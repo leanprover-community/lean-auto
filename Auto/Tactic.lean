@@ -4,15 +4,22 @@ open Lean Elab Tactic
 
 initialize
   registerTraceClass `auto.tactic
+  registerTraceClass `auto.printLemmas
 
 namespace Auto
 
-syntax hints := ("[" term,* "]")?
+-- **TODO**: Extend
+syntax hintelem := term
+syntax hints := ("[" hintelem,* "]")?
 syntax (name := auto) "auto" hints : tactic
+
+def parseHintElem : TSyntax ``hintelem → TacticM Term
+  | `(hintelem| $t:term) => return t
+  | _ => throwUnsupportedSyntax
 
 -- Parse `hints` to an array of `Term`, which is still syntax
 def parseHints : TSyntax ``hints → TacticM (Array Term)
-  | `(hints| [ $[$hs],* ]) => return hs
+  | `(hints| [ $[$hs],* ]) => hs.mapM parseHintElem
   | `(hints| ) => return #[]
   | _ => throwUnsupportedSyntax
 
@@ -23,6 +30,13 @@ inductive Result where
   | sat : (es : Array (FVarId × Expr)) → Result
   -- Unknown
   | unknown : Result
+
+instance : ToMessageData Result where
+  toMessageData : Result → MessageData
+  | .unsat e => m!"Result.unsat {e}"
+  | .sat es => .compose m!"Result.sat "
+    (ArrayToMessageData es (fun (id, e) => m!"{mkFVar id} := {e}"))
+  | .unknown => m!"Result.unknown"
 
 def collectLctxLemmas : TacticM (Array Lemma) := do
   let mut lemmas := #[]
@@ -46,10 +60,21 @@ def collectUserLemmas (terms : Array Term) : TacticM (Array Lemma) := do
         throwError "invalid lemma {type} for auto, proposition expected"
   return lemmas
 
+def traceLemmas (pre : String) (lemmas : Array Lemma) : TacticM Unit := do
+  let mut cnt : Nat := 0
+  let mut mdatas : Array MessageData := #[]
+  for lem in lemmas do
+    mdatas := mdatas.push m!"\n{cnt}: {lem}"
+    cnt := cnt + 1
+  trace[auto.printLemmas] mdatas.foldl MessageData.compose pre
+
 def runAuto (stx : TSyntax ``hints) : TacticM Result := do
-  let lctxAssumptions ← collectLctxLemmas
-  let userAssumptions ← collectUserLemmas (← parseHints stx)
-  sorry
+  let lctxLemmas ← collectLctxLemmas
+  traceLemmas "Lemmas collected from local context:" lctxLemmas
+  let userLemmas ← collectUserLemmas (← parseHints stx)
+  traceLemmas "Lemmas collected from user-provided terms:" userLemmas
+  let lemmas := lctxLemmas ++ userLemmas
+  throwError "Not Implemented"
 
 @[tactic auto]
 def evalAuto : Tactic

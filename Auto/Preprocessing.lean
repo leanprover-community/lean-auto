@@ -1,5 +1,6 @@
 import Lean
 import Auto.Util.AbstractMVars
+import Auto.Util.MessageData
 open Lean Meta Elab Tactic
 
 initialize
@@ -10,7 +11,11 @@ namespace Auto
 structure Lemma where
   proof  : Expr       -- Proof of the lemma
   type   : Expr       -- The statement of the lemma
-  params : Array Name -- Universe Levels  
+  params : Array Name -- Universe Levels
+
+instance : ToMessageData Lemma where
+  toMessageData lem := MessageData.compose
+    m!"⦗⦗ {lem.proof} : {lem.type} @@ " (.compose (ArrayToMessageData lem.params toMessageData) m!" ⦘⦘")
 
 namespace Prep
 
@@ -73,10 +78,12 @@ def elabLemma (stx : Term) : TacticM (Array Lemma) := do
       return ret
     | some (.axiomInfo _)  => return #[← elabLemmaAux stx]
     | some (.thmInfo _)    => return #[← elabLemmaAux stx]
+    -- If we have inductively defined propositions, we might
+    --   need to add constructors as lemmas
+    | some (.ctorInfo _)   => return #[← elabLemmaAux stx]
     | some (.opaqueInfo _) => throwError "Opaque constants cannot be provided as lemmas"
     | some (.quotInfo _)   => throwError "Quotient constants cannot be provided as lemmas"
     | some (.inductInfo _) => throwError "Inductive types cannot be provided as lemmas"
-    | some (.ctorInfo _)   => throwError "Constructors cannot be provided as lemmas"
     | none => throwError "Unknown constant {expr.constName!}"
   | _ => return #[← elabLemmaAux stx]
 where elabLemmaAux (stx : Term) : TacticM Lemma :=
