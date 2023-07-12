@@ -29,7 +29,7 @@ def collectLctxLemmas : TacticM (Array Lemma) := do
   for fVarId in (← getLCtx).getFVarIds do
     let decl ← FVarId.getDecl fVarId
     if ¬ decl.isAuxDecl ∧ (← instantiateMVars decl.type).isProp then
-      let declType ← Prep.preprocessLemma (← instantiateMVars decl.type)
+      let declType ← Prep.preprocessTerm (← instantiateMVars decl.type)
       lemmas := lemmas.push ⟨mkFVar fVarId, declType, #[]⟩
   return lemmas
 
@@ -38,7 +38,7 @@ def collectUserLemmas (terms : Array Term) : TacticM (Array Lemma) := do
   for lems in ← terms.mapM Prep.elabLemma do
     for ⟨proof, type, params⟩ in lems do
       if ← Meta.isProp type then
-        let type ← Prep.preprocessLemma (← instantiateMVars type)
+        let type ← Prep.preprocessTerm (← instantiateMVars type)
         -- **TODO**: Instantiate mvars in proof?
         lemmas := lemmas.push ⟨proof, type, params⟩
       else

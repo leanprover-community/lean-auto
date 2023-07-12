@@ -15,14 +15,14 @@ structure Lemma where
 namespace Prep
 
 /-- This function is expensive and should only be used in preprocessing -/
-partial def preprocessLemma (fact : Expr) : MetaM Expr := do
+partial def preprocessTerm (term : Expr) : MetaM Expr := do
   let red (e : Expr) : MetaM TransformStep := do
     let e := e.consumeMData
     let e ← Meta.whnf e
     return .continue e
   -- Reduce
-  let fact ← Meta.withTransparency .instances <| Meta.transform fact (pre := red) (usedLetOnly := false)
-  return fact
+  let term ← Meta.withTransparency .instances <| Meta.transform term (pre := red) (usedLetOnly := false)
+  return term
 
 -- **TODO**: Review
 -- Advise: For each recursive function (not only recursors)
@@ -63,20 +63,20 @@ def elabLemma (stx : Term) : TacticM (Array Lemma) := do
       let term := defval.value
       let type ← Meta.inferType term
       let sort ← Meta.reduce (← Meta.inferType type) true true false
-      -- If the fact is of sort `Prop`, add itself as a fact
+      -- If the type is of sort `Prop`, add itself as a type
       let mut ret := #[]
       if sort.isProp then
         ret := ret.push (← elabLemmaAux stx)
-      -- Generate definitional equation for the fact
+      -- Generate definitional equation for the type
       if let some eqns ← getEqnsFor? expr.constName! (nonRec := true) then
         ret := ret.append (← eqns.mapM fun eq => do elabLemmaAux (← `($(mkIdent eq))))
       return ret
     | some (.axiomInfo _)  => return #[← elabLemmaAux stx]
     | some (.thmInfo _)    => return #[← elabLemmaAux stx]
-    | some (.opaqueInfo _) => throwError "Opaque constants cannot be provided as facts"
-    | some (.quotInfo _)   => throwError "Quotient constants cannot be provided as facts"
-    | some (.inductInfo _) => throwError "Inductive types cannot be provided as facts"
-    | some (.ctorInfo _)   => throwError "Constructors cannot be provided as facts"
+    | some (.opaqueInfo _) => throwError "Opaque constants cannot be provided as lemmas"
+    | some (.quotInfo _)   => throwError "Quotient constants cannot be provided as lemmas"
+    | some (.inductInfo _) => throwError "Inductive types cannot be provided as lemmas"
+    | some (.ctorInfo _)   => throwError "Constructors cannot be provided as lemmas"
     | none => throwError "Unknown constant {expr.constName!}"
   | _ => return #[← elabLemmaAux stx]
 where elabLemmaAux (stx : Term) : TacticM Lemma :=
