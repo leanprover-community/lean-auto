@@ -6,7 +6,11 @@ namespace Auto.Util
 
 namespace ExprDeCompile
 
--- **TODO**: Support metavariables, Retain implicit binder information
+-- **TODO**:
+-- 1: Support metavariables
+--
+-- Note that in this implementation, we treat all arguments
+--   as explicit
 
 structure Context where
   usedNames : HashSet String
@@ -38,7 +42,7 @@ partial def withNewBinder (m : ExprDeCompM α) : ExprDeCompM (α × String) := d
 -- Reverse process of compiling string to `Expr`, similar to `toString`
 -- The `Expr` already has a `toString`, but that `toString` is
 --   very different from "decompiling" the `expr`
-partial def exprDeCompileAux (final : Bool) (e : Expr) : ExprDeCompM String := do
+private partial def exprDeCompileAux (final : Bool) (e : Expr) : ExprDeCompM String := do
   match e with
   | Expr.forallE _ d b _ =>
     let ds ← exprDeCompileAux final d
@@ -57,6 +61,10 @@ partial def exprDeCompileAux (final : Bool) (e : Expr) : ExprDeCompM String := d
   | Expr.app .. =>
     let f := e.getAppFn
     let args := e.getAppArgs
+    if f.isConst ∧ !final then
+      let expanded ← etaExpandConst f args.size
+      let ret ← exprDeCompileAux true expanded
+      return ret
     let fs ← exprDeCompileAux final f
     let argss ← args.mapM (exprDeCompileAux final)
     let argssC := String.intercalate " " argss.data
@@ -66,35 +74,44 @@ partial def exprDeCompileAux (final : Bool) (e : Expr) : ExprDeCompM String := d
     return s!"({bs}.{idx})"
   | Expr.const name us =>
     if final then
-      if List.length us == 0 then
-        return "@" ++ name.toString
-      else
-        return "@" ++ name.toString ++ ".{" ++
-          String.intercalate ", " (us.map toString) ++ "}"
+      return constFinalDeComp name us
     else
-      let some val := (← getEnv).find? name
-        | throwError "exprDeCompile : Unknown identifier {name}"
-      let ty := val.type
-      let lparams := val.levelParams
-      let bs := Expr.binders ty
-      let extra := bs.size
-      let mut e := e
-      for i in [0:extra] do
-        e := .app e (.bvar (extra - i - 1))
-      for (_, ty, _) in bs.reverse do
-        e := .lam `_ (ty.instantiateLevelParams lparams us) e .default
-      let ret ← exprDeCompileAux true e
+      let expanded ← etaExpandConst e 0
+      let ret ← exprDeCompileAux true expanded
       return ret
   | Expr.lit l =>
     match l with
     | .natVal l => return toString l
     | .strVal s => return toString s
   | Expr.sort l => return s!"Sort ({l})"
-  | Expr.mvar .. => throwError "exprDeCompile : Metavariable is not supported"
-  | Expr.fvar .. => throwError "exprDeCompile : Free variable is not supported"
+  | Expr.mvar .. => throwError "exprDeCompile :: Metavariable is not supported"
+  | Expr.fvar .. => throwError "exprDeCompile :: Free variable is not supported"
   | Expr.bvar n =>
     let bn := (← get).binderNames
     return bn[bn.size - n - 1]!
+where 
+  constFinalDeComp (name : Name) (us : List Level) :=
+    if List.length us == 0 then
+      "@" ++ name.toString
+    else
+      "@" ++ name.toString ++ ".{" ++
+        String.intercalate ", " (us.map toString) ++ "}"
+  etaExpandConst (cst : Expr) (appliedArgs : Nat) := do
+    if !cst.isConst then
+      throwError s!"exprDeCompile :: etaExpandConst received non-const {cst}"
+    let some val := (← getEnv).find? cst.constName!
+      | throwError s!"exprDeCompile :: Unknown identifier {cst.constName!}"
+    let ty := val.type
+    let lparams := val.levelParams
+    let bs := Expr.binders ty
+    let extra := bs.size - appliedArgs
+    let mut e := e
+    for i in [0:extra] do
+      e := .app e (.bvar (extra - i - 1))
+    let bsU := bs[appliedArgs:bs.size].toArray.reverse
+    for (_, ty, _) in bsU do
+      e := .lam `_ (ty.instantiateLevelParams lparams cst.constLevels!) e .default
+    return e
 
 def levelCollectNames (l : Level) : StateM (HashSet String) Unit := do
   match l with
@@ -131,7 +148,7 @@ def exprDeCompile (e : Expr) : CoreM String := do
   let res ← ((ExprDeCompile.exprDeCompileAux false e).run ⟨names⟩).run {}
   return res.fst
 
-/- --Test
+--Test
 
 syntax (name := testDeComp) "#testDeComp" term : command
 
@@ -171,43 +188,19 @@ universe u
             PUnit.unit.{max 1 u}))
       t).1
 #check (fun (x1 : (∀ (x0 : @Nat), Sort (u))) => (fun (x2 : @Nat) =>
- (fun (x8 : (∀ (x3 : @Nat), (∀ (x7 : ((fun (x5 : (∀ (x4 : @Nat), Sort (u)))
-  => (fun (x6 : @Nat) => (@Nat.below.{u} x5 x6))) x1 x3)), (x1 x3)))) => 
-  ((fun (x9 : Sort (u)) => (fun (x10 : Sort (max 1 u)) => (fun (x11 : 
-  (@PProd.{u, max 1 u} x9 x10)) => (@PProd.fst.{u, max 1 u} x9 x10 x11))))
-  (x1 x2) ((fun (x13 : (∀ (x12 : @Nat), Sort (u))) => (fun (x14 : @Nat) =>
-  (@Nat.below.{u} x13 x14))) x1 x2) ((fun (x16 : (∀ (x15 : @Nat), 
-  Sort (max 1 u))) => (fun (x17 : (x16 @Nat.zero)) => (fun (x20 : (∀
-  (x18 : @Nat), (∀ (x19 : (x16 x18)), (x16 (@Nat.succ x18))))) => (fun (x21
-  : @Nat) => (@Nat.rec.{max 1 u} x16 x17 x20 x21))))) (fun (x22 : @Nat) =>
-  ((fun (x23 : Sort (u)) => (fun (x24 : Sort (max 1 u)) => (@PProd.{u, max 1
-  u} x23 x24))) (x1 x22) ((fun (x26 : (∀ (x25 : @Nat), Sort (u))) => (fun
-  (x27 : @Nat) => (@Nat.below.{u} x26 x27))) x1 x22))) ((fun (x28 : Sort (u))
-  => (fun (x29 : Sort (max 1 u)) => (fun (x30 : x28) => (fun (x31 : x29) =>
-  (@PProd.mk.{u, max 1 u} x28 x29 x30 x31))))) (x1 @Nat.zero) @PUnit.{max 1
-  u} (x8 @Nat.zero @PUnit.unit.{max 1 u}) @PUnit.unit.{max 1 u}) (fun (x32 :
-  @Nat) => (fun (x38 : ((fun (x33 : Sort (u)) => (fun (x34 : Sort (max 1 u))
-  => (@PProd.{u, max 1 u} x33 x34))) (x1 x32) ((fun (x36 : (∀ (x35 : @Nat),
-  Sort (u))) => (fun (x37 : @Nat) => (@Nat.below.{u} x36 x37))) x1 x32))) =>
-  ((fun (x39 : Sort (u)) => (fun (x40 : Sort (max 1 u)) => (fun (x41 : x39) 
-  => (fun (x42 : x40) => (@PProd.mk.{u, max 1 u} x39 x40 x41 x42))))) 
-  (x1 ((fun (x43 : @Nat) => (@Nat.succ x43)) x32)) ((fun (x44 : Sort 
-  (max 1 u)) => (fun (x45 : Sort (max 1 u)) => (@PProd.{max 1 u, max 1 u} 
-  x44 x45))) ((fun (x46 : Sort (u)) => (fun (x47 : Sort (max 1 u)) => 
-  (@PProd.{u, max 1 u} x46 x47))) (x1 x32) ((fun (x49 : (∀ (x48 : @Nat), 
-  Sort (u))) => (fun (x50 : @Nat) => (@Nat.below.{u} x49 x50))) x1 x32)) 
-  @PUnit.{max 1 u}) (x8 ((fun (x51 : @Nat) => (@Nat.succ x51)) x32) ((fun 
-  (x52 : Sort (max 1 u)) => (fun (x53 : Sort (max 1 u)) => (fun (x54 : x52) 
-  => (fun (x55 : x53) => (@PProd.mk.{max 1 u, max 1 u} x52 x53 x54 x55))))) 
-  ((fun (x56 : Sort (u)) => (fun (x57 : Sort (max 1 u)) => (@PProd.{u, max 
-  1 u} x56 x57))) (x1 x32) ((fun (x59 : (∀ (x58 : @Nat), Sort (u))) => (fun 
-  (x60 : @Nat) => (@Nat.below.{u} x59 x60))) x1 x32)) @PUnit.{max 1 u} x38 
-  @PUnit.unit.{max 1 u})) ((fun (x61 : Sort (max 1 u)) => (fun (x62 : Sort 
-  (max 1 u)) => (fun (x63 : x61) => (fun (x64 : x62) => (@PProd.mk.{max 1 u, 
-  max 1 u} x61 x62 x63 x64))))) ((fun (x65 : Sort (u)) => (fun (x66 : Sort 
-  (max 1 u)) => (@PProd.{u, max 1 u} x65 x66))) (x1 x32) ((fun (x68 : (∀ 
-  (x67 : @Nat), Sort (u))) => (fun (x69 : @Nat) => (@Nat.below.{u} x68 x69)))
-  x1 x32)) @PUnit.{max 1 u} x38 @PUnit.unit.{max 1 u})))) x2)))))
+  (fun (x5 : (∀ (x3 : @Nat), (∀ (x4 : (@Nat.below.{u} x1 x3)), (x1 x3))))
+  => (@PProd.fst.{u, max 1 u} (x1 x2) (@Nat.below.{u} x1 x2)
+  (@Nat.rec.{max 1 u} (fun (x6 : @Nat) => (@PProd.{u, max 1 u} (x1 x6)
+  (@Nat.below.{u} x1 x6))) (@PProd.mk.{u, max 1 u} (x1 @Nat.zero)
+  @PUnit.{max 1 u} (x5 @Nat.zero @PUnit.unit.{max 1 u})
+  @PUnit.unit.{max 1 u}) (fun (x7 : @Nat) => (fun (x8 : (@PProd.{u, max 1 u}
+  (x1 x7) (@Nat.below.{u} x1 x7))) => (@PProd.mk.{u, max 1 u} (x1
+  (@Nat.succ x7)) (@PProd.{max 1 u, max 1 u} (@PProd.{u, max 1 u} (x1 x7)
+  (@Nat.below.{u} x1 x7)) @PUnit.{max 1 u}) (x5 (@Nat.succ x7)
+  (@PProd.mk.{max 1 u, max 1 u} (@PProd.{u, max 1 u} (x1 x7) (@Nat.below.{u}
+  x1 x7)) @PUnit.{max 1 u} x8 @PUnit.unit.{max 1 u})) (@PProd.mk.{max 1 u,
+  max 1 u} (@PProd.{u, max 1 u} (x1 x7) (@Nat.below.{u} x1 x7)) @PUnit.{max
+  1 u} x8 @PUnit.unit.{max 1 u})))) x2)))))
 
 --/
 

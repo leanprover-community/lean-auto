@@ -22,8 +22,21 @@ namespace Auto.Util
 
 syntax (name := genMonadGetSet) "#genMonadGetSet" ident ident : command
 
+open Parser in
+def runParserCategory (env : Environment) (catName : Name)
+    (input : String) (fileName := "<input>") (pos : String.Pos) : Except String Syntax :=
+  let p := andthenFn whitespace (categoryParserFnImpl catName)
+  let ictx := mkInputContext input fileName
+  let s := p.run ictx { env, options := {} } (getTokenTable env) { cache := initCacheForInput input, pos := pos }
+  if s.hasError then
+    Except.error (s.toErrorMsg ictx)
+  else if input.atEnd s.pos then
+    Except.ok s.stxStack.back
+  else
+    Except.error ((s.mkError "end of input").toErrorMsg ictx)
+
 @[command_elab Auto.Util.genMonadGetSet]
-def elabGenMonadGetSet : CommandElab := fun stx => do
+def elabGenMonadGetSet : CommandElab := fun stx => withRef stx do
   match stx with
   | `(command | #genMonadGetSet $m:ident $s:ident) => do
     let names ← liftTermElabM <| (do
@@ -51,11 +64,15 @@ def elabGenMonadGetSet : CommandElab := fun stx => do
     let getIdent := mkIdentFrom stx "get"
     let unitIdent := mkIdentFrom stx "Unit"
     let modifyIdent := mkIdentFrom stx "modify"
+    let st ← get
+    let mut definedNames := #[]
     for (fname, ty, _) in names do
       let .str .anonymous s := fname
         | throwError s!"elabGenMonadGets :: Unexpected error, field name {fname} must be atomic"
       let tys : String ← liftCoreM (exprDeCompile ty)
-      let Except.ok tyStx := Parser.runParserCategory (← getEnv) `term tys
+      let pos := (SourceInfo.fromRef stx).getPos?.getD 0
+      let tys := (List.range pos.byteIdx).foldl (fun s _ => s ++ " ") " " ++ tys
+      let Except.ok tyStx := runParserCategory (← getEnv) `term tys (pos:=pos)
         | throwError s!"elabGenMonadGets :: Can't parse {tys} to term"
       let tyStx : TSyntax `term := ⟨tyStx⟩
       let getDefName : String := "get" ++ s.capitalize
@@ -63,19 +80,21 @@ def elabGenMonadGetSet : CommandElab := fun stx => do
       let setDefName : String := "set" ++ s.capitalize
       let setDefIdent := mkIdentFrom stx setDefName
       let fnameIdent := mkIdentFrom stx fname
-      let getCmd ← withRef stx
+      let getCmd ←
        `(def $getDefIdent : $m ($tyStx) := do
           return (← $getIdent).$fnameIdent)
       elabCommand getCmd
-      trace[Elab.definition] getDefName
+      definedNames := definedNames.push ("genMonadGetSet :: " ++ getDefName)
       let structLVal := Syntax.node SourceInfo.none ``Parser.Term.structInstLVal
           #[mkIdentFrom stx fname, Syntax.node SourceInfo.none `null #[]]
-      let structLVal := ⟨ structLVal ⟩
-      let setCmd ← withRef stx
+      let structLVal := ⟨structLVal⟩
+      let setCmd ← withoutModifyingEnv <| do
        `(def $setDefIdent (f : $tyStx) : $m $unitIdent :=
           $modifyIdent (fun s => {s with $structLVal := f}))
       elabCommand setCmd
-      trace[Elab.definition] setDefName
+      definedNames := definedNames.push ("genMonadGetSet :: " ++ setDefName)
+    logInfoAt stx (String.intercalate "\n" definedNames.data)
+    modify (fun s => { s with infoState := st.infoState, traceState := st.traceState })
   | _ => throwUnsupportedSyntax
 
 end Auto.Util
