@@ -148,7 +148,7 @@ def exprDeCompile (e : Expr) : CoreM String := do
   let res ← ((ExprDeCompile.exprDeCompileAux false e).run ⟨names⟩).run {}
   return res.fst
 
---Test
+/- --Test
 
 syntax (name := testDeComp) "#testDeComp" term : command
 
@@ -158,7 +158,7 @@ def elabTestDeComp : Elab.Command.CommandElab := fun stx => do
   | `(command | #testDeComp $x:term) => do
     let e ← Elab.Command.liftTermElabM (do
       let x ← Elab.Term.elabTerm x none
-      Elab.Term.synthesizeSyntheticMVarsNoPostponing
+      Elab.Term.synthesizeSyntheticMVarsNoPostponing (ignoreStuckTC := true)
       instantiateMVars x)
     IO.println (← Elab.Command.liftCoreM (exprDeCompile e))
   | _ => Elab.throwUnsupportedSyntax
