@@ -18,7 +18,7 @@ Targets
 
 - Basic logic
 
-  Boolean.lean, FirstOrder.lean
+  Propositional.lean, FirstOrder.lean
 
 - Basic logic plus axioms or unfolding definitions
 
@@ -28,7 +28,7 @@ Targets
 
 - Problems requiring straightforward monomorphization
 
-  Set.lean
+  Set.lean, Ring.lean
 
   (Can also come up with similar examples for functions; see the notes below.)
 
