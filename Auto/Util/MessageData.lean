@@ -1,20 +1,22 @@
 import Lean
 open Lean
 
-namespace Auto
+namespace Auto.Util
 
-def ExprPairToMessageData : Expr × Expr → MessageData
+def MessageData.exprPair : Expr × Expr → MessageData
 | (e1, e2) => MessageData.compose m!"({e1}, " m!"{e2})"
 
-def ListToMessageData (as : List α) (f : α → MessageData) : MessageData :=
-  .compose m!"[" (.compose (go as) m!"]")
-  where go as :=
-    match as with
-    | .nil => m!""
-    | .cons a .nil => f a
-    | .cons a as@(.cons _ _) => .compose (f a) (.compose ", " (go as))
+def MessageData.intercalate (m : MessageData) : List MessageData → MessageData
+  | []      => m!""
+  | a :: as => go a m as
+where go (acc : MessageData) (m : MessageData) : List MessageData → MessageData
+  | a :: as => go (.compose acc (.compose m a)) m as
+  | []      => acc
 
-def ArrayToMessageData (as : Array α) (f : α → MessageData) : MessageData :=
-  ListToMessageData as.data f
+def MessageData.list (as : List α) (f : α → MessageData) : MessageData :=
+  .compose m!"[" (.compose (MessageData.intercalate m!", " (as.map f)) m!"]")
 
-end Auto
+def MessageData.array (as : Array α) (f : α → MessageData) : MessageData :=
+  MessageData.list as.data f
+
+end Auto.Util

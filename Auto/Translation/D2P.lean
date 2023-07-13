@@ -36,7 +36,26 @@ inductive PropForm where
   | Or    : PropForm → PropForm → PropForm
   | Iff   : PropForm → PropForm → PropForm
   | Eq    : PropForm → PropForm → PropForm
-deriving Inhabited, Repr
+deriving Inhabited
+
+def reprPrecPropForm (f : PropForm) (b : Bool) :=
+  let s :=
+    match f with
+    | .Atom n    => f!".Atom {n}"
+    | .True      => f!".True"
+    | .False     => f!".False"
+    | .Not g     => f!".Not " ++ reprPrecPropForm g true
+    | .And f1 f2 => f!".And " ++ reprPrecPropForm f1 true ++ f!" " ++ reprPrecPropForm f2 true
+    | .Or f1 f2  => f!".Or "  ++ reprPrecPropForm f1 true ++ f!" " ++ reprPrecPropForm f2 true
+    | .Iff f1 f2 => f!".Iff " ++ reprPrecPropForm f1 true ++ f!" " ++ reprPrecPropForm f2 true
+    | .Eq f1 f2  => f!".Eq "  ++ reprPrecPropForm f1 true ++ f!" " ++ reprPrecPropForm f2 true
+  if b then
+    f!"(" ++ s ++ ")"
+  else
+    f!"Auto.D2P.PropForm" ++ s
+
+instance : Repr PropForm where
+  reprPrec f n := reprPrecPropForm f (n != 0)
 
 def addAtom (e : Expr) : TransM PropForm := do
   let ⟨exprMap, idxMap⟩ ← get
@@ -96,7 +115,7 @@ def tst (e : Expr) : Elab.Term.TermElabM Unit := do
   let f := es.fst
   IO.println (repr f)
 
-#getExprAndApply[True ∨ (False ↔ False) ∨ (2 = 3)|tst]
+#getExprAndApply[True ∨ (False ↔ False) ∨ (2 = 3) ∨ (2 = 3)|tst]
 #getExprAndApply[True ∨ (False ↔ False) ∨ ((False = True) = True)|tst]
 
 end D2P

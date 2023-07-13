@@ -12,7 +12,7 @@ def Expr.binders (e : Expr) : Array (Name × Expr × BinderInfo) :=
 
 -- `ident` must be of type `Expr → TermElabM Unit`
 -- Compiles `term` into `Expr`, then applies `ident` to it
-syntax (name := getExprAndApply) "#getExprAndApply[" term "|" ident "]" : command
+syntax (name := getExprAndApply) "#getExprAndApply" "[" term "|" ident "]" : command
 
 @[command_elab Auto.Util.getExprAndApply]
 unsafe def elabGetExprAndApply : CommandElab := fun stx =>

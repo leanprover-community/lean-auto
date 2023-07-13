@@ -35,7 +35,7 @@ instance : ToMessageData Result where
   toMessageData : Result → MessageData
   | .unsat e => m!"Result.unsat {e}"
   | .sat es => .compose m!"Result.sat "
-    (ArrayToMessageData es (fun (id, e) => m!"{mkFVar id} := {e}"))
+    (Util.MessageData.array es (fun (id, e) => m!"{mkFVar id} := {e}"))
   | .unknown => m!"Result.unknown"
 
 def collectLctxLemmas : TacticM (Array Lemma) := do

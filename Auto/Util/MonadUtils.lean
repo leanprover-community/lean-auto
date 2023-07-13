@@ -23,7 +23,7 @@ namespace Auto.Util
 syntax (name := genMonadGetSet) "#genMonadGetSet" ident ident : command
 
 open Parser in
-def runParserCategory (env : Environment) (catName : Name)
+private def runParserCategory (env : Environment) (catName : Name)
     (input : String) (fileName := "<input>") (pos : String.Pos) : Except String Syntax :=
   let p := andthenFn whitespace (categoryParserFnImpl catName)
   let ictx := mkInputContext input fileName

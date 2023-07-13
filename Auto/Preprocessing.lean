@@ -15,7 +15,7 @@ structure Lemma where
 
 instance : ToMessageData Lemma where
   toMessageData lem := MessageData.compose
-    m!"⦗⦗ {lem.proof} : {lem.type} @@ " (.compose (ArrayToMessageData lem.params toMessageData) m!" ⦘⦘")
+    m!"⦗⦗ {lem.proof} : {lem.type} @@ " (.compose (Util.MessageData.array lem.params toMessageData) m!" ⦘⦘")
 
 namespace Prep
 
