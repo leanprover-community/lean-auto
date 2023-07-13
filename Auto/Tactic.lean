@@ -53,7 +53,6 @@ def collectUserLemmas (terms : Array Term) : TacticM (Array Lemma) := do
     for ⟨proof, type, params⟩ in lems do
       if ← Meta.isProp type then
         let type ← Prep.preprocessTerm (← instantiateMVars type)
-        -- **TODO**: Instantiate mvars in proof?
         lemmas := lemmas.push ⟨proof, type, params⟩
       else
         -- **TODO**: Relax condition?
@@ -74,7 +73,7 @@ def runAuto (stx : TSyntax ``hints) : TacticM Result := do
   let userLemmas ← collectUserLemmas (← parseHints stx)
   traceLemmas "Lemmas collected from user-provided terms:" userLemmas
   let lemmas := lctxLemmas ++ userLemmas
-  throwError "Not Implemented"
+  throwError "Not implemented"
 
 @[tactic auto]
 def evalAuto : Tactic
