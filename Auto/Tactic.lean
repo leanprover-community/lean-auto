@@ -43,7 +43,7 @@ def collectLctxLemmas : TacticM (Array Lemma) := do
   let mut lemmas := #[]
   for fVarId in (← getLCtx).getFVarIds do
     let decl ← FVarId.getDecl fVarId
-    if ¬ decl.isAuxDecl ∧ (← instantiateMVars decl.type).isProp then
+    if ¬ decl.isAuxDecl ∧ (← Meta.isProp decl.type) then
       let declType ← Prep.preprocessTerm (← instantiateMVars decl.type)
       lemmas := lemmas.push ⟨mkFVar fVarId, declType, #[]⟩
   return lemmas
@@ -76,12 +76,9 @@ def runAuto (stx : TSyntax ``hints) : TacticM Result := do
   let lemmas := lctxLemmas ++ userLemmas
   -- testing
   let types := lemmas.map (fun x => x.type)
-  let commands := (← (do
-      let _ ← types.mapM (fun e => do
-        let f ← D2P e
-        ReifP.addAssertion (ω := Expr) f)
-      P2SMT
-    ).run {}).1
+  let PState := (← (types.mapM (fun e => do
+      ReifP.addAssertion (ω := Expr) (← D2P e))).run {}).2
+  let commands := (← (P2SMT PState).run {}).1
   IO.println (String.intercalate "\n" (commands.map toString).data)
   -- testing
   throwError "Not implemented"

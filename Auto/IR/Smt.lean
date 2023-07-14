@@ -21,13 +21,15 @@ inductive SIdent where
   | indexed : String → (String ⊕ Nat) → SIdent
 deriving BEq, Hashable, Inhabited
 
+def SIdent.toString : SIdent → String
+| .symb s => "|" ++ s ++ "|"
+| .indexed s idx =>
+  match idx with
+  | .inl idx => s!"(_ {s} {idx})"
+  | .inr idx => s!"(_ {s} {idx})"
+
 instance : ToString SIdent where
-  toString : SIdent → String
-  | .symb s => "|" ++ s ++ "|"
-  | .indexed s idx =>
-    match idx with
-    | .inl idx => s!"(_ {s} {idx})"
-    | .inr idx => s!"(_ {s} {idx})"
+  toString := SIdent.toString
 
 inductive SSort where
   | bvar : Nat → SSort -- Only useful in sort declarations
@@ -76,8 +78,10 @@ structure MatchCase (α : Sort u) where
   args   : Array String
   body   : α
 
+inductive SpecConst where
+
 inductive STerm where
-  | sConst  : STerm
+  | sConst  : SpecConst → STerm
   | bvar    : Nat → STerm                      -- De bruijin index
   | qIdApp  : QualIdent → Array STerm → STerm  -- Application of function symbol to array of terms
   | letE    : (name : String) → (binding : STerm) → (body : STerm) → STerm
@@ -86,7 +90,7 @@ inductive STerm where
   | matchE  : (matchTerm : STerm) → Array (MatchCase STerm) → STerm
 
 private def STerm.toString_Aux : STerm → List SIdent → String
-  | .sConst, _         => panic!"STerm.toString :: Unimplemented"
+  | .sConst _, _         => panic!"STerm.toString :: Unimplemented"
   | .bvar i, binders   =>
     if let some si := binders.get? i then
       ToString.toString si
@@ -159,6 +163,53 @@ private def ConstrDecl.toString : ConstrDecl → Array SIdent → String
   let selDecls := selDecls.map (fun (name, sort) => s!"({SIdent.symb name}" ++ SSort.toString sort binders ++ ")")
   String.intercalate " " (pre :: selDecls.data) ++ ")"
 
+-- TODO: Complete?
+inductive Attribute where
+  | key : String → Attribute
+
+def Attribute.toString : Attribute → String
+| .key s => s
+
+instance : ToString Attribute where
+  toString := Attribute.toString
+
+inductive SMTOption where
+  | diagnosticOC            : String → SMTOption
+  | globalDecl              : Bool → SMTOption
+  | interactiveMode         : Bool → SMTOption
+  | printSuccess            : Bool → SMTOption
+  | produceAssertions       : Bool → SMTOption
+  | produceAssignments      : Bool → SMTOption
+  | produceModels           : Bool → SMTOption
+  | produceProofs           : Bool → SMTOption
+  | produceUnsatAssumptions : Bool → SMTOption
+  | produceUnsatCores       : Bool → SMTOption
+  | randomSeed              : Nat → SMTOption
+  | regularOutputChannel    : String → SMTOption
+  | reproducibleResourceLim : Nat → SMTOption
+  | verbosity               : Nat → SMTOption
+  | attr                    : Attribute → SMTOption
+
+def SMTOption.toString : SMTOption → String
+| .diagnosticOC s            => s!":diagnostic-output-channel {s}"
+| .globalDecl b              => s!":global-declarations {b}"
+| .interactiveMode b         => s!":interactive-mode {b}"
+| .printSuccess b            => s!":print-success {b}"
+| .produceAssertions b       => s!":produce-assertions {b}"
+| .produceAssignments b      => s!":produce-assignments {b}"
+| .produceModels b           => s!":produce-models {b}"
+| .produceProofs b           => s!":produce-proofs {b}"
+| .produceUnsatAssumptions b => s!":produce-unsat-assumptions {b}"
+| .produceUnsatCores b       => s!":produce-unsat-cores {b}"
+| .randomSeed n              => s!":random-seed {n}"
+| .regularOutputChannel s    => s!":regular-output-channel {s}"
+| .reproducibleResourceLim n => s!":reproducible-resource-limit {n}"
+| .verbosity n               => s!":verbosity {n}"
+| .attr a                    => ToString.toString a
+
+instance : ToString SMTOption where
+  toString := SMTOption.toString
+
 --〈sorted_var〉   ::= ( 〈symbol〉 〈sort〉 )
 --〈datatype_dec〉 ::= ( 〈constructor_dec〉+ ) | ( par ( 〈symbol〉+ ) ( 〈constructor_dec〉+ ) )
 --〈function_dec〉 ::= ( 〈symbol〉 ( 〈sorted_var〉∗ ) 〈sort〉 )
@@ -173,10 +224,23 @@ private def ConstrDecl.toString : ConstrDecl → Array SIdent → String
 --               ( define-sort 〈symbol〉 ( 〈symbol〉∗ ) 〈sort〉 )
 --               ( declare-datatype 〈symbol〉 〈datatype_dec〉)
 --               ...
+--               ( get-model )
+--               ( get-option 〈keyword〉 )
+--               ( get-proof )
+--               ( get-unsat-assumptions )
+--               ( get-unsat-core )
+--               ...
+--               ( set-option 〈option〉 )
 --               ( set-logic 〈symbol 〉 )
 inductive Command where
   | assert    : (prop : STerm) → Command
   | setLogic  : String → Command
+  | setOption : SMTOption → Command
+  | getModel  : Command
+  | getOption : String → Command
+  | getProof  : Command
+  | getUnsatAssumptions : Command
+  | getUnsatCore        : Command
   | checkSat  : Command
   | declFun   : (name : String) → (argSorts : Array SSort) → (resSort : SSort) → Command
   | declSort  : (name : String) → (arity : Nat) → Command
@@ -186,12 +250,15 @@ inductive Command where
   | declDtype : (name : String) → (params : Array String) → (cstrDecls : Array ConstrDecl) → Command
 
 def Command.toString : Command → String
-| .assert prop                         =>
-  s!"(assert {prop})"
-| .setLogic l                          =>
-  "(set-logic " ++ l ++ ")"
-| .checkSat                            =>
-  "(check-sat)"
+| .assert prop                         => s!"(assert {prop})"
+| .setLogic l                          => "(set-logic " ++ l ++ ")"
+| .setOption o                         => s!"(set-option {o})"
+| .getModel                            => "(get-model)"
+| .getOption s                         => s!"(get-option {s})"
+| .getProof                            => "(get-proof)"
+| .getUnsatAssumptions                 => "(get-unsat-assumptions)"
+| .getUnsatCore                        => "(get-unsat-core)"
+| .checkSat                            => "(check-sat)"
 | .declFun name argSorts resSort       =>
   let pre := s!"(declare-fun {SIdent.symb name} ("
   let argSorts := String.intercalate " " (argSorts.map ToString.toString).data ++ ") "
@@ -223,7 +290,7 @@ instance : ToString Command where
 
 section
 
-  -- Type of (terms in higher-level logic)
+  -- Type of (identifiers in higher-level logic)
   variable (ω : Type) [BEq ω] [Hashable ω]
 
   -- The main purpose of this state is for name generation
