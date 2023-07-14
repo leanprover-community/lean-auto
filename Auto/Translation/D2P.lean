@@ -1,77 +1,21 @@
 import Lean
 import Auto.Util.MonadUtils
 import Auto.Util.ExprExtra
+import Auto.Translation.ReifTerms
 open Lean
 
 -- D2P: Dependent type to Propositional Logic
 
 namespace Auto
 
-namespace D2P
-
-structure State where
-  -- Map from identifier to its corresponding expression in Lean
-  exprMap : HashMap Expr Nat := HashMap.empty
-  -- Map from expression in Lean to its corresponding identifier
-  idxMap : HashMap Nat Expr  := HashMap.empty
-
-abbrev TransM := StateRefT State MetaM
-
-@[always_inline]
-instance : Monad TransM :=
-  let i := inferInstanceAs (Monad TransM);
-  { pure := i.pure, bind := i.bind }
-
-instance : Inhabited (TransM α) where
-  default := fun _ => throw default
-
-#genMonadGetSet D2P.TransM D2P.State
-
-inductive PropForm where
-  | Atom  : Nat → PropForm
-  | True  : PropForm
-  | False : PropForm
-  | Not   : PropForm → PropForm
-  | And   : PropForm → PropForm → PropForm
-  | Or    : PropForm → PropForm → PropForm
-  | Iff   : PropForm → PropForm → PropForm
-  | Eq    : PropForm → PropForm → PropForm
-deriving Inhabited
-
-def reprPrecPropForm (f : PropForm) (b : Bool) :=
-  let s :=
-    match f with
-    | .Atom n    => f!".Atom {n}"
-    | .True      => f!".True"
-    | .False     => f!".False"
-    | .Not g     => f!".Not " ++ reprPrecPropForm g true
-    | .And f1 f2 => f!".And " ++ reprPrecPropForm f1 true ++ f!" " ++ reprPrecPropForm f2 true
-    | .Or f1 f2  => f!".Or "  ++ reprPrecPropForm f1 true ++ f!" " ++ reprPrecPropForm f2 true
-    | .Iff f1 f2 => f!".Iff " ++ reprPrecPropForm f1 true ++ f!" " ++ reprPrecPropForm f2 true
-    | .Eq f1 f2  => f!".Eq "  ++ reprPrecPropForm f1 true ++ f!" " ++ reprPrecPropForm f2 true
-  if b then
-    f!"(" ++ s ++ ")"
-  else
-    f!"Auto.D2P.PropForm" ++ s
-
-instance : Repr PropForm where
-  reprPrec f n := reprPrecPropForm f (n != 0)
-
-def addAtom (e : Expr) : TransM PropForm := do
-  let ⟨exprMap, idxMap⟩ ← get
-  if exprMap.contains e then
-    return .Atom (exprMap.find! e)
-  let sz := exprMap.size
-  setExprMap (exprMap.insert e sz)
-  setIdxMap (idxMap.insert sz e)
-  return .Atom sz
+open ReifP
 
 -- Translates an expression of type `Prop`
-partial def translate (e : Expr) : TransM PropForm := do
+partial def D2P (e : Expr) : TransM PropForm := do
   let ety ← Meta.inferType e
-  let failureMsg := m!"D2P.translate :: Failed to translate subexpression {e}"
+  let failureMsg := m!"D2P :: Failed to translate subexpression {e}"
   if ! (← Meta.isDefEq ety (.sort .zero)) then
-    throwError m!"D2P.translate :: Can't translate non-prop term {e}"
+    throwError m!"D2P :: Can't translate non-prop term {e}"
   match e with
   | .const .. =>
     let some name := e.constName?
@@ -86,12 +30,12 @@ partial def translate (e : Expr) : TransM PropForm := do
       | addAtom e
     let args := e.getAppArgs
     if args.size == 1 then
-      let args ← args.mapM translate
+      let args ← args.mapM D2P
       match name with
       | ``Not => return .Not args[0]!
       | _ => addAtom e
     else if args.size == 2 then
-      let args ← args.mapM translate
+      let args ← args.mapM D2P
       match name with
       | ``And => return .And args[0]! args[1]!
       | ``Or => return .Or args[0]! args[1]!
@@ -101,7 +45,7 @@ partial def translate (e : Expr) : TransM PropForm := do
       match name with
       | ``Eq =>
         if ← Meta.isDefEq args[0]! (.sort .zero) then
-          let args ← args[1:].toArray.mapM translate
+          let args ← args[1:].toArray.mapM D2P
           return .Eq args[0]! args[1]!
         else
           addAtom e
@@ -111,13 +55,11 @@ partial def translate (e : Expr) : TransM PropForm := do
   | _ => addAtom e
 
 def tst (e : Expr) : Elab.Term.TermElabM Unit := do
-  let es ← (D2P.translate e).run {}
+  let es ← (D2P e).run {}
   let f := es.fst
   IO.println (repr f)
 
 #getExprAndApply[True ∨ (False ↔ False) ∨ (2 = 3) ∨ (2 = 3)|tst]
 #getExprAndApply[True ∨ (False ↔ False) ∨ ((False = True) = True)|tst]
-
-end D2P
 
 end Auto
