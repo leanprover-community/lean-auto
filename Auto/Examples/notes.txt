@@ -1,0 +1,83 @@
+Syntax
+------
+
+The syntax should be like the simplifier syntax; i.e. we want to write
+
+  by auto [args*]
+
+where args can include:
+
+  local hypotheses
+  names of theorems
+  arbitrary expressions
+  *  (use all the hypotheses)
+  attributes (to use a collection of hypotheses)
+
+Targets
+-------
+
+- Basic logic
+
+  Propositional.lean, FirstOrder.lean
+
+- Basic logic plus axioms or unfolding definitions
+
+  Intervals.lean
+
+  See also the notes below.
+
+- Problems requiring straightforward monomorphization
+
+  Set.lean, Ring.lean
+
+  (Can also come up with similar examples for functions; see the notes below.)
+
+- Linear real arithmetic
+
+  Linarith.lean (these can be instantiated at the reals initially)
+
+- Linear integer arithmetic
+
+  LeanSMTInt.lean
+
+- Nonlinear arithmetic
+
+  Positivity.lean
+
+- Problems required mixed reasoning, e.g. sets and arithmetic, or arithmetic with
+  axiomatized functions.
+
+- The DefEq problem (even when theorems and axioms are instantiated, the only match up to defeq)
+
+  DefEq.lean
+
+- Algebraic problems, i.e. problems requiring instantiating algebraic definitions
+
+  GCongrInequalities has examples where all that is required is a LinearOrderedField. In that case,
+  one can simply give the list of axioms.
+
+  More generally, one can have a list of theorems like `add_comm` and `add_assoc` that hold of
+  the structure, though class inference is needed to see that the instantiation holds.
+
+
+More sources of examples
+------------------------
+
+- mathlib tests for tactics
+
+- SMT Lean project tests
+
+- Mathematics in Lean
+
+  The opening chapters focus on equational and logical reasoning, and the necessary facts are
+  usually given explicitly. So automation should be able to handle these, given the relevant facts.
+
+  Similarly, the exercises in the sections on sets, relations, and functions mostly come down to
+  unfolding definitions and carrying out logical reasoning. So automation should get these with
+  the relevant background facts.
+
+- Hilbert checker repository examples
+
+- Lafny repository examples
+
+- Logic puzzles, e.g. from https://github.com/avigad/lamr
