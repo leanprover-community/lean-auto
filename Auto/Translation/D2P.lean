@@ -2,16 +2,18 @@ import Lean
 import Auto.Util.MonadUtils
 import Auto.Util.ExprExtra
 import Auto.Translation.ReifTerms
-open Lean
 
 -- D2P: Dependent type to Propositional Logic
 
 namespace Auto
 
+-- Open `D`
+open Lean
+-- Open `P`
 open ReifP
 
 -- Translates an expression of type `Prop`
-partial def D2P (e : Expr) : TransM PropForm := do
+partial def D2P (e : Expr) : TransM Expr PropForm := do
   let ety ← Meta.inferType e
   let failureMsg := m!"D2P :: Failed to translate subexpression {e}"
   if ! (← Meta.isDefEq ety (.sort .zero)) then
@@ -23,24 +25,24 @@ partial def D2P (e : Expr) : TransM PropForm := do
     match name with
     | ``True => return .True
     | ``False => return .False
-    | _ => addAtom e
+    | _ => h2Atom e
   | .app .. =>
     let f := e.getAppFn
     let some name := f.constName?
-      | addAtom e
+      | h2Atom e
     let args := e.getAppArgs
     if args.size == 1 then
       let args ← args.mapM D2P
       match name with
       | ``Not => return .Not args[0]!
-      | _ => addAtom e
+      | _ => h2Atom e
     else if args.size == 2 then
       let args ← args.mapM D2P
       match name with
       | ``And => return .And args[0]! args[1]!
       | ``Or => return .Or args[0]! args[1]!
       | ``Iff => return .Iff args[0]! args[1]!
-      | _ => addAtom e
+      | _ => h2Atom e
     else if args.size == 3 then
       match name with
       | ``Eq =>
@@ -48,11 +50,11 @@ partial def D2P (e : Expr) : TransM PropForm := do
           let args ← args[1:].toArray.mapM D2P
           return .Eq args[0]! args[1]!
         else
-          addAtom e
-      | _ => addAtom e
+          h2Atom e
+      | _ => h2Atom e
     else
-      addAtom e
-  | _ => addAtom e
+      h2Atom e
+  | _ => h2Atom e
 
 def tst (e : Expr) : Elab.Term.TermElabM Unit := do
   let es ← (D2P e).run {}

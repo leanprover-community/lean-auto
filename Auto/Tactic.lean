@@ -1,5 +1,6 @@
 import Lean
 import Auto.Preprocessing
+import Auto.Translation
 open Lean Elab Tactic
 
 initialize
@@ -73,6 +74,16 @@ def runAuto (stx : TSyntax ``hints) : TacticM Result := do
   let userLemmas ← collectUserLemmas (← parseHints stx)
   traceLemmas "Lemmas collected from user-provided terms:" userLemmas
   let lemmas := lctxLemmas ++ userLemmas
+  -- testing
+  let types := lemmas.map (fun x => x.type)
+  let commands := (← (do
+      let _ ← types.mapM (fun e => do
+        let f ← D2P e
+        ReifP.addAssertion (ω := Expr) f)
+      P2SMT
+    ).run {}).1
+  IO.println (String.intercalate "\n" (commands.map toString).data)
+  -- testing
   throwError "Not implemented"
 
 @[tactic auto]
