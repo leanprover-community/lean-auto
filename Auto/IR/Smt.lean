@@ -36,7 +36,7 @@ inductive SSort where
   | app : SIdent → Array SSort → SSort
 deriving BEq, Hashable, Inhabited
 
-private def SSort.toString_Aux : SSort → List SIdent → String
+private def SSort.toStringAux : SSort → List SIdent → String
 | .bvar i, binders =>
   if h : i < binders.length then
     s!"{binders[i]}"
@@ -45,15 +45,15 @@ private def SSort.toString_Aux : SSort → List SIdent → String
 | .app i ⟨[]⟩, _ => s!"{i}"
 | .app i ⟨a :: as⟩, binders =>
   let intro := s!"({i} "
-  let head := SSort.toString_Aux a binders ++ " "
+  let head := SSort.toStringAux a binders ++ " "
   let tail := String.intercalate " " (go as binders)
   intro ++ head ++ tail ++ ")"
 where go : List SSort → List SIdent →  List String 
 | [], _ => []
-| a :: as, binders => SSort.toString_Aux a binders :: go as binders
+| a :: as, binders => SSort.toStringAux a binders :: go as binders
 
 def SSort.toString (s : SSort) (binders : Array SIdent) : String :=
-  SSort.toString_Aux s binders.data
+  SSort.toStringAux s binders.data
 
 -- Caution : Do not use this in define-sort, because sort
 --   there might contain bvars
@@ -78,7 +78,14 @@ structure MatchCase (α : Sort u) where
   args   : Array String
   body   : α
 
+-- **TODO**: Float-point numbers?
 inductive SpecConst where
+  | str   : String → SpecConst
+  | num   : Nat → SpecConst
+
+def SpecConst.toString : SpecConst → String
+| .str s   => ToString.toString (repr s)
+| .num n   => ToString.toString (repr n)
 
 inductive STerm where
   | sConst  : SpecConst → STerm
@@ -89,8 +96,8 @@ inductive STerm where
   | existsE : (name : String) → (binderType : SSort) → (body : STerm) → STerm
   | matchE  : (matchTerm : STerm) → Array (MatchCase STerm) → STerm
 
-private def STerm.toString_Aux : STerm → List SIdent → String
-  | .sConst _, _         => panic!"STerm.toString :: Unimplemented"
+private def STerm.toStringAux : STerm → List SIdent → String
+  | .sConst c, _         => SpecConst.toString c
   | .bvar i, binders   =>
     if let some si := binders.get? i then
       ToString.toString si
@@ -99,45 +106,45 @@ private def STerm.toString_Aux : STerm → List SIdent → String
   | .qIdApp si ⟨[]⟩, _   => ToString.toString si
   | .qIdApp si ⟨a :: as⟩, binders =>
     let intro := s!"({si} "
-    let tail := String.intercalate " " (STerm.toString_Aux a binders :: goQIdApp as binders)
+    let tail := String.intercalate " " (STerm.toStringAux a binders :: goQIdApp as binders)
     intro ++ tail ++ ")"
   | .letE name binding body, binders =>
     let binders := (SIdent.symb name) :: binders
     let intro := s!"(let ({SIdent.symb name} "
-    let binding := STerm.toString_Aux binding binders ++ ") "
-    let body := STerm.toString_Aux body binders ++ ")"
+    let binding := STerm.toStringAux binding binders ++ ") "
+    let body := STerm.toStringAux body binders ++ ")"
     intro ++ binding ++ body
   | .forallE name binderType body, binders =>
     let binders := (SIdent.symb name) :: binders
     let intro := s!"(forall ({SIdent.symb name} "
     let binderType := ToString.toString binderType ++ ") "
-    let body := STerm.toString_Aux body binders ++ ")"
+    let body := STerm.toStringAux body binders ++ ")"
     intro ++ binderType ++ body
   | .existsE name binderType body, binders =>
     let binders := (SIdent.symb name) :: binders
     let intro := s!"(exists ({SIdent.symb name} "
     let binderType := ToString.toString binderType ++ ") "
-    let body := STerm.toString_Aux body binders ++ ")"
+    let body := STerm.toStringAux body binders ++ ")"
     intro ++ binderType ++ body
   | .matchE _ ⟨[]⟩, _ => panic!"STerm.toString :: Zero match branches"
   | .matchE matchTerm ⟨a :: as⟩, binders =>
-    let intro := s!"(match " ++ STerm.toString_Aux matchTerm binders ++ " ("
+    let intro := s!"(match " ++ STerm.toStringAux matchTerm binders ++ " ("
     let intro := intro ++ goMatchBranch a binders
     let body := String.join ((goMatchBody as binders).map (fun s => " " ++ s)) ++ "))"
     intro ++ body
 where
   goQIdApp : List STerm → List SIdent → List String
     | [], _ => []
-    | a :: as, binders => STerm.toString_Aux a binders :: goQIdApp as binders
+    | a :: as, binders => STerm.toStringAux a binders :: goQIdApp as binders
   goMatchBranch : MatchCase STerm → List SIdent → String
     | ⟨constr, args, body⟩, binders =>
       if args.size == 0 then
-        let body := " " ++ STerm.toString_Aux body binders ++ ")"
+        let body := " " ++ STerm.toStringAux body binders ++ ")"
         let pattern := "(" ++ (ToString.toString (SIdent.symb constr))
         pattern ++ body
       else
         let binders := args.data.map .symb ++ binders
-        let body := " " ++ STerm.toString_Aux body binders ++ ")"
+        let body := " " ++ STerm.toStringAux body binders ++ ")"
         let args := args.data.map (fun x => ToString.toString (SIdent.symb x))
         let pattern := "((" ++ String.intercalate " " (ToString.toString (SIdent.symb constr) :: args) ++ ")"
         pattern ++ body
@@ -146,7 +153,7 @@ where
     | a :: as, binders => goMatchBranch a binders :: goMatchBody as binders
 
 def STerm.toString (s : STerm) (binders : Array SIdent) : String :=
-  STerm.toString_Aux s binders.data
+  STerm.toStringAux s binders.data
 
 instance : ToString STerm where
   toString s := STerm.toString s #[]
@@ -163,7 +170,7 @@ private def ConstrDecl.toString : ConstrDecl → Array SIdent → String
   let selDecls := selDecls.map (fun (name, sort) => s!"({SIdent.symb name}" ++ SSort.toString sort binders ++ ")")
   String.intercalate " " (pre :: selDecls.data) ++ ")"
 
--- TODO: Complete?
+-- **TODO**: Complete?
 inductive Attribute where
   | key : String → Attribute
 

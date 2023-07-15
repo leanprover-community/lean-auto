@@ -16,3 +16,7 @@ example (a b : Prop)
         (h₁ : a ∨ b) (h₂ : a ∧ b) : True := by
   try auto [];
   sorry
+
+example : (P ∧ Q) ∧ R ↔ P ∧ (Q ∧ R) := by
+  try auto [];
+  sorry
