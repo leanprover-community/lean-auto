@@ -334,7 +334,7 @@ section DFA
     let tr := tr.concatMap id
     let all := "DFA ⦗⦗" ::
                s!"Accept states := {d.accepts.toList}" ::
-               s!"Size/Malformed-input state = {d.tr.size}" ::
+               s!"Size (Malformed-input state) = {d.tr.size}" ::
                tr.data
     String.intercalate "\n  " all ++ "\n⦘⦘"
 

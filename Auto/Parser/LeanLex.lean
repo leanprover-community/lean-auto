@@ -68,6 +68,7 @@ local instance : Hashable Char where
 
 inductive EREBracket where
   | cc      : CC.Ty → EREBracket
+  -- Match any character contained in the string
   | ofStr   : String → EREBracket
   -- Taking union
   | comp    : Array EREBracket → EREBracket
@@ -95,7 +96,6 @@ instance : ToString EREBracket where
   toString := EREBracket.toString
 
 inductive ERE where
-  -- Matches any character contained in the string
   | bracket : EREBracket → ERE
   | startp  : ERE
   | endp    : ERE
@@ -111,6 +111,9 @@ inductive ERE where
   | comp    : Array ERE → ERE
   | plus     : Array ERE → ERE
 deriving BEq, Hashable, Inhabited
+
+-- Match any character in the string
+def ERE.ofStr (s : String) := ERE.bracket (.ofStr s)
 
 partial def ERE.brackets : ERE → Array EREBracket
 | .bracket b     => #[b]
@@ -210,11 +213,6 @@ def ERE.charGrouping (e : ERE) : CharGrouping := Id.run <| do
   charMap := HashMap.ofList (charMap.toList.map (fun (c, i) => (c, reloc.find! i)))
   return CharGrouping.mk ridx all charMap
 
-/-
-#eval IO.println (ERE.charGrouping (.comp ((
-  #[.ofStr "abce", .ofStr "abgh"]).map ERE.bracket)))
--/
-
 private partial def ERE.toNFAAux (cg : CharGrouping) : ERE → (NFA Nat)
 | .bracket b =>
   let bs := toString b
@@ -235,10 +233,44 @@ structure ADFA where
   dfa : DFA Nat
   cg  : CharGrouping
 
+def ADFA.toString : ADFA → String :=
+  fun ⟨d, cg⟩ =>
+    let dsnatS (s : Nat) (sn : _ × Nat) := s!"({s}, {sn.fst} → {sn.snd})"
+    let dtr := d.tr.mapIdx (fun idx c => c.toArray.map (fun el => dsnatS idx el))
+    let dtr := dtr.concatMap id
+    let cggroups := cg.groups.mapIdx (
+      fun idx c =>
+        let c := String.mk ((sort (c.toList.map Char.toNat)).map Char.ofNat)
+        s!"{idx.val} : {repr c}"
+    )
+    let cgalls := String.mk ((sort (cg.all.toList.map Char.toNat)).map Char.ofNat)
+    let all := "ADFA ⦗⦗" ::
+               s!"Accept states := {d.accepts.toList}" ::
+               s!"Size (Malformed-input state) = {d.tr.size}" ::
+               dtr.data
+               ++
+               s!"Number of groups := {cg.ngroup}" ::
+               s!"All relevant characters := {repr cgalls}" ::
+               cggroups.data
+    String.intercalate "\n  " all ++ "\n⦘⦘"
+
+instance : ToString ADFA where
+  toString := ADFA.toString
+
 def ERE.toADFA (e : ERE) : ADFA :=
   let cg := e.charGrouping
   let nfa := e.toNFAAux cg
   let dfa := DFA.ofNFA nfa
   ⟨dfa, cg⟩
+
+/-
+
+#eval IO.println (ERE.charGrouping (.comp ((
+  #[.ofStr "abce", .ofStr "abgh"]).map ERE.bracket)))
+
+#eval IO.println (ERE.toADFA
+  (.comp #[.plus #[.ofStr "hd", .ofStr "f"], .ofStr "fg#", .bracket (.cc .alpha)]))
+
+-/
 
 end Auto.Regex
