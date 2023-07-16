@@ -69,22 +69,25 @@ local instance : Hashable Char where
 inductive EREBracket where
   | cc      : CC.Ty → EREBracket
   -- Match any character contained in the string
-  | ofStr   : String → EREBracket
+  | inStr   : String → EREBracket
   -- Taking union
-  | comp    : Array EREBracket → EREBracket
-  -- Takes complement in ascii
-  | neg     : EREBracket → EREBracket
+  | plus    : Array EREBracket → EREBracket
+  -- Takes complement of `b2` with respect to `b1`
+  | minus   : (b1 : EREBracket) → (b2 : EREBracket) → EREBracket
 deriving BEq, Hashable, Inhabited
+
+-- Taking complement of `b` with respect to the set of ascii characters
+def EREBracket.neg (b : EREBracket) : EREBracket := .minus b (.cc .all)
 
 -- **TODO**: Why does this need `partial`?
 partial def EREBracket.toHashSet : EREBracket → HashSet Char
-  | .cc cty      => HashSet.empty.insertMany (toString cty).toList
-  | .ofStr s     => HashSet.empty.insertMany s.toList
-  | .neg b       =>
-    let hb := b.toHashSet
-    let alls := (List.range 128).map Char.ofNat
-    HashSet.empty.insertMany (alls.filter (fun x => !hb.contains x))
-  | .comp ⟨bl⟩    => go bl
+  | .cc cty       => HashSet.empty.insertMany (toString cty).toList
+  | .inStr s      => HashSet.empty.insertMany s.toList
+  | .plus ⟨bl⟩     => go bl
+  | .minus b1 b2  =>
+    let hb := b2.toHashSet
+    let b1s := b1.toHashSet.toList
+    HashSet.empty.insertMany (b1s.filter (fun x => !hb.contains x))
 where
   go : List EREBracket → HashSet Char
     | [] => HashSet.empty
@@ -96,31 +99,49 @@ instance : ToString EREBracket where
   toString := EREBracket.toString
 
 inductive ERE where
-  | bracket : EREBracket → ERE
+  | bracket  : EREBracket → ERE
+  -- Complement of bracket with respect to the set of `utf-8` characters
+  | bracketN : EREBracket → ERE
   -- Beginning of string
-  | startp  : ERE
+  --   Do not use this in any lexer! In many
+  --   cases there are whitespaces between
+  --   tokens, so your `startp` will not correctly
+  --   match the beginning of the token.
+  | startp   : ERE
   -- End of string
-  -- Do not use this in any lexer! It makes no sense
+  --   Do not use this in any lexer! It makes no sense
   --   to talk about the "end of string" in a lexer.
-  | endp    : ERE
-  | star    : ERE → ERE
+  | endp     : ERE
+  | star     : ERE → ERE
   -- Repeat exactly `n` times
-  | repN    : ERE → (n : Nat) → ERE
+  | repN     : ERE → (n : Nat) → ERE
   -- Repeat at most `n` times
-  | repGe   : ERE → (n : Nat) → ERE
+  | repGe    : ERE → (n : Nat) → ERE
   -- Repeat at least `n` times
-  | repLe   : ERE → (n : Nat) → ERE
+  | repLe    : ERE → (n : Nat) → ERE
   -- Repeat at least `n` times and at most `m` times
-  | repGeLe : ERE → (n : Nat) → (m : Nat) → ERE
-  | comp    : Array ERE → ERE
+  | repGeLe  : ERE → (n : Nat) → (m : Nat) → ERE
+  | comp     : Array ERE → ERE
   | plus     : Array ERE → ERE
 deriving BEq, Hashable, Inhabited
 
 -- Match any character in the string
-def ERE.ofStr (s : String) := ERE.bracket (.ofStr s)
+def ERE.inStr (s : String) := ERE.bracket (.inStr s)
+
+-- Match the given string
+def ERE.ofStr (s : String) := ERE.comp ⟨s.toList.map (fun c => .inStr (String.mk [c]))⟩
+
+def ERE.ofCC (c : CC.Ty) := ERE.bracket (.cc c)
+
+-- Optional, corresponding to `?`
+def ERE.opt (e : ERE) := e.repLe 1
+
+-- Nonempty sequence of, corresponding to `+`
+def ERE.some (e : ERE) := e.repGe 1
 
 partial def ERE.brackets : ERE → Array EREBracket
 | .bracket b     => #[b]
+| .bracketN b    => #[b]
 | .startp        => #[]
 | .endp          => #[]
 | .star e        => e.brackets
@@ -132,7 +153,8 @@ partial def ERE.brackets : ERE → Array EREBracket
 | .plus es       => (es.map ERE.brackets).concatMap id
 
 partial def ERE.normalizeBrackets : ERE → ERE
-| .bracket b     => .bracket (.ofStr (toString b))
+| .bracket b     => .bracket (.inStr (toString b))
+| .bracketN b    => .bracketN (.inStr (toString b))
 | .startp        => .startp
 | .endp          => .endp
 | .star e        => .star e.normalizeBrackets
@@ -158,9 +180,11 @@ section
     -- A character is in `all` iff it's in `charMap`.
     -- Group number takes value in `0, 1, ..., ngroups - 1`
     -- For the intermediate `NFA` generated in `ERE.toADFA`,
-    --   the alphabet of the `NFA` will be `0, 1, ..., ngroups + 1`,
-    --   where `ngroups` represents beginning of string, and
-    --   `ngroups + 1` represents end of string.
+    --   the alphabet of the `NFA` will be `0, 1, ..., ngroups + 2`,
+    --   where `ngroups` represents beginning of string,
+    --   `ngroups + 1` represents end of string, and `ngroups + 2`
+    --   is the complement of `all` with respect to the set
+    --   of `utf-8` characters
   deriving Inhabited
 
   -- Annotated DFA, the `lexer table`
@@ -173,8 +197,10 @@ section
     dfa : DFA Nat
     -- As stated before, for the intermediate `NFA` generated
     --   in `ERE.toADFA`, `cg.ngroups` represents beginning
-    --   of string, and `cg.ngroups + 1` represents end of string.
-    --   Refer to `ERE.toADFA`.
+    --   of string, `cg.ngroups + 1` represents end of string,
+    --   and `ngroups + 2` is the complement of `all` with
+    --   respect to the set of `utf-8` characters
+    --   Refer to `ERE.toADFA`, `ERE.ADFALex` and `DFA.run`
     cg  : CharGrouping σ
   
   variable {σ : Type} [Hashable σ] [BEq σ] [ToString σ]
@@ -206,6 +232,12 @@ section
                  s!"All relevant characters := {ToString.toString all.toList}" ::
                  groups.data
       String.intercalate "\n  " all ++ "\n⦘⦘"
+
+  def CharGrouping.getGroup (cg : CharGrouping σ) (c : σ) : Nat :=
+    match cg.charMap.find? c with
+    | .some g => g
+    -- Invalid character
+    | .none   => cg.ngroup + 2
 
   instance : ToString (CharGrouping σ) where
     toString := CharGrouping.toString
@@ -279,9 +311,15 @@ def ERE.charGrouping (e : ERE) : CharGrouping Char := Id.run <| do
   return CharGrouping.mk ridx all charMap
 
 private partial def ERE.toNFAAux (cg : CharGrouping Char) : ERE → (NFA Nat)
-| .bracket b =>
+| .bracket b     =>
   let bs := toString b
   let states := bs.foldl (fun hs c => hs.insert (cg.charMap.find! c)) HashSet.empty
+  NFA.ofSymbAdd states.toArray
+| .bracketN b    =>
+  let bs := toString b
+  -- All `utf-8` characters
+  let initHs := HashSet.empty.insertMany ((cg.ngroup + 2) :: List.range cg.ngroup)
+  let states := bs.foldl (fun hs c => hs.erase (cg.charMap.find! c)) initHs
   NFA.ofSymbAdd states.toArray
 | .startp        => NFA.ofSymb (cg.ngroup)
 | .endp          => NFA.ofSymb (cg.ngroup + 1)
@@ -311,6 +349,7 @@ def ADFA.toStringForChar : ADFA Char → String :=
                s!"All relevant characters := {repr cgalls}" ::
                s!"Group representing beginning of string := {cg.ngroup}" ::
                s!"Group representing end of string := {cg.ngroup + 1}" ::
+               s!"Group representing other utf-8 characters := {cg.ngroup + 2}" ::
                "(GroupIdx, Group members):" ::
                cggroups.data ++
                s!"(State, GroupIdx → State'):" ::
@@ -330,13 +369,76 @@ def ERE.toADFA (e : ERE) : ADFA Char :=
   let dfa := DFA.ofNFA nfa
   ⟨dfa, cg⟩
 
-/-
+-- Rationale : First use `ERE.toADFA` to generate
+--   the lexing table in another file `<f>` and use
+--   `initialize` to store it, then call the following
+--   function in another file, where the `ADFA` is
+--   the one initialized in `<f>`
+-- This function takes an `ADFA` generated by
+--   `ERE.toADFA`, a string `s`, and outputs the
+--   substring which represents the leftmost longest
+--   match against `a`.
+-- We assume that `.startp` and `.endp` is not used
+--   in the `ERE` used to generate `a`.
+def ERE.ADFALex (a : ADFA Char) (s : Substring) : Option Substring := Id.run <| do
+  let mut p : String.Pos := s.startPos
+  let mut b : String.Pos := s.startPos
+  let mut e : String.Pos := s.startPos
+  let mut state : Nat := 0
+  let mut matchStart : Bool := false
+  while true do
+    if p == s.stopPos then
+      -- If end of string is reached, stop matching
+      e := p
+      break
+    else
+      let .some c := s.str.get? p
+        | panic! s!"ERE.ADFALex :: Invalid position {p} for string {s.str}"
+      let cgp := a.cg.getGroup c
+      let state' := a.dfa.move state cgp
+      match matchStart, state' == a.dfa.tr.size with
+      -- If `state'` is `malformed input`, stop matching and do not add to `p`
+      | true, true   => e := p; break
+      -- If `state'` is valid, update `state`
+      | true, false  => state := state'
+      -- If the symbol is not valid as the first symbol of a matching
+      --   substring, continue searching for valid first symbol
+      | false, true  => pure ()
+      -- If the symbol is valid as the first symbol, start matching
+      | false, false => b := p; state := state'; matchStart := true
+      p := p + c
+  if matchStart && a.dfa.accepts.contains state then
+    return .some ⟨s.str, b, e⟩
+  else
+    return .none
+
+
 
 #eval IO.println (ERE.charGrouping (.comp ((
-  #[.ofStr "abce", .ofStr "abgh"]).map ERE.bracket)))
+  #[.inStr "abce", .inStr "abgh"]).map ERE.bracket)))
 
-#eval IO.println <| ToString.toString (ERE.toADFA
-  (.comp #[.plus #[.ofStr "hd", .ofStr "f"], .ofStr "fg#", .bracket (.cc .alpha)]))
+def test₁ := ERE.toADFA
+  (.comp #[.plus #[.inStr "hd", .inStr "f"], .inStr "fg#", .bracket (.cc .alpha)])
+
+/-
+
+#eval IO.println test₁
+
+#eval test₁.dfa.move 2 3
+
+#eval (ERE.ADFALex test₁ "? f#a ".toSubstring).map (fun x => x.stopPos)
+
+def test₂ := ERE.toADFA (.plus #[.ofStr "abc", .ofStr "efg"])
+
+#eval IO.println test₂
+ 
+#eval (ERE.ADFALex test₂ " efg ".toSubstring).map (fun x => x.startPos)
+
+def test₃ := ERE.toADFA (.comp #[.ofStr "ab", .bracketN (.inStr "pd🍉")])
+
+#eval IO.println test₃
+
+#eval (ERE.ADFALex test₃ " ab🍈 ".toSubstring).map (fun x => x.startPos)
 
 -/
 
