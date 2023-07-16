@@ -165,8 +165,8 @@ section NFA
     #[HashMap.empty.insert (.inl .unit) #[1]]
 
   -- Accepts a character
-  def NFA.char (c : Char) : NFA UInt32 :=
-    #[HashMap.empty.insert (.inr c.val) #[1]]
+  def NFA.ofSymb (c : σ) : NFA σ :=
+    #[HashMap.empty.insert (.inr c) #[1]]
 
   -- Produce an NFA whose language is the union of `m`'s and `n`'s
   def NFA.plus (m n : NFA σ) : NFA σ :=
@@ -262,14 +262,17 @@ section NFA
     NFA.comp (r.repeatN n) (r.repeatAtMost (m - n))
 
   -- Accepts all characters in an array of characters
-  def NFA.chars (cs : Array Char) : NFA UInt32 :=
-    #[HashMap.ofList (cs.map (fun c => (.inr c.val,#[1]))).data]
+  def NFA.ofSymbAdd (cs : Array σ) : NFA σ :=
+    #[HashMap.ofList (cs.map (fun c => (.inr c,#[1]))).data]
 
   -- An `NFA UInt32` that accepts exactly a string
-  def NFA.charOfString (s : String) : NFA UInt32 :=
-    (Array.mk s.data).mapIdx (fun idx c => HashMap.empty.insert (.inr c.val) #[idx + 1])
+  def NFA.ofSymbComp (s : Array σ) : NFA σ :=
+    (Array.mk s.data).mapIdx (fun idx c => HashMap.empty.insert (.inr c) #[idx + 1])
 
   /-
+
+  local instance : Hashable Char where
+    hash c := hash c.val
 
   def test₁ : NFA String := #[
       HashMap.ofList [(.inr "a", #[5]), (.inr "b", #[1, 0])],
@@ -286,20 +289,20 @@ section NFA
   #eval IO.println (test₂.comp test₂)
   #eval IO.println (test₂.plus test₂)
   #eval IO.println test₂.star
-  #eval IO.println (NFA.chars #['a', 'c', 'd', '🍉'])
-  #eval IO.println (NFA.charOfString "acd🍉")
-  #eval IO.println (NFA.repeatAtMost (NFA.charOfString "ab") 2)
+  #eval IO.println (NFA.ofSymbAdd #['a', 'c', 'd', '🍉'])
+  #eval IO.println (NFA.ofSymbComp ⟨"acd🍉".toList⟩)
+  #eval IO.println (NFA.repeatAtMost (NFA.ofSymbComp ⟨"ab".toList⟩) 2)
   #eval IO.println (NFA.repeatAtMost test₂ 2)
-  #eval IO.println (NFA.repeatN (NFA.char 'a') 5)
-  #eval IO.println (NFA.charOfString "aaaaa")
+  #eval IO.println (NFA.repeatN (NFA.ofSymb 'a') 5)
+  #eval IO.println (NFA.ofSymbComp ⟨"aaaaa".toList⟩)
 
-  def test₃ := NFA.multiPlus (#["a", "dfw", "e4"].map NFA.charOfString)
+  def test₃ := NFA.multiPlus (#["a", "dfw", "e4"].map (fun s => NFA.ofSymbComp ⟨s.toList⟩))
 
   #eval IO.println test₃
   #eval test₃.wf
-  #eval (test₃.move (HashSet.empty.insert 0) 'a'.val).toList
+  #eval (test₃.move (HashSet.empty.insert 0) 'a').toList
   #eval (test₃.εClosureOfStates (HashSet.empty.insert 0)).toList
-  #eval (test₃.move (HashSet.empty.insertMany [7,3,1,0]) 'a'.val).toList
+  #eval (test₃.move (HashSet.empty.insertMany [7,3,1,0]) 'a').toList
 
   -/
 
@@ -406,8 +409,11 @@ section DFA
 
   /-
 
-  def test₅ : NFA UInt32 := NFA.repeatAtMost (NFA.charOfString "ab") 2
-  def test₆ : NFA UInt32 := NFA.repeatAtLeast (NFA.charOfString "ab") 200
+  local instance : Hashable Char where
+    hash c := hash c.val
+
+  def test₅ : NFA Char := NFA.repeatAtMost (NFA.ofSymbComp ⟨"ab".toList⟩) 2
+  def test₆ : NFA Char := NFA.repeatAtLeast (NFA.ofSymbComp ⟨"ab".toList⟩) 200
 
   #eval (do IO.println test₂; IO.println (DFA.ofNFA test₂))
   #eval (do IO.println test₃; IO.println (DFA.ofNFA test₃))
