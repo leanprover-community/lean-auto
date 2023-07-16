@@ -205,6 +205,7 @@ section
     --   respect to the set of `utf-8` characters
     --   Refer to `ERE.toADFA`, `ERE.ADFALex` and `DFA.run`
     cg  : CharGrouping σ
+  deriving Inhabited
   
   variable {σ : Type} [Hashable σ] [BEq σ] [ToString σ]
   
@@ -224,29 +225,32 @@ section
         arr := arr.modify idx (fun hs => hs.insert c)
       return arr
 
-  def CharGrouping.toString : CharGrouping σ → String :=
-    fun cg@⟨ngroup, all, _⟩ =>
-      let groups := cg.groups.mapIdx (
-        fun idx c =>
-          s!"{idx.val} : {ToString.toString c.toList}"
-      )
-      let all := "CharGrouping ⦗⦗" ::
-                 s!"Number of groups := {ngroup}" ::
-                 s!"All relevant characters := {ToString.toString all.toList}" ::
-                 s!"Group representing beginning of string := {ngroup}" ::
-                 s!"Group representing end of string := {ngroup + 1}" ::
-                 s!"Group representing other utf-8 characters := {ngroup + 2}" ::
-                 groups.data
-      String.intercalate "\n  " all ++ "\n⦘⦘"
+  def CharGrouping.toStringAux : CharGrouping σ → (symbListToString : Array σ → String) → String :=
+    fun cg@⟨ngroup, all, _⟩ symbListToString =>
+    let groups := cg.groups.mapIdx (
+      fun idx c =>
+        s!"{idx.val} : {symbListToString c.toArray}"
+    )
+    let all := "CharGrouping ⦗⦗" ::
+               s!"Number of groups := {ngroup}" ::
+               s!"All relevant characters := {symbListToString all.toArray}" ::
+               s!"Group representing beginning of string := {ngroup}" ::
+               s!"Group representing end of string := {ngroup + 1}" ::
+               s!"Group representing other utf-8 characters := {ngroup + 2}" ::
+               groups.data
+    String.intercalate "\n  " all ++ "\n⦘⦘"
+
+  def CharGrouping.toString (cg : CharGrouping σ) : String :=
+    CharGrouping.toStringAux cg ToString.toString
+
+  instance : ToString (CharGrouping σ) where
+    toString := CharGrouping.toString
 
   def CharGrouping.getGroup (cg : CharGrouping σ) (c : σ) : Nat :=
     match cg.charMap.find? c with
     | .some g => g
     -- Invalid character
     | .none   => cg.ngroup + 2
-
-  instance : ToString (CharGrouping σ) where
-    toString := CharGrouping.toString
 
   def ADFA.toStringAux : ADFA σ → (symbListToString : Array σ → String) → String :=
     fun ⟨d, cg⟩ symbListToString =>
@@ -263,7 +267,7 @@ section
                  s!"Accept states := {d.accepts.toList}" ::
                  s!"Size (Malformed-input state) = {d.tr.size}" ::
                  s!"Number of groups := {cg.ngroup}" ::
-                 s!"All relevant characters := {repr cgalls}" ::
+                 s!"All relevant characters := {cgalls}" ::
                  s!"Group representing beginning of string := {cg.ngroup}" ::
                  s!"Group representing end of string := {cg.ngroup + 1}" ::
                  s!"Group representing other utf-8 characters := {cg.ngroup + 2}" ::
@@ -280,22 +284,23 @@ section
 
 end
 
-def CharGrouping.toStringForChar : CharGrouping Char → String :=
-  fun cg@⟨ngroup, all, _⟩ =>
-    let groups := cg.groups.mapIdx (
-      fun idx c =>
-        let c := String.mk ((sort (c.toList.map Char.toNat)).map Char.ofNat)
-        s!"{idx.val} : {repr c}"
-    )
-    let alls := String.mk ((sort (all.toList.map Char.toNat)).map Char.ofNat)
-    let all := "CharGrouping ⦗⦗" ::
-               s!"Number of groups := {ngroup}" ::
-               s!"All relevant characters := {repr alls}" ::
-               groups.data
-    String.intercalate "\n  " all ++ "\n⦘⦘"
+def CharGrouping.toStringForChar (cg : CharGrouping Char) : String :=
+  CharGrouping.toStringAux cg (fun l => 
+    let sorted := sort (l.toList.map Char.toNat)
+    let str := String.mk (sorted.map Char.ofNat)
+    ToString.toString (repr str))
 
 instance : ToString (CharGrouping Char) where
   toString := CharGrouping.toStringForChar
+
+def ADFA.toStringForChar (a : ADFA Char) : String :=
+  ADFA.toStringAux a (fun l => 
+    let sorted := sort (l.toList.map Char.toNat)
+    let str := String.mk (sorted.map Char.ofNat)
+    ToString.toString (repr str))
+
+instance : ToString (ADFA Char) where
+  toString := ADFA.toStringForChar
 
 def ERE.charGrouping (e : ERE) : CharGrouping Char := Id.run <| do
   let hsets := e.brackets.map EREBracket.toHashSet
@@ -342,12 +347,6 @@ private partial def ERE.toNFAAux (cg : CharGrouping Char) : ERE → (NFA Nat)
 | .comp es       => NFA.multiComp (es.map (fun e => e.toNFAAux cg))
 | .plus es       => NFA.multiPlus (es.map (fun e => e.toNFAAux cg))
 | .attr e s      => NFA.addAttr (e.toNFAAux cg) s
-
-def ADFA.toStringForChar (a : ADFA Char) : String := ADFA.toStringAux a
-  (fun l => String.mk ((sort (l.toList.map Char.toNat)).map Char.ofNat))
-
-instance : ToString (ADFA Char) where
-  toString := ADFA.toStringForChar
 
 def ERE.toADFA (e : ERE) : ADFA Char :=
   let cg := e.charGrouping

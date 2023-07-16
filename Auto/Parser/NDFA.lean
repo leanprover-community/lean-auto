@@ -388,6 +388,7 @@ section DFA
     --   is associated with an array of attributes.
     -- So, we should have `attrs.size == tr.size`
     attrs   : Array (HashSet String)
+  deriving Inhabited
   
   variable {σ : Type} [BEq σ] [Hashable σ] [ToString σ]
 

@@ -2,11 +2,11 @@ import Lean
 import Auto.Parser.LeanLex
 open Lean
 
---〈spec_constant〉 ::= 〈numeral〉 | 〈decimal〉 | 〈hexadecimal〉 | 〈binary〉 | 〈string〉
---〈s_expr 〉 ::= 〈spec_constant〉 | 〈symbol〉 | 〈keyword〉 | ( 〈s_expr〉∗ )
-
 namespace Auto.Lexer
 
+-- SMT-LIB2 compilant lexer
+--〈spec_constant〉 ::= 〈numeral〉 | 〈decimal〉 | 〈hexadecimal〉 | 〈binary〉 | 〈string〉
+--〈s_expr 〉 ::= 〈spec_constant〉 | 〈symbol〉 | 〈keyword〉 | ( 〈s_expr〉∗ )
 namespace SMTSexp
 
 open Regex
@@ -53,6 +53,10 @@ def symbol : ERE := .plus #[simpleSymbol, quotedSymbol]
 
 def keyword : ERE := .comp #[.inStr ":", simpleSymbol]
 
+def lparen : ERE := .inStr "("
+
+def rparen : ERE := .inStr ")"
+
 -- Special constants
 def specConst : ERE := .plus #[
   .attr numeral "numeral",
@@ -62,19 +66,30 @@ def specConst : ERE := .plus #[
   .attr string "string"
 ]
 
-def baseSexp : ERE := .plus #[
+def lexicons : ERE := .plus #[
   specConst,
   -- For lexical analysis, do not distinguish between keyword and symbol
   .attr symbol "symbol",
-  .attr keyword "keyword"
+  .attr keyword "keyword",
+  .attr lparen "(",
+  .attr rparen ")"
 ]
+
+/-
 
 #eval string.toADFA
 
 #eval specConst.toADFA
 
 -- Good property: Each state have at most one attribute!
-#eval baseSexp.toADFA
+#eval lexicons.toADFA
+
+-/
+
+local instance : Hashable Char where
+  hash c := hash c.val
+
+initialize lexiconADFA : ADFA Char ← pure lexicons.toADFA
 
 end SMTSexp
 
