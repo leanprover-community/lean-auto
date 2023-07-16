@@ -97,7 +97,11 @@ instance : ToString EREBracket where
 
 inductive ERE where
   | bracket : EREBracket → ERE
+  -- Beginning of string
   | startp  : ERE
+  -- End of string
+  -- Do not use this in any lexer! It makes no sense
+  --   to talk about the "end of string" in a lexer.
   | endp    : ERE
   | star    : ERE → ERE
   -- Repeat exactly `n` times
@@ -139,40 +143,101 @@ partial def ERE.normalizeBrackets : ERE → ERE
 | .comp es       => .comp (es.map normalizeBrackets)
 | .plus es       => .plus (es.map normalizeBrackets)
 
--- Given an `ERE`, group characters that `behaves the same`,
---   according to all the `bracket`s in this `ERE`
-structure CharGrouping where
-  ngroup  : Nat
-  -- All relevant characters
-  all     : HashSet Char
-  -- Map from character to its corresponding group
-  charMap : HashMap Char Nat
-  -- A character is in `all` iff it's in `charMap`.
-  -- Group number takes value in `0, 1, ..., ngroups - 1`
-  -- When we generate the `NFA` based on this `CharGrouping`,
-  --   the alphabet of the `NFA` will be `0, 1, ..., ngroups + 1`,
-  --   where `ngroups` is the extra group, `ngroups`
-  --   represents beginning of string, and `ngroups + 1` represents
-  --   end of string.
-deriving Inhabited
+section
 
-def CharGrouping.wf : CharGrouping → Bool :=
-  fun ⟨ngroup, all, charMap⟩ =>
-    let img := charMap.fold (fun hs _ n => hs.insert n) HashSet.empty
-    let surj := (sort img.toList) == List.range ngroup
-    let allInCharMap := all.all (fun c => charMap.contains c)
-    let sizeEq := all.size == charMap.size
-    surj && allInCharMap && sizeEq
+  variable (σ : Type) [Hashable σ] [BEq σ] [ToString σ]
 
-def CharGrouping.groups : CharGrouping → Array (HashSet Char) :=
-  fun ⟨ngroup, _, charMap⟩ => Id.run <| do
-    let mut arr : Array (HashSet Char) := 
-      Array.mk ((List.range ngroup).map (fun _ => HashSet.empty))
-    for (c, idx) in charMap do
-      arr := arr.modify idx (fun hs => hs.insert c)
-    return arr
+  -- Given an `ERE`, group characters that `behaves the same`,
+  --   according to all the `bracket`s in this `ERE`
+  structure CharGrouping where
+    ngroup  : Nat
+    -- All relevant characters
+    all     : HashSet σ
+    -- Map from character to its corresponding group
+    charMap : HashMap σ Nat
+    -- A character is in `all` iff it's in `charMap`.
+    -- Group number takes value in `0, 1, ..., ngroups - 1`
+    -- For the intermediate `NFA` generated in `ERE.toADFA`,
+    --   the alphabet of the `NFA` will be `0, 1, ..., ngroups + 1`,
+    --   where `ngroups` represents beginning of string, and
+    --   `ngroups + 1` represents end of string.
+  deriving Inhabited
 
-def CharGrouping.toString : CharGrouping → String :=
+  -- Annotated DFA, the `lexer table`
+  structure ADFA where
+    -- As stated before, `dfa.tr.size` represents the
+    --  `malformed input` state. Moreover (also stated before),
+    --   if the transition map of state `i` does not include
+    --   an entry for character `c`, then the transition from
+    --   `i` to `c` ends in `malformed input` state
+    dfa : DFA Nat
+    -- As stated before, for the intermediate `NFA` generated
+    --   in `ERE.toADFA`, `cg.ngroups` represents beginning
+    --   of string, and `cg.ngroups + 1` represents end of string.
+    --   Refer to `ERE.toADFA`.
+    cg  : CharGrouping σ
+  
+  variable {σ : Type} [Hashable σ] [BEq σ] [ToString σ]
+  
+  def CharGrouping.wf : CharGrouping σ → Bool :=
+    fun ⟨ngroup, all, charMap⟩ =>
+      let img := charMap.fold (fun hs _ n => hs.insert n) HashSet.empty
+      let surj := (sort img.toList) == List.range ngroup
+      let allInCharMap := all.all (fun c => charMap.contains c)
+      let sizeEq := all.size == charMap.size
+      surj && allInCharMap && sizeEq
+  
+  def CharGrouping.groups : CharGrouping σ → Array (HashSet σ) :=
+    fun ⟨ngroup, _, charMap⟩ => Id.run <| do
+      let mut arr : Array (HashSet σ) := 
+        Array.mk ((List.range ngroup).map (fun _ => HashSet.empty))
+      for (c, idx) in charMap do
+        arr := arr.modify idx (fun hs => hs.insert c)
+      return arr
+
+  def CharGrouping.toString : CharGrouping σ → String :=
+    fun cg@⟨ngroup, all, _⟩ =>
+      let groups := cg.groups.mapIdx (
+        fun idx c =>
+          s!"{idx.val} : {ToString.toString c.toList}"
+      )
+      let all := "CharGrouping ⦗⦗" ::
+                 s!"Number of groups := {ngroup}" ::
+                 s!"All relevant characters := {ToString.toString all.toList}" ::
+                 groups.data
+      String.intercalate "\n  " all ++ "\n⦘⦘"
+
+  instance : ToString (CharGrouping σ) where
+    toString := CharGrouping.toString
+
+  def ADFA.toString : ADFA σ → String :=
+    fun ⟨d, cg⟩ =>
+      let dsnatS (s : Nat) (sn : _ × Nat) := s!"  ({s}, {sn.fst} → {sn.snd})"
+      let dtr := d.tr.mapIdx (fun idx c => c.toArray.map (fun el => dsnatS idx el))
+      let dtr := dtr.concatMap id
+      let cggroups := cg.groups.mapIdx (
+        fun idx c =>
+          s!"  {idx.val} : {ToString.toString c.toList}"
+      )
+      let all := "ADFA ⦗⦗" ::
+                 s!"Accept states := {d.accepts.toList}" ::
+                 s!"Size (Malformed-input state) = {d.tr.size}" ::
+                 s!"Number of groups := {cg.ngroup}" ::
+                 s!"All relevant characters := {ToString.toString cg.all.toList}" ::
+                 s!"Group representing beginning of string := {cg.ngroup}" ::
+                 s!"Group representing end of string := {cg.ngroup + 1}" ::
+                 "(GroupIdx, Group members):" ::
+                 cggroups.data ++
+                 s!"(State, GroupIdx → State'):" ::
+                 dtr.data
+      String.intercalate "\n  " all ++ "\n⦘⦘"
+  
+  instance : ToString (ADFA σ) where
+    toString := ADFA.toString
+
+end
+
+def CharGrouping.toStringForChar : CharGrouping Char → String :=
   fun cg@⟨ngroup, all, _⟩ =>
     let groups := cg.groups.mapIdx (
       fun idx c =>
@@ -186,10 +251,10 @@ def CharGrouping.toString : CharGrouping → String :=
                groups.data
     String.intercalate "\n  " all ++ "\n⦘⦘"
 
-instance : ToString CharGrouping where
-  toString := CharGrouping.toString
+instance : ToString (CharGrouping Char) where
+  toString := CharGrouping.toStringForChar
 
-def ERE.charGrouping (e : ERE) : CharGrouping := Id.run <| do
+def ERE.charGrouping (e : ERE) : CharGrouping Char := Id.run <| do
   let hsets := e.brackets.map EREBracket.toHashSet
   let mut all := hsets.foldl (fun hs nhs => hs.insertMany nhs) HashSet.empty
   let mut charMap := all.fold (fun hs c => hs.insert c 0) HashMap.empty
@@ -213,7 +278,7 @@ def ERE.charGrouping (e : ERE) : CharGrouping := Id.run <| do
   charMap := HashMap.ofList (charMap.toList.map (fun (c, i) => (c, reloc.find! i)))
   return CharGrouping.mk ridx all charMap
 
-private partial def ERE.toNFAAux (cg : CharGrouping) : ERE → (NFA Nat)
+private partial def ERE.toNFAAux (cg : CharGrouping Char) : ERE → (NFA Nat)
 | .bracket b =>
   let bs := toString b
   let states := bs.foldl (fun hs c => hs.insert (cg.charMap.find! c)) HashSet.empty
@@ -228,38 +293,40 @@ private partial def ERE.toNFAAux (cg : CharGrouping) : ERE → (NFA Nat)
 | .comp es       => NFA.multiComp (es.map (fun e => e.toNFAAux cg))
 | .plus es       => NFA.multiPlus (es.map (fun e => e.toNFAAux cg))
 
--- Annotated DFA, the `lexer table`
-structure ADFA where
-  dfa : DFA Nat
-  cg  : CharGrouping
-
-def ADFA.toString : ADFA → String :=
+def ADFA.toStringForChar : ADFA Char → String :=
   fun ⟨d, cg⟩ =>
-    let dsnatS (s : Nat) (sn : _ × Nat) := s!"({s}, {sn.fst} → {sn.snd})"
+    let dsnatS (s : Nat) (sn : _ × Nat) := s!"  ({s}, {sn.fst} → {sn.snd})"
     let dtr := d.tr.mapIdx (fun idx c => c.toArray.map (fun el => dsnatS idx el))
     let dtr := dtr.concatMap id
     let cggroups := cg.groups.mapIdx (
       fun idx c =>
         let c := String.mk ((sort (c.toList.map Char.toNat)).map Char.ofNat)
-        s!"{idx.val} : {repr c}"
+        s!"  {idx.val} : {repr c}"
     )
     let cgalls := String.mk ((sort (cg.all.toList.map Char.toNat)).map Char.ofNat)
     let all := "ADFA ⦗⦗" ::
                s!"Accept states := {d.accepts.toList}" ::
                s!"Size (Malformed-input state) = {d.tr.size}" ::
-               dtr.data
-               ++
                s!"Number of groups := {cg.ngroup}" ::
                s!"All relevant characters := {repr cgalls}" ::
-               cggroups.data
+               s!"Group representing beginning of string := {cg.ngroup}" ::
+               s!"Group representing end of string := {cg.ngroup + 1}" ::
+               "(GroupIdx, Group members):" ::
+               cggroups.data ++
+               s!"(State, GroupIdx → State'):" ::
+               dtr.data
     String.intercalate "\n  " all ++ "\n⦘⦘"
 
-instance : ToString ADFA where
-  toString := ADFA.toString
+instance : ToString (ADFA Char) where
+  toString := ADFA.toStringForChar
 
-def ERE.toADFA (e : ERE) : ADFA :=
+def ERE.toADFA (e : ERE) : ADFA Char :=
   let cg := e.charGrouping
-  let nfa := e.toNFAAux cg
+  -- Prepend `.repLe .startp 1`, append `.preLe .endp 1`. Later,
+  --   before parsing strings, first translate the string (list of char)
+  --   into list of groups, then prepend `dfa.ngroups` and append
+  --   `dfa.ngroups + 1` to the string
+  let nfa := (ERE.comp #[.repLe .startp 1, e, .repLe .endp 1]).toNFAAux cg
   let dfa := DFA.ofNFA nfa
   ⟨dfa, cg⟩
 
@@ -268,7 +335,7 @@ def ERE.toADFA (e : ERE) : ADFA :=
 #eval IO.println (ERE.charGrouping (.comp ((
   #[.ofStr "abce", .ofStr "abgh"]).map ERE.bracket)))
 
-#eval IO.println (ERE.toADFA
+#eval IO.println <| ToString.toString (ERE.toADFA
   (.comp #[.plus #[.ofStr "hd", .ofStr "f"], .ofStr "fg#", .bracket (.cc .alpha)]))
 
 -/
