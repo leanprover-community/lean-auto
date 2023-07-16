@@ -123,6 +123,7 @@ inductive ERE where
   | repGeLe  : ERE → (n : Nat) → (m : Nat) → ERE
   | comp     : Array ERE → ERE
   | plus     : Array ERE → ERE
+  | attr     : ERE → String → ERE
 deriving BEq, Hashable, Inhabited
 
 -- Match any character in the string
@@ -151,6 +152,7 @@ partial def ERE.brackets : ERE → Array EREBracket
 | .repGeLe e _ _ => e.brackets
 | .comp es       => (es.map ERE.brackets).concatMap id
 | .plus es       => (es.map ERE.brackets).concatMap id
+| .attr e s      => e.brackets
 
 partial def ERE.normalizeBrackets : ERE → ERE
 | .bracket b     => .bracket (.inStr (toString b))
@@ -164,6 +166,7 @@ partial def ERE.normalizeBrackets : ERE → ERE
 | .repGeLe e n m => .repGeLe e.normalizeBrackets n m
 | .comp es       => .comp (es.map normalizeBrackets)
 | .plus es       => .plus (es.map normalizeBrackets)
+| .attr e s      => .attr e.normalizeBrackets s
 
 section
 
@@ -230,6 +233,9 @@ section
       let all := "CharGrouping ⦗⦗" ::
                  s!"Number of groups := {ngroup}" ::
                  s!"All relevant characters := {ToString.toString all.toList}" ::
+                 s!"Group representing beginning of string := {ngroup}" ::
+                 s!"Group representing end of string := {ngroup + 1}" ::
+                 s!"Group representing other utf-8 characters := {ngroup + 2}" ::
                  groups.data
       String.intercalate "\n  " all ++ "\n⦘⦘"
 
@@ -242,27 +248,32 @@ section
   instance : ToString (CharGrouping σ) where
     toString := CharGrouping.toString
 
-  def ADFA.toString : ADFA σ → String :=
-    fun ⟨d, cg⟩ =>
+  def ADFA.toStringAux : ADFA σ → (symbListToString : Array σ → String) → String :=
+    fun ⟨d, cg⟩ symbListToString =>
       let dsnatS (s : Nat) (sn : _ × Nat) := s!"  ({s}, {sn.fst} → {sn.snd})"
       let dtr := d.tr.mapIdx (fun idx c => c.toArray.map (fun el => dsnatS idx el))
       let dtr := dtr.concatMap id
+      let attrs := d.attrs.mapIdx (fun idx attrs => s!"  {idx} : {attrs.toList}")
       let cggroups := cg.groups.mapIdx (
         fun idx c =>
-          s!"  {idx.val} : {ToString.toString c.toList}"
+          s!"  {idx.val} : {symbListToString c.toArray}"
       )
+      let cgalls := symbListToString cg.all.toArray
       let all := "ADFA ⦗⦗" ::
                  s!"Accept states := {d.accepts.toList}" ::
                  s!"Size (Malformed-input state) = {d.tr.size}" ::
                  s!"Number of groups := {cg.ngroup}" ::
-                 s!"All relevant characters := {ToString.toString cg.all.toList}" ::
+                 s!"All relevant characters := {repr cgalls}" ::
                  s!"Group representing beginning of string := {cg.ngroup}" ::
                  s!"Group representing end of string := {cg.ngroup + 1}" ::
-                 "(GroupIdx, Group members):" ::
-                 cggroups.data ++
-                 s!"(State, GroupIdx → State'):" ::
-                 dtr.data
+                 s!"Group representing other utf-8 characters := {cg.ngroup + 2}" ::
+                 "(GroupIdx, Group members):" :: cggroups.data ++
+                 s!"(State, GroupIdx → State'):" :: dtr.data ++
+                 s!"(State, Attributes)" :: attrs.data
       String.intercalate "\n  " all ++ "\n⦘⦘"
+
+  def ADFA.toString (a : ADFA σ) : String := ADFA.toStringAux a
+    (fun l => ToString.toString l.toList)
   
   instance : ToString (ADFA σ) where
     toString := ADFA.toString
@@ -314,13 +325,13 @@ private partial def ERE.toNFAAux (cg : CharGrouping Char) : ERE → (NFA Nat)
 | .bracket b     =>
   let bs := toString b
   let states := bs.foldl (fun hs c => hs.insert (cg.charMap.find! c)) HashSet.empty
-  NFA.ofSymbAdd states.toArray
+  NFA.ofSymbPlus states.toArray
 | .bracketN b    =>
   let bs := toString b
   -- All `utf-8` characters
   let initHs := HashSet.empty.insertMany ((cg.ngroup + 2) :: List.range cg.ngroup)
   let states := bs.foldl (fun hs c => hs.erase (cg.charMap.find! c)) initHs
-  NFA.ofSymbAdd states.toArray
+  NFA.ofSymbPlus states.toArray
 | .startp        => NFA.ofSymb (cg.ngroup)
 | .endp          => NFA.ofSymb (cg.ngroup + 1)
 | .star e        => NFA.star (e.toNFAAux cg)
@@ -330,31 +341,10 @@ private partial def ERE.toNFAAux (cg : CharGrouping Char) : ERE → (NFA Nat)
 | .repGeLe e n m => NFA.repeatBounded (e.toNFAAux cg) n m
 | .comp es       => NFA.multiComp (es.map (fun e => e.toNFAAux cg))
 | .plus es       => NFA.multiPlus (es.map (fun e => e.toNFAAux cg))
+| .attr e s      => NFA.addAttr (e.toNFAAux cg) s
 
-def ADFA.toStringForChar : ADFA Char → String :=
-  fun ⟨d, cg⟩ =>
-    let dsnatS (s : Nat) (sn : _ × Nat) := s!"  ({s}, {sn.fst} → {sn.snd})"
-    let dtr := d.tr.mapIdx (fun idx c => c.toArray.map (fun el => dsnatS idx el))
-    let dtr := dtr.concatMap id
-    let cggroups := cg.groups.mapIdx (
-      fun idx c =>
-        let c := String.mk ((sort (c.toList.map Char.toNat)).map Char.ofNat)
-        s!"  {idx.val} : {repr c}"
-    )
-    let cgalls := String.mk ((sort (cg.all.toList.map Char.toNat)).map Char.ofNat)
-    let all := "ADFA ⦗⦗" ::
-               s!"Accept states := {d.accepts.toList}" ::
-               s!"Size (Malformed-input state) = {d.tr.size}" ::
-               s!"Number of groups := {cg.ngroup}" ::
-               s!"All relevant characters := {repr cgalls}" ::
-               s!"Group representing beginning of string := {cg.ngroup}" ::
-               s!"Group representing end of string := {cg.ngroup + 1}" ::
-               s!"Group representing other utf-8 characters := {cg.ngroup + 2}" ::
-               "(GroupIdx, Group members):" ::
-               cggroups.data ++
-               s!"(State, GroupIdx → State'):" ::
-               dtr.data
-    String.intercalate "\n  " all ++ "\n⦘⦘"
+def ADFA.toStringForChar (a : ADFA Char) : String := ADFA.toStringAux a
+  (fun l => String.mk ((sort (l.toList.map Char.toNat)).map Char.ofNat))
 
 instance : ToString (ADFA Char) where
   toString := ADFA.toStringForChar
@@ -365,6 +355,11 @@ def ERE.toADFA (e : ERE) : ADFA Char :=
   --   before parsing strings, first translate the string (list of char)
   --   into list of groups, then prepend `dfa.ngroups` and append
   --   `dfa.ngroups + 1` to the string
+  -- Note that the state after the `.endp` transition will have no
+  --   attributes, hence we'll have to keep the previous state if
+  --   we want to get the lexion's corresponding attribute.
+  --   However, this is not a problem in lexing since we never
+  --   use `.startp` or `.endp` during lexing.
   let nfa := (ERE.comp #[.repLe .startp 1, e, .repLe .endp 1]).toNFAAux cg
   let dfa := DFA.ofNFA nfa
   ⟨dfa, cg⟩
@@ -380,7 +375,7 @@ def ERE.toADFA (e : ERE) : ADFA Char :=
 --   match against `a`.
 -- We assume that `.startp` and `.endp` is not used
 --   in the `ERE` used to generate `a`.
-def ERE.ADFALex (a : ADFA Char) (s : Substring) : Option Substring := Id.run <| do
+def ERE.ADFALex (a : ADFA Char) (s : Substring) : Option (Substring × HashSet String) := Id.run <| do
   let mut p : String.Pos := s.startPos
   let mut b : String.Pos := s.startPos
   let mut e : String.Pos := s.startPos
@@ -408,11 +403,14 @@ def ERE.ADFALex (a : ADFA Char) (s : Substring) : Option Substring := Id.run <| 
       | false, false => b := p; state := state'; matchStart := true
       p := p + c
   if matchStart && a.dfa.accepts.contains state then
-    return .some ⟨s.str, b, e⟩
+    if state >= a.dfa.attrs.size then
+      panic!"ERE.ADFALex :: {state} is invalid for {a.dfa}"
+    else
+      return .some (⟨s.str, b, e⟩, a.dfa.attrs[state]!)
   else
     return .none
 
-
+/-
 
 #eval IO.println (ERE.charGrouping (.comp ((
   #[.inStr "abce", .inStr "abgh"]).map ERE.bracket)))
@@ -420,25 +418,23 @@ def ERE.ADFALex (a : ADFA Char) (s : Substring) : Option Substring := Id.run <| 
 def test₁ := ERE.toADFA
   (.comp #[.plus #[.inStr "hd", .inStr "f"], .inStr "fg#", .bracket (.cc .alpha)])
 
-/-
-
 #eval IO.println test₁
 
 #eval test₁.dfa.move 2 3
 
-#eval (ERE.ADFALex test₁ "? f#a ".toSubstring).map (fun x => x.stopPos)
+#eval (ERE.ADFALex test₁ "? f#a ".toSubstring).map (fun x => x.1.stopPos)
 
-def test₂ := ERE.toADFA (.plus #[.ofStr "abc", .ofStr "efg"])
+def test₂ := ERE.toADFA (.plus #[.attr (.ofStr "abc") "fst", .ofStr "efg"])
 
 #eval IO.println test₂
  
-#eval (ERE.ADFALex test₂ " efg ".toSubstring).map (fun x => x.startPos)
+#eval (ERE.ADFALex test₂ " efg ".toSubstring).map (fun x => x.1.startPos)
 
 def test₃ := ERE.toADFA (.comp #[.ofStr "ab", .bracketN (.inStr "pd🍉")])
 
 #eval IO.println test₃
 
-#eval (ERE.ADFALex test₃ " ab🍈 ".toSubstring).map (fun x => x.startPos)
+#eval (ERE.ADFALex test₃ " ab🍈 ".toSubstring).map (fun x => x.1.startPos)
 
 -/
 

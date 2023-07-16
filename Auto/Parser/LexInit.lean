@@ -36,13 +36,16 @@ private def stringAux : EREBracket :=
 def string : ERE :=
   .star (.comp #[.inStr "\"", .bracketN (.inStr ("\"" ++ unprintable)), .inStr "\""])
 
+private def ssymbstart : EREBracket :=
+  .plus #[.cc .alpha, .inStr "~!@$%^&*_-+=<>.?/"]
+
 private def ssymbchars : EREBracket :=
   .plus #[.cc .alnum, .inStr "~!@$%^&*_-+=<>.?/"]
 
 private def notqsymbchars : EREBracket :=
   .minus (.inStr ("|\\" ++ unprintable)) (.inStr whitespace)
 
-def simpleSymbol : ERE := .star (.bracket ssymbchars)
+def simpleSymbol : ERE := .comp #[.bracket ssymbstart, .star (.bracket ssymbchars)]
 
 def quotedSymbol : ERE := .comp #[.inStr "|", .star (.bracketN notqsymbchars), .inStr "|"]
 
@@ -50,7 +53,28 @@ def symbol : ERE := .plus #[simpleSymbol, quotedSymbol]
 
 def keyword : ERE := .comp #[.inStr ":", simpleSymbol]
 
+-- Special constants
+def specConst : ERE := .plus #[
+  .attr numeral "numeral",
+  .attr decimal "decimal",
+  .attr hexadecimal "hexadecimal",
+  .attr binary "binary",
+  .attr string "string"
+]
+
+def baseSexp : ERE := .plus #[
+  specConst,
+  -- For lexical analysis, do not distinguish between keyword and symbol
+  .attr symbol "symbol",
+  .attr keyword "keyword"
+]
+
 #eval string.toADFA
+
+#eval specConst.toADFA
+
+-- Good property: Each state have at most one attribute!
+#eval baseSexp.toADFA
 
 end SMTSexp
 
