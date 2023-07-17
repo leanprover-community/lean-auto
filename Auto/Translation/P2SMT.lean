@@ -38,12 +38,9 @@ section
 
   def P2SMT (s : ReifP.State ω) : TransM Nat (Array IR.SMT.Command) := do
     let assertions := s.assertions
-    addCommand (.setOption (.produceProofs true))
     for a in assertions do
       let f ← PropForm2STerm a
       addCommand (.assert f)
-    addCommand .checkSat
-    addCommand .getProof
     getCommands
 
 end

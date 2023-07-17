@@ -414,13 +414,16 @@ instance : ToString LexResultTy where
   toString := LexResultTy.toString
 
 structure LexResult where
-  type : LexResultTy
-  matched : Substring
-  state : Nat
+  type       : LexResultTy
+  -- Matched part
+  matched    : Substring
+  -- Whether the appended `end of string` group is matched
+  endSMatched : Bool
+  state      : Nat
 deriving Inhabited, BEq
 
-def LexResult.toString : LexResult → String := fun ⟨ty, matched, state⟩ =>
-  s!"{ty} {repr matched.toString} {state}"
+def LexResult.toString : LexResult → String := fun ⟨ty, matched, em, state⟩ =>
+  s!"{ty} (matched := {repr matched.toString}) (endSMatched := {em}) (state := {state})"
 
 instance : ToString LexResult where
   toString := LexResult.toString
@@ -460,6 +463,7 @@ def ERE.ADFALexEagerL (a : ADFA Char) (s : Substring) (cfg : LexConfig) : LexRes
   let beginString : Nat := a.cg.ngroup
   let endString : Nat := a.cg.ngroup + 1
   let mut endReached : Bool := false
+  let mut endSMatched : Bool := false
   let mut state : Nat :=
     if cfg.prependBeginS then
       -- Implicitly prepend `s` with "beginning of string"
@@ -482,7 +486,7 @@ def ERE.ADFALexEagerL (a : ADFA Char) (s : Substring) (cfg : LexConfig) : LexRes
     let cgp := a.cg.getGroup c
     let state' := a.dfa.move state cgp
     if state' == a.dfa.tr.size then
-      return ⟨.malformed, ⟨s.str, p, p⟩, state⟩
+      return ⟨.malformed, ⟨s.str, p, p⟩, false, state⟩
     b := p; state := state'; matchStarted := true; p := p + c
   while true do
     -- Put `matchStarted` here because we want to match
@@ -504,7 +508,9 @@ def ERE.ADFALexEagerL (a : ADFA Char) (s : Substring) (cfg : LexConfig) : LexRes
     -- If `state'` is `malformed input`, stop matching and do not change `p`
     | true, true   => break
     -- If `state'` is valid, update `state`
-    | true, false  => state := state'
+    | true, false  =>
+      state := state'
+      endSMatched := endReached
     -- If the symbol is not valid as the first symbol of a matching
     --   substring, continue searching for valid first symbol
     | false, true  => pure ()
@@ -515,12 +521,12 @@ def ERE.ADFALexEagerL (a : ADFA Char) (s : Substring) (cfg : LexConfig) : LexRes
       p := p + c
   match es with
   | .some (e, finalstate) =>
-    return ⟨.complete, ⟨s.str, b, e⟩, finalstate⟩
+    return ⟨.complete, ⟨s.str, b, e⟩, endSMatched, finalstate⟩
   | .none =>
     if state == a.dfa.tr.size || p != s.stopPos then
-      ⟨.malformed, ⟨s.str, b, p⟩, state⟩
+      ⟨.malformed, ⟨s.str, b, p⟩, endSMatched, state⟩
     else
-      ⟨.incomplete, ⟨s.str, b, p⟩, state⟩
+      ⟨.incomplete, ⟨s.str, b, p⟩, endSMatched, state⟩
 
 /-
 

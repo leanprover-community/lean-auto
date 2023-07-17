@@ -20,3 +20,15 @@ example (a b : Prop)
 example : (P ∧ Q) ∧ R ↔ P ∧ (Q ∧ R) := by
   try auto [];
   sorry
+
+example
+  (h₁ : a ∨ b ∨ c)
+  (h₂ : ¬ a ∨ ¬ d ∨ e)
+  (h₄ : ¬ a ∨ b ∨ ¬ c)
+  (h₅ : a ∨ b ∨ ¬ c)
+  (h₆ : ¬ b ∨ c ∨ ¬ d)
+  (h₇ : a ∨ ¬c ∨ ¬ d)
+  (h₈ : d)
+  : e := by
+  try auto [Or.inl, Or.inr];
+  sorry

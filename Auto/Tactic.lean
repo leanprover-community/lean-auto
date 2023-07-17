@@ -1,6 +1,7 @@
 import Lean
 import Auto.Preprocessing
 import Auto.Translation
+import Auto.Solver.SMT
 open Lean Elab Tactic
 
 initialize
@@ -79,9 +80,10 @@ def runAuto (stx : TSyntax ``hints) : TacticM Result := do
   let PState := (← (types.mapM (fun e => do
       ReifP.addAssertion (ω := Expr) (← D2P e))).run {}).2
   let commands := (← (P2SMT PState).run {}).1
-  IO.println (String.intercalate "\n" (commands.map toString).data)
+  let _ ← liftM <| commands.mapM (fun c => IO.println s!"Command: {c}")
+  Solver.SMT.querySolver commands
   -- testing
-  throwError "Not implemented"
+  throwError "runAuto :: Not implemented"
 
 @[tactic auto]
 def evalAuto : Tactic

@@ -92,52 +92,79 @@ instance : ToString Sexp where
 -- #eval IO.println <| Sexp.toString (.app #[.atom (.nat 3), 
 --   .atom (.str "sdf"), .app #[.atom (.rat 3 10), .atom (.kw "kl"), .atom (.symb "a7&")]])
 
-private inductive ParseResult where
+structure PartialResult where
+  -- Lexer state
+  lst     : Nat := 0
+  -- Partially matched lexicon
+  lexpart : String := ""
+  -- Parser stack
+  pstk    : Array (Array Sexp) := #[]
+deriving Inhabited, BEq, Hashable
+
+def PartialResult.toString : PartialResult → String := fun ⟨lst, lexpart, pstk⟩ =>
+  s!"PartialResult \{ lst := {lst}, lexpart := {repr lexpart}, pstk := {pstk.toList.map (·.toList)}}"
+
+instance : ToString PartialResult where
+  toString := PartialResult.toString
+
+inductive ParseResult where
   -- Sexp: Result
   -- String.pos: The position of the next character
   | complete   : Sexp → String.Pos → ParseResult
   -- Array (Array Sexp): Parser stack
   -- Nat: State of lexer
   -- String.pos: The position of the next character
-  | incomplete : Array (Array Sexp) → Nat → String.Pos → ParseResult
+  | incomplete : PartialResult → String.Pos → ParseResult
   -- Malformed input
   | malformed  : ParseResult
 deriving Inhabited, BEq, Hashable
 
+def ParseResult.toString : ParseResult → String
+| .complete s p => s!"ParseResult.complete {s} {p}"
+| .incomplete pr p => s!"ParseResult.incomplete {pr} {p}"
+| .malformed => "ParseResult.malformed"
+
 local instance : Hashable Char := ⟨fun c => hash c.val⟩
 
--- Note: Make sure that the next character of `s` is either `EOF` or line break
+-- Note: Make sure that the next character of `s` is either `EOF` or white space
 -- This is because wee rely on the property that:
---    For each lexicon `l` with a line break at position `p`, the
+--    For each lexicon `l` with a white space at position `p`, the
 --    part of `l` before `p` will always be identified as `incomplete`
 --    by `ERE.ADFALexEagerL SMTSexp.lexiconADFA`, and never as `done`.
-def parseSexp (s : String) (p : String.Pos) (partialResult : Array (Array Sexp)) : ParseResult := Id.run <| do
-  let nextLexicon (p : String.Pos) :=
+def parseSexp (s : String) (p : String.Pos) (partialResult : PartialResult) : ParseResult := Id.run <| do
+  if p == s.endPos then
+    return .incomplete partialResult p
+  let nextLexicon (p : String.Pos) (lst : Nat) :=
     Regex.ERE.ADFALexEagerL SMTSexp.lexiconADFA ⟨s, p, s.endPos⟩
-      {strict := true, prependBeginS := false}
-  let mut pstk := partialResult
+      {strict := true, initS := lst, prependBeginS := false, appendEndS := false}
+  let mut lst := partialResult.lst
+  let mut lexpart := partialResult.lexpart
+  let mut pstk := partialResult.pstk
   let mut p := p
-  let mut prevp := p
   let endPos := s.endPos
   while true do
-    -- Skip whitespace characters
-    while p != endPos do
-      let c := s.get! p
-      if SMTSexp.whitespace.contains c then
-        p := p + c
-      else
-        break
+    -- If we're not resuming from an incomplete
+    --   match of lexicon, skip white space
+    if lexpart == "" then
+      -- Skip whitespace characters
+      while p != endPos do
+        let c := s.get! p
+        if SMTSexp.whitespace.contains c then
+          p := p + c
+        else
+          break
     -- This indicates incomplete input
     if p == endPos then
-      return .incomplete pstk 0 p
-    match nextLexicon p with
-    | ⟨.complete, matched, state⟩ =>
-      prevp := p
+      return .incomplete ⟨0, "", pstk⟩ p
+    match nextLexicon p lst with
+    | ⟨.complete, matched, _, state⟩ =>
       -- A unique attribute should be returned, according to `SMTSexp.lexiconADFA`
       let [attr] := (SMTSexp.lexiconADFA.getAttrs state).toList
         | return panic! "parseSexp :: Unexpected error"
       p := matched.stopPos
-      let lexval := LexVal.ofString matched.toString attr
+      let lexval := LexVal.ofString (lexpart ++ matched.toString) attr
+      -- Restore lexer state
+      lst := 0; lexpart := ""
       match lexval with
       | .lparen =>
         pstk := pstk.push #[]
@@ -163,14 +190,14 @@ def parseSexp (s : String) (p : String.Pos) (partialResult : Array (Array Sexp))
           -- An atom
           return .complete (.atom lexval) p
         pstk := pstk.modify (pstk.size - 1) (fun arr => arr.push (.atom l))
-    | ⟨.incomplete, _, _⟩ => return .incomplete pstk 0 p
-    | ⟨.malformed, _, _⟩  => return .malformed
+    | ⟨.incomplete, m, _, lst'⟩ => return .incomplete ⟨lst', lexpart ++ m.toString, pstk⟩ m.stopPos
+    | ⟨.malformed, _, _, _⟩  => return .malformed
   return panic! "parseSexp :: Unexpected error"
 
 /-
 
 private def testit (s : String) (p : String.Pos) (print := true) : IO Unit := do
-  match parseSexp s p #[] with
+  match parseSexp s p {} with
   | .complete e p => if print then IO.println e; IO.println (Substring.toString ⟨s, p, s.endPos⟩)
   | .malformed .. => IO.println "malformed"
   | .incomplete .. => IO.println "incomplete"
@@ -185,7 +212,28 @@ def longSexp : Nat → Sexp
 #eval (toString (longSexp 20)).length
 #eval testit (toString (longSexp 20)) ⟨0⟩ (print:=false)
 #eval testit "djn (abcde |fg| h (12 3) 0x50 34.4 (0b0 x2_& |🍉| \"dl\"\"\")) Not here" ⟨3⟩
+#eval testit "(abcde 0x" ⟨0⟩
 #eval IO.println <| Regex.ERE.ADFALexEagerL SMTSexp.lexiconADFA "abc".toSubstring {}
+
+def testResume : IO Unit := do
+  let strs := ["(abcde\n", "|ab", "\nu\n", "|", "ua", "ab)"]
+  let mut pr : PartialResult := {}
+  for s in strs do
+    IO.println (repr s)
+    match parseSexp s ⟨0⟩ pr with
+    | .complete se p' =>
+      IO.println (repr (toString se));
+      IO.println (repr (Substring.toString ⟨s, ⟨0⟩, p'⟩))
+      return
+    | .incomplete pr' p =>
+      if p != s.endPos then
+        IO.println s!"Unexpected 1 {p} {s.endPos}"
+        return
+      pr := pr';
+    | .malformed => IO.println "Error: malformed input"; return
+  IO.println "Unexpected 2"
+
+#eval testResume
 
 -/
 
