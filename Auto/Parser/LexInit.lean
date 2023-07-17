@@ -49,7 +49,9 @@ def simpleSymbol : ERE := .comp #[.bracket ssymbstart, .star (.bracket ssymbchar
 
 def quotedSymbol : ERE := .comp #[.inStr "|", .star (.bracketN notqsymbchars), .inStr "|"]
 
-def symbol : ERE := .plus #[simpleSymbol, quotedSymbol]
+def symbol : ERE := .plus #[
+  .attr simpleSymbol "simplesymbol",
+  .attr quotedSymbol "quotedsymbol"]
 
 def keyword : ERE := .comp #[.inStr ":", simpleSymbol]
 
@@ -69,7 +71,7 @@ def specConst : ERE := .plus #[
 def lexicons : ERE := .plus #[
   specConst,
   -- For lexical analysis, do not distinguish between keyword and symbol
-  .attr symbol "symbol",
+  symbol,
   .attr keyword "keyword",
   .attr lparen "(",
   .attr rparen ")"
