@@ -71,7 +71,7 @@ def LexVal.ofString (s : String) (attr : String) : LexVal :=
     .nat (bdigs.foldl (fun x c => x * 2 + c.toNat - '0'.toNat) 0)
   | "string" =>
     let subs := ((s.drop 1).take (s.length - 2)).splitOn "\"\""
-    .str (String.intercalate "" subs)
+    .str (String.intercalate "\"" subs)
   | "simplesymbol" => .symb s
   | "quotedsymbol" => .symb ((s.drop 1).take (s.length - 2))
   | "keyword"      => .kw (s.drop 1)
@@ -95,13 +95,16 @@ instance : ToString Sexp where
 private inductive ParseResult where
   -- Sexp: Result
   -- String.pos: The position of the next character
-  | done       : Sexp → String.Pos → ParseResult
-  -- Array (Array Sexp): Partial result of parsing
+  | complete   : Sexp → String.Pos → ParseResult
+  -- Array (Array Sexp): Parser stack
+  -- Nat: State of lexer
   -- String.pos: The position of the next character
-  | incomplete : Array (Array Sexp) → String.Pos → ParseResult
+  | incomplete : Array (Array Sexp) → Nat → String.Pos → ParseResult
   -- Malformed input
   | malformed  : ParseResult
 deriving Inhabited, BEq, Hashable
+
+local instance : Hashable Char := ⟨fun c => hash c.val⟩
 
 -- Note: Make sure that the next character of `s` is either `EOF` or line break
 -- This is because wee rely on the property that:
@@ -110,8 +113,9 @@ deriving Inhabited, BEq, Hashable
 --    by `ERE.ADFALexEagerL SMTSexp.lexiconADFA`, and never as `done`.
 def parseSexp (s : String) (p : String.Pos) (partialResult : Array (Array Sexp)) : ParseResult := Id.run <| do
   let nextLexicon (p : String.Pos) :=
-    Regex.ERE.ADFALexEagerL SMTSexp.lexiconADFA ⟨s, p, s.endPos⟩ (strict:=true)
-  let mut pr := partialResult
+    Regex.ERE.ADFALexEagerL SMTSexp.lexiconADFA ⟨s, p, s.endPos⟩
+      {strict := true, prependBeginS := false}
+  let mut pstk := partialResult
   let mut p := p
   let mut prevp := p
   let endPos := s.endPos
@@ -125,29 +129,29 @@ def parseSexp (s : String) (p : String.Pos) (partialResult : Array (Array Sexp))
         break
     -- This indicates incomplete input
     if p == endPos then
-      return .incomplete pr p
+      return .incomplete pstk 0 p
     match nextLexicon p with
-    | .done (subs, attrs) =>
+    | ⟨.complete, matched, state⟩ =>
       prevp := p
       -- A unique attribute should be returned, according to `SMTSexp.lexiconADFA`
-      let [attr] := attrs.toList
+      let [attr] := (SMTSexp.lexiconADFA.getAttrs state).toList
         | return panic! "parseSexp :: Unexpected error"
-      p := subs.stopPos
-      let lexval := LexVal.ofString subs.toString attr
+      p := matched.stopPos
+      let lexval := LexVal.ofString matched.toString attr
       match lexval with
       | .lparen =>
-        pr := pr.push #[]
+        pstk := pstk.push #[]
       | .rparen =>
-        if pr.size == 0 then
+        if pstk.size == 0 then
           -- Too many right parentheses
           return .malformed
         else
-          let final := pr.back
-          pr := pr.pop
-          if pr.size == 0 then
-            return .done (.app final) p
+          let final := pstk.back
+          pstk := pstk.pop
+          if pstk.size == 0 then
+            return .complete (.app final) p
           else
-            pr := pr.modify (pr.size - 1) (fun arr => arr.push (.app final))
+            pstk := pstk.modify (pstk.size - 1) (fun arr => arr.push (.app final))
       | l       =>
         -- Ordinary lexicons must be separated by whitespace or parentheses
         match s.get? p with
@@ -155,22 +159,35 @@ def parseSexp (s : String) (p : String.Pos) (partialResult : Array (Array Sexp))
           if !SMTSexp.whitespace.contains c ∧ c != ')' ∧ c != '(' then
             return .malformed
         | none => pure ()
-        if pr.size == 0 then
+        if pstk.size == 0 then
           -- An atom
-          return .done (.atom lexval) p
-        pr := pr.modify (pr.size - 1) (fun arr => arr.push (.atom l))
-    | .malformed  => return .malformed
-    | .incomplete => return .incomplete pr p
+          return .complete (.atom lexval) p
+        pstk := pstk.modify (pstk.size - 1) (fun arr => arr.push (.atom l))
+    | ⟨.incomplete, _, _⟩ => return .incomplete pstk 0 p
+    | ⟨.malformed, _, _⟩  => return .malformed
   return panic! "parseSexp :: Unexpected error"
 
-private def testit (s : String) (p : String.Pos) : IO Unit := do
+/-
+
+private def testit (s : String) (p : String.Pos) (print := true) : IO Unit := do
   match parseSexp s p #[] with
-  | .done e p => IO.println e; IO.println (Substring.toString ⟨s, p, s.endPos⟩)
+  | .complete e p => if print then IO.println e; IO.println (Substring.toString ⟨s, p, s.endPos⟩)
   | .malformed .. => IO.println "malformed"
   | .incomplete .. => IO.println "incomplete"
 
-#eval testit "djn (abcde |fg| h (12 3) 0x50 34.4 (0b01 x2_& |🍉|)) Not here" ⟨3⟩
-#eval IO.println <| Regex.ERE.ADFALexEagerL SMTSexp.lexiconADFA "abc".toSubstring
+def longSexp : Nat → Sexp
+| 0 => .atom (.nat 239429)
+| 1 => .atom (.str "Mon_\"day")
+| 2 => .atom (.symb "🔑🥭🍊")
+| n + 3 => .app #[longSexp n, longSexp (n + 1), longSexp (n + 2)]
+
+#eval toString (longSexp 4)
+#eval (toString (longSexp 20)).length
+#eval testit (toString (longSexp 20)) ⟨0⟩ (print:=false)
+#eval testit "djn (abcde |fg| h (12 3) 0x50 34.4 (0b0 x2_& |🍉| \"dl\"\"\")) Not here" ⟨3⟩
+#eval IO.println <| Regex.ERE.ADFALexEagerL SMTSexp.lexiconADFA "abc".toSubstring {}
+
+-/
 
 end Parser.SMTSexp
 
