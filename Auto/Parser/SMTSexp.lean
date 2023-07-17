@@ -103,7 +103,6 @@ private inductive ParseResult where
   | malformed  : ParseResult
 deriving Inhabited, BEq, Hashable
 
--- lpsurplus: Number of surplus left parentheses
 -- Note: Make sure that the next character of `s` is either `EOF` or line break
 -- This is because wee rely on the property that:
 --    For each lexicon `l` with a line break at position `p`, the
