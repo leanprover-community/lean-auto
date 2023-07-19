@@ -104,6 +104,9 @@ def elabcomposehintdb : CommandElab := fun stx => do
     let db := db.getId.toString
     let dbs := dbs.map (fun x => x.getId.toString)
     let state := hintDBExt.getState (← getEnv)
+    for db in dbs do
+      if !state.contains db then
+        throwError "Unknown hint database {repr db}"
     if let some db := state.find? db then
       throwError "Hint database {repr db} has already been declared"
     else
