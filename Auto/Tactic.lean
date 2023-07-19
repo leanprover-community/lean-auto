@@ -11,18 +11,47 @@ initialize
 namespace Auto
 
 -- **TODO**: Extend
-syntax hintelem := term
+syntax hintelem := term <|> "*"
 syntax hints := ("[" hintelem,* "]")?
 syntax (name := auto) "auto" hints : tactic
 
-def parseHintElem : TSyntax ``hintelem → TacticM Term
-  | `(hintelem| $t:term) => return t
+inductive HintElem where
+  -- A user-provided term
+  | term     : Term → HintElem
+  -- Hint database, not yet supported
+  | hintdb   : HintElem
+  -- `*` adds all hypotheses in the local context
+  -- Also, if `[..]` is not supplied to `auto`, all
+  --   hypotheses in the local context are
+  --   automatically collected.
+  | lctxhyps : HintElem
+deriving Inhabited, BEq
+
+def parseHintElem : TSyntax ``hintelem → TacticM HintElem
+  | `(hintelem| *)       => return .lctxhyps
+  | `(hintelem| $t:term) => return .term t
   | _ => throwUnsupportedSyntax
 
+structure InputHints where
+  terms    : Array Term := #[]
+  hintdbs  : Array Unit := #[]
+  lctxhyps : Bool       := false
+deriving Inhabited, BEq
+
 -- Parse `hints` to an array of `Term`, which is still syntax
-def parseHints : TSyntax ``hints → TacticM (Array Term)
-  | `(hints| [ $[$hs],* ]) => hs.mapM parseHintElem
-  | `(hints| ) => return #[]
+-- `Array Term`
+def parseHints : TSyntax ``hints → TacticM InputHints
+  | `(hints| [ $[$hs],* ]) => do
+    let mut terms := #[]
+    let mut lctxhyps := false
+    let elems ← hs.mapM parseHintElem
+    for elem in elems do
+      match elem with
+      | .term t => terms := terms.push t
+      | .lctxhyps => lctxhyps := true
+      | _ => throwError "parseHints :: Not implemented"
+    return ⟨terms, #[], lctxhyps⟩
+  | `(hints| ) => return ⟨#[], #[], true⟩
   | _ => throwUnsupportedSyntax
 
 inductive Result where
@@ -40,9 +69,10 @@ instance : ToMessageData Result where
     (Util.MessageData.array es (fun (id, e) => m!"{mkFVar id} := {e}"))
   | .unknown => m!"Result.unknown"
 
-def collectLctxLemmas : TacticM (Array Lemma) := do
+def collectLctxLemmas (lctxhyps : Bool) (ngoal : FVarId) : TacticM (Array Lemma) := do
+  let fVarIds := (if lctxhyps then (← getLCtx).getFVarIds else #[ngoal])
   let mut lemmas := #[]
-  for fVarId in (← getLCtx).getFVarIds do
+  for fVarId in fVarIds do
     let decl ← FVarId.getDecl fVarId
     if ¬ decl.isAuxDecl ∧ (← Meta.isProp decl.type) then
       let declType ← Prep.preprocessTerm (← instantiateMVars decl.type)
@@ -69,10 +99,11 @@ def traceLemmas (pre : String) (lemmas : Array Lemma) : TacticM Unit := do
     cnt := cnt + 1
   trace[auto.printLemmas] mdatas.foldl MessageData.compose pre
 
-def runAuto (stx : TSyntax ``hints) : TacticM Result := do
-  let lctxLemmas ← collectLctxLemmas
+def runAuto (stx : TSyntax ``hints) (ngoal : FVarId) : TacticM Result := do
+  let inputHints ← parseHints stx
+  let lctxLemmas ← collectLctxLemmas inputHints.lctxhyps ngoal
   traceLemmas "Lemmas collected from local context:" lctxLemmas
-  let userLemmas ← collectUserLemmas (← parseHints stx)
+  let userLemmas ← collectUserLemmas inputHints.terms
   traceLemmas "Lemmas collected from user-provided terms:" userLemmas
   let lemmas := lctxLemmas ++ userLemmas
   -- testing
@@ -92,12 +123,13 @@ def evalAuto : Tactic
   -- Suppose the goal is `∀ (x₁ x₂ ⋯ xₙ), G`
   -- First, apply `intros` to put `x₁ x₂ ⋯ xₙ` into the local context,
   --   now the goal is just `G`
-  -- Then, apply `Classical.byContradiction` to change the goal into `False`
-  --  and put `¬ G` into the local context
-  Elab.Tactic.evalTactic (← `(tactic| intros; apply Classical.byContradiction _; intro))
-  -- Now the main goal has changed
+  Elab.Tactic.evalTactic (← `(tactic| intros))
+  let [nngoal] ← (← getMainGoal).apply (.const ``Classical.byContradiction [])
+    | throwError "evalAuto :: Unexpected result after applying Classical.byContradiction"
+  let (ngoal, absurd) ← MVarId.intro1 nngoal
+  replaceMainGoal [absurd]
   withMainContext do
-    let result ← runAuto hints
+    let result ← runAuto hints ngoal
     match result with
     | Result.unsat e => do
       IO.println s!"Unsat. Time: {(← IO.monoMsNow) - startTime}"

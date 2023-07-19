@@ -62,7 +62,10 @@ def elabLemma (stx : Term) : TacticM (Array Lemma) := do
     let some expr ← Term.resolveId? id
       | throwError "Unknown identifier {id}"
 
-    match (← getEnv).find? expr.constName! with
+    let some cstname := expr.constName?
+      | return #[← lctxHyp expr]
+
+    match (← getEnv).find? cstname with
     | some (.recInfo val) => addRecAsLemma val
     | some (.defnInfo defval) =>
       let term := defval.value
@@ -73,7 +76,7 @@ def elabLemma (stx : Term) : TacticM (Array Lemma) := do
       if sort.isProp then
         ret := ret.push (← elabLemmaAux stx)
       -- Generate definitional equation for the type
-      if let some eqns ← getEqnsFor? expr.constName! (nonRec := true) then
+      if let some eqns ← getEqnsFor? cstname (nonRec := true) then
         ret := ret.append (← eqns.mapM fun eq => do elabLemmaAux (← `($(mkIdent eq))))
       return ret
     | some (.axiomInfo _)  => return #[← elabLemmaAux stx]
@@ -84,18 +87,30 @@ def elabLemma (stx : Term) : TacticM (Array Lemma) := do
     | some (.opaqueInfo _) => throwError "Opaque constants cannot be provided as lemmas"
     | some (.quotInfo _)   => throwError "Quotient constants cannot be provided as lemmas"
     | some (.inductInfo _) => throwError "Inductive types cannot be provided as lemmas"
-    | none => throwError "Unknown constant {expr.constName!}"
+    | none => throwError "Unknown constant {cstname}"
   | _ => return #[← elabLemmaAux stx]
-where elabLemmaAux (stx : Term) : TacticM Lemma :=
-  -- elaborate term as much as possible and abstract any remaining mvars:
-  Term.withoutModifyingElabMetaStateWithInfo <| withRef stx <| Term.withoutErrToSorry do
-    let e ← Term.elabTerm stx none
-    Term.synthesizeSyntheticMVars (mayPostpone := false) (ignoreStuckTC := true)
-    let e ← instantiateMVars e
-    let abstres ← Auto.abstractMVars e
-    let e := abstres.expr
-    let paramNames := abstres.paramNames
-    return Lemma.mk e (← inferType e) paramNames
+where
+  elabLemmaAux (stx : Term) : TacticM Lemma :=
+    -- elaborate term as much as possible and abstract any remaining mvars:
+    Term.withoutModifyingElabMetaStateWithInfo <| withRef stx <| Term.withoutErrToSorry do
+      let e ← Term.elabTerm stx none
+      Term.synthesizeSyntheticMVars (mayPostpone := false) (ignoreStuckTC := true)
+      let e ← instantiateMVars e
+      let abstres ← Auto.abstractMVars e
+      let e := abstres.expr
+      let paramNames := abstres.paramNames
+      return Lemma.mk e (← inferType e) paramNames
+  lctxHyp (e : Expr) : TacticM Lemma := do
+    let some localDecl := (← getLCtx).findFVar? e
+      | throwError "elabLemma :: Identifier {e} is neither a constant nor a local hypothesis"
+    if ← Meta.isProp localDecl.type then
+      return Lemma.mk e localDecl.type #[]
+    else if localDecl.isLet then
+      let proof ← mkAppM ``Eq.refl #[e]
+      let type  ← mkAppM ``Eq #[e, localDecl.value]
+      return Lemma.mk proof type #[]
+    else
+      throwError "elabLemma :: Local hypothesis {e} is neither a let declaration nor a proof of proposition"
 
 end Prep
 

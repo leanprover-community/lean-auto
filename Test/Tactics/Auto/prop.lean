@@ -1,4 +1,5 @@
 import Auto.Tactic
+import Mathlib.Tactic
 
 -- Collecting `logical constructors`
 
@@ -30,5 +31,5 @@ example
   (h₇ : a ∨ ¬c ∨ ¬ d)
   (h₈ : d)
   : e := by
-  try auto [Or.inl, Or.inr];
+  try auto [];
   sorry
