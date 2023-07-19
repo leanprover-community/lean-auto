@@ -9,13 +9,12 @@ namespace Auto
 -- Each hint database has a name, which is internally stored as a string.
 -- User can add a lemma to a hint database (internally, .addLemma),
 --   or combine several existing hint databases to form a larger
---   hint database (internally, .union), or both.
---   Note that .union is dynamic.
+--   hint database (internally, .compose), or both.
+--   Note that .compose is dynamic.
 inductive HintDB where
   | empty     : HintDB
   | addLemma  : (lem : Name) → (hintdb : HintDB) → HintDB
-  | union     : (hintdb₁ : String) → (hintdb₂ : String) → HintDB
-  | minus     : (minuend : String) → (subtrahend : String) → HintDB
+  | compose     : (hintdbs : Array String) → HintDB
 deriving BEq, Hashable, Inhabited, Repr
 
 abbrev HintDBExtension :=
@@ -27,9 +26,29 @@ initialize hintDBExt : HintDBExtension ← registerSimplePersistentEnvExtension 
   addEntryFn    := fun s n => s.insert n.1 n.2
 }
 
+partial def HintDB.toHashSet : HintDB → AttrM (HashSet Name)
+| .empty => pure HashSet.empty
+| .addLemma lem hdb => do
+    let hset ← hdb.toHashSet
+    return hset.insert lem
+| .compose hdbs => do
+    let state := hintDBExt.getState (← getEnv)
+    let mut ret := HashSet.empty
+    for hdb in hdbs do
+      let some hdb := state.find? hdb
+        | throwError "HintDB.toHashSet :: Unknown hint database {hdb}"
+      let hset ← hdb.toHashSet
+      ret := ret.insertMany hset
+    return ret 
+
+private def throwUnregisteredHintDB (dbname action : String) : AttrM Unit := do
+  let cmdstr := "#declare_hintdb " ++ dbname
+  throwError ("Please declare hint database using " ++
+    s!"command {repr cmdstr} before " ++ action ++ " it")
+
 def registerHintDB : IO Unit :=
   registerBuiltinAttribute {
-    name  := `hintDB
+    name  := `hintdb
     descr := "Use this attribute to register lemmas to hint databases"
     applicationTime := .afterTypeChecking
     add   := fun decl stx _ => do
@@ -39,33 +58,57 @@ def registerHintDB : IO Unit :=
         let state' := state.insert dbname (.addLemma decl db)
         modifyEnv fun env => hintDBExt.modifyState env fun _ => state'
       else
-        throwError "Please declare hint database {dbname} before adding lemma to it"
+        throwUnregisteredHintDB dbname "adding lemma to"
+    erase := fun _ => do
+      throwError "Lemmas cannot be erased from hint database"
   }
 
 initialize registerHintDB
 
 open Elab Command
 
-syntax (name := printHintDB) "#printHintDB" ident : command
-syntax (name := appendToHintDB) "#appendToHintDB" ident "+=" ident : command
-syntax (name := composeHintDB) "#composeHintDB" ident ":=" "[" ident,* "]" : command
+syntax (name := declarehintdb) "#declare_hintdb" ident : command
+syntax (name := printhintdb) "#print_hintdb" ident : command
+syntax (name := composehintdb) "#compose_hintdb" ident "[" ident,* "]" : command
 
-@[command_elab printHintDB]
-def elabPrintHintDB : CommandElab := fun stx => do
+@[command_elab declarehintdb]
+def elabdeclarehintdb : CommandElab := fun stx => do
   match stx with
-  | `(printHintDB | #printHintDB $dbnam) => sorry
-  | _ => sorry
+  | `(declarehintdb | #declare_hintdb $dbname) =>
+    let dbname := dbname.getId.toString
+    let state := hintDBExt.getState (← getEnv)
+    if let some db := state.find? dbname then
+      throwError "Hint database {repr db} has already been declared"
+    else
+      let state' := state.insert dbname .empty
+      modifyEnv fun env => hintDBExt.modifyState env fun _ => state'
+  | _ => throwUnsupportedSyntax
 
-@[command_elab appendToHintDB]
-def elabAppendToHintDB : CommandElab := fun stx => do
+@[command_elab printhintdb]
+def elabprinthintdb : CommandElab := fun stx => do
   match stx with
-  | `(appendToHintDB | #appendToHintDB $to += $fr) => sorry
-  | _ => sorry
+  | `(printhintdb | #print_hintdb $dbname) =>
+    let dbname := dbname.getId.toString
+    let state := hintDBExt.getState (← getEnv)
+    if let some db := state.find? dbname then
+      let hset ← liftCoreM (db.toHashSet)
+      logInfoAt stx m!"{hset.toList}"
+    else
+      liftCoreM <| throwUnregisteredHintDB dbname "printing"
+  | _ => throwUnsupportedSyntax
 
-@[command_elab composeHintDB]
-def elabComposeHintDB : CommandElab := fun stx => do
+@[command_elab composehintdb]
+def elabcomposehintdb : CommandElab := fun stx => do
   match stx with
-  | `(composeHintDB | #composeHintDB $db := [$[$dbs],*]) => sorry
-  | _ => sorry
+  | `(composehintdb | #compose_hintdb $db [$[$dbs],*]) =>
+    let db := db.getId.toString
+    let dbs := dbs.map (fun x => x.getId.toString)
+    let state := hintDBExt.getState (← getEnv)
+    if let some db := state.find? db then
+      throwError "Hint database {repr db} has already been declared"
+    else
+      let state' := state.insert db (.compose dbs)
+      modifyEnv fun env => hintDBExt.modifyState env fun _ => state'
+  | _ => throwUnsupportedSyntax
 
 end Auto
