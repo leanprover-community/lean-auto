@@ -31,5 +31,5 @@ example
   (h₇ : a ∨ ¬c ∨ ¬ d)
   (h₈ : d)
   : e := by
-  try auto [];
+  try auto [*];
   sorry
