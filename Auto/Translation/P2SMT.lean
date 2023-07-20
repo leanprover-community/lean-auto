@@ -12,23 +12,23 @@ namespace Auto
 open IR.SMT
 
 private def PropForm2STerm : ReifP.PropForm → TransM Nat STerm
-| .Atom n    => do
+| .atom n    => do
   if !(← hIn n) then
     let name ← h2Symb n
     addCommand (.declFun name #[] (.app (.symb "bool") #[]))
   return .qIdApp (QualIdent.ofString (← h2Symb n)) #[]
-| .True      => return .qIdApp (QualIdent.ofString "true") #[]
-| .False     => return .qIdApp (QualIdent.ofString "false") #[]
-| .Not f     => do
+| .trueE     => return .qIdApp (QualIdent.ofString "true") #[]
+| .falseE    => return .qIdApp (QualIdent.ofString "false") #[]
+| .not f     => do
   return .qIdApp (QualIdent.ofString "not") #[← PropForm2STerm f]
-| .And f1 f2 => do
+| .and f1 f2 => do
   return .qIdApp (QualIdent.ofString "and") #[← PropForm2STerm f1, ← PropForm2STerm f2]
-| .Or f1 f2  => do
+| .or f1 f2  => do
   return .qIdApp (QualIdent.ofString "or") #[← PropForm2STerm f1, ← PropForm2STerm f2]
-| .Iff f1 f2  => do
+| .iff f1 f2  => do
   return .qIdApp (QualIdent.ofString "not")
     #[.qIdApp (QualIdent.ofString "xor") #[← PropForm2STerm f1, ← PropForm2STerm f2]]
-| .Eq f1 f2  => do
+| .eq f1 f2  => do
   return .qIdApp (QualIdent.ofString "not")
     #[.qIdApp (QualIdent.ofString "xor") #[← PropForm2STerm f1, ← PropForm2STerm f2]]
 

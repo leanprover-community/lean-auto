@@ -1,6 +1,8 @@
 -- This file contains definitions of reification terms
 import Lean
 import Auto.Util.MonadUtils
+import Mathlib.Data.Real.Basic
+import Mathlib.Data.BitVec.Defs
 open Lean
 
 
@@ -10,27 +12,27 @@ namespace Auto
 namespace ReifP
 
 inductive PropForm where
-  | Atom  : Nat → PropForm
-  | True  : PropForm
-  | False : PropForm
-  | Not   : PropForm → PropForm
-  | And   : PropForm → PropForm → PropForm
-  | Or    : PropForm → PropForm → PropForm
-  | Iff   : PropForm → PropForm → PropForm
-  | Eq    : PropForm → PropForm → PropForm
-deriving Inhabited
+  | atom   : Nat → PropForm
+  | trueE  : PropForm
+  | falseE : PropForm
+  | not    : PropForm → PropForm
+  | and    : PropForm → PropForm → PropForm
+  | or     : PropForm → PropForm → PropForm
+  | iff    : PropForm → PropForm → PropForm
+  | eq     : PropForm → PropForm → PropForm
+deriving Inhabited, Hashable, BEq
 
 def reprPrecPropForm (f : PropForm) (b : Bool) :=
   let s :=
     match f with
-    | .Atom n    => f!".Atom {n}"
-    | .True      => f!".True"
-    | .False     => f!".False"
-    | .Not g     => f!".Not " ++ reprPrecPropForm g true
-    | .And f1 f2 => f!".And " ++ reprPrecPropForm f1 true ++ f!" " ++ reprPrecPropForm f2 true
-    | .Or f1 f2  => f!".Or "  ++ reprPrecPropForm f1 true ++ f!" " ++ reprPrecPropForm f2 true
-    | .Iff f1 f2 => f!".Iff " ++ reprPrecPropForm f1 true ++ f!" " ++ reprPrecPropForm f2 true
-    | .Eq f1 f2  => f!".Eq "  ++ reprPrecPropForm f1 true ++ f!" " ++ reprPrecPropForm f2 true
+    | .atom n    => f!".atom {n}"
+    | .trueE     => f!".trueE"
+    | .falseE    => f!".falseE"
+    | .not g     => f!".not " ++ reprPrecPropForm g true
+    | .and f1 f2 => f!".and " ++ reprPrecPropForm f1 true ++ f!" " ++ reprPrecPropForm f2 true
+    | .or f1 f2  => f!".or "  ++ reprPrecPropForm f1 true ++ f!" " ++ reprPrecPropForm f2 true
+    | .iff f1 f2 => f!".iff " ++ reprPrecPropForm f1 true ++ f!" " ++ reprPrecPropForm f2 true
+    | .eq f1 f2  => f!".eq "  ++ reprPrecPropForm f1 true ++ f!" " ++ reprPrecPropForm f2 true
   if b then
     f!"(" ++ s ++ ")"
   else
@@ -95,11 +97,11 @@ section
   def h2Atom (e : ω) : TransM ω PropForm := do
     let ⟨h2lMap, l2hMap, _⟩ ← get
     if h2lMap.contains e then
-      return .Atom (h2lMap.find! e)
+      return .atom (h2lMap.find! e)
     let sz := h2lMap.size
     setH2lMap (h2lMap.insert e sz)
     setL2hMap (l2hMap.insert sz e)
-    return .Atom sz
+    return .atom sz
 
   def addAssertion (a : PropForm) : TransM ω Unit := do
     let assertions ← getAssertions
@@ -108,5 +110,65 @@ section
 end
 
 end ReifP
+
+-- Typed first-order logic without polymorphism
+namespace ReifTF0
+
+inductive TF0Sort
+| atom : Nat → TF0Sort
+| prop : TF0Sort             -- Lean `Prop`
+| nat  : TF0Sort             -- Lean `Nat`
+| real : TF0Sort             -- Mathlib `ℝ`
+| bv   : (n : Nat) → TF0Sort -- Mathlib Bitvec. `n` must be a numeral
+| func : Array TF0Sort → TF0Sort → TF0Sort
+deriving Inhabited, Hashable, BEq
+
+partial def TF0Sort.toExpr (interp : Nat → Expr) : TF0Sort → Expr
+| .prop        => Expr.sort Level.zero
+| .nat         => Expr.const ``Nat []
+| .real        => Expr.const ``Real []
+| .bv n        => mkApp (.const ``Bitvec []) (.lit (.natVal n))
+| .atom n      => interp n
+| .func ⟨bs⟩ r  => go bs (TF0Sort.toExpr interp r)
+where
+  go : List TF0Sort → Expr → Expr
+  | [], e      => e
+  | t :: ts, e => Expr.forallE `_ (TF0Sort.toExpr interp t) (go ts e) .default
+
+inductive TF0Term : Type
+| atom    : Nat → TF0Term
+| natVal  : Nat → TF0Term
+| trueE   : TF0Term
+| falseE  : TF0Term
+| not     : TF0Term → TF0Term
+| and     : TF0Term → TF0Term → TF0Term
+| or      : TF0Term → TF0Term → TF0Term
+| iff     : TF0Term → TF0Term → TF0Term
+| eq      : TF0Term → TF0Term → TF0Term
+| bvar    : (idx : Nat) → TF0Term
+| app     : (appFn : TF0Term) → (appArgs : Array TF0Term) → TF0Term
+| forallE : (binderTy : TF0Sort) → (body : TF0Term) → TF0Term
+deriving Inhabited, Hashable, BEq
+
+structure ToExpr.Context where
+  interpTy   : Nat → Expr
+  interpTerm : Nat → Expr
+deriving Inhabited
+
+structure ToExpr.State where
+  lctx       : Array Expr
+deriving Inhabited, Hashable, BEq
+
+abbrev ToExprM := ReaderT ToExpr.Context (StateM ToExpr.State)
+
+partial def TF0Term.toExpr (interpTy : Nat → Expr) (interpTerm : Nat → Expr) : TF0Term → Expr
+| .atom n    => interpTerm n
+| .natVal n  => .lit (.natVal n)
+| .trueE     => .const ``true []
+| .falseE    => .const ``false []
+
+#eval format <| TF0Sort.toExpr (fun _ => Expr.const ``Nat []) (.func #[.prop, .nat] (.atom 3))
+
+end ReifTF0
 
 end Auto

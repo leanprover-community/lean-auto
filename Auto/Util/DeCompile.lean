@@ -19,7 +19,7 @@ structure State where
   binderNames : Array String := #[]
   curIdx : Nat := 0
 
-abbrev ExprDeCompM := ReaderT Context (StateRefT State CoreM)
+abbrev ExprDeCompM := ReaderT Context (StateRefT State MetaM)
 
 partial def withNewBinder (m : ExprDeCompM α) : ExprDeCompM (α × String) := do
   let bn := (← get).binderNames
@@ -85,7 +85,10 @@ private partial def exprDeCompileAux (final : Bool) (e : Expr) : ExprDeCompM Str
     | .strVal s => return toString s
   | Expr.sort l => return s!"Sort ({l})"
   | Expr.mvar .. => throwError "exprDeCompile :: Metavariable is not supported"
-  | Expr.fvar .. => throwError "exprDeCompile :: Free variable is not supported"
+  | Expr.fvar f =>
+    let some decl := (← getLCtx).find? f
+      | throwError "Unknown free variable {e}"
+    return decl.userName.toString
   | Expr.bvar n =>
     let bn := (← get).binderNames
     return bn[bn.size - n - 1]!
@@ -113,7 +116,7 @@ where
       e := .lam `_ (ty.instantiateLevelParams lparams cst.constLevels!) e .default
     return e
 
-def levelCollectNames (l : Level) : StateM (HashSet String) Unit := do
+def levelCollectNames (l : Level) : StateT (HashSet String) MetaM Unit := do
   match l with
   | .zero => return
   | .succ l => levelCollectNames l
@@ -122,7 +125,7 @@ def levelCollectNames (l : Level) : StateM (HashSet String) Unit := do
   | .max l1 l2 => levelCollectNames l1; levelCollectNames l2
   | .imax l1 l2 => levelCollectNames l1; levelCollectNames l2
 
-def exprCollectNames (e : Expr) : StateM (HashSet String) Unit := do
+def exprCollectNames (e : Expr) : StateT (HashSet String) MetaM Unit := do
   match e with
   | Expr.forallE _ d b _ => exprCollectNames d; exprCollectNames b
   | Expr.lam _ d b _ => exprCollectNames d; exprCollectNames b
@@ -138,13 +141,17 @@ def exprCollectNames (e : Expr) : StateM (HashSet String) Unit := do
   | Expr.lit _ => return
   | Expr.sort l => levelCollectNames l
   | Expr.mvar .. => return
-  | Expr.fvar .. => return
+  | Expr.fvar f => 
+    let some decl := (← getLCtx).find? f
+      | throwError "Unknown free variable {e}"
+    let name := decl.userName.toString
+    modify (fun s => s.insert name)
   | Expr.bvar .. => return
 
 end ExprDeCompile
 
-def exprDeCompile (e : Expr) : CoreM String := do
-  let names := ((ExprDeCompile.exprCollectNames e).run {}).snd
+def exprDeCompile (e : Expr) : MetaM String := do
+  let names := (← (ExprDeCompile.exprCollectNames e).run {}).snd
   let res ← ((ExprDeCompile.exprDeCompileAux false e).run ⟨names⟩).run {}
   return res.fst
 
@@ -155,12 +162,11 @@ syntax (name := testDeComp) "#testDeComp" term : command
 @[command_elab Auto.Util.testDeComp]
 def elabTestDeComp : Elab.Command.CommandElab := fun stx => do
   match stx with
-  | `(command | #testDeComp $x:term) => do
-    let e ← Elab.Command.liftTermElabM (do
+  | `(command | #testDeComp $x:term) => Elab.Command.runTermElabM (fun _ => do
       let x ← Elab.Term.elabTerm x none
       Elab.Term.synthesizeSyntheticMVarsNoPostponing (ignoreStuckTC := true)
-      instantiateMVars x)
-    IO.println (← Elab.Command.liftCoreM (exprDeCompile e))
+      let e ← instantiateMVars x
+      IO.println (← exprDeCompile e))
   | _ => Elab.throwUnsupportedSyntax
 
 #testDeComp (fun (x y : Nat) => Nat.add x y)
