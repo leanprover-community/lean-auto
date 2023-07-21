@@ -329,34 +329,14 @@ section
   instance : Inhabited (TransM ω α) where
     default := fun _ => throw default
   
-  def getH2lMap : TransM ω (HashMap ω String) := do
-    return (← get).h2lMap
+  variable {ω : Type} [BEq ω] [Hashable ω]
 
-  def getL2hMap : TransM ω (HashMap String ω) := do
-    return (← get).l2hMap
-
-  def getCommands : TransM ω (Array Command) := do
-    return (← get).commands
-
-  def getIdx : TransM ω Nat := do
-    return (← get).idx
+  #genMonadGetSet (TransM ω)
 
   def getMapSize : TransM ω Nat := do
     let size := (← getH2lMap).size
     assert! ((← getL2hMap).size == size)
     return size
-
-  def setH2lMap (m : HashMap ω String) : TransM ω Unit :=
-    modify (fun s => {s with h2lMap := m})
-
-  def setL2hMap (m : HashMap String ω) : TransM ω Unit :=
-    modify (fun s => {s with l2hMap := m})
-
-  def setCommands (cmds : Array Command) : TransM ω Unit :=
-    modify (fun s => {s with commands := cmds})
-
-  def setIdx (m : Nat) : TransM ω Unit :=
-    modify (fun s => {s with idx := m})
   
   def hIn (e : ω) : TransM ω Bool := do
     return (← getH2lMap).contains e

@@ -73,23 +73,7 @@ section
   instance : Inhabited (TransM ω α) where
     default := fun _ => throw default
 
-  def getH2lMap : TransM ω (HashMap ω Nat) := do
-    return (← get).h2lMap
-
-  def getL2hMap : TransM ω (HashMap Nat ω) := do
-    return (← get).l2hMap
-
-  def getAssertions : TransM ω (Array PropForm) := do
-    return (← get).assertions
-
-  def setH2lMap (m : HashMap ω Nat) : TransM ω Unit :=
-    modify (fun s => {s with h2lMap := m})
-
-  def setL2hMap (m : HashMap Nat ω) : TransM ω Unit :=
-    modify (fun s => {s with l2hMap := m})
-
-  def setAssertions (a : Array PropForm) : TransM ω Unit :=
-    modify (fun s => {s with assertions := a})
+  #genMonadGetSet (TransM ω)
   
   def hIn (e : ω) : TransM ω Bool := do
     return (← getH2lMap).contains e
@@ -156,16 +140,19 @@ structure ToExpr.Context where
 deriving Inhabited
 
 structure ToExpr.State where
-  lctx       : Array Expr
+  lCtx       : Array Expr
 deriving Inhabited, Hashable, BEq
 
 abbrev ToExprM := ReaderT ToExpr.Context (StateM ToExpr.State)
+
+#genMonadGetSet ToExprM
 
 partial def TF0Term.toExpr (interpTy : Nat → Expr) (interpTerm : Nat → Expr) : TF0Term → Expr
 | .atom n    => interpTerm n
 | .natVal n  => .lit (.natVal n)
 | .trueE     => .const ``true []
 | .falseE    => .const ``false []
+| _ => sorry
 
 #eval format <| TF0Sort.toExpr (fun _ => Expr.const ``Nat []) (.func #[.prop, .nat] (.atom 3))
 
