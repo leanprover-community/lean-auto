@@ -22,62 +22,111 @@ namespace Auto.Util
 --    def set<field_i> (f : <ty_i>) : SomeM param₁ ... paramₙ Unit :=
 --      modify (fun s => {s with <field_i> := f})
 --
--- using the command `#genMonadGetSet (SomeM param₁ ... paramₙ)`
+-- using the command `#genMonadState (SomeM param₁ ... paramₙ)`
+-- And generate the following functions:
+--
+--    def get<field_i> : SomeM param₁ ... paramₙ <ty_i> := do
+--      return (← read).<field_i>
+--
+-- using the command `#genMonadContext (SomeM param₁ ⋯ paramₙ)`
+-- 3. Make sure that
+--    (1) No function with conflicting name has been declared
+--    (2) When invoking `#genMonadState`, Lean's kernel is able to
+--        synthesize `MonadState _ (SomeM param₁ ⋯ paramₙ)`
+--    (3) When invoking `#genMonadContext`, Lean's kernel is able to
+--        synthesize `MonadReader _ (SomeM param₁ ⋯ paramₙ)`
 
-syntax (name := genMonadGetSet) "#genMonadGetSet" term : command
+syntax (name := genMonadContext) "#genMonadContext" term : command
+syntax (name := genMonadState) "#genMonadState" term : command
 
-private def elabGenMonadGetSetAux (m : Term) : CommandElab := fun stx => runTermElabM <| fun xs => do
-  let mexpr ← elabStx m
-  let .const mname _ := mexpr.getAppFn
-    | throwError "elabGenMonadGetSet :: Unknown monad"
-  let .str pre _ := mname
-    | throwError "elabGenMonadGetSet :: {mname} is not a valid constant name"
-  let mInst ← elabStx (← `(inferInstanceAs (Monad $m)))
-  let pureInst ← elabStx (← `(inferInstanceAs (Pure $m)))
-  let mstateInst ← elabStx (← `(inferInstanceAs (MonadState _ $m)))
-  -- `instTy = MonadState <state> <monad>`
-  let mstateInstTy ← Meta.inferType mstateInst
-  -- The type of the state of the Monad (with parameters applied)
-  let stateTy := mstateInstTy.getArg! 0
-  let .const stateConst lvls := stateTy.getAppFn
-    | throwError s!"elabGenMonadGetSet :: Head symbol of {stateTy} is not a constant"
-  let some stateStructInfo := getStructureInfo? (← getEnv) stateConst
-    | throwError s!"elabGenMonadGetSet :: {stateConst} is not a structure"
-  let .some (.inductInfo statei) := (← getEnv).find? stateConst
-    | throwError s!"elabGenMOnadGetSet :: Unknown identifier {stateConst}"
-  let [stateDotMk] := statei.ctors
-    | throwError s!"elabGenMonadGetSet :: {stateConst} is not a structure"
-  let stateMkExpr := mkAppN (Expr.const stateDotMk lvls) stateTy.getAppArgs
-  let tyArgs := stateTy.getAppArgs
-  let fieldInfos ← (do
-    let nameMap : HashMap Name StructureFieldInfo := HashMap.ofList
-      (stateStructInfo.fieldInfo.map (fun sfi => (sfi.fieldName, sfi))).data
-    let sorted := stateStructInfo.fieldNames.map (fun name => nameMap.find! name)
-    return sorted.map (fun i =>
+-- `instStructTy`: An expression of the form `<structure> param₁ param₂ ⋯ paramₙ`
+-- `Name`: The name of the structure
+-- `Expr`: <structure>.mk with parameters instantiated
+-- `Array (Name × Expr)`
+--   `Name`: Name of the field
+--   `Expr`: The projection function of this field, with parameters instantiated
+def structureProjs (structTy : Expr) : CoreM (Name × Expr × Array (Name × Expr)) := do
+  let .const structName lvls := structTy.getAppFn
+    | throwError s!"structureProjs :: Head symbol of {structTy} is not a constant"
+  let some structInfo := getStructureInfo? (← getEnv) structName
+    | throwError s!"structureProjs :: {structName} is not a structure"
+  let .some (.inductInfo structi) := (← getEnv).find? structName
+    | throwError s!"structureProjs :: Unknown identifier {structName}"
+  let [structDotMk] := structi.ctors
+    | throwError s!"structureProjs :: {structName} is not a structure"
+  let structMkExpr := mkAppN (Expr.const structDotMk lvls) structTy.getAppArgs
+  let tyArgs := structTy.getAppArgs
+  let nameMap : HashMap Name StructureFieldInfo := HashMap.ofList
+    (structInfo.fieldInfo.map (fun sfi => (sfi.fieldName, sfi))).data
+  let sorted := structInfo.fieldNames.map (fun name => nameMap.find! name)
+  let fieldInfos := sorted.map (fun i =>
       -- Field name, Projection function
       (i.fieldName, mkAppN (Expr.const i.projFn lvls) tyArgs))
-  )
-  genMonadGets xs stateTy pureInst mstateInst fieldInfos pre
-  genMonadSets xs stateTy stateMkExpr mstateInst fieldInfos pre
-where
-  elabStx (stx : Term) : TermElabM Expr := do
-    let expr ← Term.elabTerm stx none
-    Term.synthesizeSyntheticMVarsNoPostponing (ignoreStuckTC := true)
-    let e ← instantiateMVars expr
-    if e.hasMVar then
-      throwError "genMonadGetSet :: {e} contains metavariables"
-    return e
-  -- Note that `e` might contain free variables
-  addDefnitionValFromExpr (e : Expr) (name : Name) : MetaM Unit := do
+  return (structName, structMkExpr, fieldInfos)
+
+private def elabStx (stx : Term) : TermElabM Expr := do
+  let expr ← Term.elabTerm stx none
+  Term.synthesizeSyntheticMVarsNoPostponing (ignoreStuckTC := true)
+  let e ← instantiateMVars expr
+  if e.hasMVar then
+    throwError "elabStx :: {e} contains metavariables"
+  return e
+
+private def addDefnitionValFromExpr (e : Expr) (name : Name) : MetaM Unit := do
     let ty ← Meta.inferType e
     let cstVal : ConstantVal := { name := name, levelParams := [], type := ty }
     -- **TODO:** What argument to supply to `.regular`?
     let dfnVal : DefinitionVal := {cstVal with value := e, hints := .opaque, safety := .safe}
     addAndCompile (.defnDecl dfnVal)
+
+private def elabGenMonadContextAux (m : Term) : CommandElab := fun _ => runTermElabM <| fun xs => do
+  let mexpr ← elabStx m
+  let .const mname _ := mexpr.getAppFn
+    | throwError "elabGenMonadContext :: Unknown monad"
+  let .str pre _ := mname
+    | throwError "elabGenMonadContext :: {mname} is not a valid constant name"
+  let pureInst ← elabStx (← `(inferInstanceAs (Pure $m)))
+  let mctxInst ← elabStx (← `(inferInstanceAs (MonadReader _ $m)))
+  let mctxInstTy ← Meta.inferType mctxInst
+  -- The type of the context of the Monad (with parameters applied)
+  let ctxTy := mctxInstTy.getArg! 0
+  let (_, _, ctxFieldInfos) ← structureProjs ctxTy
+  genMonadGets xs ctxTy pureInst mctxInst ctxFieldInfos pre
+where
+  genMonadGets (xs : Array Expr) (ctxTy : Expr) (pureInst : Expr) (mctxInst : Expr)
+      (fieldInfos : Array (Name × Expr)) (pre : Name) : MetaM Unit :=
+    for (fieldName, projFn) in fieldInfos do
+      let getFnNameStr := "get" ++ fieldName.toString.capitalize
+      let getFnName := Name.str pre getFnNameStr
+      let bind₁ ← Meta.mkAppOptM ``read #[none, none, mctxInst]
+      let bind₂ ← Meta.withLocalDecl `st .default ctxTy fun e => do
+        let field := mkApp projFn e
+        let purefield ← Meta.mkAppOptM ``pure #[none, pureInst, none, field]
+        Meta.mkLambdaFVars #[e] purefield
+      let fnBodyPre ← Meta.mkAppM ``bind #[bind₁, bind₂]
+      let fnBodyPre ← Meta.mkLambdaFVars xs fnBodyPre (usedOnly := true)
+      let fnBody ← instantiateMVars fnBodyPre
+      IO.println s!"genMonadContext :: {getFnName}"
+      addDefnitionValFromExpr fnBody getFnName
+
+private def elabGenMonadStateAux (m : Term) : CommandElab := fun _ => runTermElabM <| fun xs => do
+  let mexpr ← elabStx m
+  let .const mname _ := mexpr.getAppFn
+    | throwError "elabGenMonadState :: Unknown monad"
+  let .str pre _ := mname
+    | throwError "elabGenMonadState :: {mname} is not a valid constant name"
+  let pureInst ← elabStx (← `(inferInstanceAs (Pure $m)))
+  let mstateInst ← elabStx (← `(inferInstanceAs (MonadState _ $m)))
+  let mstateInstTy ← Meta.inferType mstateInst
+  -- The type of the state of the Monad (with parameters applied)
+  let stateTy := mstateInstTy.getArg! 0
+  let (_, stateMkExpr, stateFieldInfos) ← structureProjs stateTy
+  genMonadGets xs stateTy pureInst mstateInst stateFieldInfos pre
+  genMonadSets xs stateTy stateMkExpr mstateInst stateFieldInfos pre
+where
   genMonadGets
       (xs : Array Expr) (stateTy : Expr) (pureInst : Expr) (mstateInst : Expr)
-      (fieldInfos : Array (Name × Expr))
-      (pre : Name) : MetaM Unit :=
+      (fieldInfos : Array (Name × Expr)) (pre : Name) : MetaM Unit :=
     for (fieldName, projFn) in fieldInfos do
       let getFnNameStr := "get" ++ fieldName.toString.capitalize
       let getFnName := Name.str pre getFnNameStr
@@ -93,8 +142,7 @@ where
       addDefnitionValFromExpr fnBody getFnName
   genMonadSets
       (xs : Array Expr) (stateTy : Expr) (stateMkExpr : Expr) (mstateInst : Expr)
-      (fieldInfos : Array (Name × Expr))
-      (pre : Name) : MetaM Unit := do
+      (fieldInfos : Array (Name × Expr)) (pre : Name) : MetaM Unit := do
     let mut fieldCnt := 0
     for (fieldName, projFn) in fieldInfos do
       let setFnNameStr := "set" ++ fieldName.toString.capitalize
@@ -114,11 +162,18 @@ where
       addDefnitionValFromExpr fnBody setFnName
       fieldCnt := fieldCnt + 1
 
-@[command_elab Auto.Util.genMonadGetSet]
-def elabGenMonadGetSet : CommandElab := fun stx => withRef stx do
+@[command_elab Auto.Util.genMonadContext]
+def elabGenMonadContext : CommandElab := fun stx => withRef stx do
   match stx with
-  | `(command | #genMonadGetSet $m:term) =>
-    elabGenMonadGetSetAux m stx
+  | `(command | #genMonadContext $m:term) =>
+    elabGenMonadContextAux m stx
+  | _ => throwUnsupportedSyntax
+
+@[command_elab Auto.Util.genMonadState]
+def elabGenMonadState : CommandElab := fun stx => withRef stx do
+  match stx with
+  | `(command | #genMonadState $m:term) =>
+    elabGenMonadStateAux m stx
   | _ => throwUnsupportedSyntax
 
 end Auto.Util

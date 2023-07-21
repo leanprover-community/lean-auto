@@ -73,7 +73,7 @@ section
   instance : Inhabited (TransM ω α) where
     default := fun _ => throw default
 
-  #genMonadGetSet (TransM ω)
+  #genMonadState (TransM ω)
   
   def hIn (e : ω) : TransM ω Bool := do
     return (← getH2lMap).contains e
@@ -145,7 +145,7 @@ deriving Inhabited, Hashable, BEq
 
 abbrev ToExprM := ReaderT ToExpr.Context (StateM ToExpr.State)
 
-#genMonadGetSet ToExprM
+#genMonadState ToExprM
 
 partial def TF0Term.toExpr (interpTy : Nat → Expr) (interpTerm : Nat → Expr) : TF0Term → Expr
 | .atom n    => interpTerm n

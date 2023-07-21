@@ -331,7 +331,7 @@ section
   
   variable {ω : Type} [BEq ω] [Hashable ω]
 
-  #genMonadGetSet (TransM ω)
+  #genMonadState (TransM ω)
 
   def getMapSize : TransM ω Nat := do
     let size := (← getH2lMap).size
