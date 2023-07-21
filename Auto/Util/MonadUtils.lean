@@ -96,7 +96,6 @@ where
       (fieldInfos : Array (Name × Expr))
       (pre : Name) : MetaM Unit := do
     let mut fieldCnt := 0
-    IO.println (fieldInfos.map (fun x => x.1))
     for (fieldName, projFn) in fieldInfos do
       let setFnNameStr := "set" ++ fieldName.toString.capitalize
       let setFnName := Name.str pre setFnNameStr
