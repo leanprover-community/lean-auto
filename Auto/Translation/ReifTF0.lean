@@ -23,18 +23,18 @@ structure TF0Sort where
 deriving BEq, Hashable, Inhabited
 
 inductive TF0Term : Type
-| natVal  : Nat → TF0Term
-| trueE   : TF0Term
-| falseE  : TF0Term
-| not     : TF0Term → TF0Term
-| and     : TF0Term → TF0Term → TF0Term
-| or      : TF0Term → TF0Term → TF0Term
-| iff     : TF0Term → TF0Term → TF0Term
--- Supporting polymorphic `eq`
-| eq      : TF0Term → TF0Term → TF0Term
-| bvar    : (idx : Nat) → TF0Term
-| app     : (atom : Nat) → (appArgs : Array TF0Term) → TF0Term
-| forallE : (binderTy : TF0Sort) → (body : TF0Term) → TF0Term
+  | natVal  : Nat → TF0Term
+  | trueE   : TF0Term
+  | falseE  : TF0Term
+  | not     : TF0Term → TF0Term
+  | and     : TF0Term → TF0Term → TF0Term
+  | or      : TF0Term → TF0Term → TF0Term
+  | iff     : TF0Term → TF0Term → TF0Term
+  -- Supporting polymorphic `eq`
+  | eq      : TF0Term → TF0Term → TF0Term
+  | bvar    : (idx : Nat) → TF0Term
+  | app     : (atom : Nat) → (appArgs : Array TF0Term) → TF0Term
+  | forallE : (binderTy : TF0Sort) → (body : TF0Term) → TF0Term
 deriving Inhabited, Hashable, BEq
 
 section ToExpr
@@ -106,5 +106,37 @@ section ToExpr
   --  ⟨[.prop, .nat], (.atom 3)⟩
   
 end ToExpr
+
+@[reducible] def TF0BaseSort.interp.{u} (val : Nat → Type u) : TF0BaseSort → Type u
+| .atom n => val n
+| .prop   => GLift Prop
+| .nat    => GLift Nat
+| .real   => GLift Real
+| .bv n   => GLift (Bitvec n)
+
+@[reducible] def TF0Sort.interp.{u} (val : Nat → Type u) : (x : TF0Sort) → Type u :=
+  fun ⟨argTys, resTy⟩ =>
+    let argTys : List (Type u) := List.map (TF0BaseSort.interp val) argTys
+    let resTy : Type u := resTy.interp val
+    argTys.foldr (fun ty acc => ty → acc) resTy
+
+-- Valuation
+structure TF0Val.{u} where
+  tyVal    : Nat → Type (u + 1)
+  constVal : Nat → (s : TF0Sort) × TF0Sort.interp tyVal s
+
+-- Interpretation pair, `(TF0 term, CIC term)`
+structure TF0Interp.{u} where
+  -- Local context, list of CIC terms
+  lctx    : List ((α : Type (u + 1)) × α)
+  -- A term in TF0
+  rterm   : TF0Term
+  -- Type of `mterm`
+  ty      : Type (u + 1)
+  -- The CIC term that `rterm` translates into
+  mterm   : ty
+
+inductive WF.{u} (val : TF0Val.{u}) : TF0Interp.{u} → Prop
+--  | a : WF sorry sorry
 
 end Auto.ReifTF0

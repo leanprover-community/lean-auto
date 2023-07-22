@@ -32,6 +32,16 @@ def reprPrecPropForm (f : PropForm) (b : Bool) :=
   else
     f!"Auto.D2P.PropForm" ++ s
 
+def PropForm.interp (val : Nat → Prop) : PropForm → Prop
+| .atom n    => val n
+| .trueE     => True
+| .falseE    => false
+| .not f     => Not (f.interp val)
+| .and f₁ f₂ => And (f₁.interp val) (f₂.interp val)
+| .or f₁ f₂  => Or (f₁.interp val) (f₂.interp val)
+| .iff f₁ f₂ => Iff (f₁.interp val) (f₂.interp val)
+| .eq f₁ f₂  => f₁.interp val = f₂.interp val
+
 instance : Repr PropForm where
   reprPrec f n := reprPrecPropForm f (n != 0)
 

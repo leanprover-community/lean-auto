@@ -9,7 +9,7 @@ inductive LamSort
 | func : LamSort → LamSort → LamSort
 deriving Inhabited, Hashable, BEq
 
-@[reducible] def LamSort.interp.{u} (val : Nat → Type u) : LamSort → Type u
+@[reducible] def LamSort.interp.{u} (val : Nat → Sort u) : LamSort → Sort u
 | .atom n => val n
 | .func dom cod => interp val dom → interp val cod
 
@@ -38,42 +38,42 @@ structure LamInterp.{u} where
   mterm   : ty
 
 inductive WF.{u} (val : LamVal.{u}) : LamInterp.{u} → Prop
-| ofAtom n
-    {lctx : List ((γ : Type (u + 1)) × γ)} :
-  WF val <|
-    let ci := val.constVal n
-    let ty := LamSort.interp val.tyVal ci.fst
-    ⟨lctx, (.atom n), ty, ci.snd⟩
-| ofBVar
-    {lctx : List ((α : Type (u + 1)) × α)}
-    (n : Fin lctx.length) :
-  WF val <|
-    ⟨lctx, .bvar n, lctx[n].fst, lctx[n].snd⟩
-| ofEq
-    {lctx : List ((γ : Type (u + 1)) × γ)}
-    {hlhs hrhs : LamTerm}
-    (α : Type (u + 1)) (lhs rhs : α)
-    (Hl : WF val ⟨lctx, hlhs, α, lhs⟩)
-    (Hr : WF val ⟨lctx, hrhs, α, rhs⟩) :
-  WF val <|
-    ⟨lctx, .eq hlhs hrhs, Type u, EqLift lhs rhs⟩
-| ofLam
-    {lctx : List ((γ : Type (u + 1)) × γ)}
-    {hs : LamSort} {ht : LamTerm}
-    (α β : Type (u + 1)) (fn : α → β)
-    (H : ∀ (t : α), WF val ⟨⟨α, t⟩ :: lctx, ht, β, fn t⟩)
-    :
-  WF val <|
-    ⟨lctx, .lam hs ht, α → β, fn⟩
-| ofApp
-    {lctx : List ((γ : Type (u + 1)) × γ)}
-    {hfn harg : LamTerm}
-    (α β : Type (u + 1)) (fn : α → β) (arg : α)
-    (Hfn : WF val ⟨lctx, hfn, α → β, fn⟩)
-    (Harg : WF val ⟨lctx, harg, α, arg⟩)
-    :
-  WF val <|
-    ⟨lctx, .app hfn harg, β, fn arg⟩
+  | ofAtom n
+      {lctx : List ((γ : Type (u + 1)) × γ)} :
+    WF val <|
+      let ci := val.constVal n
+      let ty := LamSort.interp val.tyVal ci.fst
+      ⟨lctx, (.atom n), ty, ci.snd⟩
+  | ofBVar
+      {lctx : List ((α : Type (u + 1)) × α)}
+      (n : Fin lctx.length) :
+    WF val <|
+      ⟨lctx, .bvar n, lctx[n].fst, lctx[n].snd⟩
+  | ofEq
+      {lctx : List ((γ : Type (u + 1)) × γ)}
+      {hlhs hrhs : LamTerm}
+      (α : Type (u + 1)) (lhs rhs : α)
+      (Hl : WF val ⟨lctx, hlhs, α, lhs⟩)
+      (Hr : WF val ⟨lctx, hrhs, α, rhs⟩) :
+    WF val <|
+      ⟨lctx, .eq hlhs hrhs, Type u, EqLift lhs rhs⟩
+  | ofLam
+      {lctx : List ((γ : Type (u + 1)) × γ)}
+      {hs : LamSort} {ht : LamTerm}
+      (α β : Type (u + 1)) (fn : α → β)
+      (H : ∀ (t : α), WF val ⟨⟨α, t⟩ :: lctx, ht, β, fn t⟩)
+      :
+    WF val <|
+      ⟨lctx, .lam hs ht, α → β, fn⟩
+  | ofApp
+      {lctx : List ((γ : Type (u + 1)) × γ)}
+      {hfn harg : LamTerm}
+      (α β : Type (u + 1)) (fn : α → β) (arg : α)
+      (Hfn : WF val ⟨lctx, hfn, α → β, fn⟩)
+      (Harg : WF val ⟨lctx, harg, α, arg⟩)
+      :
+    WF val <|
+      ⟨lctx, .app hfn harg, β, fn arg⟩
 
 section Example
   
