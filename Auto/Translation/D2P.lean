@@ -3,7 +3,7 @@ import Auto.Util.MonadUtils
 import Auto.Util.ExprExtra
 import Auto.Translation.ReifP
 
--- D2P: Dependent type to Propositional Logic
+-- D2P: Dependent type (COC) to Propositional Logic
 
 namespace Auto
 

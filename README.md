@@ -13,12 +13,22 @@ Experiments in automation for Lean
 * Lexical Analyzer Generator: ```Parser/LeanLex.lean```. The frontend is not yet implemented. The backend can be found in ```NDFA.lean```.
 
 ## Translation Workflow (Tentative)
-* $CIC \to CIC$: Instantiating universe levels
-* $CIC \to CIC$: Instantiating typeclasse arguments
-* $CIC \to \lambda_2^u(\text{TPTP\ THF})$: Instantiating dependent type arguments. The superscript $u$ means that there are still universe levels within terms.
-* $\lambda_2^u \to \lambda_2$: Universe uniformization (??)
+* Collecting assumptions from local context and user-provided facts
+* $CIC \to COC$: Collecting constructors and recursors for inductive types (effectively, not directly)
+  * e.g collecting equational theorem for *match* constructs
+  * e.g collect fields of typeclasses (we probably won't do so because typeclass can get very complicated and there are simply too many fields)
+  * e.g collect constructors for inductively defined propositions
+* $COC \to COC^{p.i}$: Erase proofs
+  * $p.i.$ stands for "proof irrelevance"
+* $COC^{p.i.} \to COC^{c.u.}$: Instantiating universe levels
+  * $c.u.$ stands for "constant universe level"
+* $COC^{c.u.} \to COC^{c.u.}$: Instantiating typeclasse arguments
+  * **This is probably the most difficult part of translation.**
+* $COC^{c.u.} \to COC(\lambda_2^{c.u.})$: Instantiating (types depending on types) and (types depending on terms)
+  * Note that at this stage, all the facts we've obtained are still valid $CIC$ expressions and are directly provable from the assumptions.
+* $COC(\lambda_2^{c.u.}) \to COC(\lambda_2)$
   * We want all types $α$ occuring in the signature of constants and variables to be of sort ```Type (u + 1)```, i.e., $α : Type \ (u + 1)$. This is necessary because we want to write a checker (instead of directly reconstructing proof in DTT) and the valuation function from less expressive logic to dependent type theory requires [the elements in the range of the valuation function] to be [of the same sort].
-  * To do this, for example, ```Nat.add``` is transformed into ```Nat.addLift```
+  * To do this, we use ```GLift```. For example, ```Nat.add``` is transformed into ```Nat.addLift```
     ```lean
     structure GLift.{u, v} (α : Sort u) : Sort (max u (v + 1)) where
       /-- Lift a value into `GLift α` -/    up ::
@@ -27,5 +37,14 @@ Experiments in automation for Lean
     def Nat.addLift.{u} (x y : GLift.{1, u} Nat) :=
       GLift.up (Nat.add (GLift.down x) (GLift.down y))
     ```
-* $\lambda_2 \to \lambda$: Monomorphization
-* $\lambda \to \text{TPTP\ TFF}$: Instantiating function arguments
+  * We only transfer these "lifted" terms to the less expressive $\lambda_2$, and $\lambda_2$ is unaware of the universe levels wrapped inside ```GLift.up```.
+  * Lifted constantes should be introduced into the local context. Theorems corresponding to the original one but using only lifted constants and with uniform universe levels, should also be introduced into the local context. Later translations should only use theorems and constants with uniform universe levels.
+* $COC(\lambda_2) \to COC(\lambda)$: Monomorphization. Instantiating (terms depending on types)
+* $COC(\lambda) \to COC(\text{TPTP TF0})$: Instantiating function arguments
+* **There should also be a process similar to ULifting that "lifts" Bool into Prop**
+
+## Reification
+* $CIC \to \text{Propositional}$
+  * ```Auto/IR/D2P.lean```
+* $COC(\lambda_2) \to \lambda_2(\text{TPTP\ THF})$
+* $COC(\text{TPTP TF0}) \to \text{TPTP TF0}$
