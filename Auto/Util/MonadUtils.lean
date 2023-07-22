@@ -75,7 +75,10 @@ private def elabStx (stx : Term) : TermElabM Expr := do
 private def addDefnitionValFromExpr (e : Expr) (name : Name) : MetaM Unit := do
     let ty ← Meta.inferType e
     let cstVal : ConstantVal := { name := name, levelParams := [], type := ty }
-    -- **TODO:** What argument to supply to `.regular`?
+    -- We supply `.opaque` to `hints` because the functions we want to define
+    --   are meant to be evaluated, not reduced. Although it's unlikely that
+    --   any `isDefEq` call will find that the head of one of its arguments
+    --   is the function we defined.
     let dfnVal : DefinitionVal := {cstVal with value := e, hints := .opaque, safety := .safe}
     addAndCompile (.defnDecl dfnVal)
 

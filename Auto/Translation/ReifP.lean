@@ -1,15 +1,9 @@
--- This file contains definitions of reification terms
 import Lean
 import Auto.Util.MonadUtils
-import Mathlib.Data.Real.Basic
-import Mathlib.Data.BitVec.Defs
 open Lean
 
-
-namespace Auto
-
 -- Propositional reification terms
-namespace ReifP
+namespace Auto.ReifP
 
 inductive PropForm where
   | atom   : Nat → PropForm
@@ -93,69 +87,4 @@ section
   
 end
 
-end ReifP
-
--- Typed first-order logic without polymorphism
-namespace ReifTF0
-
-inductive TF0Sort
-| atom : Nat → TF0Sort
-| prop : TF0Sort             -- Lean `Prop`
-| nat  : TF0Sort             -- Lean `Nat`
-| real : TF0Sort             -- Mathlib `ℝ`
-| bv   : (n : Nat) → TF0Sort -- Mathlib Bitvec. `n` must be a numeral
-| func : Array TF0Sort → TF0Sort → TF0Sort
-deriving Inhabited, Hashable, BEq
-
-partial def TF0Sort.toExpr (interp : Nat → Expr) : TF0Sort → Expr
-| .prop        => Expr.sort Level.zero
-| .nat         => Expr.const ``Nat []
-| .real        => Expr.const ``Real []
-| .bv n        => mkApp (.const ``Bitvec []) (.lit (.natVal n))
-| .atom n      => interp n
-| .func ⟨bs⟩ r  => go bs (TF0Sort.toExpr interp r)
-where
-  go : List TF0Sort → Expr → Expr
-  | [], e      => e
-  | t :: ts, e => Expr.forallE `_ (TF0Sort.toExpr interp t) (go ts e) .default
-
-inductive TF0Term : Type
-| atom    : Nat → TF0Term
-| natVal  : Nat → TF0Term
-| trueE   : TF0Term
-| falseE  : TF0Term
-| not     : TF0Term → TF0Term
-| and     : TF0Term → TF0Term → TF0Term
-| or      : TF0Term → TF0Term → TF0Term
-| iff     : TF0Term → TF0Term → TF0Term
-| eq      : TF0Term → TF0Term → TF0Term
-| bvar    : (idx : Nat) → TF0Term
-| app     : (appFn : TF0Term) → (appArgs : Array TF0Term) → TF0Term
-| forallE : (binderTy : TF0Sort) → (body : TF0Term) → TF0Term
-deriving Inhabited, Hashable, BEq
-
-structure ToExpr.Context where
-  interpTy   : Nat → Expr
-  interpTerm : Nat → Expr
-deriving Inhabited
-
-structure ToExpr.State where
-  lCtx       : Array Expr
-deriving Inhabited, Hashable, BEq
-
-abbrev ToExprM := ReaderT ToExpr.Context (StateM ToExpr.State)
-
-#genMonadState ToExprM
-
-partial def TF0Term.toExpr (interpTy : Nat → Expr) (interpTerm : Nat → Expr) : TF0Term → Expr
-| .atom n    => interpTerm n
-| .natVal n  => .lit (.natVal n)
-| .trueE     => .const ``true []
-| .falseE    => .const ``false []
-| _ => sorry
-
-#eval format <| TF0Sort.toExpr (fun _ => Expr.const ``Nat []) (.func #[.prop, .nat] (.atom 3))
-
-end ReifTF0
-
-end Auto
+end Auto.ReifP

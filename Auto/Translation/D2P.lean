@@ -1,7 +1,7 @@
 import Lean
 import Auto.Util.MonadUtils
 import Auto.Util.ExprExtra
-import Auto.Translation.ReifTerms
+import Auto.Translation.ReifP
 
 -- D2P: Dependent type to Propositional Logic
 
@@ -23,8 +23,8 @@ partial def D2P (e : Expr) : TransM Expr PropForm := do
     let some name := e.constName?
       | throwError failureMsg
     match name with
-    | ``True => return .True
-    | ``False => return .False
+    | ``True => return .trueE
+    | ``False => return .falseE
     | _ => h2Atom e
   | .app .. =>
     let f := e.getAppFn
@@ -34,21 +34,21 @@ partial def D2P (e : Expr) : TransM Expr PropForm := do
     if args.size == 1 then
       let args ← args.mapM D2P
       match name with
-      | ``Not => return .Not args[0]!
+      | ``Not => return .not args[0]!
       | _ => h2Atom e
     else if args.size == 2 then
       let args ← args.mapM D2P
       match name with
-      | ``And => return .And args[0]! args[1]!
-      | ``Or => return .Or args[0]! args[1]!
-      | ``Iff => return .Iff args[0]! args[1]!
+      | ``And => return .and args[0]! args[1]!
+      | ``Or => return .or args[0]! args[1]!
+      | ``Iff => return .iff args[0]! args[1]!
       | _ => h2Atom e
     else if args.size == 3 then
       match name with
       | ``Eq =>
         if ← Meta.isDefEq args[0]! (.sort .zero) then
           let args ← args[1:].toArray.mapM D2P
-          return .Eq args[0]! args[1]!
+          return .eq args[0]! args[1]!
         else
           h2Atom e
       | _ => h2Atom e
@@ -61,7 +61,7 @@ def tst (e : Expr) : Elab.Term.TermElabM Unit := do
   let f := es.fst
   IO.println (repr f)
 
-#getExprAndApply[True ∨ (False ↔ False) ∨ (2 = 3) ∨ (2 = 3)|tst]
-#getExprAndApply[True ∨ (False ↔ False) ∨ ((False = True) = True)|tst]
+-- #getExprAndApply[True ∨ (False ↔ False) ∨ (2 = 3) ∨ (2 = 3)|tst]
+-- #getExprAndApply[True ∨ (False ↔ False) ∨ ((False = True) = True)|tst]
 
 end Auto

@@ -32,3 +32,5 @@ attribute [hintdb arith] Nat.add_comm Nat.add_assoc
 attribute [hintdb arith] Nat.mul_assoc
 
 #print_hintdb arithlogic
+
+#check ULift Nat
