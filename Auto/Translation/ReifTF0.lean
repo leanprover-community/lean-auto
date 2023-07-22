@@ -125,8 +125,8 @@ structure TF0Val.{u} where
   tyVal    : Nat → Type (u + 1)
   constVal : Nat → (s : TF0Sort) × TF0Sort.interp tyVal s
 
--- Interpretation pair, `(TF0 term, CIC term)`
-structure TF0Interp.{u} where
+-- Judgement, `lctx ⊢ rterm ≝ mterm : ty`
+structure TF0Judge.{u} where
   -- Local context, list of CIC terms
   lctx    : List ((α : Type (u + 1)) × α)
   -- A term in TF0
@@ -136,7 +136,7 @@ structure TF0Interp.{u} where
   -- The CIC term that `rterm` translates into
   mterm   : ty
 
-inductive WF.{u} (val : TF0Val.{u}) : TF0Interp.{u} → Prop
+inductive WF.{u} (val : TF0Val.{u}) : TF0Judge.{u} → Prop
 --  | a : WF sorry sorry
 
 end Auto.ReifTF0

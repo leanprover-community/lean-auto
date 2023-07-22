@@ -4,10 +4,11 @@ structure GLift.{u, v} (α : Sort u) : Sort (max u (v + 1)) where
   /-- Lift a value into `PLift α` -/    up ::
   /-- Extract a value from `PLift α` -/ down : α
 
-def EqLift.{u, v} {α : Sort u} (a b : α) : Type v := GLift (a = b)
+def EqLift.{u, v, w} {α : Sort u} (a b : GLift.{u, v} α) : Type w :=
+  GLift (a.down = b.down)
 
-def Eq.reflLift.{u, v} {α : Sort u} (a : α) : GLift (a = a) :=
-  @GLift.up.{0, v} (a = a) (Eq.refl a)
+def Eq.reflLift.{u, v} {α : Sort u} (a : GLift.{u, v} α) : GLift (a.down = a.down) :=
+  @GLift.up.{0, v} (a.down = a.down) (Eq.refl a.down)
 
 noncomputable section
 
