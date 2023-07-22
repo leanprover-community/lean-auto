@@ -8,7 +8,7 @@ namespace Auto.ReifLam
 inductive LamSort
 | atom : Nat → LamSort
 | func : LamSort → LamSort → LamSort
-deriving Inhabited, Hashable, BEq
+deriving Inhabited, Hashable
 
 def LamSort.beq : LamSort → LamSort → Bool
 | .atom m,     .atom n     => m == n
@@ -48,7 +48,7 @@ inductive LamTerm
 | bvar    : Nat → LamTerm
 | lam     : LamSort → LamTerm → LamTerm
 | app     : LamTerm → LamTerm → LamTerm
-deriving Inhabited, Hashable, BEq
+deriving Inhabited, Hashable
 
 -- Typecheck. `val, lctx ⊢ term : type?`
 -- `val : Nat → LamSort` : Valuation
@@ -71,7 +71,7 @@ structure LamJudge where
   lctx   : List LamSort
   rterm  : LamTerm
   rTy    : LamSort
-deriving Inhabited, Hashable, BEq
+deriving Inhabited, Hashable
 
 inductive LamWF (val : Nat → LamSort) : LamJudge → Prop
   | ofAtom

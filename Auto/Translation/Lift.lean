@@ -1,8 +1,8 @@
 namespace Auto
 
 structure GLift.{u, v} (α : Sort u) : Sort (max u (v + 1)) where
-  /-- Lift a value into `PLift α` -/    up ::
-  /-- Extract a value from `PLift α` -/ down : α
+  /-- Lift a value into `GLift α` -/    up ::
+  /-- Extract a value from `GLift α` -/ down : α
 
 def EqLift.{u, v, w} {α : Sort u} (a b : GLift.{u, v} α) : Type w :=
   GLift (a.down = b.down)

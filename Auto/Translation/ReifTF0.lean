@@ -121,12 +121,12 @@ end ToExpr
     argTys.foldr (fun ty acc => ty → acc) resTy
 
 -- Valuation
-structure TF0Val.{u} where
+structure TF02DVal.{u} where
   tyVal    : Nat → Type (u + 1)
   constVal : Nat → (s : TF0Sort) × TF0Sort.interp tyVal s
 
 -- Judgement, `lctx ⊢ rterm ≝ mterm : ty`
-structure TF0Judge.{u} where
+structure TF02DJudge.{u} where
   -- Local context, list of CIC terms
   lctx    : List ((α : Type (u + 1)) × α)
   -- A term in TF0
@@ -136,7 +136,7 @@ structure TF0Judge.{u} where
   -- The CIC term that `rterm` translates into
   mterm   : ty
 
-inductive WF.{u} (val : TF0Val.{u}) : TF0Judge.{u} → Prop
---  | a : WF sorry sorry
+inductive WF.{u} (val : TF02DVal.{u}) : TF02DJudge.{u} → Prop
+-- **TODO**
 
 end Auto.ReifTF0
