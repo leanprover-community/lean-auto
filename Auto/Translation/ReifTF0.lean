@@ -123,7 +123,7 @@ end ToExpr
 -- Valuation
 structure TF02DVal.{u} where
   tyVal    : Nat → Type (u + 1)
-  constVal : Nat → (s : TF0Sort) × TF0Sort.interp tyVal s
+  varVal : Nat → (s : TF0Sort) × TF0Sort.interp tyVal s
 
 -- Judgement, `lctx ⊢ rterm ≝ mterm : ty`
 structure TF02DJudge.{u} where

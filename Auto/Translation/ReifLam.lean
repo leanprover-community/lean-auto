@@ -93,8 +93,8 @@ inductive LamWF (val : Nat → LamSort) : LamJudge → Prop
       (HArg : LamWF val ⟨lctx, arg, argTy⟩) :
     LamWF val ⟨lctx, .app fn arg, resTy⟩
 
-theorem LamTerm.check_if_wf
-  (val : Nat → LamSort) (lctx : List LamSort) (t : LamTerm) (ty : LamSort) :
+theorem LamTerm.check_of_wf
+  {val : Nat → LamSort} {lctx : List LamSort} {t : LamTerm} {ty : LamSort} :
   LamWF val ⟨lctx, t, ty⟩ → t.check val lctx = .some ty := by
   generalize JudgeEq : { lctx := lctx, rterm := t, rTy := ty : LamJudge} = Judge 
   intro HWf; revert lctx t ty JudgeEq; induction HWf
@@ -116,12 +116,12 @@ theorem LamTerm.check_if_wf
     injection JudgeEq with lctx_eq rterm_eq rty_eq;
     rw [lctx_eq, rterm_eq, rty_eq]
     simp [check];
-    rw [HFn_ih lctx' fn (LamSort.func argTy resTy)] <;> try rfl;
-    rw [HArg_ih lctx' arg argTy] <;> try rfl;
+    rw [@HFn_ih lctx' fn (LamSort.func argTy resTy)] <;> try rfl;
+    rw [@HArg_ih lctx' arg argTy] <;> try rfl;
     simp [LamSort.beq_refl]
 
-theorem LamTerm.wf_if_check
-  (val : Nat → LamSort) (lctx : List LamSort) (t : LamTerm) (ty : LamSort) :
+theorem LamTerm.wf_of_check
+  {val : Nat → LamSort} {lctx : List LamSort} {t : LamTerm} {ty : LamSort} :
   t.check val lctx = .some ty → LamWF val ⟨lctx, t, ty⟩ := by
   generalize JudgeEq : { lctx := lctx, rterm := t, rTy := ty : LamJudge} = Judge
   intros HWf; revert lctx ty Judge JudgeEq; induction t
@@ -143,7 +143,7 @@ theorem LamTerm.wf_if_check
       intro HWf; simp at HWf;
     case some bodyTy =>
       simp; intro tyEq; rw [← tyEq]
-      apply LamWF.ofLam; apply IH _ _ _ _ CheckEq; rfl
+      apply LamWF.ofLam; apply @IH _ _ _ _ CheckEq; rfl
   case app fn arg IHFn IHarg =>
     intros lctx ty Judge JudgeEq; rw [← JudgeEq];
     simp [check]
@@ -163,60 +163,65 @@ theorem LamTerm.wf_if_check
           simp [tyEq] at HWf; rw [← HWf];
           rw [LamSort.beq_eq_true_eq] at tyEq; rw [tyEq] at CheckFnEq;
           apply LamWF.ofApp argTy
-          case HFn => apply IHFn _ _ _ _ CheckFnEq; rfl
-          case HArg => apply IHarg _ _ _ _ CheckArgEq; rfl
-     
+          case HFn => apply @IHFn _ _ _ _ CheckFnEq; rfl
+          case HArg => apply @IHarg _ _ _ _ CheckArgEq; rfl
+
+theorem LamTerm.wf_iff_check
+  (val : Nat → LamSort) (lctx : List LamSort) (t : LamTerm) (ty : LamSort) :
+  (t.check val lctx = .some ty) = LamWF val ⟨lctx, t, ty⟩ :=
+  propext <| Iff.intro wf_of_check (fun h => check_of_wf h)
+
 -- Valuation
-structure Lam2DVal.{u} where
-  tyVal    : Nat → Type (u + 1)
-  constVal : Nat → (α : Type (u + 1)) × α
+structure Valuation.{u} where
+  -- Valuation of free type variables to constants in COC
+  tyVal    : Nat → Type u
+  -- valuation of free variables to constants in COC
+  varVal : Nat → (α : Type u) × α
 
 /-
   It seems that we cannot write an interpretation function
-    `interp : Lam2DVal → List ((α : Type (u + 1)) × α) → LamTerm → (α : Type (u + 1)) × α`
-  The main problem is that we cannot manipulate types like inductive types,
-    so we will not be able to compare the types of the two arguments of
-    `LamTerm.eq lhs rhs`, and will not be able to test that the
+    `interp : Valuation → List ((α : Type u) × α) → LamTerm → (α : Type u) × α`
+  The main problem is that we will not be able to test that the
     argument type of `f` matches the type of `arg` in `LamTerm.app f arg`
 
   So, we instead inductively define a well-formedness predicate.
 -/
 
 -- Judgement, `lctx ⊢ rterm ≝ mterm : ty`
-structure Lam2DJudge.{u} where
+structure Judgement.{u} where
   -- Local context, list of CIC terms
-  lctx    : List ((α : Type (u + 1)) × α)
+  lctx    : List ((α : Type u) × α)
   -- A term in simply typed lambda calculus
   rterm   : LamTerm
   -- Type of `mterm`
-  ty      : Type (u + 1)
+  ty      : Type u
   -- The CIC term that `rterm` translates into
   mterm   : ty
 
-inductive WF.{u} (val : Lam2DVal.{u}) : Lam2DJudge.{u} → Prop
+inductive WF.{u} (val : Valuation.{u}) : Judgement.{u} → Prop
   | ofAtom
-      {lctx : List ((γ : Type (u + 1)) × γ)}
+      {lctx : List ((γ : Type u) × γ)}
       (n : Nat) :
     WF val <|
-      let ci := val.constVal n
+      let ci := val.varVal n
       ⟨lctx, (.atom n), ci.fst, ci.snd⟩
   | ofBVar
-      {lctx : List ((α : Type (u + 1)) × α)}
+      {lctx : List ((α : Type u) × α)}
       (n : Fin lctx.length) :
     WF val <|
       ⟨lctx, .bvar n, lctx[n].fst, lctx[n].snd⟩
   | ofLam
-      {lctx : List ((γ : Type (u + 1)) × γ)}
+      {lctx : List ((γ : Type u) × γ)}
       {hs : LamSort} {ht : LamTerm}
-      (α β : Type (u + 1)) (fn : α → β)
+      (α β : Type u) (fn : α → β)
       (H : ∀ (t : α), WF val ⟨⟨α, t⟩ :: lctx, ht, β, fn t⟩)
       :
     WF val <|
       ⟨lctx, .lam hs ht, α → β, fn⟩
   | ofApp
-      {lctx : List ((γ : Type (u + 1)) × γ)}
+      {lctx : List ((γ : Type u) × γ)}
       {hfn harg : LamTerm}
-      (α β : Type (u + 1)) (fn : α → β) (arg : α)
+      (α β : Type u) (fn : α → β) (arg : α)
       (Hfn : WF val ⟨lctx, hfn, α → β, fn⟩)
       (Harg : WF val ⟨lctx, harg, α, arg⟩)
       :
@@ -230,13 +235,13 @@ section Example
 
   -- Original: fun (x : Nat) => Nat.succ x
   -- Lifting to: fun (x : GLift Nat) => Nat.succLift x
-  def interpEx₁.{u} : Lam2DJudge.{u} :=
+  def interpEx₁.{u} : Judgement.{u} :=
     ⟨[], .lam (.atom 0) (.app (.atom 0) (.bvar 0)),
-     GLift.{1, u + 1} Nat → GLift.{1, u + 1} Nat, fun (x : GLift Nat) => Nat.succLift x⟩
+     GLift.{1, u} Nat → GLift.{1, u} Nat, fun (x : GLift Nat) => Nat.succLift x⟩
   
-  def valuation₁.{u} : Lam2DVal.{u} :=
+  def valuation₁.{u} : Valuation.{u} :=
     ⟨fun _ => GLift Nat,
-     fun _ => ⟨GLift.{1, u + 1} Nat → GLift.{1, u + 1} Nat, Nat.succLift⟩⟩
+     fun _ => ⟨GLift.{1, u} Nat → GLift.{1, u} Nat, Nat.succLift⟩⟩
 
   def wf₁.{u} : WF valuation₁.{u} interpEx₁.{u} := by
     apply WF.ofLam
@@ -252,14 +257,14 @@ section Example
   def Nat.addLift.{u} (x y : GLift.{1, u} Nat) :=
     GLift.up (Nat.add (GLift.down x) (GLift.down y))
 
-  def interpEx₂.{u} : Lam2DJudge.{u} :=
+  def interpEx₂.{u} : Judgement.{u} :=
     ⟨[], .app (.app (.atom 0) (.atom 1)) (.atom 2),
-      GLift.{1, u + 1} Nat, GLift.up (Nat.add 2 3)⟩
+      GLift.{1, u} Nat, GLift.up (Nat.add 2 3)⟩
 
-  def valuation₂.{u} : Lam2DVal.{u} :=
+  def valuation₂.{u} : Valuation.{u} :=
     ⟨fun _ => GLift Nat, fun n =>
-      [⟨GLift.{1, u + 1} Nat → GLift.{1, u + 1} Nat → GLift.{1, u + 1} Nat, Nat.addLift⟩,
-       ⟨GLift.{1, u + 1} Nat, GLift.up 2⟩, ⟨GLift.{1, u + 1} Nat, GLift.up 3⟩].getD n ⟨GLift.{1, u + 1} Nat, GLift.up 0⟩⟩
+      [⟨GLift.{1, u} Nat → GLift.{1, u} Nat → GLift.{1, u} Nat, Nat.addLift⟩,
+       ⟨GLift.{1, u} Nat, GLift.up 2⟩, ⟨GLift.{1, u} Nat, GLift.up 3⟩].getD n ⟨GLift.{1, u} Nat, GLift.up 0⟩⟩
   
   def wf₂.{u} : WF valuation₂.{u} interpEx₂.{u} := by
     apply WF.ofApp (fn := Nat.addLift (GLift.up 2))
@@ -270,10 +275,12 @@ section Example
 
   -- Original: @Eq Nat 2 3
   -- Lifting to: GLift.up (@Eq Nat 2 3)
-  def interpEx₃.{u} : Lam2DJudge.{u} :=
+  -- **Note**: Sometimes we might want to lift to universe `u + 1`
+  --   to avoid universe level issues.
+  def interpEx₃.{u} : Judgement.{u + 1} :=
     ⟨[], .app (.app (.atom 0) (.atom 1)) (.atom 2), Type u, GLift (2 = 3)⟩
   
-  def valuation₃.{u} : Lam2DVal.{u} :=
+  def valuation₃.{u} : Valuation.{u + 1} :=
     ⟨fun _ => GLift Nat, fun n =>
       [⟨GLift.{1, u + 1} Nat → GLift.{1, u + 1} Nat → Type u, @EqLift.{1, u + 1, u} Nat⟩,
        ⟨GLift.{1, u + 1} Nat, GLift.up 2⟩, ⟨GLift.{1, u + 1} Nat, GLift.up 3⟩].getD n ⟨GLift.{1, u + 1} Nat, GLift.up 0⟩⟩
