@@ -16,21 +16,24 @@ inductive PropForm where
   | eq     : PropForm → PropForm → PropForm
 deriving Inhabited, Hashable, BEq
 
-def reprPrecPropForm (f : PropForm) (b : Bool) :=
+def reprPrecPropForm (f : PropForm) (n : Nat) :=
   let s :=
     match f with
     | .atom n    => f!".atom {n}"
     | .trueE     => f!".trueE"
     | .falseE    => f!".falseE"
-    | .not g     => f!".not " ++ reprPrecPropForm g true
-    | .and f1 f2 => f!".and " ++ reprPrecPropForm f1 true ++ f!" " ++ reprPrecPropForm f2 true
-    | .or f1 f2  => f!".or "  ++ reprPrecPropForm f1 true ++ f!" " ++ reprPrecPropForm f2 true
-    | .iff f1 f2 => f!".iff " ++ reprPrecPropForm f1 true ++ f!" " ++ reprPrecPropForm f2 true
-    | .eq f1 f2  => f!".eq "  ++ reprPrecPropForm f1 true ++ f!" " ++ reprPrecPropForm f2 true
-  if b then
-    f!"(" ++ s ++ ")"
-  else
+    | .not g     => f!".not " ++ reprPrecPropForm g 1
+    | .and f1 f2 => f!".and " ++ reprPrecPropForm f1 1 ++ f!" " ++ reprPrecPropForm f2 1
+    | .or f1 f2  => f!".or "  ++ reprPrecPropForm f1 1 ++ f!" " ++ reprPrecPropForm f2 1
+    | .iff f1 f2 => f!".iff " ++ reprPrecPropForm f1 1 ++ f!" " ++ reprPrecPropForm f2 1
+    | .eq f1 f2  => f!".eq "  ++ reprPrecPropForm f1 1 ++ f!" " ++ reprPrecPropForm f2 1
+  if n == 0 then
     f!"Auto.D2P.PropForm" ++ s
+  else
+    f!"(" ++ s ++ ")"
+
+instance : Repr PropForm where
+  reprPrec f n := reprPrecPropForm f n
 
 def PropForm.interp (val : Nat → Prop) : PropForm → Prop
 | .atom n    => val n
@@ -41,9 +44,6 @@ def PropForm.interp (val : Nat → Prop) : PropForm → Prop
 | .or f₁ f₂  => Or (f₁.interp val) (f₂.interp val)
 | .iff f₁ f₂ => Iff (f₁.interp val) (f₂.interp val)
 | .eq f₁ f₂  => f₁.interp val = f₂.interp val
-
-instance : Repr PropForm where
-  reprPrec f n := reprPrecPropForm f (n != 0)
 
 section
   

@@ -29,5 +29,32 @@ unsafe def elabGetExprAndApply : CommandElab := fun stx =>
         | throwError "elabGetExprAndApply :: Failed to evaluate {fname} to a term of type (Expr → TermElabM Unit)"
       f e
     | _ => throwUnsupportedSyntax
+
+syntax (name := lazyReduce) "#lazyReduce" term : command
+
+register_option skipProof : Bool := {
+  defValue := true
+  descr    := "Whether to reduce proof when calling #lazyReduce"
+}
+
+register_option skipType : Bool := {
+  defValue := true
+  descr    := "Whether to reduce type when calling #lazyReduce"
+}
+
+open Meta in
+@[command_elab Auto.Util.lazyReduce] def elabLazyReduce : CommandElab
+  | `(#lazyReduce%$tk $term) => withoutModifyingEnv <| runTermElabM fun _ => Term.withDeclName `_reduce do
+    let e ← Term.elabTerm term none
+    Term.synthesizeSyntheticMVarsNoPostponing
+    let e ← Term.levelMVarToParam (← instantiateMVars e)
+    let opts ← getOptions
+    let skipProof? := skipProof.get opts
+    let skipType? := skipType.get opts
+    -- TODO: add options or notation for setting the following parameters
+    withTheReader Core.Context (fun ctx => { ctx with options := ctx.options.setBool `smartUnfolding false }) do
+      let e ← withTransparency (mode := TransparencyMode.all) <| reduce e (skipProofs := skipProof?) (skipTypes := skipType?)
+      logInfoAt tk e
+  | _ => throwUnsupportedSyntax
     
 end Auto.Util

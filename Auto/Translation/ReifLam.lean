@@ -1,4 +1,5 @@
 import Auto.Translation.Lift
+import Auto.Util.ExprExtra
 import Std.Data.List.Lemmas
 
 -- Embedding Simply Typed Lambda Calculus into Dependent Type Theory
@@ -10,17 +11,29 @@ inductive LamSort
 | func : LamSort → LamSort → LamSort
 deriving Inhabited, Hashable
 
+def LamSort.reprPrec (s : LamSort) (n : Nat) :=
+  let rec str :=
+    match s with
+    | .atom n     => f!".atom {n}"
+    | .func s1 s2 => f!".func {LamSort.reprPrec s1 1} {LamSort.reprPrec s2 1}"
+  if n == 0 then
+    f!"Auto.ReifLam.LamSort" ++ str
+  else
+    f!"({str})"
+
+instance : Repr LamSort where
+  reprPrec s n := s.reprPrec n 
+
 def LamSort.beq : LamSort → LamSort → Bool
 | .atom m,     .atom n     => m == n
 | .func m₁ n₁, .func m₂ n₂ => LamSort.beq m₁ m₂ && LamSort.beq n₁ n₂
 | _,           _           => false
 
-theorem LamSort.beq_refl (a : LamSort) : (a.beq a) = true := by
-  induction a
-  case atom n => simp [beq]
-  case func s1 s2 => simp [beq]; simp [s1, s2]
+def LamSort.beq_refl : (a : LamSort) → (a.beq a) = true
+| .atom m => by rw [beq]; apply Nat.beq_refl
+| .func m₁ n₁ => by rw [beq]; rw [LamSort.beq_refl m₁]; rw [LamSort.beq_refl n₁]; rfl
 
-theorem LamSort.beq_eq (a b : LamSort) : (a.beq b = true) → a = b := by
+def LamSort.beq_eq (a b : LamSort) : (a.beq b = true) → a = b := by
   revert b; induction a
   case atom m =>
     intro b; cases b
@@ -39,6 +52,10 @@ theorem LamSort.beq_eq (a b : LamSort) : (a.beq b = true) → a = b := by
 theorem LamSort.beq_eq_true_eq (a b : LamSort) : (a.beq b = true) = (a = b) :=
   propext <| Iff.intro (beq_eq a b) (fun h => by subst h; apply beq_refl)
 
+set_option bootstrap.inductiveCheckResultingUniverse false in
+inductive ErrSort : Sort u where
+  | err : ErrSort
+
 @[reducible] def LamSort.interp.{u} (val : Nat → Sort u) : LamSort → Sort u
 | .atom n => val n
 | .func dom cod => interp val dom → interp val cod
@@ -50,53 +67,127 @@ inductive LamTerm
 | app     : LamTerm → LamTerm → LamTerm
 deriving Inhabited, Hashable
 
--- Typecheck. `val, lctx ⊢ term : type?`
--- `val : Nat → LamSort` : Valuation
+def LamTerm.reprPrec (t : LamTerm) (n : Nat) :=
+  let s :=
+    match t with
+    | .atom m => f!".atom {m}"
+    | .bvar m => f!".bvar {m}"
+    | .lam s t => f!".lam {LamSort.reprPrec s 1} {LamTerm.reprPrec t 1}"
+    | .app t₁ t₂ => f!".app {LamTerm.reprPrec t₁ 1} {LamTerm.reprPrec t₂ 1}"
+  if n == 0 then
+    f!"Auto.ReifLam.LamTerm" ++ s
+  else
+    f!"({s})"
+
+instance : Repr LamTerm where
+  reprPrec f n := LamTerm.reprPrec f n
+
+-- Typecheck. `lamVarTy, lctx ⊢ term : type?`
+-- `lamVarTy : Nat → LamSort` : Valuation
 -- `List LamSort`        : Local Context
-def LamTerm.check (val : Nat → LamSort) : List LamSort → LamTerm → Option LamSort
-| _,    .atom n  => val n
+def LamTerm.check (lamVarTy : Nat → LamSort) : List LamSort → LamTerm → Option LamSort
+| _,    .atom n  => lamVarTy n
 | lctx, .bvar n  => lctx.get? n
 | lctx, .lam s t =>
-  match t.check val (s :: lctx) with
+  match t.check lamVarTy (s :: lctx) with
   | .some ty => .some (.func s ty)
   | .none    => .none
 | lctx, .app fn arg =>
-  match fn.check val lctx, arg.check val lctx with
+  match fn.check lamVarTy lctx, arg.check lamVarTy lctx with
   | .some (.func ty₁ ty₂), .some argTy =>
     if ty₁.beq argTy then .some ty₂ else none
   | _, _ => .none
 
--- Judgement. `val, lctx ⊢ term : type?`
+-- Judgement. `lamVarTy, lctx ⊢ term : type?`
 structure LamJudge where
   lctx   : List LamSort
   rterm  : LamTerm
-  rTy    : LamSort
+  rty    : LamSort
 deriving Inhabited, Hashable
 
-inductive LamWF (val : Nat → LamSort) : LamJudge → Prop
+inductive LamWF (lamVarTy : Nat → LamSort) : LamJudge → Type
   | ofAtom
       {lctx : List LamSort} (n : Nat) :
-    LamWF val ⟨lctx, .atom n, val n⟩
+    LamWF lamVarTy ⟨lctx, .atom n, lamVarTy n⟩
   | ofBVar
       {lctx : List LamSort} (n : Fin lctx.length) :
-    LamWF val ⟨lctx, .bvar n, lctx[n]⟩
+    LamWF lamVarTy ⟨lctx, .bvar n, lctx[n]⟩
   | ofLam
       {lctx : List LamSort}
       {argTy : LamSort} (bodyTy : LamSort) {body : LamTerm}
-      (H : LamWF val ⟨argTy :: lctx, body, bodyTy⟩) :
-    LamWF val ⟨lctx, .lam argTy body, .func argTy bodyTy⟩
+      (H : LamWF lamVarTy ⟨argTy :: lctx, body, bodyTy⟩) :
+    LamWF lamVarTy ⟨lctx, .lam argTy body, .func argTy bodyTy⟩
   | ofApp
       {lctx : List LamSort}
       (argTy : LamSort) {resTy : LamSort}
       {fn : LamTerm} {arg : LamTerm}
-      (HFn : LamWF val ⟨lctx, fn, .func argTy resTy⟩)
-      (HArg : LamWF val ⟨lctx, arg, argTy⟩) :
-    LamWF val ⟨lctx, .app fn arg, resTy⟩
+      (HFn : LamWF lamVarTy ⟨lctx, fn, .func argTy resTy⟩)
+      (HArg : LamWF lamVarTy ⟨lctx, arg, argTy⟩) :
+    LamWF lamVarTy ⟨lctx, .app fn arg, resTy⟩
 
-theorem LamTerm.check_of_wf
-  {val : Nat → LamSort} {lctx : List LamSort} {t : LamTerm} {ty : LamSort} :
-  LamWF val ⟨lctx, t, ty⟩ → t.check val lctx = .some ty := by
-  generalize JudgeEq : { lctx := lctx, rterm := t, rTy := ty : LamJudge} = Judge 
+def LamWF.ofLamTerm {lamVarTy : Nat → LamSort} :
+  {lctx : List LamSort} → (t : LamTerm) → Option ((rty : LamSort) × LamWF lamVarTy ⟨lctx, t, rty⟩)
+| lctx, .atom n => .some ⟨lamVarTy n, .ofAtom n⟩
+| lctx, .bvar n =>
+  match h : Nat.blt n lctx.length with
+  | true =>
+    let h' := Nat.le_of_ble_eq_true h;
+    let fin : Fin lctx.length := ⟨n, h'⟩
+    .some ⟨lctx[fin], .ofBVar fin⟩
+  | false => .none
+| lctx, .lam argTy body =>
+  let bodyWf := @LamWF.ofLamTerm lamVarTy (argTy :: lctx) body
+  match bodyWf with
+  | .some ⟨bodyTy, wf⟩ => .some ⟨.func argTy bodyTy, .ofLam bodyTy wf⟩
+  | .none => .none
+| lctx, .app fn arg =>
+  let fnWf := @LamWF.ofLamTerm lamVarTy lctx fn
+  let argWf := @LamWF.ofLamTerm lamVarTy lctx arg
+  match fnWf, argWf with
+  | .some (⟨.func ty₁ ty₂, fnWf⟩), .some ⟨argTy, argWf⟩ =>
+    match heq : ty₁.beq argTy with
+    | true =>
+      have tyEq := LamSort.beq_eq _ _ heq
+      have fnWf' := tyEq ▸ fnWf
+      .some ⟨ty₂, .ofApp argTy fnWf' argWf⟩
+    | false => .none
+  | _, _ => .none
+
+def LamWF.complete_Aux
+  {b : β} (p : Bool) (f : (p = true) → β) (eq : p = true) :
+  (match (generalizing:=false) h : p with
+  | true => f h
+  | false => b) = f eq := by
+  cases p
+  case false => cases eq
+  case true => simp
+
+-- Of course `ofLamTerm` is sound with respect to `LamWF`. So, we
+--   only need to show that it's complete
+def LamWF.complete {lamVarTy : Nat → LamSort} :
+  {j : LamJudge} → (wf : LamWF lamVarTy j) → LamWF.ofLamTerm j.rterm = .some ⟨j.rty, wf⟩
+| .(_), @LamWF.ofAtom _ lctx n => rfl
+| .(_), @LamWF.ofBVar _ lctx n => by
+  simp [ofLamTerm, Nat.blt]
+  cases n;
+  case mk val isLt =>
+    simp;
+    have heq := @LamWF.complete_Aux
+    simp at heq; rw [heq]; apply Nat.ble_eq_true_of_le; exact isLt
+| .(_), @LamWF.ofLam _ lctx argTy bodyTy body H => by
+  simp [ofLamTerm]
+  have IH := LamWF.complete H; simp at IH; rw [IH];
+| .(_), @LamWF.ofApp _ lctx argTy resTy fn arg HFn HArg => by
+  simp [ofLamTerm]
+  have IHFn := LamWF.complete HFn
+  have IHArg := LamWF.complete HArg
+  simp at IHFn; simp at IHArg
+  rw [IHFn]; rw [IHArg]; simp; rw [LamSort.beq_refl]
+
+def LamTerm.check_of_wf
+  {lamVarTy : Nat → LamSort} {lctx : List LamSort} {t : LamTerm} {ty : LamSort} :
+  LamWF lamVarTy ⟨lctx, t, ty⟩ → t.check lamVarTy lctx = .some ty := by
+  generalize JudgeEq : { lctx := lctx, rterm := t, rty := ty : LamJudge} = Judge 
   intro HWf; revert lctx t ty JudgeEq; induction HWf
   case ofAtom lctx' n =>
     intros lctx t ty JudgeEq
@@ -120,72 +211,98 @@ theorem LamTerm.check_of_wf
     rw [@HArg_ih lctx' arg argTy] <;> try rfl;
     simp [LamSort.beq_refl]
 
-theorem LamTerm.wf_of_check
-  {val : Nat → LamSort} {lctx : List LamSort} {t : LamTerm} {ty : LamSort} :
-  t.check val lctx = .some ty → LamWF val ⟨lctx, t, ty⟩ := by
-  generalize JudgeEq : { lctx := lctx, rterm := t, rTy := ty : LamJudge} = Judge
-  intros HWf; revert lctx ty Judge JudgeEq; induction t
-  case atom a =>
-    intros lctx ty Judge JudgeEq HCheck; rw [← JudgeEq]
-    simp [check] at HCheck; rw [← HCheck]; apply LamWF.ofAtom
-  case bvar n =>
-    intros lctx ty Judge JudgeEq HCheck; rw [← JudgeEq]
-    simp [check] at HCheck; rw [List.get?_eq_some] at HCheck
-    cases HCheck;
-    case intro hLt hEq =>
-      rw [← hEq]; apply LamWF.ofBVar (n := ⟨n, hLt⟩)
-  case lam argTy body IH =>
-    intros lctx ty Judge JudgeEq; rw [← JudgeEq];
-    simp [check];
-    generalize CheckEq : check val (argTy :: lctx) body = cRes
-    cases cRes;
-    case none =>
-      intro HWf; simp at HWf;
-    case some bodyTy =>
-      simp; intro tyEq; rw [← tyEq]
-      apply LamWF.ofLam; apply @IH _ _ _ _ CheckEq; rfl
-  case app fn arg IHFn IHarg =>
-    intros lctx ty Judge JudgeEq; rw [← JudgeEq];
-    simp [check]
-    generalize CheckFnEq : check val lctx fn = cFnRes
-    generalize CheckArgEq : check val lctx arg = cArgRes
-    cases cFnRes <;> try (intro HWf; simp at HWf)
-    case some fnTy =>
-      cases cArgRes
-      case none => cases fnTy <;> simp at HWf
-      case some argTy =>
-      cases fnTy <;> simp at HWf
-      case func argTy' resTy' =>
-        cases tyEq : LamSort.beq argTy' argTy
-        case false =>
-          simp [tyEq] at HWf
-        case true =>
-          simp [tyEq] at HWf; rw [← HWf];
-          rw [LamSort.beq_eq_true_eq] at tyEq; rw [tyEq] at CheckFnEq;
-          apply LamWF.ofApp argTy
-          case HFn => apply @IHFn _ _ _ _ CheckFnEq; rfl
-          case HArg => apply @IHarg _ _ _ _ CheckArgEq; rfl
+private def List.get?_eq_some' : {l : List α} → {n : Nat} → l.get? n = some a →
+  (@PSigma (n < List.length l) (fun h => List.get l ⟨n, h⟩ = a))
+| a::_,  0    , eq => ⟨Nat.succ_le_succ (Nat.zero_le _), by simp at eq; exact eq⟩
+| _::as, n + 1, eq => by
+    simp at eq; simp;
+    match @List.get?_eq_some' α a as n eq with
+    | PSigma.mk h' proof' =>
+      apply PSigma.mk;
+      case fst => apply Nat.succ_lt_succ; exact h'
+      case snd => exact proof'
+| .nil, _     , eq => by simp at eq
 
-theorem LamTerm.wf_iff_check
-  (val : Nat → LamSort) (lctx : List LamSort) (t : LamTerm) (ty : LamSort) :
-  (t.check val lctx = .some ty) = LamWF val ⟨lctx, t, ty⟩ :=
-  propext <| Iff.intro wf_of_check (fun h => check_of_wf h)
+-- This function is meant to be `execute`-d (`eval`-ed), not `reduce`-d
+def LamTerm.wf_of_check {lamVarTy : Nat → LamSort} :
+  {lctx : List LamSort} → {t : LamTerm} → {ty : LamSort} →
+  t.check lamVarTy lctx = .some ty → LamWF lamVarTy ⟨lctx, t, ty⟩
+| lctx, .atom n, ty, HCheck => by
+  simp [check] at HCheck; rw [← HCheck]; apply LamWF.ofAtom
+| lctx, .bvar n, ty, HCheck => by
+  simp [check] at HCheck;
+  have HCheck' := List.get?_eq_some' HCheck
+  cases HCheck'
+  case mk hLt HEq =>
+    rw [← HEq]; apply LamWF.ofBVar (n := ⟨n, hLt⟩)
+| lctx, .lam argTy body, ty, HCheck => by
+  simp [check] at HCheck; revert HCheck
+  cases CheckEq : check lamVarTy (argTy :: lctx) body
+  case none => intro contra; cases contra
+  case some bodyTy =>
+    simp; intro tyEq; rw [← tyEq]
+    apply LamWF.ofLam; apply (LamTerm.wf_of_check CheckEq)
+| lctx, .app fn arg, ty, HCheck => by
+  simp [check] at HCheck; revert HCheck
+  match CheckFnEq : check lamVarTy lctx fn, CheckArgEq : check lamVarTy lctx arg with
+  | .some (LamSort.func ty₁ ty₂), .some argTy =>
+    simp;
+    cases heq : LamSort.beq ty₁ argTy
+    case false => intro contra; cases contra
+    case true =>
+      simp; intro H; rw [← H]; apply LamWF.ofApp (argTy:=ty₁);
+      case HFn => apply (LamTerm.wf_of_check CheckFnEq)
+      case HArg =>
+        have heq' : ty₁ = argTy := LamSort.beq_eq _ _ heq
+        rw [heq']
+        apply (LamTerm.wf_of_check CheckArgEq)
+  | .some (LamSort.func _ _), .none => intro contra; cases contra
+  | .some (LamSort.atom _), _ => intro contra; cases contra
+  | .none, _ => intro contra; cases contra
+
+--#reduce @LamTerm.wf_of_check
+--  (lamVarTy := fun n => if n == 0 then .atom 2 else .func (.atom 2) (.atom 1))
+--  (lctx := [])
+--  (t := .lam (.atom 0) (.app (.atom 1) (.atom 0)))
+--  (ty := .func (.atom 0) (.atom 1))
+--  rfl
+
+structure LamValuation.{u} where
+  lamVarTy  : Nat → LamSort
+  tyVal     : Nat → Type u
+  varVal    : ∀ (n : Nat), (lamVarTy n).interp tyVal
+
+def LamTerm.interp.{u} (lval : LamValuation.{u}) :
+  (lctx : List ((α : LamSort) × α.interp lval.tyVal)) →
+  let lctx' := lctx.map (fun x => x.fst)
+  (lwf : LamWF lval.lamVarTy ⟨lctx', t, rty⟩) → rty.interp lval.tyVal
+| lctx,  @LamWF.ofAtom _ _ n => lval.varVal n
+| lctx,  @LamWF.ofBVar _ _ n =>
+  let rec bvarAux :
+    (lctx : List ((α : LamSort) × α.interp lval.tyVal)) →
+    (n : Fin (List.length (List.map (fun (x : (α : LamSort) × LamSort.interp lval.tyVal α) => x.fst) lctx))) →
+    let lctx' := lctx.map (fun x => Sigma.fst x)
+    LamSort.interp lval.tyVal lctx'[n]
+  | a::_, ⟨0, _⟩  => a.snd
+  | _::as, ⟨n + 1, hsn⟩ =>
+    let hsn' : n < List.length (List.map (fun x => x.fst) as) :=
+      Nat.lt_of_succ_lt_succ hsn
+    bvarAux as ⟨n, hsn'⟩
+  bvarAux lctx n
+| lctx, @LamWF.ofLam _ _ argTy bodyTy body H =>
+  fun (x : argTy.interp lval.tyVal) =>
+    LamTerm.interp lval (⟨argTy, x⟩ :: lctx) H
+| lctx, @LamWF.ofApp _ _ argTy resTy fn arg HFn HArg =>
+  let mfn := LamTerm.interp lval lctx HFn
+  let marg := LamTerm.interp lval lctx HArg
+  mfn marg
 
 -- Valuation
 structure Valuation.{u} where
   -- Valuation of free type variables to constants in COC
-  tyVal    : Nat → Type u
+  tyVal  : Nat → Type u
   -- valuation of free variables to constants in COC
   varVal : Nat → (α : Type u) × α
-
-/-
-  It seems that we cannot write an interpretation function
-    `interp : Valuation → List ((α : Type u) × α) → LamTerm → (α : Type u) × α`
-  The main problem is that we will not be able to test that the
-    argument type of `f` matches the type of `arg` in `LamTerm.app f arg`
-
-  So, we instead inductively define a well-formedness predicate.
--/
 
 -- Judgement, `lctx ⊢ rterm ≝ mterm : ty`
 structure Judgement.{u} where

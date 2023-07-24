@@ -1,4 +1,5 @@
 import Auto.Translation.Lift
+import Std.Data.List.Lemmas
 
 namespace Auto.ReifLam₂
 
@@ -48,45 +49,41 @@ theorem Lam₂Type.beq_eq (a b : Lam₂Type) : (a.beq b = true) → a = b := by
   case atom m =>
     intro b;
     cases b <;> simp [Lam₂Type.beq]
-    case atom n => apply id
   case bvar n =>
     intro b;
     cases b <;> simp [Lam₂Type.beq]
-    case bvar m => apply id
   case func m₁ n₁ ihm₁ ihn₁ =>
     intro b;
     cases b <;> simp [Lam₂Type.beq]
-    intro h; cases h;
-    case func.intro h₁ h₂ =>
-      apply And.intro
-      case left => apply ihm₁; simp [h₁]
-      case right => apply ihn₁; simp [h₂]
+    intro h₁ h₂;
+    apply And.intro
+    case left => apply ihm₁; simp [h₁]
+    case right => apply ihn₁; simp [h₂]
   case app m₁ n₁ ihm₁ ihn₁ =>
     intro b;
     cases b <;> simp [Lam₂Type.beq]
-    intro h; cases h;
-    case app.intro h₁ h₂ =>
-      apply And.intro
-      case left => apply ihm₁; simp [h₁]
-      case right => apply ihn₁; simp [h₂]
+    intro h₁ h₂
+    apply And.intro
+    case left => apply ihm₁; simp [h₁]
+    case right => apply ihn₁; simp [h₂]
 
 theorem Lam₂Type.beq_eq_true_eq (a b : Lam₂Type) : (a.beq b = true) = (a = b) :=
   propext <| Iff.intro (beq_eq a b) (fun h => by subst h; apply beq_refl)
 
 -- `tcVal`: Valuation of type constructors
--- `lctx` : Number of type variables in the local context
+-- `ltyLCtx` : Number of type variables in the local context
 -- Returns:
 --   1. Number of type arguments the type takes, if the type is well-formed
 --   2. None, otherwise
-def Lam₂Type.check (tcVal : Nat → Lam₂Sort) (lctx : Nat) : Lam₂Type → Option Nat
+def Lam₂Type.check (tcVal : Nat → Lam₂Sort) (ltyLCtx : Nat) : Lam₂Type → Option Nat
 | .atom n => .some (tcVal n)
-| .bvar n => if n < lctx then .some 0 else .none
+| .bvar n => if n < ltyLCtx then .some 0 else .none
 | .func dom cod =>
-  match dom.check tcVal lctx, cod.check tcVal lctx with
+  match dom.check tcVal ltyLCtx, cod.check tcVal ltyLCtx with
   | .some 0, .some 0 => .some 0
   | _, _ => .none
 | .app fn arg =>
-  match fn.check tcVal lctx, arg.check tcVal lctx with
+  match fn.check tcVal ltyLCtx, arg.check tcVal ltyLCtx with
   | .some (n + 1), .some 0 => .some n
   | _, _ => .none
 
@@ -108,5 +105,88 @@ def Lam₂Type.check (tcVal : Nat → Lam₂Sort) (lctx : Nat) : Lam₂Type → 
   match fn.interp val lctx, arg.interp val lctx with
   | .some ⟨n + 1, fni⟩, .some ⟨0, argi⟩ => .some ⟨n, fni argi⟩
   | _,                 _               => none
+
+def Lam₂Type.check_iff_interp
+  (val : Nat → ((n : Lam₂Sort) × Lam₂Sort.interp n)) (lctx : List (Sort u))
+  (lty : Lam₂Type) :
+  let tcVal := fun n => (val n).1
+  let ltyLCtx := lctx.length
+  lty.check tcVal ltyLCtx = (lty.interp val lctx).map (fun x => x.1) := by
+  induction lty
+  case atom n =>
+    simp [check, interp, Option.map]
+  case bvar n =>
+    simp [check, interp]
+    cases hLt : (Nat.decLt n (List.length lctx))
+    case isTrue h =>
+      simp [h]; simp [List.get?_eq_get h]
+    case isFalse h =>
+      simp [h]; simp at h; simp [List.get?_len_le h]
+  case func fn arg IHfn IHarg =>
+    revert IHfn IHarg
+    simp [check, interp]
+    match
+      cfn : check (fun n => (val n).fst) (List.length lctx) fn,
+      carg : check (fun n => (val n).fst) (List.length lctx) arg with
+    | .some 0, .some 0 =>
+      simp;
+      match cifn : interp val lctx fn, ciarg : interp val lctx arg with
+      | .some ⟨0, _⟩, .some ⟨0, _⟩ => simp
+      | .some ⟨0, _⟩, .some ⟨n + 1, _⟩ => simp; simp_arith
+      | .some ⟨0, _⟩, .none => simp
+      | .some ⟨n + 1, _⟩, _ => simp; simp_arith
+      | .none , _ => simp
+    | .some 0, .some (n + 1) =>
+      simp;
+      match cifn : interp val lctx fn, ciarg : interp val lctx arg with
+      | .some ⟨0, _⟩, .some ⟨0, _⟩ => simp
+      | .some ⟨0, _⟩, .some ⟨n + 1, _⟩ => simp
+      | .some ⟨0, _⟩, .none => simp
+      | .some ⟨n + 1, _⟩, _ => simp
+      | .none , _ => simp
+    | .some 0, .none =>
+      simp; cases ciarg : interp val lctx arg <;> simp
+    | .some (n + 1), _ =>
+      simp;
+      match cifn : interp val lctx fn, ciarg : interp val lctx arg with
+      | .some ⟨0, _⟩, .some ⟨0, _⟩ => simp
+      | .some ⟨0, _⟩, .some ⟨n + 1, _⟩ => simp
+      | .some ⟨0, _⟩, .none => simp
+      | .some ⟨n + 1, _⟩, _ => simp
+      | .none , _ => simp
+    | .none, _ =>
+      simp; cases cifn : interp val lctx fn <;> simp
+  case app fn arg IHfn IHarg =>
+    revert IHfn IHarg
+    simp [check, interp]
+    match
+      cfn : check (fun n => (val n).fst) (List.length lctx) fn,
+      carg : check (fun n => (val n).fst) (List.length lctx) arg with
+    | .some (n + 1), .some 0 =>
+      simp;
+      match cifn : interp val lctx fn, ciarg : interp val lctx arg with
+      | .some ⟨n + 1, _⟩, .some ⟨0, _⟩ => simp
+      | .some ⟨n + 1, _⟩, .some ⟨m + 1, _⟩ => simp; simp_arith
+      | .some ⟨n + 1, _⟩, .none => simp
+      | .some ⟨0, _⟩, _ => simp
+      | .none , _ => simp
+    | .some (n + 1), .some (m + 1) =>
+      simp;
+      match cifn : interp val lctx fn, ciarg : interp val lctx arg with
+      | .some ⟨n + 1, _⟩, .some ⟨0, _⟩ => simp
+      | .some ⟨n + 1, _⟩, .some ⟨m + 1, _⟩ => simp
+      | .some ⟨n + 1, _⟩, .none => simp
+      | .some ⟨0, _⟩, _ => simp
+      | .none , _ => simp
+    | .some (n + 1), none =>
+      simp; cases ciarg : interp val lctx arg <;> simp
+    | .some 0, _ =>
+      simp;
+      match cifn : interp val lctx fn with
+      | .some ⟨n + 1, _⟩ => simp; simp_arith
+      | .some ⟨0, _⟩ => simp
+      | .none => simp
+    | .none, _ =>
+      simp; cases cifn : interp val lctx fn <;> simp
 
 end Auto.ReifLam₂
