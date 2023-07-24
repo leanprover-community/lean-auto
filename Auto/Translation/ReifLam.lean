@@ -125,6 +125,46 @@ inductive LamWF (lamVarTy : Nat → LamSort) : LamJudge → Type
       (HArg : LamWF lamVarTy ⟨lctx, arg, argTy⟩) :
     LamWF lamVarTy ⟨lctx, .app fn arg, resTy⟩
 
+def LamWF.reprPrec (wf : LamWF f judge) (n : Nat) :=
+  let rec formatLCtxAux m : (lctx : List LamSort) → Lean.Format
+    | .nil => f!""
+    | .cons a as => ", " ++ a.reprPrec m ++ formatLCtxAux m as
+  let formatLCtx m : (lctx : List LamSort) → Lean.Format
+    | .nil => f!"[]"
+    | a::as => f!"[" ++ a.reprPrec m ++ formatLCtxAux m as ++ f!"]"
+  match wf with
+  | @LamWF.ofAtom _ lctx m =>
+    if n == 0 then
+      f!"Auto.ReifLam.LamWF.ofAtom (lctx := {formatLCtx 1 lctx}) {m}"
+    else
+      f!"(.ofAtom {m})"
+  | @LamWF.ofBVar _ lctx m =>
+    if n == 0 then
+      f!"Auto.ReifLam.LamWF.ofBVar (lctx := {formatLCtx 1 lctx}) {m}"
+    else
+      f!"(.ofBVar {m})"
+  | @LamWF.ofLam _ lctx argTy bodyTy body H =>
+    if n == 0 then
+      f!"Auto.ReifLam.LamWF.ofLam (lctx := {formatLCtx 1 lctx}) " ++
+      f!"(argTy := {argTy.reprPrec 1}) (bodyTy := {bodyTy.reprPrec 1}) " ++
+      f!"(body := {body.reprPrec 1}) {LamWF.reprPrec H 1}"
+    else
+      f!"(.ofLam (argTy := {argTy.reprPrec 1}) (bodyTy := {bodyTy.reprPrec 1}) " ++
+      f!"{LamWF.reprPrec H 1})"
+  | @LamWF.ofApp _ lctx argTy resTy fn arg HFn HArg =>
+    if n == 0 then
+      f!"Auto.ReifLam.LamWF.ofApp (lctx := {formatLCtx 1 lctx}) " ++
+      f!"(argTy := {argTy.reprPrec 1}) (resTy := {resTy.reprPrec 1}) " ++
+      f!"(fn := {fn.reprPrec 1}) (arg := {arg.reprPrec 1}) " ++
+      f!"{LamWF.reprPrec HFn 1} {LamWF.reprPrec HArg 1}"
+    else
+      f!"(.ofApp (lctx := {formatLCtx 1 lctx}) " ++
+      f!"(argTy := {argTy.reprPrec 1}) (resTy := {resTy.reprPrec 1}) " ++
+      f!"{LamWF.reprPrec HFn 1} {LamWF.reprPrec HArg 1})"
+
+instance : Repr (LamWF lamVarTy judge) where
+  reprPrec wf _ := LamWF.reprPrec wf 0
+
 def LamWF.ofLamTerm {lamVarTy : Nat → LamSort} :
   {lctx : List LamSort} → (t : LamTerm) → Option ((rty : LamSort) × LamWF lamVarTy ⟨lctx, t, rty⟩)
 | lctx, .atom n => .some ⟨lamVarTy n, .ofAtom n⟩
@@ -153,6 +193,15 @@ def LamWF.ofLamTerm {lamVarTy : Nat → LamSort} :
     | false => .none
   | _, _ => .none
 
+-- #eval (@LamWF.ofLamTerm
+--   (lamVarTy := fun n => if n == 0 then .atom 2 else .func (.atom 2) (.atom 1))
+--   (lctx := [])
+--   (t := .lam (.atom 0) (.app (.atom 1) (.atom 0))))
+-- 
+-- #check Auto.ReifLam.LamWF.ofLam
+--   (lamVarTy := fun n => if n == 0 then .atom 2 else .func (.atom 2) (.atom 1))
+--   (lctx := []) (argTy := (.atom 0)) (bodyTy := (.atom 1)) (body := (.app (.atom 1) (.atom 0))) (.ofApp (lctx := [(.atom 0)]) (argTy := (.atom 2)) (resTy := (.atom 1)) (.ofAtom 1) (.ofAtom 0))
+
 def LamWF.complete_Aux
   {b : β} (p : Bool) (f : (p = true) → β) (eq : p = true) :
   (match (generalizing:=false) h : p with
@@ -168,23 +217,23 @@ def LamWF.complete {lamVarTy : Nat → LamSort} :
   {j : LamJudge} → (wf : LamWF lamVarTy j) → LamWF.ofLamTerm j.rterm = .some ⟨j.rty, wf⟩
 | .(_), @LamWF.ofAtom _ lctx n => rfl
 | .(_), @LamWF.ofBVar _ lctx n => by
-  simp [ofLamTerm, Nat.blt]
+  unfold ofLamTerm;
+  unfold Nat.blt;
   cases n;
   case mk val isLt =>
-    simp;
     have heq := @LamWF.complete_Aux
     simp at heq; rw [heq]; apply Nat.ble_eq_true_of_le; exact isLt
 | .(_), @LamWF.ofLam _ lctx argTy bodyTy body H => by
-  simp [ofLamTerm]
+  unfold ofLamTerm;
   have IH := LamWF.complete H; simp at IH; rw [IH];
 | .(_), @LamWF.ofApp _ lctx argTy resTy fn arg HFn HArg => by
-  simp [ofLamTerm]
+  unfold ofLamTerm;
   have IHFn := LamWF.complete HFn
   have IHArg := LamWF.complete HArg
   simp at IHFn; simp at IHArg
   rw [IHFn]; rw [IHArg]; simp; rw [LamSort.beq_refl]
 
-def LamTerm.check_of_wf
+def LamTerm.check_of_lamWF
   {lamVarTy : Nat → LamSort} {lctx : List LamSort} {t : LamTerm} {ty : LamSort} :
   LamWF lamVarTy ⟨lctx, t, ty⟩ → t.check lamVarTy lctx = .some ty := by
   generalize JudgeEq : { lctx := lctx, rterm := t, rty := ty : LamJudge} = Judge 
@@ -224,7 +273,7 @@ private def List.get?_eq_some' : {l : List α} → {n : Nat} → l.get? n = some
 | .nil, _     , eq => by simp at eq
 
 -- This function is meant to be `execute`-d (`eval`-ed), not `reduce`-d
-def LamTerm.wf_of_check {lamVarTy : Nat → LamSort} :
+def LamTerm.lamWF_of_check {lamVarTy : Nat → LamSort} :
   {lctx : List LamSort} → {t : LamTerm} → {ty : LamSort} →
   t.check lamVarTy lctx = .some ty → LamWF lamVarTy ⟨lctx, t, ty⟩
 | lctx, .atom n, ty, HCheck => by
@@ -241,7 +290,7 @@ def LamTerm.wf_of_check {lamVarTy : Nat → LamSort} :
   case none => intro contra; cases contra
   case some bodyTy =>
     simp; intro tyEq; rw [← tyEq]
-    apply LamWF.ofLam; apply (LamTerm.wf_of_check CheckEq)
+    apply LamWF.ofLam; apply (LamTerm.lamWF_of_check CheckEq)
 | lctx, .app fn arg, ty, HCheck => by
   simp [check] at HCheck; revert HCheck
   match CheckFnEq : check lamVarTy lctx fn, CheckArgEq : check lamVarTy lctx arg with
@@ -251,16 +300,16 @@ def LamTerm.wf_of_check {lamVarTy : Nat → LamSort} :
     case false => intro contra; cases contra
     case true =>
       simp; intro H; rw [← H]; apply LamWF.ofApp (argTy:=ty₁);
-      case HFn => apply (LamTerm.wf_of_check CheckFnEq)
+      case HFn => apply (LamTerm.lamWF_of_check CheckFnEq)
       case HArg =>
         have heq' : ty₁ = argTy := LamSort.beq_eq _ _ heq
         rw [heq']
-        apply (LamTerm.wf_of_check CheckArgEq)
+        apply (LamTerm.lamWF_of_check CheckArgEq)
   | .some (LamSort.func _ _), .none => intro contra; cases contra
   | .some (LamSort.atom _), _ => intro contra; cases contra
   | .none, _ => intro contra; cases contra
 
---#reduce @LamTerm.wf_of_check
+--#eval @LamTerm.wf_of_check
 --  (lamVarTy := fun n => if n == 0 then .atom 2 else .func (.atom 2) (.atom 1))
 --  (lctx := [])
 --  (t := .lam (.atom 0) (.app (.atom 1) (.atom 0)))
@@ -304,6 +353,9 @@ structure Valuation.{u} where
   -- valuation of free variables to constants in COC
   varVal : Nat → (α : Type u) × α
 
+@[reducible] def Valuation.ofLamValuation : LamValuation → Valuation :=
+  fun ⟨lamVarTy, tyVal, varVal⟩ => ⟨tyVal, fun n => ⟨(lamVarTy n).interp tyVal, varVal n⟩⟩
+
 -- Judgement, `lctx ⊢ rterm ≝ mterm : ty`
 structure Judgement.{u} where
   -- Local context, list of CIC terms
@@ -344,6 +396,30 @@ inductive WF.{u} (val : Valuation.{u}) : Judgement.{u} → Prop
       :
     WF val <|
       ⟨lctx, .app hfn harg, β, fn arg⟩
+
+-- def LamTerm.wf_of_lamWF.{u} (lval : LamValuation.{u}) :
+--   (lctx : List ((α : LamSort) × α.interp lval.tyVal)) →
+--   let lctx' := lctx.map (fun x => x.fst)
+--   (lwf : LamWF lval.lamVarTy ⟨lctx', t, rty⟩) →
+--   let lctxW := lctx.map (fun x => ⟨x.fst.interp lval.tyVal, x.snd⟩)
+--   WF (Valuation.ofLamValuation lval)
+--     ⟨lctxW, t, rty.interp lval.tyVal, LamTerm.interp lval lctx lwf⟩
+-- | lctx, @LamWF.ofAtom _ _ n => WF.ofAtom _
+-- | lctx, @LamWF.ofBVar _ _ n => by
+--   let rec bvarAux : (lctx : List _) → (n : Fin _) → WF (Valuation.ofLamValuation lval)
+--     { lctx := List.map (fun x => { fst := LamSort.interp lval.tyVal x.fst, snd := x.snd }) lctx, rterm := bvar n.val,
+--       ty := LamSort.interp lval.tyVal (List.map (fun x => x.fst) lctx)[n], mterm := interp lval lctx (LamWF.ofBVar n) }
+--   | a::as, ⟨0, h0⟩ =>
+--     let tr : List ((α : LamSort) × LamSort.interp lval.tyVal α) → List ((α : Type u) × α) :=
+--       List.map (fun x => { fst := LamSort.interp lval.tyVal x.fst, snd := x.snd })
+--     WF.ofBVar
+--     (lctx := tr (a :: as))
+--     ⟨0, Nat.zero_lt_succ (List.length (tr as))⟩
+--   | a::as, ⟨k + 1, hsk⟩ =>
+--     let hsk' := Nat.lt_of_succ_lt_succ hsk
+--     bvarAux as ⟨k, hsk'⟩
+--   bvarAux lctx n
+-- | _, _ => sorry
 
 section Example
   
