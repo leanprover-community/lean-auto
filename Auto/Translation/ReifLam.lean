@@ -1,6 +1,6 @@
 import Auto.Translation.Lift
 import Auto.Util.ExprExtra
-import Auto.Util.DepEq
+import Auto.Util.SigEq
 import Std.Data.List.Lemmas
 
 -- Embedding Simply Typed Lambda Calculus into Dependent Type Theory
@@ -385,7 +385,7 @@ inductive WF.{u} (val : Valuation.{u}) : Judgement.{u} → Type (u + 1)
     WF val <|
       ⟨lctxTy, lctxTerm, .app hfn harg, β, fn arg⟩
 
-noncomputable def LamTerm.wf_of_lamWF.{u} (lval : LamValuation.{u}) :
+def LamTerm.wf_of_lamWF.{u} (lval : LamValuation.{u}) :
   (lctxTy : Nat → LamSort) → (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal) →
   (lwf : LamWF lval.lamVarTy ⟨lctxTy, t, rty⟩) →
   WF (Valuation.ofLamValuation lval)
@@ -396,23 +396,22 @@ noncomputable def LamTerm.wf_of_lamWF.{u} (lval : LamValuation.{u}) :
     (fun n => (lctxTy' n).interp lval.tyVal) lctxTerm'
     argTy body (LamSort.interp lval.tyVal argTy) (LamSort.interp lval.tyVal bodyTy)
     (LamTerm.interp lval lctxTy' lctxTerm' (LamWF.ofLam bodyTy H))
-    (fun t =>
+    (fun t' =>
       let ty₁ := fun n => LamSort.interp lval.tyVal (pushLCtx lctxTy' argTy n)
       let ty₂ := pushLCtx (fun n => LamSort.interp lval.tyVal (lctxTy' n)) (LamSort.interp lval.tyVal argTy)
       have hTyEq : ty₁ = ty₂ := by apply funext; intro n; cases n <;> simp
-      let term₁ : ∀ (n : Nat), ty₁ n := fun n => match n with | 0 => t | Nat.succ n => lctxTerm' n
-      let term₂ : ∀ (n : Nat), ty₂ n := fun n => match n with | 0 => t | Nat.succ n => lctxTerm' n
-      have hTermEq : DepEq (fun (α : Nat → Type _) => (∀ (n : Nat), α n)) term₁ term₂ := by
-        apply DepEq.funext _ _ _ _ _ hTyEq; intro u; cases u;
-        case zero =>
-          simp; apply depeq_of_heq; apply HEq.rfl; exact hTyEq
-        case succ n =>
-          simp; apply depeq_of_heq; apply HEq.rfl; exact hTyEq
+      let term₁ : ∀ (n : Nat), ty₁ n := fun n => match n with | 0 => t' | Nat.succ n => lctxTerm' n
+      let term₂ : ∀ (n : Nat), ty₂ n := fun n => match n with | 0 => t' | Nat.succ n => lctxTerm' n
+      have hTermEq : SigmaEq (fun (α : Nat → Type _) => (∀ (n : Nat), α n)) term₁ term₂ :=
+        SigmaEq.of_heq (fun (α : Nat → Type u) => (n : Nat) → α n) (HEq.funext _ _ fun u =>
+            match u with
+            | 0 => HEq.refl _
+            | n + 1 => HEq.refl _) hTyEq
       let motive := fun {ty : Nat → Type u} (term : ∀ n, ty n) =>
         WF (Valuation.ofLamValuation lval)
-          ⟨ty, term, body, LamSort.interp lval.tyVal bodyTy, interp lval lctxTy' lctxTerm' (LamWF.ofLam bodyTy H) t⟩
+          ⟨ty, term, body, LamSort.interp lval.tyVal bodyTy, interp lval lctxTy' lctxTerm' (LamWF.ofLam bodyTy H) t'⟩
       let hWF : motive (ty:=ty₁) term₁ := LamTerm.wf_of_lamWF lval _ _ H
-      @DepEq.ndrec (Nat → Type _) (fun α => (n : Nat) → α n) ty₁ term₁ motive hWF ty₂ term₂ hTermEq)
+      @SigmaEq.ndrec (Nat → Type _) (fun α => (n : Nat) → α n) ty₁ term₁ motive hWF ty₂ term₂ hTermEq)
 | lctxTy', lctxTerm', @LamWF.ofApp _ _ argTy resTy fn arg Hfn Harg =>
   let WFfn := LamTerm.wf_of_lamWF _ _ _ Hfn
   let WFarg := LamTerm.wf_of_lamWF _ _ _ Harg
