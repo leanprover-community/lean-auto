@@ -1,6 +1,6 @@
 import Auto.Translation.Lift
 import Auto.Util.ExprExtra
-import Auto.Translation.DepEq
+import Auto.Util.DepEq
 import Std.Data.List.Lemmas
 
 -- Embedding Simply Typed Lambda Calculus into Dependent Type Theory
