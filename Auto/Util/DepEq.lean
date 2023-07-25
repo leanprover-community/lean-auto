@@ -1,5 +1,3 @@
-/-
-
 inductive DepEq {α : Sort u} (f : α → Sort v) : {x : α} → (a : f x) → {y : α} → (b : f y) → Prop where
   /-- Reflexivity of heterogeneous equality. -/
   | refl (x : α) (a : f x) : DepEq f a a
@@ -75,44 +73,6 @@ def HEq.ofSigmaEq {α β : Type u} (x : α) (y : β) (H : @Sigma.mk _ id _ x = @
   by cases H; apply HEq.rfl
 
 def HEq.toSigmaEq {α β : Type u} (x : α) (y : β) (H : HEq x y) : @Sigma.mk _ id _ x = @Sigma.mk _ id _ y :=
-  by cases H; rfl
-
-theorem SigmaFn.inj {α : Type} {fn : α → Nat} {arg : α} {fn_1 : α_1 → Nat} {arg_1 : α_1}
-  (H : DepEq SigmaFn (SigmaFn.mk α fn arg) (SigmaFn.mk α_1 fn_1 arg_1)) : α = α_1 ∧ HEq arg arg_1 ∧ HEq fn fn_1 :=
-  let lh : Sigma SigmaFn := { fst := fn arg, snd := mk α fn arg }
-  let rh : Sigma SigmaFn := { fst := fn_1 arg_1, snd := mk α_1 fn_1 arg_1 }
-  let lreq : lh = rh := DepEq.toSigmaEq _ _ _ _ _ H
-  let rwFn₁ (x : Sigma SigmaFn) : Sigma id :=
-    match x with
-    | Sigma.mk fst snd =>
-      match snd with
-      | SigmaFn.mk α fn arg => ⟨α, arg⟩
-  let rwRes₁ : rwFn₁ lh = rwFn₁ rh := by rw [lreq]
-  let argHeq := HEq.ofSigmaEq _ _ rwRes₁;
-  let rwFn₂ (x : Sigma SigmaFn) : Sigma id :=
-    match x with
-    | Sigma.mk fst snd =>
-      match snd with
-      | SigmaFn.mk α fn arg => ⟨α → Nat, fn⟩
-  let rwRes₂ : rwFn₂ lh = rwFn₂ rh := by rw [lreq]
-  let fnHeq := HEq.ofSigmaEq _ _ rwRes₂;
-  And.intro (by cases argHeq; rfl) (And.intro argHeq fnHeq)
-
--/
-
-inductive DepEq {α : Sort u} (f : α → Sort v) : {x : α} → (a : f x) → {y : α} → (b : f y) → Prop where
-  /-- Reflexivity of dependent equality. -/
-  | refl (x : α) (a : f x) : DepEq f a a
-
-set_option genInjectivity false in
-inductive SigmaFn : Nat → Type 1
-  | mk (α : Type) (fn : α → Nat) (arg : α) : SigmaFn (fn arg)
-
-def HEq.ofSigmaEq {α β : Type u} (x : α) (y : β) (H : @Sigma.mk _ id _ x = @Sigma.mk _ id _ y) : HEq x y :=
-  by cases H; apply HEq.rfl
-
-def DepEq.toSigmaEq {α : Type u} (f : α → Type v) (x : α) (a : f x)
-  (y : α) (b : f y) (H : DepEq f a b) : Sigma.mk (β:=f) x a = Sigma.mk (β:=f) y b :=
   by cases H; rfl
 
 theorem SigmaFn.inj {α : Type} {fn : α → Nat} {arg : α} {fn_1 : α_1 → Nat} {arg_1 : α_1}
