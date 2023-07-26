@@ -1,4 +1,5 @@
 import Auto.Translation.Lift
+import Auto.Translation.LCtx
 import Auto.Util.ExprExtra
 import Auto.Util.SigEq
 import Std.Data.List.Lemmas
@@ -82,14 +83,6 @@ def LamTerm.reprPrec (t : LamTerm) (n : Nat) :=
 
 instance : Repr LamTerm where
   reprPrec f n := LamTerm.reprPrec f n
-
-@[reducible] def pushLCtx (lctx : Nat → α) (x : α) : Nat → α
-| 0     => x
-| n + 1 => lctx n
-
-theorem pushLCtx.comm (f : α → β) (lctx : Nat → α) (x : α) :
-  (fun n => f (pushLCtx lctx x n)) = pushLCtx (fun n => f (lctx n)) (f x) := by
-  apply funext; intro n; cases n <;> simp
 
 -- Typecheck. `lamVarTy, lctx ⊢ term : type?`
 -- `lamVarTy : Nat → LamSort` : Valuation
@@ -495,5 +488,111 @@ section Example
     case Harg => apply WF.ofAtom
 
 end Example
+
+-- Changing all `.bvar ?n` in `t` to `.bvar (Nat.succ ?n)`
+def LamTerm.bvarLift (t : LamTerm) : LamTerm := sorry
+
+def LamTerm.bvarLifts (t : LamTerm) (lvl : Nat) : LamTerm := sorry
+
+def LamWF.ofLCtxBVarLift {lamVarTy lctx} (rterm : LamTerm) (k : Nat)
+  (HWF : LamWF lamVarTy ⟨popLCtx lctx, rterm, lctx (Nat.succ k)⟩) :
+  LamWF lamVarTy ⟨lctx, rterm.bvarLift, lctx k⟩ := sorry
+
+def LamWF.fromLCtxBVarLift {lamVarTy lctx} (rterm : LamTerm) (k : Nat)
+  (HWF : LamWF lamVarTy ⟨lctx, rterm.bvarLift, lctx k⟩) :
+  LamWF lamVarTy ⟨popLCtx lctx, rterm, lctx (Nat.succ k)⟩ := sorry
+
+def LamWF.ofLCtxBVarLifts {lamVarTy lctx} (rterm : LamTerm) (lvl : Nat) (k : Nat)
+  (HWF : LamWF lamVarTy ⟨popLCtxs lctx lvl, rterm, lctx (k + lvl)⟩) :
+  LamWF lamVarTy ⟨lctx, rterm.bvarLifts lvl, lctx k⟩ := sorry
+
+def LamWF.fromLCtxBVarLifts {lamVarTy lctx} (rterm : LamTerm) (lvl : Nat) (k : Nat)
+  (HWF : LamWF lamVarTy ⟨lctx, rterm.bvarLifts lvl, lctx k⟩) :
+  LamWF lamVarTy ⟨popLCtxs lctx lvl, rterm, lctx (k + lvl)⟩ := sorry
+
+def LamWF.ofBVarLifts {lamVarTy lctx} (rterm : LamTerm) (lvl : Nat)
+  (HWF : LamWF lamVarTy ⟨popLCtxs lctx lvl, rterm, argTy⟩) :
+  LamWF lamVarTy ⟨lctx, rterm.bvarLifts lvl, argTy⟩ := sorry
+
+-- Suppose we have `(λ x. func[body]) arg`
+--   and `body` is a subterm of `func` under `idx` levels of binders in `func`.
+--   We want to compute what `body` will become when we beta-reduce the whole term
+-- `bj` is the judgement related to the body, i.e. `lctx ⊢ body : ty`. It's
+--   easy to see that the `lctx` which `arg` resides in is `popLCtxs lctx (idx + 1)`
+--   and the type of `arg` is `lctx idx`
+noncomputable def LamWF.subst (lamVarTy : Nat → LamSort) (idx : Nat)
+  (arg : LamTerm) (argTy : LamSort)
+  (body : LamTerm) (bodyTy : LamSort) :
+  (lctx : Nat → LamSort) → 
+  (wfArg : LamWF lamVarTy ⟨fun n => popLCtxs lctx idx n, arg, argTy⟩) →
+  (wfBody : LamWF lamVarTy ⟨pushLCtxAt lctx argTy idx, body, bodyTy⟩) →
+  (substed : LamTerm) × LamWF lamVarTy ⟨lctx, substed, bodyTy⟩
+| lctx, _, .ofAtom n => ⟨.atom n, .ofAtom _⟩
+| lctx, wfArg, .ofBVar n =>
+  -- The `LamWF` of the `ofBVar` we've just destructed is equivalent to
+  --   `argTy::(idx)→lctx ⊢ (.bvar n) : (argTy::(idx)→lctx)[n]`
+  -- The `wfArg` is equivalent to saying
+  --  `lctx[idx:] ⊢ arg : argTy`
+  -- Which can be turned into
+  --  `lctx ⊢ (bVarLifts arg idx) : (argTy::(idx)→lctx)[idx]`
+  -- What we want is
+  --   1. n < idx : `lctx ⊢ (.bvar n) : lctx[n]`
+  --   2. n = idx : `lctx ⊢ (bVarLifts arg idx) : argTy`
+  --   3. n = n' + 1 > idx : `lctx ⊢ (.bvar n') : lctx[n']`
+  -- It helps to think of `lctx ⊢ (.bvar n) : lctx[n]` as being bvar lifted
+  --   from `lctx ⊢ (.bvar 0) : lctx[0]`
+  -- The required type is
+  --   `lctx ⊢ substed : (argTy::(idx)→lctx)[n]`
+  -- The required definitional equalities are
+  --   1. n < idx          ::   lctx[n]  == (argTy::(idx)→lctx)[n]
+  --   2. n = idx          ::   argTy    == (argTy::(idx)→lctx)[n]
+  --   3. n = n' + 1 > idx ::   lctx[n'] == (argTy::(idx)→lctx)[n]
+  -- The term will be defined recursively. So we will have the following situation:
+  -- 1. n >= idx, requires
+  --    `lctx ⊢ substed : (argTy::(2)→lctx)[4]`     (idx, n, lctx) := (2, 4, pop 0)
+  --    Given `LamWF.ofBVarLifts wfArg ::: lctx ⊢ (bVarLifts arg 2) : (argTy::(2)→lctx)[4]`
+  --  i.e.
+  --    `lctx ⊢ substed : (lctx[0]::lctx[1]::argTy::lctx[2:])[4]`  := (2, 4, pop 0)
+  --  This can be bvar lifted from
+  --    `lctx[1:] ⊢ substed : (lctx[1]::argTy::lctx[2:])[3]`       := (1, 3, pop 1)
+  --  This can in turn be bvar lifted from
+  --    `lctx[2:] ⊢ substed : (argTy::lctx[2:])[2]`                := (0, `n` = 2, pop 2)
+  --  At this point, we should do `cases` on `n`.
+  --    (1). If `n = 0`, we should use `substed := arg`
+  --    (2). if `n = n' + 1`, we should use `substed := (.bvar n')`
+  -- 2. n < idx, requires
+  --    `lctx ⊢ substed : (argTy::(4)→lctx)[2]`     (idx, n, lctx) := (4, 2, pop 0)
+  --  i.e                                                          := (4, 2, pop 0)
+  --    `lctx ⊢ substed : (lctx[0]::lctx[1]::lctx[2]::lctx[3]::argTy::lctx[4:])[2]`
+  --  This can be bvar lifted from                                 := (3, 1, pop 1)
+  --    `lctx[1:] ⊢ substed : (lctx[1]::lctx[2]::lctx[3]::argTy::lctx[4:])[1]`
+  --  This can in turn be bvar lifted from                         := (`idx'` = 2, 0, pop 2)
+  --    `lctx[2:] ⊢ substed : (lctx[2]::lctx[3]::argTy::lctx[4])[0]`
+  --  At this point, it's clear that `substed := (.bvar idx')`
+  let rec bvarAux (lctx : Nat → LamSort) (pops : Nat) : (idx : Nat) → (n : Nat) →
+    (wfArg : LamWF lamVarTy ⟨popLCtxs lctx pops, arg.bvarLifts idx, pushLCtxAt (popLCtxs lctx pops) argTy idx idx⟩) → 
+    (substed : LamTerm) × LamWF lamVarTy ⟨(popLCtxs lctx pops), substed, pushLCtxAt (popLCtxs lctx pops) argTy idx n⟩
+    | 0 => fun n =>
+      match n with
+      | 0 => fun wfArg =>
+        ⟨LamTerm.bvarLift arg, wfArg⟩
+      | n' + 1 => fun wfArg =>
+        ⟨.bvar n', .ofBVar _⟩
+    | idx' + 1 => fun n =>
+      match n with
+      | 0 => fun wfArg => sorry
+      | n' + 1 => sorry
+  bvarAux lctx 0 idx n (pushLCtxAt_eqpos_cast₂ (popLCtxs lctx 0) argTy idx
+    (fun x => LamWF lamVarTy ⟨popLCtxs lctx 0, LamTerm.bvarLifts arg idx, x⟩)
+    (LamWF.ofBVarLifts _ idx wfArg))
+| _, _, .ofLam (argTy:=argTy') bodyTy' (body:=body') H =>
+  sorry
+| _, _, _ => sorry
+
+#check pushLCtxAt_eqpos_cast₂
+/-
+but is expected to have type
+  LamWF lamVarTy ⟨popLCtxs lctx 0, LamTerm.bvarLifts arg idx, pushLCtxAt (popLCtxs lctx 0) argTy idx idx⟩ : Type
+-/
 
 end Auto.ReifLam
