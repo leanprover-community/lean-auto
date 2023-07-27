@@ -25,23 +25,41 @@ def popLCtxAt (lctx : Nat → α) (pos : Nat) :=
     | 0 => lctx 0
     | n' + 1 => popLCtxAt (fun n => lctx (Nat.succ n)) pos' n'
 
+def popLCtxAt.comm_cast₁ (lctx : Nat → α) (f : α → β) (g : β → Sort w) (pos : Nat) :
+  (n : Nat) → (H : g (f (popLCtxAt lctx pos n))) → g (popLCtxAt (fun n => f (lctx n)) pos n) :=
+  match pos with
+  | 0 => fun _ H => H
+  | pos' + 1 => fun n =>
+    match n with
+    | 0 => fun H => H
+    | n' + 1 => fun H => popLCtxAt.comm_cast₁ _ _ _ pos' n' H
+
+def popLCtxAt.comm_cast₂ (lctx : Nat → α) (f : α → β) (g : β → Sort w) (pos : Nat) :
+  (n : Nat) → (H : g (popLCtxAt (fun n => f (lctx n)) pos n)) → g (f (popLCtxAt lctx pos n)) :=
+  match pos with
+  | 0 => fun _ H => H
+  | pos' + 1 => fun n =>
+    match n with
+    | 0 => fun H => H
+    | n' + 1 => fun H => popLCtxAt.comm_cast₂ _ _ _ pos' n' H
+
 -- #reduce fun lctx => popLCtxAt lctx 3 4
 
 def popLCtxs (lctx : Nat → α) : (i : Nat) → Nat → α
 | 0 => lctx
 | i' + 1 => popLCtx (popLCtxs lctx i')
 
-def popLCtx_cast₁ (lctx : Nat → α) (f : (Nat → α) → Sort u) (i : Nat)
+def popLCtx.succ_cast₁ (lctx : Nat → α) (f : (Nat → α) → Sort u) (i : Nat)
   (H : f (popLCtxs (popLCtx lctx) i)) : f (popLCtxs lctx (Nat.succ i)) :=
   match i with
   | 0 => H
-  | i' + 1 => popLCtx_cast₁ lctx (fun lctx => f (popLCtx lctx)) i' H
+  | i' + 1 => popLCtx.succ_cast₁ lctx (fun lctx => f (popLCtx lctx)) i' H
 
-def popLCtx_cast₂ (lctx : Nat → α) (f : (Nat → α) → Sort u) (i : Nat)
+def popLCtx.succ_cast₂ (lctx : Nat → α) (f : (Nat → α) → Sort u) (i : Nat)
   (H : f (popLCtxs lctx (Nat.succ i))) : f (popLCtxs (popLCtx lctx) i) :=
   match i with
   | 0 => H
-  | i' + 1 => popLCtx_cast₂ lctx (fun lctx => f (popLCtx lctx)) i' H
+  | i' + 1 => popLCtx.succ_cast₂ lctx (fun lctx => f (popLCtx lctx)) i' H
 
 -- Definitional equality :
 -- #check fun lctx x => (Eq.refl _ : popLCtx (pushLCtx lctx x) = lctx)

@@ -490,20 +490,10 @@ section Example
 
 end Example
 
-private def LamTerm.bvarLift_bvarAux (idx : Nat) : (n : Nat) → Nat :=
-  match idx with
-  | 0 => fun n => Nat.succ n
-  | idx' + 1 => fun n =>
-    match n with
-    | 0 => 0
-    | n' + 1 => Nat.succ (LamTerm.bvarLift_bvarAux idx' n')
-
--- #eval LamTerm.bvarLift_bvarAux 2 3
-
 -- Changing all `.bvar ?n` in `t` (where `?n >= idx`) to `.bvar (Nat.succ ?n)`
 def LamTerm.bvarLiftIdx (idx : Nat) : LamTerm → LamTerm
 | .atom n     => .atom n
-| .bvar n     => .bvar (LamTerm.bvarLift_bvarAux idx n)
+| .bvar n     => .bvar (popLCtxAt id idx n)
 | .lam s t    => .lam s (t.bvarLiftIdx (Nat.succ idx))
 | .app fn arg => .app (fn.bvarLiftIdx idx) (arg.bvarLiftIdx idx)
 
@@ -531,7 +521,10 @@ def LamWF.ofBVarLiftIdx {lamVarTy lctx} (idx : Nat) (rterm : LamTerm) :
   (HWF : LamWF lamVarTy ⟨popLCtxAt lctx idx, rterm, rTy⟩) →
   LamWF lamVarTy ⟨lctx, rterm.bvarLiftIdx idx, rTy⟩
 | .ofAtom n => .ofAtom n
-| .ofBVar n => sorry
+| .ofBVar n =>
+  let H := @LamWF.ofBVar lamVarTy lctx (popLCtxAt id idx n)
+  let castHg := fun i => LamWF lamVarTy ⟨lctx, LamTerm.bvar (popLCtxAt id idx n), i⟩
+  popLCtxAt.comm_cast₁ id lctx castHg idx n H
 | .ofLam (argTy:=argTy) (body:=body) bodyTy wfBody =>
   .ofLam (argTy:=argTy) bodyTy
     (body:=body.bvarLiftIdx (Nat.succ idx))
@@ -561,7 +554,10 @@ def LamWF.fromBVarLiftIdx {lamVarTy} (idx : Nat) : {rTy : LamSort} →
   (rterm : LamTerm) → (HWF : LamWF lamVarTy ⟨lctx, rterm.bvarLiftIdx idx, rTy⟩) →
   LamWF lamVarTy ⟨popLCtxAt lctx idx, rterm, rTy⟩
 | _, .atom n, .ofAtom _ => .ofAtom n
-| _, .bvar n, .ofBVar _ => sorry
+| _, .bvar n, .ofBVar _ =>
+  let H := @LamWF.ofBVar lamVarTy (popLCtxAt lctx idx) n
+  let castHg := fun i => LamWF lamVarTy ⟨popLCtxAt lctx idx, LamTerm.bvar n, i⟩
+  popLCtxAt.comm_cast₂ id lctx castHg idx n H
 | _, .lam argTy body, .ofLam bodyTy wfBody =>
   .ofLam (argTy:=argTy) bodyTy
     (LamWF.fromBVarLiftIdx (lctx:=pushLCtx lctx argTy) (Nat.succ idx) _ wfBody)
@@ -585,7 +581,7 @@ def LamWF.fromBVarLifts {lamVarTy lctx} (rterm : LamTerm) (lvl : Nat)
     let IH := LamWF.fromBVarLifts _ _ HWF'
     let castIH := fun f =>
       LamWF lamVarTy ⟨f, rterm, argTy⟩
-    popLCtx_cast₁ _ castIH _ IH
+    popLCtx.succ_cast₁ _ castIH _ IH
 
 -- **Note**: This is the `.bvar` case for the following `LamWF.subst`
 -- The `LamWF` of the `ofBVar` we've just destructed is equivalent to
