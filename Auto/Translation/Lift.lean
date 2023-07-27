@@ -7,6 +7,9 @@ structure GLift.{u, v} (α : Sort u) : Sort (max u (v + 1)) where
 def EqLift {α : Sort u} (a b : α) : GLift.{1, v} Prop :=
   GLift.up (a = b)
 
+def EqLiftTy {α : Sort u} (a b : GLift.{u, v} α) : Type w :=
+  GLift.{0, w} (a.down = b.down)
+
 def Eq.reflLift.{u, v} {α : Sort u} (a : GLift.{u, v} α) : GLift (a.down = a.down) :=
   @GLift.up.{0, v} (a.down = a.down) (Eq.refl a.down)
 

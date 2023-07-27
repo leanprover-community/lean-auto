@@ -147,9 +147,9 @@ def CstrReal.reprPrec (c : CstrReal) (n : Nat) :=
 instance : Repr CstrReal where
   reprPrec := CstrReal.reprPrec
 
-def CstrReal.interp.{u} : (c : CstrReal) → GLift.{1, u} Real
-| zero => GLift.up 0
-| one  => GLift.up 1
+def CstrReal.interp : (c : CstrReal) → Real
+| zero => 0
+| one  => 1
 
 inductive LamBaseTerm
   | trueE   : LamBaseTerm -- Propositional `true`
@@ -261,18 +261,56 @@ def LamBaseTerm.wf_of_Check (H : b.check = s) : LamBaseTerm.LamWF b s := by
   cases H; cases b <;> constructor
 
 def LamBaseTerm.interp (tyVal : Nat → Type u) : (lwf : LamBaseTerm.LamWF b s) → s.interp tyVal
-| .ofTrueE      => GLift.up true
-| .ofFalseE     => GLift.up false
+| .ofTrueE      => GLift.up True
+| .ofFalseE     => GLift.up False
 | .ofNot        => NotLift
 | .ofAnd        => AndLift
 | .ofOr         => OrLift
 | .ofIff        => IffLift
 | .ofNatVal n   => GLift.up n
-| .ofRealVal cr => cr.interp
+| .ofRealVal cr => GLift.up cr.interp
 | .ofBvVal ls   => GLift.up ⟨ls, rfl⟩
 | .ofEq s       => @EqLift (s.interp tyVal)
 | .ofForallE s  => @ForallLift (s.interp tyVal)
 | .ofExistE s   => @ExistsLift (s.interp tyVal)
+
+-- Judgement, `rterm ≝ mterm : ty`
+structure LamBaseTerm.Judgement.{u} where
+  -- A base term
+  rterm : LamBaseTerm
+  -- Type of `mterm`
+  ty    : Type u
+  -- The CIC term that `rterm` translates into
+  mterm : ty
+
+inductive LamBaseTerm.WF.{u} (tyVal : Nat → Type u) : LamBaseTerm.Judgement.{u} → Type u
+  | ofTrueE      : WF tyVal ⟨.trueE, GLift.{1, u} Prop, GLift.up True⟩
+  | ofFalseE     : WF tyVal ⟨.falseE, GLift.{1, u} Prop, GLift.up False⟩
+  | ofNot        : WF tyVal ⟨.not, GLift.{1, u} Prop → GLift.{1, u} Prop, NotLift.{u}⟩
+  | ofAnd        : WF tyVal ⟨.and, GLift.{1, u} Prop → GLift.{1, u} Prop → GLift.{1, u} Prop, AndLift⟩
+  | ofOr         : WF tyVal ⟨.or, GLift.{1, u} Prop → GLift.{1, u} Prop → GLift.{1, u} Prop, OrLift⟩
+  | ofIff        : WF tyVal ⟨.iff, GLift.{1, u} Prop → GLift.{1, u} Prop → GLift.{1, u} Prop, IffLift⟩
+  | ofNatVal n   : WF tyVal ⟨.natVal n, GLift.{1, u} Nat, GLift.up n⟩
+  | ofRealVal cr : WF tyVal ⟨.realVal cr, GLift.{1, u} Real, GLift.up cr.interp⟩
+  | ofBvVal ls   : WF tyVal ⟨.bvVal ls, GLift.{1, u} (Bitvec ls.length), GLift.up ⟨ls, rfl⟩⟩
+  | ofEq s       : WF tyVal ⟨.eq s, LamSort.interp tyVal s → LamSort.interp tyVal s → GLift.{1, u} Prop, @EqLift (s.interp tyVal)⟩
+  | ofForallE s  : WF tyVal ⟨.forallE s, (LamSort.interp tyVal s → GLift.{1, u} Prop) → GLift.{1, u} Prop, @ForallLift (s.interp tyVal)⟩
+  | ofExistE s   : WF tyVal ⟨.existE s, (LamSort.interp tyVal s → GLift.{1, u} Prop) → GLift.{1, u} Prop, @ExistsLift (s.interp tyVal)⟩
+
+def LamBaseTerm.wf_of_lamWF.{u} (tyVal : Nat → Type u)
+  : (lwf : LamBaseTerm.LamWF b s) → WF tyVal ⟨b, s.interp tyVal, LamBaseTerm.interp tyVal lwf⟩
+| .ofTrueE      => .ofTrueE
+| .ofFalseE     => .ofFalseE
+| .ofNot        => .ofNot
+| .ofAnd        => .ofAnd
+| .ofOr         => .ofOr
+| .ofIff        => .ofIff
+| .ofNatVal n   => .ofNatVal n
+| .ofRealVal cr => .ofRealVal cr
+| .ofBvVal ls   => .ofBvVal ls
+| .ofEq s       => .ofEq s
+| .ofForallE s  => .ofForallE s
+| .ofExistE s   => .ofExistE s
 
 inductive LamTerm
   | atom    : Nat → LamTerm
@@ -465,7 +503,7 @@ def LamTerm.check_of_lamWF
   case ofBase lctx' b s H =>
     intros lctx t ty JudgeEq
     injection JudgeEq with lctx_eq rterm_eq rty_eq;
-    rw [rterm_eq, rty_eq]; sorry
+    rw [rterm_eq, rty_eq, check]; rw [LamBaseTerm.check_of_LamWF H]
   case ofBVar lctx' n =>
     intros lctx t ty JudgeEq
     injection JudgeEq with lctx_eq rterm_eq rty_eq;
@@ -590,6 +628,13 @@ inductive WF.{u} (val : Valuation.{u}) : Judgement.{u} → Type (u + 1)
       {lctxTerm : ∀ n : Nat, lctxTy n} (n : Nat) :
     WF val <|
       ⟨lctxTy, lctxTerm, (.atom n), val.varTy n, val.varVal n⟩
+  | ofBase
+      {lctxTy : Nat → Type u}
+      {lctxTerm : ∀ n : Nat, lctxTy n}
+      {hb : LamBaseTerm} {α : Type u} {b : α}
+      (Hb : LamBaseTerm.WF val.tyVal ⟨hb, α, b⟩) :
+    WF val <|
+      ⟨lctxTy, lctxTerm, (.base hb), α, b⟩
   | ofBVar
       {lctxTy : Nat → Type u}
       {lctxTerm : ∀ n : Nat, lctxTy n} (n : Nat) :
@@ -622,7 +667,7 @@ def LamTerm.wf_of_lamWF.{u} (lval : LamValuation.{u}) :
   WF (Valuation.ofLamValuation lval)
     ⟨fun n => (lctxTy n).interp lval.tyVal, lctxTerm, t, rty.interp lval.tyVal, LamTerm.interp lval lctxTy lctxTerm lwf⟩
 | lctxTy', lctxTerm', @LamWF.ofAtom _ _ n => WF.ofAtom _
-| lctxTy', lctxTerm', @LamWF.ofBase _ _ b s H => _
+| lctxTy', lctxTerm', @LamWF.ofBase _ _ b s H => WF.ofBase (LamBaseTerm.wf_of_lamWF lval.tyVal H)
 | lctxTy', lctxTerm', @LamWF.ofBVar _ _ n => WF.ofBVar _
 | lctxTy', lctxTerm', @LamWF.ofLam _ _ argTy bodyTy body H => @WF.ofLam (Valuation.ofLamValuation lval)
     (fun n => (lctxTy' n).interp lval.tyVal) lctxTerm'
@@ -715,13 +760,13 @@ section Example
               GLift.{1, u + 1} Nat].getD n (GLift.{1, u + 1} Nat),
     fun n =>
       match n with
-      | 0 => @EqLift.{1, u + 1, u} Nat
+      | 0 => @EqLiftTy.{1, u + 1, u} Nat
       | 1 => GLift.up 2
       | 2 => GLift.up 3
       | _ + 3 => GLift.up 0⟩
 
   def wf₃.{u} : WF valuation₃.{u} interpEx₃.{u} := by
-    apply WF.ofApp (fn := @EqLift.{1, u + 1, u} Nat (GLift.up 2))
+    apply WF.ofApp (fn := @EqLiftTy.{1, u + 1, u} Nat (GLift.up 2))
     case Hfn =>
       apply WF.ofApp <;> apply WF.ofAtom
     case Harg => apply WF.ofAtom
@@ -731,6 +776,7 @@ end Example
 -- Changing all `.bvar ?n` in `t` (where `?n >= idx`) to `.bvar (Nat.succ ?n)`
 def LamTerm.bvarLiftIdx (idx : Nat) : LamTerm → LamTerm
 | .atom n     => .atom n
+| .base b     => .base b
 | .bvar n     => .bvar (popLCtxAt id idx n)
 | .lam s t    => .lam s (t.bvarLiftIdx (Nat.succ idx))
 | .app fn arg => .app (fn.bvarLiftIdx idx) (arg.bvarLiftIdx idx)
@@ -759,6 +805,7 @@ def LamWF.ofBVarLiftIdx {lamVarTy lctx} (idx : Nat) (rterm : LamTerm) :
   (HWF : LamWF lamVarTy ⟨popLCtxAt lctx idx, rterm, rTy⟩) →
   LamWF lamVarTy ⟨lctx, rterm.bvarLiftIdx idx, rTy⟩
 | .ofAtom n => .ofAtom n
+| .ofBase b => .ofBase b
 | .ofBVar n =>
   let H := @LamWF.ofBVar lamVarTy lctx (popLCtxAt id idx n)
   let castHg := fun i => LamWF lamVarTy ⟨lctx, LamTerm.bvar (popLCtxAt id idx n), i⟩
@@ -792,6 +839,7 @@ def LamWF.fromBVarLiftIdx {lamVarTy} (idx : Nat) : {rTy : LamSort} →
   (rterm : LamTerm) → (HWF : LamWF lamVarTy ⟨lctx, rterm.bvarLiftIdx idx, rTy⟩) →
   LamWF lamVarTy ⟨popLCtxAt lctx idx, rterm, rTy⟩
 | _, .atom n, .ofAtom _ => .ofAtom n
+| _, .base _, .ofBase H => .ofBase H
 | _, .bvar n, .ofBVar _ =>
   let H := @LamWF.ofBVar lamVarTy (popLCtxAt lctx idx) n
   let castHg := fun i => LamWF lamVarTy ⟨popLCtxAt lctx idx, LamTerm.bvar n, i⟩
@@ -902,6 +950,7 @@ def LamWF.subst (lamVarTy : Nat → LamSort) (idx : Nat)
   (wfBody : LamWF lamVarTy ⟨pushLCtxAt lctx argTy idx, body, bodyTy⟩) →
   (substed : LamTerm) × LamWF lamVarTy ⟨lctx, substed, bodyTy⟩
 | lctx, _,     .ofAtom n => ⟨.atom n, .ofAtom _⟩
+| lctx, _,     .ofBase (b:=b) H => ⟨.base b, .ofBase H⟩
 | lctx, wfArg, .ofBVar n => LamWF.subst_bvarAux arg 0 idx n wfArg
 | lctx, wfArg, .ofLam (argTy:=argTy') bodyTy' (body:=body') H =>
   let wfArg' := LamWF.ofBVarLift (lctx:=pushLCtx lctx argTy') _ wfArg
@@ -924,6 +973,7 @@ def LamWF.subst_correct.{u} (lval : LamValuation.{u})
     (pushLCtxAtDep lctxTerm (LamTerm.interp lval lctxTy lctxTerm wfArg) idx) wfBody
   = LamTerm.interp lval lctxTy lctxTerm wfSubst.snd)
 | lctxTy, lctxTerm, wfArg, .ofAtom n => rfl
+| lctxTy, lctxTerm, wfArg, .ofBase b => rfl
 | lctxTy, lctxTerm, wfArg, .ofBVar n => by simp [subst, LamTerm.interp]; sorry
   -- This seems to be implying that
   -- 1. We should state a commutativity theorem about `pushLCtxAtDep`
