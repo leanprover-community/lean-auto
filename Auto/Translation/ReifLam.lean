@@ -316,8 +316,7 @@ def LamTerm.interp.{u} (lval : LamValuation.{u}) :
 | lctxTy, lctxTerm, @LamWF.ofBVar _ _ n => lctxTerm n
 | lctxTy, lctxTerm, @LamWF.ofLam _ _ argTy _ body H =>
   fun (x : argTy.interp lval.tyVal) =>
-    LamTerm.interp lval (pushLCtx lctxTy argTy)
-    (fun n => match n with | 0 => x | k + 1 => lctxTerm k) H
+    LamTerm.interp lval (pushLCtx lctxTy argTy) (pushLCtxDep lctxTerm x) H
 | lctxTy, lctxTerm, @LamWF.ofApp _ _ _ resTy _ _ HFn HArg =>
   let mfn := LamTerm.interp lval lctxTy lctxTerm HFn
   let marg := LamTerm.interp lval lctxTy lctxTerm HArg
@@ -627,6 +626,8 @@ def LamWF.fromBVarLifts {lamVarTy lctx} (rterm : LamTerm) (lvl : Nat)
 --  This can in turn be bvar lifted from                         := (`idx'` = 2, 0, pop 2)
 --    `lctx[2:] ⊢ substed : (lctx[2]::lctx[3]::argTy::lctx[4])[0]`
 --  At this point, it's clear that `substed := (.bvar 0)`
+-- **TODO**: Can this function be represented by `pushLCtxDep`?
+--           Furthermore, can other functions be represented by `pushLCtxDep`?
 private def LamWF.subst_bvarAux
   {lamVarTy lctx : Nat → LamSort} {argTy : LamSort}
   (arg : LamTerm) (pops : Nat) : (idx : Nat) → (n : Nat) →
@@ -654,23 +655,43 @@ private def LamWF.subst_bvarAux
 -- `bj` is the judgement related to the body, i.e. `lctx ⊢ body : ty`. It's
 --   easy to see that the `lctx` which `arg` resides in is `popLCtxs lctx (idx + 1)`
 --   and the type of `arg` is `lctx idx`
-noncomputable def LamWF.subst (lamVarTy : Nat → LamSort) (idx : Nat)
+def LamWF.subst (lamVarTy : Nat → LamSort) (idx : Nat)
   (arg : LamTerm) (argTy : LamSort)
   (body : LamTerm) (bodyTy : LamSort) :
   (lctx : Nat → LamSort) → 
   (wfArg : LamWF lamVarTy ⟨lctx, LamTerm.bvarLifts arg idx, argTy⟩) →
   (wfBody : LamWF lamVarTy ⟨pushLCtxAt lctx argTy idx, body, bodyTy⟩) →
   (substed : LamTerm) × LamWF lamVarTy ⟨lctx, substed, bodyTy⟩
-| lctx, _, .ofAtom n => ⟨.atom n, .ofAtom _⟩
+| lctx, _,     .ofAtom n => ⟨.atom n, .ofAtom _⟩
 | lctx, wfArg, .ofBVar n => LamWF.subst_bvarAux arg 0 idx n wfArg
 | lctx, wfArg, .ofLam (argTy:=argTy') bodyTy' (body:=body') H =>
-  let wfArg' := LamWF.ofBVarLift
-    (lctx:=pushLCtx lctx argTy') _ wfArg
+  let wfArg' := LamWF.ofBVarLift (lctx:=pushLCtx lctx argTy') _ wfArg
   let IHArg := LamWF.subst lamVarTy (Nat.succ idx) _ _ _ _ _ wfArg' H
   ⟨.lam argTy' IHArg.fst, .ofLam _ IHArg.snd⟩
 | lctx, wfArg, .ofApp argTy' HFn HArg =>
   let IHFn := LamWF.subst lamVarTy idx _ _ _ _ _ wfArg HFn
   let IHArg := LamWF.subst lamVarTy idx _ _ _ _ _ wfArg HArg
   ⟨.app IHFn.fst IHArg.fst, .ofApp argTy' IHFn.snd IHArg.snd⟩
+
+def LamWF.subst_correct.{u} (lval : LamValuation.{u})
+  (arg : LamTerm) (argTy : LamSort)
+  (body : LamTerm) (bodyTy : LamSort) (idx : Nat) :
+  (lctxTy : Nat → LamSort) →
+  (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal) →
+  (wfArg : LamWF lval.lamVarTy ⟨lctxTy, LamTerm.bvarLifts arg idx, argTy⟩) →
+  (wfBody : LamWF lval.lamVarTy ⟨pushLCtxAt lctxTy argTy idx, body, bodyTy⟩) →
+  let wfSubst := LamWF.subst lval.lamVarTy idx arg argTy body bodyTy lctxTy wfArg wfBody
+  (LamTerm.interp lval (pushLCtxAt lctxTy argTy idx)
+    (pushLCtxAtDep lctxTerm (LamTerm.interp lval lctxTy lctxTerm wfArg) idx) wfBody
+  = LamTerm.interp lval lctxTy lctxTerm wfSubst.snd)
+| lctxTy, lctxTerm, wfArg, .ofAtom n => rfl
+| lctxTy, lctxTerm, wfArg, .ofBVar n => by simp [subst, LamTerm.interp]; sorry
+  -- This seems to be implying that
+  -- 1. We should state a commutativity theorem about `pushLCtxAtDep`
+  -- 1. `Auto.ReifLam.LamWF.subst_bvarAux` should be expressed by `pushLCtxAtDep`
+| lctxTy, lctxTerm, wfArg, .ofLam (argTy:=argTy') bodyTy' (body:=body') H =>
+  sorry
+| lctxTy, lctxTerm, wfArg, .ofApp argTy' HFn HArg =>
+  sorry
 
 end Auto.ReifLam

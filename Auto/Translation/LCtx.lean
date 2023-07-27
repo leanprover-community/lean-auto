@@ -4,7 +4,8 @@ namespace Auto.Translation
 | 0     => x
 | n + 1 => lctx n
 
-@[reducible] def pushLCtxDep {f : Nat → Sort u} (lctx : ∀ n, f n) (x : α) : ∀ n, (pushLCtx f α n)
+@[reducible] def pushLCtxDep {rty : Nat → α} {lctxty : α → Sort u}
+  (lctx : ∀ n, lctxty (rty n)) {xty : α} (x : lctxty xty) : ∀ n, lctxty (pushLCtx rty xty n)
 | 0     => x
 | n + 1 => lctx n
 
@@ -14,6 +15,14 @@ def pushLCtxAt (lctx : Nat → α) (x : α) : (pos : Nat) → Nat → α
   match n with
   | 0 => lctx 0
   | n' + 1 => pushLCtxAt (fun n => lctx (Nat.succ n)) x pos' n'
+
+def pushLCtxAtDep {rty : Nat → α} {lctxty : α → Sort u}
+  (lctx : ∀ n, lctxty (rty n)) {xty : α} (x : lctxty xty) : (pos : Nat) → (n : Nat) → lctxty (pushLCtxAt rty xty pos n)
+| 0 => pushLCtxDep lctx x
+| pos' + 1 => fun n =>
+  match n with
+  | 0 => lctx 0
+  | n' + 1 => pushLCtxAtDep (fun n => lctx (Nat.succ n)) x pos' n'
 
 def popLCtx (lctx : Nat → α) := fun n => lctx (n + 1)
 
