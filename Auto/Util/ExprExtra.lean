@@ -32,14 +32,24 @@ unsafe def elabGetExprAndApply : CommandElab := fun stx =>
 
 syntax (name := lazyReduce) "#lazyReduce" term : command
 
-register_option skipProof : Bool := {
+register_option lazyReduce.skipProof : Bool := {
   defValue := true
   descr    := "Whether to reduce proof when calling #lazyReduce"
 }
 
-register_option skipType : Bool := {
+register_option lazyReduce.skipType : Bool := {
   defValue := true
   descr    := "Whether to reduce type when calling #lazyReduce"
+}
+
+register_option lazyReduce.logInfo : Bool := {
+  defValue := true
+  descr    := "Whether to print result of #reduce"
+}
+
+register_option lazyReduce.printTime : Bool := {
+  defValue := false
+  descr    := "Whether to print result of #reduce"
 }
 
 open Meta in
@@ -49,12 +59,18 @@ open Meta in
     Term.synthesizeSyntheticMVarsNoPostponing
     let e ← Term.levelMVarToParam (← instantiateMVars e)
     let opts ← getOptions
-    let skipProof? := skipProof.get opts
-    let skipType? := skipType.get opts
+    let skipProof? := lazyReduce.skipProof.get opts
+    let skipType? := lazyReduce.skipType.get opts
+    let logInfo? := lazyReduce.logInfo.get opts
+    let printTime? := lazyReduce.printTime.get opts
+    let startTime ← IO.monoMsNow
     -- TODO: add options or notation for setting the following parameters
     withTheReader Core.Context (fun ctx => { ctx with options := ctx.options.setBool `smartUnfolding false }) do
       let e ← withTransparency (mode := TransparencyMode.all) <| reduce e (skipProofs := skipProof?) (skipTypes := skipType?)
-      logInfoAt tk e
+      if logInfo? then
+        logInfoAt tk e
+      if printTime? then
+        IO.println s!"{(← IO.monoMsNow) - startTime} ms"
   | _ => throwUnsupportedSyntax
     
 end Auto.Util

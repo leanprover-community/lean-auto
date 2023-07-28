@@ -41,11 +41,16 @@ def LamBaseSort.beq : LamBaseSort → LamBaseSort → Bool
 | .bv n, .bv m => n == m
 | _,     _     => false
 
+-- A version of `Nat.beq_refl` that reduces to `Eq.refl`
+private def Nat.beq_refl' : (a : Nat) → (a.beq a) = true
+| 0 => rfl
+| n + 1 => Nat.beq_refl' n
+
 def LamBaseSort.beq_refl : (b : LamBaseSort) → (b.beq b) = true
 | .prop => rfl
 | .nat  => rfl
 | .real => rfl
-| .bv n => Nat.beq_refl n
+| .bv n => Nat.beq_refl' n
 
 def LamBaseSort.beq_eq (b₁ b₂ : LamBaseSort) : b₁.beq b₂ → b₁ = b₂ :=
   match b₁, b₂ with
@@ -99,7 +104,7 @@ def LamSort.beq : LamSort → LamSort → Bool
 | _,           _           => false
 
 def LamSort.beq_refl : (a : LamSort) → (a.beq a) = true
-| .atom m => Nat.beq_refl m
+| .atom m => Nat.beq_refl' m
 | .base b => LamBaseSort.beq_refl b
 | .func m₁ n₁ => by rw [beq]; rw [LamSort.beq_refl m₁]; rw [LamSort.beq_refl n₁]; rfl
 
@@ -108,11 +113,15 @@ def LamSort.beq_eq (a b : LamSort) : (a.beq b = true) → a = b :=
   | .atom m,     .atom n     => fun H => Nat.eq_of_beq_eq_true H ▸ rfl
   | .base m,     .base n     => fun H => LamBaseSort.beq_eq _ _ H ▸ rfl
   | .func m₁ n₁, .func m₂ n₂ => fun H => by
-    simp [beq] at H; cases H;
-    case intro left right =>
-      let meq : m₁ = m₂ := LamSort.beq_eq m₁ m₂ left ▸ rfl
-      let neq : n₁ = n₂ := LamSort.beq_eq n₁ n₂ right ▸ rfl
-      rw [meq, neq]
+    unfold beq at H; revert H;
+    match h₁ : beq m₁ m₂, h₂ : beq n₁ n₂ with
+    | true,  true  =>
+      intro _;
+      let eq₁ := LamSort.beq_eq _ _ h₁
+      let eq₂ := LamSort.beq_eq _ _ h₂
+      rw [eq₁, eq₂]
+    | true,  false => intro H; cases H
+    | false, _     => intro H; cases H
   | .atom m,     .base n     => fun H => by cases H
   | .atom m,     .func m₁ n₁ => fun H => by cases H
   | .base m,     .atom n     => fun H => by cases H
@@ -350,7 +359,9 @@ def LamTerm.check (lamVarTy : Nat → LamSort) : (Nat → LamSort) → LamTerm �
 | lctx, .app fn arg =>
   match fn.check lamVarTy lctx, arg.check lamVarTy lctx with
   | .some (.func ty₁ ty₂), .some argTy =>
-    if ty₁.beq argTy then .some ty₂ else none
+    match ty₁.beq argTy with
+    | true => .some ty₂ 
+    | false => none
   | _, _ => .none
 
 -- Judgement. `lamVarTy, lctx ⊢ term : type?`
@@ -388,10 +399,13 @@ def LamWF.reprPrec (wf : LamWF f judge) (n : Nat) (lctxDep : Nat) :=
   let rec formatLCtxAux prec : (lctx : List LamSort) → Lean.Format
     | .nil => f!""
     | .cons a as => ", " ++ a.reprPrec prec ++ formatLCtxAux prec as
+  let pre := "fun n => "
+  let trail := ".getD n (.atom 0)"
   let formatLCtx prec (lctx : Nat → LamSort) : (lctxDep : Nat) → Lean.Format
-    | 0 => f!"[]"
-    | n + 1 => f!"[" ++ (lctx 0).reprPrec prec ++
-               formatLCtxAux prec ((List.range n).map (fun i => lctx (i + 1))) ++ f!"]"
+    | 0 => pre ++ f!"[]" ++ trail
+    | n + 1 => pre ++ f!"[" ++ (lctx 0).reprPrec prec ++
+               formatLCtxAux prec ((List.range n).map (fun i => lctx (i + 1))) ++ f!"]" ++
+               trail
   match wf with
   | @LamWF.ofAtom _ lctx m =>
     if n == 0 then
@@ -541,27 +555,28 @@ def LamTerm.lamWF_of_check {lamVarTy : Nat → LamSort} :
   {lctx : Nat → LamSort} → {t : LamTerm} → {ty : LamSort} →
   t.check lamVarTy lctx = .some ty → LamWF lamVarTy ⟨lctx, t, ty⟩
 | lctx, .atom n, ty, HCheck => by
-  simp [check] at HCheck; rw [← HCheck]; apply LamWF.ofAtom
+  have HCheck' := Option.some.inj HCheck
+  rw [← HCheck']; apply LamWF.ofAtom
 | lctx, .base b, ty, HCheck => by
   simp [check] at HCheck; exact LamWF.ofBase (LamBaseTerm.wf_of_Check HCheck)
 | lctx, .bvar n, ty, HCheck => by
   simp [check] at HCheck; rw [← HCheck]; apply LamWF.ofBVar
 | lctx, .lam argTy body, ty, HCheck => by
-  simp [check] at HCheck; revert HCheck
+  dsimp [check] at HCheck; revert HCheck
   cases CheckEq : check lamVarTy (pushLCtx lctx argTy) body
   case none => intro contra; cases contra
   case some bodyTy =>
-    simp; intro tyEq; rw [← tyEq]
+    dsimp; intro tyEq; rw [← Option.some.inj tyEq]
     apply LamWF.ofLam; apply (LamTerm.lamWF_of_check CheckEq)
 | lctx, .app fn arg, ty, HCheck => by
   simp [check] at HCheck; revert HCheck
   match CheckFnEq : check lamVarTy lctx fn, CheckArgEq : check lamVarTy lctx arg with
   | .some (LamSort.func ty₁ ty₂), .some argTy =>
-    simp;
+    dsimp;
     cases heq : LamSort.beq ty₁ argTy
     case false => intro contra; cases contra
     case true =>
-      simp; intro H; rw [← H]; apply LamWF.ofApp (argTy:=ty₁);
+      dsimp; intro H; rw [← Option.some.inj H]; apply LamWF.ofApp (argTy:=ty₁);
       case HFn => apply (LamTerm.lamWF_of_check CheckFnEq)
       case HArg =>
         have heq' : ty₁ = argTy := LamSort.beq_eq _ _ heq
@@ -572,12 +587,33 @@ def LamTerm.lamWF_of_check {lamVarTy : Nat → LamSort} :
   | .some (LamSort.base _), _ => intro contra; cases contra
   | .none, _ => intro contra; cases contra
 
---#eval @LamTerm.wf_of_check
---  (lamVarTy := fun n => if n == 0 then .atom 2 else .func (.atom 2) (.atom 1))
---  (lctx := [])
---  (t := .lam (.atom 0) (.app (.atom 1) (.atom 0)))
---  (ty := .func (.atom 0) (.atom 1))
---  rfl
+-- #reduce @LamTerm.lamWF_of_check
+--   (lamVarTy := fun n => .atom 0)
+--   (lctx := fun _ => .atom 0)
+--   (t := .atom 0)
+--   (ty := .atom 0)
+--   rfl
+-- 
+-- #reduce @LamTerm.lamWF_of_check
+--   (lamVarTy := fun n => if n == 0 then .func (.atom 0) (.atom 0) else .atom 0)
+--   (lctx := fun _ => .atom 0)
+--   (t := .app (.atom 0) (.atom 1))
+--   (ty := .atom 0)
+--   rfl
+-- 
+-- #reduce @LamTerm.lamWF_of_check
+--   (lamVarTy := fun n => if n == 0 then .atom 2 else .func (.atom 2) (.atom 1))
+--   (lctx := fun _ => .atom 0)
+--   (t := .lam (.atom 0) (.app (.atom 1) (.atom 0)))
+--   (ty := .func (.atom 0) (.atom 1))
+--   rfl
+-- 
+-- #eval @LamTerm.lamWF_of_check
+--   (lamVarTy := fun n => if n == 0 then .atom 2 else .func (.atom 2) (.atom 1))
+--   (lctx := fun _ => .atom 0)
+--   (t := .lam (.atom 0) (.app (.atom 1) (.atom 0)))
+--   (ty := .func (.atom 0) (.atom 1))
+--   rfl
 
 structure LamValuation.{u} where
   lamVarTy  : Nat → LamSort
