@@ -55,6 +55,7 @@ register_option lazyReduce.printTime : Bool := {
 open Meta in
 @[command_elab Auto.Util.lazyReduce] def elabLazyReduce : CommandElab
   | `(#lazyReduce%$tk $term) => withoutModifyingEnv <| runTermElabM fun _ => Term.withDeclName `_reduce do
+    let startTime ← IO.monoMsNow
     let e ← Term.elabTerm term none
     Term.synthesizeSyntheticMVarsNoPostponing
     let e ← Term.levelMVarToParam (← instantiateMVars e)
@@ -63,7 +64,6 @@ open Meta in
     let skipType? := lazyReduce.skipType.get opts
     let logInfo? := lazyReduce.logInfo.get opts
     let printTime? := lazyReduce.printTime.get opts
-    let startTime ← IO.monoMsNow
     -- TODO: add options or notation for setting the following parameters
     withTheReader Core.Context (fun ctx => { ctx with options := ctx.options.setBool `smartUnfolding false }) do
       let e ← withTransparency (mode := TransparencyMode.all) <| reduce e (skipProofs := skipProof?) (skipTypes := skipType?)
