@@ -732,21 +732,21 @@ def LamTerm.wf_of_lamWF.{u} (lval : LamValuation.{u}) :
 
 section Example
   
-  def Nat.succLift.{u} (x : GLift.{1, u} Nat) :=
+  private def Nat.succLift.{u} (x : GLift.{1, u} Nat) :=
     GLift.up (Nat.succ x.down)
 
   -- Original: fun (x : Nat) => Nat.succ x
   -- Lifting to: fun (x : GLift Nat) => Nat.succLift x
-  def interpEx₁.{u} : Judgement.{u} :=
+  private def interpEx₁.{u} : Judgement.{u} :=
     ⟨fun _ => Sort u, fun _ => PUnit, .lam (.atom 0) (.app (.atom 0) (.bvar 0)),
      GLift.{1, u} Nat → GLift.{1, u} Nat, fun (x : GLift Nat) => Nat.succLift x⟩
   
-  def valuation₁.{u} : Valuation.{u} :=
+  private def valuation₁.{u} : Valuation.{u} :=
     ⟨fun _ => GLift Nat,
      fun _ => GLift.{1, u} Nat → GLift.{1, u} Nat,
      fun _ => Nat.succLift⟩
 
-  def wf₁.{u} : WF valuation₁.{u} interpEx₁.{u} := by
+  private def wf₁.{u} : WF valuation₁.{u} interpEx₁.{u} := by
     apply WF.ofLam
     intro t
     apply WF.ofApp
@@ -757,14 +757,14 @@ section Example
 
   -- Original: Nat.add 2 3
   -- Lifting to: GLift.up (Nat.add 2 3)
-  def Nat.addLift.{u} (x y : GLift.{1, u} Nat) :=
+  private def Nat.addLift.{u} (x y : GLift.{1, u} Nat) :=
     GLift.up (Nat.add (GLift.down x) (GLift.down y))
 
-  def interpEx₂.{u} : Judgement.{u} :=
+  private def interpEx₂.{u} : Judgement.{u} :=
     ⟨fun _ => Sort u, fun _ => PUnit, .app (.app (.atom 0) (.atom 1)) (.atom 2),
       GLift.{1, u} Nat, GLift.up (Nat.add 2 3)⟩
 
-  def valuation₂.{u} : Valuation.{u} :=
+  private def valuation₂.{u} : Valuation.{u} :=
     ⟨fun _ => GLift Nat,
      fun n => [GLift.{1, u} Nat → GLift.{1, u} Nat → GLift.{1, u} Nat,
                GLift.{1, u} Nat, GLift.{1, u} Nat].getD n (GLift.{1, u} Nat),
@@ -775,7 +775,7 @@ section Example
        | 2 => GLift.up 3
        | _ + 3 => GLift.up 0⟩
   
-  def wf₂.{u} : WF valuation₂.{u} interpEx₂.{u} := by
+  private def wf₂.{u} : WF valuation₂.{u} interpEx₂.{u} := by
     apply WF.ofApp (fn := Nat.addLift (GLift.up 2))
     case Hfn =>
       apply WF.ofApp <;> apply WF.ofAtom
@@ -786,10 +786,10 @@ section Example
   -- Lifting to: GLift.up (@Eq Nat 2 3)
   -- **Note**: Sometimes we might want to lift to universe `u + 1`
   --   to avoid universe level issues.
-  def interpEx₃.{u} : Judgement.{u + 1} :=
+  private def interpEx₃.{u} : Judgement.{u + 1} :=
     ⟨fun _ => Type u, fun _ => Sort u, .app (.app (.atom 0) (.atom 1)) (.atom 2), Type u, GLift (2 = 3)⟩
   
-  def valuation₃.{u} : Valuation.{u + 1} :=
+  private def valuation₃.{u} : Valuation.{u + 1} :=
     ⟨fun _ => GLift Nat,
     fun n => [GLift.{1, u + 1} Nat → GLift.{1, u + 1} Nat → Type u,
               GLift.{1, u + 1} Nat,
@@ -801,7 +801,7 @@ section Example
       | 2 => GLift.up 3
       | _ + 3 => GLift.up 0⟩
 
-  def wf₃.{u} : WF valuation₃.{u} interpEx₃.{u} := by
+  private def wf₃.{u} : WF valuation₃.{u} interpEx₃.{u} := by
     apply WF.ofApp (fn := @EqLiftTy.{1, u + 1, u} Nat (GLift.up 2))
     case Hfn =>
       apply WF.ofApp <;> apply WF.ofAtom
