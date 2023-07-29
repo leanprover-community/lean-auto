@@ -6,11 +6,11 @@ namespace Auto
 axiom f : ∀ (α : Type) (β : α → Type) (x : α), β x
 
 noncomputable def f.Lift.{u} := fun
-  (α : GLift.{2, u + 1} Type) (β : GLift (α.down) → Type) (x : GLift (α.down)) =>
-  f α.down (fun x => β (GLift.up x)) x.down
+  (α : GLift.{2, u + 1} Type) (β : GLift (α.down) → GLift.{2, u + 1} Type) (x : GLift (α.down)) =>
+  f α.down (fun x => (β (GLift.up x)).down) x.down
 
 noncomputable def f.Lift.check.{u} := fun (α : Type) (β : α → Type) (x : α) =>
-  f.Lift.{u} (GLift.up α) (fun x => GLift (β x.down)) (GLift.up x)
+  f.Lift.{u} (GLift.up α) (fun x => GLift.up (β x.down)) (GLift.up x)
 
 #reduce f.Lift.check
 
@@ -28,8 +28,8 @@ def Nat.succ.Lift.{u} := fun (n : GLift.{1, u} Nat) => GLift.up.{1, u} (Nat.succ
 
 noncomputable def Nat.rec.Lift.{u, v} := fun
   (motive' : GLift.{1, max u v + 1} Nat → GLift.{u + 1, max u v + 1} (Sort u))
-  (H₀' : GLift (motive' (GLift.up Nat.zero)).down)
-  (Hsucc' : ∀ (n : GLift Nat), GLift (motive' n).down → GLift (motive' (Nat.succ.Lift n)).down)
+  (H₀' : GLift.{u, max u v + 1} (motive' (GLift.up Nat.zero)).down)
+  (Hsucc' : ∀ (n : GLift Nat), GLift.{u, max u v + 1} (motive' n).down → GLift.{u, max u v + 1} (motive' (Nat.succ.Lift n)).down)
   (t' : GLift.{1, max u v + 1} Nat) =>
   @Nat.rec.{u}
     (motive:=fun n => (motive' (GLift.up n)).down)

@@ -13,11 +13,14 @@ def EqLiftTy {α : Sort u} (a b : GLift.{u, v} α) : Type w :=
 def Eq.reflLift.{u, v} {α : Sort u} (a : GLift.{u, v} α) : GLift (a.down = a.down) :=
   @GLift.up.{0, v} (a.down = a.down) (Eq.refl a.down)
 
-def ForallLift {α : Sort u} (p : α → GLift.{1, v} Prop) : GLift.{1, w} Prop :=
-  GLift.up (∀ (x : α), (p x).down)
+def LiftTyConv.{u, v} (tyUp : GLift.{u + 1, v} (Sort u)) :=
+  GLift.{u, v} (GLift.down.{u + 1, v} tyUp)
 
-def ExistsLift {α : Sort u} (p : α → GLift.{1, v} Prop) : GLift.{1, v} Prop :=
-  GLift.up (∃ (x : α), (p x).down)
+def ForallLift {α : Sort u} (p : GLift.{u, v} α → GLift.{w + 1, v} (Sort w)) :=
+  GLift.up.{_, v} (∀ (x : GLift.{u, v} α), GLift.down (p x))
+
+def ExistsLift {α : Sort u} (p : GLift.{u, v} α → GLift.{1, v} Prop) :=
+  GLift.up.{_, v} (∃ (x : GLift.{u, v} α), GLift.down (p x))
 
 section
 
