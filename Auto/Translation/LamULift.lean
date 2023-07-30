@@ -5,52 +5,56 @@ import Auto.Util.ExprExtra
 import Auto.Util.MonadUtils
 open Lean
 
--- ULift for simply typed lambda calculus
--- (1) For functions `f` used in user-provided facts, call
---     `cstULift` to obtain a lifted version of `f` where
---     all the arguments are lifted versions of the original
---     argument
--- (2) For user-provided fact `proof : ty`, we **assume**
---     that all the `∀` has been turned into free variables,
---     where the free variable corresponds to a monomorphized
---     instance of the polymorphic `forallF` function.
---     We call `exprULift` on `ty` to obtain an expression
---     `ty'` that is definitionally equal to `GLift.up ty`,
---    but only contains lifted counterparts of the original
---    constants in `ty`
+/-
+  ULift for simply typed lambda calculus
+  (1) For functions `f` used in user-provided facts, call
+      `cstULift` to obtain a lifted version of `f` where
+      all the arguments are lifted versions of the original
+      argument
+  (2) For user-provided fact `proof : ty`, we **assume**
+      that all the `∀` has been turned into free variables,
+      where the free variable corresponds to a monomorphized
+      instance of the polymorphic `forallF` function.
+      We call `exprULift` on `ty` to obtain an expression
+      `ty'` that is definitionally equal to `GLift.up ty`,
+     but only contains lifted counterparts of the original
+     constants in `ty`
+-/
 
-namespace Auto.ULift
+namespace Auto.LamULift
 
--- For an expression `e`, we denote its lifted version as `e↑`. For the
---   following discussion, we assume that we want to lift everything
---   to universe level `u`.
--- `cstULiftPos u e ty`:
---   Given a type `ty` an expression `e : ty`, return
---   (1) `e↑`
---   (2) The type of `e↑`, i.e. `ty×`
--- `cstULiftNeg u e↑ ty`:
---   Given a type `ty` and an expression `e↑` where `e↑ : ty×`, return
---   (1) `(e↑)↓`
---   (2) The type of `e↑`, i.e. `ty×`.
---   Note that the type of `e↑` is unknown when we call `cstULiftNeg`
---   because there will be a free variable of unknown type acting
---   as a hole inside `e↑`. This also explains why we need to
---   return `ty×`.
--- Note that `ULift` proceeds by structural recursion on
---   `ty`, not on `e`.
+/-
+  For an expression `e`, we denote its lifted version as `e↑`. For the
+    following discussion, we assume that we want to lift everything
+    to universe level `u`.
+  `cstULiftPos u e ty`:
+    Given a type `ty` an expression `e : ty`, return
+    (1) `e↑`
+    (2) The type of `e↑`, i.e. `ty×`
+  `cstULiftNeg u e↑ ty`:
+    Given a type `ty` and an expression `e↑` where `e↑ : ty×`, return
+    (1) `(e↑)↓`
+    (2) The type of `e↑`, i.e. `ty×`.
+    Note that the type of `e↑` is unknown when we call `cstULiftNeg`
+    because there will be a free variable of unknown type acting
+    as a hole inside `e↑`. This also explains why we need to
+    return `ty×`.
+  Note that `ULift` proceeds by structural recursion on
+    `ty`, not on `e`.
 
--- **Usage:** `cstULift` can be used to calculate ULift-ed version
---   of expressions. However, un-lifted constants and free variables
---   may still occur in the `ty×` returned by `cstULift`. So we'll
---   have to use another function `exprULift`, which will be described
---   below
--- Suppose we have a constant/free variable `A`. To calculate the
---   ULift-ed version of `A` (denoted as `A↑`),
---   (1) Compute the type of `A` (denoted as `ty`), instantiate
---       metavariables in `ty` and β-reduce & ζ-reduce it to obtain `ty*`.
---   (2) Let `u` be the universe level you want to lift to.
---       Call `let A↑ ← cstULiftPos u A ty` to obtain the ULift-ed
---       version of `A`
+  **Usage:** `cstULift` can be used to calculate ULift-ed version
+    of expressions. However, un-lifted constants and free variables
+    may still occur in the `ty×` returned by `cstULift`. So we'll
+    have to use another function `exprULift`, which will be described
+    below
+  Suppose we have a constant/free variable `A`. To calculate the
+    ULift-ed version of `A` (denoted as `A↑`),
+    (1) Compute the type of `A` (denoted as `ty`), instantiate
+        metavariables in `ty` and β-reduce & ζ-reduce it to obtain `ty*`.
+    (2) Let `u` be the universe level you want to lift to.
+        Call `let A↑ ← cstULiftPos u A ty` to obtain the ULift-ed
+        version of `A`
+-/
 
 mutual
   -- In the return type, the first `Expr` is `e↑`, and the second `Expr` is
@@ -200,7 +204,7 @@ section TestcstULift
   #getExprAndApply [f₅ | ulift]
   #check fun (a : (GLift.{1, tmp} Nat → GLift.{1, tmp} Nat) → GLift.{1, tmp} Nat) =>
   GLift.up.{1, tmp}
-    (Auto.ULift.f₅ fun (a_1 : Nat → Nat) =>
+    (Auto.LamULift.f₅ fun (a_1 : Nat → Nat) =>
       GLift.down.{1, tmp} (a fun (a : GLift.{1, tmp} Nat) => GLift.up.{1, tmp} (a_1 (GLift.down.{1, tmp} a))))
 
   set_option pp.explicit true in
@@ -233,7 +237,7 @@ section TestcstULift
       (f : GLift.{1, tmp} Nat → GLift.{1, tmp} Nat) →
         GLift.{1, tmp} (GLift.down.{2, tmp} (α (f (GLift.up.{1, tmp} 0))))) =>
   GLift.up.{1, tmp}
-    (Auto.ULift.f₆ (fun (a : Nat) => GLift.down.{2, tmp} (α (GLift.up.{1, tmp} a))) fun (f : Nat → Nat) =>
+    (Auto.LamULift.f₆ (fun (a : Nat) => GLift.down.{2, tmp} (α (GLift.up.{1, tmp} a))) fun (f : Nat → Nat) =>
       GLift.down.{1, tmp} (β fun (a : GLift.{1, tmp} Nat) => GLift.up.{1, tmp} (f (GLift.down.{1, tmp} a))))
 
 end TestcstULift
@@ -246,57 +250,62 @@ noncomputable def A_Constant.Lift.{u} := fun
   (α : GLift.{2, u + 1} Type) (β : GLift (α.down)) (x : GLift (α.down)) (y : GLift Nat) =>
   A_Constant α.down β.down x.down y.down
 
--- Now, we want to implement a function `exprULift` which lifts an expressions
---   `e` to `GLift.up e`, such that all the constants occurring in `e↑` are [lifted 
---   counterparts of constants in `e`]. To do this, the function requires that
---   all the constants in `e` has already had their lifted counterparts calculated.
--- Before we implement this function, let's first look at what we'll obtain
---   when we lift the following `example₁` (It's definitionally equal to
---   `A_Constant`, but we were applying const-lift to `A_Constant`. Now that
---   `A_Constant` is const-lifted, we'll apply expr-lift to `example₁`)
+/-
+  Now, we want to implement a function `exprULift` which lifts an expressions
+    `e` to `GLift.up e`, such that all the constants occurring in `e↑` are [lifted 
+    counterparts of constants in `e`]. To do this, the function requires that
+    all the constants in `e` has already had their lifted counterparts calculated.
+  Before we implement this function, let's first look at what we'll obtain
+    when we lift the following `example₁` (It's definitionally equal to
+    `A_Constant`, but we were applying const-lift to `A_Constant`. Now that
+    `A_Constant` is const-lifted, we'll apply expr-lift to `example₁`)
+-/
+
 private noncomputable def example₁ :=
   fun (α : Type) (β : α) (x : α) (y : Nat) => A_Constant α β x y
 -- What we'll get is
 noncomputable def example₁.Lift.{u} := fun
   (α : GLift.{2, u + 1} Type) (β : GLift (α.down)) (x : GLift (α.down)) (y : GLift Nat) =>
     A_Constant.Lift α β x y
--- We observe a dicrepency here: While binder `(y : Nat)` is lifted to `(y : GLift Nat)`,
---   the binder `(β : α)` is lifted to `(β : GLift (α.down))`. In fact,
---   this discrepency can be resolved by viewing `GLift Nat` as `GLift (GLift.up Nat).down`
--- Now, it's easy to see that to Ulift an expression `e`, we only need to proceed by
---   these three steps:
---   (1) Replace all the atomic expressions (constants/fvars/mvars/sorts/nat lits/string lits)
---       in `e` with their lifted counterparts to obtain `e₁`
---   (2) For all binder `(x : ty)` occuring in `e₁`, replace it with `(x : GLift ty.down)`
---
--- Now, we describe the procedure `withProcessedFact` that processes a user-provided fact `proof : ty`
---   (1) Collect all atomic expressions that depends on `proof`. Call `withProcessedAtomic` on all of
---       them
---   (2) **Call `exprULift` on `ty`. Since `ty` is always rigid, we obtain an**
---       **expression `gLiftTy` definitionally equal to (GLift.up ty)**
---   (3) Note that `ty` is definitionally equal to `GLift.down gLiftTy`, and
---       `p : typ` is already within the local context. So, we don't need to
---       introduce any binders
--- We call `withProcessedFact` on each user-provided fact to process all user-provided facts.
---
--- The procedure `withProcessedAtomic` works as follows:
---   (1) We keep a map which maps atomic expressions to their lifted couonterpart's `fvarId`.
---       The lifted-counterparts are stored as `let`-declarations in the local context
---   (2) Suppose we're processing an atomic expression `p : typ`, we proceed in three steps
---       (i)  Collect all the atomic expressions that `p` depends on
---         Note: `p` depends on an atomic expression `c` iff either `c` occurs in `p`, or
---           a (constant/fvar/mvar) occurring in `p` depends on `c` (this is a recursive
---           definition)
---       (ii) For all the unprocessed ones in the collected atomic expressions,
---         process them. **Note that the same constant with different universe levels are**
---         **considered different**
---       (iii) If `p : typ` is not a user-provided fact, then `p` is intended to be used
---         as a function in some user-provided fact. In this case, we
---          (*) Call `typeULift` on `typ` to obtain `typ↑`
---          (*) If `p` is a let-declaration, call `exprULift` on the body of the
---              let decaration to obtain `body↑`. Otherwise, call `cstULift` on `p` to
---              obtain `body↑`
---          (*) Introduce a let binder `let fvarp↑ : ty↑ := body↑` into the local context
+/-
+  We observe a dicrepency here: While binder `(y : Nat)` is lifted to `(y : GLift Nat)`,
+    the binder `(β : α)` is lifted to `(β : GLift (α.down))`. In fact,
+    this discrepency can be resolved by viewing `GLift Nat` as `GLift (GLift.up Nat).down`
+  Now, it's easy to see that to Ulift an expression `e`, we only need to proceed by
+    these three steps:
+    (1) Replace all the atomic expressions (constants/fvars/mvars/sorts/nat lits/string lits)
+        in `e` with their lifted counterparts to obtain `e₁`
+    (2) For all binder `(x : ty)` occuring in `e₁`, replace it with `(x : GLift ty.down)`
+
+  Now, we describe the procedure `withProcessedFact` that processes a user-provided fact `proof : ty`
+    (1) Collect all atomic expressions that depends on `proof`. Call `withProcessedAtomic` on all of
+        them
+    (2) **Call `exprULift` on `ty`. Since `ty` is always rigid, we obtain an**
+        **expression `gLiftTy` definitionally equal to (GLift.up ty)**
+    (3) Note that `ty` is definitionally equal to `GLift.down gLiftTy`, and
+        `p : typ` is already within the local context. So, we don't need to
+        introduce any binders
+  We call `withProcessedFact` on each user-provided fact to process all user-provided facts.
+
+  The procedure `withProcessedAtomic` works as follows:
+    (1) We keep a map which maps atomic expressions to their lifted couonterpart's `fvarId`.
+        The lifted-counterparts are stored as `let`-declarations in the local context
+    (2) Suppose we're processing an atomic expression `p : typ`, we proceed in three steps
+        (i)  Collect all the atomic expressions that `p` depends on
+          Note: `p` depends on an atomic expression `c` iff either `c` occurs in `p`, or
+            a (constant/fvar/mvar) occurring in `p` depends on `c` (this is a recursive
+            definition)
+        (ii) For all the unprocessed ones in the collected atomic expressions,
+          process them. **Note that the same constant with different universe levels are**
+          **considered different**
+        (iii) If `p : typ` is not a user-provided fact, then `p` is intended to be used
+          as a function in some user-provided fact. In this case, we
+           (*) Call `typeULift` on `typ` to obtain `typ↑`
+           (*) If `p` is a let-declaration, call `exprULift` on the body of the
+               let decaration to obtain `body↑`. Otherwise, call `cstULift` on `p` to
+               obtain `body↑`
+           (*) Introduce a let binder `let fvarp↑ : ty↑ := body↑` into the local context
+-/
 
 -- Maps atomic expressions described above to their lifted counterpart
 structure Context where
@@ -514,4 +523,4 @@ private def withProcessedFactsImp (u : Level) (cont : Array ProcessedFact → UL
 def withProcessedFacts [Monad n] [MonadControlT ULiftM n] (u : Level) (cont : Array ProcessedFact → n α) : n α :=
   map1ULiftM (withProcessedFactsImp u) cont
 
-end Auto.ULift
+end Auto.LamULift
