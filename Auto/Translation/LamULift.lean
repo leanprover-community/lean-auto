@@ -1,6 +1,6 @@
 import Lean
 import Auto.Translation.Lift
-import Auto.Translation.FrontM
+import Auto.Translation.TFrontM
 import Auto.Util.ExprExtra
 import Auto.Util.MonadUtils
 open Lean
@@ -308,15 +308,17 @@ noncomputable def example₁.Lift.{u} := fun
 -/
 
 -- Maps atomic expressions described above to their lifted counterpart
-structure Context where
+structure State where
   -- Maps constant name `c` to an array of (level, fvarId)
   --   such that `fvarId` is the lifted counterpart of `.const c level`
   constMap : HashMap Name (Array (List Level × FVarId)) := HashMap.empty
   -- Maps fvars and mvars to their lifted counterpart
   varMap : HashMap Expr FVarId                          := HashMap.empty
+  -- Maps *lifted* [interpreted logical constants] into their un-lifted counterparts
+  liftedILogical : HashMap FVarId FVarId                := HashMap.empty
 
-abbrev ULiftM := ReaderT Context Front.FrontM
-#genMonadContext ULiftM
+abbrev ULiftM := StateT State TFront.TFrontM
+#genMonadState ULiftM
 
 @[inline] def mapULiftM [MonadControlT ULiftM m] [Monad m] (f : ∀ {α}, ULiftM α → ULiftM α) {α} (x : m α) : m α :=
   controlAt ULiftM fun runInBase => f <| runInBase x
@@ -327,7 +329,7 @@ abbrev ULiftM := ReaderT Context Front.FrontM
 @[inline] def map2ULiftM [MonadControlT ULiftM m] [Monad m] (f : forall {α}, (β → γ → ULiftM α) → ULiftM α) {α} (k : β → γ → m α) : m α :=
   controlAt ULiftM fun runInBase => f fun b c => runInBase <| k b c
 
-private def withLiftedImp (e : Expr) (eUp : FVarId) (k : ULiftM α) : ULiftM α :=
+def pushLifted (e : Expr) (eUp : FVarId) : ULiftM Unit :=
   match e with
   | .const name lvls => do
     let constMap ← getConstMap
@@ -336,23 +338,25 @@ private def withLiftedImp (e : Expr) (eUp : FVarId) (k : ULiftM α) : ULiftM α 
        | .some arr => arr
        | none => #[])
     let constMap := constMap.insert name (arr.push (lvls, eUp))
-    withReader (fun ctx => {ctx with constMap := constMap}) k
-  | .fvar _ => do
+    setConstMap constMap
+  | .fvar id => do
     let varMap ← getVarMap
-    withReader (fun ctx => {ctx with varMap := varMap}) k
+    setVarMap (varMap.insert e eUp)
+    -- If `e` is also an interpreted logical constant, add it to `liftedILogical`
+    let iL ← TFront.getILogical
+    if iL.contains id then
+      let liftedILogical ← getLiftedILogical
+      setLiftedILogical (liftedILogical.insert eUp id)
   | .mvar _ => do
     let varMap ← getVarMap
-    withReader (fun ctx => {ctx with varMap := varMap}) k
+    setVarMap (varMap.insert e eUp)
   | .lit _ => do
     let varMap ← getVarMap
-    withReader (fun ctx => {ctx with varMap := varMap}) k
+    setVarMap (varMap.insert e eUp)
   | .sort _ => do
     let varMap ← getVarMap
-    withReader (fun ctx => {ctx with varMap := varMap}) k
+    setVarMap (varMap.insert e eUp)
   | _ => throwError "insertLifted :: Unexpected expression {e}"
-
-def withLifted [Monad n] [MonadControlT ULiftM n] (e : Expr) (eUp : FVarId) (k : n α) : n α :=
-  mapULiftM (withLiftedImp e eUp) k
 
 def getLifted? (e : Expr) : ULiftM (Option FVarId) :=
   match e with
@@ -380,7 +384,8 @@ def getLifted? (e : Expr) : ULiftM (Option FVarId) :=
 
 mutual
 
-  -- Lift expression `e` to `e↑` such that `e↑` only contains
+  -- Turn `e` into an expression `e'` definitionally equal
+  --   to `GLift.up e` such that `e'` only contains
   --   lifted counterparts of constants
   partial def exprULift (u : Level) : (e : Expr) → ULiftM Expr
   | .bvar _ => throwError "exprULift :: Loose bound variable"
@@ -401,7 +406,8 @@ mutual
       Meta.mkLambdaFVars #[biUp] bodyUp
   | .forallE name biTy body binfo => do
     if body.hasLooseBVar 0 then
-      throwError "Dependent ∀ should have been turned into `forallLift` during monomorphization"
+      throwError ("Dependent ∀ should have been turned into" ++
+        " free variables representing `forallLift` during monomorphization")
     else
       -- Non-dependent `∀`, using `impLift`
       let biTyUp ← exprULift u biTy
@@ -420,7 +426,7 @@ mutual
       | throwError "exprULift :: Cannot find lifted counterpart of {e}"
     return .fvar eUp
 
-  -- typeULift is used to deal with binders like `(f : ∀ (x₁ x₂ ... xₙ), Ty)`
+  -- If an expression `e : ty`, then `cstULift e : typeULift ty`
   partial def typeULift (u : Level) : (e : Expr) → ULiftM Expr
   | .mdata data e' => return .mdata data (← typeULift u e')
   | .lam .. => throwError "typeULift :: Unexpected error"
@@ -491,9 +497,9 @@ private partial def withProcessedAtomicImp (u : Level) (e : Expr) (cont : ULiftM
       bodyUp := eUp
       let freshId := (← mkFreshId).toString
       Meta.withLetDecl ("_lift_" ++ freshId) eTyUp bodyUp (fun newFVar => do
-        withLifted e newFVar.fvarId! (do
-          Front.pushFVar newFVar.fvarId!
-          cont)
+        pushLifted e newFVar.fvarId!
+        TFront.pushFVar newFVar.fvarId!
+        cont
       )
     )
 
@@ -514,9 +520,9 @@ private def withProcessedFactsAux (u : Level) (proof : Expr) {α : Type}
     cont (arr.push (proof, gLiftTy))
   )
 
--- Note that the facts to be processed are stored in `FrontM.state`
+-- Note that the facts to be processed are stored in `TFrontM.state`
 private def withProcessedFactsImp (u : Level) (cont : Array ProcessedFact → ULiftM α) : ULiftM α := do
-  let facts ← Front.getFacts
+  let facts ← TFront.getFacts
   let cont' := facts.foldl (β:= Array ProcessedFact → ULiftM α) (fun cont' pr => withProcessedFactsAux u pr cont') cont
   cont' #[]
 
