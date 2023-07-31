@@ -110,7 +110,7 @@ def runAuto (stx : TSyntax ``hints) (ngoal : FVarId) : TacticM Result := do
   -- testing
   let types := lemmas.map (fun x => x.type)
   let PState := (← (types.mapM (fun e => do
-      ReifP.addAssertion (ω := Expr) (← D2P e))).run {}).2
+      PReif.addAssertion (ω := Expr) (← D2P e))).run {}).2
   let commands := (← (P2SMT PState).run {}).1
   let _ ← liftM <| commands.mapM (fun c => IO.println s!"Command: {c}")
   Solver.SMT.querySolver commands

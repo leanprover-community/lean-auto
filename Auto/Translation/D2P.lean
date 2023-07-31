@@ -1,7 +1,7 @@
 import Lean
 import Auto.Util.MonadUtils
 import Auto.Util.ExprExtra
-import Auto.Translation.ReifP
+import Auto.Translation.PReif
 
 -- D2P: Dependent type (COC) to Propositional Logic
 
@@ -10,7 +10,7 @@ namespace Auto
 -- Open `D`
 open Lean
 -- Open `P`
-open ReifP
+open PReif
 
 -- Translates an expression of type `Prop`
 partial def D2P (e : Expr) : TransM Expr PropForm := do

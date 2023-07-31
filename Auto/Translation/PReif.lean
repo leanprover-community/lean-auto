@@ -3,7 +3,7 @@ import Auto.Util.MonadUtils
 open Lean
 
 -- Propositional reification terms
-namespace Auto.ReifP
+namespace Auto.PReif
 
 inductive PropForm where
   | atom   : Nat → PropForm
@@ -97,4 +97,4 @@ section
   
 end
 
-end Auto.ReifP
+end Auto.PReif

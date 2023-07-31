@@ -1,9 +1,10 @@
 import Lean
-import Auto.Translation.Lift
+import Auto.Embedding.Lift
 import Auto.Translation.TFrontM
 import Auto.Util.ExprExtra
 import Auto.Util.MonadUtils
 open Lean
+open Auto.Embedding
 
 /-
   ULift for simply typed lambda calculus

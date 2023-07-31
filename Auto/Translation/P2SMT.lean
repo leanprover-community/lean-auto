@@ -1,5 +1,5 @@
 import Lean
-import Auto.Translation.ReifTerms
+import Auto.Translation.PReif
 import Auto.IR.SMT
 open Lean
 
@@ -11,7 +11,7 @@ namespace Auto
 -- Open `SMT`
 open IR.SMT
 
-private def PropForm2STerm : ReifP.PropForm → TransM Nat STerm
+private def PropForm2STerm : PReif.PropForm → TransM Nat STerm
 | .atom n    => do
   if !(← hIn n) then
     let name ← h2Symb n
@@ -36,7 +36,7 @@ section
 
   variable {ω : Type} [BEq ω] [Hashable ω]
 
-  def P2SMT (s : ReifP.State ω) : TransM Nat (Array IR.SMT.Command) := do
+  def P2SMT (s : PReif.State ω) : TransM Nat (Array IR.SMT.Command) := do
     let assertions := s.assertions
     for a in assertions do
       let f ← PropForm2STerm a
