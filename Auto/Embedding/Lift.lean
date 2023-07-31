@@ -1,4 +1,4 @@
-namespace Auto
+namespace Auto.Embedding
 
 structure GLift.{u, v} (α : Sort u) : Sort (max u (v + 1)) where
   /-- Lift a value into `GLift α` -/    up ::
@@ -98,4 +98,4 @@ structure ExistsLift (α : Sort u) where
   down    : ∀ (p : α → GLift.{1, v} Prop), (existsF p).down → (∀ x : α, (p x).down)
   up      : ∀ (p : α → GLift.{1, v} Prop), (∀ x : α, (p x).down) → (existsF p).down
 
-end Auto
+end Auto.Embedding

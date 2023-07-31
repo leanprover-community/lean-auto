@@ -1,7 +1,7 @@
-import Auto.Translation.Lift
+import Auto.Embedding.Lift
 import Std.Data.List.Lemmas
 
-namespace Auto.ReifLam₂
+namespace Auto.Embedding.Lam₂
 
 -- 0 = *
 -- 1 = * -> *
@@ -189,4 +189,4 @@ def Lam₂Type.check_iff_interp
     | .none, _ =>
       simp; cases cifn : interp val lctx fn <;> simp
 
-end Auto.ReifLam₂
+end Auto.Embedding.Lam₂

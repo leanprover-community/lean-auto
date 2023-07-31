@@ -1,4 +1,4 @@
-namespace Auto.Translation
+namespace Auto.Embedding
 
 @[reducible] def pushLCtx (lctx : Nat → α) (x : α) : Nat → α
 | 0     => x
@@ -90,4 +90,4 @@ theorem pushLCtx.comm (f : α → β) (lctx : Nat → α) (x : α) :
   (fun n => f (pushLCtx lctx x n)) = pushLCtx (fun n => f (lctx n)) (f x) := by
   apply funext; intro n; cases n <;> simp
 
-end Auto.Translation
+end Auto.Embedding
