@@ -1,7 +1,7 @@
-import Auto.Translation.ReifLam
+import Auto.Embedding.LamConv
 import Auto.Util.ExprExtra
 
-open Auto.ReifLam
+open Auto.Embedding.Lam
 
 #print LamWF.subst
 
@@ -38,13 +38,15 @@ set_option lazyReduce.logInfo false in
 #lazyReduce manyBinders 3000
 
 def wfManyBinders (narg : Nat) := @LamTerm.lamWF_of_check
-  (lamVarTy := fun n => if n == 0 then manyArgFuncTy narg 0 else .atom 0)
+  (ltv := {(Inhabited.default : LamTyVal) with
+    lamVarTy := fun n => if n == 0 then manyArgFuncTy narg 0 else .atom 0})
   (lctx := fun _ => .atom 0)
   (t := manyBinders narg)
   (ty := manyArgFuncTy narg 0)
 
 def wfManyBinders' (narg : Nat) := LamWF.ofLamTerm
-  (lamVarTy := fun n => if n == 0 then manyArgFuncTy narg 0 else .atom 0)
+  (ltv := {(Inhabited.default : LamTyVal) with
+    lamVarTy := fun n => if n == 0 then manyArgFuncTy narg 0 else .atom 0})
   (lctx := fun _ => .atom 0) (manyBinders narg)
 
 -- **Succeeds in a reasonable amount of time**
@@ -52,7 +54,7 @@ def wfManyBinders' (narg : Nat) := LamWF.ofLamTerm
 set_option lazyReduce.logInfo false in
 set_option lazyReduce.printTime true in
 set_option maxRecDepth 4000 in
-#lazyReduce wfManyBinders' 400
+#lazyReduce wfManyBinders' 200
 
 def wfManyBindersRfl (narg : Nat) H :=
   Option.some ⟨manyArgFuncTy narg 0, wfManyBinders narg H⟩ =

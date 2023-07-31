@@ -204,6 +204,9 @@ structure LamTyVal where
   forallLamVal : Nat → LamSort
   existsLamVal : Nat → LamSort
 
+instance : Inhabited LamTyVal where
+  default := let func := fun _ => .atom 0; ⟨func, func, func, func⟩
+
 def LamBaseTerm.check (ltv : LamTyVal) : LamBaseTerm → LamSort
 | .trueE      => .base .prop
 | .falseE     => .base .prop
@@ -516,13 +519,15 @@ def LamWF.ofLamTerm {ltv : LamTyVal} :
   | _, _ => .none
 
 -- #eval (@LamWF.ofLamTerm
---   (lamVarTy := fun n => if n == 0 then .atom 2 else .func (.atom 2) (.atom 1))
---   (lctx := [])
+--   (ltv := {(Inhabited.default : LamTyVal) with
+--     lamVarTy := fun n => if n == 0 then .atom 2 else .func (.atom 2) (.atom 1)})
+--   (lctx := fun _ => .atom 0)
 --   (t := .lam (.atom 0) (.app (.atom 1) (.atom 0))))
 -- 
 -- #check Auto.Embedding.Lam.LamWF.ofLam
---   (lamVarTy := fun n => if n == 0 then .atom 2 else .func (.atom 2) (.atom 1))
---   (lctx := []) (argTy := (.atom 0)) (bodyTy := (.atom 1)) (body := (.app (.atom 1) (.atom 0))) (.ofApp (lctx := [(.atom 0)]) (argTy := (.atom 2)) (resTy := (.atom 1)) (.ofAtom 1) (.ofAtom 0))
+--   (ltv := {(Inhabited.default : LamTyVal) with
+--     lamVarTy := fun n => if n == 0 then .atom 2 else .func (.atom 2) (.atom 1)})
+--   (lctx := fun _ => .atom 0) (argTy := (.atom 0)) (bodyTy := (.atom 1)) (body := (.app (.atom 1) (.atom 0))) (.ofApp (lctx := _) (argTy := (.atom 2)) (resTy := (.atom 1)) (.ofAtom 1) (.ofAtom 0))
 
 def LamWF.complete_Aux
   {b : β} (p : Bool) (f : (p = true) → β) (eq : p = true) :
@@ -633,33 +638,39 @@ def LamTerm.lamWF_of_check {ltv : LamTyVal} :
   | .some (LamSort.base _), _ => intro contra; cases contra
   | .none, _ => intro contra; cases contra
 
--- #reduce @LamTerm.lamWF_of_check
---   (lamVarTy := fun n => .atom 0)
---   (lctx := fun _ => .atom 0)
---   (t := .atom 0)
---   (ty := .atom 0)
---   rfl
--- 
--- #reduce @LamTerm.lamWF_of_check
---   (lamVarTy := fun n => if n == 0 then .func (.atom 0) (.atom 0) else .atom 0)
---   (lctx := fun _ => .atom 0)
---   (t := .app (.atom 0) (.atom 1))
---   (ty := .atom 0)
---   rfl
--- 
--- #reduce @LamTerm.lamWF_of_check
---   (lamVarTy := fun n => if n == 0 then .atom 2 else .func (.atom 2) (.atom 1))
---   (lctx := fun _ => .atom 0)
---   (t := .lam (.atom 0) (.app (.atom 1) (.atom 0)))
---   (ty := .func (.atom 0) (.atom 1))
---   rfl
--- 
--- #eval @LamTerm.lamWF_of_check
---   (lamVarTy := fun n => if n == 0 then .atom 2 else .func (.atom 2) (.atom 1))
---   (lctx := fun _ => .atom 0)
---   (t := .lam (.atom 0) (.app (.atom 1) (.atom 0)))
---   (ty := .func (.atom 0) (.atom 1))
---   rfl
+
+/-
+#reduce @LamTerm.lamWF_of_check
+  (ltv := {(Inhabited.default : LamTyVal) with lamVarTy := fun n => .atom 0})
+  (lctx := fun _ => .atom 0)
+  (t := .atom 0)
+  (ty := .atom 0)
+  rfl
+
+#reduce @LamTerm.lamWF_of_check
+  (ltv := {(Inhabited.default : LamTyVal) with
+    lamVarTy := fun n => if n == 0 then .func (.atom 0) (.atom 0) else .atom 0})
+  (lctx := fun _ => .atom 0)
+  (t := .app (.atom 0) (.atom 1))
+  (ty := .atom 0)
+  rfl
+
+#reduce @LamTerm.lamWF_of_check
+  (ltv := {(Inhabited.default : LamTyVal) with
+    lamVarTy := fun n => if n == 0 then .atom 2 else .func (.atom 2) (.atom 1)})
+  (lctx := fun _ => .atom 0)
+  (t := .lam (.atom 0) (.app (.atom 1) (.atom 0)))
+  (ty := .func (.atom 0) (.atom 1))
+  rfl
+
+#eval @LamTerm.lamWF_of_check
+  (ltv := {(Inhabited.default : LamTyVal) with
+    lamVarTy := fun n => if n == 0 then .atom 2 else .func (.atom 2) (.atom 1)})
+  (lctx := fun _ => .atom 0)
+  (t := .lam (.atom 0) (.app (.atom 1) (.atom 0)))
+  (ty := .func (.atom 0) (.atom 1))
+  rfl
+-/
 
 structure LamValuation.{u} where
   ilVal     : ILValuation.{u}
