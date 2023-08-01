@@ -23,10 +23,11 @@ structure State where
   -- The first `Expr` is the proof, and the second `Expr` is the fact
   facts           : Array UMonoFact     := #[]
   -- During monomorphization, interpreted constants
-  --   (¬, ∧, ∨, →, ↔, =, ∀, ∃) will be turned into free
-  --   variables representing instances of these
-  --   constants. We have to record these free variables
-  --   so that we know they're interpreted constants during reification.
+  --   (¬, ∧, ∨, →, ↔, =, ∀, ∃, ...), except for `prop,
+  --   will be turned into free variables representing
+  --   (instances of) these constants. We have to record
+  --   these free variables so that we know they're interpreted
+  --   constants during reification.
   interpreted     : HashMap FVarId Expr := HashMap.empty
 
 abbrev ReifM := StateT State MetaM

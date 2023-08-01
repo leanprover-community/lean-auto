@@ -149,8 +149,8 @@ partial def D2P (e : Expr) : ReifM Expr PropForm := do
       | _ => h2Atom e
     else
       h2Atom e
-  | .forallE name biTy body binfo =>
-    if body.hasLooseBVar 0 then
+  | .forallE name biTy body binfo => do
+    if body.hasLooseBVar 0 ∨ !(← Meta.isProp biTy) ∨ !(← Meta.isProp body) then
       h2Atom e
     else
       Meta.withLocalDecl name binfo biTy fun fvar => do

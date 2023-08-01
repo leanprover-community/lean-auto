@@ -328,17 +328,17 @@ structure State where
   -- Maps fvars and mvars to their lifted counterpart
   varMap : HashMap Expr FVarId                          := HashMap.empty
   -- Maps *lifted* [interpreted constants] into their un-lifted counterparts
-  liftedInterped : HashMap FVarId FVarId                := HashMap.empty
+  liftedInterped : HashMap FVarId Expr                  := HashMap.empty
   -- The universe level that all constants lift to. This is computed at
   --   the beginning of `withULiftedFacts`
   u : Level                                             := Level.zero
 
 abbrev ULiftM := ReaderT Context <| StateRefT State Reif.ReifM
 
-@[inline] def ULiftM.run (x : ULiftM α) (ctx : Context := {}) (s : State) :=
+@[inline] def ULiftM.run (x : ULiftM α) (ctx : Context := {}) (s : State := {}) :=
   x ctx |>.run s
 
-@[inline] def ULiftM.run' (x : ULiftM α) (ctx : Context := {}) (s : State) :=
+@[inline] def ULiftM.run' (x : ULiftM α) (ctx : Context := {}) (s : State := {}) :=
   Prod.fst <$> (x ctx |>.run s)
 
 #genMonadState ULiftM
@@ -366,18 +366,22 @@ def pushLifted (e : Expr) (eUp : FVarId) : ULiftM Unit :=
   | .fvar id => do
     let varMap ← getVarMap
     setVarMap (varMap.insert e eUp)
-    -- If `e` is also an interpreted logical constant, add it to `liftedInterped`
+    -- If `e` is also an interpreted constant, add it to `liftedInterped`
     let iL ← Reif.getInterpreted
-    if iL.contains id then
+    if let .some val := iL.find? id then
       let liftedInterped ← getLiftedInterped
-      setLiftedInterped (liftedInterped.insert eUp id)
+      setLiftedInterped (liftedInterped.insert eUp val)
   | .mvar _ => do
     let varMap ← getVarMap
     setVarMap (varMap.insert e eUp)
   | .lit _ => do
     let varMap ← getVarMap
     setVarMap (varMap.insert e eUp)
-  | .sort _ => do
+  | .sort lvl => do
+    -- Add `prop` as interpreted constant
+    if ← Meta.isLevelDefEq lvl .zero then
+      let liftedInterped ← getLiftedInterped
+      setLiftedInterped (liftedInterped.insert eUp (.sort .zero))
     let varMap ← getVarMap
     setVarMap (varMap.insert e eUp)
   | _ => throwError "insertLifted :: Unexpected expression {e}"
@@ -522,17 +526,36 @@ def collectAtomic : (e : Expr) → ULiftM (Array Expr)
 | .proj .. => throwError "collectAtomic :: Please unfold projections before calling me"
 | e => return #[e]
 
+-- `e` should be an atomic expression
 private partial def withProcessedAtomicImp (e : Expr) (cont : ULiftM α) : ULiftM α := do
   -- If `e` is already processed, return
   if let .some _ ← getLifted? e then
     cont
   else
-    let ea ← collectAtomic e
-    -- `c` occurs in `e`
-    let cont' := ea.foldl (β := ULiftM α) (fun cont' a => withProcessedAtomicImp a cont') (do
+    (fun cont' => do
+      if let .fvar id := e then
+        -- Collect atomic expressions within the type of a free variable
+        let ia := (← collectAtomic (← instantiateMVars (← id.getType)))
+        ia.foldl (β := ULiftM α) (fun cont' a => withProcessedAtomicImp a cont') cont'
+      else if e.isMVar ∨ e.isConst then
+        -- Collect atomic expressions within the type of a constant or a metavariable
+        let ia := (← collectAtomic (← instantiateMVars (← Meta.inferType e)))
+        ia.foldl (β := ULiftM α) (fun cont' a => withProcessedAtomicImp a cont') cont'
+      else
+        cont') (do
       let eTy ← Meta.inferType e
-      let eTyUp ← typeULift eTy
-      let (eUp, _) ← cstULiftPos (← getU) e eTy
+      let (eUp, eTyUp) ← cstULiftPos (← getU) e eTy
+      let mut eTyUp : Expr := eTyUp
+      -- If `e` is already `.sort lvl`, then `eTy` is `.sort (lvl + 1)`.
+      --   Since we might have not lifted the term `.sort (lvl + 1)`, we
+      --   should not call `typeULift` on `eTy` (because that will trigger
+      --   `termULift` on `eTy`). However, this problem is very easy to
+      --   solve. We can just use the `eTyUp` returned by `cstULiftPos`
+      --   because in this case it does not contain any constant/fvar/mvar
+      --   that has not been lifted.
+      match (← instantiateMVars e) with
+      | .sort _ => pure ()
+      | _       => eTyUp ← typeULift eTy
       let freshId := (← mkFreshId).toString
       Meta.withLetDecl ("_lift_" ++ freshId) eTyUp eUp (fun newFVar => do
         pushLifted e newFVar.fvarId!
@@ -540,14 +563,6 @@ private partial def withProcessedAtomicImp (e : Expr) (cont : ULiftM α) : ULift
         cont
       )
     )
-    -- The type of some `const/fvar/mvar` in `e` depends on `c`
-    ea.foldl (β := ULiftM α) (fun cont' a => do
-      if let .fvar id := a then
-        withProcessedAtomicImp (← id.getType) cont'
-      else if a.isMVar ∨ a.isConst then
-        withProcessedAtomicImp (← instantiateMVars (← Meta.inferType a)) cont'
-      else
-        cont') cont'
 
 def withProcessedAtomic [Monad n] [MonadControlT ULiftM n] (e : Expr) (cont : n α) : n α :=
   mapULiftM (withProcessedAtomicImp e) cont

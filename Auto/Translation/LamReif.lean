@@ -33,6 +33,9 @@ structure State where
 deriving Inhabited
 
 abbrev ReifM := StateRefT State ULiftM
+
+@[inline] def ReifM.run' (x : ReifM α) (s : State) := Prod.fst <$> x.run s
+
 #genMonadState ReifM
 
 -- Accept a new free variable representing atom or lifted logical constant
@@ -76,8 +79,20 @@ def newTypeFVar (id : FVarId) : ReifM LamSort := do
 
 def processTypeFVar (fid : FVarId) : ReifM LamSort := do
   let tyVarMap ← getTyVarMap
-  match tyVarMap.find? fid with
-  | .some idx => return .atom idx
+  if let .some idx := tyVarMap.find? fid then
+    return .atom idx
+  match (← getLiftedInterped).find? fid with
+  | .some val =>
+    match val with
+    | .sort lvl => do
+      if !(← Meta.isLevelDefEq lvl .zero) then
+        throwError "processTypeFVar :: Unexpected sort {val}"
+      else
+        return .base .prop
+    | .const ``Nat [] => return .base .nat
+    | .const ``Real [] => return .base .real
+    | .app (.const ``Bitvec []) (.lit (.natVal n)) => return .base (.bv n)
+    | _ => throwError "processTypeFVar :: Unexpected interpreted constant {val}"
   | .none     => newTypeFVar fid
 
 mutual
@@ -95,18 +110,13 @@ mutual
       | .forallVar => return .base (.forallE id)
       | .existVar => return .base (.existE id)
     -- If the free variable has not been processed
-    let liftedInterped ← getLiftedInterped
-    match liftedInterped.find? fid with
-    -- A lifted logical constant, lifted from `origFid`
-    | .some origFid => do
-      let .some val := (← Reif.getInterpreted).find? origFid
-        | throwError "processTermFVar :: Cannot find let declaration of interpreted logical constant"
-      let u ← getU
-      -- `α` is the original (un-lifted) type
+    match (← getLiftedInterped).find? fid with
+    | .some val => do
+      -- An interpreted constant, lifted from `val`
       let mut info : FVarType × Level × Expr := Inhabited.default
       match val with
-      | .const ``true [] => return .base .trueE
-      | .const ``false [] => return .base .falseE
+      | .const ``True [] => return .base .trueE
+      | .const ``False [] => return .base .falseE
       | .const ``Not [] => return .base .not
       | .const ``And [] => return .base .and
       | .const ``Or []  => return .base .or
@@ -114,16 +124,18 @@ mutual
       | .const ``Iff [] => return .base .iff
       | .lit (.natVal n) => return .base (.natVal n)
       -- **TODO: Real number, Bit vector**
+      -- `α` is the original (un-lifted) type
       | .app (.const ``Eq [uOrig]) α =>
         info := (FVarType.eqVar, uOrig, α)
       | .app (.const ``Embedding.forallF [uOrig, _]) α =>
         info := (FVarType.forallVar, uOrig, α)
       | .app (.const ``Exists [uOrig]) α =>
         info := (FVarType.existVar, uOrig, α)
-      | _ => throwError "processTermFVar :: Unexpected logical construct {val}"
+      | _ => throwError "processTermFVar :: Unexpected interpreted constant {val}"
       let (fvTy, uOrig, α) := info
       -- Process `=, ∀, ∃`
       -- Make `IsomType`. We choose not to call `termULift` and `typeULift` at this stage
+      let u ← getU
       let (upFunc, upTy) ← Meta.withLocalDeclD `_ α fun down => do
         let (up, upTy) ← cstULiftPos u down (← instantiateMVars α)
         let upFunc ← Meta.mkLambdaFVars #[down] up
@@ -161,10 +173,10 @@ mutual
           #[α, upTy, isomTy]
         setExistVal ((← getExistVal).push existLift)
         newTermFVar .existVar fid s
-    -- A normal free variable, treated as atom
+    -- A normal free variable, treated as an atom
     | .none =>
-      let ty ← fid.getType
-      let lamTy ← reifType ty
+      let tyLift ← fid.getType
+      let lamTy ← reifType tyLift
       newTermFVar .var fid lamTy
 
   partial def reifTerm : Expr → ReifM LamTerm
@@ -185,7 +197,8 @@ mutual
   -- At this point, there should only be non-dependent `∀`s in the type.
   --   Nothing else!
   partial def reifType : Expr → ReifM LamSort
-  | .fvar fid => processTypeFVar fid
+  | .app (.const ``Embedding.liftTyConv _) (.fvar fid) =>
+    processTypeFVar fid
   | .forallE _ ty body _ => do
     if body.hasLooseBVar 0 then
       throwError "reifType :: Dependently typed functions are not supported"

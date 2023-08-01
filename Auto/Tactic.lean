@@ -123,8 +123,13 @@ def runAuto
   let lemmas := lctxLemmas ++ userLemmas
   match instr with
   | .none =>
-    -- Testing. Skipping universe level instantiation
+    -- Testing. Skipping universe level instantiation and monomorphization
     let rs : Reif.State := { facts := lemmas.map (fun x => (x.proof, x.type)) }
+    (((LamReif.uLiftAndReify (fun s => do
+      let assertions := s.assertions
+      for (expr, lterm) in assertions do
+        IO.println s!"Proof: {expr}"
+        IO.println s!"LTerm: {repr lterm}")).run' {}).run').run' rs
     -- testing
     throwError "runAuto :: Not implemented"
   | .p =>
