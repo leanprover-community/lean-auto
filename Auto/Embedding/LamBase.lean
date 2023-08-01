@@ -172,7 +172,7 @@ inductive LamBaseTerm
   | bvVal   : List Bool → LamBaseTerm
   | eq      : Nat → LamBaseTerm -- Polymorphic `eq`
   | forallE : Nat → LamBaseTerm -- Polymorphic `forall`
-  | existE  : Nat → LamBaseTerm -- Polymorphic `exists`
+  | existE  : Nat → LamBaseTerm -- Polymorphic `exist`
 deriving Inhabited, Hashable
 
 def LamBaseTerm.reprPrec (l : LamBaseTerm) (n : Nat) :=
@@ -202,7 +202,7 @@ structure LamTyVal where
   lamVarTy     : Nat → LamSort
   eqLamVal     : Nat → LamSort
   forallLamVal : Nat → LamSort
-  existsLamVal : Nat → LamSort
+  existLamVal : Nat → LamSort
 
 instance : Inhabited LamTyVal where
   default := let func := fun _ => .atom 0; ⟨func, func, func, func⟩
@@ -224,7 +224,7 @@ def LamBaseTerm.check (ltv : LamTyVal) : LamBaseTerm → LamSort
   let s := ltv.forallLamVal n
   .func (.func s (.base .prop)) (.base .prop)
 | .existE n   =>
-  let s := ltv.existsLamVal n
+  let s := ltv.existLamVal n
   .func (.func s (.base .prop)) (.base .prop)
 
 inductive LamBaseTerm.LamWF (ltv : LamTyVal) : LamBaseTerm → LamSort → Type
@@ -239,7 +239,7 @@ inductive LamBaseTerm.LamWF (ltv : LamTyVal) : LamBaseTerm → LamSort → Type
   | ofBvVal ls   : LamWF ltv (.bvVal ls) (.base (.bv ls.length))
   | ofEq n       : LamWF ltv (.eq n) (.func (ltv.eqLamVal n) (.func (ltv.eqLamVal n) (.base .prop)))
   | ofForallE n  : LamWF ltv (.forallE n) (.func (.func (ltv.forallLamVal n) (.base .prop)) (.base .prop))
-  | ofExistE n   : LamWF ltv (.existE n) (.func (.func (ltv.existsLamVal n) (.base .prop)) (.base .prop))
+  | ofExistE n   : LamWF ltv (.existE n) (.func (.func (ltv.existLamVal n) (.base .prop)) (.base .prop))
 
 def LamBaseTerm.LamWF.reprPrec (wf : LamBaseTerm.LamWF ltv s t) (n : Nat) :=
   let s :=
@@ -287,8 +287,8 @@ def LamBaseTerm.wf_of_Check (H : b.check ltv = s) : LamBaseTerm.LamWF ltv b s :=
 structure ILValuation extends LamTyVal where
   tyVal     : Nat → Type u
   eqVal     : ∀ (n : Nat), EqLift.{u + 1, u} ((eqLamVal n).interp tyVal)
-  forallVal : ∀ (n : Nat), ForallLift.{u + 1, 0, u} ((forallLamVal n).interp tyVal)
-  existsVal : ∀ (n : Nat), ExistsLift.{u + 1, u} ((existsLamVal n).interp tyVal)
+  forallVal : ∀ (n : Nat), ForallLift.{u + 1, u, 0, 0} ((forallLamVal n).interp tyVal)
+  existVal : ∀ (n : Nat), ExistLift.{u + 1, u} ((existLamVal n).interp tyVal)
 
 set_option pp.universes true in
 def LamBaseTerm.interp (ilVal : ILValuation.{u}) : (lwf : LamBaseTerm.LamWF ilVal.toLamTyVal b s) → s.interp ilVal.tyVal
@@ -303,7 +303,7 @@ def LamBaseTerm.interp (ilVal : ILValuation.{u}) : (lwf : LamBaseTerm.LamWF ilVa
 | .ofBvVal ls   => GLift.up ⟨ls, rfl⟩
 | .ofEq n       => (ilVal.eqVal n).eqF
 | .ofForallE n  => (ilVal.forallVal n).forallF
-| .ofExistE n   => (ilVal.existsVal n).existsF
+| .ofExistE n   => (ilVal.existVal n).existF
 
 -- Judgement, `rterm ≝ mterm : ty`
 structure LamBaseTerm.Judgement.{u} where
@@ -322,21 +322,21 @@ structure BaseValuation.{u} where
   eqTyVal     : Nat → Type u
   -- Valuation of foralls' sorts
   forallTyVal : Nat → Type u
-  -- Valuation of exists' sorts
-  existsTyVal : Nat → Type u
+  -- Valuation of exist' sorts
+  existTyVal : Nat → Type u
   eqVal       : ∀ (n : Nat), EqLift.{u + 1, u} (eqTyVal n)
-  forallVal   : ∀ (n : Nat), ForallLift.{u + 1, 0, u} (forallTyVal n)
-  existsVal   : ∀ (n : Nat), ExistsLift.{u + 1, u} (existsTyVal n)
+  forallVal   : ∀ (n : Nat), ForallLift.{u + 1, u, 0, 0} (forallTyVal n)
+  existVal   : ∀ (n : Nat), ExistLift.{u + 1, u} (existTyVal n)
 
 def BaseValuation.ofILValuation.{u} : ILValuation.{u} → BaseValuation.{u} :=
-  fun {lamVarTy, eqLamVal, forallLamVal, existsLamVal, tyVal, eqVal, forallVal, existsVal} =>
+  fun {lamVarTy, eqLamVal, forallLamVal, existLamVal, tyVal, eqVal, forallVal, existVal} =>
     ⟨tyVal,
      fun (n : Nat) => (eqLamVal n).interp tyVal,
      fun (n : Nat) => (forallLamVal n).interp tyVal,
-     fun (n : Nat) => (existsLamVal n).interp tyVal,
+     fun (n : Nat) => (existLamVal n).interp tyVal,
      eqVal,
      forallVal,
-     existsVal
+     existVal
     ⟩
 
 inductive LamBaseTerm.WF.{u} (baseVal : BaseValuation.{u}) : LamBaseTerm.Judgement.{u} → Type u
@@ -351,7 +351,7 @@ inductive LamBaseTerm.WF.{u} (baseVal : BaseValuation.{u}) : LamBaseTerm.Judgeme
   | ofBvVal ls   : WF baseVal ⟨.bvVal ls, GLift.{1, u} (Bitvec ls.length), GLift.up ⟨ls, rfl⟩⟩
   | ofEq n       : WF baseVal ⟨.eq n, baseVal.eqTyVal n → baseVal.eqTyVal n → GLift.{1, u} Prop, (baseVal.eqVal n).eqF⟩
   | ofForallE n  : WF baseVal ⟨.forallE n, (baseVal.forallTyVal n → GLift.{1, u} Prop) → GLift.{1, u} Prop, (baseVal.forallVal n).forallF⟩
-  | ofExistE n   : WF baseVal ⟨.existE n, (baseVal.existsTyVal n → GLift.{1, u} Prop) → GLift.{1, u} Prop, (baseVal.existsVal n).existsF⟩
+  | ofExistE n   : WF baseVal ⟨.existE n, (baseVal.existTyVal n → GLift.{1, u} Prop) → GLift.{1, u} Prop, (baseVal.existVal n).existF⟩
 
 def LamBaseTerm.wf_of_lamWF.{u} (ilVal : ILValuation.{u})
   : (lwf : LamBaseTerm.LamWF ilVal.toLamTyVal b s) →
@@ -702,10 +702,10 @@ structure Valuation.{u} extends BaseValuation.{u} where
       ilVal.tyVal,
       fun n => (ilVal.eqLamVal n).interp ilVal.tyVal,
       fun n => (ilVal.forallLamVal n).interp ilVal.tyVal,
-      fun n => (ilVal.existsLamVal n).interp ilVal.tyVal,
+      fun n => (ilVal.existLamVal n).interp ilVal.tyVal,
       ilVal.eqVal,
       ilVal.forallVal,
-      ilVal.existsVal
+      ilVal.existVal
     ⟩
     ⟨baseVal, fun n => (ilVal.lamVarTy n).interp ilVal.tyVal, varVal⟩
 

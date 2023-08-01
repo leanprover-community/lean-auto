@@ -24,9 +24,9 @@ Experiments in automation for Lean
   * $c.u.$ stands for "constant universe level"
 * $COC^{c.u.} \to COC^{c.u.}$: Instantiating typeclasse arguments
   * **This is probably the most difficult part of translation.**
-* $COC^{c.u.} \to COC(\lambda_2^{c.u.})$: Instantiating (types depending on types) and (types depending on terms)
+* $COC^{c.u.} \to COC(\lambda^{c.u.})$: Instantiating (types depending on types), (types depending on terms) and (terms depending on types)
   * Note that at this stage, all the facts we've obtained are still valid $CIC$ expressions and are directly provable from the assumptions.
-* $COC(\lambda_2^{c.u.}) \to COC(\lambda_2)$
+* $COC(\lambda^{c.u.}) \to COC(\lambda)$
   * We want all types $α$ occuring in the signature of constants and variables to be of sort ```Type (u + 1)```, i.e., $α : Type \ (u + 1)$. This is necessary because we want to write a checker (instead of directly reconstructing proof in DTT) and the valuation function from less expressive logic to dependent type theory requires [the elements in the range of the valuation function] to be [of the same sort].
   * To do this, we use ```GLift```. For example, ```Nat.add``` is transformed into ```Nat.addLift```
     ```lean
@@ -39,12 +39,11 @@ Experiments in automation for Lean
     ```
   * We only transfer these "lifted" terms to the less expressive $\lambda_2$, and $\lambda_2$ is unaware of the universe levels wrapped inside ```GLift.up```.
   * Lifted constantes should be introduced into the local context. Theorems corresponding to the original one but using only lifted constants and with uniform universe levels, should also be introduced into the local context. Later translations should only use theorems and constants with uniform universe levels.
-* $COC(\lambda_2) \to COC(\lambda)$: Monomorphization. Instantiating (terms depending on types)
 * $COC(\lambda) \to COC(\text{TPTP TF0})$: Instantiating function arguments
 * **There should also be a process similar to ULifting that "lifts" Bool into Prop**
 
 ## Reification
 * $CIC \to \text{Propositional}$
   * ```Auto/IR/D2P.lean```
-* $COC(\lambda_2) \to \lambda_2(\text{TPTP\ THF})$
+* $COC(\lambda) \to \lambda(\text{TPTP\ TH0})$
 * $COC(\text{TPTP TF0}) \to \text{TPTP TF0}$

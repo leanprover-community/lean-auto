@@ -47,17 +47,20 @@ def eqLift.up {α : Sort u} {β : Sort v} (I : IsomType α β)
   (x y : β) (H : x = y) : GLift.down (eqLift I x y) :=
   H ▸ eqLift_refl I x
 
-structure EqLift (α : Sort u) where
-  eqF  : α → α → GLift.{1, v} Prop
-  down : ∀ (x y : α), (eqF x y).down → x = y
-  up   : ∀ (x y : α), x = y → (eqF x y).down
+structure EqLift (β : Sort u) where
+  eqF  : β → β → GLift.{1, v} Prop
+  down : ∀ (x y : β), (eqF x y).down → x = y
+  up   : ∀ (x y : β), x = y → (eqF x y).down
+
+def EqLift.ofEqLift {α : Sort u} {β : Sort v} (I : IsomType α β) : EqLift β :=
+  ⟨eqLift I, eqLift.down I, eqLift.up I⟩
 
 def forallF {α : Sort u} (p : α → Sort v) := ∀ (x : α), p x
 
 -- Isomorphic domain, β is the lifted one
 def forallLift {α : Sort u} {β : Sort v} (I : IsomType α β)
   (p : β → GLift.{w + 1, v} (Sort w)) :=
-  GLift.up.{_, v} (∀ (x : α), GLift.down (p (I.f x)))
+  GLift.up.{(imax u w) + 1, v} (∀ (x : α), GLift.down (p (I.f x)))
 
 def forallLift.down
   {α : Sort u} {β : Sort v} (I : IsomType α β)
@@ -71,31 +74,37 @@ def forallLift.up
   (H : ∀ (x : β), GLift.down (p x)) : GLift.down (forallLift I p) :=
   fun x => I.eq₁ x ▸ H (I.f x)
 
-structure ForallLift (α : Sort t) where
-  forallF : (α → GLift.{u + 1, v} (Sort u)) → GLift.{u + 1, v} (Sort u)
-  down    : ∀ (p : α → GLift.{u + 1, v} (Sort u)), (forallF p).down → (∀ x : α, (p x).down)
-  up      : ∀ (p : α → GLift.{u + 1, v} (Sort u)), (∀ x : α, (p x).down) → (forallF p).down
+structure ForallLift (β : Sort v') where
+  forallF : (β → GLift.{w + 1, v} (Sort w)) → GLift.{_, v} (Sort w')
+  down    : ∀ (p : β → GLift.{w + 1, v} (Sort w)), (forallF p).down → (∀ x : β, (p x).down)
+  up      : ∀ (p : β → GLift.{w + 1, v} (Sort w)), (∀ x : β, (p x).down) → (forallF p).down
+
+def ForallLift.ofForallLift.{u, v, w} {α : Sort u} {β : Sort v} (I : IsomType α β) : ForallLift β :=
+  ⟨forallLift.{u, v, w} I, forallLift.down I, forallLift.up I⟩
 
 -- Isomorphic domain, β is the lifted one
-def existsLift {α : Sort u} {β : Sort v} (I : IsomType α β)
+def existLift {α : Sort u} {β : Sort v} (I : IsomType α β)
   (p : β → GLift.{1, v} Prop) :=
   GLift.up.{_, v} (∃ (x : α), GLift.down (p (I.f x)))
 
-def existsLift.down
+def existLift.down
   {α : Sort u} {β : Sort v} (I : IsomType α β)
   (p : β → GLift.{1, v} Prop)
-  (H : GLift.down (existsLift I p)) : ∃ x, GLift.down (p x) := by
+  (H : GLift.down (existLift I p)) : ∃ x, GLift.down (p x) := by
   cases H; case intro x proof => exists I.f x;
 
-def existsLift.up
+def existLift.up
   {α : Sort u} {β : Sort v} (I : IsomType α β)
   (p : β → GLift.{1, v} Prop)
-  (H : ∃ x, GLift.down (p x)) : GLift.down (existsLift I p) := by
+  (H : ∃ x, GLift.down (p x)) : GLift.down (existLift I p) := by
   cases H; case intro x proof => exists I.g x; rw [I.eq₂]; exact proof
 
-structure ExistsLift (α : Sort u) where
-  existsF : (α → GLift.{1, v} Prop) → GLift.{1, v} Prop
-  down    : ∀ (p : α → GLift.{1, v} Prop), (existsF p).down → (∀ x : α, (p x).down)
-  up      : ∀ (p : α → GLift.{1, v} Prop), (∀ x : α, (p x).down) → (existsF p).down
+structure ExistLift (β : Sort v') where
+  existF  : (β → GLift.{1, v} Prop) → GLift.{1, v} Prop
+  down    : ∀ (p : β → GLift.{1, v} Prop), (existF p).down → (∃ x : β, (p x).down)
+  up      : ∀ (p : β → GLift.{1, v} Prop), (∃ x : β, (p x).down) → (existF p).down
+
+def ExistLift.ofExistLift.{u, v} {α : Sort u} {β : Sort v} (I : IsomType α β) : ExistLift β :=
+  ⟨existLift.{u, v} I, existLift.down I, existLift.up I⟩
 
 end Auto.Embedding

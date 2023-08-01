@@ -2,15 +2,9 @@ import Lean
 import Auto.Util.MonadUtils
 open Lean
 
-namespace Auto.TFront
+namespace Auto.Reif
 
-inductive ILogicalType where
-  | eqF
-  | forallF
-  | existsF
-deriving Hashable, Inhabited, BEq
-
-structure TFrontM.State where
+structure ReifM.State where
   -- We will introduce let-binders during reification.
   --   This field records the list of let-binders introduced
   --   during the process so that we know which binders
@@ -28,13 +22,13 @@ structure TFrontM.State where
   --   constants. We have to record these free variables
   --   so that we know they're interpreted logical
   --   constants during reification.
-  iLogical : HashMap FVarId ILogicalType
+  iLogical        : HashMap FVarId Expr
 
-abbrev TFrontM := StateT TFrontM.State MetaM
-#genMonadState TFrontM
+abbrev ReifM := StateT ReifM.State MetaM
+#genMonadState ReifM
 
-@[inline] def pushFVar (id : FVarId) : TFrontM Unit := do
+@[inline] def pushFVar (id : FVarId) : ReifM Unit := do
   let fvarsToAbstract ← getFvarsToAbstract
   setFvarsToAbstract (fvarsToAbstract.push id)
 
-end Auto.TFront
+end Auto.Reif
