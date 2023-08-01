@@ -69,7 +69,8 @@ mutual
   | .forallE name biTy body binfo => do
     -- We want to reate a free variable (intended) of type `bity↑`.
     --   However, we still don't what's `bity↑`, so we first
-    --   create a metavariable representing `bity↑`
+    --   create a metavariable representing `bity↑`, and assign
+    --   it after calling `cstULiftNeg`
     let biUpTyLvl? ← Meta.mkFreshLevelMVar
     let biUpTy? ← Meta.mkFreshExprMVar (.some (.sort biUpTyLvl?))
     -- `downFunc` is such that `downFunc binder↑` is equivalent to `binder`

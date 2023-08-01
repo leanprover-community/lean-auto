@@ -50,7 +50,7 @@ section
   -- Type of (terms in more expressive logic)
   variable (ω : Type) [BEq ω] [Hashable ω]
   
-  -- State of TransM (from more expressive logic to propositional logic)
+  -- State of ReifM (from more expressive logic to propositional logic)
   -- Note that We do not have to record declarations because we only have to
   --   (declare-const x0 bool) ... (declare-const x(k-1) bool)
   --   where `k` is `h2lMap.size`
@@ -65,24 +65,24 @@ section
     -- List of assertions
     assertions : Array PropForm := #[]
   
-  abbrev TransM := StateRefT (State ω) MetaM
+  abbrev ReifM := StateRefT (State ω) MetaM
 
   variable {ω : Type} [BEq ω] [Hashable ω]
   
   @[always_inline]
-  instance : Monad (TransM ω) :=
-    let i := inferInstanceAs (Monad (TransM ω));
+  instance : Monad (ReifM ω) :=
+    let i := inferInstanceAs (Monad (ReifM ω));
     { pure := i.pure, bind := i.bind }
   
-  instance : Inhabited (TransM ω α) where
+  instance : Inhabited (ReifM ω α) where
     default := fun _ => throw default
 
-  #genMonadState (TransM ω)
+  #genMonadState (ReifM ω)
   
-  def hIn (e : ω) : TransM ω Bool := do
+  def hIn (e : ω) : ReifM ω Bool := do
     return (← getH2lMap).contains e
 
-  def h2Atom (e : ω) : TransM ω PropForm := do
+  def h2Atom (e : ω) : ReifM ω PropForm := do
     let ⟨h2lMap, l2hMap, _⟩ ← get
     if h2lMap.contains e then
       return .atom (h2lMap.find! e)
@@ -91,10 +91,69 @@ section
     setL2hMap (l2hMap.insert sz e)
     return .atom sz
 
-  def addAssertion (a : PropForm) : TransM ω Unit := do
+  def addAssertion (a : PropForm) : ReifM ω Unit := do
     let assertions ← getAssertions
     setAssertions (assertions.push a)
   
 end
 
-end Auto.PReif
+end PReif
+
+-- Open `D`
+open Lean
+-- Open `P`
+open PReif
+
+-- Translates an expression of type `Prop`
+partial def D2P (e : Expr) : ReifM Expr PropForm := do
+  let ety ← Meta.inferType e
+  let failureMsg := m!"D2P :: Failed to translate subexpression {e}"
+  if ! (← Meta.isDefEq ety (.sort .zero)) then
+    throwError m!"D2P :: Can't translate non-prop term {e}"
+  match e with
+  | .const .. =>
+    let some name := e.constName?
+      | throwError failureMsg
+    match name with
+    | ``True => return .trueE
+    | ``False => return .falseE
+    | _ => h2Atom e
+  | .app .. =>
+    let f := e.getAppFn
+    let some name := f.constName?
+      | h2Atom e
+    let args := e.getAppArgs
+    if args.size == 1 then
+      let args ← args.mapM D2P
+      match name with
+      | ``Not => return .not args[0]!
+      | _ => h2Atom e
+    else if args.size == 2 then
+      let args ← args.mapM D2P
+      match name with
+      | ``And => return .and args[0]! args[1]!
+      | ``Or => return .or args[0]! args[1]!
+      | ``Iff => return .iff args[0]! args[1]!
+      | _ => h2Atom e
+    else if args.size == 3 then
+      match name with
+      | ``Eq =>
+        if ← Meta.isDefEq args[0]! (.sort .zero) then
+          let args ← args[1:].toArray.mapM D2P
+          return .eq args[0]! args[1]!
+        else
+          h2Atom e
+      | _ => h2Atom e
+    else
+      h2Atom e
+  | _ => h2Atom e
+
+def tst (e : Expr) : Elab.Term.TermElabM Unit := do
+  let es ← (D2P e).run {}
+  let f := es.fst
+  IO.println (repr f)
+
+-- #getExprAndApply[True ∨ (False ↔ False) ∨ (2 = 3) ∨ (2 = 3)|tst]
+-- #getExprAndApply[True ∨ (False ↔ False) ∨ ((False = True) = True)|tst]
+
+end Auto

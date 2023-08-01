@@ -20,12 +20,15 @@ structure State where
   tyVarMap    : HashMap FVarId Nat := HashMap.empty
   -- Maps fvars representing free variables to their index
   varMap      : HashMap FVarId (FVarType × Nat) := HashMap.empty
-  -- Corresponding fields of `LamValuation`
+  -- Corresponds to fields of `LamValuation`
   lamVarTy    : Array (FVarId × LamSort) := #[]
   eqLamTy     : Array (FVarId × LamSort) := #[]
   forallLamTy : Array (FVarId × LamSort) := #[]
   existLamTy  : Array (FVarId × LamSort) := #[]
   tyVal       : Array FVarId             := #[]
+  eqVal       : Array Expr               := #[]
+  forallVal   : Array Expr               := #[]
+  existVal    : Array Expr               := #[]
 deriving Inhabited
 
 abbrev ReifM := StateRefT State ULiftM
@@ -96,10 +99,56 @@ mutual
     -- A lifted logical constant, lifted from `origFid`
     | .some origFid => do
       let .some val := (← Reif.getILogical).find? origFid
-        | throwError "reifTerm :: Cannot find let declaration of interpreted logical constant"
-      match val with
-      | .app (.const ``Eq [u]) α => sorry
-      | _ => sorry
+        | throwError "processTermFVar :: Cannot find let declaration of interpreted logical constant"
+      let u ← getU
+      -- `α` is the original (un-lifted) type
+      let (fvTy, uOrig, α) ← (do
+        match val with
+        | .app (.const ``Eq [uOrig]) α =>
+          return (FVarType.eqVar, uOrig, α)
+        | .app (.const ``Embedding.forallF [uOrig, _]) α =>
+          return (FVarType.forallVar, uOrig, α)
+        | .app (.const ``Exists [uOrig]) α =>
+          return (FVarType.existVar, uOrig, α)
+        | _ => throwError "processTermFVar :: Unexpected logical construct {val}")
+      -- Make `IsomType`. We choose not to call `termULift` and `typeULift` at this stage
+      let (upFunc, upTy) ← Meta.withLocalDeclD `_ α fun down => do
+        let (up, upTy) ← cstULiftPos u down (← instantiateMVars α)
+        let upFunc ← Meta.mkLambdaFVars #[down] up
+        return (upFunc, upTy)
+      let downFunc ← Meta.withLocalDeclD `_ upTy fun up => do
+        let (down, _) ← cstULiftNeg u up (← instantiateMVars α)
+        Meta.mkLambdaFVars #[up] down
+      let eq₁ : Expr := mkLambda `_ .default α (mkAppN (.const ``Eq.refl [uOrig]) #[α, .bvar 0])
+      let eq₂ : Expr := mkLambda `_ .default upTy (mkAppN (.const ``Eq.refl [u]) #[upTy, .bvar 0])
+      let isomTy : Expr := mkAppN (.const ``Embedding.IsomType.mk [uOrig, u]) #[α, upTy, upFunc, downFunc, eq₁, eq₂]
+      let fidTy ← fid.getType
+      match fvTy with
+      | .var => throwError "processTermFVar :: Unexpected error"
+      | .eqVar =>
+        let .forallE _ upTy' _ _ := fidTy
+          | throwError "processTermFVar :: Unexpected `=` type {fidTy}"
+        let s ← reifType upTy'
+        let eqLift := mkAppN (.const ``Embedding.EqLift.ofEqLift [uOrig, u])
+          #[α, upTy, isomTy]
+        setEqVal ((← getEqVal).push eqLift)
+        newTermFVar .eqVar fid s
+      | .forallVar =>
+        let .forallE _ (.forallE _ upTy' _ _) _ _ := fidTy
+          | throwError "processTermFVar :: Unexpected `∀` type {fidTy}"
+        let s ← reifType upTy'
+        let forallLift := mkAppN (.const ``Embedding.ForallLift.ofForallLift [uOrig, u, .zero])
+          #[α, upTy, isomTy]
+        setForallVal ((← getForallVal).push forallLift)
+        newTermFVar .forallVar fid s
+      | .existVar =>
+        let .forallE _ (.forallE _ upTy' _ _) _ _ := fidTy
+          | throwError "processTermFVar :: Unexpected `∃` type {fidTy}"
+        let s ← reifType upTy'
+        let existLift := mkAppN (.const ``Embedding.ExistLift.ofExistLift [uOrig, u])
+          #[α, upTy, isomTy]
+        setExistVal ((← getExistVal).push existLift)
+        newTermFVar .existVar fid s
     -- A normal free variable, treated as atom
     | .none =>
       let ty ← fid.getType

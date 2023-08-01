@@ -44,6 +44,6 @@ Experiments in automation for Lean
 
 ## Reification
 * $CIC \to \text{Propositional}$
-  * ```Auto/IR/D2P.lean```
+  * ```Auto/IR/PReif.lean```
 * $COC(\lambda) \to \lambda(\text{TPTP\ TH0})$
 * $COC(\text{TPTP TF0}) \to \text{TPTP TF0}$

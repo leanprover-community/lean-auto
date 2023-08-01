@@ -1,3 +1,3 @@
-import Auto.Translation.D2P
 import Auto.Translation.P2SMT
-import Auto.Translation.ReifTerms
+import Auto.Translation.PReif
+import Auto.Translation.LamReif
