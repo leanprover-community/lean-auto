@@ -17,18 +17,19 @@ deriving Inhabited, Hashable, BEq
 
 structure State where
   -- Maps fvars representing (lifted) type to their index
-  tyVarMap    : HashMap FVarId Nat := HashMap.empty
+  tyVarMap    : HashMap FVarId Nat              := HashMap.empty
   -- Maps fvars representing free variables to their index
   varMap      : HashMap FVarId (FVarType × Nat) := HashMap.empty
   -- Corresponds to fields of `LamValuation`
-  lamVarTy    : Array (FVarId × LamSort) := #[]
-  eqLamTy     : Array (FVarId × LamSort) := #[]
-  forallLamTy : Array (FVarId × LamSort) := #[]
-  existLamTy  : Array (FVarId × LamSort) := #[]
-  tyVal       : Array FVarId             := #[]
-  eqVal       : Array Expr               := #[]
-  forallVal   : Array Expr               := #[]
-  existVal    : Array Expr               := #[]
+  lamVarTy    : Array (FVarId × LamSort)        := #[]
+  eqLamTy     : Array (FVarId × LamSort)        := #[]
+  forallLamTy : Array (FVarId × LamSort)        := #[]
+  existLamTy  : Array (FVarId × LamSort)        := #[]
+  tyVal       : Array FVarId                    := #[]
+  eqVal       : Array Expr                      := #[]
+  forallVal   : Array Expr                      := #[]
+  existVal    : Array Expr                      := #[]
+  assertions  : Array (Expr × LamTerm)          := #[]
 deriving Inhabited
 
 abbrev ReifM := StateRefT State ULiftM
@@ -94,23 +95,34 @@ mutual
       | .forallVar => return .base (.forallE id)
       | .existVar => return .base (.existE id)
     -- If the free variable has not been processed
-    let liftedILogical ← getLiftedILogical
-    match liftedILogical.find? fid with
+    let liftedInterped ← getLiftedInterped
+    match liftedInterped.find? fid with
     -- A lifted logical constant, lifted from `origFid`
     | .some origFid => do
-      let .some val := (← Reif.getILogical).find? origFid
+      let .some val := (← Reif.getInterpreted).find? origFid
         | throwError "processTermFVar :: Cannot find let declaration of interpreted logical constant"
       let u ← getU
       -- `α` is the original (un-lifted) type
-      let (fvTy, uOrig, α) ← (do
-        match val with
-        | .app (.const ``Eq [uOrig]) α =>
-          return (FVarType.eqVar, uOrig, α)
-        | .app (.const ``Embedding.forallF [uOrig, _]) α =>
-          return (FVarType.forallVar, uOrig, α)
-        | .app (.const ``Exists [uOrig]) α =>
-          return (FVarType.existVar, uOrig, α)
-        | _ => throwError "processTermFVar :: Unexpected logical construct {val}")
+      let mut info : FVarType × Level × Expr := Inhabited.default
+      match val with
+      | .const ``true [] => return .base .trueE
+      | .const ``false [] => return .base .falseE
+      | .const ``Not [] => return .base .not
+      | .const ``And [] => return .base .and
+      | .const ``Or []  => return .base .or
+      | .const ``Embedding.impF [] => return .base .imp
+      | .const ``Iff [] => return .base .iff
+      | .lit (.natVal n) => return .base (.natVal n)
+      -- **TODO: Real number, Bit vector**
+      | .app (.const ``Eq [uOrig]) α =>
+        info := (FVarType.eqVar, uOrig, α)
+      | .app (.const ``Embedding.forallF [uOrig, _]) α =>
+        info := (FVarType.forallVar, uOrig, α)
+      | .app (.const ``Exists [uOrig]) α =>
+        info := (FVarType.existVar, uOrig, α)
+      | _ => throwError "processTermFVar :: Unexpected logical construct {val}"
+      let (fvTy, uOrig, α) := info
+      -- Process `=, ∀, ∃`
       -- Make `IsomType`. We choose not to call `termULift` and `typeULift` at this stage
       let (upFunc, upTy) ← Meta.withLocalDeclD `_ α fun down => do
         let (up, upTy) ← cstULiftPos u down (← instantiateMVars α)
@@ -182,5 +194,16 @@ mutual
   | e => throwError "reifType :: {e} should have been lifted into fvar"
 
 end
+
+def reifFacts (facts : Array ULiftedFact) : ReifM Unit := do
+  let _ ← facts.mapM (fun (proof, tyLift) => do
+    let lamty ← reifTerm tyLift
+    setAssertions ((← getAssertions).push (proof, lamty)))
+
+-- `cont` is what we need to do after we ulift and reify the facts
+def uLiftAndReify (cont : State → MetaM α) : ReifM α :=
+  withULiftedFacts (fun pfacts => do
+    reifFacts pfacts
+    cont (← get))
 
 end Auto.LamReif

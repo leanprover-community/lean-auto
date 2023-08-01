@@ -166,6 +166,7 @@ inductive LamBaseTerm
   | not     : LamBaseTerm -- Propositional `not`
   | and     : LamBaseTerm -- Propositional `and`
   | or      : LamBaseTerm -- Propositional `or`
+  | imp     : LamBaseTerm -- Propositional `imp`
   | iff     : LamBaseTerm -- Propositional `iff`
   | natVal  : Nat → LamBaseTerm
   | realVal : CstrReal → LamBaseTerm
@@ -183,6 +184,7 @@ def LamBaseTerm.reprPrec (l : LamBaseTerm) (n : Nat) :=
     | .not        => f!".not"
     | .and        => f!".and"
     | .or         => f!".or"
+    | .imp        => f!".imp"
     | .iff        => f!".iff"
     | .natVal n   => f!".natVal {n}"
     | .realVal cr => f!".realVal {CstrReal.reprPrec cr 1}"
@@ -213,6 +215,7 @@ def LamBaseTerm.check (ltv : LamTyVal) : LamBaseTerm → LamSort
 | .not        => .func (.base .prop) (.base .prop)
 | .and        => .func (.base .prop) (.func (.base .prop) (.base .prop))
 | .or         => .func (.base .prop) (.func (.base .prop) (.base .prop))
+| .imp        => .func (.base .prop) (.func (.base .prop) (.base .prop))
 | .iff        => .func (.base .prop) (.func (.base .prop) (.base .prop))
 | .natVal n   => .base .nat
 | .realVal cr => .base .real
@@ -233,6 +236,7 @@ inductive LamBaseTerm.LamWF (ltv : LamTyVal) : LamBaseTerm → LamSort → Type
   | ofNot        : LamWF ltv .not (.func (.base .prop) (.base .prop))
   | ofAnd        : LamWF ltv .and (.func (.base .prop) (.func (.base .prop) (.base .prop)))
   | ofOr         : LamWF ltv .or (.func (.base .prop) (.func (.base .prop) (.base .prop)))
+  | ofImp        : LamWF ltv .imp (.func (.base .prop) (.func (.base .prop) (.base .prop)))
   | ofIff        : LamWF ltv .iff (.func (.base .prop) (.func (.base .prop) (.base .prop)))
   | ofNatVal n   : LamWF ltv (.natVal n) (.base .nat)
   | ofRealVal cr : LamWF ltv (.realVal cr) (.base .real)
@@ -249,6 +253,7 @@ def LamBaseTerm.LamWF.reprPrec (wf : LamBaseTerm.LamWF ltv s t) (n : Nat) :=
     | .ofNot        => f!".ofNot"
     | .ofAnd        => f!".ofAnd"
     | .ofOr         => f!".ofOr"
+    | .ofImp        => f!".ofImp"
     | .ofIff        => f!".ofIff"
     | .ofNatVal n   => f!".ofNatVal {n}"
     | .ofRealVal cr => f!".ofRealVal {CstrReal.reprPrec cr 1}"
@@ -267,6 +272,7 @@ def LamBaseTerm.LamWF.ofLamBaseTerm (ltv : LamTyVal) : (b : LamBaseTerm) → (s 
 | .not        => ⟨.func (.base .prop) (.base .prop), .ofNot⟩
 | .and        => ⟨.func (.base .prop) (.func (.base .prop) (.base .prop)), .ofAnd⟩
 | .or         => ⟨.func (.base .prop) (.func (.base .prop) (.base .prop)), .ofOr⟩
+| .imp        => ⟨.func (.base .prop) (.func (.base .prop) (.base .prop)), .ofImp⟩
 | .iff        => ⟨.func (.base .prop) (.func (.base .prop) (.base .prop)), .ofIff⟩
 | .natVal n   => ⟨.base .nat, .ofNatVal n⟩
 | .realVal cr => ⟨.base .real, .ofRealVal cr⟩
@@ -297,6 +303,7 @@ def LamBaseTerm.interp (ilVal : ILValuation.{u}) : (lwf : LamBaseTerm.LamWF ilVa
 | .ofNot        => notLift
 | .ofAnd        => andLift
 | .ofOr         => orLift
+| .ofImp        => impLift
 | .ofIff        => iffLift
 | .ofNatVal n   => GLift.up n
 | .ofRealVal cr => GLift.up cr.interp
@@ -345,6 +352,7 @@ inductive LamBaseTerm.WF.{u} (baseVal : BaseValuation.{u}) : LamBaseTerm.Judgeme
   | ofNot        : WF baseVal ⟨.not, GLift.{1, u} Prop → GLift.{1, u} Prop, notLift.{u}⟩
   | ofAnd        : WF baseVal ⟨.and, GLift.{1, u} Prop → GLift.{1, u} Prop → GLift.{1, u} Prop, andLift⟩
   | ofOr         : WF baseVal ⟨.or, GLift.{1, u} Prop → GLift.{1, u} Prop → GLift.{1, u} Prop, orLift⟩
+  | ofImp        : WF baseVal ⟨.imp, GLift.{1, u} Prop → GLift.{1, u} Prop → GLift.{1, u} Prop, impLift⟩
   | ofIff        : WF baseVal ⟨.iff, GLift.{1, u} Prop → GLift.{1, u} Prop → GLift.{1, u} Prop, iffLift⟩
   | ofNatVal n   : WF baseVal ⟨.natVal n, GLift.{1, u} Nat, GLift.up n⟩
   | ofRealVal cr : WF baseVal ⟨.realVal cr, GLift.{1, u} Real, GLift.up cr.interp⟩
@@ -361,6 +369,7 @@ def LamBaseTerm.wf_of_lamWF.{u} (ilVal : ILValuation.{u})
 | .ofNot        => .ofNot (baseVal:=.ofILValuation ilVal)
 | .ofAnd        => .ofAnd (baseVal:=.ofILValuation ilVal)
 | .ofOr         => .ofOr (baseVal:=.ofILValuation ilVal)
+| .ofImp        => .ofImp (baseVal:=.ofILValuation ilVal)
 | .ofIff        => .ofIff (baseVal:=.ofILValuation ilVal)
 | .ofNatVal n   => .ofNatVal (baseVal:=.ofILValuation ilVal) n
 | .ofRealVal cr => .ofRealVal (baseVal:=.ofILValuation ilVal) cr

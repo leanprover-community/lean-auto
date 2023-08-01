@@ -16,6 +16,8 @@ def orLift.{u} (p q : GLift.{1, u} Prop) :=
 def iffLift.{u} (p q : GLift.{1, u} Prop) :=
   GLift.up (Iff p.down q.down)
 
+def impF.{u, v} (p : Sort u) (q : Sort v) := p → q
+
 def impLift.{u}
   (p : GLift.{t + 1, v} (Sort t))
   (q : GLift.{u + 1, v} (Sort u)) :=

@@ -25,6 +25,8 @@ private def PropForm2STerm : PReif.PropForm → TransM Nat STerm
   return .qIdApp (QualIdent.ofString "and") #[← PropForm2STerm f1, ← PropForm2STerm f2]
 | .or f1 f2  => do
   return .qIdApp (QualIdent.ofString "or") #[← PropForm2STerm f1, ← PropForm2STerm f2]
+| .imp f1 f2 => do
+  return .qIdApp (QualIdent.ofString "=>") #[← PropForm2STerm f1, ← PropForm2STerm f2]
 | .iff f1 f2  => do
   return .qIdApp (QualIdent.ofString "not")
     #[.qIdApp (QualIdent.ofString "xor") #[← PropForm2STerm f1, ← PropForm2STerm f2]]

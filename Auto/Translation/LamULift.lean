@@ -279,7 +279,7 @@ noncomputable def example₁.Lift.{u} := fun
         in `e` with their lifted counterparts to obtain `e₁`
     (2) For all binder `(x : ty)` occuring in `e₁`, replace it with `(x : GLift ty.down)`
 
-  Now, we describe the procedure `withProcessedFact` that processes a user-provided fact `proof : ty`
+  Now, we describe the procedure `withULiftedFact` that processes a user-provided fact `proof : ty`
     (1) Collect all atomic expressions that depends on `proof`. Call `withProcessedAtomic` on all of
         them
     (2) **Call `termULift` on `ty`. Since `ty` is always rigid, we obtain an**
@@ -287,7 +287,7 @@ noncomputable def example₁.Lift.{u} := fun
     (3) Note that `ty` is definitionally equal to `GLift.down gLiftTy`, and
         `p : typ` is already within the local context. So, we don't need to
         introduce any binders
-  We call `withProcessedFact` on each user-provided fact to process all user-provided facts.
+  We call `withULiftedFact` on each user-provided fact to process all user-provided facts.
 
   The procedure `withProcessedAtomic` works as follows:
     (1) We keep a map which maps atomic expressions to their lifted couonterpart's `fvarId`.
@@ -295,8 +295,8 @@ noncomputable def example₁.Lift.{u} := fun
     (2) Suppose we're processing an atomic expression `p : typ`, we proceed in three steps
         (i)  Collect all the atomic expressions that `p` depends on
           Note: `p` depends on an atomic expression `c` iff either `c` occurs in `p`, or
-            a (constant/fvar/mvar) occurring in `p` depends on `c` (this is a recursive
-            definition)
+            the type of a (constant/fvar/mvar) occurring in `p` depends on `c` (this is a
+            recursive definition)
         (ii) For all the unprocessed ones in the collected atomic expressions,
           process them. **Note that the same constant with different universe levels are**
           **considered different**
@@ -318,7 +318,7 @@ structure Context where
   --   calculated by `boundFVars.size - 1 - boundFVars.get! fvar`
   -- Note that we don't need to calculate de-bruijin indices during
   --   `termULift`, but we'll need that during reification.
-  boundFVars : HashMap FVarId Nat
+  boundFVars : HashMap FVarId Nat := HashMap.empty
 
 -- Maps atomic expressions described above to their lifted counterpart
 structure State where
@@ -327,12 +327,19 @@ structure State where
   constMap : HashMap Name (Array (List Level × FVarId)) := HashMap.empty
   -- Maps fvars and mvars to their lifted counterpart
   varMap : HashMap Expr FVarId                          := HashMap.empty
-  -- Maps *lifted* [interpreted logical constants] into their un-lifted counterparts
-  liftedILogical : HashMap FVarId FVarId                := HashMap.empty
-  -- The universe level that all constants lift to
-  u : Level
+  -- Maps *lifted* [interpreted constants] into their un-lifted counterparts
+  liftedInterped : HashMap FVarId FVarId                := HashMap.empty
+  -- The universe level that all constants lift to. This is computed at
+  --   the beginning of `withULiftedFacts`
+  u : Level                                             := Level.zero
 
 abbrev ULiftM := ReaderT Context <| StateRefT State Reif.ReifM
+
+@[inline] def ULiftM.run (x : ULiftM α) (ctx : Context := {}) (s : State) :=
+  x ctx |>.run s
+
+@[inline] def ULiftM.run' (x : ULiftM α) (ctx : Context := {}) (s : State) :=
+  Prod.fst <$> (x ctx |>.run s)
 
 #genMonadState ULiftM
 #genMonadContext ULiftM
@@ -359,11 +366,11 @@ def pushLifted (e : Expr) (eUp : FVarId) : ULiftM Unit :=
   | .fvar id => do
     let varMap ← getVarMap
     setVarMap (varMap.insert e eUp)
-    -- If `e` is also an interpreted logical constant, add it to `liftedILogical`
-    let iL ← Reif.getILogical
+    -- If `e` is also an interpreted logical constant, add it to `liftedInterped`
+    let iL ← Reif.getInterpreted
     if iL.contains id then
-      let liftedILogical ← getLiftedILogical
-      setLiftedILogical (liftedILogical.insert eUp id)
+      let liftedInterped ← getLiftedInterped
+      setLiftedInterped (liftedInterped.insert eUp id)
   | .mvar _ => do
     let varMap ← getVarMap
     setVarMap (varMap.insert e eUp)
@@ -442,15 +449,9 @@ mutual
       -- Now `bodyUp` is type correct
       let bodyUp ← termULift body'
       Meta.mkLambdaFVars #[biUp] bodyUp
-  | .forallE name biTy body binfo => do
-    if body.hasLooseBVar 0 then
-      throwError ("Dependent ∀ should have been turned into" ++
-        " free variables representing `forallLift` during monomorphization")
-    else
-      -- Non-dependent `∀`, using `impLift`
-      let biTyUp ← termULift biTy
-      let bodyUp ← termULift body
-      Meta.mkAppM ``impLift #[biTyUp, bodyUp]
+  | .forallE .. =>
+    throwError ("∀ should have been turned into" ++
+        " free variables representing `forallF` or `impF` during monomorphization")
   | .letE .. => throwError "termULift :: Not implemented"
   | .fvar id => do
     let varMap ← getVarMap
@@ -527,24 +528,26 @@ private partial def withProcessedAtomicImp (e : Expr) (cont : ULiftM α) : ULift
     cont
   else
     let ea ← collectAtomic e
-    ea.foldl (β := ULiftM α) (fun cont' a => withProcessedAtomicImp a cont') (do
+    -- `c` occurs in `e`
+    let cont' := ea.foldl (β := ULiftM α) (fun cont' a => withProcessedAtomicImp a cont') (do
       let eTy ← Meta.inferType e
       let eTyUp ← typeULift eTy
-      let mut bodyUp : Expr := Inhabited.default
-      if let .fvar id := e then
-        if let .some body ← id.getValue? then
-          -- **TODO**: Is it sufficient to call `betaReduce`?
-          let body ← Core.betaReduce body
-          bodyUp ← termULift body
       let (eUp, _) ← cstULiftPos (← getU) e eTy
-      bodyUp := eUp
       let freshId := (← mkFreshId).toString
-      Meta.withLetDecl ("_lift_" ++ freshId) eTyUp bodyUp (fun newFVar => do
+      Meta.withLetDecl ("_lift_" ++ freshId) eTyUp eUp (fun newFVar => do
         pushLifted e newFVar.fvarId!
         Reif.pushFVar newFVar.fvarId!
         cont
       )
     )
+    -- The type of some `const/fvar/mvar` in `e` depends on `c`
+    ea.foldl (β := ULiftM α) (fun cont' a => do
+      if let .fvar id := a then
+        withProcessedAtomicImp (← id.getType) cont'
+      else if a.isMVar ∨ a.isConst then
+        withProcessedAtomicImp (← instantiateMVars (← Meta.inferType a)) cont'
+      else
+        cont') cont'
 
 def withProcessedAtomic [Monad n] [MonadControlT ULiftM n] (e : Expr) (cont : n α) : n α :=
   mapULiftM (withProcessedAtomicImp e) cont
@@ -552,24 +555,71 @@ def withProcessedAtomic [Monad n] [MonadControlT ULiftM n] (e : Expr) (cont : n 
 -- The first `Expr` is `proof` (of type `ty`), and the second
 --   `Expr` is the lifted type, which is definitionally equal
 --   to `GLift.up ty`
-abbrev ProcessedFact := Expr × Expr
+abbrev ULiftedFact := Expr × Expr
 
-private def withProcessedFactsAux (proof : Expr) {α : Type}
-  (cont : Array ProcessedFact → ULiftM α) (arr : Array ProcessedFact) : ULiftM α := do
-  let ty ← Meta.inferType proof
+private def withULiftedFactsAux (fact : Reif.UMonoFact) {α : Type}
+  (cont : Array ULiftedFact → ULiftM α) (arr : Array ULiftedFact) : ULiftM α := do
+  let (proof, ty) := fact
   let tya ← collectAtomic ty
   tya.foldl (fun cont' a => withProcessedAtomicImp a cont') (do
     let gLiftTy ← termULift ty
     cont (arr.push (proof, gLiftTy))
   )
 
+private def mergeHashSet {α : Type u} [BEq α] [Hashable α] (a1 a2 : HashSet α) :=
+  if a1.size < a2.size then
+    a2.insertMany a1.toArray
+  else
+    a1.insertMany a2.toArray
+
+-- Note that we're not introducing binders into the local context.
+partial def collectUniverseLevels : Expr → MetaM (HashSet Level)
+| .bvar _ => return HashSet.empty
+| e@(.fvar _) => do collectUniverseLevels (← instantiateMVars (← Meta.inferType e))
+| e@(.mvar _) => do collectUniverseLevels (← instantiateMVars (← Meta.inferType e))
+| .sort u => return HashSet.empty.insert u
+| e@(.const _ us) => do
+  let hus := HashSet.empty.insertMany us
+  let tys ← collectUniverseLevels (← instantiateMVars (← Meta.inferType e))
+  return mergeHashSet hus tys
+| .app fn arg => do
+  let fns ← collectUniverseLevels fn
+  let args ← collectUniverseLevels arg
+  return mergeHashSet fns args
+| .lam _ biTy body _ => do
+  let tys ← collectUniverseLevels biTy
+  let bodys ← collectUniverseLevels body
+  return mergeHashSet tys bodys
+| .forallE _ biTy body _ => do
+  let tys ← collectUniverseLevels biTy
+  let bodys ← collectUniverseLevels body
+  return mergeHashSet tys bodys
+| .letE _ ty v body _ => do
+  let tys ← collectUniverseLevels ty
+  let vs ← collectUniverseLevels v
+  let bodys ← collectUniverseLevels body
+  return mergeHashSet (mergeHashSet tys vs) bodys
+| .lit _ => return HashSet.empty.insert (.succ .zero)
+| .mdata _ e' => collectUniverseLevels e'
+| .proj .. => throwError "Please unfold projections before collecting universe levels"
+
 -- Note that the facts to be processed are stored in `ReifM.state`
-private def withProcessedFactsImp (cont : Array ProcessedFact → ULiftM α) : ULiftM α := do
+private def withULiftedFactsImp (cont : Array ULiftedFact → ULiftM α) : ULiftM α := do
   let facts ← Reif.getFacts
-  let cont' := facts.foldl (β:= Array ProcessedFact → ULiftM α) (fun cont' pr => withProcessedFactsAux pr cont') cont
+  -- Collect universe levels
+  let levels ← facts.foldlM (fun hs (proof, ty) => do
+    let proofUs ← collectUniverseLevels proof
+    let tyUs ← collectUniverseLevels ty
+    return mergeHashSet (mergeHashSet proofUs tyUs) hs) HashSet.empty
+  -- Compute the universe level that we need to lift to
+  let level := Level.succ (levels.fold (fun l l' => Level.max l l') Level.zero)
+  let normLevel := level.normalize
+  setU normLevel
+  -- Lift all facts to the required universe level
+  let cont' := facts.foldl (β:= Array ULiftedFact → ULiftM α) (fun cont' fact => withULiftedFactsAux fact cont') cont
   cont' #[]
 
-def withProcessedFacts [Monad n] [MonadControlT ULiftM n] (cont : Array ProcessedFact → n α) : n α :=
-  map1ULiftM withProcessedFactsImp cont
+def withULiftedFacts [Monad n] [MonadControlT ULiftM n] (cont : Array ULiftedFact → n α) : n α :=
+  map1ULiftM withULiftedFactsImp cont
 
 end Auto.LamULift

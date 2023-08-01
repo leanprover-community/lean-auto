@@ -12,6 +12,7 @@ inductive PropForm where
   | not    : PropForm → PropForm
   | and    : PropForm → PropForm → PropForm
   | or     : PropForm → PropForm → PropForm
+  | imp    : PropForm → PropForm → PropForm
   | iff    : PropForm → PropForm → PropForm
   | eq     : PropForm → PropForm → PropForm
 deriving Inhabited, Hashable, BEq
@@ -25,6 +26,7 @@ def reprPrecPropForm (f : PropForm) (n : Nat) :=
     | .not g     => f!".not " ++ reprPrecPropForm g 1
     | .and f1 f2 => f!".and " ++ reprPrecPropForm f1 1 ++ f!" " ++ reprPrecPropForm f2 1
     | .or f1 f2  => f!".or "  ++ reprPrecPropForm f1 1 ++ f!" " ++ reprPrecPropForm f2 1
+    | .imp f1 f2 => f!".imp " ++ reprPrecPropForm f1 1 ++ f!" " ++ reprPrecPropForm f2 1
     | .iff f1 f2 => f!".iff " ++ reprPrecPropForm f1 1 ++ f!" " ++ reprPrecPropForm f2 1
     | .eq f1 f2  => f!".eq "  ++ reprPrecPropForm f1 1 ++ f!" " ++ reprPrecPropForm f2 1
   if n == 0 then
@@ -42,6 +44,7 @@ def PropForm.interp (val : Nat → Prop) : PropForm → Prop
 | .not f     => Not (f.interp val)
 | .and f₁ f₂ => And (f₁.interp val) (f₂.interp val)
 | .or f₁ f₂  => Or (f₁.interp val) (f₂.interp val)
+| .imp f₁ f₂ => f₁.interp val → f₂.interp val
 | .iff f₁ f₂ => Iff (f₁.interp val) (f₂.interp val)
 | .eq f₁ f₂  => f₁.interp val = f₂.interp val
 
@@ -146,6 +149,14 @@ partial def D2P (e : Expr) : ReifM Expr PropForm := do
       | _ => h2Atom e
     else
       h2Atom e
+  | .forallE name biTy body binfo =>
+    if body.hasLooseBVar 0 then
+      h2Atom e
+    else
+      Meta.withLocalDecl name binfo biTy fun fvar => do
+        let fnTy ← D2P biTy
+        let argTy ← D2P (body.instantiate1 fvar)
+        return .imp fnTy argTy
   | _ => h2Atom e
 
 def tst (e : Expr) : Elab.Term.TermElabM Unit := do

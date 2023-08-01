@@ -14,7 +14,17 @@ namespace Auto
 -- **TODO**: Extend
 syntax hintelem := term <|> "*"
 syntax hints := ("[" hintelem,* "]")?
-syntax (name := auto) "auto" hints : tactic
+syntax autoinstr := ("p")?
+syntax (name := auto) "auto" autoinstr hints : tactic
+
+inductive Instruction where
+  | none
+  | p
+
+def parseInstr : TSyntax ``Auto.autoinstr → TacticM Instruction
+| `(autoinstr|) => return .none
+| `(autoinstr|p) => return .p
+| _ => throwUnsupportedSyntax
 
 inductive HintElem where
   -- A user-provided term
@@ -29,9 +39,9 @@ inductive HintElem where
 deriving Inhabited, BEq
 
 def parseHintElem : TSyntax ``hintelem → TacticM HintElem
-  | `(hintelem| *)       => return .lctxhyps
-  | `(hintelem| $t:term) => return .term t
-  | _ => throwUnsupportedSyntax
+| `(hintelem| *)       => return .lctxhyps
+| `(hintelem| $t:term) => return .term t
+| _ => throwUnsupportedSyntax
 
 structure InputHints where
   terms    : Array Term := #[]
@@ -42,18 +52,18 @@ deriving Inhabited, BEq
 -- Parse `hints` to an array of `Term`, which is still syntax
 -- `Array Term`
 def parseHints : TSyntax ``hints → TacticM InputHints
-  | `(hints| [ $[$hs],* ]) => do
-    let mut terms := #[]
-    let mut lctxhyps := false
-    let elems ← hs.mapM parseHintElem
-    for elem in elems do
-      match elem with
-      | .term t => terms := terms.push t
-      | .lctxhyps => lctxhyps := true
-      | _ => throwError "parseHints :: Not implemented"
-    return ⟨terms, #[], lctxhyps⟩
-  | `(hints| ) => return ⟨#[], #[], true⟩
-  | _ => throwUnsupportedSyntax
+| `(hints| [ $[$hs],* ]) => do
+  let mut terms := #[]
+  let mut lctxhyps := false
+  let elems ← hs.mapM parseHintElem
+  for elem in elems do
+    match elem with
+    | .term t => terms := terms.push t
+    | .lctxhyps => lctxhyps := true
+    | _ => throwError "parseHints :: Not implemented"
+  return ⟨terms, #[], lctxhyps⟩
+| `(hints| ) => return ⟨#[], #[], true⟩
+| _ => throwUnsupportedSyntax
 
 inductive Result where
   -- Unsatisfiable, witnessed by `e`
@@ -100,26 +110,35 @@ def traceLemmas (pre : String) (lemmas : Array Lemma) : TacticM Unit := do
     cnt := cnt + 1
   trace[auto.printLemmas] mdatas.foldl MessageData.compose pre
 
-def runAuto (stx : TSyntax ``hints) (ngoal : FVarId) : TacticM Result := do
-  let inputHints ← parseHints stx
+-- `ngoal` means `negated goal`
+def runAuto
+  (instrstx : TSyntax ``autoinstr)
+  (hintstx : TSyntax ``hints) (ngoal : FVarId) : TacticM Result := do
+  let instr ← parseInstr instrstx
+  let inputHints ← parseHints hintstx
   let lctxLemmas ← collectLctxLemmas inputHints.lctxhyps ngoal
   traceLemmas "Lemmas collected from local context:" lctxLemmas
   let userLemmas ← collectUserLemmas inputHints.terms
   traceLemmas "Lemmas collected from user-provided terms:" userLemmas
   let lemmas := lctxLemmas ++ userLemmas
-  -- testing
-  let types := lemmas.map (fun x => x.type)
-  let PState := (← (types.mapM (fun e => do
-      PReif.addAssertion (ω := Expr) (← D2P e))).run {}).2
-  let commands := (← (P2SMT PState).run {}).1
-  let _ ← liftM <| commands.mapM (fun c => IO.println s!"Command: {c}")
-  Solver.SMT.querySolver commands
-  -- testing
-  throwError "runAuto :: Not implemented"
+  match instr with
+  | .none =>
+    -- Testing. Skipping universe level instantiation
+    let rs : Reif.State := { facts := lemmas.map (fun x => (x.proof, x.type)) }
+    -- testing
+    throwError "runAuto :: Not implemented"
+  | .p =>
+    let types := lemmas.map (fun x => x.type)
+    let PState := (← (types.mapM (fun e => do
+        PReif.addAssertion (ω := Expr) (← D2P e))).run {}).2
+    let commands := (← (P2SMT PState).run {}).1
+    let _ ← liftM <| commands.mapM (fun c => IO.println s!"Command: {c}")
+    Solver.SMT.querySolver commands
+    throwError "runAuto :: Not implemented"
 
 @[tactic auto]
 def evalAuto : Tactic
-| `(auto | auto $hints) => withMainContext do
+| `(auto | auto $instr $hints) => withMainContext do
   let startTime ← IO.monoMsNow
   -- Suppose the goal is `∀ (x₁ x₂ ⋯ xₙ), G`
   -- First, apply `intros` to put `x₁ x₂ ⋯ xₙ` into the local context,
@@ -130,7 +149,7 @@ def evalAuto : Tactic
   let (ngoal, absurd) ← MVarId.intro1 nngoal
   replaceMainGoal [absurd]
   withMainContext do
-    let result ← runAuto hints ngoal
+    let result ← runAuto instr hints ngoal
     match result with
     | Result.unsat e => do
       IO.println s!"Unsat. Time: {(← IO.monoMsNow) - startTime}"

@@ -5,13 +5,13 @@ import Auto.Tactic
 set_option trace.auto.printLemmas true
 
 example : True := by
-  try auto [True.intro];
+  try auto p [True.intro];
   sorry
 
 example : True := by
-  try auto [Or.inl, Or.inr];
+  try auto p [Or.inl, Or.inr];
   sorry
 
 example : True := by
-  try auto [And.intro];
+  try auto p [And.intro];
   sorry
