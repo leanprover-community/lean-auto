@@ -18,13 +18,15 @@ Experiments in automation for Lean
   * e.g collecting equational theorem for *match* constructs
   * e.g collect fields of typeclasses (we probably won't do so because typeclass can get very complicated and there are simply too many fields)
   * e.g collect constructors for inductively defined propositions
-* $COC \to COC^{p.i}$: Erase proofs
+* $COC \to COC^{p.i}$: Erase proofs??
   * $p.i.$ stands for "proof irrelevance"
-* $COC^{p.i.} \to COC^{c.u.}$: Instantiating universe levels
+* $COC^{p.i} \to COC({p.i.})$: Instantiating (types depending on types), (types depending on terms) and (terms depending on types) while ignoring all typeclass arguments of functions
+  * This should be done **before instantiating universe levels and instantiating typeclass arguments**
+* $COC^{p.i.} \to COC^{p.i.}$: Instantiating typeclass arguments
+  * First of all, synthesize instance according to the dependent arguments that the function takes (these arguments are filled by the last step).
+  * The problem is that two definitionally equal instances might be syntactically different. To deal with this, whenever there are two instances of the function `f` which takes the [same dependent arguments (excluding typeclass arguments)], we call `isDefEq` on their instance argument to see whether they're definitionally equal.
+* $COC^{p.i.} \to COC(\lambda^{c.u.})$: Instantiating universe levels
   * $c.u.$ stands for "constant universe level"
-* $COC^{c.u.} \to COC^{c.u.}$: Instantiating typeclasse arguments
-  * **This is probably the most difficult part of translation.**
-* $COC^{c.u.} \to COC(\lambda^{c.u.})$: Instantiating (types depending on types), (types depending on terms) and (terms depending on types)
   * Note that at this stage, all the facts we've obtained are still valid $CIC$ expressions and are directly provable from the assumptions.
 * $COC(\lambda^{c.u.}) \to COC(\lambda)$
   * We want all types $α$ occuring in the signature of constants and variables to be of sort ```Type (u + 1)```, i.e., $α : Type \ (u + 1)$. This is necessary because we want to write a checker (instead of directly reconstructing proof in DTT) and the valuation function from less expressive logic to dependent type theory requires [the elements in the range of the valuation function] to be [of the same sort].
@@ -39,11 +41,13 @@ Experiments in automation for Lean
     ```
   * We only transfer these "lifted" terms to the less expressive $\lambda_2$, and $\lambda_2$ is unaware of the universe levels wrapped inside ```GLift.up```.
   * Lifted constantes should be introduced into the local context. Theorems corresponding to the original one but using only lifted constants and with uniform universe levels, should also be introduced into the local context. Later translations should only use theorems and constants with uniform universe levels.
-* $COC(\lambda) \to COC(\text{TPTP TF0})$: Instantiating function arguments
+* $\lambda \to \lambda(\text{TPTP TF0})$: Instantiating function arguments
+  * $\lambda$ is the reified $COC(\lambda)$
 * **There should also be a process similar to ULifting that "lifts" Bool into Prop**
 
 ## Reification
 * $CIC \to \text{Propositional}$
-  * ```Auto/IR/PReif.lean```
+  * ```Auto/Translation/PReif.lean```
 * $COC(\lambda) \to \lambda(\text{TPTP\ TH0})$
-* $COC(\text{TPTP TF0}) \to \text{TPTP TF0}$
+  * ```Auto/Translation/LamReif.lean```
+* $\lambda(\text{TPTP TF0}) \to \text{TPTP TF0}$
