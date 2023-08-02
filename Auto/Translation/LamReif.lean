@@ -1,7 +1,7 @@
 import Lean
 import Auto.Util.MonadUtils
 import Auto.Util.ExprExtra
-import Auto.Translation.LamULift
+import Auto.Translation.LamPLift
 import Auto.Embedding.LamBase
 open Lean
 
@@ -9,7 +9,7 @@ initialize
   registerTraceClass `auto.reifLam
 
 namespace Auto.LamReif
-open LamULift Embedding.Lam
+open LamPLift Embedding.Lam
 
 inductive FVarType where
   | var       -- Ordinary variable

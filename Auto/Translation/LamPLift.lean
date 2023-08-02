@@ -7,11 +7,11 @@ open Lean
 open Auto.Embedding
 
 initialize
-  registerTraceClass `auto.lamULift
+  registerTraceClass `auto.lamPLift
 
 /-
-  ULift for simply typed lambda calculus, with some support
-    for dependent types
+  ULift for system `λP`, i.e. supports `types depending on terms`
+    and `terms depending on terms`.
   (1) For functions `f` used in user-provided facts, call
       `cstULift` to obtain a lifted version of `f` where
       all the arguments are lifted versions of the original
@@ -19,14 +19,26 @@ initialize
   (2) For user-provided fact `proof : ty`, we **assume**
       that all the `∀` has been turned into free variables,
       where the free variable corresponds to a monomorphized
-      instance of the polymorphic `forallF` function.
+      instance of the polymorphic `forallF` function, or a
+      universe-level-instantiated instance of the `ImpF` function.
       We call `termULift` on `ty` to obtain an expression
       `ty'` that is definitionally equal to `GLift.up ty`,
-     but only contains lifted counterparts of the original
-     constants in `ty`
+      and that `ty'` only contains lifted counterparts of
+      the original constants in `ty`
+
+  Note that `types/terms depending on types` are not fully supported
+  For example, if we have const/fvar `f : ∀ (α : Type), α → Prop`
+    and `h : Nat → Nat`, then calling `termLift` on `f (Nat → Nat) h`
+    would fail. This is because 
+  (1) `h` will be lifted to `hLift : GLift Nat → GLift Nat`, so
+      The lifted version of `f (Nat → Nat)` must have type
+      `(GLift Nat → GLift Nat) → GLift Prop`
+  (2) However, `cstULift f` has type `∀ (α : GLift Type), α → GLift Prop`.
+      We can't actually instantiate `α := GLift Nat → GLift Nat` because
+      the type of `GLift Nat → GLift Nat` is not `GLift Type`.
 -/
 
-namespace Auto.LamULift
+namespace Auto.LamPLift
 
 /-
   For an expression `e`, we denote its lifted version as `e↑`. For the
@@ -210,7 +222,7 @@ section TestcstULift
   #getExprAndApply [f₅ | ulift]
   #check fun (a : (GLift.{1, tmp} Nat → GLift.{1, tmp} Nat) → GLift.{1, tmp} Nat) =>
   GLift.up.{1, tmp}
-    (Auto.LamULift.f₅ fun (a_1 : Nat → Nat) =>
+    (Auto.LamPLift.f₅ fun (a_1 : Nat → Nat) =>
       GLift.down.{1, tmp} (a fun (a : GLift.{1, tmp} Nat) => GLift.up.{1, tmp} (a_1 (GLift.down.{1, tmp} a))))
 
   set_option pp.explicit true in
@@ -243,7 +255,7 @@ section TestcstULift
       (f : GLift.{1, tmp} Nat → GLift.{1, tmp} Nat) →
         GLift.{1, tmp} (GLift.down.{2, tmp} (α (f (GLift.up.{1, tmp} 0))))) =>
   GLift.up.{1, tmp}
-    (Auto.LamULift.f₆ (fun (a : Nat) => GLift.down.{2, tmp} (α (GLift.up.{1, tmp} a))) fun (f : Nat → Nat) =>
+    (Auto.LamPLift.f₆ (fun (a : Nat) => GLift.down.{2, tmp} (α (GLift.up.{1, tmp} a))) fun (f : Nat → Nat) =>
       GLift.down.{1, tmp} (β fun (a : GLift.{1, tmp} Nat) => GLift.up.{1, tmp} (f (GLift.down.{1, tmp} a))))
 
 end TestcstULift
@@ -433,7 +445,7 @@ section
   
   private def withLocalDeclAsBoundFVarImp (name : Name) (bi : BinderInfo) (type : Expr) (k : Expr → ULiftM α) : ULiftM α :=
     Meta.withLocalDecl name bi type fun fvar =>
-      LamULift.withBoundFVar fvar.fvarId! <| k fvar
+      LamPLift.withBoundFVar fvar.fvarId! <| k fvar
   
   def withLocalDeclAsBoundFVar
     [Monad n] [MonadControlT ULiftM n]
@@ -460,8 +472,7 @@ section
       return .app fnUp argUp
     | .lam name biTy body binfo => do
       let biTyUp ← typeULift biTy
-      let biTyUpTy ← instantiateMVars (← Meta.inferType biTyUp)
-      withLocalDeclAsBoundFVar (n:=ULiftM) name binfo biTyUpTy fun biUp => do
+      withLocalDeclAsBoundFVar (n:=ULiftM) name binfo biTyUp fun biUp => do
         -- This `body'` would not be type correct, but we
         --   do this anyway.
         let body' := Expr.instantiate1 body biUp
@@ -469,7 +480,7 @@ section
         let bodyUp ← termULift body'
         Meta.mkLambdaFVars #[biUp] bodyUp
     | .forallE .. =>
-      throwError ("∀ should have been turned into" ++
+      throwError ("termULift :: ∀ should have been turned into" ++
         " free variables representing `forallF` or `ImpF` during monomorphization")
     | .letE .. => throwError "termULift :: Not implemented"
     | .fvar id => do
@@ -557,13 +568,13 @@ section
     --   Since we might have not lifted the term `.sort (lvl + 1)`, we
     --   should not call `typeULift` on `eTy` (because that will trigger
     --   `termULift` on `eTy`).
-    trace[auto.lamULift] "withProcessedAtomic :: Type lifting type of ⦗⦗{e} : {eTy}⦘⦘"
+    trace[auto.lamPLift] "withProcessedAtomic :: Type lifting type of ⦗⦗{e} : {eTy}⦘⦘"
     match (← instantiateMVars e) with
     | .sort lvl =>
       eTyUp := Expr.app (.const ``GLift [.succ (.succ lvl), u]) eTy
     | _       =>
       eTyUp ← typeULift eTy
-    trace[auto.lamULift] "withProcessedAtomic :: ⦗⦗{e} : {eTy}⦘⦘ lifted to ⦗⦗{eUp} : {eTyUp}⦘⦘"
+    trace[auto.lamPLift] "withProcessedAtomic :: ⦗⦗{e} : {eTy}⦘⦘ lifted to ⦗⦗{eUp} : {eTyUp}⦘⦘"
     let freshId := (← mkFreshId).toString
     Meta.withLetDecl ("_lift_" ++ freshId) eTyUp eUp (fun newFVar => do
       pushLifted checkInterpretedConst e newFVar.fvarId!
@@ -573,7 +584,7 @@ section
   
   -- `e` should be an atomic expression
   private partial def withProcessedAtomicImp (e : Expr) (cont : ULiftM α) : ULiftM α := do
-    trace[auto.lamULift] "withProcessedAtomic :: Processing expression {e}"
+    trace[auto.lamPLift] "withProcessedAtomic :: Processing expression {e}"
     -- If `e` is already processed, return
     if let .some _ ← getLifted? e then
       cont
@@ -599,11 +610,11 @@ section
   abbrev ULiftedFact := Expr × Expr
 
   private def checkFactLift (proof gLiftTy : Expr) : MetaM Unit := do
-    trace[auto.lamULift] "Checking correctness of lift"
+    trace[auto.lamPLift] "Checking correctness of lift"
     let ty ← Meta.inferType proof
     let ty' ← Meta.mkAppM ``GLift.down #[gLiftTy]
     if !(← Meta.isTypeCorrect ty') then
-      throwError "checkFactLift :: Malformed type ⦗⦗{ty'}⦘⦘"
+      throwError "checkFactLift :: Malformed lifted type ⦗⦗{ty'}⦘⦘ of ⦗⦗{proof}⦘⦘"
     if !(← Meta.isDefEq ty ty') then
       throwError "checkFactLift :: Error: ⦗⦗{proof}⦘⦘ is not of type ⦗⦗{ty'}⦘⦘"
 
@@ -611,9 +622,9 @@ section
     (cont : Array ULiftedFact → ULiftM α) (arr : Array ULiftedFact) : ULiftM α := do
     let (proof, ty) := fact
     let tya ← collectAtomic ty
-    trace[auto.lamULift] "Collected atomic expressions {tya.toList} for ⦗⦗{ty}⦘⦘"
+    trace[auto.lamPLift] "Collected atomic expressions {tya.toList} for ⦗⦗{ty}⦘⦘"
     tya.foldl (fun cont' a => withProcessedAtomicImp checkInterpretedConst a cont') (do
-      trace[auto.lamULift] "Term lifting ⦗⦗{ty}⦘⦘, the type of ⦗⦗{proof}⦘⦘"
+      trace[auto.lamPLift] "Term lifting ⦗⦗{ty}⦘⦘, the type of ⦗⦗{proof}⦘⦘"
       let gLiftTy ← termULift ty
       -- Now we check that `proof : GLift.down gLiftTy`
       checkFactLift proof gLiftTy
@@ -679,4 +690,4 @@ section
 
 end
 
-end Auto.LamULift
+end Auto.LamPLift
