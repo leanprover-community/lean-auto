@@ -23,7 +23,7 @@ def impLift.{u}
   (q : GLift.{u + 1, v} (Sort u)) :=
   GLift.up (p.down → q.down)
 
-def liftTyConv.{u, v} (tyUp : GLift.{u + 1, v} (Sort u)) :=
+def LiftTyConv.{u, v} (tyUp : GLift.{u + 1, v} (Sort u)) :=
   GLift.{u, v} (GLift.down.{u + 1, v} tyUp)
 
 structure IsomType (α : Sort u) (β : Sort v) where

@@ -203,8 +203,9 @@ mutual
 
   -- At this point, there should only be non-dependent `∀`s in the type.
   partial def reifType : Expr → ReifM LamSort
-  | .app (.const ``Embedding.liftTyConv _) (.fvar fid) =>
+  | .app (.const ``Embedding.LiftTyConv _) (.fvar fid) =>
     processTypeFVar fid
+  | .mdata _ e => reifType e
   | .forallE _ ty body _ => do
     if body.hasLooseBVar 0 then
       throwError "reifType :: Dependently typed functions are not supported"

@@ -128,8 +128,10 @@ def runAuto
     (((LamReif.uLiftAndReify (fun s => do
       let assertions := s.assertions
       for (expr, lterm) in assertions do
-        trace[auto.tactic] "Proof: {expr}"
-        trace[auto.tactic] "LTerm: {repr lterm}")).run' {}).run').run' rs
+        trace[auto.tactic] "Proof: {expr}, λ Term: {repr lterm}"
+      let lamVarTy := s.lamVarTy
+      for (id, lams) in lamVarTy do
+        trace[auto.tactic] "FVar: {Expr.fvar id}, λ Sort: {repr lams}")).run' {}).run').run' rs
     -- testing
     throwError "runAuto :: Not implemented"
   | .p =>

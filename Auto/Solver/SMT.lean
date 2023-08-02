@@ -90,11 +90,11 @@ def querySolver (query : Array IR.SMT.Command) : MetaM Unit := do
   if unsat then
     emitCommand solver .getProof
     let proof ← getSexp solver
-    IO.println proof
+    IO.println s!"Unsat, proof: {proof}"
   else
     emitCommand solver .getModel
     let model ← getSexp solver
-    IO.println model
+    IO.println s!"Sat, model: {model}"
 
 end Solver.SMT
 

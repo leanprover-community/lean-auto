@@ -299,8 +299,8 @@ noncomputable def example₁.Lift.{u} := fun
     (2) Suppose we're processing an atomic expression `p : typ`, we proceed in three steps
         (i)  Collect all the atomic expressions that `p` depends on
           Note: `p` depends on an atomic expression `c` iff either `c` occurs in `p`, or
-            the type of a (constant/fvar/mvar) occurring in `p` depends on `c` (this is a
-            recursive definition)
+            the type of a (constant/fvar/mvar/lit) occurring in `p` depends on `c` (this is
+            a recursive definition)
         (ii) For all the unprocessed ones in the collected atomic expressions,
           process them. **Note that the same constant with different universe levels are**
           **considered different**
@@ -359,6 +359,9 @@ abbrev ULiftM := ReaderT Context <| StateRefT State Reif.ReifM
 
 section
   
+  -- Check whether an expression is an interpreted constant.
+  -- We'll use this function to insert lifted counterparts of
+  --   interpreted constants into `liftedInterped`
   variable (checkInterpretedConst : Expr → MetaM Bool)
   
   def pushLifted (e : Expr) (eUp : FVarId) : ULiftM Unit := do
@@ -499,13 +502,19 @@ section
         let bodyUp ← typeULift body'
         Meta.mkForallFVars #[biUp] bodyUp
     | e => do
+      -- We want `termULift` and `typeULift` to work on dependent types.
+      -- Note that here, the `typeof(eUp)` is not necessarily `GLift typeof(e)`
+      --   because `e` might contain free variables that are binders in the
+      --   original expression and has already been lifted.
       let eUp ← termULift e
-      let eUpTy ← (instantiateMVars (← Meta.inferType eUp))
-      let eUpTy ← Meta.withTransparency Meta.TransparencyMode.all <| Meta.whnfD eUpTy
-      let .app (.const ``GLift [v, _]) _  := eUpTy
-        | throwError "typeULift :: Unexpected type ⦗⦗{e}⦘⦘ which lifts to ⦗⦗{eUp} : {eUpTy}⦘⦘"
+      let eUpSort ← (instantiateMVars (← Meta.inferType eUp))
+      let eUpSort ← Meta.withTransparency .all <| Meta.whnf eUpSort
+      let .app (.const ``GLift [vsucc, _]) _ := eUpSort
+        | throwError "typeULift :: Unexpected type ⦗⦗{eUp} : {eUpSort}⦘⦘"
       let u ← getU
-      return Expr.app (.const ``liftTyConv [v, u]) eUp
+      let some v := (← instantiateLevelMVars vsucc).dec
+        | throwError "typeULift :: Unexpected universe level in ⦗⦗{eUp} : {eUpSort}⦘⦘"
+      return Expr.app (.const ``LiftTyConv [v, u]) eUp
   
   end
   
@@ -548,15 +557,13 @@ section
     --   Since we might have not lifted the term `.sort (lvl + 1)`, we
     --   should not call `typeULift` on `eTy` (because that will trigger
     --   `termULift` on `eTy`).
+    trace[auto.lamULift] "withProcessedAtomic :: Type lifting type of ⦗⦗{e} : {eTy}⦘⦘"
     match (← instantiateMVars e) with
     | .sort lvl =>
-      let eUp := Expr.app (.const ``GLift [.succ lvl, u]) e
-      eTyUp := Expr.app (.const ``liftTyConv [.succ lvl, u]) eUp
-      trace[auto.lamULift] "⦗⦗{Expr.sort (.succ lvl)}⦘⦘ lifted to ⦗⦗{eTyUp}⦘⦘ while processing atomic expression ⦗⦗{e}⦘⦘"
+      eTyUp := Expr.app (.const ``GLift [.succ (.succ lvl), u]) eTy
     | _       =>
-      trace[auto.lamULift] "Type lifting ⦗⦗{eTy}⦘⦘ while processing atomic expression ⦗⦗{e}⦘⦘"
       eTyUp ← typeULift eTy
-      trace[auto.lamULift] "⦗⦗{eTy}⦘⦘ lifted to ⦗⦗{eTyUp}⦘⦘ while processing atomic expression ⦗⦗{e}⦘⦘"
+    trace[auto.lamULift] "withProcessedAtomic :: ⦗⦗{e} : {eTy}⦘⦘ lifted to ⦗⦗{eUp} : {eTyUp}⦘⦘"
     let freshId := (← mkFreshId).toString
     Meta.withLetDecl ("_lift_" ++ freshId) eTyUp eUp (fun newFVar => do
       pushLifted checkInterpretedConst e newFVar.fvarId!
@@ -576,7 +583,7 @@ section
           -- Collect atomic expressions within the type of a free variable
           let ia := (← collectAtomic (← instantiateMVars (← id.getType)))
           ia.foldl (β := ULiftM α) (fun cont'' a => withProcessedAtomicImp a cont'') cont'
-        else if e.isMVar ∨ e.isConst then
+        else if e.isMVar ∨ e.isConst ∨ e.isLit then
           -- Collect atomic expressions within the type of a constant or a metavariable
           let ia := (← collectAtomic (← instantiateMVars (← Meta.inferType e)))
           ia.foldl (β := ULiftM α) (fun cont'' a => withProcessedAtomicImp a cont'') cont'
@@ -590,7 +597,16 @@ section
   --   `Expr` is the lifted type, which is definitionally equal
   --   to `GLift.up ty`
   abbrev ULiftedFact := Expr × Expr
-  
+
+  private def checkFactLift (proof gLiftTy : Expr) : MetaM Unit := do
+    trace[auto.lamULift] "Checking correctness of lift"
+    let ty ← Meta.inferType proof
+    let ty' ← Meta.mkAppM ``GLift.down #[gLiftTy]
+    if !(← Meta.isTypeCorrect ty') then
+      throwError "checkFactLift :: Malformed type ⦗⦗{ty'}⦘⦘"
+    if !(← Meta.isDefEq ty ty') then
+      throwError "checkFactLift :: Error: ⦗⦗{proof}⦘⦘ is not of type ⦗⦗{ty'}⦘⦘"
+
   private def withULiftedFactsAux (fact : Reif.UMonoFact) {α : Type}
     (cont : Array ULiftedFact → ULiftM α) (arr : Array ULiftedFact) : ULiftM α := do
     let (proof, ty) := fact
@@ -599,6 +615,8 @@ section
     tya.foldl (fun cont' a => withProcessedAtomicImp checkInterpretedConst a cont') (do
       trace[auto.lamULift] "Term lifting ⦗⦗{ty}⦘⦘, the type of ⦗⦗{proof}⦘⦘"
       let gLiftTy ← termULift ty
+      -- Now we check that `proof : GLift.down gLiftTy`
+      checkFactLift proof gLiftTy
       cont (arr.push (proof, gLiftTy))
     )
   

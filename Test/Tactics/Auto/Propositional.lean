@@ -18,6 +18,11 @@ example (a b : Prop)
   try auto p [];
   sorry
 
+example (a b : Prop)
+        (h₁ : a) (h₂ : a → b) : b := by
+  try auto p [*];
+  sorry
+
 example : (P ∧ Q) ∧ R ↔ P ∧ (Q ∧ R) := by
   try auto p [];
   sorry
