@@ -5,6 +5,9 @@ import Auto.Translation.LamULift
 import Auto.Embedding.LamBase
 open Lean
 
+initialize
+  registerTraceClass `auto.reifLam
+
 namespace Auto.LamReif
 open LamULift Embedding.Lam
 
@@ -195,7 +198,6 @@ mutual
   | e => throwError "reifTerm :: {e} should have been lifted into fvar"
 
   -- At this point, there should only be non-dependent `∀`s in the type.
-  --   Nothing else!
   partial def reifType : Expr → ReifM LamSort
   | .app (.const ``Embedding.liftTyConv _) (.fvar fid) =>
     processTypeFVar fid
@@ -210,6 +212,7 @@ end
 
 def reifFacts (facts : Array ULiftedFact) : ReifM Unit := do
   let _ ← facts.mapM (fun (proof, tyLift) => do
+    trace[auto.reifLam] s!"Reifying {proof} : {tyLift}"
     let lamty ← reifTerm tyLift
     setAssertions ((← getAssertions).push (proof, lamty)))
 

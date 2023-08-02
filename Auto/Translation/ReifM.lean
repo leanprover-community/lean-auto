@@ -22,10 +22,9 @@ structure State where
   --   versions will be added to `facts`.
   -- The first `Expr` is the proof, and the second `Expr` is the fact
   facts           : Array UMonoFact     := #[]
-  -- During monomorphization, interpreted constants
-  --   (¬, ∧, ∨, →, ↔, =, ∀, ∃, ...), except for `prop,
-  --   will be turned into free variables representing
-  --   (instances of) these constants. We have to record
+  -- During monomorphization, interpreted polymorphic logical
+  --   constants (=, ∀, ∃, →) will be turned into free variables
+  --   representing (instances of) these constants. We have to record
   --   these free variables so that we know they're interpreted
   --   constants during reification.
   interpreted     : HashMap FVarId Expr := HashMap.empty

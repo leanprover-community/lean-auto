@@ -3,7 +3,9 @@ import Auto.Tactic
 -- Collecting `logical constructors`
 
 set_option trace.auto.printLemmas true
+set_option trace.auto.lamULift true
 
+set_option pp.universes true in
 example : True := by
   auto [True.intro];
 
