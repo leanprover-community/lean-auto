@@ -10,7 +10,8 @@ initialize
   registerTraceClass `auto.lamULift
 
 /-
-  ULift for simply typed lambda calculus
+  ULift for simply typed lambda calculus, with some support
+    for dependent types
   (1) For functions `f` used in user-provided facts, call
       `cstULift` to obtain a lifted version of `f` where
       all the arguments are lifted versions of the original
@@ -369,8 +370,9 @@ def pushLifted (e : Expr) (eUp : FVarId) : ULiftM Unit :=
   | .fvar id => do
     let varMap ← getVarMap
     setVarMap (varMap.insert e eUp)
-    -- If `e` is also an interpreted constant, add it to `liftedInterped`
-    let iL ← Reif.getInterpreted
+    -- If `e` is also an interpreted polymorphic
+    --   logical constant, add it to `liftedInterped`
+    let iL ← Reif.getIPolyLog
     if let .some val := iL.find? id then
       let liftedInterped ← getLiftedInterped
       setLiftedInterped (liftedInterped.insert eUp val)

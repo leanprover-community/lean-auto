@@ -27,7 +27,7 @@ structure State where
   --   representing (instances of) these constants. We have to record
   --   these free variables so that we know they're interpreted
   --   constants during reification.
-  interpreted     : HashMap FVarId Expr := HashMap.empty
+  iPolyLog        : HashMap FVarId Expr := HashMap.empty
 
 abbrev ReifM := StateT State MetaM
 #genMonadState ReifM

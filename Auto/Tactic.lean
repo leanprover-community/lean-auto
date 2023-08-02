@@ -128,8 +128,8 @@ def runAuto
     (((LamReif.uLiftAndReify (fun s => do
       let assertions := s.assertions
       for (expr, lterm) in assertions do
-        IO.println s!"Proof: {expr}"
-        IO.println s!"LTerm: {repr lterm}")).run' {}).run').run' rs
+        trace[auto.tactic] "Proof: {expr}"
+        trace[auto.tactic] "LTerm: {repr lterm}")).run' {}).run').run' rs
     -- testing
     throwError "runAuto :: Not implemented"
   | .p =>
