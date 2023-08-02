@@ -357,299 +357,308 @@ abbrev ULiftM := ReaderT Context <| StateRefT State Reif.ReifM
 @[inline] def map2ULiftM [MonadControlT ULiftM m] [Monad m] (f : forall {α}, (β → γ → ULiftM α) → ULiftM α) {α} (k : β → γ → m α) : m α :=
   controlAt ULiftM fun runInBase => f fun b c => runInBase <| k b c
 
-def pushLifted (e : Expr) (eUp : FVarId) : ULiftM Unit :=
-  match e with
-  | .const name lvls => do
-    let constMap ← getConstMap
-    let arr :=
-      (match constMap.find? name with
-       | .some arr => arr
-       | none => #[])
-    let constMap := constMap.insert name (arr.push (lvls, eUp))
-    setConstMap constMap
-  | .fvar id => do
-    let varMap ← getVarMap
-    setVarMap (varMap.insert e eUp)
-    -- If `e` is also an interpreted polymorphic
-    --   logical constant, add it to `liftedInterped`
-    let iL ← Reif.getIPolyLog
-    if let .some val := iL.find? id then
+section
+  
+  variable (checkInterpretedConst : Expr → MetaM Bool)
+  
+  def pushLifted (e : Expr) (eUp : FVarId) : ULiftM Unit := do
+    if ← checkInterpretedConst e then
       let liftedInterped ← getLiftedInterped
-      setLiftedInterped (liftedInterped.insert eUp val)
-  | .mvar _ => do
-    let varMap ← getVarMap
-    setVarMap (varMap.insert e eUp)
-  | .lit _ => do
-    let varMap ← getVarMap
-    setVarMap (varMap.insert e eUp)
-  | .sort lvl => do
-    -- Add `prop` as interpreted constant
-    if ← Meta.isLevelDefEq lvl .zero then
-      let liftedInterped ← getLiftedInterped
-      setLiftedInterped (liftedInterped.insert eUp (.sort .zero))
-    let varMap ← getVarMap
-    setVarMap (varMap.insert e eUp)
-  | _ => throwError "insertLifted :: Unexpected expression {e}"
-
-def getLifted? (e : Expr) : ULiftM (Option FVarId) :=
-  match e with
-  | .const name lvls => do
-    let constMap ← getConstMap
-    let some arrs := constMap.find? name
-      | return none
-    for (lvls', fvarId) in arrs do
-      if ← (lvls'.zip lvls).allM (fun (lvl', lvl) => Meta.isLevelDefEq lvl' lvl) then
-        return fvarId
-    return none
-  | .fvar _ => do
-    let varMap ← getVarMap
-    return varMap.find? e
-  | .mvar _ => do
-    let varMap ← getVarMap
-    return varMap.find? e
-  | .lit _ => do
-    let varMap ← getVarMap
-    return varMap.find? e
-  | .sort _ => do
-    let varMap ← getVarMap
-    return varMap.find? e
-  | _ => throwError "getLifted? :: Unexpected expression {e}"
-
-private def withBoundFVarImp (id : FVarId) (k : ULiftM α) : ULiftM α :=
-  withReader (fun ctx => ⟨ctx.boundFVars.insert id (ctx.boundFVars.size)⟩) k
-
-def withBoundFVar [Monad n] [MonadControlT ULiftM n] (id : FVarId) (k : n α) :=
-  mapULiftM (withBoundFVarImp id) k
-
-private def withLocalDeclAsBoundFVarImp (name : Name) (bi : BinderInfo) (type : Expr) (k : Expr → ULiftM α) : ULiftM α :=
-  Meta.withLocalDecl name bi type fun fvar =>
-    LamULift.withBoundFVar fvar.fvarId! <| k fvar
-
-def withLocalDeclAsBoundFVar
-  [Monad n] [MonadControlT ULiftM n]
-  (name : Name) (bi : BinderInfo) (type : Expr) (k : Expr → n α) :=
-  map1ULiftM (withLocalDeclAsBoundFVarImp name bi type) k
-
-def deBruijn! (id : FVarId) : ULiftM Nat := do
-  let boundFVars ← getBoundFVars
-  match boundFVars.find? id with
-  | .some n => return boundFVars.size - 1 - n
-  | .none   => throwError "deBruijn! :: Unknown bound fvar {Expr.fvar id}"
-
-mutual
-
-  -- Turn `e` into an expression `e'` definitionally equal
-  --   to `GLift.up e` such that `e'` only contains
-  --   lifted counterparts of constants
-  partial def termULift : (e : Expr) → ULiftM Expr
-  | .bvar _ => throwError "termULift :: Loose bound variable"
-  | .mdata data e' => return .mdata data (← termULift e')
+      setLiftedInterped (liftedInterped.insert eUp e)
+    match e with
+    | .const name lvls => do
+      let constMap ← getConstMap
+      let arr :=
+        (match constMap.find? name with
+         | .some arr => arr
+         | none => #[])
+      let constMap := constMap.insert name (arr.push (lvls, eUp))
+      setConstMap constMap
+    | .fvar id => do
+      let varMap ← getVarMap
+      setVarMap (varMap.insert e eUp)
+      -- If `e` is also an interpreted polymorphic
+      --   logical constant, add it to `liftedInterped`
+      let iL ← Reif.getIPolyLog
+      if let .some val := iL.find? id then
+        let liftedInterped ← getLiftedInterped
+        setLiftedInterped (liftedInterped.insert eUp val)
+    | .mvar _ => do
+      let varMap ← getVarMap
+      setVarMap (varMap.insert e eUp)
+    | .lit _ => do
+      let varMap ← getVarMap
+      setVarMap (varMap.insert e eUp)
+    | .sort lvl => do
+      -- Add `prop` as interpreted constant
+      if ← Meta.isLevelDefEq lvl .zero then
+        let liftedInterped ← getLiftedInterped
+        setLiftedInterped (liftedInterped.insert eUp (.sort .zero))
+      let varMap ← getVarMap
+      setVarMap (varMap.insert e eUp)
+    | _ => throwError "insertLifted :: Unexpected expression {e}"
+  
+  def getLifted? (e : Expr) : ULiftM (Option FVarId) :=
+    match e with
+    | .const name lvls => do
+      let constMap ← getConstMap
+      let some arrs := constMap.find? name
+        | return none
+      for (lvls', fvarId) in arrs do
+        if ← (lvls'.zip lvls).allM (fun (lvl', lvl) => Meta.isLevelDefEq lvl' lvl) then
+          return fvarId
+      return none
+    | .fvar _ => do
+      let varMap ← getVarMap
+      return varMap.find? e
+    | .mvar _ => do
+      let varMap ← getVarMap
+      return varMap.find? e
+    | .lit _ => do
+      let varMap ← getVarMap
+      return varMap.find? e
+    | .sort _ => do
+      let varMap ← getVarMap
+      return varMap.find? e
+    | _ => throwError "getLifted? :: Unexpected expression {e}"
+  
+  private def withBoundFVarImp (id : FVarId) (k : ULiftM α) : ULiftM α :=
+    withReader (fun ctx => ⟨ctx.boundFVars.insert id (ctx.boundFVars.size)⟩) k
+  
+  def withBoundFVar [Monad n] [MonadControlT ULiftM n] (id : FVarId) (k : n α) :=
+    mapULiftM (withBoundFVarImp id) k
+  
+  private def withLocalDeclAsBoundFVarImp (name : Name) (bi : BinderInfo) (type : Expr) (k : Expr → ULiftM α) : ULiftM α :=
+    Meta.withLocalDecl name bi type fun fvar =>
+      LamULift.withBoundFVar fvar.fvarId! <| k fvar
+  
+  def withLocalDeclAsBoundFVar
+    [Monad n] [MonadControlT ULiftM n]
+    (name : Name) (bi : BinderInfo) (type : Expr) (k : Expr → n α) :=
+    map1ULiftM (withLocalDeclAsBoundFVarImp name bi type) k
+  
+  def deBruijn! (id : FVarId) : ULiftM Nat := do
+    let boundFVars ← getBoundFVars
+    match boundFVars.find? id with
+    | .some n => return boundFVars.size - 1 - n
+    | .none   => throwError "deBruijn! :: Unknown bound fvar {Expr.fvar id}"
+  
+  mutual
+  
+    -- Turn `e` into an expression `e'` definitionally equal
+    --   to `GLift.up e` such that `e'` only contains
+    --   lifted counterparts of constants
+    partial def termULift : (e : Expr) → ULiftM Expr
+    | .bvar _ => throwError "termULift :: Loose bound variable"
+    | .mdata data e' => return .mdata data (← termULift e')
+    | .app fn arg => do
+      let fnUp ← termULift fn
+      let argUp ← termULift arg
+      return .app fnUp argUp
+    | .lam name biTy body binfo => do
+      let biTyUp ← typeULift biTy
+      let biTyUpTy ← instantiateMVars (← Meta.inferType biTyUp)
+      withLocalDeclAsBoundFVar (n:=ULiftM) name binfo biTyUpTy fun biUp => do
+        -- This `body'` would not be type correct, but we
+        --   do this anyway.
+        let body' := Expr.instantiate1 body biUp
+        -- Now `bodyUp` is type correct
+        let bodyUp ← termULift body'
+        Meta.mkLambdaFVars #[biUp] bodyUp
+    | .forallE .. =>
+      throwError ("∀ should have been turned into" ++
+        " free variables representing `forallF` or `ImpF` during monomorphization")
+    | .letE .. => throwError "termULift :: Not implemented"
+    | .fvar id => do
+      let varMap ← getVarMap
+      match varMap.find? (.fvar id) with
+      -- A free variable in the lctx where the orignal expression lives in
+      | .some id' => return (.fvar id')
+      | none =>
+        let boundFVars ← getBoundFVars
+        match boundFVars.find? id with
+        -- A binder inside the original expression
+        | .some _ => return (.fvar id)
+        | none => throwError "termULift :: Unexpected error"
+    | e => do
+      let some eUp ← getLifted? e
+        | throwError "termULift :: Cannot find lifted counterpart of {e}"
+      return .fvar eUp
+  
+    -- If an expression `e : ty`, then `cstULift e : typeULift ty`
+    partial def typeULift : (e : Expr) → ULiftM Expr
+    | .mdata data e' => return .mdata data (← typeULift e')
+    | e@(.lam ..) => throwError "typeULift :: Unexpected type {e}"
+    | .forallE name biTy body binfo => do
+      let biUpTy ← typeULift biTy
+      withLocalDeclAsBoundFVar (n:=ULiftM) name binfo biUpTy fun biUp => do
+        -- This `body'` would not be type correct, but we
+        --   do this anyway.
+        let body' := Expr.instantiate1 body biUp
+        -- Now `bodyUp` is type correct
+        let bodyUp ← typeULift body'
+        Meta.mkForallFVars #[biUp] bodyUp
+    | e => do
+      let eUp ← termULift e
+      let eUpTy ← (instantiateMVars (← Meta.inferType eUp))
+      let eUpTy ← Meta.withTransparency Meta.TransparencyMode.all <| Meta.whnfD eUpTy
+      let .app (.const ``GLift [v, _]) _  := eUpTy
+        | throwError "typeULift :: Unexpected type ⦗⦗{e}⦘⦘ which lifts to ⦗⦗{eUp} : {eUpTy}⦘⦘"
+      let u ← getU
+      return Expr.app (.const ``liftTyConv [v, u]) eUp
+  
+  end
+  
+  private def mergeArray (a1 a2 : Array α) :=
+    if a1.size < a2.size then
+      a2 ++ a1
+    else
+      a1 ++ a2
+  
+  -- Runs in `MetaM`, but does not use `MetaM` facilities
+  def collectAtomic : (e : Expr) → ULiftM (Array Expr)
+  | .bvar _ => return #[]
   | .app fn arg => do
-    let fnUp ← termULift fn
-    let argUp ← termULift arg
-    return .app fnUp argUp
-  | .lam name biTy body binfo => do
-    let biTyUp ← typeULift biTy
-    let biTyUpTy ← instantiateMVars (← Meta.inferType biTyUp)
-    withLocalDeclAsBoundFVar (n:=ULiftM) name binfo biTyUpTy fun biUp => do
-      -- This `body'` would not be type correct, but we
-      --   do this anyway.
-      let body' := Expr.instantiate1 body biUp
-      -- Now `bodyUp` is type correct
-      let bodyUp ← termULift body'
-      Meta.mkLambdaFVars #[biUp] bodyUp
-  | .forallE .. =>
-    throwError ("∀ should have been turned into" ++
-      " free variables representing `forallF` or `impF` during monomorphization")
-  | .letE .. => throwError "termULift :: Not implemented"
-  | .fvar id => do
-    let varMap ← getVarMap
-    match varMap.find? (.fvar id) with
-    -- A free variable in the lctx where the orignal expression lives in
-    | .some id' => return (.fvar id')
-    | none =>
-      let boundFVars ← getBoundFVars
-      match boundFVars.find? id with
-      -- A binder inside the original expression
-      | .some _ => return (.fvar id)
-      | none => throwError "termULift :: Unexpected error"
-  | e => do
-    let some eUp ← getLifted? e
-      | throwError "termULift :: Cannot find lifted counterpart of {e}"
-    return .fvar eUp
-
-  -- If an expression `e : ty`, then `cstULift e : typeULift ty`
-  partial def typeULift : (e : Expr) → ULiftM Expr
-  | .mdata data e' => return .mdata data (← typeULift e')
-  | e@(.lam ..) => throwError "typeULift :: Unexpected type {e}"
-  | .forallE name biTy body binfo => do
-    let biUpTy ← typeULift biTy
-    withLocalDeclAsBoundFVar (n:=ULiftM) name binfo biUpTy fun biUp => do
-      -- This `body'` would not be type correct, but we
-      --   do this anyway.
-      let body' := Expr.instantiate1 body biUp
-      -- Now `bodyUp` is type correct
-      let bodyUp ← typeULift body'
-      Meta.mkForallFVars #[biUp] bodyUp
-  | e => do
-    let eUp ← termULift e
-    let eUpTy ← (instantiateMVars (← Meta.inferType eUp))
-    let eUpTy ← Meta.withTransparency Meta.TransparencyMode.all <| Meta.whnfD eUpTy
-    let .app (.const ``GLift [v, _]) _  := eUpTy
-      | throwError "typeULift :: Unexpected type ⦗⦗{e}⦘⦘ which lifts to ⦗⦗{eUp} : {eUpTy}⦘⦘"
+    let fna ← collectAtomic fn
+    let arga ← collectAtomic arg
+    return mergeArray fna arga
+  | .lam _ ty body _ => do
+    let tya ← collectAtomic ty
+    let bodya ← collectAtomic body
+    return mergeArray tya bodya
+  | .forallE _ ty body _ => do
+    let tya ← collectAtomic ty
+    let bodya ← collectAtomic body
+    return mergeArray tya bodya
+  | .letE _ ty v body _ => do
+    let tya ← collectAtomic ty
+    let va ← collectAtomic v
+    let bodya ← collectAtomic body
+    return mergeArray (mergeArray tya va) bodya
+  | .mdata _ e => collectAtomic e
+  | .proj .. => throwError "collectAtomic :: Please unfold projections before calling me"
+  | e => return #[e]
+  
+  def withProcessedAtomicImpAux (e : Expr) (cont : ULiftM α) : ULiftM α := do
+    let eTy ← Meta.inferType e
+    let (eUp, _) ← cstULiftPos (← getU) e eTy
     let u ← getU
-    return Expr.app (.const ``liftTyConv [v, u]) eUp
+    let mut eTyUp : Expr := Inhabited.default
+    -- If `e` is already `.sort lvl`, then `eTy` is `.sort (lvl + 1)`.
+    --   Since we might have not lifted the term `.sort (lvl + 1)`, we
+    --   should not call `typeULift` on `eTy` (because that will trigger
+    --   `termULift` on `eTy`).
+    match (← instantiateMVars e) with
+    | .sort lvl =>
+      let eUp := Expr.app (.const ``GLift [.succ lvl, u]) e
+      eTyUp := Expr.app (.const ``liftTyConv [.succ lvl, u]) eUp
+      trace[auto.lamULift] "⦗⦗{Expr.sort (.succ lvl)}⦘⦘ lifted to ⦗⦗{eTyUp}⦘⦘ while processing atomic expression ⦗⦗{e}⦘⦘"
+    | _       =>
+      trace[auto.lamULift] "Type lifting ⦗⦗{eTy}⦘⦘ while processing atomic expression ⦗⦗{e}⦘⦘"
+      eTyUp ← typeULift eTy
+      trace[auto.lamULift] "⦗⦗{eTy}⦘⦘ lifted to ⦗⦗{eTyUp}⦘⦘ while processing atomic expression ⦗⦗{e}⦘⦘"
+    let freshId := (← mkFreshId).toString
+    Meta.withLetDecl ("_lift_" ++ freshId) eTyUp eUp (fun newFVar => do
+      pushLifted checkInterpretedConst e newFVar.fvarId!
+      Reif.pushFVar newFVar.fvarId!
+      cont
+    )
+  
+  -- `e` should be an atomic expression
+  private partial def withProcessedAtomicImp (e : Expr) (cont : ULiftM α) : ULiftM α := do
+    trace[auto.lamULift] "withProcessedAtomic :: Processing expression {e}"
+    -- If `e` is already processed, return
+    if let .some _ ← getLifted? e then
+      cont
+    else
+      (fun (cont' : ULiftM α) => do
+        if let .fvar id := e then
+          -- Collect atomic expressions within the type of a free variable
+          let ia := (← collectAtomic (← instantiateMVars (← id.getType)))
+          ia.foldl (β := ULiftM α) (fun cont'' a => withProcessedAtomicImp a cont'') cont'
+        else if e.isMVar ∨ e.isConst then
+          -- Collect atomic expressions within the type of a constant or a metavariable
+          let ia := (← collectAtomic (← instantiateMVars (← Meta.inferType e)))
+          ia.foldl (β := ULiftM α) (fun cont'' a => withProcessedAtomicImp a cont'') cont'
+        else
+          cont') (withProcessedAtomicImpAux checkInterpretedConst e cont)
+  
+  def withProcessedAtomic [Monad n] [MonadControlT ULiftM n] (e : Expr) (cont : n α) : n α :=
+    mapULiftM (withProcessedAtomicImp checkInterpretedConst e) cont
+  
+  -- The first `Expr` is `proof` (of type `ty`), and the second
+  --   `Expr` is the lifted type, which is definitionally equal
+  --   to `GLift.up ty`
+  abbrev ULiftedFact := Expr × Expr
+  
+  private def withULiftedFactsAux (fact : Reif.UMonoFact) {α : Type}
+    (cont : Array ULiftedFact → ULiftM α) (arr : Array ULiftedFact) : ULiftM α := do
+    let (proof, ty) := fact
+    let tya ← collectAtomic ty
+    trace[auto.lamULift] "Collected atomic expressions {tya.toList} for ⦗⦗{ty}⦘⦘"
+    tya.foldl (fun cont' a => withProcessedAtomicImp checkInterpretedConst a cont') (do
+      trace[auto.lamULift] "Term lifting ⦗⦗{ty}⦘⦘, the type of ⦗⦗{proof}⦘⦘"
+      let gLiftTy ← termULift ty
+      cont (arr.push (proof, gLiftTy))
+    )
+  
+  private def mergeHashSet {α : Type u} [BEq α] [Hashable α] (a1 a2 : HashSet α) :=
+    if a1.size < a2.size then
+      a2.insertMany a1.toArray
+    else
+      a1.insertMany a2.toArray
+  
+  -- Note that we're not introducing binders into the local context.
+  partial def collectUniverseLevels : Expr → MetaM (HashSet Level)
+  | .bvar _ => return HashSet.empty
+  | e@(.fvar _) => do collectUniverseLevels (← instantiateMVars (← Meta.inferType e))
+  | e@(.mvar _) => do collectUniverseLevels (← instantiateMVars (← Meta.inferType e))
+  | .sort u => return HashSet.empty.insert u
+  | e@(.const _ us) => do
+    let hus := HashSet.empty.insertMany us
+    let tys ← collectUniverseLevels (← instantiateMVars (← Meta.inferType e))
+    return mergeHashSet hus tys
+  | .app fn arg => do
+    let fns ← collectUniverseLevels fn
+    let args ← collectUniverseLevels arg
+    return mergeHashSet fns args
+  | .lam _ biTy body _ => do
+    let tys ← collectUniverseLevels biTy
+    let bodys ← collectUniverseLevels body
+    return mergeHashSet tys bodys
+  | .forallE _ biTy body _ => do
+    let tys ← collectUniverseLevels biTy
+    let bodys ← collectUniverseLevels body
+    return mergeHashSet tys bodys
+  | .letE _ ty v body _ => do
+    let tys ← collectUniverseLevels ty
+    let vs ← collectUniverseLevels v
+    let bodys ← collectUniverseLevels body
+    return mergeHashSet (mergeHashSet tys vs) bodys
+  | .lit _ => return HashSet.empty.insert (.succ .zero)
+  | .mdata _ e' => collectUniverseLevels e'
+  | .proj .. => throwError "Please unfold projections before collecting universe levels"
+  
+  -- Note that the facts to be processed are stored in `ReifM.state`
+  private def withULiftedFactsImp (cont : Array ULiftedFact → ULiftM α) : ULiftM α := do
+    let facts ← Reif.getFacts
+    -- Collect universe levels
+    let levels ← facts.foldlM (fun hs (proof, ty) => do
+      let proofUs ← collectUniverseLevels proof
+      let tyUs ← collectUniverseLevels ty
+      return mergeHashSet (mergeHashSet proofUs tyUs) hs) HashSet.empty
+    -- Compute the universe level that we need to lift to
+    -- Use `.succ` two times to reveal mugs
+    let level := Level.succ (.succ (levels.fold (fun l l' => Level.max l l') Level.zero))
+    let normLevel := level.normalize
+    setU normLevel
+    -- Lift all facts to the required universe level
+    let cont' := facts.foldl (β:= Array ULiftedFact → ULiftM α) (fun cont' fact => withULiftedFactsAux checkInterpretedConst fact cont') cont
+    cont' #[]
+
+  def withULiftedFacts [Monad n] [MonadControlT ULiftM n] (cont : Array ULiftedFact → n α) : n α :=
+    map1ULiftM (withULiftedFactsImp checkInterpretedConst) cont
 
 end
-
-private def mergeArray (a1 a2 : Array α) :=
-  if a1.size < a2.size then
-    a2 ++ a1
-  else
-    a1 ++ a2
-
--- Runs in `MetaM`, but does not use `MetaM` facilities
-def collectAtomic : (e : Expr) → ULiftM (Array Expr)
-| .bvar _ => return #[]
-| .app fn arg => do
-  let fna ← collectAtomic fn
-  let arga ← collectAtomic arg
-  return mergeArray fna arga
-| .lam _ ty body _ => do
-  let tya ← collectAtomic ty
-  let bodya ← collectAtomic body
-  return mergeArray tya bodya
-| .forallE _ ty body _ => do
-  let tya ← collectAtomic ty
-  let bodya ← collectAtomic body
-  return mergeArray tya bodya
-| .letE _ ty v body _ => do
-  let tya ← collectAtomic ty
-  let va ← collectAtomic v
-  let bodya ← collectAtomic body
-  return mergeArray (mergeArray tya va) bodya
-| .mdata _ e => collectAtomic e
-| .proj .. => throwError "collectAtomic :: Please unfold projections before calling me"
-| e => return #[e]
-
-def withProcessedAtomicImpAux (e : Expr) (cont : ULiftM α) : ULiftM α := do
-  let eTy ← Meta.inferType e
-  let (eUp, _) ← cstULiftPos (← getU) e eTy
-  let u ← getU
-  let mut eTyUp : Expr := Inhabited.default
-  -- If `e` is already `.sort lvl`, then `eTy` is `.sort (lvl + 1)`.
-  --   Since we might have not lifted the term `.sort (lvl + 1)`, we
-  --   should not call `typeULift` on `eTy` (because that will trigger
-  --   `termULift` on `eTy`).
-  match (← instantiateMVars e) with
-  | .sort lvl =>
-    let eUp := Expr.app (.const ``GLift [.succ lvl, u]) e
-    eTyUp := Expr.app (.const ``liftTyConv [.succ lvl, u]) eUp
-    trace[auto.lamULift] "⦗⦗{Expr.sort (.succ lvl)}⦘⦘ lifted to ⦗⦗{eTyUp}⦘⦘ while processing atomic expression ⦗⦗{e}⦘⦘"
-  | _       =>
-    trace[auto.lamULift] "Type lifting ⦗⦗{eTy}⦘⦘ while processing atomic expression ⦗⦗{e}⦘⦘"
-    eTyUp ← typeULift eTy
-    trace[auto.lamULift] "⦗⦗{eTy}⦘⦘ lifted to ⦗⦗{eTyUp}⦘⦘ while processing atomic expression ⦗⦗{e}⦘⦘"
-  let freshId := (← mkFreshId).toString
-  Meta.withLetDecl ("_lift_" ++ freshId) eTyUp eUp (fun newFVar => do
-    pushLifted e newFVar.fvarId!
-    Reif.pushFVar newFVar.fvarId!
-    cont
-  )
-
--- `e` should be an atomic expression
-private partial def withProcessedAtomicImp (e : Expr) (cont : ULiftM α) : ULiftM α := do
-  trace[auto.lamULift] "withProcessedAtomic :: Processing expression {e}"
-  -- If `e` is already processed, return
-  if let .some _ ← getLifted? e then
-    cont
-  else
-    (fun (cont' : ULiftM α) => do
-      if let .fvar id := e then
-        -- Collect atomic expressions within the type of a free variable
-        let ia := (← collectAtomic (← instantiateMVars (← id.getType)))
-        ia.foldl (β := ULiftM α) (fun cont'' a => withProcessedAtomicImp a cont'') cont'
-      else if e.isMVar ∨ e.isConst then
-        -- Collect atomic expressions within the type of a constant or a metavariable
-        let ia := (← collectAtomic (← instantiateMVars (← Meta.inferType e)))
-        ia.foldl (β := ULiftM α) (fun cont'' a => withProcessedAtomicImp a cont'') cont'
-      else
-        cont') (withProcessedAtomicImpAux e cont)
-
-def withProcessedAtomic [Monad n] [MonadControlT ULiftM n] (e : Expr) (cont : n α) : n α :=
-  mapULiftM (withProcessedAtomicImp e) cont
-
--- The first `Expr` is `proof` (of type `ty`), and the second
---   `Expr` is the lifted type, which is definitionally equal
---   to `GLift.up ty`
-abbrev ULiftedFact := Expr × Expr
-
-private def withULiftedFactsAux (fact : Reif.UMonoFact) {α : Type}
-  (cont : Array ULiftedFact → ULiftM α) (arr : Array ULiftedFact) : ULiftM α := do
-  let (proof, ty) := fact
-  let tya ← collectAtomic ty
-  trace[auto.lamULift] "Collected atomic expressions {tya.toList} for ⦗⦗{ty}⦘⦘"
-  tya.foldl (fun cont' a => withProcessedAtomicImp a cont') (do
-    trace[auto.lamULift] "Term lifting ⦗⦗{ty}⦘⦘, the type of ⦗⦗{proof}⦘⦘"
-    let gLiftTy ← termULift ty
-    cont (arr.push (proof, gLiftTy))
-  )
-
-private def mergeHashSet {α : Type u} [BEq α] [Hashable α] (a1 a2 : HashSet α) :=
-  if a1.size < a2.size then
-    a2.insertMany a1.toArray
-  else
-    a1.insertMany a2.toArray
-
--- Note that we're not introducing binders into the local context.
-partial def collectUniverseLevels : Expr → MetaM (HashSet Level)
-| .bvar _ => return HashSet.empty
-| e@(.fvar _) => do collectUniverseLevels (← instantiateMVars (← Meta.inferType e))
-| e@(.mvar _) => do collectUniverseLevels (← instantiateMVars (← Meta.inferType e))
-| .sort u => return HashSet.empty.insert u
-| e@(.const _ us) => do
-  let hus := HashSet.empty.insertMany us
-  let tys ← collectUniverseLevels (← instantiateMVars (← Meta.inferType e))
-  return mergeHashSet hus tys
-| .app fn arg => do
-  let fns ← collectUniverseLevels fn
-  let args ← collectUniverseLevels arg
-  return mergeHashSet fns args
-| .lam _ biTy body _ => do
-  let tys ← collectUniverseLevels biTy
-  let bodys ← collectUniverseLevels body
-  return mergeHashSet tys bodys
-| .forallE _ biTy body _ => do
-  let tys ← collectUniverseLevels biTy
-  let bodys ← collectUniverseLevels body
-  return mergeHashSet tys bodys
-| .letE _ ty v body _ => do
-  let tys ← collectUniverseLevels ty
-  let vs ← collectUniverseLevels v
-  let bodys ← collectUniverseLevels body
-  return mergeHashSet (mergeHashSet tys vs) bodys
-| .lit _ => return HashSet.empty.insert (.succ .zero)
-| .mdata _ e' => collectUniverseLevels e'
-| .proj .. => throwError "Please unfold projections before collecting universe levels"
-
--- Note that the facts to be processed are stored in `ReifM.state`
-private def withULiftedFactsImp (cont : Array ULiftedFact → ULiftM α) : ULiftM α := do
-  let facts ← Reif.getFacts
-  -- Collect universe levels
-  let levels ← facts.foldlM (fun hs (proof, ty) => do
-    let proofUs ← collectUniverseLevels proof
-    let tyUs ← collectUniverseLevels ty
-    return mergeHashSet (mergeHashSet proofUs tyUs) hs) HashSet.empty
-  -- Compute the universe level that we need to lift to
-  -- Use `.succ` two times to reveal mugs
-  let level := Level.succ (.succ (levels.fold (fun l l' => Level.max l l') Level.zero))
-  let normLevel := level.normalize
-  setU normLevel
-  -- Lift all facts to the required universe level
-  let cont' := facts.foldl (β:= Array ULiftedFact → ULiftM α) (fun cont' fact => withULiftedFactsAux fact cont') cont
-  cont' #[]
-
-def withULiftedFacts [Monad n] [MonadControlT ULiftM n] (cont : Array ULiftedFact → n α) : n α :=
-  map1ULiftM withULiftedFactsImp cont
 
 end Auto.LamULift

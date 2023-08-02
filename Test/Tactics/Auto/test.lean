@@ -10,8 +10,7 @@ set_option trace.auto.lamULift true
 set_option pp.universes true
 
 -- **TODO**
--- 1. Implement support for monomorphic logical constants.
--- 2. Check whether `LamULift` works for dependently typed terms
+-- Check whether `LamULift` works for dependently typed terms
 
 example : True := by
   auto [True.intro];
@@ -29,7 +28,7 @@ example (a b : Nat) (f : Nat → Nat)
  (eqNat : Nat → Nat → Prop) (H : eqNat (f a) (f b)) : True := by
   auto [H];
 
-example (a b : Prop) (H : impF a b) : True := by
+example (a b : Prop) (H : ImpF a b) : True := by
   auto [H];
 
 example : True := by

@@ -204,7 +204,7 @@ structure LamTyVal where
   lamVarTy     : Nat → LamSort
   eqLamVal     : Nat → LamSort
   forallLamVal : Nat → LamSort
-  existLamVal : Nat → LamSort
+  existLamVal  : Nat → LamSort
 
 instance : Inhabited LamTyVal where
   default := let func := fun _ => .atom 0; ⟨func, func, func, func⟩

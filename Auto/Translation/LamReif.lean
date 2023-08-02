@@ -123,7 +123,11 @@ mutual
       | .const ``Not [] => return .base .not
       | .const ``And [] => return .base .and
       | .const ``Or []  => return .base .or
-      | .const ``Embedding.impF [] => return .base .imp
+      | .const ``Embedding.ImpF [u, v] =>
+        if (← Meta.isLevelDefEq u .zero) ∧ (← Meta.isLevelDefEq v .zero) then
+          return .base .imp
+        else
+          throwError "processTermFVar :: Unexpected ImpF levels"
       | .const ``Iff [] => return .base .iff
       | .lit (.natVal n) => return .base (.natVal n)
       -- **TODO: Real number, Bit vector**
@@ -216,9 +220,28 @@ def reifFacts (facts : Array ULiftedFact) : ReifM Unit := do
     let lamty ← reifTerm tyLift
     setAssertions ((← getAssertions).push (proof, lamty)))
 
+-- **TODO:** Real and bitvec
+open Embedding in
+def checkInterpretedConst : Expr → MetaM Bool
+| .const ``Nat []      => return true
+| .const ``Real []     => return true
+| .const ``True []     => return true
+| .const ``False []    => return true
+| .const ``Not []      => return true
+| .const ``And []      => return true
+| .const ``Or []       => return true
+-- Although `ImpF` should have been turned into free
+--   variable, we write code for it here anyway because
+--   this does not hurt.
+| .const ``ImpF [u, v] =>
+  return (← Meta.isLevelDefEq u .zero) ∧ (← Meta.isLevelDefEq v .zero)
+| .const ``Iff []      => return true
+| .lit (.natVal _)     => return true
+| _                    => return false
+
 -- `cont` is what we need to do after we ulift and reify the facts
 def uLiftAndReify (cont : State → MetaM α) : ReifM α :=
-  withULiftedFacts (fun pfacts => do
+  withULiftedFacts checkInterpretedConst (fun pfacts => do
     reifFacts pfacts
     cont (← get))
 
