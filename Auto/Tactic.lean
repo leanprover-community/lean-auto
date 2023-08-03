@@ -124,14 +124,19 @@ def runAuto
   match instr with
   | .none =>
     -- Testing. Skipping universe level instantiation and monomorphization
-    let rs : Reif.State := { facts := lemmas.map (fun x => (x.proof, x.type)) }
-    (((LamReif.uLiftAndReify (fun s => do
+    let afterReify : LamReif.State → MetaM PUnit := (fun s => do
       let assertions := s.assertions
       for (expr, lterm) in assertions do
         trace[auto.tactic] "Proof: {expr}, λ Term: {repr lterm}"
       let lamVarTy := s.lamVarTy
       for (id, lams) in lamVarTy do
-        trace[auto.tactic] "FVar: {Expr.fvar id}, λ Sort: {repr lams}")).run' {}).run').run' rs
+        trace[auto.tactic] "FVar: {Expr.fvar id}, λ Sort: {repr lams}")
+    let afterMonomorphization : Reif.ReifM Unit :=
+      ((LamReif.uLiftAndReify afterReify).run' {}).run'
+    Monomorphization.collectPolyLog (fun hmap mfacts =>
+      let hmaprev := hmap.toList.foldl (fun hm (key, val) => hm.insert val key) HashMap.empty
+      afterMonomorphization.run' { facts := mfacts, iPolyLog := hmaprev })
+      (lemmas.map (fun x => (x.proof, x.type)))
     -- testing
     throwError "runAuto :: Not implemented"
   | .p =>

@@ -12,7 +12,7 @@ open Auto Embedding
 
 set_option trace.auto.printLemmas true
 set_option trace.auto.tactic true
-set_option trace.auto.lamPLift true
+set_option trace.auto.lamPULift true
 set_option pp.universes true
 
 example : True := by
@@ -72,6 +72,13 @@ example (eqNat : Nat → Nat → Prop) (x : Nat)
   (H : eqNat (@Nat.rec (fun _ => Nat) 5 (fun x y => Nat.add x y) x) 8) : True := by
   try auto [H];
   sorry
+
+set_option trace.auto.monomorphization true in
+-- When monomorphization is not implemented, this example will fail
+example (f : Nat → Nat) : True :=
+  let H : ∃ (z : Real), ∀ (x : Nat), x = 6 → ∃ (y : Prop), f x = 2 := sorry
+  by auto [H]
+
 
 -- This example should fail. It's not an indication of a bug.
 --   Refer to `Translation/LamPULift.lean`

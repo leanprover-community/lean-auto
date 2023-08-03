@@ -7,7 +7,7 @@ open Lean
 open Auto.Embedding
 
 initialize
-  registerTraceClass `auto.lamPLift
+  registerTraceClass `auto.lamPULift
 
 /-
   ULift for system `λP`, i.e. supports `types depending on terms`
@@ -38,7 +38,7 @@ initialize
       the type of `GLift Nat → GLift Nat` is not `GLift Type`.
 -/
 
-namespace Auto.LamPLift
+namespace Auto.LamPULift
 
 /-
   For an expression `e`, we denote its lifted version as `e↑`. For the
@@ -222,7 +222,7 @@ section TestcstULift
   #getExprAndApply [f₅ | ulift]
   #check fun (a : (GLift.{1, tmp} Nat → GLift.{1, tmp} Nat) → GLift.{1, tmp} Nat) =>
   GLift.up.{1, tmp}
-    (Auto.LamPLift.f₅ fun (a_1 : Nat → Nat) =>
+    (Auto.LamPULift.f₅ fun (a_1 : Nat → Nat) =>
       GLift.down.{1, tmp} (a fun (a : GLift.{1, tmp} Nat) => GLift.up.{1, tmp} (a_1 (GLift.down.{1, tmp} a))))
 
   set_option pp.explicit true in
@@ -255,7 +255,7 @@ section TestcstULift
       (f : GLift.{1, tmp} Nat → GLift.{1, tmp} Nat) →
         GLift.{1, tmp} (GLift.down.{2, tmp} (α (f (GLift.up.{1, tmp} 0))))) =>
   GLift.up.{1, tmp}
-    (Auto.LamPLift.f₆ (fun (a : Nat) => GLift.down.{2, tmp} (α (GLift.up.{1, tmp} a))) fun (f : Nat → Nat) =>
+    (Auto.LamPULift.f₆ (fun (a : Nat) => GLift.down.{2, tmp} (α (GLift.up.{1, tmp} a))) fun (f : Nat → Nat) =>
       GLift.down.{1, tmp} (β fun (a : GLift.{1, tmp} Nat) => GLift.up.{1, tmp} (f (GLift.down.{1, tmp} a))))
 
 end TestcstULift
@@ -445,7 +445,7 @@ section
   
   private def withLocalDeclAsBoundFVarImp (name : Name) (bi : BinderInfo) (type : Expr) (k : Expr → ULiftM α) : ULiftM α :=
     Meta.withLocalDecl name bi type fun fvar =>
-      LamPLift.withBoundFVar fvar.fvarId! <| k fvar
+      LamPULift.withBoundFVar fvar.fvarId! <| k fvar
   
   def withLocalDeclAsBoundFVar
     [Monad n] [MonadControlT ULiftM n]
@@ -568,13 +568,13 @@ section
     --   Since we might have not lifted the term `.sort (lvl + 1)`, we
     --   should not call `typeULift` on `eTy` (because that will trigger
     --   `termULift` on `eTy`).
-    trace[auto.lamPLift] "withProcessedAtomic :: Type lifting type of ⦗⦗{e} : {eTy}⦘⦘"
+    trace[auto.lamPULift] "withProcessedAtomic :: Type lifting type of ⦗⦗{e} : {eTy}⦘⦘"
     match (← instantiateMVars e) with
     | .sort lvl =>
       eTyUp := Expr.app (.const ``GLift [.succ (.succ lvl), u]) eTy
     | _       =>
       eTyUp ← typeULift eTy
-    trace[auto.lamPLift] "withProcessedAtomic :: ⦗⦗{e} : {eTy}⦘⦘ lifted to ⦗⦗{eUp} : {eTyUp}⦘⦘"
+    trace[auto.lamPULift] "withProcessedAtomic :: ⦗⦗{e} : {eTy}⦘⦘ lifted to ⦗⦗{eUp} : {eTyUp}⦘⦘"
     let freshId := (← mkFreshId).toString
     Meta.withLetDecl ("_lift_" ++ freshId) eTyUp eUp (fun newFVar => do
       pushLifted checkInterpretedConst e newFVar.fvarId!
@@ -584,7 +584,7 @@ section
   
   -- `e` should be an atomic expression
   private partial def withProcessedAtomicImp (e : Expr) (cont : ULiftM α) : ULiftM α := do
-    trace[auto.lamPLift] "withProcessedAtomic :: Processing expression {e}"
+    trace[auto.lamPULift] "withProcessedAtomic :: Processing expression {e}"
     -- If `e` is already processed, return
     if let .some _ ← getLifted? e then
       cont
@@ -610,7 +610,7 @@ section
   abbrev ULiftedFact := Expr × Expr
 
   private def checkFactLift (proof gLiftTy : Expr) : MetaM Unit := do
-    trace[auto.lamPLift] "Checking correctness of lift"
+    trace[auto.lamPULift] "Checking correctness of lift"
     let ty ← Meta.inferType proof
     let ty' ← Meta.mkAppM ``GLift.down #[gLiftTy]
     if !(← Meta.isTypeCorrect ty') then
@@ -622,9 +622,9 @@ section
     (cont : Array ULiftedFact → ULiftM α) (arr : Array ULiftedFact) : ULiftM α := do
     let (proof, ty) := fact
     let tya ← collectAtomic ty
-    trace[auto.lamPLift] "Collected atomic expressions {tya.toList} for ⦗⦗{ty}⦘⦘"
+    trace[auto.lamPULift] "Collected atomic expressions {tya.toList} for ⦗⦗{ty}⦘⦘"
     tya.foldl (fun cont' a => withProcessedAtomicImp checkInterpretedConst a cont') (do
-      trace[auto.lamPLift] "Term lifting ⦗⦗{ty}⦘⦘, the type of ⦗⦗{proof}⦘⦘"
+      trace[auto.lamPULift] "Term lifting ⦗⦗{ty}⦘⦘, the type of ⦗⦗{proof}⦘⦘"
       let gLiftTy ← termULift ty
       -- Now we check that `proof : GLift.down gLiftTy`
       checkFactLift proof gLiftTy
@@ -682,7 +682,7 @@ section
     let normLevel := level.normalize
     setU normLevel
     -- Lift all facts to the required universe level
-    let cont' := facts.foldl (β:= Array ULiftedFact → ULiftM α) (fun cont' fact => withULiftedFactsAux checkInterpretedConst fact cont') cont
+    let cont' := facts.foldl (β := Array ULiftedFact → ULiftM α) (fun cont' fact => withULiftedFactsAux checkInterpretedConst fact cont') cont
     cont' #[]
 
   def withULiftedFacts [Monad n] [MonadControlT ULiftM n] (cont : Array ULiftedFact → n α) : n α :=
@@ -690,4 +690,4 @@ section
 
 end
 
-end Auto.LamPLift
+end Auto.LamPULift

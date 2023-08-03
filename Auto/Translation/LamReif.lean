@@ -1,15 +1,15 @@
 import Lean
 import Auto.Util.MonadUtils
 import Auto.Util.ExprExtra
-import Auto.Translation.LamPLift
+import Auto.Translation.LamPULift
 import Auto.Embedding.LamBase
 open Lean
 
 initialize
-  registerTraceClass `auto.reifLam
+  registerTraceClass `auto.lamReif
 
 namespace Auto.LamReif
-open LamPLift Embedding.Lam
+open LamPULift Embedding.Lam
 
 inductive FVarType where
   | var       -- Ordinary variable
@@ -217,7 +217,7 @@ end
 
 def reifFacts (facts : Array ULiftedFact) : ReifM Unit := do
   let _ ← facts.mapM (fun (proof, tyLift) => do
-    trace[auto.reifLam] s!"Reifying {proof} : {tyLift}"
+    trace[auto.lamReif] s!"Reifying {proof} : {tyLift}"
     let lamty ← reifTerm tyLift
     setAssertions ((← getAssertions).push (proof, lamty)))
 
