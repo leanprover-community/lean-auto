@@ -215,7 +215,7 @@ def LamBaseTerm.reprPrec (l : LamBaseTerm) (n : Nat) :=
     | .forallE s  => f!".forallE {s}"
     | .existE s   => f!".existE {s}"
   if n == 0 then
-    f!"Auto.Embedding.Lam.LamBaseTerm." ++ s
+    f!"Auto.Embedding.Lam.LamBaseTerm" ++ s
   else
     f!"({s})"
 
@@ -284,7 +284,7 @@ def LamBaseTerm.LamWF.reprPrec (wf : LamBaseTerm.LamWF ltv s t) (n : Nat) :=
     | .ofForallE s  => f!".ofForallE {s}"
     | .ofExistE s   => f!".ofExistE {s}"
   if n == 0 then
-    f!"Auto.Embedding.Lam.LamBaseTerm.LamWF." ++ s
+    f!"Auto.Embedding.Lam.LamBaseTerm.LamWF" ++ s
   else
     f!"({s})"
 

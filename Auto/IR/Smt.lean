@@ -118,14 +118,14 @@ private def STerm.toStringAux : STerm → List SIdent → String
     intro ++ binding ++ body
   | .forallE name binderType body, binders =>
     let binders := (SIdent.symb name) :: binders
-    let intro := s!"(forall ({SIdent.symb name} "
-    let binderType := ToString.toString binderType ++ ") "
+    let intro := s!"(forall (({SIdent.symb name} "
+    let binderType := ToString.toString binderType ++ ")) "
     let body := STerm.toStringAux body binders ++ ")"
     intro ++ binderType ++ body
   | .existE name binderType body, binders =>
     let binders := (SIdent.symb name) :: binders
-    let intro := s!"(exists ({SIdent.symb name} "
-    let binderType := ToString.toString binderType ++ ") "
+    let intro := s!"(exists (({SIdent.symb name} "
+    let binderType := ToString.toString binderType ++ ")) "
     let body := STerm.toStringAux body binders ++ ")"
     intro ++ binderType ++ body
   | .matchE _ ⟨[]⟩, _ => panic!"STerm.toString :: Zero match branches"

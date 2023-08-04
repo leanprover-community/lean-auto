@@ -42,10 +42,13 @@ partial def polylogs : Expr → MetaM (HashSet Expr)
 -- For test purpose
 def addpolylog (e : Expr) (cont : HashMap Expr FVarId → MetaM α)
   (hmap : HashMap Expr FVarId) : MetaM α := do
-  let fvarid ← mkFreshId
-  let name := "_pl_" ++ fvarid.toString
-  Meta.withLetDecl name (← Meta.inferType e) e fun fvar =>
-    cont (hmap.insert e fvar.fvarId!)
+  if hmap.contains e then
+    cont hmap
+  else
+    let fvarid ← mkFreshId
+    let name := "_pl_" ++ fvarid.toString
+    Meta.withLetDecl name (← Meta.inferType e) e fun fvar =>
+      cont (hmap.insert e fvar.fvarId!)
 
 -- For test purpose
 partial def replacepolylog (hmap : HashMap Expr FVarId) : Expr → MetaM Expr
@@ -82,8 +85,7 @@ def collectPolyLogAux (fact : Expr × Expr) {α : Type}
   let (proof, ty) := fact
   let plgs ← polylogs ty
   plgs.fold (fun cont' e => addpolylog e cont') (fun hmap => do
-    let hmap' := hmap₀.toList.foldl (fun hm (key, val) => hm.insert key val) hmap
-    cont hmap' (arr.push (proof, ← replacepolylog hmap ty))) HashMap.empty
+    cont hmap (arr.push (proof, ← replacepolylog hmap ty))) hmap₀
 
 -- For test purpose
 -- This function's semantics is incorrect. A full-fleged version should run
@@ -95,6 +97,8 @@ def collectPolyLog (cont : HashMap Expr FVarId → Array (Expr × Expr) → Meta
       (fun cont' fact => collectPolyLogAux fact cont') (fun hmap mfacts => do
         for fact in mfacts do
           trace[auto.monomorphization] "Monomorphized: {fact.fst} : {fact.snd}"
+        for (expr, fvar) in hmap.toList do
+          trace[auto.monomorphization] "Expression {expr} turned into {Expr.fvar fvar}"
         cont hmap mfacts
       )
     cont' HashMap.empty #[]

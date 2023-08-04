@@ -61,7 +61,7 @@ private def getSexp (sp : SolverProc) : MetaM Sexp := do
       s := remain ++ "\n" ++ new
       partialRes := pr
     | .malformed =>
-      throwError s!"getSexp :: Malformed input"
+      throwError s!"getSexp :: Malformed (prefix of) input {s}"
   throwError "getSexp :: Unexpected error"
 
 def createSolver (name : SolverName) : MetaM SolverProc := do

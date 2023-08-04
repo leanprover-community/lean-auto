@@ -130,15 +130,18 @@ def runAuto
         trace[auto.tactic] "Proof: {expr}, λ Term: {repr lterm}"
       let lamVarTy := s.lamVarTy
       for (id, lams) in lamVarTy do
-        trace[auto.tactic] "FVar: {Expr.fvar id}, λ Sort: {repr lams}")
+        trace[auto.tactic] "FVar: {Expr.fvar id}, λ Sort: {repr lams}"
+      let commands := (← (lamFOL2SMT s).run {}).1
+      let _ ← liftM <| commands.mapM (fun c => IO.println s!"Command: {c}")
+      Solver.SMT.querySolver commands)
     let afterMonomorphization : Reif.ReifM Unit :=
       ((LamReif.uLiftAndReify afterReify).run' {}).run'
     Monomorphization.collectPolyLog (fun hmap mfacts =>
       let hmaprev := hmap.toList.foldl (fun hm (key, val) => hm.insert val key) HashMap.empty
       afterMonomorphization.run' { facts := mfacts, iPolyLog := hmaprev })
       (lemmas.map (fun x => (x.proof, x.type)))
-    -- testing
     throwError "runAuto :: Not implemented"
+    -- testing
   | .p =>
     let types := lemmas.map (fun x => x.type)
     let PState := (← (types.mapM (fun e => do

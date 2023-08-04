@@ -44,8 +44,6 @@ private def lamSort2SSort : LamSort → TransM LamAtom (List SSort × SSort)
 | s => return ([], ← lamSort2SSortAux s)
 
 private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → TransM LamAtom STerm
-| .trueE  => return .qIdApp (QualIdent.ofString "true") #[arg1, arg2]
-| .falseE => return .qIdApp (QualIdent.ofString "false") #[arg1, arg2]
 | .and    => return .qIdApp (QualIdent.ofString "and") #[arg1, arg2]
 | .or     => return .qIdApp (QualIdent.ofString "or") #[arg1, arg2]
 | .imp    => return .qIdApp (QualIdent.ofString "=>") #[arg1, arg2]
@@ -67,6 +65,8 @@ private def CstrReal2STerm : CstrReal → STerm
 private def Bitvec2STerm (bv : List Bool) : STerm := .sConst (.binary bv)
 
 private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtom STerm
+| .trueE     => return .qIdApp (QualIdent.ofString "true") #[]
+| .falseE    => return .qIdApp (QualIdent.ofString "false") #[]
 | .intVal n  => return Int2STerm n
 | .realVal c => return CstrReal2STerm c
 | .bvVal bv  => return Bitvec2STerm bv
