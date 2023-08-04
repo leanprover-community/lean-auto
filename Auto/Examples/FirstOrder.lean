@@ -48,6 +48,12 @@ example (a : α) : (∃ x, r → p x) ↔ (r → ∃ x, p x) := by
   try auto;
   sorry
 
+def p_ : Nat → Prop := fun x => False
+
+example : (∃ x, r → p_ x) ↔ (r → ∃ x, p_ x) := by
+  try auto;
+  sorry
+
 end
 
 section

@@ -1,13 +1,43 @@
+import Auto.Util.SigEq
 namespace Auto.Embedding
 
 @[reducible] def pushLCtx (lctx : Nat → α) (x : α) : Nat → α
 | 0     => x
 | n + 1 => lctx n
 
+def pushLCtx.comm (lctx : Nat → α) (f : α → β) (x : α) :
+  (n : Nat) → f (pushLCtx lctx x n) = pushLCtx (fun n => f (lctx n)) (f x) n
+| 0       => rfl
+| .succ _ => rfl
+
+theorem pushLCtx.commFn  (lctx : Nat → α) (f : α → β) (x : α) :
+  (fun n => f (pushLCtx lctx x n)) = (fun n => pushLCtx (fun n => f (lctx n)) (f x) n) :=
+  funext (pushLCtx.comm lctx f x)
+
+def pushLCtx.comm_cast₁ (lctx : Nat → α) (f : α → β) (g : β → Sort w) (x : α) :
+  (n : Nat) → (H : g (f (pushLCtx lctx x n))) → g (pushLCtx (fun n => f (lctx n)) (f x) n)
+| 0       => fun H => H
+| .succ _ => fun H => H
+
+def pushLCtx.comm_cast₂ (lctx : Nat → α) (f : α → β) (g : β → Sort w) (x : α) :
+  (n : Nat) → (H : g (pushLCtx (fun n => f (lctx n)) (f x) n)) → g (f (pushLCtx lctx x n))
+| 0       => fun H => H
+| .succ _ => fun H => H
+
 @[reducible] def pushLCtxDep {rty : Nat → α} {lctxty : α → Sort u}
   (lctx : ∀ n, lctxty (rty n)) {xty : α} (x : lctxty xty) : ∀ n, lctxty (pushLCtx rty xty n)
 | 0     => x
 | n + 1 => lctx n
+
+theorem pushLCtxDep.absorb {rty : Nat → α} {lctxty : α → Sort u}
+  (lctx : ∀ n, lctxty (rty n)) {xty : α} (x : lctxty xty) :
+  PSigmaEq (fun (α : Nat → Sort u) => (∀ (n : Nat), α n))
+    (@pushLCtxDep _ rty lctxty lctx _ x) (@pushLCtxDep _ (lctxty ∘ rty) id lctx _ x) :=
+  PSigmaEq.of_heq _ (HEq.funext _ _ (fun u =>
+    match u with
+    | 0       => HEq.refl _
+    | .succ _ => HEq.refl _
+  )) (pushLCtx.commFn _ _ _)
 
 def pushLCtxAt (lctx : Nat → α) (x : α) : (pos : Nat) → Nat → α
 | 0 => pushLCtx lctx x
@@ -85,9 +115,5 @@ def push_pop_eq (lctx : Nat → α) :
   pushLCtx (popLCtx lctx) (lctx 0) = lctx := by
   apply funext
   intro n; cases n <;> rfl
-
-theorem pushLCtx.comm (f : α → β) (lctx : Nat → α) (x : α) :
-  (fun n => f (pushLCtx lctx x n)) = pushLCtx (fun n => f (lctx n)) (f x) := by
-  apply funext; intro n; cases n <;> simp
 
 end Auto.Embedding

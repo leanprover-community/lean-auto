@@ -722,7 +722,7 @@ def LamTerm.interp.{u} (lval : LamValuation.{u}) :
 | lctxTy, lctxTerm, @LamWF.ofBVar _ _ n => lctxTerm n
 | lctxTy, lctxTerm, @LamWF.ofLam _ _ argTy _ body H =>
   fun (x : argTy.interp lval.ilVal.tyVal) =>
-    LamTerm.interp lval (pushLCtx lctxTy argTy) (pushLCtxDep lctxTerm x) H
+    LamTerm.interp lval (pushLCtx lctxTy argTy) (pushLCtxDep (rty:=lctxTy) lctxTerm x) H
 | lctxTy, lctxTerm, @LamWF.ofApp _ _ _ resTy _ _ HFn HArg =>
   let mfn := LamTerm.interp lval lctxTy lctxTerm HFn
   let marg := LamTerm.interp lval lctxTy lctxTerm HArg
@@ -783,9 +783,7 @@ inductive WF.{u} (val : Valuation.{u}) : Judgement.{u} → Type (u + 1)
       {lctxTerm : ∀ n : Nat, lctxTy n}
       {hs : LamSort} {ht : LamTerm}
       (α β : Type u) (fn : α → β)
-      (H : ∀ (t : α), WF val ⟨pushLCtx lctxTy α,
-        (fun n => match n with | 0 => t | n + 1 => lctxTerm n), ht, β, fn t⟩)
-      :
+      (H : ∀ (t : α), WF val ⟨pushLCtx lctxTy α, pushLCtxDep (lctxty:=id) lctxTerm t, ht, β, fn t⟩) :
     WF val <|
       ⟨lctxTy, lctxTerm, .lam hs ht, α → β, fn⟩
   | ofApp
@@ -799,6 +797,7 @@ inductive WF.{u} (val : Valuation.{u}) : Judgement.{u} → Type (u + 1)
     WF val <|
       ⟨lctxTy, lctxTerm, .app hfn harg, β, fn arg⟩
 
+set_option pp.explicit true
 def LamTerm.wf_of_lamWF.{u} (lval : LamValuation.{u}) :
   (lctxTy : Nat → LamSort) → (lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal) →
   (lwf : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, t, rty⟩) →
@@ -807,26 +806,22 @@ def LamTerm.wf_of_lamWF.{u} (lval : LamValuation.{u}) :
 | lctxTy', lctxTerm', @LamWF.ofAtom _ _ n => WF.ofAtom _
 | lctxTy', lctxTerm', @LamWF.ofBase _ _ b s H => WF.ofBase (LamBaseTerm.wf_of_lamWF lval.ilVal H)
 | lctxTy', lctxTerm', @LamWF.ofBVar _ _ n => WF.ofBVar _
-| lctxTy', lctxTerm', @LamWF.ofLam _ _ argTy bodyTy body H => @WF.ofLam (Valuation.ofLamValuation lval)
+| lctxTy', lctxTerm', @LamWF.ofLam _ _ argTy bodyTy body H => @WF.ofLam
+    (Valuation.ofLamValuation lval)
     (fun n => (lctxTy' n).interp lval.ilVal.tyVal) lctxTerm'
     argTy body (LamSort.interp lval.ilVal.tyVal argTy) (LamSort.interp lval.ilVal.tyVal bodyTy)
     (LamTerm.interp lval lctxTy' lctxTerm' (LamWF.ofLam bodyTy H))
     (fun t' =>
       let ty₁ := fun n => LamSort.interp lval.ilVal.tyVal (pushLCtx lctxTy' argTy n)
       let ty₂ := pushLCtx (fun n => LamSort.interp lval.ilVal.tyVal (lctxTy' n)) (LamSort.interp lval.ilVal.tyVal argTy)
-      have hTyEq : ty₁ = ty₂ := by apply funext; intro n; cases n <;> simp
-      let term₁ : ∀ (n : Nat), ty₁ n := fun n => match n with | 0 => t' | Nat.succ n => lctxTerm' n
-      let term₂ : ∀ (n : Nat), ty₂ n := fun n => match n with | 0 => t' | Nat.succ n => lctxTerm' n
-      have hTermEq : SigmaEq (fun (α : Nat → Type _) => (∀ (n : Nat), α n)) term₁ term₂ :=
-        SigmaEq.of_heq (fun (α : Nat → Type u) => (n : Nat) → α n) (HEq.funext _ _ fun u =>
-            match u with
-            | 0 => HEq.refl _
-            | n + 1 => HEq.refl _) hTyEq
+      let term₁ : ∀ (n : Nat), ty₁ n := pushLCtxDep (rty:=lctxTy') lctxTerm' t'
+      let term₂ : ∀ (n : Nat), ty₂ n := pushLCtxDep (lctxty:=id) lctxTerm' t'
+      let hTermEq : PSigmaEq (fun (α : Nat → Type _) => (∀ (n : Nat), α n)) term₁ term₂ := pushLCtxDep.absorb _ _
       let motive := fun {ty : Nat → Type u} (term : ∀ n, ty n) =>
         WF (Valuation.ofLamValuation lval)
           ⟨ty, term, body, LamSort.interp lval.ilVal.tyVal bodyTy, interp lval lctxTy' lctxTerm' (LamWF.ofLam bodyTy H) t'⟩
       let hWF : motive (ty:=ty₁) term₁ := LamTerm.wf_of_lamWF lval _ _ H
-      @SigmaEq.ndrec (Nat → Type _) (fun α => (n : Nat) → α n) ty₁ term₁ motive hWF ty₂ term₂ hTermEq)
+      @PSigmaEq.ndrec (Nat → Type _) (fun α => (n : Nat) → α n) ty₁ term₁ motive hWF ty₂ term₂ hTermEq)
 | lctxTy', lctxTerm', @LamWF.ofApp _ _ argTy resTy fn arg Hfn Harg =>
   let WFfn := LamTerm.wf_of_lamWF _ _ _ Hfn
   let WFarg := LamTerm.wf_of_lamWF _ _ _ Harg
