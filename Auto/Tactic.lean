@@ -14,7 +14,7 @@ namespace Auto
 -- **TODO**: Extend
 syntax hintelem := term <|> "*"
 syntax hints := ("[" hintelem,* "]")?
-syntax autoinstr := ("p")?
+syntax autoinstr := ("@p")?
 syntax (name := auto) "auto" autoinstr hints : tactic
 
 inductive Instruction where
@@ -23,7 +23,7 @@ inductive Instruction where
 
 def parseInstr : TSyntax ``Auto.autoinstr → TacticM Instruction
 | `(autoinstr|) => return .none
-| `(autoinstr|p) => return .p
+| `(autoinstr|@p) => return .p
 | _ => throwUnsupportedSyntax
 
 inductive HintElem where

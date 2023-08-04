@@ -6,25 +6,25 @@ import Mathlib.Tactic
 set_option trace.auto.printLemmas true
 
 example : True := by
-  try auto p [True.intro];
+  try auto @p [True.intro];
   exact .intro
 
 example : True := by
-  try auto p [Or.inl, Or.inr];
+  try auto @p [Or.inl, Or.inr];
   sorry
 
 example (a b : Prop)
         (h₁ : a ∨ b) (h₂ : a ∧ b) : True := by
-  try auto p [];
+  try auto @p [];
   sorry
 
 example (a b : Prop)
         (h₁ : a) (h₂ : a → b) : b := by
-  try auto p [*];
+  try auto @p [*];
   sorry
 
 example : (P ∧ Q) ∧ R ↔ P ∧ (Q ∧ R) := by
-  try auto p [];
+  try auto @p [];
   sorry
 
 example
@@ -36,5 +36,5 @@ example
   (h₇ : a ∨ ¬c ∨ ¬ d)
   (h₈ : d)
   : e := by
-  try auto p [*];
+  try auto @p [*];
   sorry

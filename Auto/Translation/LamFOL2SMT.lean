@@ -47,7 +47,7 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .and    => return .qIdApp (QualIdent.ofString "and") #[arg1, arg2]
 | .or     => return .qIdApp (QualIdent.ofString "or") #[arg1, arg2]
 | .imp    => return .qIdApp (QualIdent.ofString "=>") #[arg1, arg2]
-| .iff    => return .qIdApp (QualIdent.ofString "xor") #[arg1, arg2]
+| .iff    => return .qIdApp (QualIdent.ofString "not") #[.qIdApp (QualIdent.ofString "xor") #[arg1, arg2]]
 | t       => throwError "lamTerm2STerm :: The arity of {repr t} is not 2"
 
 private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamAtom STerm
