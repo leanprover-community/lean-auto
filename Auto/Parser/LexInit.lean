@@ -24,10 +24,10 @@ def decimal : ERE :=
   .comp #[numeral, .inStr ".", ERE.some (.ofCC .digit)]
 
 def hexadecimal : ERE :=
-  .comp #[.ofStr "0x", ERE.some (.ofCC .xdigit)]
+  .comp #[.ofStr "#x", ERE.some (.ofCC .xdigit)]
 
 def binary : ERE :=
-  .comp #[.ofStr "0b", ERE.some (.inStr "01")]
+  .comp #[.ofStr "#b", ERE.some (.inStr "01")]
 
 -- Characters not allowed within a pair of double quote
 private def stringAux : EREBracket :=

@@ -86,6 +86,8 @@ def collectPolyLogAux (fact : Expr × Expr) {α : Type}
     cont hmap' (arr.push (proof, ← replacepolylog hmap ty))) HashMap.empty
 
 -- For test purpose
+-- This function's semantics is incorrect. A full-fleged version should run
+--   in `Reif.ReifM` and modify `fvarsToAbstract` and `iPolyLog` simultaneously
 def collectPolyLog (cont : HashMap Expr FVarId → Array (Expr × Expr) → MetaM α)
   (facts : Array ((Expr × Expr))) : MetaM α := do
   if testCollectPolyLog.get (← getOptions) then

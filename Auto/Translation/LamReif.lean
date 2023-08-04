@@ -92,7 +92,7 @@ def processTypeFVar (fid : FVarId) : ReifM LamSort := do
         throwError "processTypeFVar :: Unexpected sort {val}"
       else
         return .base .prop
-    | .const ``Nat [] => return .base .nat
+    | .const ``Int [] => return .base .int
     | .const ``Real [] => return .base .real
     | .app (.const ``Bitvec []) (.lit (.natVal n)) => return .base (.bv n)
     | _ => throwError "processTypeFVar :: Unexpected interpreted constant {val}"
@@ -129,8 +129,7 @@ mutual
         else
           throwError "processTermFVar :: Unexpected ImpF levels"
       | .const ``Iff [] => return .base .iff
-      | .lit (.natVal n) => return .base (.natVal n)
-      -- **TODO: Real number, Bit vector**
+      -- **TODO: Integer, Real number, Bit vector**
       -- `α` is the original (un-lifted) type
       | .app (.const ``Eq [uOrig]) α =>
         info := (FVarType.eqVar, uOrig, α)
@@ -224,7 +223,7 @@ def reifFacts (facts : Array ULiftedFact) : ReifM Unit := do
 -- **TODO:** Real and bitvec
 open Embedding in
 def checkInterpretedConst : Expr → MetaM Bool
-| .const ``Nat []      => return true
+| .const ``Int []      => return true
 | .const ``Real []     => return true
 | .const ``True []     => return true
 | .const ``False []    => return true
@@ -237,7 +236,6 @@ def checkInterpretedConst : Expr → MetaM Bool
 | .const ``ImpF [u, v] =>
   return (← Meta.isLevelDefEq u .zero) ∧ (← Meta.isLevelDefEq v .zero)
 | .const ``Iff []      => return true
-| .lit (.natVal _)     => return true
 | _                    => return false
 
 -- `cont` is what we need to do after we ulift and reify the facts

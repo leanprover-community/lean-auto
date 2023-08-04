@@ -5,6 +5,7 @@ import Auto.Util.SigEq
 import Std.Data.List.Lemmas
 import Mathlib.Data.Real.Basic
 import Mathlib.Data.BitVec.Defs
+import Mathlib.Data.Int.Basic
 
 -- Embedding Simply Typed Lambda Calculus into Dependent Type Theory
 -- Simply Typed Lambda Calculus = HOL (without polymorphism)
@@ -13,7 +14,7 @@ namespace Auto.Embedding.Lam
 -- Interpreted sorts
 inductive LamBaseSort
   | prop : LamBaseSort             -- GLift `prop`
-  | nat  : LamBaseSort             -- GLift `nat`
+  | int  : LamBaseSort             -- GLift `int`
   | real : LamBaseSort             -- GLift `real`
   | bv   : (n : Nat) → LamBaseSort -- GLift `bv n`
 deriving BEq, Hashable, Inhabited
@@ -22,7 +23,7 @@ def LamBaseSort.reprPrec (b : LamBaseSort) (n : Nat) :=
   let str :=
     match b with
     | .prop => ".prop"
-    | .nat  => ".nat"
+    | .int  => ".int"
     | .real => ".real"
     | .bv n => s!".bv {n}"
   if n == 0 then
@@ -35,7 +36,7 @@ instance : Repr LamBaseSort where
 
 def LamBaseSort.beq : LamBaseSort → LamBaseSort → Bool
 | .prop, .prop => true
-| .nat,  .nat  => true
+| .int,  .int  => true
 | .real, .real => true
 | .bv n, .bv m => n == m
 | _,     _     => false
@@ -47,32 +48,32 @@ private def Nat.beq_refl' : (a : Nat) → (a.beq a) = true
 
 def LamBaseSort.beq_refl : (b : LamBaseSort) → (b.beq b) = true
 | .prop => rfl
-| .nat  => rfl
+| .int  => rfl
 | .real => rfl
 | .bv n => Nat.beq_refl' n
 
 def LamBaseSort.beq_eq (b₁ b₂ : LamBaseSort) : b₁.beq b₂ → b₁ = b₂ :=
   match b₁, b₂ with
   | .prop, .prop => fun _ => rfl
-  | .nat,  .nat  => fun _ => rfl
+  | .int,  .int  => fun _ => rfl
   | .real, .real => fun _ => rfl
   | .bv n, .bv m => fun H => Nat.eq_of_beq_eq_true H ▸ rfl
-  | .prop, .nat  => fun H => by cases H
+  | .prop, .int  => fun H => by cases H
   | .prop, .real => fun H => by cases H
   | .prop, .bv m => fun H => by cases H
-  | .nat,  .prop => fun H => by cases H
-  | .nat,  .real => fun H => by cases H
-  | .nat,  .bv m => fun H => by cases H
+  | .int,  .prop => fun H => by cases H
+  | .int,  .real => fun H => by cases H
+  | .int,  .bv m => fun H => by cases H
   | .real, .prop => fun H => by cases H
-  | .real, .nat  => fun H => by cases H
+  | .real, .int  => fun H => by cases H
   | .real, .bv m => fun H => by cases H
   | .bv n, .prop => fun H => by cases H
-  | .bv n, .nat  => fun H => by cases H
+  | .bv n, .int  => fun H => by cases H
   | .bv n, .real => fun H => by cases H
 
 @[reducible] def LamBaseSort.interp.{u} : LamBaseSort → Type u
 | .prop   => GLift Prop
-| .nat    => GLift Nat
+| .int    => GLift Int
 | .real   => GLift Real
 | .bv n   => GLift (Bitvec n)
 
@@ -160,6 +161,27 @@ def CstrReal.interp : (c : CstrReal) → Real
 | one  => 1
 
 -- Interpreted constants
+-- Note that `eq`, `forallE`, `existE` have `(eq/forall/exist)(Val/LamVal)`
+--   associated with them. During proof reconstruction, we should collect
+--   the sort arguments of all `eq, forallE, existE` that occurs in the
+--   proof into `eqLamVal, forallLamVal` and `existLamVal`, respectively.
+-- For `eqVal, forallVal` and `existVal`, we need to use `EqLift.ofEqLift`,
+--   `ForallLift.ofForallLift` and `ExistLift.ofExistLift` to construct
+--   `EqLift/ForallLift/ExistLift` structures for the assumptions.
+--   For any other `eq, forall, exist` that occurs in the proof, use
+--   `(EqLift/ForallLift/ExistLift).default` instead. The idea is that
+--   we want the interpretation of reified assumptions to be definitionally
+--   equal to the assumption (or `GLift.up` applied to the assumption, to
+--   be precise), so we'll have to use the specially designed
+--   `of(Eq/Forall/Exist)Lift` function. However, at the end of the proof,
+--   we'll have a `LamTerm.base .falseE`, no `=, ∀, ∃` left,
+--   so whatever `(Eq/Forall/Exist)Lift` structure are within the
+--   `(eq/forall/lam)Val`, the final result will always interpret to
+--   `GLift.up False`.
+-- The correctness theorem of the checker existentially quantify over
+--   over `eqVal, forallVal` and `lamVal` to reduce kernel overhead
+--   while performing proof checking, but the speedup would probably
+--   be insignificant.
 inductive LamBaseTerm
   | trueE   : LamBaseTerm -- Propositional `true`
   | falseE  : LamBaseTerm -- Propositional `false`
@@ -168,7 +190,7 @@ inductive LamBaseTerm
   | or      : LamBaseTerm -- Propositional `or`
   | imp     : LamBaseTerm -- Propositional `imp`
   | iff     : LamBaseTerm -- Propositional `iff`
-  | natVal  : Nat → LamBaseTerm
+  | intVal  : Int → LamBaseTerm
   | realVal : CstrReal → LamBaseTerm
   | bvVal   : List Bool → LamBaseTerm
   | eq      : Nat → LamBaseTerm -- Polymorphic `eq`
@@ -186,7 +208,7 @@ def LamBaseTerm.reprPrec (l : LamBaseTerm) (n : Nat) :=
     | .or         => f!".or"
     | .imp        => f!".imp"
     | .iff        => f!".iff"
-    | .natVal n   => f!".natVal {n}"
+    | .intVal n   => f!".intVal {n}"
     | .realVal cr => f!".realVal {CstrReal.reprPrec cr 1}"
     | .bvVal l    => f!".bvVal {l}"
     | .eq s       => f!".eq {s}"
@@ -217,7 +239,7 @@ def LamBaseTerm.check (ltv : LamTyVal) : LamBaseTerm → LamSort
 | .or         => .func (.base .prop) (.func (.base .prop) (.base .prop))
 | .imp        => .func (.base .prop) (.func (.base .prop) (.base .prop))
 | .iff        => .func (.base .prop) (.func (.base .prop) (.base .prop))
-| .natVal n   => .base .nat
+| .intVal n   => .base .int
 | .realVal cr => .base .real
 | .bvVal ls   => .base (.bv ls.length)
 | .eq n       =>
@@ -238,7 +260,7 @@ inductive LamBaseTerm.LamWF (ltv : LamTyVal) : LamBaseTerm → LamSort → Type
   | ofOr         : LamWF ltv .or (.func (.base .prop) (.func (.base .prop) (.base .prop)))
   | ofImp        : LamWF ltv .imp (.func (.base .prop) (.func (.base .prop) (.base .prop)))
   | ofIff        : LamWF ltv .iff (.func (.base .prop) (.func (.base .prop) (.base .prop)))
-  | ofNatVal n   : LamWF ltv (.natVal n) (.base .nat)
+  | ofIntVal n   : LamWF ltv (.intVal n) (.base .int)
   | ofRealVal cr : LamWF ltv (.realVal cr) (.base .real)
   | ofBvVal ls   : LamWF ltv (.bvVal ls) (.base (.bv ls.length))
   | ofEq n       : LamWF ltv (.eq n) (.func (ltv.eqLamVal n) (.func (ltv.eqLamVal n) (.base .prop)))
@@ -255,7 +277,7 @@ def LamBaseTerm.LamWF.reprPrec (wf : LamBaseTerm.LamWF ltv s t) (n : Nat) :=
     | .ofOr         => f!".ofOr"
     | .ofImp        => f!".ofImp"
     | .ofIff        => f!".ofIff"
-    | .ofNatVal n   => f!".ofNatVal {n}"
+    | .ofIntVal n   => f!".ofIntVal {n}"
     | .ofRealVal cr => f!".ofRealVal {CstrReal.reprPrec cr 1}"
     | .ofBvVal ls   => f!".ofBvVal {ls}"
     | .ofEq s       => f!".ofEq {s}"
@@ -274,7 +296,7 @@ def LamBaseTerm.LamWF.ofLamBaseTerm (ltv : LamTyVal) : (b : LamBaseTerm) → (s 
 | .or         => ⟨.func (.base .prop) (.func (.base .prop) (.base .prop)), .ofOr⟩
 | .imp        => ⟨.func (.base .prop) (.func (.base .prop) (.base .prop)), .ofImp⟩
 | .iff        => ⟨.func (.base .prop) (.func (.base .prop) (.base .prop)), .ofIff⟩
-| .natVal n   => ⟨.base .nat, .ofNatVal n⟩
+| .intVal n   => ⟨.base .int, .ofIntVal n⟩
 | .realVal cr => ⟨.base .real, .ofRealVal cr⟩
 | .bvVal ls   => ⟨.base (.bv ls.length), .ofBvVal ls⟩
 | .eq n       => ⟨.func _ (.func _ (.base .prop)), .ofEq n⟩
@@ -294,9 +316,16 @@ structure ILValuation extends LamTyVal where
   tyVal     : Nat → Type u
   eqVal     : ∀ (n : Nat), EqLift.{u + 1, u} ((eqLamVal n).interp tyVal)
   forallVal : ∀ (n : Nat), ForallLift.{u + 1, u, 0, 0} ((forallLamVal n).interp tyVal)
-  existVal : ∀ (n : Nat), ExistLift.{u + 1, u} ((existLamVal n).interp tyVal)
+  existVal  : ∀ (n : Nat), ExistLift.{u + 1, u} ((existLamVal n).interp tyVal)
 
-set_option pp.universes true in
+def eqVal.default (eqLamVal : Nat → LamSort) (tyVal : Nat → Type u) :
+  ∀ (n : Nat), EqLift.{u + 1, u} ((eqLamVal n).interp tyVal) :=
+  fun n => EqLift.default ((eqLamVal n).interp tyVal)
+
+def forallVal.default (forallLamVal : Nat → LamSort) (tyVal : Nat → Type u) :
+  ∀ (n : Nat), ForallLift.{u + 1, u, 0, 0} ((forallLamVal n).interp tyVal) :=
+  fun n => ForallLift.default ((forallLamVal n).interp tyVal)
+
 def LamBaseTerm.interp (ilVal : ILValuation.{u}) : (lwf : LamBaseTerm.LamWF ilVal.toLamTyVal b s) → s.interp ilVal.tyVal
 | .ofTrueE      => GLift.up True
 | .ofFalseE     => GLift.up False
@@ -305,7 +334,7 @@ def LamBaseTerm.interp (ilVal : ILValuation.{u}) : (lwf : LamBaseTerm.LamWF ilVa
 | .ofOr         => orLift
 | .ofImp        => impLift
 | .ofIff        => iffLift
-| .ofNatVal n   => GLift.up n
+| .ofIntVal n   => GLift.up n
 | .ofRealVal cr => GLift.up cr.interp
 | .ofBvVal ls   => GLift.up ⟨ls, rfl⟩
 | .ofEq n       => (ilVal.eqVal n).eqF
@@ -354,7 +383,7 @@ inductive LamBaseTerm.WF.{u} (baseVal : BaseValuation.{u}) : LamBaseTerm.Judgeme
   | ofOr         : WF baseVal ⟨.or, GLift.{1, u} Prop → GLift.{1, u} Prop → GLift.{1, u} Prop, orLift⟩
   | ofImp        : WF baseVal ⟨.imp, GLift.{1, u} Prop → GLift.{1, u} Prop → GLift.{1, u} Prop, impLift⟩
   | ofIff        : WF baseVal ⟨.iff, GLift.{1, u} Prop → GLift.{1, u} Prop → GLift.{1, u} Prop, iffLift⟩
-  | ofNatVal n   : WF baseVal ⟨.natVal n, GLift.{1, u} Nat, GLift.up n⟩
+  | ofIntVal n   : WF baseVal ⟨.intVal n, GLift.{1, u} Int, GLift.up n⟩
   | ofRealVal cr : WF baseVal ⟨.realVal cr, GLift.{1, u} Real, GLift.up cr.interp⟩
   | ofBvVal ls   : WF baseVal ⟨.bvVal ls, GLift.{1, u} (Bitvec ls.length), GLift.up ⟨ls, rfl⟩⟩
   | ofEq n       : WF baseVal ⟨.eq n, baseVal.eqTyVal n → baseVal.eqTyVal n → GLift.{1, u} Prop, (baseVal.eqVal n).eqF⟩
@@ -371,7 +400,7 @@ def LamBaseTerm.wf_of_lamWF.{u} (ilVal : ILValuation.{u})
 | .ofOr         => .ofOr (baseVal:=.ofILValuation ilVal)
 | .ofImp        => .ofImp (baseVal:=.ofILValuation ilVal)
 | .ofIff        => .ofIff (baseVal:=.ofILValuation ilVal)
-| .ofNatVal n   => .ofNatVal (baseVal:=.ofILValuation ilVal) n
+| .ofIntVal n   => .ofIntVal (baseVal:=.ofILValuation ilVal) n
 | .ofRealVal cr => .ofRealVal (baseVal:=.ofILValuation ilVal) cr
 | .ofBvVal ls   => .ofBvVal (baseVal:=.ofILValuation ilVal) ls
 | .ofEq n       => .ofEq (baseVal:=.ofILValuation ilVal) n

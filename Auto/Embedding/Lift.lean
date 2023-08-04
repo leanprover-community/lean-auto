@@ -54,8 +54,12 @@ structure EqLift (β : Sort u) where
   down : ∀ (x y : β), (eqF x y).down → x = y
   up   : ∀ (x y : β), x = y → (eqF x y).down
 
+
 def EqLift.ofEqLift {α : Sort u} {β : Sort v} (I : IsomType α β) : EqLift β :=
   ⟨eqLift I, eqLift.down I, eqLift.up I⟩
+
+def EqLift.default (β : Sort u) : EqLift β :=
+  ⟨fun x y => GLift.up (@Eq β x y), fun _ _ => id, fun _ _ => id⟩
 
 def forallF {α : Sort u} (p : α → Sort v) := ∀ (x : α), p x
 
@@ -77,12 +81,15 @@ def forallLift.up
   fun x => I.eq₁ x ▸ H (I.f x)
 
 structure ForallLift (β : Sort v') where
-  forallF : (β → GLift.{w + 1, v} (Sort w)) → GLift.{_, v} (Sort w')
+  forallF : (β → GLift.{w + 1, v} (Sort w)) → GLift.{w' + 1, v} (Sort w')
   down    : ∀ (p : β → GLift.{w + 1, v} (Sort w)), (forallF p).down → (∀ x : β, (p x).down)
   up      : ∀ (p : β → GLift.{w + 1, v} (Sort w)), (∀ x : β, (p x).down) → (forallF p).down
-
+ 
 def ForallLift.ofForallLift.{u, v, w} {α : Sort u} {β : Sort v} (I : IsomType α β) : ForallLift β :=
   ⟨forallLift.{u, v, w} I, forallLift.down I, forallLift.up I⟩
+
+def ForallLift.default (β : Type v) : ForallLift.{v + 1, v, w, imax (v + 1) w} β :=
+  ⟨fun (p : β → GLift (Sort w)) => GLift.up (∀ (x : β), GLift.down (p x)), fun _ => id, fun _ => id⟩
 
 -- Isomorphic domain, β is the lifted one
 def existLift {α : Sort u} {β : Sort v} (I : IsomType α β)

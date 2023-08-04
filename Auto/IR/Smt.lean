@@ -80,12 +80,14 @@ structure MatchCase (α : Sort u) where
 
 -- **TODO**: Float-point numbers?
 inductive SpecConst where
-  | str   : String → SpecConst
-  | num   : Nat → SpecConst
+  | str    : String → SpecConst
+  | binary : List Bool → SpecConst
+  | num    : Nat → SpecConst
 
 def SpecConst.toString : SpecConst → String
-| .str s   => ToString.toString (repr s)
-| .num n   => ToString.toString (repr n)
+| .str s     => ToString.toString (repr s)
+| .binary bs => bs.foldl (fun acc b => acc.push (if b then '1' else '0')) "#b"
+| .num n     => ToString.toString (repr n)
 
 inductive STerm where
   | sConst  : SpecConst → STerm
@@ -93,7 +95,7 @@ inductive STerm where
   | qIdApp  : QualIdent → Array STerm → STerm  -- Application of function symbol to array of terms
   | letE    : (name : String) → (binding : STerm) → (body : STerm) → STerm
   | forallE : (name : String) → (binderType : SSort) → (body : STerm) → STerm
-  | existsE : (name : String) → (binderType : SSort) → (body : STerm) → STerm
+  | existE  : (name : String) → (binderType : SSort) → (body : STerm) → STerm
   | matchE  : (matchTerm : STerm) → Array (MatchCase STerm) → STerm
 
 private def STerm.toStringAux : STerm → List SIdent → String
@@ -120,7 +122,7 @@ private def STerm.toStringAux : STerm → List SIdent → String
     let binderType := ToString.toString binderType ++ ") "
     let body := STerm.toStringAux body binders ++ ")"
     intro ++ binderType ++ body
-  | .existsE name binderType body, binders =>
+  | .existE name binderType body, binders =>
     let binders := (SIdent.symb name) :: binders
     let intro := s!"(exists ({SIdent.symb name} "
     let binderType := ToString.toString binderType ++ ") "
@@ -341,18 +343,26 @@ section
   def hIn (e : ω) : TransM ω Bool := do
     return (← getH2lMap).contains e
 
+  -- Used for e.g. bound variables
+  partial def disposableName : TransM ω String := do
+    let l2hMap ← getL2hMap
+    let idx ← getIdx
+    let currName := s!"smtd_{idx}"
+    if l2hMap.contains currName then
+      throwError "disposableName :: Unexpected error"
+    return currName
+
   -- Note that this function is idempotent
+  -- Turn high-level construct into low-level symbol
   partial def h2Symb (cstr : ω) : TransM ω String := do
     let l2hMap ← getL2hMap
     let h2lMap ← getH2lMap
     if h2lMap.contains cstr then
       return h2lMap.find! cstr
-    let mut idx ← getIdx
-    let mut currName : String := ""
-    while true do
-      currName := s!"smti_{idx}"
-      if !l2hMap.contains currName then
-        break
+    let idx ← getIdx
+    let currName : String := s!"smti_{idx}"
+    if l2hMap.contains currName then
+      throwError "h2Symb :: Unexpected error"
     setL2hMap (l2hMap.insert currName cstr)
     setH2lMap (h2lMap.insert cstr currName)
     setIdx (idx + 1)

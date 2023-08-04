@@ -15,7 +15,7 @@ private def PropForm2STerm : PReif.PropForm → TransM Nat STerm
 | .atom n    => do
   if !(← hIn n) then
     let name ← h2Symb n
-    addCommand (.declFun name #[] (.app (.symb "bool") #[]))
+    addCommand (.declFun name #[] (.app (.symb "Bool") #[]))
   return .qIdApp (QualIdent.ofString (← h2Symb n)) #[]
 | .trueE     => return .qIdApp (QualIdent.ofString "true") #[]
 | .falseE    => return .qIdApp (QualIdent.ofString "false") #[]
