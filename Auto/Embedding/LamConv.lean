@@ -48,6 +48,22 @@ def LamWF.ofBVarLiftIdx {lamVarTy lctx} (idx : Nat) (rterm : LamTerm) :
   let IHArg := LamWF.ofBVarLiftIdx idx _ HArg
   .ofApp argTy' IHFn IHArg
 
+def LamWF.bvarLiftIdx_correct.{u}
+  (lval : LamValuation.{u}) (lctxTy : Nat → LamSort) (idx : Nat)
+  (lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal)
+  {xty : LamSort} (x : LamSort.interp lval.ilVal.tyVal xty) :
+  (rterm : LamTerm) → (HWF : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, rterm, rTy⟩) →
+  LamTerm.interp lval lctxTy lctxTerm HWF = LamTerm.interp lval
+    (pushLCtxAt lctxTy xty idx) (pushLCtxAtDep lctxTerm x idx)
+    (ofBVarLiftIdx idx rterm sorry)
+| .atom n, .ofAtom _ => sorry
+| .base _, .ofBase _ => sorry
+| .bvar n, .ofBVar _ => sorry
+| .lam argTy body, .ofLam bodyTy wfBody => funext (fun x' => by
+  simp [LamTerm.interp]
+  sorry)
+| _, _ => sorry
+
 def LamWF.ofBVarLift {lamVarTy lctx} (rterm : LamTerm) 
   (HWF : LamWF lamVarTy ⟨popLCtx lctx, rterm, rTy⟩) :
   LamWF lamVarTy ⟨lctx, rterm.bvarLift, rTy⟩ :=
@@ -126,11 +142,10 @@ def LamWF.subst (ltv : LamTyVal) (idx : Nat)
   let IHArg := LamWF.subst ltv idx _ _ _ _ _ wfArg HArg
   ⟨.app IHFn.fst IHArg.fst, .ofApp argTy' IHFn.snd IHArg.snd⟩
 
-def LamWF.subst_correct.{u} (lval : LamValuation.{u})
-  (arg : LamTerm) (argTy : LamSort)
-  (body : LamTerm) (bodyTy : LamSort) (idx : Nat) :
-  (lctxTy : Nat → LamSort) →
-  (lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal) →
+def LamWF.subst_correct.{u}
+  (lval : LamValuation.{u}) (idx : Nat)
+  (arg : LamTerm) (argTy : LamSort) (body : LamTerm) (bodyTy : LamSort) :
+  (lctxTy : Nat → LamSort) → (lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal) →
   (wfArg : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, LamTerm.bvarLifts arg idx, argTy⟩) →
   (wfBody : LamWF lval.ilVal.toLamTyVal ⟨pushLCtxAt lctxTy argTy idx, body, bodyTy⟩) →
   let wfSubst := LamWF.subst lval.ilVal.toLamTyVal idx arg argTy body bodyTy lctxTy wfArg wfBody
@@ -146,8 +161,15 @@ def LamWF.subst_correct.{u} (lval : LamValuation.{u})
   let lctx := fun n => (⟨LamTerm.bvar n, .ofBVar n⟩ : @Sigma LamTerm
     (fun substed => LamWF lval.ilVal.toLamTyVal ⟨lctxTy, substed, lctxTy n⟩))
   Eq.symm (pushLCtxAtDep.comm (β:=β) (lctxty:=lctxty) f lctx ⟨_, wfArg⟩ _ _)
-| lctxTy, lctxTerm, wfArg, .ofLam (argTy:=argTy') bodyTy' (body:=body') H => by
-  simp [subst, LamTerm.interp]; sorry
+| lctxTy, lctxTerm, wfArg, .ofLam (argTy:=argTy') bodyTy' (body:=body') H =>
+  funext (fun x =>
+    let wfArg' := LamWF.ofBVarLift (lctx:=pushLCtx lctxTy argTy') _ wfArg
+    let IH := LamWF.subst_correct lval (.succ idx) arg argTy body' bodyTy'
+      (pushLCtx lctxTy argTy') (pushLCtxDep lctxTerm x) wfArg' H
+    Eq.trans (by
+      dsimp [LamTerm.interp]
+      sorry
+      ) IH)
 | lctxTy, lctxTerm, wfArg, .ofApp argTy' HFn HArg =>
   sorry
 

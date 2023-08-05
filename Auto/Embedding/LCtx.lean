@@ -133,6 +133,18 @@ def popLCtxAt.comm_cast₂ (lctx : Nat → α) (f : α → β) (g : β → Sort 
     | 0 => fun H => H
     | n' + 1 => fun H => popLCtxAt.comm_cast₂ _ _ _ pos' n' H
 
+def popAt_pushAt_eq (lctx : Nat → α) (x : α) :
+  (pos : Nat) → (n : Nat) → popLCtxAt (pushLCtxAt lctx x pos) pos n = lctx n
+| 0 => fun _ => rfl
+| pos' + 1 => fun n =>
+  match n with
+  | 0 => rfl
+  | n' + 1 => popAt_pushAt_eq (fun n => lctx (Nat.succ n)) x pos' n'
+
+def popAt_pushAt_eqFn (lctx : Nat → α) (x : α) (pos : Nat) :
+  popLCtxAt (pushLCtxAt lctx x pos) pos = lctx :=
+  funext (fun n => popAt_pushAt_eq lctx x pos n)
+
 -- #reduce fun lctx => popLCtxAt lctx 3 4
 
 def popLCtxs (lctx : Nat → α) : (i : Nat) → Nat → α
