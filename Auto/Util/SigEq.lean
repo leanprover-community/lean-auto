@@ -6,6 +6,16 @@ def HEq.ofPSigmaEq {α β : Sort u} (x : α) (y : β) (H : @PSigma.mk _ id _ x =
   match β, y, H with
   | .(α), .(x), Eq.refl _ => HEq.refl _
 
+def HEq.ofSigmaEq' {α : Type u} (β : α → Type v) {xty yty : α} (x : β xty) (y : β yty)
+  (H : @Sigma.mk _ β _ x = @Sigma.mk _ β _ y) : HEq x y :=
+  match yty, y, H with
+  | .(xty), .(x), Eq.refl _ => HEq.refl _
+
+def HEq.ofPSigmaEq' {α : Sort u} (β : α → Sort v) {xty yty : α} (x : β xty) (y : β yty)
+  (H : @PSigma.mk _ β _ x = @PSigma.mk _ β _ y) : HEq x y :=
+  match yty, y, H with
+  | .(xty), .(x), Eq.refl _ => HEq.refl _
+
 def HEq.toSigmaEq {α β : Type u} (x : α) (y : β) (H : HEq x y) : @Sigma.mk _ id _ x = @Sigma.mk _ id _ y :=
   match β, y, H with
   | .(α), .(x), HEq.refl _ => Eq.refl _

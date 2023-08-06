@@ -1,5 +1,9 @@
-LamTerm.interp lval (pushLCtx (pushLCtxAt lctxTy argTy idx) argTy')
-    (pushLCtxDep (pushLCtxAtDep lctxTerm (LamTerm.interp lval lctxTy lctxTerm wfArg) idx) x) H =
-LamTerm.interp lval (pushLCtx lctxTy argTy') (pushLCtxDep lctxTerm x)
-  (subst lval.ilVal.toLamTyVal (Nat.succ idx) arg argTy body' bodyTy' (pushLCtx lctxTy argTy')
-  (ofBVarLift (LamTerm.bvarLifts arg idx) wfArg) H).snd
+LamTerm.interp lval
+  (pushLCtx lctxTy argTy)
+  (pushLCtxDep lctxTerm x')
+  wfBody
+=
+LamTerm.interp lval
+  (pushLCtx (pushLCtxAt lctxTy xty idx) argTy)
+  (pushLCtxDep (pushLCtxAtDep lctxTerm x idx) x')
+  (ofBVarLiftIdx (Nat.succ idx) body wfBody)
