@@ -921,9 +921,11 @@ def LamTerm.bvarLiftIdx (idx : Nat) : LamTerm → LamTerm
 
 def LamTerm.bvarLift : LamTerm → LamTerm := LamTerm.bvarLiftIdx 0
 
-def LamTerm.bvarLiftsRec (t : LamTerm) : (lvl : Nat) → LamTerm
+def LamTerm.bvarLiftsIdxRec (idx : Nat) (t : LamTerm) : (lvl : Nat) → LamTerm
 | 0 => t
-| lvl' + 1 => (t.bvarLiftsRec lvl').bvarLift
+| lvl' + 1 => (t.bvarLiftsIdxRec idx lvl').bvarLiftIdx idx
+
+def LamTerm.bvarLiftsRec := LamTerm.bvarLiftsIdxRec 0
 
 private def LamWF.ofBVarLiftIdxRec_bvarAux
   (lctx : Nat → α) (pos n : Nat) :
@@ -1013,7 +1015,7 @@ def LamWF.bvarLift_correct.{u}
 --   and `body` is a subterm of `func` under `idx` levels of binders in `func`.
 --   We want to compute what `body` will become when we beta-reduce the whole term
 -- `bj` is the judgement related to the body, i.e. `lctx ⊢ body : ty`. It's
---   easy to see that the `lctx` which `arg` resides in is `popLCtxs lctx (idx + 1)`
+--   easy to see that the `lctx` which `arg` resides in is `fun n => lctx (n + idx + 1)`
 --   and the type of `arg` is `lctx idx`
 def LamWF.subst (ltv : LamTyVal) (idx : Nat)
   {arg : LamTerm} {argTy : LamSort}

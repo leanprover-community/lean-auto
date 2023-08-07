@@ -113,12 +113,25 @@ def pushLCtxAtDepRec {rty : Nat → α} {lctxty : α → Sort u}
 
 def pushLCtxAtDep.equiv {rty : Nat → α} {lctxty : α → Sort u}
   (lctx : ∀ n, lctxty (rty n)) {xty : α} (x : lctxty xty) (pos n : Nat) :
-  HEq (pushLCtxAtDepRec lctx x n) (pushLCtxAtDep lctx x n) := by
-  dsimp [pushLCtxAtDep]; revert lctx n; induction pos <;> intro lctx n
+  HEq (pushLCtxAtDepRec lctx x pos n) (pushLCtxAtDep lctx x pos n) := by
+  dsimp [pushLCtxAtDep, pushLCtxAt];
+  revert rty lctx n; induction pos <;> intro rty lctx n
   case zero =>
-    sorry
-  case succ =>
-    sorry  
+    cases n <;> apply HEq.refl
+  case succ pos' IH =>
+    cases n
+    case zero => apply HEq.rfl
+    case succ n' =>
+      let IH' := IH (fun n => lctx (.succ n)) n'
+      dsimp [pushLCtxAtDepRec, pushLCtxAtRec, Nat.ble, Nat.beq]
+      dsimp [pushLCtxAtDepRec, pushLCtxAtRec, Nat.ble, Nat.beq] at IH'
+      cases n'
+      case zero =>
+        rw [Nat.ble_eq_true_of_le (Nat.zero_le _)]; dsimp
+        rw [Nat.ble_eq_true_of_le (Nat.zero_le _)] at IH'; dsimp at IH'
+        exact IH'
+      case succ n' =>
+        exact IH'
 
 def pushLCtxAtDepRec.comm {α : Sort w} {β : α → Sort x} {rty : Nat → α} {lctxty : α → Sort u}
   (f : ∀ (x : α), lctxty x → β x) (lctx : ∀ n, lctxty (rty n))
@@ -129,6 +142,15 @@ def pushLCtxAtDepRec.comm {α : Sort w} {β : α → Sort x} {rty : Nat → α} 
   match n with
   | 0 => rfl
   | n' + 1 => pushLCtxAtDepRec.comm f (fun n => lctx (Nat.succ n)) x pos' n'
+
+def pushLCtxAtDepRec.nonDep {rty : Nat → α} {lctxty : Sort u}
+  (lctx : Nat → lctxty) {xty : α} (x : lctxty) : (pos n : Nat) →
+  @pushLCtxAtDepRec _ rty (fun _ => lctxty) lctx xty x pos n = pushLCtxAtRec lctx x pos n
+| 0 => fun _ => rfl
+| .succ pos' => fun n =>
+  match n with
+  | 0 => rfl
+  | .succ n' => pushLCtxAtDepRec.nonDep (fun n => lctx (.succ n)) x pos' n'
 
 def pushLCtxAtDepRec.absorbAux {rty : Nat → α} {lctxty : α → Sort u}
   (lctx : ∀ n, lctxty (rty n)) {xty : α} (x : lctxty xty) :
@@ -273,21 +295,6 @@ def popLCtxAtRec.commDep
  
 -- #reduce fun lctx => popLCtxAtRec lctx 3 4
 
-def popLCtxs (lctx : Nat → α) : (i : Nat) → Nat → α
-| 0 => lctx
-| i' + 1 => popLCtx (popLCtxs lctx i')
-
--- Definitional equality :
--- #check fun lctx x => (Eq.refl _ : popLCtx (pushLCtx lctx x) = lctx)
--- #check fun lctx pops => (Eq.refl _ : popLCtx (popLCtxs lctx pops) = popLCtxs lctx (Nat.succ pops))
-
--- #reduce fun lctx x => popLCtx (pushLCtx lctx x)
---   popLCtxs lctx 0 = lctx
--- #reduce fun lctx => popLCtxs lctx 0
--- #reduce fun lctx x => pushLCtxAtRec lctx x (pos:=2) 4
--- #reduce (fun lctx x y t => (Eq.refl _ :
---   pushLCtx (pushLCtxAtRec lctx x t) y = pushLCtxAtRec (pushLCtx lctx y) x (t + 1)))
-
 def push_pop_eq (lctx : Nat → α) :
   pushLCtx (popLCtx lctx) (lctx 0) = lctx := by
   apply funext
@@ -313,5 +320,31 @@ def popAtDepRec_pushAtDepRec_eq
   match n with
   | 0 => HEq.rfl
   | n' + 1 => @popAtDepRec_pushAtDepRec_eq _ _ lctxty (fun n => lctx (Nat.succ n)) _ x pos' n'
+
+def popLCtxsAt (lctx : Nat → α) (lvl pos n : Nat) :=
+  match pos.ble n with
+  | true => lctx (Nat.add n lvl)
+  | false => lctx n
+
+def popLCtxsAt.comm (f : α → β) (lctx : Nat → α) (lvl : Nat) (pos n : Nat) :
+  f (popLCtxsAt lctx lvl pos n) = popLCtxsAt (f ∘ lctx) lvl pos n := by
+  dsimp [popLCtxsAt]
+  match Nat.ble pos n with
+  | true => rfl
+  | false => rfl
+
+def popLCtxsAt.succ_l (lctx : Nat → α) (lvl : Nat) (pos n : Nat) :
+  popLCtxsAt lctx (.succ lvl) pos n = popLCtxsAt (popLCtxAt lctx pos) lvl pos n := by
+  dsimp [popLCtxsAt, popLCtxAt]
+  match h : Nat.ble pos n with
+  | true =>
+    dsimp
+    have leAdd' := Nat.le_trans (Nat.le_of_ble_eq_true h) (Nat.le_add_right _ lvl)
+    have bleAdd' := Nat.ble_eq_true_of_le leAdd'
+    rw [bleAdd']; rfl
+  | false => rfl
+
+def popLCtxsAt.one (lctx : Nat → α) :
+  popLCtxsAt lctx 1 = popLCtxAt lctx := rfl
 
 end Auto.Embedding
