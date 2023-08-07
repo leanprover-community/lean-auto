@@ -73,11 +73,11 @@ def LamTerm.subst.equiv (ltv : LamTyVal) (idx : Nat)
   (lctx : Nat → LamSort) :
   (wfArg : LamWF ltv ⟨lctx, LamTerm.bvarLiftsRec arg idx, argTy⟩) →
   (wfBody : LamWF ltv ⟨pushLCtxAtRec lctx argTy idx, body, bodyTy⟩) →
-  LamTerm.subst idx arg body = (LamWF.subst ltv idx lctx wfArg wfBody).fst
+  LamTerm.subst idx arg body = (LamWF.subst' ltv idx lctx wfArg wfBody).fst
 | wfArg, .ofAtom n => rfl
 | _,     .ofBase (b:=b) H => rfl
 | wfArg, .ofBVar n => by
-  dsimp [LamTerm.subst, LamWF.subst]
+  dsimp [LamTerm.subst, LamWF.subst']
   let f := fun (x : LamSort) (t : (substed : LamTerm) × LamWF ltv ⟨lctx, substed, x⟩) => t.fst
   let β₀ := fun ty substed => LamWF ltv ⟨lctx, substed, ty⟩
   let lctx' := fun n => @Sigma.mk LamTerm (β₀ _) (LamTerm.bvar n) (@LamWF.ofBVar ltv lctx n)
@@ -86,11 +86,101 @@ def LamTerm.subst.equiv (ltv : LamTyVal) (idx : Nat)
   simp at GEq; rw [GEq]; rw [pushLCtxAtDepRec.nonDep]
   rw [pushLCtxAt.equiv]; rw [LamTerm.bvarLifts.equiv]
 | wfArg, .ofLam (argTy:=argTy') bodyTy' (body:=body') H => by
-  dsimp [LamTerm.subst, LamWF.subst];
+  dsimp [LamTerm.subst, LamWF.subst'];
   rw [← @LamTerm.subst.equiv ltv (.succ idx) arg argTy body' bodyTy']
 | wfArg, .ofApp argTy' HFn HArg => by
-  dsimp [LamTerm.subst, LamWF.subst]
+  dsimp [LamTerm.subst, LamWF.subst']
   rw [← LamTerm.subst.equiv ltv idx lctx wfArg HFn]
   rw [← LamTerm.subst.equiv ltv idx lctx wfArg HArg]
+
+def LamWF.subst (ltv : LamTyVal) (idx : Nat)
+  {arg : LamTerm} {argTy : LamSort}
+  {body : LamTerm} {bodyTy : LamSort}
+  (lctx : Nat → LamSort)
+  (wfArg : LamWF ltv ⟨lctx, LamTerm.bvarLifts arg idx, argTy⟩)
+  (wfBody : LamWF ltv ⟨pushLCtxAt lctx argTy idx, body, bodyTy⟩) :
+  LamWF ltv ⟨lctx, LamTerm.subst idx arg body, bodyTy⟩ :=
+  let GEqArg : (LamWF ltv ⟨lctx, LamTerm.bvarLifts arg idx, argTy⟩ =
+                LamWF ltv ⟨lctx, LamTerm.bvarLiftsRec arg idx, argTy⟩) := by
+    rw [LamTerm.bvarLifts.equiv arg idx]
+  let wfArg' := GEqArg ▸ wfArg
+  let GEqBody : (LamWF ltv ⟨pushLCtxAt lctx argTy idx, body, bodyTy⟩ =
+                 LamWF ltv ⟨pushLCtxAtRec lctx argTy idx, body, bodyTy⟩) := by
+    rw [pushLCtxAt.equivFn lctx argTy idx]
+  let wfBody' := GEqBody ▸ wfBody
+  let GEq : (LamWF ltv ⟨lctx, (subst' ltv idx lctx wfArg' wfBody').fst, bodyTy⟩ =
+             LamWF ltv ⟨lctx, LamTerm.subst idx arg body, bodyTy⟩) := by
+    rw [LamTerm.subst.equiv]
+  GEq ▸ (LamWF.subst' ltv idx lctx wfArg' wfBody').snd
+
+def LamWF.subst.equiv (ltv : LamTyVal) (idx : Nat)
+  {arg : LamTerm} {argTy : LamSort}
+  {body : LamTerm} {bodyTy : LamSort}
+  (lctx : Nat → LamSort)
+  (wfArg : LamWF ltv ⟨lctx, LamTerm.bvarLifts arg idx, argTy⟩)
+  (wfBody : LamWF ltv ⟨pushLCtxAt lctx argTy idx, body, bodyTy⟩) :
+  let GEqArg : (LamWF ltv ⟨lctx, LamTerm.bvarLifts arg idx, argTy⟩ =
+                LamWF ltv ⟨lctx, LamTerm.bvarLiftsRec arg idx, argTy⟩) := by
+    rw [LamTerm.bvarLifts.equiv arg idx]
+  let wfArg' := GEqArg ▸ wfArg
+  let GEqBody : (LamWF ltv ⟨pushLCtxAt lctx argTy idx, body, bodyTy⟩ =
+                 LamWF ltv ⟨pushLCtxAtRec lctx argTy idx, body, bodyTy⟩) := by
+    rw [pushLCtxAt.equivFn lctx argTy idx]
+  let wfBody' := GEqBody ▸ wfBody
+  HEq (LamWF.subst' ltv idx lctx wfArg' wfBody').snd (LamWF.subst ltv idx lctx wfArg wfBody) := by
+    let GEqArg : (LamWF ltv ⟨lctx, LamTerm.bvarLifts arg idx, argTy⟩ =
+                  LamWF ltv ⟨lctx, LamTerm.bvarLiftsRec arg idx, argTy⟩) := by
+      rw [LamTerm.bvarLifts.equiv arg idx]
+    let wfArg' := GEqArg ▸ wfArg
+    let GEqBody : (LamWF ltv ⟨pushLCtxAt lctx argTy idx, body, bodyTy⟩ =
+                   LamWF ltv ⟨pushLCtxAtRec lctx argTy idx, body, bodyTy⟩) := by
+      rw [pushLCtxAt.equivFn lctx argTy idx]
+    let wfBody' := GEqBody ▸ wfBody
+    let GEq : (LamWF ltv ⟨lctx, (subst' ltv idx lctx wfArg' wfBody').fst, bodyTy⟩ =
+               LamWF ltv ⟨lctx, LamTerm.subst idx arg body, bodyTy⟩) := by
+      rw [LamTerm.subst.equiv]
+    apply heq_of_eqRec_eq GEq; rfl
+
+def LamWF.subst.correct.{u}
+  (lval : LamValuation.{u}) (idx : Nat)
+  {arg : LamTerm} {argTy : LamSort} {body : LamTerm} {bodyTy : LamSort}
+  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal)
+  (wfArg : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, LamTerm.bvarLifts arg idx, argTy⟩)
+  (wfBody : LamWF lval.ilVal.toLamTyVal ⟨pushLCtxAt lctxTy argTy idx, body, bodyTy⟩) :
+  let wfSubst := LamWF.subst lval.ilVal.toLamTyVal idx lctxTy wfArg wfBody
+  (LamTerm.interp lval (pushLCtxAt lctxTy argTy idx)
+    (pushLCtxAtDep lctxTerm (LamTerm.interp lval lctxTy lctxTerm wfArg) idx) wfBody
+  = LamTerm.interp lval lctxTy lctxTerm wfSubst) :=
+  let GEqArg : (LamWF lval.ilVal.toLamTyVal ⟨lctxTy, LamTerm.bvarLifts arg idx, argTy⟩ =
+                LamWF lval.ilVal.toLamTyVal ⟨lctxTy, LamTerm.bvarLiftsRec arg idx, argTy⟩) := by
+    rw [LamTerm.bvarLifts.equiv arg idx]
+  let wfArg' := GEqArg ▸ wfArg
+  let GEqBody : (LamWF lval.ilVal.toLamTyVal ⟨pushLCtxAt lctxTy argTy idx, body, bodyTy⟩ =
+                 LamWF lval.ilVal.toLamTyVal ⟨pushLCtxAtRec lctxTy argTy idx, body, bodyTy⟩) := by
+    rw [pushLCtxAt.equivFn lctxTy argTy idx]
+  let wfBody' := GEqBody ▸ wfBody
+  by
+    dsimp; apply eq_of_heq
+    let bArg := (LamWF.subst' lval.ilVal.toLamTyVal idx lctxTy wfArg' wfBody').snd
+    apply HEq.trans (b := LamTerm.interp lval lctxTy lctxTerm bArg)
+    case h.h₁ =>
+      dsimp
+      rw [← LamWF.subst'.correct]
+      congr
+      case h.h.e_4 => rw [pushLCtxAt.equivFn]
+      case h.h.e_5 =>
+        let HEquiv := pushLCtxAtDep.equivFn lctxTerm (LamTerm.interp lval lctxTy lctxTerm wfArg) idx
+        apply HEq.trans (HEq.symm HEquiv);
+        apply heq_of_eq;
+        apply congrArg (f := fun x => pushLCtxAtDepRec lctxTerm x idx)
+        congr;
+        case h.h.e_1 => rw [LamTerm.bvarLifts.equiv];
+        case h.h.e_6 => apply heq_of_eqRec_eq GEqArg; rfl
+      case h.h.e_6 => apply heq_of_eqRec_eq GEqBody; rfl
+    case h.h₂ =>
+      congr
+      case h.h.e_1 => rw [← LamTerm.subst.equiv]
+      case h.h.e_6 =>
+        dsimp; apply LamWF.subst.equiv
 
 end Auto.Embedding.Lam

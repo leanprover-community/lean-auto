@@ -1,3 +1,8 @@
+theorem heq_of_eqRec_eq' {motive : γ → Sort u} {α β : γ} (h₁ : α = β)
+  (a : motive α) : HEq a (@Eq.rec γ α (fun α _ => motive α) a β h₁) := by
+  subst h₁
+  apply HEq.refl
+
 def HEq.ofSigmaEq {α β : Type u} (x : α) (y : β) (H : @Sigma.mk _ id _ x = @Sigma.mk _ id _ y) : HEq x y :=
   match β, y, H with
   | .(α), .(x), Eq.refl _ => HEq.refl _

@@ -55,7 +55,7 @@ def pushLCtxAtRec (lctx : Nat → α) (x : α) : (pos : Nat) → Nat → α
   | 0 => lctx 0
   | n' + 1 => pushLCtxAtRec (fun n => lctx (Nat.succ n)) x pos' n'
 
-theorem pushLCtxAt.equiv (lctx : Nat → α) (x : α) (pos n : Nat) :
+def pushLCtxAt.equiv (lctx : Nat → α) (x : α) (pos n : Nat) :
   pushLCtxAtRec lctx x pos n = pushLCtxAt lctx x pos n := by
   revert lctx n; induction pos <;> intro lctx n
   case zero =>
@@ -74,6 +74,10 @@ theorem pushLCtxAt.equiv (lctx : Nat → α) (x : α) (pos n : Nat) :
         exact IH'
       case succ n' =>
         exact IH'
+
+theorem pushLCtxAt.equivFn (lctx : Nat → α) (x : α) (pos : Nat) :
+  pushLCtxAtRec lctx x pos = pushLCtxAt lctx x pos :=
+  funext (fun n => pushLCtxAt.equiv lctx x pos n)
 
 def pushLCtxAtRec.comm (f : α → β) (lctx : Nat → α) (x : α) :
   (pos : Nat) → (n : Nat) → f (pushLCtxAtRec lctx x pos n) = pushLCtxAtRec (f ∘ lctx) (f x) pos n
@@ -132,6 +136,11 @@ def pushLCtxAtDep.equiv {rty : Nat → α} {lctxty : α → Sort u}
         exact IH'
       case succ n' =>
         exact IH'
+
+def pushLCtxAtDep.equivFn {rty : Nat → α} {lctxty : α → Sort u}
+  (lctx : ∀ n, lctxty (rty n)) {xty : α} (x : lctxty xty) (pos : Nat) :
+    HEq (pushLCtxAtDepRec lctx x pos) (pushLCtxAtDep lctx x pos) :=
+    HEq.funext _ _ (fun n => pushLCtxAtDep.equiv lctx x pos n)
 
 def pushLCtxAtDepRec.comm {α : Sort w} {β : α → Sort x} {rty : Nat → α} {lctxty : α → Sort u}
   (f : ∀ (x : α), lctxty x → β x) (lctx : ∀ n, lctxty (rty n))

@@ -1,4 +1,4 @@
-import Auto.Embedding.LamConv
+import Auto.Embedding.LamBase
 import Auto.Util.ExprExtra
 
 open Auto.Embedding.Lam
