@@ -54,7 +54,6 @@ structure EqLift (β : Sort u) where
   down : ∀ (x y : β), (eqF x y).down → x = y
   up   : ∀ (x y : β), x = y → (eqF x y).down
 
-
 def EqLift.ofEqLift {α : Sort u} {β : Sort v} (I : IsomType α β) : EqLift β :=
   ⟨eqLift I, eqLift.down I, eqLift.up I⟩
 
