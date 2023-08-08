@@ -3,6 +3,13 @@ theorem heq_of_eqRec_eq' {motive : γ → Sort u} {α β : γ} (h₁ : α = β)
   subst h₁
   apply HEq.refl
 
+theorem congr_arg₂_heq (β : α → Sort _) (γ : ∀ (a : α), β a → Sort _)
+  (f : ∀ (a : α) (b : β a), γ a b) {a₁ a₂ : α} {b₁ : β a₁} {b₂ : β a₂}
+  (H₁ : a₁ = a₂) (H₂ : HEq b₁ b₂) : HEq (f a₁ b₁) (f a₂ b₂) := by
+  subst H₁
+  cases H₂
+  apply HEq.refl
+
 def HEq.ofSigmaEq {α β : Type u} (x : α) (y : β) (H : @Sigma.mk _ id _ x = @Sigma.mk _ id _ y) : HEq x y :=
   match β, y, H with
   | .(α), .(x), Eq.refl _ => HEq.refl _
