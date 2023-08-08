@@ -267,6 +267,10 @@ inductive LamBaseTerm.LamWF (ltv : LamTyVal) : LamBaseTerm → LamSort → Type
   | ofForallE n  : LamWF ltv (.forallE n) (.func (.func (ltv.forallLamVal n) (.base .prop)) (.base .prop))
   | ofExistE n   : LamWF ltv (.existE n) (.func (.func (ltv.existLamVal n) (.base .prop)) (.base .prop))
 
+def LamBaseTerm.LamWF.unique (ltv : LamTyVal) (b : LamBaseTerm) (s₁ s₂ : LamSort)
+  (lbwf₁ : LamBaseTerm.LamWF ltv b s₁) (lbwf₂ : LamBaseTerm.LamWF ltv b s₂) : s₁ = s₂ ∧ HEq lbwf₁ lbwf₂ := by
+  cases lbwf₁ <;> cases lbwf₂ <;> trivial
+
 def LamBaseTerm.LamWF.reprPrec (wf : LamBaseTerm.LamWF ltv s t) (n : Nat) :=
   let s :=
     match wf with
@@ -550,6 +554,30 @@ inductive LamWF (ltv : LamTyVal) : LamJudge → Type
       (HArg : LamWF ltv ⟨lctx, arg, argTy⟩) :
     LamWF ltv ⟨lctx, .app fn arg, resTy⟩
 
+def LamWF.unique (ltv : LamTyVal) :
+  (lwf₁ : LamWF ltv ⟨lctx, t, s₁⟩) → (lwf₂ : LamWF ltv ⟨lctx, t, s₂⟩) →
+  s₁ = s₂ ∧ HEq lwf₁ lwf₂
+| .ofAtom _,  .ofAtom _  => And.intro rfl HEq.rfl
+| .ofBase H₁, .ofBase H₂ => by
+  have heq := LamBaseTerm.LamWF.unique ltv _ _ _ H₁ H₂
+  cases heq; case intro left right =>
+    cases left; cases right; apply And.intro; rfl; rfl
+| .ofBVar _,  .ofBVar _  => And.intro rfl HEq.rfl
+| .ofLam bodyTy H₁, .ofLam _ H₂ => by
+  have heq := LamWF.unique ltv H₁ H₂
+  cases heq; case intro left right =>
+    cases left; cases right; apply And.intro; rfl; rfl
+| .ofApp argTy₁ HFn₁ HArg₁, .ofApp argTy₂ HFn₂ HArg₂ => by
+  have heqFn := LamWF.unique ltv HFn₁ HFn₂
+  have heqArg := LamWF.unique ltv HArg₁ HArg₂
+  cases heqFn;
+    case intro fnLeft fnRight =>
+    cases fnLeft; cases fnRight
+    cases heqArg;
+    case intro argLeft argRight =>
+      cases argLeft; cases argRight
+      apply And.intro; rfl; rfl
+
 def LamWF.reprPrec (wf : LamWF f judge) (n : Nat) (lctxDep : Nat) :=
   let rec formatLCtxAux prec : (lctx : List LamSort) → Lean.Format
     | .nil => f!""
@@ -825,6 +853,20 @@ def LamWF.interp.{u} (lval : LamValuation.{u}) :
   let mfn := LamWF.interp lval lctxTy lctxTerm HFn
   let marg := LamWF.interp lval lctxTy lctxTerm HArg
   mfn marg
+
+def LamWF.interp.heq (lval : LamValuation.{u})
+  {lctxTy₁ lctxTy₂ : Nat → LamSort} (HLCtxTyEq : lctxTy₁ = lctxTy₂)
+  {lctxTerm₁ : ∀ n, (lctxTy₁ n).interp lval.ilVal.tyVal}
+  {lctxTerm₂ : ∀ n, (lctxTy₂ n).interp lval.ilVal.tyVal}
+  (HLCtxTermEq : HEq lctxTerm₁ lctxTerm₂)
+  (lwf₁ : LamWF lval.ilVal.toLamTyVal ⟨lctxTy₁, t₁, rty₁⟩)
+  (lwf₂ : LamWF lval.ilVal.toLamTyVal ⟨lctxTy₂, t₂, rty₂⟩)
+  (HTeq : t₁ = t₂) :
+  HEq (LamWF.interp lval lctxTy₁ lctxTerm₁ lwf₁) (LamWF.interp lval lctxTy₂ lctxTerm₂ lwf₂) := by
+  cases HTeq; cases HLCtxTyEq; cases HLCtxTermEq;
+  have HUniq := LamWF.unique lval.ilVal.toLamTyVal lwf₁ lwf₂
+  cases HUniq; case intro left right =>
+    cases left; cases right; rfl
 
 -- Valuation
 structure Valuation.{u} extends BaseValuation.{u} where

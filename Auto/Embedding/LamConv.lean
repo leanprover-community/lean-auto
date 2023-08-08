@@ -310,48 +310,17 @@ def LamWF.subst.correct.{u}
     let bArg := LamWF.subst' lval.ilVal.toLamTyVal idx lctxTy wfArg' wfBody'
     HEq.trans (b := LamWF.interp lval lctxTy lctxTerm bArg.snd) (
       Eq.symm (LamWF.subst'.correct _ _ _ _ wfArg' wfBody') ▸ (
-        heq_of_eq (
-          congr_heq (x:=wfBody) (y:=wfBody') (
-            congr_arg₂_heq _ _ (
-              LamWF.interp lval
-            ) (Eq.symm (pushLCtxAt.equivFn _ _ _)
-            ) (
-                let HEquiv := pushLCtxAtDep.equivFn lctxTerm (LamWF.interp lval lctxTy lctxTerm wfArg) idx
-                HEq.trans (HEq.symm HEquiv) (
-                  congr_arg₂_heq _ _ (
-                    pushLCtxAtDepRec lctxTerm
-                  ) (
-                    congr_heq (
-                      LamTerm.bvarLifts.equiv _ _ ▸ HEq.refl _
-                    ) (
-                      heq_of_eqRec_eq' (
-                        motive:=fun x => LamWF _ ⟨lctxTy, x, argTy⟩
-                      ) (
-                        Eq.symm (LamTerm.bvarLifts.equiv _ _)
-                      ) wfArg
-                    )
-                  ) HEq.rfl
-                )
-            )
-          ) (
-            heq_of_eqRec_eq' (
-              motive:=fun x => LamWF _ ⟨x, body, bodyTy⟩
-            ) (
-              Eq.symm (pushLCtxAt.equivFn lctxTy argTy idx)
-            ) wfBody
-          )
-        )
-      )
-     ) (
-      congr_arg₂_heq _ _ (
-        fun arg₁ => LamWF.interp (t:=arg₁) lval lctxTy lctxTerm
-      ) (
-        Eq.symm (LamTerm.subst.equiv _ _ _ _ _)
-      ) (
-        LamWF.subst.equiv _ _ _ _ _
-      )
-     )
+        LamWF.interp.heq _
+          (Eq.symm (pushLCtxAt.equivFn _ _ _))
+          (let HEquiv := pushLCtxAtDep.equivFn lctxTerm (LamWF.interp lval lctxTy lctxTerm wfArg) idx
+           HEq.trans (HEq.symm HEquiv) (
+            congr_arg₂_heq _ _ (pushLCtxAtDepRec lctxTerm) (eq_of_heq (
+              LamWF.interp.heq _ rfl HEq.rfl _ _ (Eq.symm (LamTerm.bvarLifts.equiv _ _))
+            )) HEq.rfl
+          )) _ _ rfl)
+     ) (LamWF.interp.heq _ rfl HEq.rfl _ _ (Eq.symm (LamTerm.subst.equiv _ _ _ _ _)))
   )
+
 -- Note: `LamTerm.subst`, `LamWF.subst` and `LamWF.subst_correct` is the main API
 --   of syntactic operations on `λ` terms
 
@@ -398,26 +367,16 @@ def LamWF.headBetaAux.correct.{u} (lval : LamValuation.{u})
         (by rw [← pushLCtxAt.equivFn]; exact wfBody)
       apply Eq.trans (b:=b)
       case h₁ =>
-        apply congr_heq
-        case h₁ =>
-          apply congr_arg₂_heq (f := LamWF.interp lval)
-          case H₁ => rw [← pushLCtxAt.equivFn]; rfl
-          case H₂ => apply pushLCtxAtDep.equivFn lctxTerm _ 0
-        case h₂ =>
-          dsimp [Eq.mpr]
-          apply heq_of_eqRec_eq; rfl
+        apply eq_of_heq; apply LamWF.interp.heq <;> try rfl
+        rw [← pushLCtxAt.equivFn]; rfl
+        exact (pushLCtxAtDep.equivFn lctxTerm _ 0)
       case h₂ =>
         dsimp
         rw [← LamWF.subst.correct]
-        apply eq_of_heq
-        apply congr_arg₂_heq (f:=LamWF.interp lval (pushLCtxAt lctxTy s 0))
-        case h.H₁ =>
-          apply congrFun; apply congrArg; apply eq_of_heq
-          apply congr_arg₂_heq (f := fun arg₁ => LamWF.interp (t:=arg₁) lval lctxTy lctxTerm)
-          case h.h.h.H₁ => rw [LamTerm.bvarLifts.zero]
-          case h.h.h.H₂ =>
-            apply heq_of_cast_eq (by rw [LamTerm.bvarLifts.zero]) rfl
-        case h.H₂ => rfl
+        apply eq_of_heq; apply LamWF.interp.heq <;> try rfl
+        apply heq_of_eq; apply congr_fun; apply congr_arg;
+        apply eq_of_heq; apply LamWF.interp.heq <;> try rfl
+        rw [LamTerm.bvarLifts.zero]
   | .app _ _ => rfl
 
 def LamTerm.headBeta : LamTerm → LamTerm
