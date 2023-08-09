@@ -133,4 +133,47 @@ theorem Eq.subst (lval : LamValuation)
             case h.h.h.h₂ =>
               rw [hEq']; apply LamWF.interp.heq <;> rfl
 
+def Eq.congr.WF
+  (wfEq : LamWF ltv ⟨lctx, .app (.app (.base (.eq n)) a) b, .base .prop⟩)
+  (wfT : LamWF ltv ⟨lctx, .app f a, s⟩)
+  (wfEq' : LamWF ltv ⟨lctx, .base (.eq m), .func s (.func s (.base .prop))⟩) :
+  LamWF ltv ⟨lctx, .app (.app (.base (.eq m)) (.app f a)) (.app f b), .base .prop⟩ :=
+  match wfEq with
+  | .ofApp bTy (.ofApp aTy wfEq'' wfA) wfB =>
+    match wfEq'' with
+    | .ofBase (.ofEq m) =>
+      match wfEq' with
+      | .ofBase (.ofEq n) =>
+        match wfT with
+        | .ofApp aTy' wfF wfA' =>
+          let heq : LamTyVal.eqLamVal ltv m = aTy' :=
+              (LamWF.unique ltv wfA wfA').left
+          .ofApp _
+            (.ofApp _ (.ofBase (.ofEq _))
+            (.ofApp _ wfF (heq ▸ wfA))) (.ofApp _ wfF (heq ▸ wfB))
+
+def Eq.congr (lval : LamValuation)
+  {lctxTy : Nat → LamSort} {lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal}
+  (wfEq : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, .app (.app (.base (.eq m)) a) b, .base .prop⟩)
+  (heq : GLift.down (LamWF.interp lval lctxTy lctxTerm wfEq))
+  (wfT : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, .app f a, s⟩)
+  (wfEq' : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, .base (.eq m), .func s (.func s (.base .prop))⟩) :
+  GLift.down (LamWF.interp lval lctxTy lctxTerm (Eq.congr.WF wfEq wfT wfEq')) :=
+  match wfEq with
+  | .ofApp bTy (.ofApp aTy wfEq'' wfA) wfB =>
+    match aTy, bTy, wfEq'' with
+    | _, _, .ofBase (.ofEq _) =>
+      match s, wfEq' with
+      | _, .ofBase (.ofEq _) =>
+        match wfT with
+        | .ofApp aTy' wfF wfA' => by
+          dsimp [trans.WF, LamWF.interp, LamBaseWF.interp];
+          dsimp [trans.WF, LamWF.interp, LamBaseWF.interp] at heq;
+          apply EqLift.up;
+          have heq' := EqLift.down _ _ _ heq
+          apply congrArg; apply eq_of_heq
+          apply HEq.trans (b:=LamWF.interp lval lctxTy lctxTerm wfA)
+          case a.h.h.h₁ => apply LamWF.interp.heq <;> rfl
+          case a.h.h.h₂ => rw [heq']; apply LamWF.interp.heq <;> rfl
+
 end Auto.Embedding.Lam
