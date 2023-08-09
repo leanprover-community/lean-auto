@@ -1089,8 +1089,8 @@ def LamTerm.wf_of_lamWF.{u} (lval : LamValuation.{u}) :
 section Example
 
   private def BaseValuationEx₁ : BaseValuation :=
-    ⟨fun _ => GLift Nat, fun _ => GLift Prop, fun _ => GLift Prop,
-     fun _ => GLift Prop, fun n => sorry, fun n => sorry, fun n => sorry⟩
+    ⟨fun _ => GLift Nat, fun _ => GLift Prop, fun _ => GLift Prop, fun _ => GLift Prop,
+     fun n => EqLift.default _, fun n => ForallLift.default _, fun n => ExistLift.default _⟩
   
   private def Nat.succLift.{u} (x : GLift.{1, u} Nat) :=
     GLift.up (Nat.succ x.down)

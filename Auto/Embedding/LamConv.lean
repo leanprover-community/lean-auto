@@ -76,13 +76,7 @@ private def LamWF.bvarLiftIdxRec.correct.{u}
     dsimp [LamWF.interp]
     apply HEq.symm; apply LamWF.bvarLiftIdxRec.correct_bvarAux
   case h.h₂ =>
-    congr
-    case e_2 => apply LamWF.ofBVarLiftIdxRec_bvarAux
-    case e_6 =>
-      apply HEq.symm;
-      let h := @Auto.Embedding.Lam.LamWF.ofBVarLiftIdxRec_bvarAux LamSort xty lctxTy idx n
-      let φ := fun x => LamWF lval.ilVal.toLamTyVal ⟨pushLCtxAtRec lctxTy xty idx, LamTerm.bvarLiftIdx idx (LamTerm.bvar n), x⟩
-      exact (eqRec_heq (φ:=φ) h (ofBVar (popLCtxAtRec id idx n)))
+    apply LamWF.interp.heq <;> try rfl
 | .lam argTy body, .ofLam bodyTy wfBody => funext (fun x' => LamWF.bvarLiftIdxRec.correct
     lval (pushLCtx lctxTy argTy) (Nat.succ idx)
     (pushLCtxDep lctxTerm x') x body wfBody)

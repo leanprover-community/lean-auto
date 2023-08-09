@@ -87,8 +87,8 @@ structure ForallLift (β : Sort v') where
 def ForallLift.ofForallLift.{u, v, w} {α : Sort u} {β : Sort v} (I : IsomType α β) : ForallLift β :=
   ⟨forallLift.{u, v, w} I, forallLift.down I, forallLift.up I⟩
 
-def ForallLift.default (β : Type v) : ForallLift.{v + 1, v, w, imax (v + 1) w} β :=
-  ⟨fun (p : β → GLift (Sort w)) => GLift.up (∀ (x : β), GLift.down (p x)), fun _ => id, fun _ => id⟩
+def ForallLift.default (β : Sort v') : ForallLift.{v', v, w, imax v' w} β :=
+  ⟨fun (p : β → GLift.{w + 1, v} (Sort w)) => GLift.up (∀ (x : β), GLift.down (p x)), fun _ => id, fun _ => id⟩
 
 -- Isomorphic domain, β is the lifted one
 def existLift {α : Sort u} {β : Sort v} (I : IsomType α β)
@@ -114,5 +114,8 @@ structure ExistLift (β : Sort v') where
 
 def ExistLift.ofExistLift.{u, v} {α : Sort u} {β : Sort v} (I : IsomType α β) : ExistLift β :=
   ⟨existLift.{u, v} I, existLift.down I, existLift.up I⟩
+
+def ExistLift.default (β : Sort v') : ExistLift.{v', w} β :=
+  ⟨fun (p : β → GLift.{1, w} Prop) => GLift.up (∃ (x : β), GLift.down (p x)), fun _ => id, fun _ => id⟩
 
 end Auto.Embedding
