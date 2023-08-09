@@ -314,7 +314,7 @@ def LamWF.subst.correct.{u}
           (Eq.symm (pushLCtxAt.equivFn _ _ _))
           (let HEquiv := pushLCtxAtDep.equivFn lctxTerm (LamWF.interp lval lctxTy lctxTerm wfArg) idx
            HEq.trans (HEq.symm HEquiv) (
-            congr_arg₂_heq _ _ (pushLCtxAtDepRec lctxTerm) (eq_of_heq (
+            congr_arg₂_heq _ (pushLCtxAtDepRec lctxTerm) (eq_of_heq (
               LamWF.interp.heq _ rfl HEq.rfl _ _ (Eq.symm (LamTerm.bvarLifts.equiv _ _))
             )) HEq.rfl
           )) _ _ rfl)

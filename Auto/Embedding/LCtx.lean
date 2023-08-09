@@ -1,4 +1,4 @@
-import Auto.Util.SigEq
+import Auto.Util.HEqExtra
 namespace Auto.Embedding
 
 @[reducible] def pushLCtx (lctx : Nat → α) (x : α) : Nat → α
@@ -36,9 +36,8 @@ def pushLCtxDep.absorbAux {rty : Nat → α} {lctxty : α → Sort u}
 
 theorem pushLCtxDep.absorb {rty : Nat → α} {lctxty : α → Sort u}
   (lctx : ∀ n, lctxty (rty n)) {xty : α} (x : lctxty xty) :
-  PSigmaEq (fun (α : Nat → Sort u) => (∀ (n : Nat), α n))
-    (@pushLCtxDep _ rty lctxty lctx _ x) (@pushLCtxDep _ (lctxty ∘ rty) id lctx _ x) :=
-  PSigmaEq.of_heq _ (HEq.funext _ _ (pushLCtxDep.absorbAux _ _)) (pushLCtx.commFn _ _ _)
+  HEq (@pushLCtxDep _ rty lctxty lctx _ x) (@pushLCtxDep _ (lctxty ∘ rty) id lctx _ x) :=
+  HEq.funext _ _ (pushLCtxDep.absorbAux _ _)
 
 def pushLCtxAt (lctx : Nat → α) (x : α) (pos n : Nat) : α :=
   match n.ble pos with
@@ -174,9 +173,8 @@ def pushLCtxAtDepRec.absorbAux {rty : Nat → α} {lctxty : α → Sort u}
 
 theorem pushLCtxAtDepRec.absorb {rty : Nat → α} {lctxty : α → Sort u}
   (lctx : ∀ n, lctxty (rty n)) {xty : α} (x : lctxty xty) (pos : Nat) :
-  PSigmaEq (fun (α : Nat → Sort u) => (∀ (n : Nat), α n))
-    (@pushLCtxAtDepRec _ rty lctxty lctx _ x pos) (@pushLCtxAtDepRec _ (lctxty ∘ rty) id lctx _ x pos) :=
-  PSigmaEq.of_heq _ (HEq.funext _ _ (pushLCtxAtDepRec.absorbAux _ _ _)) (pushLCtxAtRec.commFn _ _ _ _)
+  HEq (@pushLCtxAtDepRec _ rty lctxty lctx _ x pos) (@pushLCtxAtDepRec _ (lctxty ∘ rty) id lctx _ x pos) :=
+  HEq.funext _ _ (pushLCtxAtDepRec.absorbAux _ _ _)
 
 -- Surprisingly, this is definitionally equal
 def pushLCtxDep_pushLCtxAtDepRec {rty : Nat → α} {lctxty : α → Sort u}
@@ -205,9 +203,8 @@ def popLCtxDep.absorbAux {rty : Nat → α} {lctxty : α → Sort u}
     (@popLCtxDep _ (lctxty ∘ rty) id lctx n) := HEq.refl _
 
 theorem popLCtxDep.absorb {rty : Nat → α} {lctxty : α → Sort u} (lctx : ∀ n, lctxty (rty n)) :
-  PSigmaEq (fun (α : Nat → Sort u) => (∀ (n : Nat), α n))
-    (@popLCtxDep _ rty lctxty lctx) (@popLCtxDep _ (lctxty ∘ rty) id lctx) :=
-  PSigmaEq.of_heq _ (HEq.funext _ _ (popLCtxDep.absorbAux _)) (popLCtx.commFn _ _)
+  HEq (@popLCtxDep _ rty lctxty lctx) (@popLCtxDep _ (lctxty ∘ rty) id lctx) :=
+  HEq.funext _ _ (popLCtxDep.absorbAux _)
 
 def popLCtxAt (lctx : Nat → α) (pos n : Nat) :=
   match pos.ble n with
@@ -280,9 +277,8 @@ def popLCtxAtDepRec.absorbAux' {rty : Nat → α} {lctxty : α → Sort u}
     (HEq.symm (@popLCtxAtDepRec.absorbAux _ id (lctxty ∘ rty) lctx pos n))
 
 def popLCtxAtDepRec.absorb {rty : Nat → α} {lctxty : α → Sort u} (lctx : ∀ n, lctxty (rty n)) (pos : Nat):
-  PSigmaEq (fun (α : Nat → Sort u) => (∀ (n : Nat), α n))
-    (@popLCtxAtDepRec _ rty lctxty lctx pos) (@popLCtxAtDepRec _ (lctxty ∘ rty) id lctx pos) :=
-  PSigmaEq.of_heq _ (HEq.funext _ _ (popLCtxAtDepRec.absorbAux _ _)) (popLCtxAtRec.commFn _ _ _)
+  HEq (@popLCtxAtDepRec _ rty lctxty lctx pos) (@popLCtxAtDepRec _ (lctxty ∘ rty) id lctx pos) :=
+  HEq.funext _ _ (popLCtxAtDepRec.absorbAux _ _)
 
 def popLCtxAtDepRec.comm {α : Sort w} {β : α → Sort x} {rty : Nat → α} {lctxty : α → Sort u}
   (f : ∀ (x : α), lctxty x → β x) (lctx : ∀ n, lctxty (rty n)) :
