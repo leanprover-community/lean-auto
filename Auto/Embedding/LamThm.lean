@@ -76,8 +76,6 @@ theorem Eq.trans (lval : LamValuation)
               | .ofBase HB₂ =>
                 match argTy₂, argTy₂', HB₂ with
                 | _, _, .ofEq _ => by
-                  let heq : LamTyVal.eqLamVal _ m = LamTyVal.eqLamVal _ n :=
-                    (LamWF.unique lval.ilVal.toLamTyVal wfB₁ wfB₂).left
                   dsimp [trans.WF, LamWF.interp, LamBaseWF.interp];
                   dsimp [trans.WF, LamWF.interp, LamBaseWF.interp] at H₁;
                   dsimp [trans.WF, LamWF.interp, LamBaseWF.interp] at H₂;
@@ -88,6 +86,51 @@ theorem Eq.trans (lval : LamValuation)
                   apply HEq.trans (b:=LamWF.interp lval lctxTy lctxTerm wfA)
                   case a.h.h₁ => apply LamWF.interp.heq <;> rfl
                   case a.h.h₂ =>
-                    rw [H₁']; rw [← H₂']; apply LamWF.interp.heq <;> rfl                  
+                    rw [H₁']; rw [← H₂']; apply LamWF.interp.heq <;> rfl
+
+def Eq.subst.WF
+  (wfEq : LamWF ltv ⟨lctx, .app (.app (.base (.eq n)) a) b, .base .prop⟩)
+  (wfP : LamWF ltv ⟨lctx, .app p a, .base .prop⟩) :
+  LamWF ltv ⟨lctx, .app p b, .base .prop⟩ :=
+  match wfEq with
+  | .ofApp bTy wfFn wfB =>
+    match wfFn with
+    | .ofApp aTy wfEq' wfA =>
+      match wfEq' with
+      | .ofBase HB =>
+        match HB with
+        | .ofEq n =>
+          match wfP with
+          | .ofApp aTy' wfP wfA' =>
+            let heq : LamTyVal.eqLamVal ltv n = aTy' :=
+              (LamWF.unique ltv wfA wfA').left
+            .ofApp _ wfP (heq ▸ wfB)
+
+theorem Eq.subst (lval : LamValuation)
+  {lctxTy : Nat → LamSort} {lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal}
+  (wfEq : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, .app (.app (.base (.eq m)) a) b, .base .prop⟩)
+  (hEq : GLift.down (LamWF.interp lval lctxTy lctxTerm wfEq))
+  (wfP : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, .app p a, .base .prop⟩)
+  (hP : GLift.down (LamWF.interp lval lctxTy lctxTerm wfP)) :
+  GLift.down (LamWF.interp lval lctxTy lctxTerm (Eq.subst.WF wfEq wfP)) :=
+  match wfEq with
+  | .ofApp bTy wfFn wfB =>
+    match wfFn with
+    | .ofApp aTy wfEq' wfA =>
+      match wfEq' with
+      | .ofBase HB =>
+        match aTy, bTy, HB with
+        | _, _, .ofEq _ =>
+          match wfP with
+          | .ofApp aTy' wfP wfA' => by
+            dsimp [trans.WF, LamWF.interp, LamBaseWF.interp];
+            dsimp [trans.WF, LamWF.interp, LamBaseWF.interp] at hEq;
+            dsimp [trans.WF, LamWF.interp, LamBaseWF.interp] at hP;
+            let hEq' := EqLift.down _ _ _ hEq
+            apply Eq.mp _ hP; apply congrArg; apply congrArg
+            apply eq_of_heq; apply HEq.trans (b:=LamWF.interp lval lctxTy lctxTerm wfA)
+            case h.h.h.h₁ => apply LamWF.interp.heq <;> rfl
+            case h.h.h.h₂ =>
+              rw [hEq']; apply LamWF.interp.heq <;> rfl
 
 end Auto.Embedding.Lam
