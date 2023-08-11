@@ -1,4 +1,4 @@
-import Auto.Translation.Lift
+import Auto.Translation.LamPULift
 
 set_option pp.universes true
 namespace Auto

@@ -1,9 +1,0 @@
-LamTerm.interp lval
-  (pushLCtx lctxTy argTy)
-  (pushLCtxDep lctxTerm x')
-  wfBody
-=
-LamTerm.interp lval
-  (pushLCtx (pushLCtxAt lctxTy xty idx) argTy)
-  (pushLCtxDep (pushLCtxAtDep lctxTerm x idx) x')
-  (ofBVarLiftIdx (Nat.succ idx) body wfBody)

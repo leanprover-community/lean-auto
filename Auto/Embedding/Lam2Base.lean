@@ -8,6 +8,7 @@ namespace Auto.Embedding.Lam₂
 -- 2 = * -> * -> *
 -- ...
 abbrev Lam₂Sort := Nat
+-- Idea : Use a table consisting of dtt sorts organized as a binary tree
 
 def Lam₂Sort.interp.{u} : Lam₂Sort → Type u
 | 0 => Sort u

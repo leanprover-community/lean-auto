@@ -352,4 +352,9 @@ def popLCtxsAt.succ_l (lctx : Nat → α) (lvl : Nat) (pos n : Nat) :
 def popLCtxsAt.one (lctx : Nat → α) :
   popLCtxsAt lctx 1 = popLCtxAt lctx := rfl
 
+@[reducible] def pushLCtxs (lctx : Nat → α) (xs : List α) (n : Nat) : α :=
+  match h : Nat.blt n xs.length with
+  | true  => xs[n]'(Nat.le_of_ble_eq_true h)
+  | false => lctx (n - xs.length)
+
 end Auto.Embedding
