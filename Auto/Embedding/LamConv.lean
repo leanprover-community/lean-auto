@@ -180,6 +180,23 @@ def LamTerm.bvarLiftsIdx.zero (idx : Nat) : (t : LamTerm) → LamTerm.bvarLiftsI
   rw [LamTerm.bvarLiftsIdx.zero _ fn];
   rw [LamTerm.bvarLiftsIdx.zero _ arg];
 
+def LamTerm.bvarLiftsIdx.succ (idx : Nat) (t : LamTerm) (lvl : Nat) :
+  LamTerm.bvarLiftsIdx idx t (.succ lvl) = LamTerm.bvarLiftIdx idx (LamTerm.bvarLiftsIdx idx t lvl) := by
+  revert idx lvl
+  induction t <;> intros idx lvl
+  case atom a => rfl
+  case base b => rfl
+  case bvar n =>
+    dsimp [bvarLiftsIdx, bvarLiftIdx];
+    rw [popLCtxsAt.succ_l, popLCtxAt.equiv]
+    rw [popLCtxsAt.comm (popLCtxAt id idx)]; rfl
+  case lam s t IH =>
+    dsimp [bvarLiftsIdx]
+    rw [IH]; rfl
+  case app fn arg IHFn IHArg =>
+    dsimp [bvarLiftsIdx]
+    rw [IHFn, IHArg]; rfl  
+
 private def LamTerm.bvarLiftsIdx.equiv (idx : Nat) (t : LamTerm) (lvl : Nat) :
   LamTerm.bvarLiftsIdxRec idx t lvl = LamTerm.bvarLiftsIdx idx t lvl := by
   revert idx; revert t; induction lvl <;> intro t
@@ -212,6 +229,10 @@ def LamTerm.bvarLifts (t : LamTerm) (lvl : Nat) := LamTerm.bvarLiftsIdx 0 t lvl
 
 def LamTerm.bvarLifts.zero (t : LamTerm) : LamTerm.bvarLifts t 0 = t :=
   LamTerm.bvarLiftsIdx.zero 0 t
+
+def LamTerm.bvarLifts.succ (t : LamTerm) (lvl : Nat) :
+  LamTerm.bvarLifts t (.succ lvl) = LamTerm.bvarLiftRec (LamTerm.bvarLifts t lvl) :=
+  LamTerm.bvarLiftsIdx.succ _ _ _
 
 private def LamTerm.bvarLifts.equiv (t : LamTerm) (lvl : Nat) :
   LamTerm.bvarLiftsRec t lvl = LamTerm.bvarLifts t lvl :=

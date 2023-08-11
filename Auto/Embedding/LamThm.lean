@@ -10,6 +10,9 @@ structure LamThmJudge where
 def LamThmWF (lval : LamValuation) (ltj : LamThmJudge) :=
   ∀ (lctx' : Nat → LamSort), LamWF lval.ilVal.toLamTyVal ⟨pushLCtxs lctx' ltj.lctx, ltj.rterm, ltj.rty⟩
 
+def LamThmWF.ofBVarLifts (lval : LamValuation) (ltj : LamThmJudge)
+  (hWF : LamThmWF lval ltj) : Nat := sorry
+
 def LamThmValid (lval : LamValuation) (lctx : List LamSort) (t : LamTerm) :=
   ∀ (lctx' : Nat → LamSort) (lctxTerm : ∀ n, (pushLCtxs lctx' lctx n).interp lval.ilVal.tyVal),
     ∃ (wf : LamWF lval.ilVal.toLamTyVal ⟨pushLCtxs lctx' lctx, t, .base .prop⟩),

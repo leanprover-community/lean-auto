@@ -349,6 +349,18 @@ def popLCtxsAt.succ_l (lctx : Nat → α) (lvl : Nat) (pos n : Nat) :
     rw [bleAdd']; rfl
   | false => rfl
 
+def popLCtxsAt.succ_r (lctx : Nat → α) (lvl : Nat) (pos n : Nat) :
+  popLCtxsAt lctx (.succ lvl) pos n = popLCtxAt (popLCtxsAt lctx lvl pos) pos n := by
+  dsimp [popLCtxsAt, popLCtxAt]
+  match h : Nat.ble pos n with
+  | true =>
+    dsimp
+    dsimp
+    have leAdd' := Nat.le_trans (Nat.le_of_ble_eq_true h) (Nat.le_add_right _ 1)
+    have bleAdd' := Nat.ble_eq_true_of_le leAdd'
+    rw [bleAdd', Nat.succ_add]; rfl
+  | false => rfl
+
 def popLCtxsAt.one (lctx : Nat → α) :
   popLCtxsAt lctx 1 = popLCtxAt lctx := rfl
 
