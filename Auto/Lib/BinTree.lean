@@ -4,6 +4,10 @@ inductive BinTree (α : Sort _) where
   | leaf : BinTree α
   | node : BinTree α → α → BinTree α → BinTree α
 
+structure BinList (α : Sort _) where
+  zero : α
+  pos  : BinTree α
+
 def BinTree.val (bt : BinTree α) (default : α) :=
   match bt with
   | .leaf => default
