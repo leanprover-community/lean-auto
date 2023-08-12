@@ -1201,10 +1201,9 @@ def LamWF.ofMapBVarAt (covP : covPair f restore) (idx : Nat)
 | .ofApp argTy' HFn HArg =>
   .ofApp argTy' (LamWF.ofMapBVarAt covP idx _ HFn) (LamWF.ofMapBVarAt covP idx _ HArg)
 
-def LamWF.ofMapBVarAt.correct
-  (covPD : covPairDep f restore restoreDep) (idx : Nat)
-  (lval : LamValuation.{u}) {lctxTy : Nat → LamSort}
-  (lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal) :
+def LamWF.ofMapBVarAt.correct (lval : LamValuation.{u}) {restoreDep : _}
+  (covPD : covPairDep (LamSort.interp lval.ilVal.tyVal) f restore restoreDep) (idx : Nat)
+  {lctxTy : Nat → LamSort} (lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal) :
   (rterm : LamTerm) → (HWF : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, rterm, rTy⟩) →
   LamWF.interp lval lctxTy lctxTerm HWF = LamWF.interp lval
     (restoreAt idx restore lctxTy)
@@ -1231,15 +1230,77 @@ def LamWF.ofMapBVarAt.correct
     (restoreAtDep (.succ idx) restoreDep (pushLCtxDep x lctxTerm))
     (ofMapBVarAt (restore:=restore) covPD.left (.succ idx) _ wfBody))
   case h.h₁ =>
-    apply LamWF.ofMapBVarAt.correct covPD _ _ _ _ wfBody
+    apply LamWF.ofMapBVarAt.correct _ covPD _ _ _ wfBody
   case h.h₂ =>
     apply eq_of_heq; apply LamWF.interp.heq <;> try rfl
     case h.HLCtxTyEq => apply restoreAt.succ_pushLCtx_Fn
     case h.HLCtxTermEq => apply restoreAtDep.succ_pushLCtxDep_Fn
 | .app fn arg, .ofApp argTy wfFn wfArg => by
   dsimp [LamWF.interp]
-  let IHFn := LamWF.ofMapBVarAt.correct covPD idx lval lctxTerm fn wfFn
-  let IHArg := LamWF.ofMapBVarAt.correct covPD idx lval lctxTerm arg wfArg
+  let IHFn := LamWF.ofMapBVarAt.correct lval covPD idx lctxTerm fn wfFn
+  let IHArg := LamWF.ofMapBVarAt.correct lval covPD idx lctxTerm arg wfArg
   rw [IHFn]; rw [IHArg]
+
+-- Changing all `.bvar ?n` in `t` (where `?n >= idx`) to `.bvar (?n + lvl)`
+def LamTerm.bvarLiftsIdx (idx : Nat) (t : LamTerm) (lvl : Nat) : LamTerm :=
+  match t with
+  | .atom n     => .atom n
+  | .base b     => .base b
+  | .bvar n     => .bvar (popLCtxsAt lvl idx id n)
+  | .lam s t    => .lam s (t.bvarLiftsIdx (.succ idx) lvl)
+  | .app fn arg => .app (fn.bvarLiftsIdx idx lvl) (arg.bvarLiftsIdx idx lvl)
+
+-- Changing all `.bvar ?n` in `t` (where `?n >= idx`) to `.bvar (Nat.succ ?n)`
+def LamTerm.bvarLiftIdx (idx : Nat) (t : LamTerm) := LamTerm.bvarLiftsIdx idx t 1
+
+def LamTerm.bvarLiftsIdx.zero (idx : Nat) : (t : LamTerm) → LamTerm.bvarLiftsIdx idx t 0 = t
+| .atom n => rfl
+| .base b => rfl
+| .bvar n => by
+  dsimp [bvarLiftsIdx, popLCtxsAt]
+  match Nat.ble idx n with
+  | true => rfl
+  | false => rfl
+| .lam s t => by
+  dsimp [bvarLiftsIdx];
+  rw [LamTerm.bvarLiftsIdx.zero (.succ idx) t]
+| .app fn arg => by
+  dsimp [bvarLiftsIdx];
+  rw [LamTerm.bvarLiftsIdx.zero _ fn];
+  rw [LamTerm.bvarLiftsIdx.zero _ arg];
+
+def LamTerm.bvarLiftsIdx.succ_l (idx : Nat) (t : LamTerm) (lvl : Nat) :
+  LamTerm.bvarLiftsIdx idx t (.succ lvl) = LamTerm.bvarLiftsIdx idx (LamTerm.bvarLiftIdx idx t) lvl := by
+  revert idx lvl
+  induction t <;> intros idx lvl
+  case atom a => rfl
+  case base b => rfl
+  case bvar n =>
+    dsimp [bvarLiftsIdx, bvarLiftIdx];
+    rw [popLCtxsAt.succ_r, popLCtxsAt.one];
+    rw [popLCtxAt.comm (popLCtxsAt lvl idx id)]; rfl
+  case lam s t IH =>
+    dsimp [bvarLiftsIdx]
+    rw [IH]; rfl
+  case app fn arg IHFn IHArg =>
+    dsimp [bvarLiftsIdx]
+    rw [IHFn, IHArg]; rfl
+
+def LamTerm.bvarLiftsIdx.succ_r (idx : Nat) (t : LamTerm) (lvl : Nat) :
+  LamTerm.bvarLiftsIdx idx t (.succ lvl) = LamTerm.bvarLiftIdx idx (LamTerm.bvarLiftsIdx idx t lvl) := by
+  revert idx lvl
+  induction t <;> intros idx lvl
+  case atom a => rfl
+  case base b => rfl
+  case bvar n =>
+    dsimp [bvarLiftsIdx, bvarLiftIdx];
+    rw [popLCtxsAt.succ_l, popLCtxsAt.one];
+    rw [popLCtxsAt.comm (popLCtxAt idx id)]; rfl
+  case lam s t IH =>
+    dsimp [bvarLiftsIdx]
+    rw [IH]; rfl
+  case app fn arg IHFn IHArg =>
+    dsimp [bvarLiftsIdx]
+    rw [IHFn, IHArg]; rfl
 
 end Auto.Embedding.Lam

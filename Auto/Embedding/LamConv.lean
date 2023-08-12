@@ -1,53 +1,6 @@
 import Auto.Embedding.LamBase
 
-namespace Auto.Embedding.Lam    
-
--- Changing all `.bvar ?n` in `t` (where `?n >= idx`) to `.bvar (?n + lvl)`
-def LamTerm.bvarLiftsIdx (idx : Nat) (t : LamTerm) (lvl : Nat) : LamTerm :=
-  match t with
-  | .atom n     => .atom n
-  | .base b     => .base b
-  | .bvar n     => .bvar (popLCtxsAt id lvl idx n)
-  | .lam s t    => .lam s (t.bvarLiftsIdx (.succ idx) lvl)
-  | .app fn arg => .app (fn.bvarLiftsIdx idx lvl) (arg.bvarLiftsIdx idx lvl)
-
--- Changing all `.bvar ?n` in `t` (where `?n >= idx`) to `.bvar (Nat.succ ?n)`
-def LamTerm.bvarLiftIdx (idx : Nat) (t : LamTerm) := LamTerm.bvarLiftsIdx idx t 0
-
-def LamTerm.bvarLiftsIdx.zero (idx : Nat) : (t : LamTerm) → LamTerm.bvarLiftsIdx idx t 0 = t
-| .atom n => rfl
-| .base b => rfl
-| .bvar n => by
-  dsimp [bvarLiftsIdx, popLCtxsAt]
-  match Nat.ble idx n with
-  | true => rfl
-  | false => rfl
-| .lam s t => by
-  dsimp [bvarLiftsIdx];
-  rw [LamTerm.bvarLiftsIdx.zero (.succ idx) t]
-| .app fn arg => by
-  dsimp [bvarLiftsIdx];
-  rw [LamTerm.bvarLiftsIdx.zero _ fn];
-  rw [LamTerm.bvarLiftsIdx.zero _ arg];
-
-def LamTerm.bvarLiftsIdx.succ (idx : Nat) (t : LamTerm) (lvl : Nat) :
-  LamTerm.bvarLiftsIdx idx t (.succ lvl) = LamTerm.bvarLiftIdx idx (LamTerm.bvarLiftsIdx idx t lvl) := by
-  revert idx lvl
-  induction t <;> intros idx lvl
-  case atom a => rfl
-  case base b => rfl
-  case bvar n =>
-    dsimp [bvarLiftsIdx, bvarLiftIdx];
-    rw [popLCtxsAt.succ_l, popLCtxAt.equiv]
-    rw [popLCtxsAt.comm (popLCtxAt id idx)]; rfl
-  case lam s t IH =>
-    dsimp [bvarLiftsIdx]
-    rw [IH]; rfl
-  case app fn arg IHFn IHArg =>
-    dsimp [bvarLiftsIdx]
-    rw [IHFn, IHArg]; rfl  
-
-def LamTerm.bvarLiftRec : LamTerm → LamTerm := LamTerm.bvarLiftIdx 0
+namespace Auto.Embedding.Lam
 
 private def LamTerm.bvarLiftsIdxRec (idx : Nat) (t : LamTerm) : (lvl : Nat) → LamTerm
 | 0 => t
