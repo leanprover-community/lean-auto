@@ -490,7 +490,7 @@ def LamTerm.lamCheck? (ltv : LamTyVal) :
 | _,    .base b  => b.lamCheck ltv
 | lctx, .bvar n  => lctx n
 | lctx, .lam s t =>
-  match t.lamCheck? ltv (pushLCtx lctx s) with
+  match t.lamCheck? ltv (pushLCtx s lctx) with
   | .some ty => .some (.func s ty)
   | .none    => .none
 | lctx, .app fn arg =>
@@ -506,7 +506,7 @@ def LamTerm.lamCheck! (default : LamSort) (ltv : LamTyVal) :
 | _,    .atom n  => ltv.lamVarTy n
 | _,    .base b  => b.lamCheck ltv
 | lctx, .bvar n  => lctx n
-| lctx, .lam s t => .func s (t.lamCheck! default ltv (pushLCtx lctx s))
+| lctx, .lam s t => .func s (t.lamCheck! default ltv (pushLCtx s lctx))
 | lctx, .app fn arg =>
   match fn.lamCheck! default ltv lctx, arg.lamCheck! default ltv lctx with
   | .func ty₁ ty₂, argTy =>
@@ -523,13 +523,13 @@ def LamTerm.lamCheck.equiv (default : LamSort) (ltv : LamTyVal) (lctx : Nat → 
 | .bvar n, _, H => Option.some.inj H
 | .lam s t, res, H => by
   dsimp [lamCheck?] at H; revert H
-  cases hCheck : (lamCheck? ltv (pushLCtx lctx s) t)
+  cases hCheck : (lamCheck? ltv (pushLCtx s lctx) t)
   case none => intro contra; cases contra
   case some res' =>
     intro heq;
     have heq' := Option.some.inj heq; rw [← heq']
     dsimp [lamCheck!]; congr
-    apply LamTerm.lamCheck.equiv default ltv (pushLCtx lctx s) _ _ hCheck    
+    apply LamTerm.lamCheck.equiv default ltv (pushLCtx s lctx) _ _ hCheck    
 | .app fn arg, res, H => by
   dsimp [lamCheck?] at H; revert H
   match hCheckFn : lamCheck? ltv lctx fn, hCheckArg : lamCheck? ltv lctx arg with
@@ -570,7 +570,7 @@ inductive LamWF (ltv : LamTyVal) : LamJudge → Type
   | ofLam
       {lctx : Nat → LamSort}
       {argTy : LamSort} (bodyTy : LamSort) {body : LamTerm}
-      (H : LamWF ltv ⟨pushLCtx lctx argTy, body, bodyTy⟩) :
+      (H : LamWF ltv ⟨pushLCtx argTy lctx, body, bodyTy⟩) :
     LamWF ltv ⟨lctx, .lam argTy body, .func argTy bodyTy⟩
   | ofApp
       {lctx : Nat → LamSort}
@@ -661,7 +661,7 @@ def LamWF.ofLamTerm {ltv : LamTyVal} :
   .some ⟨bWF.fst, .ofBase bWF.snd⟩
 | lctx, .bvar n => .some ⟨lctx n, .ofBVar n⟩
 | lctx, .lam argTy body =>
-  let bodyWf := @LamWF.ofLamTerm ltv (pushLCtx lctx argTy) body
+  let bodyWf := @LamWF.ofLamTerm ltv (pushLCtx argTy lctx) body
   match bodyWf with
   | .some ⟨bodyTy, wf⟩ => .some ⟨.func argTy bodyTy, .ofLam bodyTy wf⟩
   | .none => .none
@@ -774,7 +774,7 @@ def LamTerm.lamWF_of_check {ltv : LamTyVal} :
   simp [lamCheck?] at HCheck; rw [← HCheck]; apply LamWF.ofBVar
 | lctx, .lam argTy body, ty, HCheck => by
   dsimp [lamCheck?] at HCheck; revert HCheck
-  cases CheckEq : lamCheck? ltv (pushLCtx lctx argTy) body
+  cases CheckEq : lamCheck? ltv (pushLCtx argTy lctx) body
   case none => intro contra; cases contra
   case some bodyTy =>
     dsimp; intro tyEq; rw [← Option.some.inj tyEq]
@@ -845,7 +845,7 @@ def LamTerm.interp.{u}
 | .bvar n => lctxTerm n
 | .lam s body =>
   fun (x : s.interp lval.ilVal.tyVal) =>
-    LamTerm.interp dfSort lval dfVal (pushLCtx lctxTy s) (pushLCtxDep (rty:=lctxTy) lctxTerm x) body
+    LamTerm.interp dfSort lval dfVal (pushLCtx s lctxTy) (pushLCtxDep (rty:=lctxTy) x lctxTerm) body
 | .app fn arg => (fun fnInterp argInterp => by
   dsimp [lamCheck!]
   revert fnInterp argInterp
@@ -874,7 +874,7 @@ def LamWF.interp.{u} (lval : LamValuation.{u}) :
 | lctxTy, lctxTerm, .ofBVar n => lctxTerm n
 | lctxTy, lctxTerm, @LamWF.ofLam _ _ argTy _ body H =>
   fun (x : argTy.interp lval.ilVal.tyVal) =>
-    LamWF.interp lval (pushLCtx lctxTy argTy) (pushLCtxDep (rty:=lctxTy) lctxTerm x) H
+    LamWF.interp lval (pushLCtx argTy lctxTy) (pushLCtxDep (rty:=lctxTy) x lctxTerm) H
 | lctxTy, lctxTerm, .ofApp _ HFn HArg =>
   let mfn := LamWF.interp lval lctxTy lctxTerm HFn
   let marg := LamWF.interp lval lctxTy lctxTerm HArg
@@ -931,7 +931,7 @@ inductive LamTerm.check.{u} (val : Valuation.{u}) :
   | ofBase b : check val lctx (.base b) (b.check val.toBaseValuation)
   | ofBVar n : check val lctx (.bvar n) (lctx n)
   | ofLam s
-      (tch : check val (pushLCtx lctx (s.interp val.tyVal)) t tty) :
+      (tch : check val (pushLCtx (s.interp val.tyVal) lctx) t tty) :
       check val lctx (.lam s t) (s.interp val.tyVal → tty)
   | ofApp
       (fnch : check val lctx fn (argTy → resTy))
@@ -1005,7 +1005,7 @@ inductive WF.{u} (val : Valuation.{u}) : Judgement.{u} → Type (u + 1)
       --   it's always possible to take `α = Empty`, `β`
       --   an arbitrary type, and `fn = Empty.elim β`.
       (α β : Type u) (fn : α → β) (HChk : LamTerm.check val lctxTy (.lam hs ht) (α → β))
-      (H : ∀ (t : α), WF val ⟨pushLCtx lctxTy α, pushLCtxDep (lctxty:=id) lctxTerm t, ht, β, fn t⟩) :
+      (H : ∀ (t : α), WF val ⟨pushLCtx α lctxTy, pushLCtxDep (lctxty:=id) t lctxTerm, ht, β, fn t⟩) :
     WF val <|
       ⟨lctxTy, lctxTerm, .lam hs ht, α → β, fn⟩
   | ofApp
@@ -1075,7 +1075,7 @@ def LamTerm.wf_of_lamWF.{u} (lval : LamValuation.{u}) :
     (LamWF.interp lval lctxTy' lctxTerm' (LamWF.ofLam bodyTy H))
     (LamTerm.check_of_LamWF _ (@LamWF.ofLam _ _ argTy bodyTy body H))
     (fun t' =>
-      let hWF := LamTerm.wf_of_lamWF lval (pushLCtx lctxTy' argTy) (pushLCtxDep (rty:=lctxTy') lctxTerm' t') H
+      let hWF := LamTerm.wf_of_lamWF lval (pushLCtx argTy lctxTy') (pushLCtxDep (rty:=lctxTy') t' lctxTerm') H
       Eq.mp (congrArg _ (eq_of_heq (
         congr_arg₂_heq _ (
           fun lctxTy lctxTerm => Judgement.mk lctxTy lctxTerm _ _ _
@@ -1178,5 +1178,68 @@ section Example
     case Harg => apply WF.ofAtom
 
 end Example
+
+def LamTerm.mapBVarAt (idx : Nat) (f : Nat → Nat) (t : LamTerm) : LamTerm :=
+  match t with
+  | .atom n     => .atom n
+  | .base b     => .base b
+  | .bvar n     => .bvar (mapAt idx f n)
+  | .lam s t    => .lam s (t.mapBVarAt (.succ idx) f)
+  | .app fn arg => .app (fn.mapBVarAt idx f) (arg.mapBVarAt idx f)
+
+def LamTerm.mapBVar := LamTerm.mapBVarAt 0
+
+def LamWF.ofMapBVarAt (covP : covPair f restore) (idx : Nat)
+  {lamVarTy lctx} (rterm : LamTerm) :
+  (HWF : LamWF lamVarTy ⟨lctx, rterm, rty⟩) →
+  LamWF lamVarTy ⟨restoreAt idx restore lctx, rterm.mapBVarAt idx f, rty⟩
+| .ofAtom n => .ofAtom n
+| .ofBase b => .ofBase b
+| .ofBVar n => covPairAt.ofCovPair covP idx lctx n ▸ .ofBVar (mapAt idx f n)
+| .ofLam (body:=body) bodyTy wfBody =>
+  .ofLam bodyTy (restoreAt.succ_pushLCtx_Fn restore _ _ _ ▸ LamWF.ofMapBVarAt covP (.succ idx) _ wfBody)
+| .ofApp argTy' HFn HArg =>
+  .ofApp argTy' (LamWF.ofMapBVarAt covP idx _ HFn) (LamWF.ofMapBVarAt covP idx _ HArg)
+
+def LamWF.ofMapBVarAt.correct
+  (covPD : covPairDep f restore restoreDep) (idx : Nat)
+  (lval : LamValuation.{u}) {lctxTy : Nat → LamSort}
+  (lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal) :
+  (rterm : LamTerm) → (HWF : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, rterm, rTy⟩) →
+  LamWF.interp lval lctxTy lctxTerm HWF = LamWF.interp lval
+    (restoreAt idx restore lctxTy)
+    (restoreAtDep idx restoreDep lctxTerm)
+    (ofMapBVarAt (restore:=restore) covPD.left idx rterm HWF)
+| .atom _, .ofAtom _ => rfl
+| .base _, .ofBase _ => rfl
+| .bvar n, .ofBVar _ => by
+  dsimp [ofMapBVarAt, LamWF.interp]
+  apply eq_of_heq
+  apply HEq.trans (b := LamWF.interp lval
+    (restoreAt idx restore lctxTy) (restoreAtDep idx restoreDep lctxTerm)
+    (ofBVar (mapAt idx f n)))
+  case h.h₁ =>
+    dsimp [LamWF.interp]
+    apply HEq.symm; apply (covPairDepAt.ofCovPairDep covPD).right
+  case h.h₂ =>
+    apply LamWF.interp.heq <;> rfl
+| .lam argTy body, .ofLam bodyTy wfBody => by
+  apply funext; intros x
+  dsimp [LamWF.interp]
+  apply Eq.trans (b := LamWF.interp lval
+    (restoreAt (.succ idx) restore (pushLCtx argTy lctxTy))
+    (restoreAtDep (.succ idx) restoreDep (pushLCtxDep x lctxTerm))
+    (ofMapBVarAt (restore:=restore) covPD.left (.succ idx) _ wfBody))
+  case h.h₁ =>
+    apply LamWF.ofMapBVarAt.correct covPD _ _ _ _ wfBody
+  case h.h₂ =>
+    apply eq_of_heq; apply LamWF.interp.heq <;> try rfl
+    case h.HLCtxTyEq => apply restoreAt.succ_pushLCtx_Fn
+    case h.HLCtxTermEq => apply restoreAtDep.succ_pushLCtxDep_Fn
+| .app fn arg, .ofApp argTy wfFn wfArg => by
+  dsimp [LamWF.interp]
+  let IHFn := LamWF.ofMapBVarAt.correct covPD idx lval lctxTerm fn wfFn
+  let IHArg := LamWF.ofMapBVarAt.correct covPD idx lval lctxTerm arg wfArg
+  rw [IHFn]; rw [IHArg]
 
 end Auto.Embedding.Lam
