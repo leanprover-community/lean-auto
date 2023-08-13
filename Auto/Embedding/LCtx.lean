@@ -1,457 +1,130 @@
 import Auto.Util.HEqExtra
 import Std.Data.Nat.Lemmas
-import MathLib.Data.Nat.Basic
-import MathLib.Data.Bool.Basic
+import Std.Data.List.Lemmas
+
 namespace Auto.Embedding
 
+
+section list
+
+  inductive HList (β : α → Sort _) : List α → Sort _
+    | nil  : HList β .nil
+    | cons : (x : β ty) → HList β tys → HList β (ty :: tys)
+
+  def HList.getD {β : α → Sort _} {ty : α} (default : β ty) :
+    {tys : List α} → HList β tys → (n : Nat) → β (tys.getD n ty)
+    | .nil, .nil,       _       => default
+    | .(_), .cons a _,  0       => a
+    | .(_), .cons _ as, .succ n => HList.getD default as n
+
+end list
+
+
 section lem
+  
+  theorem Nat.lt_of_ble_eq_false (n : Nat) : Nat.ble n pos = false → pos < n := by
+    intro H; apply Nat.lt_of_not_le;
+    intro hle; rw [Nat.ble_eq_true_of_le hle] at H; cases H
+  
+  theorem Nat.ble_eq_false_of_lt (n : Nat) : pos < n → Nat.ble n pos = false := by
+    intro H;
+    cases h₁ : Nat.ble n pos
+    case false => rfl
+    case true =>
+      simp at h₁;
+      have h₂ := Nat.not_le_of_lt H
+      apply False.elim (h₂ h₁)
+  
+  theorem Nat.ble_eq_false_eq_lt (n : Nat) : (pos < n) = (Nat.ble n pos = false) := by
+    apply propext; apply Iff.intro
+    case a.mp => apply Nat.ble_eq_false_of_lt
+    case a.mpr => apply Nat.lt_of_ble_eq_false
 
-theorem Nat.lt_of_ble_eq_false (n : Nat) : Nat.ble n pos = false → pos < n := by
-  intro H; apply Nat.lt_of_not_le;
-  intro hle; rw [Nat.ble_eq_true_of_le hle] at H; cases H
+  theorem Nat.eq_of_le_of_lt_succ {n m : Nat} (h₁ : n ≤ m) (h₂ : m < n + 1) : m = n :=
+    Nat.le_antisymm (Nat.le_of_succ_le_succ h₂) h₁
 
-theorem Nat.ble_eq_false_of_lt (n : Nat) : pos < n → Nat.ble n pos = false := by
-  intro H;
-  cases h₁ : Nat.ble n pos
-  case false => rfl
-  case true =>
-    simp at h₁;
-    have h₂ := Nat.not_le_of_lt H
-    apply False.elim (h₂ h₁)
+  theorem Nat.one_add (n : Nat) : 1 + n = Nat.succ n := by simp [Nat.add_comm]
 
-theorem Nat.ble_eq_false_eq_lt (n : Nat) : (pos < n) = (Nat.ble n pos = false) := by
-  apply propext; apply Iff.intro
-  case a.mp => apply Nat.ble_eq_false_of_lt
-  case a.mpr => apply Nat.lt_of_ble_eq_false 
+  theorem Nat.pred_sub (n m : Nat) : Nat.pred n - m = Nat.pred (n - m) := by
+    rw [← Nat.sub_one, Nat.sub_sub, one_add, Nat.sub_succ]
 
+  theorem Bool.eq_false_of_ne_true {a : Bool} : a ≠ true → a = false := by
+    cases a <;> decide
+
+  theorem Bool.ne_true_of_eq_false {a : Bool} : a = false → a ≠ true := by
+    cases a <;> decide
+
+  theorem Bool.eq_false_eq_not_eq_true {a : Bool} : (a ≠ true) = (a = false) := by
+    cases a <;> decide    
+  
 end lem
-
-section push
-  
-  def pushLCtxAt (x : α) (pos : Nat) (lctx : Nat → α) (n : Nat) : α :=
-    match n.ble pos with
-    | true => 
-      match n.beq pos with
-      | true => x
-      | false => lctx n
-    | false => lctx (.pred n)
-  
-  theorem pushLCtxAt.succ_zero (x : α) (pos : Nat) (lctx : Nat → α) :
-    pushLCtxAt x (.succ pos) lctx 0 = lctx 0 := rfl
-  
-  theorem pushLCtxAt.succ_succ (x : α) (pos : Nat) (lctx : Nat → α) (n : Nat) :
-    pushLCtxAt x (.succ pos) lctx (.succ n) = pushLCtxAt x pos (fun n => lctx (.succ n)) n := by
-    dsimp [pushLCtxAt, Nat.ble, Nat.beq];
-    match h : Nat.ble n pos with
-    | true => rfl
-    | false =>
-      dsimp; cases n;
-      case zero =>
-        have h' : Nat.ble Nat.zero pos = true :=
-          Nat.ble_eq_true_of_le (Nat.zero_le _)
-        rw [h] at h'; cases h'
-      case succ n' => rfl
-  
-  theorem pushLCtxAt.succ_succ_Fn (x : α) (pos : Nat) (lctx : Nat → α) :
-    (fun n => pushLCtxAt x (.succ pos) lctx (.succ n)) = pushLCtxAt x pos (fun n => lctx (.succ n)) :=
-    funext (fun n => pushLCtxAt.succ_succ x pos lctx n)
-  
-  def pushLCtxAt.comm (f : α → β) (x : α) (pos : Nat) (lctx : Nat → α) (n : Nat) :
-    f (pushLCtxAt x pos lctx n) = pushLCtxAt (f x) pos (f ∘ lctx) n := by
-    dsimp [pushLCtxAt]
-    match n.ble pos with
-    | true =>
-      match n.beq pos with
-      | true => rfl
-      | false => rfl
-    | false => rfl
-  
-  theorem pushLCtxAt.commFn (f : α → β) (x : α) (pos : Nat) (lctx : Nat → α) :
-    (fun n => f (pushLCtxAt x pos lctx n)) = (fun n => pushLCtxAt (f x) pos (fun n => f (lctx n)) n) :=
-    funext (pushLCtxAt.comm f x pos lctx)
-  
-  def pushLCtxAtDep
-    {rty : Nat → α} {lctxty : α → Sort u} {xty : α} (x : lctxty xty) (pos : Nat)
-    (lctx : ∀ n, lctxty (rty n)) (n : Nat) : lctxty (pushLCtxAt xty pos rty n) := by
-    dsimp [pushLCtxAt]
-    match n.ble pos with
-    | true =>
-      match n.beq pos with
-      | true => exact x
-      | false => exact (lctx n)
-    | false => exact (lctx (.pred n))
-  
-  theorem pushLCtxAtDep.succ_zero {rty : Nat → α} {lctxty : α → Sort u}
-    {xty : α} (x : lctxty xty) (pos : Nat) (lctx : ∀ n, lctxty (rty n)) :
-    pushLCtxAtDep x (.succ pos) lctx 0 = lctx 0 := rfl
-  
-  theorem pushLCtxAtDep.succ_succ {rty : Nat → α} {lctxty : α → Sort u} {xty : α}
-    (x : lctxty xty) (pos : Nat) (lctx : ∀ n, lctxty (rty n)) (n : Nat) :
-    HEq (pushLCtxAtDep x (.succ pos) lctx (.succ n)) (pushLCtxAtDep x pos (fun n => lctx (.succ n)) n) := by
-    dsimp [pushLCtxAt, pushLCtxAtDep, Nat.ble, Nat.beq]
-    match h : Nat.ble n pos with
-    | true => rfl
-    | false =>
-      dsimp; cases n;
-      case zero =>
-        have h' : Nat.ble Nat.zero pos = true :=
-          Nat.ble_eq_true_of_le (Nat.zero_le _)
-        rw [h] at h'; cases h'
-      case succ n' => rfl
-  
-  theorem pushLCtxAtDep.succ_succ_Fn {rty : Nat → α} {lctxty : α → Sort u}
-    {xty : α} (x : lctxty xty) (pos : Nat) (lctx : ∀ n, lctxty (rty n)) :
-    HEq (fun n => pushLCtxAtDep x (.succ pos) lctx (.succ n)) (pushLCtxAtDep x pos (fun n => lctx (.succ n))) :=
-    HEq.funext _ _ (fun n => pushLCtxAtDep.succ_succ x pos lctx n)
-  
-  def pushLCtxAtDep.comm {α : Sort w} {β : α → Sort x} {rty : Nat → α} {lctxty : α → Sort u}
-    (f : ∀ (x : α), lctxty x → β x) {xty : α} (x : lctxty xty) (pos : Nat)
-    (lctx : ∀ n, lctxty (rty n)) (n : Nat) :
-      f _ (pushLCtxAtDep x pos lctx n) = pushLCtxAtDep (lctxty:=β) (f xty x) pos (fun n => f _ (lctx n)) n := by
-    dsimp [pushLCtxAt, pushLCtxAtDep]
-    match n.ble pos with
-    | true =>
-      match n.beq pos with
-      | true => rfl
-      | false => rfl
-    | false => rfl
-  
-  def pushLCtxAtDep.nonDep {rty : Nat → α} {lctxty : Sort u}
-    {xty : α} (x : lctxty) (pos : Nat) (lctx : Nat → lctxty) (n : Nat) :
-    @pushLCtxAtDep _ rty (fun _ => lctxty) xty x pos lctx n = pushLCtxAt x pos lctx n := rfl
-  
-  def pushLCtxAtDep.absorbAux {rty : Nat → α} {lctxty : α → Sort u}
-    {xty : α} (x : lctxty xty) (pos : Nat) (lctx : ∀ n, lctxty (rty n)) (n : Nat) :
-    HEq
-      (@pushLCtxAtDep _ rty lctxty _ x pos lctx n)
-      (@pushLCtxAtDep _ (lctxty ∘ rty) id _ x pos lctx n) := by
-    dsimp [pushLCtxAt, pushLCtxAtDep]
-    match n.ble pos with
-    | true =>
-      match n.beq pos with
-      | true => apply HEq.rfl
-      | false => apply HEq.rfl
-    | false => apply HEq.rfl
-  
-  theorem pushLCtxAtDep.absorb {rty : Nat → α} {lctxty : α → Sort u}
-    {xty : α} (x : lctxty xty) (pos : Nat) (lctx : ∀ n, lctxty (rty n)) :
-    HEq (@pushLCtxAtDep _ rty lctxty _ x pos lctx) (@pushLCtxAtDep _ (lctxty ∘ rty) id _ x pos lctx) :=
-    HEq.funext _ _ (pushLCtxAtDep.absorbAux _ _ _)
-  
-  @[reducible] def pushLCtx (x : α) (lctx : Nat → α) := pushLCtxAt x 0 lctx
-  
-  def pushLCtx.zero (x : α) (lctx : Nat → α) : pushLCtx x lctx 0 = x := rfl
-  
-  def pushLCtx.succ (x : α) (lctx : Nat → α) (n : Nat) : pushLCtx x lctx (.succ n) = lctx n := rfl
-  
-  def pushLCtx.succ_Fn (x : α) (lctx : Nat → α) :
-    (fun n => pushLCtx x lctx (.succ n)) = lctx := rfl
-
-  theorem pushLCtxAt.zero (x : α) (lctx : Nat → α) (n : Nat) :
-    pushLCtxAt x 0 lctx n = pushLCtx x lctx n := rfl
-  
-  def pushLCtx.comm (f : α → β) (x : α) (lctx : Nat → α) (n : Nat) :
-    f (pushLCtx x lctx n) = pushLCtx (f x) (fun n => f (lctx n)) n :=
-    pushLCtxAt.comm f x 0 lctx n
-  
-  theorem pushLCtx.commFn (f : α → β) (x : α) (lctx : Nat → α) :
-    (fun n => f (pushLCtx x lctx n)) = (fun n => pushLCtx (f x) (fun n => f (lctx n)) n) :=
-    funext (pushLCtx.comm f x lctx)
-  
-  def pushLCtx_pushLCtxAt (x y : α) (pos : Nat) (lctx : Nat → α) :
-    pushLCtx y (pushLCtxAt x pos lctx) = pushLCtxAt x (Nat.succ pos) (pushLCtx y lctx) := by
-    apply funext; intro n; cases n; rfl; rw [pushLCtxAt.succ_succ]; rfl
-  
-  @[reducible] def pushLCtxDep {rty : Nat → α} {lctxty : α → Sort u}
-    {xty : α} (x : lctxty xty) (lctx : ∀ n, lctxty (rty n)) := pushLCtxAtDep x 0 lctx
-  
-  def pushLCtxDep.zero {rty : Nat → α} {lctxty : α → Sort u}
-    {xty : α} (x : lctxty xty) (lctx : ∀ n, lctxty (rty n)) :
-    pushLCtxDep x lctx 0 = x := rfl
-  
-  def pushLCtxDep.succ {rty : Nat → α} {lctxty : α → Sort u}
-    (lctx : ∀ n, lctxty (rty n)) {xty : α} (x : lctxty xty) (n : Nat) :
-    pushLCtxDep x lctx (.succ n) = lctx n := rfl
-
-  def pushLCtxDep.succ_Fn {rty : Nat → α} {lctxty : α → Sort u}
-    (lctx : ∀ n, lctxty (rty n)) {xty : α} (x : lctxty xty) :
-    (fun n => pushLCtxDep x lctx (.succ n)) = lctx := rfl
-  
-  theorem pushLCtxAtDep.zero {rty : Nat → α} {lctxty : α → Sort u}
-    (lctx : ∀ n, lctxty (rty n)) {xty : α} (x : lctxty xty) (n : Nat) :
-    pushLCtxAtDep x 0 lctx n = pushLCtxDep x lctx n := rfl
-  
-  def pushLCtxDep.comm {α : Sort w} {β : α → Sort x} {rty : Nat → α} {lctxty : α → Sort u}
-    (f : ∀ (x : α), lctxty x → β x) (lctx : ∀ n, lctxty (rty n))
-    {xty : α} (x : lctxty xty) (n : Nat) :
-    f _ (pushLCtxDep x lctx n) = pushLCtxDep (lctxty:=β) (f xty x) (fun n => f _ (lctx n)) n :=
-    pushLCtxAtDep.comm f x 0 lctx n
-  
-  def pushLCtxDep.absorbAux {rty : Nat → α} {lctxty : α → Sort u}
-    (lctx : ∀ n, lctxty (rty n)) {xty : α} (x : lctxty xty) (n : Nat) :
-    HEq
-      (@pushLCtxDep _ rty lctxty _ x lctx n)
-      (@pushLCtxDep _ (lctxty ∘ rty) id _ x lctx n) :=
-    pushLCtxAtDep.absorbAux x 0 lctx n
-  
-  theorem pushLCtxDep.absorb {rty : Nat → α} {lctxty : α → Sort u}
-    (lctx : ∀ n, lctxty (rty n)) {xty : α} (x : lctxty xty) :
-    HEq (@pushLCtxDep _ rty lctxty _ x lctx) (@pushLCtxDep _ (lctxty ∘ rty) id _ x lctx) :=
-    pushLCtxAtDep.absorb x 0 lctx
-  
-  -- Surprisingly, this is definitionally equal
-  def pushLCtxDep_pushLCtxAtDep {rty : Nat → α} {lctxty : α → Sort u}
-    (lctx : ∀ n, lctxty (rty n)) {xty : α} (x : lctxty xty) {yty : α} (y : lctxty yty) (pos : Nat) :
-    HEq (pushLCtxDep y (pushLCtxAtDep x pos lctx)) (pushLCtxAtDep x (Nat.succ pos) (pushLCtxDep y lctx)) := by
-    apply HEq.funext; intro n; cases n; rfl;
-    apply HEq.trans _ (HEq.symm (pushLCtxAtDep.succ_succ _ _ _ _)); apply HEq.rfl
-  
-  @[reducible] def pushLCtxs (xs : List α) (lctx : Nat → α) (n : Nat) : α :=
-    match h : Nat.blt n xs.length with
-    | true  => xs[n]'(Nat.le_of_ble_eq_true h)
-    | false => lctx (n - xs.length)
-
-end push
-
-
-section pop
-  
-  def popLCtxAt (pos : Nat) (lctx : Nat → α) (n : Nat) :=
-    match pos.ble n with
-    | true => lctx (.succ n)
-    | false => lctx n
-  
-  theorem popLCtxAt.succ_zero (pos : Nat) (lctx : Nat → α) :
-    popLCtxAt (.succ pos) lctx 0 = lctx 0 := rfl
-  
-  theorem popLCtxAt.succ_succ (pos : Nat) (lctx : Nat → α) (n : Nat) :
-    popLCtxAt (.succ pos) lctx (.succ n) = popLCtxAt pos (fun n => lctx (.succ n)) n := rfl
-  
-  def popLCtxAt.comm (f : α → β) (pos : Nat) (lctx : Nat → α) (n : Nat) :
-    f (popLCtxAt pos lctx n) = popLCtxAt pos (f ∘ lctx) n := by
-    dsimp [popLCtxAt]
-    match pos.ble n with
-    | true => rfl
-    | false => rfl
-  
-  def popLCtxAt.commFn (f : α → β) (pos : Nat) (lctx : Nat → α) :
-    (fun n => f (popLCtxAt pos lctx n)) = (fun n => popLCtxAt pos (f ∘ lctx) n) :=
-    funext (popLCtxAt.comm f pos lctx)
-  
-  def popLCtxAtDep {rty : Nat → α} {lctxty : α → Sort u}
-    (pos : Nat) (lctx : ∀ n, lctxty (rty n)) (n : Nat) : lctxty (popLCtxAt pos rty n) := by
-    dsimp [popLCtxAt]
-    match pos.ble n with
-    | true => exact lctx (.succ n)
-    | false => exact lctx n
-  
-  theorem popLCtxAtDep.succ_zero {rty : Nat → α} {lctxty : α → Sort u}
-    (lctx : ∀ n, lctxty (rty n)) (pos : Nat) :
-    popLCtxAtDep (.succ pos) lctx 0 = lctx 0 := rfl
-  
-  theorem popLCtxAtDep.succ_succ {rty : Nat → α} {lctxty : α → Sort u}
-    (pos : Nat) (lctx : ∀ n, lctxty (rty n)) (n : Nat) :
-    popLCtxAtDep (.succ pos) lctx (.succ n) = popLCtxAtDep pos (fun n => lctx (.succ n)) n := rfl
-  
-  def popLCtxAtDep.absorbAux {rty : Nat → α} {lctxty : α → Sort u}
-    (pos : Nat) (lctx : ∀ n, lctxty (rty n)) (n : Nat) : HEq
-      (@popLCtxAtDep _ rty lctxty pos lctx n)
-      (@popLCtxAtDep _ (lctxty ∘ rty) id pos lctx n) := by
-    dsimp [popLCtxAt, popLCtxAtDep]
-    match pos.ble n with
-    | true => rfl
-    | false => rfl
-  
-  def popLCtxAtDep.absorbAux' {rty : Nat → α} {lctxty : α → Sort u}
-    (pos : Nat) (lctx : ∀ n, lctxty (rty n)) (n : Nat) : HEq
-      (@popLCtxAtDep _ rty lctxty pos lctx n)
-      (@popLCtxAtDep _ id (lctxty ∘ rty) pos lctx n) :=
-    HEq.trans
-      (b := @popLCtxAtDep _ (lctxty ∘ rty) id pos lctx n)
-      (popLCtxAtDep.absorbAux pos lctx n)
-      (HEq.symm (@popLCtxAtDep.absorbAux _ id (lctxty ∘ rty) pos lctx n))
-  
-  def popLCtxAtDep.absorb {rty : Nat → α} {lctxty : α → Sort u} (pos : Nat) (lctx : ∀ n, lctxty (rty n)) :
-    HEq (@popLCtxAtDep _ rty lctxty pos lctx) (@popLCtxAtDep _ (lctxty ∘ rty) id pos lctx) :=
-    HEq.funext _ _ (popLCtxAtDep.absorbAux pos lctx)
-
-  def popLCtxAtDep.absorb' {rty : Nat → α} {lctxty : α → Sort u} (pos : Nat) (lctx : ∀ n, lctxty (rty n)) :
-    HEq (@popLCtxAtDep _ rty lctxty pos lctx) (@popLCtxAtDep _ id (lctxty ∘ rty) pos lctx) :=
-    HEq.funext _ _ (popLCtxAtDep.absorbAux' pos lctx)
-  
-  def popLCtxAtDep.comm {α : Sort w} {β : α → Sort x} {rty : Nat → α} {lctxty : α → Sort u}
-    (f : ∀ (x : α), lctxty x → β x) (pos : Nat) (lctx : ∀ n, lctxty (rty n)) (n : Nat) :
-      f _ (popLCtxAtDep pos lctx n) = popLCtxAtDep (lctxty:=β) pos (fun n => f _ (lctx n)) n := by
-    dsimp [popLCtxAt, popLCtxAtDep]
-    match pos.ble n with
-    | true => rfl
-    | false => rfl
-  
-  def popLCtxAtDep.commFn {α : Sort w} {β : α → Sort x} {rty : Nat → α} {lctxty : α → Sort u}
-    (f : ∀ (x : α), lctxty x → β x) (pos : Nat) (lctx : ∀ n, lctxty (rty n)) :
-    (fun n => f _ (popLCtxAtDep pos lctx n)) = (fun n => popLCtxAtDep (lctxty:=β) pos (fun n => f _ (lctx n)) n) :=
-    funext (fun n => popLCtxAtDep.comm f pos lctx n)
-  
-  def popLCtxAt.commDep
-    {β : α → Sort u} (f : ∀ (x : α), β x) (pos : Nat) (lctx : Nat → α) (n : Nat) :
-      f (popLCtxAt pos lctx n) = popLCtxAtDep pos (fun n => f (lctx n)) n := by
-    dsimp [popLCtxAt, popLCtxAtDep]
-    match pos.ble n with
-    | true => rfl
-    | false => rfl
-
-  def popLCtx (lctx : Nat → α) := popLCtxAt 0 lctx
-  
-  def popLCtx.comm (f : α → β) (lctx : Nat → α) (n : Nat) :
-    f (popLCtx lctx n) = popLCtx (f ∘ lctx) n := popLCtxAt.comm f 0 lctx n
-  
-  def popLCtx.commFn (f : α → β) (lctx : Nat → α) :
-    (fun n => f (popLCtx lctx n)) = (fun n => popLCtx (f ∘ lctx) n) :=
-    popLCtxAt.commFn f 0 lctx
-  
-  def popLCtxDep {rty : Nat → α} {lctxty : α → Sort u}
-    (lctx : ∀ n, lctxty (rty n)) : ∀ n, lctxty (popLCtx rty n) :=
-    popLCtxAtDep 0 lctx
-  
-  def popLCtxDep.comm {α : Sort w} {β : α → Sort x} {rty : Nat → α} {lctxty : α → Sort u}
-    (f : ∀ (x : α), lctxty x → β x) (lctx : ∀ n, lctxty (rty n)) (n : Nat) :
-    f _ (popLCtxDep lctx n) = popLCtxDep (lctxty:=β) (fun n => f _ (lctx n)) n :=
-    popLCtxAtDep.comm f 0 lctx n
-  
-  def popLCtxDep.absorbAux {rty : Nat → α} {lctxty : α → Sort u}
-    (lctx : ∀ n, lctxty (rty n)) (n : Nat) : HEq
-      (@popLCtxDep _ rty lctxty lctx n)
-      (@popLCtxDep _ (lctxty ∘ rty) id lctx n) :=
-      popLCtxAtDep.absorbAux 0 lctx n
-  
-  theorem popLCtxDep.absorb {rty : Nat → α} {lctxty : α → Sort u} (lctx : ∀ n, lctxty (rty n)) :
-    HEq (@popLCtxDep _ rty lctxty lctx) (@popLCtxDep _ (lctxty ∘ rty) id lctx) :=
-    popLCtxAtDep.absorb 0 lctx
-  
-  def popLCtxsAt (lvl pos : Nat) (lctx : Nat → α) (n : Nat) :=
-    match pos.ble n with
-    | true => lctx (Nat.add n lvl)
-    | false => lctx n
-  
-  def popLCtxsAt.comm (f : α → β) (lvl pos : Nat) (lctx : Nat → α) (n : Nat) :
-    f (popLCtxsAt lvl pos lctx n) = popLCtxsAt lvl pos (f ∘ lctx) n := by
-    dsimp [popLCtxsAt]
-    match Nat.ble pos n with
-    | true => rfl
-    | false => rfl
-  
-  def popLCtxsAt.succ_l (lvl pos : Nat) (lctx : Nat → α) (n : Nat) :
-    popLCtxsAt (.succ lvl) pos lctx n = popLCtxsAt lvl pos (popLCtxAt pos lctx) n := by
-    dsimp [popLCtxsAt, popLCtxAt]
-    match h : Nat.ble pos n with
-    | true =>
-      dsimp
-      have leAdd' := Nat.le_trans (Nat.le_of_ble_eq_true h) (Nat.le_add_right _ lvl)
-      have bleAdd' := Nat.ble_eq_true_of_le leAdd'
-      rw [bleAdd']; rfl
-    | false => rfl
-  
-  def popLCtxsAt.succ_r (lvl pos : Nat) (lctx : Nat → α) (n : Nat) :
-    popLCtxsAt (.succ lvl) pos lctx n = popLCtxAt pos (popLCtxsAt lvl pos lctx) n := by
-    dsimp [popLCtxsAt, popLCtxAt]
-    match h : Nat.ble pos n with
-    | true =>
-      dsimp
-      dsimp
-      have leAdd' := Nat.le_trans (Nat.le_of_ble_eq_true h) (Nat.le_add_right _ 1)
-      have bleAdd' := Nat.ble_eq_true_of_le leAdd'
-      rw [bleAdd', Nat.succ_add]; rfl
-    | false => rfl
-  
-  def popLCtxsAt.zero (pos : Nat) (lctx : Nat → α) :
-    popLCtxsAt 0 pos lctx = lctx := by
-    apply funext; intro n;
-    dsimp [popLCtxsAt]
-    match pos.ble n with
-    | true => rfl
-    | false => rfl
-
-  def popLCtxsAt.one (pos : Nat) (lctx : Nat → α) :
-    popLCtxsAt 1 pos lctx = popLCtxAt pos lctx := rfl
-
-end pop
-
-
-section push_pop
-
-  def push_pop_eq (lctx : Nat → α) :
-    pushLCtx (lctx 0) (popLCtx lctx) = lctx := by
-    apply funext
-    intro n; cases n
-    case zero => rfl
-    case succ n' => cases n' <;> rfl    
-  
-  def popAt_pushAt_eq (x : α) (pos : Nat) (lctx : Nat → α) (n : Nat) :
-    popLCtxAt pos (pushLCtxAt x pos lctx) n = lctx n :=
-    match pos, n with
-    | 0, 0       => rfl
-    | 0, .succ _ => rfl
-    | .succ _, 0 => rfl
-    | .succ pos' , .succ n' => by
-      rw [popLCtxAt.succ_succ]; rw [pushLCtxAt.succ_succ_Fn];
-      exact (popAt_pushAt_eq x pos' (fun n => lctx (.succ n)) n')
-
-  def popAtDep_pushAtDep_eq
-    {α : Sort w} {lctxty : α → Sort u} {xty : α} (x : lctxty xty)
-    (pos : Nat) {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) (n : Nat) :
-    HEq
-      (@popLCtxAtDep _ (pushLCtxAt xty pos rty) lctxty
-        pos (@pushLCtxAtDep _ rty lctxty xty x pos lctx) n)
-      (lctx n) :=
-    match pos, n with
-    | 0, 0       => HEq.rfl
-    | 0, .succ _ => HEq.rfl
-    | .succ _, 0 => HEq.rfl
-    | .succ pos' , .succ n' => by
-      apply HEq.trans (heq_of_eq (popLCtxAtDep.succ_succ _ _ _))
-      apply HEq.trans _ (popAtDep_pushAtDep_eq x pos' (fun n => lctx (.succ n)) n')
-      apply (congr_arg₂_heq
-        (γ := fun rty _ => lctxty (popLCtxAt pos' rty n'))
-        (fun rty lctx => popLCtxAtDep (rty:=rty) pos' lctx n') _ _)
-      apply pushLCtxAt.succ_succ_Fn
-      apply pushLCtxAtDep.succ_succ_Fn
-
-end push_pop
 
 
 section generic
 
-  def mapAt (pos : Nat) (f : Nat → Nat) (n : Nat) :=
+  @[reducible] def mapAt (pos : Nat) (f : Nat → Nat) (n : Nat) :=
     match pos.ble n with
     | true => f (n - pos) + pos
     | false => n
+
+  theorem mapAt_id_eq_id (pos : Nat) : mapAt pos id = id := by
+    apply funext; intros n;
+    dsimp [mapAt]
+    match h : pos.ble n with
+    | true =>
+      dsimp
+      rw [Nat.sub_add_cancel (Nat.le_of_ble_eq_true h)]
+    | false => rfl
   
-  def restoreAt {α} (pos : Nat) (restore : (Nat → α) → (Nat → α)) :=
+  theorem mapAt_id_eq_id' (pos : Nat) : mapAt pos (fun x => x) = id :=
+    mapAt_id_eq_id pos
+
+  theorem mapAt.zero (f : Nat → Nat) : mapAt 0 f = f :=
+    funext (fun n => match n with | 0 => rfl | _ + 1 => rfl)
+
+  theorem mapAt.succ_zero (pos : Nat) (f : Nat → Nat) :
+    mapAt (.succ pos) f 0 = 0 := rfl
+
+  theorem mapAt.succ_succ (pos : Nat) (f : Nat → Nat) (n : Nat) :
+    mapAt (.succ pos) f (.succ n) = .succ (mapAt pos f n) := by
+    dsimp [mapAt, Nat.ble]
+    match Nat.ble pos n with
+    | true => dsimp; rw [Nat.succ_sub_succ]; rfl
+    | false => rfl
+
+  theorem mapAt.comp (pos : Nat) (g f : Nat → Nat) (n : Nat) :
+    mapAt pos (fun x => g (f x)) n = mapAt pos g (mapAt pos f n) := by
+    dsimp [mapAt]
+    match h : Nat.ble pos n with
+    | true =>
+      dsimp;
+      have hble : ∀ t, Nat.ble pos (t + pos) = true := by
+        intro t; apply Nat.ble_eq_true_of_le;
+        apply Nat.le_add_left
+      rw [hble]; dsimp; rw [Nat.add_sub_cancel]
+    | false =>
+      dsimp; rw [h]
+  
+  @[reducible] def restoreAt {α} (pos : Nat) (restore : (Nat → α) → (Nat → α)) :=
     fun (lctx : Nat → α) (n : Nat) =>
       match pos.ble n with
       | true => restore (fun i => lctx (i + pos)) (n - pos)
       | false => lctx n
+
+  theorem restoreAt.zero {α} (restore : (Nat → α) → (Nat → α)) :
+    restoreAt 0 restore = restore := by
+    apply funext; intro lctx; apply funext; intro n;
+    cases n <;> rfl
 
   theorem restoreAt.succ_succ {α} (pos : Nat) (restore : (Nat → α) → (Nat → α))
     (lctx : Nat → α) (n : Nat) :
     restoreAt (.succ pos) restore lctx (.succ n) = restoreAt pos restore (fun n => lctx (.succ n)) n := by
     dsimp [restoreAt, Nat.ble]; rw [Nat.succ_sub_succ]; rfl
 
-  theorem restoreAt.succ_pushLCtx {α} (restore : (Nat → α) → (Nat → α))
-    (x : α) (pos : Nat) (lctx : Nat → α) (n : Nat) :
-    restoreAt (.succ pos) restore (pushLCtx x lctx) n = pushLCtx x (restoreAt pos restore lctx) n :=
-    match pos, n with
-    | 0,          0        => rfl
-    | 0,          .succ _  => rfl
-    | .succ _,    0        => rfl
-    | .succ pos', .succ n' => by
-      rw [restoreAt.succ_succ]
-      rw [pushLCtx.succ, pushLCtx.succ_Fn]
-
-  theorem restoreAt.succ_pushLCtx_Fn {α} (restore : (Nat → α) → (Nat → α))
-    (x : α) (pos : Nat) (lctx : Nat → α) :
-    restoreAt (.succ pos) restore (pushLCtx x lctx) = pushLCtx x (restoreAt pos restore lctx) :=
-    funext (fun n => restoreAt.succ_pushLCtx restore x pos lctx n)
+  theorem restoreAt.succ_succ_Fn {α} (pos : Nat)
+    (restore : (Nat → α) → (Nat → α)) (lctx : Nat → α) :
+    (fun n => restoreAt (.succ pos) restore lctx (.succ n)) = restoreAt pos restore (fun n => lctx (.succ n)) :=
+    funext (fun n => restoreAt.succ_succ pos restore lctx n)
 
   def covPair {α} (f : Nat → Nat) (restore : (Nat → α) → (Nat → α)) :=
     ∀ (lctx : Nat → α) (n : Nat), (restore lctx) (f n) = lctx n
@@ -484,6 +157,13 @@ section generic
     | true  => exact (restoreDep (fun i => lctx (i + pos)) (n - pos))
     | false => exact (lctx n)
 
+  theorem restoreAtDep.zero {α} {lctxty : α → Sort u}
+    {restore : (Nat → α) → (Nat → α)}
+    (restoreDep : ∀ {rty : Nat → α}, (∀ n, lctxty (rty n)) → ∀ n, lctxty (restore rty n))
+    {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :
+    HEq (restoreAtDep 0 restoreDep lctx) (restoreDep (rty:=rty) lctx) := by
+    apply HEq.funext; intros n; cases n <;> rfl
+
   theorem restoreAtDep.succ_succ {α} {lctxty : α → Sort u}
     (pos : Nat) {restore : (Nat → α) → (Nat → α)}
     (restoreDep : ∀ {rty : Nat → α}, (∀ n, lctxty (rty n)) → ∀ n, lctxty (restore rty n))
@@ -491,27 +171,12 @@ section generic
     HEq (restoreAtDep (.succ pos) restoreDep lctx (.succ n)) (restoreAtDep pos restoreDep (fun n => lctx (.succ n)) n) := by
     dsimp [restoreAt, restoreAtDep, Nat.ble]; rw [Nat.succ_sub_succ]; rfl
 
-  theorem restoreAtDep.succ_pushLCtxDep {α} {lctxty : α → Sort u}
-    (restore : (Nat → α) → (Nat → α))
-    (restoreDep : ∀ {rty : Nat → α}, (∀ n, lctxty (rty n)) → ∀ n, lctxty ((restore rty) n))
-    {rty : Nat → α} {xty : α} (x : lctxty xty) (pos : Nat)
-    (lctx : ∀ n, lctxty (rty n)) (n : Nat) :
-    HEq (restoreAtDep (.succ pos) restoreDep (pushLCtxDep x lctx) n) (pushLCtxDep x (restoreAtDep pos restoreDep lctx) n) :=
-    match pos, n with
-    | 0,          0        => HEq.rfl
-    | 0,          .succ _  => HEq.rfl
-    | .succ _,    0        => HEq.rfl
-    | .succ pos', .succ n' => by
-      apply HEq.trans (restoreAtDep.succ_succ (Nat.succ pos') restoreDep (pushLCtxDep x lctx) n')
-      rw [pushLCtxDep.succ]; rw [pushLCtxDep.succ_Fn]
-
-  theorem restoreAtDep.succ_pushLCtxDep_Fn {α} {lctxty : α → Sort u}
-    (restore : (Nat → α) → (Nat → α))
-    (restoreDep : ∀ {rty : Nat → α}, (∀ n, lctxty (rty n)) → ∀ n, lctxty ((restore rty) n))
-    {rty : Nat → α} {xty : α} (x : lctxty xty) (pos : Nat)
-    (lctx : ∀ n, lctxty (rty n)) :
-    HEq (restoreAtDep (.succ pos) restoreDep (pushLCtxDep x lctx)) (pushLCtxDep x (restoreAtDep pos restoreDep lctx)) :=
-    HEq.funext _ _ (fun n => restoreAtDep.succ_pushLCtxDep restore restoreDep x pos lctx n)
+  theorem restoreAtDep.succ_succ_Fn {α} {lctxty : α → Sort u}
+    (pos : Nat) {restore : (Nat → α) → (Nat → α)}
+    (restoreDep : ∀ {rty : Nat → α}, (∀ n, lctxty (rty n)) → ∀ n, lctxty (restore rty n))
+    {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :
+    HEq (fun n => restoreAtDep (.succ pos) restoreDep lctx (.succ n)) (restoreAtDep pos restoreDep (fun n => lctx (.succ n))) :=
+    HEq.funext _ _ (fun n => restoreAtDep.succ_succ pos restoreDep lctx n)
 
   def covPairDep {α} (lctxty : α → Sort u)
     (f : Nat → Nat) (restore : (Nat → α) → (Nat → α))
@@ -551,70 +216,337 @@ section generic
 end generic
 
 
+section push
+  
+  @[reducible] def pushLCtxs (xs : List α) (lctx : Nat → α) (n : Nat) : α :=
+    match Nat.blt n xs.length with
+    | true  => xs.getD n (lctx 0)
+    | false => lctx (n - xs.length)
+
+  @[reducible] def pushLCtxsAt (xs : List α) (pos : Nat) :=
+    restoreAt pos (pushLCtxs xs)
+
+  theorem pushLCtxsAt.succ_zero (xs : List α) (pos : Nat) (lctx : Nat → α) :
+    pushLCtxsAt xs (.succ pos) lctx 0 = lctx 0 := rfl
+
+  theorem pushLCtxsAt.succ_succ (xs : List α) (pos : Nat) (lctx : Nat → α) (n : Nat) :
+    pushLCtxsAt xs (.succ pos) lctx (.succ n) = pushLCtxsAt xs pos (fun n => lctx (.succ n)) n := by
+    dsimp [pushLCtxsAt]; rw [restoreAt.succ_succ]
+
+  theorem pushLCtxsAt.succ_succ_Fn (xs : List α) (pos : Nat) (lctx : Nat → α) :
+    (fun n => pushLCtxsAt xs (.succ pos) lctx (.succ n)) = pushLCtxsAt xs pos (fun n => lctx (.succ n)) := by
+    dsimp [pushLCtxsAt]; rw [restoreAt.succ_succ_Fn]
+
+  @[reducible] def pushLCtxsDep
+    {lctxty : α → Sort u} {tys : List α} (xs : HList lctxty tys)
+    {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) (n : Nat) :
+    lctxty (pushLCtxs tys rty n) := by
+    dsimp [pushLCtxs]
+    match Nat.blt n tys.length with
+    | true  => exact (xs.getD (α:=α) (lctx 0) n)
+    | false => exact (lctx (n - tys.length))
+
+  @[reducible] def pushLCtxsAtDep
+    {lctxty : α → Sort u} {tys : List α} (xs : HList lctxty tys) (pos : Nat)
+    {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :=
+    restoreAtDep pos (pushLCtxsDep xs) lctx
+
+  theorem pushLCtxsAtDep.succ_zero
+    {lctxty : α → Sort u} {tys : List α} (xs : HList lctxty tys)
+    {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :
+    pushLCtxsAtDep xs (.succ pos) lctx 0 = lctx 0 := rfl
+
+  theorem pushLCtxsAtDep.succ_succ 
+    {lctxty : α → Sort u} {tys : List α} (xs : HList lctxty tys) (pos : Nat)
+    {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) (n : Nat) :
+    HEq (pushLCtxsAtDep xs (.succ pos) lctx (.succ n)) (pushLCtxsAtDep xs pos (fun n => lctx (.succ n)) n) := by
+    dsimp [pushLCtxsAtDep]; apply restoreAtDep.succ_succ
+
+  theorem pushLCtxsAtDep.succ_succ_Fn 
+    {lctxty : α → Sort u} {tys : List α} (xs : HList lctxty tys) (pos : Nat)
+    {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :
+    HEq (fun n => pushLCtxsAtDep xs (.succ pos) lctx (.succ n)) (pushLCtxsAtDep xs pos (fun n => lctx (.succ n))) := by
+    dsimp [pushLCtxsAtDep]; apply restoreAtDep.succ_succ_Fn
+  
+  @[reducible] def pushLCtx (x : α) (lctx : Nat → α) (n : Nat) : α :=
+    match n with
+    | 0 => x
+    | n' + 1 => lctx n'
+
+  @[reducible] def pushLCtxAt (x : α) (pos : Nat) := restoreAt pos (pushLCtx x)
+
+  theorem pushLCtxAt.zero (x : α) : pushLCtxAt x 0 = pushLCtx x := restoreAt.zero _
+
+  theorem pushLCtxAt.succ_zero (x : α) (pos : Nat) (lctx : Nat → α) :
+    pushLCtxAt x (.succ pos) lctx 0 = lctx 0 := rfl
+  
+  theorem pushLCtxAt.succ_succ (x : α) (pos : Nat) (lctx : Nat → α) (n : Nat) :
+    pushLCtxAt x (.succ pos) lctx (.succ n) = pushLCtxAt x pos (fun n => lctx (.succ n)) n :=
+    restoreAt.succ_succ _ _ _ _
+  
+  theorem pushLCtxAt.succ_succ_Fn (x : α) (pos : Nat) (lctx : Nat → α) :
+    (fun n => pushLCtxAt x (.succ pos) lctx (.succ n)) = pushLCtxAt x pos (fun n => lctx (.succ n)) :=
+    restoreAt.succ_succ_Fn _ _ _
+  
+  def pushLCtxAt.comm (f : α → β) (x : α) (pos : Nat) (lctx : Nat → α) (n : Nat) :
+    f (pushLCtxAt x pos lctx n) = pushLCtxAt (f x) pos (f ∘ lctx) n := by
+    dsimp [pushLCtxAt, restoreAt]
+    match pos.ble n with
+    | true =>
+      match (n - pos) with
+      | 0 => rfl
+      | _ + 1 => rfl
+    | false => rfl
+  
+  theorem pushLCtxAt.commFn (f : α → β) (x : α) (pos : Nat) (lctx : Nat → α) :
+    (fun n => f (pushLCtxAt x pos lctx n)) = (fun n => pushLCtxAt (f x) pos (fun n => f (lctx n)) n) :=
+    funext (pushLCtxAt.comm f x pos lctx)
+  
+  @[reducible] def pushLCtxDep {lctxty : α → Sort u} {xty : α} (x : lctxty xty)
+    {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) (n : Nat) : lctxty (pushLCtx xty rty n) := by
+    dsimp [pushLCtx]
+    match n with
+    | 0 => exact x
+    | n' + 1 => exact (lctx n')
+
+  def pushLCtxAtDep {lctxty : α → Sort u} {xty : α} (x : lctxty xty) (pos : Nat)
+    {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) (n : Nat) : lctxty (pushLCtxAt xty pos rty n) :=
+    restoreAtDep pos (pushLCtxDep x) lctx n
+  
+  theorem pushLCtxAtDep.zero {lctxty : α → Sort u} {xty : α} (x : lctxty xty)
+    {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :
+    HEq (pushLCtxAtDep x 0 lctx) (pushLCtxDep x lctx) := restoreAtDep.zero _ _
+
+  theorem pushLCtxAtDep.succ_zero {rty : Nat → α} {lctxty : α → Sort u}
+    {xty : α} (x : lctxty xty) (pos : Nat) (lctx : ∀ n, lctxty (rty n)) :
+    pushLCtxAtDep x (.succ pos) lctx 0 = lctx 0 := rfl
+  
+  theorem pushLCtxAtDep.succ_succ {rty : Nat → α} {lctxty : α → Sort u} {xty : α}
+    (x : lctxty xty) (pos : Nat) (lctx : ∀ n, lctxty (rty n)) (n : Nat) :
+    HEq (pushLCtxAtDep x (.succ pos) lctx (.succ n)) (pushLCtxAtDep x pos (fun n => lctx (.succ n)) n) :=
+    restoreAtDep.succ_succ _ _ _ _
+  
+  theorem pushLCtxAtDep.succ_succ_Fn {rty : Nat → α} {lctxty : α → Sort u}
+    {xty : α} (x : lctxty xty) (pos : Nat) (lctx : ∀ n, lctxty (rty n)) :
+    HEq (fun n => pushLCtxAtDep x (.succ pos) lctx (.succ n)) (pushLCtxAtDep x pos (fun n => lctx (.succ n))) :=
+    restoreAtDep.succ_succ_Fn _ _ _
+  
+  def pushLCtxAtDep.comm {α : Sort w} {β : α → Sort x} {rty : Nat → α} {lctxty : α → Sort u}
+    (f : ∀ (x : α), lctxty x → β x) {xty : α} (x : lctxty xty) (pos : Nat)
+    (lctx : ∀ n, lctxty (rty n)) (n : Nat) :
+      f _ (pushLCtxAtDep x pos lctx n) = pushLCtxAtDep (lctxty:=β) (f xty x) pos (fun n => f _ (lctx n)) n := by
+    dsimp [pushLCtxAt, pushLCtxAtDep, restoreAt, restoreAtDep]
+    match pos.ble n with
+    | true =>
+      match (n - pos) with
+      | 0 => rfl
+      | _ + 1 => rfl
+    | false => rfl
+  
+  def pushLCtxAtDep.nonDep {rty : Nat → α} {lctxty : Sort u}
+    {xty : α} (x : lctxty) (pos : Nat) (lctx : Nat → lctxty) (n : Nat) :
+    @pushLCtxAtDep _ (fun _ => lctxty) xty x pos rty lctx n = pushLCtxAt x pos lctx n := rfl
+  
+  def pushLCtxAtDep.absorbAux {rty : Nat → α} {lctxty : α → Sort u}
+    {xty : α} (x : lctxty xty) (pos : Nat) (lctx : ∀ n, lctxty (rty n)) (n : Nat) :
+    HEq
+      (@pushLCtxAtDep _ lctxty _ x pos rty lctx n)
+      (@pushLCtxAtDep _ id _ x pos (lctxty ∘ rty) lctx n) := by
+    dsimp [pushLCtxAt, pushLCtxAtDep]
+    dsimp [pushLCtxAt, pushLCtxAtDep, restoreAt, restoreAtDep]
+    match pos.ble n with
+    | true =>
+      match (n - pos) with
+      | 0 => rfl
+      | _ + 1 => rfl
+    | false => rfl
+  
+  theorem pushLCtxAtDep.absorb {rty : Nat → α} {lctxty : α → Sort u}
+    {xty : α} (x : lctxty xty) (pos : Nat) (lctx : ∀ n, lctxty (rty n)) :
+    HEq (@pushLCtxAtDep _ lctxty _ x pos rty lctx) (@pushLCtxAtDep _ id _ x pos (lctxty ∘ rty) lctx) :=
+    HEq.funext _ _ (pushLCtxAtDep.absorbAux _ _ _)
+  
+  def pushLCtx.zero (x : α) (lctx : Nat → α) : pushLCtx x lctx 0 = x := rfl
+  
+  def pushLCtx.succ (x : α) (lctx : Nat → α) (n : Nat) : pushLCtx x lctx (.succ n) = lctx n := rfl
+  
+  def pushLCtx.succ_Fn (x : α) (lctx : Nat → α) :
+    (fun n => pushLCtx x lctx (.succ n)) = lctx := rfl
+  
+  def pushLCtx.comm (f : α → β) (x : α) (lctx : Nat → α) (n : Nat) :
+    f (pushLCtx x lctx n) = pushLCtx (f x) (fun n => f (lctx n)) n := by
+    rw [← pushLCtxAt.zero]; rw [← pushLCtxAt.zero]
+    apply pushLCtxAt.comm f x 0 lctx n
+  
+  theorem pushLCtx.commFn (f : α → β) (x : α) (lctx : Nat → α) :
+    (fun n => f (pushLCtx x lctx n)) = (fun n => pushLCtx (f x) (fun n => f (lctx n)) n) :=
+    funext (pushLCtx.comm f x lctx)
+  
+  def pushLCtx_pushLCtxAt (x y : α) (pos : Nat) (lctx : Nat → α) :
+    pushLCtx y (pushLCtxAt x pos lctx) = pushLCtxAt x (Nat.succ pos) (pushLCtx y lctx) := by
+    apply funext; intro n; cases n; rfl; rw [pushLCtxAt.succ_succ];
+  
+  def pushLCtxDep.zero {lctxty : α → Sort u} {xty : α} (x : lctxty xty)
+    {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :
+    pushLCtxDep x lctx 0 = x := rfl
+  
+  def pushLCtxDep.succ {lctxty : α → Sort u}
+    {xty : α} (x : lctxty xty) {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) (n : Nat) :
+    pushLCtxDep x lctx (.succ n) = lctx n := rfl
+
+  def pushLCtxDep.succ_Fn {lctxty : α → Sort u}
+    {xty : α} (x : lctxty xty) {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :
+    (fun n => pushLCtxDep x lctx (.succ n)) = lctx := rfl
+  
+  def pushLCtxDep.comm {α : Sort w} {β : α → Sort x} {rty : Nat → α} {lctxty : α → Sort u}
+    (f : ∀ (x : α), lctxty x → β x) (lctx : ∀ n, lctxty (rty n))
+    {xty : α} (x : lctxty xty) (n : Nat) :
+    f _ (pushLCtxDep x lctx n) = pushLCtxDep (lctxty:=β) (f xty x) (fun n => f _ (lctx n)) n := by
+    dsimp [pushLCtx, pushLCtxDep]
+    cases n <;> rfl
+  
+  def pushLCtxDep.absorbAux {rty : Nat → α} {lctxty : α → Sort u}
+    (lctx : ∀ n, lctxty (rty n)) {xty : α} (x : lctxty xty) (n : Nat) :
+    HEq
+      (@pushLCtxDep _ lctxty _ x rty lctx n)
+      (@pushLCtxDep _ id _ x (lctxty ∘ rty) lctx n) := by
+    dsimp [pushLCtx, pushLCtxDep]
+    cases n <;> rfl
+  
+  theorem pushLCtxDep.absorb {rty : Nat → α} {lctxty : α → Sort u}
+    (lctx : ∀ n, lctxty (rty n)) {xty : α} (x : lctxty xty) :
+    HEq (@pushLCtxDep _ lctxty _ x rty lctx) (@pushLCtxDep _ id _ x (lctxty ∘ rty) lctx) :=
+    HEq.funext _ _ (fun n => pushLCtxDep.absorbAux lctx x n)
+  
+  def pushLCtxDep_pushLCtxAtDep {rty : Nat → α} {lctxty : α → Sort u}
+    (lctx : ∀ n, lctxty (rty n)) {xty : α} (x : lctxty xty) {yty : α} (y : lctxty yty) (pos : Nat) :
+    HEq (pushLCtxDep y (pushLCtxAtDep x pos lctx)) (pushLCtxAtDep x (Nat.succ pos) (pushLCtxDep y lctx)) := by
+    apply HEq.funext; intro n; cases n; rfl;
+    apply HEq.trans _ (HEq.symm (pushLCtxAtDep.succ_succ _ _ _ _)); apply HEq.rfl
+
+end push
+
+
+section add_nat
+  
+  @[reducible] def addAt (lvl pos : Nat) := mapAt pos (fun x => x + lvl)
+
+  @[reducible] def succAt := addAt 1
+
+  theorem addAt.succ_zero (lvl pos : Nat) :
+    addAt lvl (.succ pos) 0 = 0 := rfl
+  
+  theorem addAt.succ_succ (lvl pos : Nat) (n : Nat) :
+    addAt lvl (.succ pos) (.succ n) = .succ (addAt lvl pos n) := by
+    dsimp [addAt]; rw [mapAt.succ_succ]
+
+  def addAt.succ_l (lvl pos : Nat) (n : Nat) :
+    addAt (.succ lvl) pos n = succAt pos (addAt lvl pos n) := by
+    dsimp [addAt, Nat.add_succ]
+    rw [mapAt.comp pos Nat.succ (fun x => x + lvl) n]
+  
+  def addAt.succ_r (lvl pos : Nat) (n : Nat) :
+    addAt (.succ lvl) pos n = addAt lvl pos (succAt pos n) := by
+    dsimp [addAt];
+    have heq : (fun x => x + Nat.succ lvl) = (fun x => (Nat.succ x) + lvl) := by
+      apply funext; intros x; rw [Nat.succ_add]; rfl
+    rw [heq]; rw [mapAt.comp pos (fun x => x + lvl) Nat.succ n]
+  
+  def addAt.zero (pos : Nat) : addAt 0 pos = id := by
+    apply funext; intro n;
+    dsimp [addAt];
+    rw [mapAt_id_eq_id']; rfl
+
+  def add.one (pos : Nat) : addAt 1 pos = succAt pos:= rfl
+
+end add_nat
+
+
+section generic
+
+  theorem restoreAt.succ_pushLCtx {α} (restore : (Nat → α) → (Nat → α))
+    (x : α) (pos : Nat) (lctx : Nat → α) (n : Nat) :
+    restoreAt (.succ pos) restore (pushLCtx x lctx) n = pushLCtx x (restoreAt pos restore lctx) n :=
+    match pos, n with
+    | 0,       0        => rfl
+    | 0,       .succ _  => rfl
+    | .succ _, 0        => rfl
+    | .succ _, .succ _ => restoreAt.succ_succ _ _ _ _
+
+  theorem restoreAt.succ_pushLCtx_Fn {α} (restore : (Nat → α) → (Nat → α))
+    (x : α) (pos : Nat) (lctx : Nat → α) :
+    restoreAt (.succ pos) restore (pushLCtx x lctx) = pushLCtx x (restoreAt pos restore lctx) :=
+    funext (fun n => restoreAt.succ_pushLCtx restore x pos lctx n)
+
+  theorem restoreAtDep.succ_pushLCtxDep {α} {lctxty : α → Sort u}
+    (restore : (Nat → α) → (Nat → α))
+    (restoreDep : ∀ {rty : Nat → α}, (∀ n, lctxty (rty n)) → ∀ n, lctxty ((restore rty) n))
+    {rty : Nat → α} {xty : α} (x : lctxty xty) (pos : Nat)
+    (lctx : ∀ n, lctxty (rty n)) (n : Nat) :
+    HEq (restoreAtDep (.succ pos) restoreDep (pushLCtxDep x lctx) n) (pushLCtxDep x (restoreAtDep pos restoreDep lctx) n) :=
+    match pos, n with
+    | 0,          0        => HEq.rfl
+    | 0,          .succ _  => HEq.rfl
+    | .succ _,    0        => HEq.rfl
+    | .succ pos', .succ n' => by
+      apply HEq.trans (restoreAtDep.succ_succ (Nat.succ pos') restoreDep (pushLCtxDep x lctx) n')
+      rw [pushLCtxDep.succ]; rw [pushLCtxDep.succ_Fn]
+
+  theorem restoreAtDep.succ_pushLCtxDep_Fn {α} {lctxty : α → Sort u}
+    (restore : (Nat → α) → (Nat → α))
+    (restoreDep : ∀ {rty : Nat → α}, (∀ n, lctxty (rty n)) → ∀ n, lctxty ((restore rty) n))
+    {rty : Nat → α} {xty : α} (x : lctxty xty) (pos : Nat)
+    (lctx : ∀ n, lctxty (rty n)) :
+    HEq (restoreAtDep (.succ pos) restoreDep (pushLCtxDep x lctx)) (pushLCtxDep x (restoreAtDep pos restoreDep lctx)) :=
+    HEq.funext _ _ (fun n => restoreAtDep.succ_pushLCtxDep restore restoreDep x pos lctx n)
+
+end generic
+
 section genericInst
 
-  theorem covPair.ofPushAtPopAt (x : α) (pos : Nat) :
-    covPair (popLCtxAt pos id) (pushLCtxAt x pos) :=
-    fun lctx n => by
-      rw [popLCtxAt.comm (pushLCtxAt x pos lctx)]
-      apply popAt_pushAt_eq
-  
-  theorem popLCtxAt.isMapAt (pos : Nat) : popLCtxAt pos id = mapAt pos .succ := by
-    apply funext; intros n
-    dsimp [popLCtxAt, mapAt]
-    match h : Nat.ble pos n with
-    | true =>
-      dsimp; rw [Nat.succ_add]; rw [Nat.sub_add_cancel]
-      apply Nat.le_of_ble_eq_true h
-    | false => rfl
+  theorem covPair.ofPushPop (x : α) :
+    covPair Nat.succ (pushLCtx x) := fun _ _ => rfl
 
-  theorem pushLCtxAt.isRestoreAt (x : α) (pos : Nat) :
-    pushLCtxAt x pos = restoreAt pos (pushLCtx x) := by
-    apply funext; intros lctx; apply funext; intros n
-    dsimp [pushLCtxAt, restoreAt, pushLCtx]
-    match h₁ : Nat.ble pos n, h₂ : Nat.ble n pos with
-    | true,  true  =>
-      dsimp; simp at h₁ h₂;
-      have heq := Nat.eq_of_le_of_lt_succ h₁ (Nat.succ_le_succ h₂)
-      cases heq; rw [Nat.beq_refl]; rw [Nat.sub_self];
-    | true,  false =>
-      dsimp; simp at h₁; rw [← Nat.ble_eq_false_eq_lt] at h₂
-      have h₃ : Nat.ble (n - pos) 0 = false := by
-        apply Bool.eq_false_of_not_eq_true; intro h
-        have g₁ : n - pos ≤ 0 := Nat.le_of_ble_eq_true h
-        have g₂ := Nat.sub_le_iff_le_add'.mp g₁
-        exact (Nat.not_le_of_lt h₂ g₂)
-      rw [h₃]; dsimp
-      rw [← Nat.pred_sub]; rw [Nat.sub_add_cancel]
-      apply Nat.le_pred_of_lt; exact h₂
-    | false, true =>
-      dsimp; rw [← Nat.ble_eq_false_eq_lt] at h₁
-      have h₃ : Nat.beq n pos = false := by
-        rw [← Bool.eq_false_eq_not_eq_true]; intro h₃;
-        have h₄ : n = pos := Nat.eq_of_beq_eq_true h₃
-        cases h₄; revert h₁; apply Nat.not_lt_of_le; constructor
-      rw [h₃]
-    | false, false =>
-      rw [← Nat.ble_eq_false_eq_lt] at h₁
-      rw [← Nat.ble_eq_false_eq_lt] at h₂
-      have h₃ : ¬ (n < pos) := by
-        apply Nat.not_lt_of_le
-        apply Nat.le_of_lt h₂
-      apply False.elim (h₃ h₁)
-  
-  theorem covPairDep.ofPushAtDepPopAtDep
-    {lctxty : α → Sort u} {xty : α} (x : lctxty xty) (pos : Nat) :
-    covPairDep lctxty (popLCtxAt pos id) (pushLCtxAt xty pos) (pushLCtxAtDep x pos) :=
-    And.intro (covPair.ofPushAtPopAt xty pos) (fun {rty} lctx n => by
-      dsimp;
-      rw [popLCtxAt.commDep (pushLCtxAtDep x pos lctx)]
-      let b := @popLCtxAtDep α (pushLCtxAt xty pos rty) lctxty pos (pushLCtxAtDep x pos lctx) n
-      apply HEq.trans (b:=b)
-      case h₁ =>
-        apply HEq.symm; apply popLCtxAtDep.absorbAux'
-      case h₂ =>
-        dsimp; apply popAtDep_pushAtDep_eq)
+  theorem covPairDep.ofPushDepPopDep
+    {lctxty : α → Sort u} {xty : α} (x : lctxty xty) :
+    covPairDep lctxty Nat.succ (pushLCtx xty) (pushLCtxDep x) :=
+    And.intro (covPair.ofPushPop xty) (fun {_} _ _ => HEq.rfl)
+
+  theorem covPair.ofPushsPops
+    (lvl : Nat) (xs : List α) (heq : xs.length = lvl) :
+    covPair (fun x => x + lvl) (pushLCtxs xs) := by
+    revert xs heq; induction lvl <;> intros xs heq lctx n
+    case zero =>
+      dsimp [pushLCtxs]; cases xs;
+      case nil => rfl
+      case cons _ _ => cases heq
+    case succ lvl IH =>
+      dsimp [pushLCtxs]; cases xs;
+      case nil => cases heq
+      case cons x xs =>
+        simp at heq
+        rw [← IH xs heq lctx n]
+        dsimp [pushLCtxs, Nat.blt, Nat.ble, Nat.add_succ];
+        rw [Nat.succ_sub_succ]; rfl
+
+  theorem covPairDep.ofPushsDepPopsDep
+    {lctxty : α → Sort u} (lvl : Nat) {tys : List α}
+    (xs : HList lctxty tys) (heq : tys.length = lvl) :
+    covPairDep lctxty (fun x => x + lvl) (pushLCtxs tys) (pushLCtxsDep xs) :=
+    And.intro (covPair.ofPushsPops lvl tys heq) (fun {rty} lctx n => by
+      dsimp [pushLCtxsDep, pushLCtxs]; revert tys lctxty n;
+      induction lvl <;> intros lctxty tys xs heq lctx n
+      case zero =>
+        cases xs;
+        case nil => rfl
+        case cons _ _ => cases heq
+      case succ lvl IH =>
+        cases xs;
+        case nil => cases heq
+        case cons ty tys x xs =>
+          simp at heq
+          apply HEq.trans _ (IH xs heq lctx n)
+          dsimp [Nat.blt, Nat.ble, Nat.add_succ]
+          rw [Nat.succ_sub_succ]; rfl)
 
 end genericInst
-
-end Auto.Embedding

@@ -8,15 +8,15 @@ structure LamThmJudge where
   rty   : LamSort
 
 def LamThmWF (lval : LamValuation) (ltj : LamThmJudge) :=
-  ∀ (lctx' : Nat → LamSort), LamWF lval.ilVal.toLamTyVal ⟨pushLCtxs lctx' ltj.lctx, ltj.rterm, ltj.rty⟩
+  ∀ (lctx' : Nat → LamSort), LamWF lval.ilVal.toLamTyVal ⟨pushLCtxs ltj.lctx lctx', ltj.rterm, ltj.rty⟩
 
 def LamThmWF.ofBVarLifts (lval : LamValuation) (ltj : LamThmJudge)
   (hWF : LamThmWF lval ltj) : Nat := sorry
 
 def LamThmValid (lval : LamValuation) (lctx : List LamSort) (t : LamTerm) :=
-  ∀ (lctx' : Nat → LamSort) (lctxTerm : ∀ n, (pushLCtxs lctx' lctx n).interp lval.ilVal.tyVal),
-    ∃ (wf : LamWF lval.ilVal.toLamTyVal ⟨pushLCtxs lctx' lctx, t, .base .prop⟩),
-      GLift.down (LamWF.interp lval (pushLCtxs lctx' lctx) lctxTerm wf)
+  ∀ (lctx' : Nat → LamSort) (lctxTerm : ∀ n, (pushLCtxs lctx lctx' n).interp lval.ilVal.tyVal),
+    ∃ (wf : LamWF lval.ilVal.toLamTyVal ⟨pushLCtxs lctx lctx', t, .base .prop⟩),
+      GLift.down (LamWF.interp lval (pushLCtxs lctx lctx') lctxTerm wf)
 
 def Eq.symm.WF (wf : LamWF ltv ⟨lctx, .app (.app (.base (.eq n)) a) b, .base .prop⟩) :
   LamWF ltv ⟨lctx, .app (.app (.base (.eq n)) b) a, .base .prop⟩ :=

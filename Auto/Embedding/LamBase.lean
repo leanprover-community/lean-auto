@@ -1201,7 +1201,7 @@ def LamWF.ofMapBVarAt (covP : covPair f restore) (idx : Nat)
 | .ofApp argTy' HFn HArg =>
   .ofApp argTy' (LamWF.ofMapBVarAt covP idx _ HFn) (LamWF.ofMapBVarAt covP idx _ HArg)
 
-def LamWF.ofMapBVarAt.correct (lval : LamValuation.{u}) {restoreDep : _}
+theorem LamWF.ofMapBVarAt.correct (lval : LamValuation.{u}) {restoreDep : _}
   (covPD : covPairDep (LamSort.interp lval.ilVal.tyVal) f restore restoreDep) (idx : Nat)
   {lctxTy : Nat → LamSort} (lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal) :
   (rterm : LamTerm) → (HWF : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, rterm, rTy⟩) →
@@ -1242,65 +1242,100 @@ def LamWF.ofMapBVarAt.correct (lval : LamValuation.{u}) {restoreDep : _}
   rw [IHFn]; rw [IHArg]
 
 -- Changing all `.bvar ?n` in `t` (where `?n >= idx`) to `.bvar (?n + lvl)`
-def LamTerm.bvarLiftsIdx (idx : Nat) (t : LamTerm) (lvl : Nat) : LamTerm :=
-  match t with
-  | .atom n     => .atom n
-  | .base b     => .base b
-  | .bvar n     => .bvar (popLCtxsAt lvl idx id n)
-  | .lam s t    => .lam s (t.bvarLiftsIdx (.succ idx) lvl)
-  | .app fn arg => .app (fn.bvarLiftsIdx idx lvl) (arg.bvarLiftsIdx idx lvl)
+def LamTerm.bvarLiftsIdx (idx lvl : Nat) := LamTerm.mapBVarAt idx (fun x => Nat.add x lvl)
+
+@[reducible] def LamTerm.bvarLifts := LamTerm.bvarLiftsIdx 0
 
 -- Changing all `.bvar ?n` in `t` (where `?n >= idx`) to `.bvar (Nat.succ ?n)`
-def LamTerm.bvarLiftIdx (idx : Nat) (t : LamTerm) := LamTerm.bvarLiftsIdx idx t 1
+def LamTerm.bvarLiftIdx (idx : Nat) (t : LamTerm) := LamTerm.bvarLiftsIdx idx 1 t
 
-def LamTerm.bvarLiftsIdx.zero (idx : Nat) : (t : LamTerm) → LamTerm.bvarLiftsIdx idx t 0 = t
+def LamTerm.bvarLiftsIdx.zero (idx : Nat) : (t : LamTerm) → LamTerm.bvarLiftsIdx idx 0 t = t
 | .atom n => rfl
 | .base b => rfl
 | .bvar n => by
-  dsimp [bvarLiftsIdx, popLCtxsAt]
-  match Nat.ble idx n with
-  | true => rfl
-  | false => rfl
+  dsimp [bvarLiftsIdx, mapBVarAt]
+  rw [mapAt_id_eq_id']; rfl
 | .lam s t => by
-  dsimp [bvarLiftsIdx];
-  rw [LamTerm.bvarLiftsIdx.zero (.succ idx) t]
+  dsimp [bvarLiftsIdx, mapBVarAt];
+  have IH := LamTerm.bvarLiftsIdx.zero (.succ idx) t
+  dsimp [bvarLiftsIdx] at IH
+  rw [IH]
 | .app fn arg => by
-  dsimp [bvarLiftsIdx];
-  rw [LamTerm.bvarLiftsIdx.zero _ fn];
-  rw [LamTerm.bvarLiftsIdx.zero _ arg];
+  dsimp [bvarLiftsIdx, mapBVarAt];
+  have IHFn := LamTerm.bvarLiftsIdx.zero idx fn
+  have IHArg := LamTerm.bvarLiftsIdx.zero idx arg
+  dsimp [bvarLiftsIdx] at IHFn IHArg
+  rw [IHFn];
+  rw [IHArg];
 
-def LamTerm.bvarLiftsIdx.succ_l (idx : Nat) (t : LamTerm) (lvl : Nat) :
-  LamTerm.bvarLiftsIdx idx t (.succ lvl) = LamTerm.bvarLiftsIdx idx (LamTerm.bvarLiftIdx idx t) lvl := by
+def LamTerm.bvarLiftsIdx.succ_l (idx lvl : Nat) (t : LamTerm) :
+  LamTerm.bvarLiftsIdx idx (.succ lvl) t = LamTerm.bvarLiftsIdx idx lvl (LamTerm.bvarLiftIdx idx t) := by
   revert idx lvl
   induction t <;> intros idx lvl
   case atom a => rfl
   case base b => rfl
   case bvar n =>
-    dsimp [bvarLiftsIdx, bvarLiftIdx];
-    rw [popLCtxsAt.succ_r, popLCtxsAt.one];
-    rw [popLCtxAt.comm (popLCtxsAt lvl idx id)]; rfl
+    dsimp [bvarLiftsIdx, bvarLiftIdx, mapBVarAt];
+    have hAddAt := addAt.succ_r lvl idx n
+    dsimp [addAt] at hAddAt; rw [hAddAt]
   case lam s t IH =>
-    dsimp [bvarLiftsIdx]
+    dsimp [bvarLiftsIdx, mapBVarAt];
+    dsimp [bvarLiftsIdx] at IH
     rw [IH]; rfl
   case app fn arg IHFn IHArg =>
-    dsimp [bvarLiftsIdx]
+    dsimp [bvarLiftsIdx, mapBVarAt];
+    dsimp [bvarLiftsIdx] at IHFn IHArg;
     rw [IHFn, IHArg]; rfl
 
-def LamTerm.bvarLiftsIdx.succ_r (idx : Nat) (t : LamTerm) (lvl : Nat) :
-  LamTerm.bvarLiftsIdx idx t (.succ lvl) = LamTerm.bvarLiftIdx idx (LamTerm.bvarLiftsIdx idx t lvl) := by
+def LamTerm.bvarLiftsIdx.succ_r (idx lvl : Nat) (t : LamTerm) :
+  LamTerm.bvarLiftsIdx idx (.succ lvl) t = LamTerm.bvarLiftIdx idx (LamTerm.bvarLiftsIdx idx lvl t) := by
   revert idx lvl
   induction t <;> intros idx lvl
   case atom a => rfl
   case base b => rfl
   case bvar n =>
-    dsimp [bvarLiftsIdx, bvarLiftIdx];
-    rw [popLCtxsAt.succ_l, popLCtxsAt.one];
-    rw [popLCtxsAt.comm (popLCtxAt idx id)]; rfl
+    dsimp [bvarLiftsIdx, bvarLiftIdx, mapBVarAt];
+    have hAddAt := addAt.succ_l lvl idx n
+    dsimp [addAt] at hAddAt; rw [hAddAt];
   case lam s t IH =>
-    dsimp [bvarLiftsIdx]
+    dsimp [bvarLiftsIdx, mapBVarAt];
+    dsimp [bvarLiftsIdx] at IH
     rw [IH]; rfl
   case app fn arg IHFn IHArg =>
-    dsimp [bvarLiftsIdx]
+    dsimp [bvarLiftsIdx, mapBVarAt];
+    dsimp [bvarLiftsIdx] at IHFn IHArg;
     rw [IHFn, IHArg]; rfl
+
+def LamWF.ofBVarLiftsIdx
+  {lamVarTy lctx} {idx lvl : Nat}
+  {xs : List LamSort} (heq : xs.length = lvl)
+  (rterm : LamTerm) (HWF : LamWF lamVarTy ⟨lctx, rterm, rTy⟩) :
+  LamWF lamVarTy ⟨pushLCtxsAt xs idx lctx, rterm.bvarLiftsIdx idx lvl, rTy⟩ :=
+  LamWF.ofMapBVarAt (covPair.ofPushsPops _ _ heq) idx rterm HWF
+
+theorem LamWF.ofBVarLiftsIdx.correct
+  (lval : LamValuation.{u}) {idx lvl : Nat}
+  {tys : List LamSort} (xs : HList (LamSort.interp lval.ilVal.tyVal) tys) (heq : tys.length = lvl)
+  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal)
+  (rterm : LamTerm) (HWF : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, rterm, rTy⟩) :
+  LamWF.interp lval lctxTy lctxTerm HWF = LamWF.interp lval
+    (pushLCtxsAt tys idx lctxTy) (pushLCtxsAtDep xs idx lctxTerm)
+    (ofBVarLiftsIdx heq rterm HWF) :=
+  LamWF.ofMapBVarAt.correct lval (covPairDep.ofPushsDepPopsDep _ _ heq) idx lctxTerm rterm HWF
+
+def LamWF.ofBVarLiftIdx {lamVarTy lctx} (idx : Nat)
+  (rterm : LamTerm) (HWF : LamWF lamVarTy ⟨lctx, rterm, rTy⟩) :
+  LamWF lamVarTy ⟨pushLCtxAt s idx lctx, rterm.bvarLiftIdx idx, rTy⟩ :=
+  LamWF.ofMapBVarAt (covPair.ofPushPop _) idx rterm HWF
+
+theorem LamWF.ofBVarLiftIdx.correct
+  (lval : LamValuation.{u}) {idx : Nat}
+  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal)
+  {xty : LamSort} (x : LamSort.interp lval.ilVal.tyVal xty)
+  (rterm : LamTerm) (HWF : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, rterm, rTy⟩) :
+  LamWF.interp lval lctxTy lctxTerm HWF = LamWF.interp lval
+    (pushLCtxAt xty idx lctxTy) (pushLCtxAtDep x idx lctxTerm)
+    (ofBVarLiftIdx idx rterm HWF) :=
+  LamWF.ofMapBVarAt.correct lval (covPairDep.ofPushDepPopDep _) idx lctxTerm rterm HWF
 
 end Auto.Embedding.Lam
