@@ -9,11 +9,11 @@ namespace Auto.Embedding.Lam
 --   easy to see that the `lctx` which `arg` resides in is `fun n => lctx (n + idx + 1)`
 --   and the type of `arg` is `lctx idx`
 def LamTerm.subst (idx : Nat) (arg : LamTerm) : (body : LamTerm) → LamTerm
-| .atom n      => .atom n
-| .base b      => .base b
-| .bvar n      => pushLCtxAt (arg.bvarLifts idx) idx LamTerm.bvar n
-| .lam s body  => .lam s (LamTerm.subst (.succ idx) arg body)
-| .app fn arg' => .app (LamTerm.subst idx arg fn) (LamTerm.subst idx arg arg')
+| .atom n        => .atom n
+| .base b        => .base b
+| .bvar n        => pushLCtxAt (arg.bvarLifts idx) idx LamTerm.bvar n
+| .lam s body    => .lam s (LamTerm.subst (.succ idx) arg body)
+| .app s fn arg' => .app s (LamTerm.subst idx arg fn) (LamTerm.subst idx arg arg')
 
 private def LamWF.subst
   (ltv : LamTyVal) (idx : Nat)
@@ -103,15 +103,15 @@ private def LamWF.subst.correct.{u}
 
 -- Note: `LamTerm.subst`, `LamWF.subst` and `LamWF.subst_correct` is the main API
 --   of syntactic operations on `λ` terms
-def LamTerm.headBetaAux (arg : LamTerm) : (fn : LamTerm) → LamTerm
+def LamTerm.headBetaAux (s : LamSort) (arg : LamTerm) : (fn : LamTerm) → LamTerm
 | .lam _ body => LamTerm.subst 0 arg body
-| t           => .app t arg
+| t           => .app s t arg
 
 def LamWF.headBetaAux (ltv : LamTyVal)
   {arg : LamTerm} {argTy : LamSort} {fn : LamTerm} {resTy : LamSort}
   (lctx : Nat → LamSort) (wfArg : LamWF ltv ⟨lctx, arg, argTy⟩) 
   (wfFn : LamWF ltv ⟨lctx, fn, .func argTy resTy⟩) :
-  LamWF ltv ⟨lctx, LamTerm.headBetaAux arg fn, resTy⟩ :=
+  LamWF ltv ⟨lctx, LamTerm.headBetaAux argTy arg fn, resTy⟩ :=
   match fn with
   | .atom _  => .ofApp _ wfFn wfArg
   | .base _  => .ofApp _ wfFn wfArg
@@ -124,7 +124,7 @@ def LamWF.headBetaAux (ltv : LamTyVal)
             rw [LamTerm.bvarLiftsIdx.zero 0 arg];
             exact wfArg)
         (by rw [pushLCtxAt.zero]; exact wfBody)
-  | .app _ _ => .ofApp _ wfFn wfArg
+  | .app _ _ _ => .ofApp _ wfFn wfArg
 
 def LamWF.headBetaAux.correct.{u} (lval : LamValuation.{u})
   {arg : LamTerm} {argTy : LamSort} {fn : LamTerm} {resTy : LamSort}
@@ -157,10 +157,10 @@ def LamWF.headBetaAux.correct.{u} (lval : LamValuation.{u})
         apply heq_of_eq; apply congr_arg (f := fun x => pushLCtxAtDep x 0 lctxTerm);
         apply eq_of_heq; apply LamWF.interp.heq <;> try rfl
         dsimp [LamTerm.bvarLifts]; rw [LamTerm.bvarLiftsIdx.zero 0 arg]
-  | .app _ _ => rfl
+  | .app _ _ _ => rfl
 
 def LamTerm.headBeta : LamTerm → LamTerm
-| .app fn arg => LamTerm.headBetaAux arg fn
+| .app s fn arg => LamTerm.headBetaAux s arg fn
 | t => t
 
 def LamWF.headBeta

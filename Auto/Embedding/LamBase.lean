@@ -462,7 +462,10 @@ inductive LamTerm
   | base    : LamBaseTerm → LamTerm
   | bvar    : Nat → LamTerm
   | lam     : LamSort → LamTerm → LamTerm
-  | app     : LamTerm → LamTerm → LamTerm
+  -- The `LamSort` is here so that both the type of
+  --   the function and argument can be inferred directly
+  --   when we know the type of the application
+  | app     : LamSort → LamTerm → LamTerm → LamTerm
 deriving Inhabited, Hashable
 
 def LamTerm.reprPrec (t : LamTerm) (n : Nat) :=
@@ -472,7 +475,7 @@ def LamTerm.reprPrec (t : LamTerm) (n : Nat) :=
     | .base b => f!".base {LamBaseTerm.reprPrec b 1}"
     | .bvar m => f!".bvar {m}"
     | .lam s t => f!".lam {LamSort.reprPrec s 1} {LamTerm.reprPrec t 1}"
-    | .app t₁ t₂ => f!".app {LamTerm.reprPrec t₁ 1} {LamTerm.reprPrec t₂ 1}"
+    | .app s t₁ t₂ => f!".app {LamSort.reprPrec s 1} {LamTerm.reprPrec t₁ 1} {LamTerm.reprPrec t₂ 1}"
   if n == 0 then
     f!"Auto.Embedding.Lam.LamTerm" ++ s
   else
@@ -493,12 +496,12 @@ def LamTerm.lamCheck? (ltv : LamTyVal) :
   match t.lamCheck? ltv (pushLCtx s lctx) with
   | .some ty => .some (.func s ty)
   | .none    => .none
-| lctx, .app fn arg =>
+| lctx, .app s fn arg =>
   match fn.lamCheck? ltv lctx, arg.lamCheck? ltv lctx with
   | .some (.func ty₁ ty₂), .some argTy =>
-    match ty₁.beq argTy with
-    | true => .some ty₂ 
-    | false => none
+    match ty₁.beq s, argTy.beq s with
+    | true, true => .some ty₂ 
+    | _,    _    => none
   | _, _ => .none
 
 def LamTerm.lamCheck! (default : LamSort) (ltv : LamTyVal) :
@@ -507,12 +510,12 @@ def LamTerm.lamCheck! (default : LamSort) (ltv : LamTyVal) :
 | _,    .base b  => b.lamCheck ltv
 | lctx, .bvar n  => lctx n
 | lctx, .lam s t => .func s (t.lamCheck! default ltv (pushLCtx s lctx))
-| lctx, .app fn arg =>
+| lctx, .app s fn arg =>
   match fn.lamCheck! default ltv lctx, arg.lamCheck! default ltv lctx with
   | .func ty₁ ty₂, argTy =>
-    match ty₁.beq argTy with
-    | true => ty₂
-    | false => default
+    match ty₁.beq s, argTy.beq s with
+    | true, true => ty₂
+    | _, _ => default
   | _, _ => default
 
 def LamTerm.lamCheck.equiv (default : LamSort) (ltv : LamTyVal) (lctx : Nat → LamSort) :
@@ -530,7 +533,7 @@ def LamTerm.lamCheck.equiv (default : LamSort) (ltv : LamTyVal) (lctx : Nat → 
     have heq' := Option.some.inj heq; rw [← heq']
     dsimp [lamCheck!]; congr
     apply LamTerm.lamCheck.equiv default ltv (pushLCtx s lctx) _ _ hCheck    
-| .app fn arg, res, H => by
+| .app s fn arg, res, H => by
   dsimp [lamCheck?] at H; revert H
   match hCheckFn : lamCheck? ltv lctx fn, hCheckArg : lamCheck? ltv lctx arg with
   | .some resFn, .some resArg =>
@@ -542,9 +545,11 @@ def LamTerm.lamCheck.equiv (default : LamSort) (ltv : LamTyVal) (lctx : Nat → 
     | .base _ => intro contra; cases contra
     | .func argTy resTy =>
       dsimp;
-      match LamSort.beq argTy resArg with
-      | true => intro H; exact Option.some.inj H
-      | false => intro contra; cases contra
+      match LamSort.beq argTy s, LamSort.beq resArg s with
+      | true, true   => intro H; exact Option.some.inj H
+      | true, false  => intro contra; cases contra
+      | false, true  => intro contra; cases contra
+      | false, false => intro contra; cases contra
   | .some resFn, none =>
     cases resFn <;> intro contra <;> cases contra
   | .none, _ => intro contra; cases contra
@@ -578,7 +583,7 @@ inductive LamWF (ltv : LamTyVal) : LamJudge → Type
       {fn : LamTerm} {arg : LamTerm}
       (HFn : LamWF ltv ⟨lctx, fn, .func argTy resTy⟩)
       (HArg : LamWF ltv ⟨lctx, arg, argTy⟩) :
-    LamWF ltv ⟨lctx, .app fn arg, resTy⟩
+    LamWF ltv ⟨lctx, .app argTy fn arg, resTy⟩
 
 def LamWF.unique (ltv : LamTyVal) :
   (lwf₁ : LamWF ltv ⟨lctx, t, s₁⟩) → (lwf₂ : LamWF ltv ⟨lctx, t, s₂⟩) →
@@ -593,7 +598,7 @@ def LamWF.unique (ltv : LamTyVal) :
   have heq := LamWF.unique ltv H₁ H₂
   cases heq; case intro left right =>
     cases left; cases right; apply And.intro; rfl; rfl
-| .ofApp argTy₁ HFn₁ HArg₁, .ofApp argTy₂ HFn₂ HArg₂ => by
+| .ofApp argTy₁ HFn₁ HArg₁, .ofApp _ HFn₂ HArg₂ => by
   have heqFn := LamWF.unique ltv HFn₁ HFn₂
   have heqArg := LamWF.unique ltv HArg₁ HArg₂
   cases heqFn;
@@ -665,17 +670,17 @@ def LamWF.ofLamTerm {ltv : LamTyVal} :
   match bodyWf with
   | .some ⟨bodyTy, wf⟩ => .some ⟨.func argTy bodyTy, .ofLam bodyTy wf⟩
   | .none => .none
-| lctx, .app fn arg =>
+| lctx, .app s fn arg =>
   let fnWf := @LamWF.ofLamTerm ltv lctx fn
   let argWf := @LamWF.ofLamTerm ltv lctx arg
   match fnWf, argWf with
   | .some (⟨.func ty₁ ty₂, fnWf⟩), .some ⟨argTy, argWf⟩ =>
-    match heq : ty₁.beq argTy with
-    | true =>
+    match heq : ty₁.beq s, heqa : argTy.beq s with
+    | true, true =>
       have tyEq := LamSort.beq_eq _ _ heq
-      have fnWf' := tyEq ▸ fnWf
-      .some ⟨ty₂, .ofApp argTy fnWf' argWf⟩
-    | false => .none
+      have argTyEq := LamSort.beq_eq _ _ heqa
+      .some ⟨ty₂, .ofApp s (tyEq ▸ fnWf) (argTyEq ▸ argWf)⟩
+    | _, _ => .none
   | _, _ => .none
 
 -- #eval (@LamWF.ofLamTerm
@@ -779,20 +784,22 @@ def LamTerm.lamWF_of_check {ltv : LamTyVal} :
   case some bodyTy =>
     dsimp; intro tyEq; rw [← Option.some.inj tyEq]
     apply LamWF.ofLam; apply (LamTerm.lamWF_of_check CheckEq)
-| lctx, .app fn arg, ty, HCheck => by
+| lctx, .app s fn arg, ty, HCheck => by
   simp [lamCheck?] at HCheck; revert HCheck
   match CheckFnEq : lamCheck? ltv lctx fn, CheckArgEq : lamCheck? ltv lctx arg with
   | .some (LamSort.func ty₁ ty₂), .some argTy =>
     dsimp;
-    cases heq : LamSort.beq ty₁ argTy
+    cases heq : LamSort.beq ty₁ s
     case false => intro contra; cases contra
+    have heq' : ty₁ = s := LamSort.beq_eq _ _ heq; cases heq'
+    cases heqa : LamSort.beq argTy s
+    case false => intro contra; cases contra
+    have heqa' : argTy = s := LamSort.beq_eq _ _ heqa; cases heqa'
     case true =>
-      dsimp; intro H; rw [← Option.some.inj H]; apply LamWF.ofApp (argTy:=ty₁);
+      dsimp;
+      intro H; rw [← Option.some.inj H]; apply LamWF.ofApp (argTy:=s);
       case HFn => apply (LamTerm.lamWF_of_check CheckFnEq)
-      case HArg =>
-        have heq' : ty₁ = argTy := LamSort.beq_eq _ _ heq
-        rw [heq']
-        apply (LamTerm.lamWF_of_check CheckArgEq)
+      case HArg => apply (LamTerm.lamWF_of_check CheckArgEq)
   | .some (LamSort.func _ _), .none => intro contra; cases contra
   | .some (LamSort.atom _), _ => intro contra; cases contra
   | .some (LamSort.base _), _ => intro contra; cases contra
@@ -846,7 +853,7 @@ def LamTerm.interp.{u}
 | .lam s body =>
   fun (x : s.interp lval.ilVal.tyVal) =>
     LamTerm.interp dfSort lval dfVal (pushLCtx s lctxTy) (pushLCtxDep (rty:=lctxTy) x lctxTerm) body
-| .app fn arg => (fun fnInterp argInterp => by
+| .app s fn arg => (fun fnInterp argInterp => by
   dsimp [lamCheck!]
   revert fnInterp argInterp
   match
@@ -856,21 +863,24 @@ def LamTerm.interp.{u}
   | .base _, _ => intros _ _; exact dfVal
   | .func argTy' resTy', argTy =>
     dsimp
-    match heq : LamSort.beq argTy' argTy with
-    | true =>
+    match heq : LamSort.beq argTy' s, heqa : LamSort.beq argTy s with
+    | true, true =>
       intros fnInterp argInterp; dsimp at fnInterp
-      rw [LamSort.beq_eq _ _ heq] at fnInterp
+      have heq' := LamSort.beq_eq _ _ heq; cases heq'
+      have heqa' := LamSort.beq_eq _ _ heqa; cases heqa'
       dsimp [LamSort.interp] at fnInterp
       exact (fnInterp argInterp)
-    | false => intros _ _; exact dfVal)
+    | true,  false => intros _ _; exact dfVal
+    | false, true  => intros _ _; exact dfVal
+    | false, false => intros _ _; exact dfVal)
   (LamTerm.interp dfSort lval dfVal lctxTy lctxTerm fn)
   (LamTerm.interp dfSort lval dfVal lctxTy lctxTerm arg)
 
 def LamWF.interp.{u} (lval : LamValuation.{u}) :
   (lctxTy : Nat → LamSort) → (lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal) →
   (lwf : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, t, rty⟩) → rty.interp lval.ilVal.tyVal
-| lctxTy, lctxTerm, .ofAtom n => lval.varVal n
-| lctxTy, lctxTerm, .ofBase H => LamBaseWF.interp lval.ilVal H
+| _,      lctxTerm, .ofAtom n => lval.varVal n
+| _,      _       , .ofBase H => LamBaseWF.interp lval.ilVal H
 | lctxTy, lctxTerm, .ofBVar n => lctxTerm n
 | lctxTy, lctxTerm, @LamWF.ofLam _ _ argTy _ body H =>
   fun (x : argTy.interp lval.ilVal.tyVal) =>
@@ -934,9 +944,9 @@ inductive LamTerm.check.{u} (val : Valuation.{u}) :
       (tch : check val (pushLCtx (s.interp val.tyVal) lctx) t tty) :
       check val lctx (.lam s t) (s.interp val.tyVal → tty)
   | ofApp
-      (fnch : check val lctx fn (argTy → resTy))
+      (fnch : check val lctx fn ((s.interp val.tyVal) → resTy))
       (argch : check val lctx arg argTy) :
-      check val lctx (.app fn arg) resTy
+      check val lctx (.app s fn arg) resTy
 
 def LamTerm.check_of_LamWF (lVal : LamValuation) :
   (H : LamWF lVal.ilVal.toLamTyVal ⟨lctx, t, s⟩) →
@@ -944,11 +954,11 @@ def LamTerm.check_of_LamWF (lVal : LamValuation) :
 | .ofAtom n => .ofAtom n
 | .ofBase (b:=b) H => LamBaseTerm.check_of_LamWF _ H ▸ .ofBase b
 | .ofBVar n => .ofBVar n
-| .ofLam (argTy:=argTy) (body:=body) bodyTy wfBody =>
+| .ofLam (body:=body) _ wfBody =>
   .ofLam _
-    (Eq.mp (congrFun (congrFun (congrArg _ (funext (fun n => pushLCtx.comm (LamSort.interp _) _ _ _))) _) _)
+    (Eq.mp (congrFun (congrFun (congrArg _ (funext (fun _ => pushLCtx.comm (LamSort.interp _) _ _ _))) _) _)
     (LamTerm.check_of_LamWF lVal wfBody))
-| .ofApp argTy wfFn wfArg =>
+| .ofApp _ wfFn wfArg =>
   .ofApp (LamTerm.check_of_LamWF lVal wfFn) (LamTerm.check_of_LamWF lVal wfArg)
 
 def impEqAx.{u, v} := ∀ (α₁ α₂ : Sort u) (β₁ β₂ : Sort v),
@@ -1012,12 +1022,12 @@ inductive WF.{u} (val : Valuation.{u}) : Judgement.{u} → Type (u + 1)
       {lctxTy : Nat → Type u}
       {lctxTerm : ∀ n : Nat, lctxTy n}
       {hfn harg : LamTerm}
-      (α β : Type u) (fn : α → β) (arg : α)
-      (Hfn : WF val ⟨lctxTy, lctxTerm, hfn, α → β, fn⟩)
-      (Harg : WF val ⟨lctxTy, lctxTerm, harg, α, arg⟩)
+      (s : LamSort) (β : Type u) (fn : s.interp val.tyVal → β) (arg : s.interp val.tyVal)
+      (Hfn : WF val ⟨lctxTy, lctxTerm, hfn, s.interp val.tyVal → β, fn⟩)
+      (Harg : WF val ⟨lctxTy, lctxTerm, harg, s.interp val.tyVal, arg⟩)
       :
     WF val <|
-      ⟨lctxTy, lctxTerm, .app hfn harg, β, fn arg⟩
+      ⟨lctxTy, lctxTerm, .app s hfn harg, β, fn arg⟩
 
 def WF.unique.{u} {ax : impEqAx.{u + 1, u + 1}} (val : Valuation.{u})
   {lctxTy : Nat → Type u} {lctxTerm : ∀ n, lctxTy n} :
@@ -1051,7 +1061,7 @@ def WF.unique.{u} {ax : impEqAx.{u + 1, u + 1}} (val : Valuation.{u})
       eq_of_heq heq.right.right
     )
     cases wfEq; apply And.intro <;> rfl
-| .ofApp α₁ β₁ fn₁ arg₁ HFn₁ HArg₁, .ofApp α₂ β₂ fn₂ arg₂ HFn₂ HArg₂ => by
+| .ofApp _ β₁ fn₁ arg₁ HFn₁ HArg₁, .ofApp _ β₂ fn₂ arg₂ HFn₂ HArg₂ => by
   have hFnEq := WF.unique (ax:=ax) val HFn₁ HFn₂
   have hArgEq := WF.unique (ax:=ax) val HArg₁ HArg₂
   have hTyEq := ax _ _ _ _ hFnEq.left
@@ -1065,8 +1075,8 @@ def LamTerm.wf_of_lamWF.{u} (lval : LamValuation.{u}) :
   (lwf : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, t, rty⟩) →
   WF (Valuation.ofLamValuation lval)
     ⟨fun n => (lctxTy n).interp lval.ilVal.tyVal, lctxTerm, t, rty.interp lval.ilVal.tyVal, LamWF.interp lval lctxTy lctxTerm lwf⟩
-| lctxTy', lctxTerm', @LamWF.ofAtom _ _ n => WF.ofAtom _
-| lctxTy', lctxTerm', @LamWF.ofBase _ _ b s H => WF.ofBase (LamBaseTerm.wf_of_lamWF lval.ilVal H)
+| _,       lctxTerm', @LamWF.ofAtom _ _ n => WF.ofAtom _
+| _,       _,         @LamWF.ofBase _ _ b s H => WF.ofBase (LamBaseTerm.wf_of_lamWF lval.ilVal H)
 | lctxTy', lctxTerm', @LamWF.ofBVar _ _ n => WF.ofBVar _
 | lctxTy', lctxTerm', @LamWF.ofLam _ _ argTy bodyTy body H => @WF.ofLam
     (Valuation.ofLamValuation lval)
@@ -1079,9 +1089,9 @@ def LamTerm.wf_of_lamWF.{u} (lval : LamValuation.{u}) :
       Eq.mp (congrArg _ (eq_of_heq (
         congr_arg₂_heq _ (
           fun lctxTy lctxTerm => Judgement.mk lctxTy lctxTerm _ _ _
-        ) (funext (fun n => pushLCtx.comm _ _ _ _)) (pushLCtxDep.absorb _ _)
+        ) (funext (fun _ => pushLCtx.comm _ _ _ _)) (pushLCtxDep.absorb _ _)
       ))) hWF)
-| lctxTy', lctxTerm', @LamWF.ofApp _ _ argTy resTy fn arg Hfn Harg =>
+| _,       _, @LamWF.ofApp _ _ _ resTy _ _ Hfn Harg =>
   let WFfn := LamTerm.wf_of_lamWF _ _ _ Hfn
   let WFarg := LamTerm.wf_of_lamWF _ _ _ Harg
   WF.ofApp _ _ _ _ WFfn WFarg
@@ -1098,7 +1108,7 @@ section Example
   -- Original: fun (x : Nat) => Nat.succ x
   -- Lifting to: fun (x : GLift Nat) => Nat.succLift x
   private def interpEx₁.{u} : Judgement.{u} :=
-    ⟨fun _ => Sort u, fun _ => PUnit, .lam (.atom 0) (.app (.atom 0) (.bvar 0)),
+    ⟨fun _ => Sort u, fun _ => PUnit, .lam (.atom 0) (.app (.atom 0) (.atom 0) (.bvar 0)),
      GLift.{1, u} Nat → GLift.{1, u} Nat, fun (x : GLift Nat) => Nat.succLift x⟩
   
   private def valuation₁.{u} : Valuation.{u} :=
@@ -1110,7 +1120,7 @@ section Example
     apply WF.ofLam
     case HChk =>
       apply @LamTerm.check.ofLam.{u}
-        valuation₁ (fun _ => Sort u) (LamTerm.app (LamTerm.atom 0) (LamTerm.bvar 0))
+        valuation₁ (fun _ => Sort u) (LamTerm.app _ (LamTerm.atom 0) (LamTerm.bvar 0))
         (GLift.{1, u} Nat) (.atom 0)
       dsimp [LamSort.interp, Auto.Embedding.Lam.valuation₁]
       dsimp [Auto.Embedding.Lam.BaseValuationEx₁]
@@ -1131,7 +1141,7 @@ section Example
     GLift.up (Nat.add (GLift.down x) (GLift.down y))
 
   private def interpEx₂.{u} : Judgement.{u} :=
-    ⟨fun _ => Sort u, fun _ => PUnit, .app (.app (.atom 0) (.atom 1)) (.atom 2),
+    ⟨fun _ => Sort u, fun _ => PUnit, .app (.atom 1) (.app (.atom 1) (.atom 0) (.atom 1)) (.atom 2),
       GLift.{1, u} Nat, GLift.up (Nat.add 2 3)⟩
 
   private def valuation₂.{u} : Valuation.{u} :=
@@ -1146,7 +1156,7 @@ section Example
        | _ + 3 => GLift.up 0⟩
   
   private def wf₂.{u} : WF valuation₂.{u} interpEx₂.{u} := by
-    apply WF.ofApp (fn := Nat.addLift (GLift.up 2))
+    apply WF.ofApp (val:=valuation₂) (.atom 1) _ (Nat.addLift (GLift.up 2))
     case Hfn =>
       apply WF.ofApp <;> apply WF.ofAtom
     case Harg =>
@@ -1157,7 +1167,7 @@ section Example
   -- **Note**: Sometimes we might want to lift to universe `u + 1`
   --   to avoid universe level issues.
   private def interpEx₃.{u} : Judgement.{u + 1} :=
-    ⟨fun _ => Type u, fun _ => Sort u, .app (.app (.atom 0) (.atom 1)) (.atom 2), Type u, GLift (2 = 3)⟩
+    ⟨fun _ => Type u, fun _ => Sort u, .app (.atom 1) (.app (.atom 1) (.atom 0) (.atom 1)) (.atom 2), Type u, GLift (2 = 3)⟩
   
   private def valuation₃.{u} : Valuation.{u + 1} :=
     ⟨BaseValuationEx₁,
@@ -1172,20 +1182,22 @@ section Example
       | _ + 3 => GLift.up 0⟩
 
   private def wf₃.{u} : WF valuation₃.{u} interpEx₃.{u} := by
-    apply WF.ofApp (fn := fun (b : GLift.{1, u + 1} Nat) => GLift (2 = b.down))
+    apply WF.ofApp
+      (val:=valuation₃) (.atom 1) _
+      (fun (b : GLift.{1, u + 1} Nat) => GLift (2 = b.down))
     case Hfn =>
-      apply WF.ofApp (fn := fun (a b : GLift Nat) => GLift (a.down = b.down)) <;> apply WF.ofAtom
+      apply WF.ofApp (val:=valuation₃) (.atom 1) _ (fun (a b : GLift Nat) => GLift (a.down = b.down)) <;> apply WF.ofAtom
     case Harg => apply WF.ofAtom
 
 end Example
 
 def LamTerm.mapBVarAt (idx : Nat) (f : Nat → Nat) (t : LamTerm) : LamTerm :=
   match t with
-  | .atom n     => .atom n
-  | .base b     => .base b
-  | .bvar n     => .bvar (mapAt idx f n)
-  | .lam s t    => .lam s (t.mapBVarAt (.succ idx) f)
-  | .app fn arg => .app (fn.mapBVarAt idx f) (arg.mapBVarAt idx f)
+  | .atom n       => .atom n
+  | .base b       => .base b
+  | .bvar n       => .bvar (mapAt idx f n)
+  | .lam s t      => .lam s (t.mapBVarAt (.succ idx) f)
+  | .app s fn arg => .app s (fn.mapBVarAt idx f) (arg.mapBVarAt idx f)
 
 def LamTerm.mapBVar := LamTerm.mapBVarAt 0
 
@@ -1235,7 +1247,7 @@ theorem LamWF.ofMapBVarAt.correct (lval : LamValuation.{u}) {restoreDep : _}
     apply eq_of_heq; apply LamWF.interp.heq <;> try rfl
     case h.HLCtxTyEq => apply restoreAt.succ_pushLCtx_Fn
     case h.HLCtxTermEq => apply restoreAtDep.succ_pushLCtxDep_Fn
-| .app fn arg, .ofApp argTy wfFn wfArg => by
+| .app s fn arg, .ofApp _ wfFn wfArg => by
   dsimp [LamWF.interp]
   let IHFn := LamWF.ofMapBVarAt.correct lval covPD idx lctxTerm fn wfFn
   let IHArg := LamWF.ofMapBVarAt.correct lval covPD idx lctxTerm arg wfArg
@@ -1260,7 +1272,7 @@ def LamTerm.bvarLiftsIdx.zero (idx : Nat) : (t : LamTerm) → LamTerm.bvarLiftsI
   have IH := LamTerm.bvarLiftsIdx.zero (.succ idx) t
   dsimp [bvarLiftsIdx] at IH
   rw [IH]
-| .app fn arg => by
+| .app s fn arg => by
   dsimp [bvarLiftsIdx, mapBVarAt];
   have IHFn := LamTerm.bvarLiftsIdx.zero idx fn
   have IHArg := LamTerm.bvarLiftsIdx.zero idx arg

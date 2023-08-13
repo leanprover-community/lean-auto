@@ -1,9 +1,9 @@
-import Auto.Embedding.LamBase
+import Auto.Embedding.LamConv
 
 namespace Auto.Embedding.Lam
 
-def Eq.symm.WF (wf : LamWF ltv ⟨lctx, .app (.app (.base (.eq n)) a) b, .base .prop⟩) :
-  LamWF ltv ⟨lctx, .app (.app (.base (.eq n)) b) a, .base .prop⟩ :=
+def Eq.symm.WF (wf : LamWF ltv ⟨lctx, .app s (.app s (.base (.eq n)) a) b, .base .prop⟩) :
+  LamWF ltv ⟨lctx, .app s (.app s (.base (.eq n)) b) a, .base .prop⟩ :=
   match wf with
   | .ofApp argTy wfFn wfB =>
     match wfFn with
@@ -15,13 +15,13 @@ def Eq.symm.WF (wf : LamWF ltv ⟨lctx, .app (.app (.base (.eq n)) a) b, .base .
 
 theorem Eq.symmAux (lval : LamValuation)
   {lctxTy : Nat → LamSort} {lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal}
-  (wf : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, .app (.app (.base (.eq n)) a) b, .base .prop⟩)
+  (wf : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, .app s (.app s (.base (.eq n)) a) b, .base .prop⟩)
   (H : GLift.down (LamWF.interp lval lctxTy lctxTerm wf)) :
   GLift.down (LamWF.interp lval lctxTy lctxTerm (Eq.symm.WF wf)) :=
   match wf with
   | .ofApp argTy wfFn wfB =>
     match wfFn with
-    | .ofApp argTy' wfEq wfA =>
+    | .ofApp _ wfEq wfA =>
       match wfEq with
       | .ofBase HB => by
         cases HB; case ofEq =>
@@ -30,8 +30,8 @@ theorem Eq.symmAux (lval : LamValuation)
         exact (_root_.Eq.symm H')
 
 theorem Eq.symm (lval : LamValuation) (lctx : List LamSort)
-  (H : LamThmValid lval lctx (.app (.app (.base (.eq n)) a) b)) :
-  LamThmValid lval lctx (.app (.app (.base (.eq n)) b) a) := by
+  (H : LamThmValid lval lctx (.app s (.app s (.base (.eq n)) a) b)) :
+  LamThmValid lval lctx (.app s (.app s (.base (.eq n)) b) a) := by
   unfold LamThmValid; unfold LamThmValid at H
   intros lctx' lctxTerm
   cases (H lctx' lctxTerm)
@@ -40,9 +40,9 @@ theorem Eq.symm (lval : LamValuation) (lctx : List LamSort)
     apply Eq.symmAux _ _ H
 
 def Eq.trans.WF
-  (wf₁ : LamWF ltv ⟨lctx, .app (.app (.base (.eq m)) a) b, .base .prop⟩)
-  (wf₂ : LamWF ltv ⟨lctx, .app (.app (.base (.eq n)) b) c, .base .prop⟩)
-  : LamWF ltv ⟨lctx, .app (.app (.base (.eq n)) a) c, .base .prop⟩ :=
+  (wf₁ : LamWF ltv ⟨lctx, .app s (.app s (.base (.eq m)) a) b, .base .prop⟩)
+  (wf₂ : LamWF ltv ⟨lctx, .app s (.app s (.base (.eq n)) b) c, .base .prop⟩)
+  : LamWF ltv ⟨lctx, .app s (.app s (.base (.eq n)) a) c, .base .prop⟩ :=
   match wf₁ with
   | .ofApp argTy₁ wfFn₁ wfB₁ =>
     match wfFn₁ with
@@ -65,27 +65,27 @@ def Eq.trans.WF
 
 theorem Eq.transAux (lval : LamValuation)
   {lctxTy : Nat → LamSort} {lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal}
-  (wf₁ : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, .app (.app (.base (.eq m)) a) b, .base .prop⟩)
+  (wf₁ : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, .app s (.app s (.base (.eq m)) a) b, .base .prop⟩)
   (H₁ : GLift.down (LamWF.interp lval lctxTy lctxTerm wf₁))
-  (wf₂ : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, .app (.app (.base (.eq n)) b) c, .base .prop⟩)
+  (wf₂ : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, .app s (.app s (.base (.eq n)) b) c, .base .prop⟩)
   (H₂ : GLift.down (LamWF.interp lval lctxTy lctxTerm wf₂)) :
   GLift.down (LamWF.interp lval lctxTy lctxTerm (Eq.trans.WF wf₁ wf₂)) :=
   match wf₁ with
-  | .ofApp argTy₁ wfFn₁ wfB₁ =>
+  | .ofApp _ wfFn₁ wfB₁ =>
     match wfFn₁ with
-    | .ofApp argTy₁' wfEq₁ wfA =>
+    | .ofApp _ wfEq₁ wfA =>
       match wfEq₁ with
       | .ofBase HB₁ =>
-        match argTy₁, argTy₁', HB₁ with
-        | _, _, .ofEq _ =>
+        match s, HB₁ with
+        | _, .ofEq _ =>
           match wf₂ with
-          | .ofApp argTy₂ wfFn₂ wfC =>
+          | .ofApp _ wfFn₂ wfC =>
             match wfFn₂ with
-            | .ofApp argTy₂' wfEq₂ wfB₂ =>
+            | .ofApp _ wfEq₂ wfB₂ =>
               match wfEq₂ with
               | .ofBase HB₂ =>
-                match argTy₂, argTy₂', HB₂ with
-                | _, _, .ofEq _ => by
+                match HB₂ with
+                | .ofEq _ => by
                   dsimp [trans.WF, LamWF.interp, LamBaseWF.interp];
                   dsimp [trans.WF, LamWF.interp, LamBaseWF.interp] at H₁;
                   dsimp [trans.WF, LamWF.interp, LamBaseWF.interp] at H₂;
