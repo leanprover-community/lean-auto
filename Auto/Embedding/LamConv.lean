@@ -190,19 +190,6 @@ def LamWF.headBeta.correct
     match wfT with
     | .ofApp _ wfFn wfArg => LamWF.headBetaAux.correct lval lctxTy lctxTerm wfArg wfFn
 
-def LamThmWF
-  (lval : LamValuation) (lctx : List LamSort) (rty : LamSort) (t : LamTerm) :=
-  ∀ (lctx' : Nat → LamSort), LamWF lval.ilVal.toLamTyVal ⟨pushLCtxs lctx lctx', t, rty⟩
-
-def LamThmWF.ofBVarLifts
-  (lval : LamValuation) (lctx : List LamSort) (rty : LamSort) (t : LamTerm)
-  (hWF : LamThmWF lval lctx rty t) : Nat := sorry
-
-def LamThmValid (lval : LamValuation) (lctx : List LamSort) (t : LamTerm) :=
-  ∀ (lctx' : Nat → LamSort) (lctxTerm : ∀ n, (pushLCtxs lctx lctx' n).interp lval.ilVal.tyVal),
-    ∃ (wf : LamWF lval.ilVal.toLamTyVal ⟨pushLCtxs lctx lctx', t, .base .prop⟩),
-      GLift.down (LamWF.interp lval (pushLCtxs lctx lctx') lctxTerm wf)
-
 -- Semantic Equivalence
 -- Note that we do not expect to reorder binders or remove
 --   unused binders, because doing so makes the term not equivalent

@@ -1,4 +1,4 @@
-import Auto.Util.HEqExtra
+import Auto.Lib.HEqExtra
 import Std.Data.Nat.Lemmas
 import Std.Data.List.Lemmas
 
@@ -39,6 +39,11 @@ section lem
     apply propext; apply Iff.intro
     case a.mp => apply Nat.ble_eq_false_of_lt
     case a.mpr => apply Nat.lt_of_ble_eq_false
+
+  theorem Nat.ble_add (a b e : Nat) : Nat.ble a b = Nat.ble (a + e) (b + e) := by
+    induction e
+    case zero => rfl
+    case succ e => rw [e]; rfl
 
   theorem Nat.eq_of_le_of_lt_succ {n m : Nat} (h₁ : n ≤ m) (h₂ : m < n + 1) : m = n :=
     Nat.le_antisymm (Nat.le_of_succ_le_succ h₂) h₁
@@ -393,6 +398,13 @@ section push
       dsimp [pushLCtxs, pushLCtx, Nat.blt, Nat.ble]
       rw [Nat.succ_sub_succ]; rfl
 
+  theorem pushLCtxs.append (xs ys : List α) (lctx : Nat → α) :
+    pushLCtxs (xs ++ ys) lctx = pushLCtxs xs (pushLCtxs ys lctx) := by
+    induction xs;
+    case nil => rfl
+    case cons x xs IH =>
+      dsimp; rw [pushLCtxs.cons]; rw [pushLCtxs.cons]; rw [IH]
+
   theorem pushLCtxs.singleton (x : α) (lctx : Nat → α) :
     pushLCtxs [x] lctx = pushLCtx x lctx := pushLCtxs.cons [] lctx
 
@@ -406,8 +418,32 @@ section push
     pushLCtxs (x :: xs) lctx (.succ n) = pushLCtxs xs lctx n := by
     dsimp [pushLCtxs]; rw [Nat.succ_sub_succ]; rfl
 
+  theorem pushLCtxs.cons_succ_Fn (xs : List α) (lctx : Nat → α) :
+    (fun n => pushLCtxs (x :: xs) lctx (.succ n)) = pushLCtxs xs lctx :=
+    funext (fun n => pushLCtxs.cons_succ xs lctx n)
+
+  theorem pushLCtxs.append_add
+    (xs ys : List α) (lctx : Nat → α)
+    (val : Nat) (heq : xs.length = val) (n : Nat) :
+    pushLCtxs (xs ++ ys) lctx (n + val) = pushLCtxs ys lctx n := by
+    dsimp [pushLCtxs]; rw [List.length_append]
+    have heq₁ : Nat.blt (n + val) (List.length xs + List.length ys) = Nat.blt n (List.length ys) := by
+      dsimp [Nat.blt]; rw [heq];
+      rw [Nat.add_comm val]; rw [← Nat.succ_add]
+      exact Eq.symm (Nat.ble_add _ _ _)
+    rw [heq₁]
+    have heq₂ : n + val - (List.length xs + List.length ys) = n - List.length ys := by
+      rw [heq]; rw [Nat.add_comm val]; rw [Nat.add_sub_add_right]
+    rw [heq₂]
+    dsimp [List.getD]; rw [List.get?_append_right]
+    case _ => rw [heq]; rw [Nat.add_sub_cancel]
+    case _ => rw [heq]; apply Nat.le_add_left
+
   @[reducible] def pushLCtxsAt (xs : List α) (pos : Nat) :=
     restoreAt pos (pushLCtxs xs)
+
+  theorem pushLCtxsAt.zero (xs : List α) : pushLCtxsAt xs 0 = pushLCtxs xs :=
+    restoreAt.zero _
 
   theorem pushLCtxsAt.succ_zero (xs : List α) (pos : Nat) (lctx : Nat → α) :
     pushLCtxsAt xs (.succ pos) lctx 0 = lctx 0 := rfl
@@ -428,6 +464,48 @@ section push
     match Nat.blt n tys.length with
     | true  => exact (xs.getD (α:=α) (lctx 0) n)
     | false => exact (lctx (n - tys.length))
+
+  theorem pushLCtxsDep.nil
+    {lctxty : α → Sort u} {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :
+    pushLCtxsDep .nil lctx = lctx := rfl
+
+  theorem pushLCtxsDep.cons
+    {lctxty : α → Sort u} {ty : α} (x : lctxty ty) {tys : List α}
+    (xs : HList lctxty tys) {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :
+    HEq (pushLCtxsDep (.cons x xs) lctx) (pushLCtxDep x (pushLCtxsDep xs lctx)) := by
+    apply HEq.funext; intros n; cases n
+    case zero =>
+      dsimp [pushLCtxs, pushLCtx, Nat.blt, Nat.ble]
+      rw [Nat.ble_eq_true_of_le]; rfl
+      apply Nat.zero_le
+    case succ n =>
+      dsimp [pushLCtxs, pushLCtx, Nat.blt, Nat.ble]
+      rw [Nat.succ_sub_succ]; rfl
+
+  theorem pushLCtxsDep.singleton
+    {lctxty : α → Sort u} {ty : α} (x : lctxty ty)
+    {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :
+    HEq (pushLCtxsDep (.cons x .nil) lctx) (pushLCtxDep x lctx) := pushLCtxsDep.cons x .nil lctx
+  
+  theorem pushLCtxsDep.cons_zero
+    {lctxty : α → Sort u} {ty : α} (x : lctxty ty) {tys : List α}
+    (xs : HList lctxty tys) {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :
+    HEq (pushLCtxsDep (.cons x xs) lctx 0) x := by
+    dsimp [pushLCtxs, Nat.blt, Nat.ble];
+    rw [Nat.ble_eq_true_of_le]; rfl
+    apply Nat.zero_le
+
+  theorem pushLCtxsDep.cons_succ
+    {lctxty : α → Sort u} {ty : α} (x : lctxty ty) {tys : List α}
+    (xs : HList lctxty tys) {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) (n : Nat) :
+    HEq (pushLCtxsDep (.cons x xs) lctx (.succ n)) (pushLCtxsDep xs lctx n) := by
+    dsimp [pushLCtxs]; rw [Nat.succ_sub_succ]; rfl
+
+  theorem pushLCtxsDep.cons_succ_Fn
+    {lctxty : α → Sort u} {ty : α} (x : lctxty ty) {tys : List α}
+    (xs : HList lctxty tys) {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :
+    HEq (fun n => pushLCtxsDep (.cons x xs) lctx (.succ n)) (pushLCtxsDep xs lctx) :=
+    HEq.funext _ _ (fun n => pushLCtxsDep.cons_succ x xs lctx n)
 
   @[reducible] def pushLCtxsAtDep
     {lctxty : α → Sort u} {tys : List α} (xs : HList lctxty tys) (pos : Nat)
@@ -451,7 +529,73 @@ section push
     HEq (fun n => pushLCtxsAtDep xs (.succ pos) lctx (.succ n)) (pushLCtxsAtDep xs pos (fun n => lctx (.succ n))) := by
     dsimp [pushLCtxsAtDep]; apply restoreAtDep.succ_succ_Fn
 
+  -- This function is slow and is not meant to be used in
+  --   computation. It's main use is in the pushs_pops theorems
+  def List.ofFun (f : Nat → α) (n : Nat) : List α :=
+    match n with
+    | 0 => .nil
+    | .succ n' => f 0 :: ofFun (fun n => f (.succ n)) n'
+
+  theorem List.ofFun.ofPushLCtx
+    (xs : List α) (heq : xs.length = n) (lctx : Nat → α) :
+    List.ofFun (pushLCtxs xs lctx) n = xs :=
+    match xs, n with
+    | .nil, n => by
+      dsimp at heq; rw [← heq]; rfl
+    | .cons x xs, _ => by
+      dsimp at heq; rw [← heq];
+      dsimp [ofFun]; rw [pushLCtxs.cons_zero]; apply congrArg
+      rw [pushLCtxs.cons_succ_Fn]
+      exact List.ofFun.ofPushLCtx xs rfl lctx
+
+  def HList.ofFun {tyf : Nat → α} {β : α → Sort _} (f : ∀ n, β (tyf n)) (n : Nat) :
+    HList β (List.ofFun tyf n) :=
+    match n with
+    | 0 => .nil
+    | .succ n' => .cons (f 0) (ofFun (fun n => f (.succ n)) n')
+
+  theorem HList.ofFun.zero {tyf : Nat → α} {β : α → Sort _} (f : ∀ n, β (tyf n)) :
+    HList.ofFun f 0 = .nil := rfl
+
+  theorem HList.ofFun.succ {tyf : Nat → α} {β : α → Sort _} (f : ∀ n, β (tyf n)) (n : Nat) :
+    HList.ofFun f (.succ n) = .cons (f 0) (ofFun (fun n => f (.succ n)) n) := rfl
+
+  theorem HList.ofFun.ofPushLCtxDep
+    {lctxty : α → Sort u} {tys : List α} (heq : tys.length = n)
+    (xs : HList lctxty tys) {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :
+    HEq (HList.ofFun (pushLCtxsDep xs lctx) n) xs :=
+    match xs, n with
+    | .nil, n => by
+      dsimp at heq; rw [← heq]; rfl
+    | .cons (ty:=ty) (tys:=tys) x xs, _ => by
+      dsimp at heq; rw [← heq]
+      rw [HList.ofFun.succ];
+      congr
+      case e_3.h => dsimp; rw [pushLCtxs.cons_zero]
+      case e_4.h => dsimp; rw [pushLCtxs.cons_succ_Fn]; apply List.ofFun.ofPushLCtx; rfl
+      case e_5 => apply pushLCtxsDep.cons_zero
+      case e_6 =>
+        apply HEq.trans _ (ofPushLCtxDep rfl xs lctx)
+        congr
+        case e_2.h => apply pushLCtxs.cons_succ_Fn
+        case e_4 => apply pushLCtxsDep.cons_succ_Fn
+
 end push
+
+
+section pushs_pops
+
+  theorem push_pop_eq (lctx : Nat → α) :
+    pushLCtx (lctx 0) (fun n => lctx (.succ n)) = lctx := by
+    apply funext
+    intro n; cases n <;> rfl
+  
+  theorem pushs_pops_eq (lctx : Nat → α) :
+    pushLCtxs (List.ofFun lctx lvl) (fun n => lctx (n + lvl)) = lctx := by
+    apply funext; intro n; dsimp [pushLCtxs]
+    sorry
+
+end pushs_pops
 
 
 section add_nat

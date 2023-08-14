@@ -1,7 +1,7 @@
 import Auto.Embedding.Lift
 import Auto.Embedding.LCtx
 import Auto.Util.ExprExtra
-import Auto.Util.HEqExtra
+import Auto.Lib.HEqExtra
 import Std.Data.List.Lemmas
 import Mathlib.Data.Real.Basic
 import Mathlib.Data.BitVec.Defs
@@ -1350,4 +1350,45 @@ theorem LamWF.ofBVarLiftIdx.correct
     (ofBVarLiftIdx idx rterm HWF) :=
   LamWF.ofMapBVarAt.correct lval (covPairDep.ofPushDepPopDep _) idx lctxTerm rterm HWF
 
-end Auto.Embedding.Lam
+def LamThmWF
+  (lval : LamValuation) (lctx : List LamSort) (rty : LamSort) (t : LamTerm) :=
+  ∀ (lctx' : Nat → LamSort), LamWF lval.ilVal.toLamTyVal ⟨pushLCtxs lctx lctx', t, rty⟩
+
+def LamThmWF.append (H : LamThmWF lval lctx rty t) (ex : List LamSort) :
+  LamThmWF lval (lctx ++ ex) rty t := by
+  dsimp [LamThmWF]; intros lctx'; rw [pushLCtxs.append]; apply H
+
+def LamThmWF.prepend (H : LamThmWF lval lctx rty t) (ex : List LamSort) :
+  LamThmWF lval (ex ++ lctx) rty (t.bvarLifts ex.length) := by
+  dsimp [LamThmWF]; intros lctx';
+  rw [pushLCtxs.append]; rw [← pushLCtxsAt.zero ex]
+  apply LamWF.ofBVarLiftsIdx (idx:=0); rfl; apply H
+
+def LamThmValid (lval : LamValuation) (lctx : List LamSort) (t : LamTerm) :=
+  ∀ (lctx' : Nat → LamSort),
+    ∃ (wf : LamWF lval.ilVal.toLamTyVal ⟨pushLCtxs lctx lctx', t, .base .prop⟩),
+    ∀ (lctxTerm : ∀ n, (pushLCtxs lctx lctx' n).interp lval.ilVal.tyVal),
+      GLift.down (LamWF.interp lval (pushLCtxs lctx lctx') lctxTerm wf)
+
+theorem LamThmValid.append (H : LamThmValid lval lctx t)
+  (ex : List LamSort) : LamThmValid lval (lctx ++ ex) t := by
+  dsimp [LamThmValid]; intros lctx'; let ⟨wft, Ht⟩ := H (pushLCtxs ex lctx')
+  exists (pushLCtxs.append _ _ _ ▸ wft); intros lctxTerm
+  let Ht' := Ht (pushLCtxs.append _ _ _ ▸ lctxTerm)
+  apply Eq.mp _ Ht'; apply congr_arg (f:=GLift.down)
+  apply eq_of_heq; apply LamWF.interp.heq <;> try rfl
+  case h.HLCtxTyEq => apply Eq.symm; apply pushLCtxs.append
+  case h.HLCtxTermEq => apply eqRec_heq'
+
+theorem LamThmValid.prepend (H : LamThmValid lval lctx t)
+  (ex : List LamSort) : LamThmValid lval (ex ++ lctx) (t.bvarLifts ex.length) := by
+  dsimp [LamThmValid]; intros lctx'; let ⟨wft, Ht⟩ := H lctx'
+  let wft' := @LamWF.ofBVarLiftsIdx _ _ _ 0 _ ex rfl _ wft
+  rw [pushLCtxsAt.zero, ← pushLCtxs.append] at wft'; exists wft'
+  intros lctxTerm;
+  let lctxTerm₁ : (n : ℕ) → LamSort.interp lval.ilVal.tyVal (pushLCtxs lctx lctx' n) :=
+    fun n => pushLCtxs.append_add _ _ _ _  rfl _ ▸ lctxTerm (n + ex.length)
+  let Ht' := Ht lctxTerm₁
+  apply Eq.mp _ Ht'; apply congr_arg (f:=GLift.down)
+  apply Eq.trans _ (Eq.trans (@LamWF.ofBVarLiftsIdx.correct
+    _ _ 0 _ ex _ rfl _ lctxTerm₁ _ wft) _)
