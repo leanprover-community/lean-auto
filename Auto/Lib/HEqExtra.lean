@@ -14,8 +14,18 @@ def HEq.funext {γ : Sort u} {α β : γ → Sort v}
       | Eq.refl _ => HEq.refl _) (_root_.funext (fun u => HEq.tyEq _ _ (H u)))
 
 theorem congr_heq {α β γ : Sort _} {f : α → γ} {g : β → γ} {x : α} {y : β}
-    (h₁ : HEq f g) (h₂ : HEq x y) : f x = g y := by
+  (h₁ : HEq f g) (h₂ : HEq x y) : f x = g y := by
   cases h₂; cases h₁; rfl
+
+theorem congr_h_heq {f₁ : α₁ → β₁} {f₂ : α₂ → β₂} {x₁ : α₁} {x₂ : α₂}
+  (Hβ : β₁ = β₂) (h₁ : HEq f₁ f₂) (h₂ : HEq x₁ x₂) : HEq (f₁ x₁) (f₂ x₂) := by
+  cases h₂; cases Hβ; cases h₁; apply HEq.rfl
+
+theorem congr_hd_heq
+  {β₁ : α₁ → Sort u} {β₂ : α₂ → Sort u}
+  {f₁ : ∀ (x : α₁), β₁ x} {f₂ : ∀ (x : α₂), β₂ x} {x₁ : α₁} {x₂ : α₂}
+  (Hβ : HEq β₁ β₂) (h₁ : HEq f₁ f₂) (h₂ : HEq x₁ x₂) : HEq (f₁ x₁) (f₂ x₂) := by
+  cases h₂; cases Hβ; cases h₁; apply HEq.rfl
 
 theorem congr_arg_heq {α} {β : α → Sort _} (f : ∀ a, β a) :
     ∀ {a₁ a₂ : α}, a₁ = a₂ → HEq (f a₁) (f a₂)
@@ -25,6 +35,11 @@ theorem heq_of_eqRec_eq' {motive : γ → Sort u} {α β : γ} (h₁ : α = β)
   (a : motive α) : HEq a (@Eq.rec γ α (fun α _ => motive α) a β h₁) := by
   subst h₁
   apply HEq.refl
+
+theorem eqRec_heq' {α : Sort u_1} {a' : α} {motive : (a : α) → a' = a → Sort u}
+    (p : motive a' (rfl : a' = a')) {a : α} (t : a' = a) :
+    HEq (@Eq.rec α a' motive p a t) p :=
+  by subst t; apply HEq.refl
 
 theorem congr_arg₂_heq {β : α → Sort _} (γ : ∀ (a : α), β a → Sort _)
   (f : ∀ (a : α) (b : β a), γ a b) {a₁ a₂ : α} {b₁ : β a₁} {b₂ : β a₂}

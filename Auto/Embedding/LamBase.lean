@@ -1390,5 +1390,30 @@ theorem LamThmValid.prepend (H : LamThmValid lval lctx t)
     fun n => pushLCtxs.append_add _ _ _ _  rfl _ ▸ lctxTerm (n + ex.length)
   let Ht' := Ht lctxTerm₁
   apply Eq.mp _ Ht'; apply congr_arg (f:=GLift.down)
+  let Hl := HList.ofFun lctxTerm ex.length
+  let Hl' : HList (LamSort.interp lval.ilVal.tyVal) ex := by
+    rw [pushLCtxs.append] at Hl; rw [List.ofFun.ofPushLCtx] at Hl;
+    exact Hl; rfl
   apply Eq.trans _ (Eq.trans (@LamWF.ofBVarLiftsIdx.correct
-    _ _ 0 _ ex _ rfl _ lctxTerm₁ _ wft) _)
+    _ _ 0 _ ex Hl' rfl _ lctxTerm₁ _ wft) _)
+  case _ => rfl
+  case _ =>
+    apply eq_of_heq; apply LamWF.interp.heq <;> try rfl
+    case h.HLCtxTyEq =>
+      rw [pushLCtxsAt.zero]; rw [pushLCtxs.append]
+    case h.HLCtxTermEq =>
+      apply HEq.trans _ (pushsDep_popsDep_eq (lvl:=ex.length) _)
+      apply HEq.trans (pushLCtxsAtDep.zero _ _)
+      apply HEq.funext; intro n;
+      apply pushLCtxsDep.heq <;> try rfl
+      case H.h₃ =>
+        rw [pushLCtxs.append]; rw [List.ofFun.ofPushLCtx]; rfl
+      case H.h₄ =>
+        dsimp;
+        apply HEq.trans (cast_heq _ _) _
+        apply cast_heq
+      case H.h₅ =>
+        apply HEq.funext; intro n;
+        rw [pushLCtxs.append]; rw [covPair.ofPushsPops]; rfl
+      case H.h₆ =>
+        apply HEq.funext; intro n; apply eqRec_heq'
