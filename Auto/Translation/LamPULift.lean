@@ -343,6 +343,9 @@ structure State where
   constMap : HashMap Name (Array (List Level × FVarId)) := HashMap.empty
   -- Maps fvars and mvars to their lifted counterpart
   varMap : HashMap Expr FVarId                          := HashMap.empty
+  -- Maps lifted fvars to their un-lifted counterpart
+  -- `unliftMap` is the dual of `constMap ∪ varMap`
+  unliftMap : HashMap FVarId Expr                       := HashMap.empty
   -- Maps *lifted* [interpreted constants] into their un-lifted counterparts
   liftedInterped : HashMap FVarId Expr                  := HashMap.empty
   -- The universe level that all constants lift to. This is computed at
@@ -380,6 +383,8 @@ section
     if ← checkInterpretedConst e then
       let liftedInterped ← getLiftedInterped
       setLiftedInterped (liftedInterped.insert eUp e)
+    -- Record un-lifted counterpart of the free variable
+    setUnliftMap ((← getUnliftMap).insert eUp e)
     match e with
     | .const name lvls => do
       let constMap ← getConstMap
@@ -669,8 +674,7 @@ section
   | .proj .. => throwError "Please unfold projections before collecting universe levels"
   
   -- Note that the facts to be processed are stored in `ReifM.state`
-  private def withULiftedFactsImp (cont : Array ULiftedFact → ULiftM α) : ULiftM α := do
-    let facts ← Reif.getFacts
+  private def withULiftedFactsImp (facts : Array Reif.UMonoFact) (cont : Array ULiftedFact → ULiftM α) : ULiftM α := do
     -- Collect universe levels
     let levels ← facts.foldlM (fun hs (proof, ty) => do
       let proofUs ← collectUniverseLevels proof
@@ -685,8 +689,9 @@ section
     let cont' := facts.foldl (β := Array ULiftedFact → ULiftM α) (fun cont' fact => withULiftedFactsAux checkInterpretedConst fact cont') cont
     cont' #[]
 
-  def withULiftedFacts [Monad n] [MonadControlT ULiftM n] (cont : Array ULiftedFact → n α) : n α :=
-    map1ULiftM (withULiftedFactsImp checkInterpretedConst) cont
+  def withULiftedFacts [Monad n] [MonadControlT ULiftM n]
+    (facts : Array Reif.UMonoFact) (cont : Array ULiftedFact → n α) : n α :=
+    map1ULiftM (withULiftedFactsImp checkInterpretedConst facts) cont
 
 end
 

@@ -4,8 +4,7 @@ import Auto.Translation.LamReif
 import Auto.IR.SMT
 open Lean
 
--- LamFOL2SMT : First-order fragment of simply-typed lambda calculus
---   to SMT IR
+-- LamFOL2SMT : First-order fragment of simply-typed lambda calculus to SMT IR
 
 namespace Auto
 
@@ -96,16 +95,16 @@ private partial def lamTerm2STerm (lamVarTy : Array LamSort) :
   LamTerm → TransM LamAtom STerm
 | .base b => lamBaseTerm2STerm_Arity0 b
 | .bvar n => return .bvar n
-| .app (.app (.base (.eq _)) arg₁) arg₂ => do
+| .app _ (.app _ (.base (.eq _)) arg₁) arg₂ => do
   let arg₁' ← lamTerm2STerm lamVarTy arg₁
   let arg₂' ← lamTerm2STerm lamVarTy arg₂
   return .qIdApp (QualIdent.ofString "=") #[arg₁', arg₂']
-| .app (.base (.forallE _)) (.lam s body) => do
+| .app _ (.base (.forallE _)) (.lam s body) => do
   let s' ← lamSort2SSortAux s
   let dname ← disposableName
   let body' ← lamTerm2STerm lamVarTy body
   return .forallE dname s' body'
-| .app (.base (.existE _)) (.lam s body) => do
+| .app _ (.base (.existE _)) (.lam s body) => do
   let s' ← lamSort2SSortAux s
   let dname ← disposableName
   let body' ← lamTerm2STerm lamVarTy body
@@ -116,7 +115,7 @@ private partial def lamTerm2STerm (lamVarTy : Array LamSort) :
   lamTerm2STermAux lamVarTy ts' t
 where
   splitApp : LamTerm → Array LamTerm × LamTerm
-  | .app fn arg =>
+  | .app _ fn arg =>
     let (ts, t) := splitApp fn
     (ts.push arg, t)
   | t => (#[], t)

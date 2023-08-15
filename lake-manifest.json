@@ -36,4 +36,10 @@
     "subDir?": null,
     "rev": "e68aa8f5fe47aad78987df45f99094afbcb5e936",
     "name": "std",
-    "inputRev?": "main"}}]}
+    "inputRev?": "main"}},
+  {"git":
+  {"url": "https://github.com/leanprover-community/duper",
+   "subDir?": null,
+   "rev": "abfdea13945de773b394f53e093855702df3ae8e",
+   "name": "duper",
+   "inputRev?": "abfdea13945de773b394f53e093855702df3ae8e"}}]}

@@ -2,6 +2,8 @@ import Auto.Embedding.LamConv
 
 namespace Auto.Embedding.Lam
 
+/-
+
 def Eq.symm.WF (wf : LamWF ltv ⟨lctx, .app s (.app s (.base (.eq n)) a) b, .base .prop⟩) :
   LamWF ltv ⟨lctx, .app s (.app s (.base (.eq n)) b) a, .base .prop⟩ :=
   match wf with
@@ -227,5 +229,7 @@ theorem Eq.congr (lval : LamValuation) (lctx : List LamSort)
     apply Eq.congrAux _ wfEq hEq wfT wfEq'
 
 attribute [irreducible] LamThmWF LamThmValid
+
+-/
 
 end Auto.Embedding.Lam

@@ -13,6 +13,7 @@ variable (α : Type) (p q : α → Prop)
 variable (r : Prop)
 
 set_option smt.solver.name "cvc5"
+
 example : (∃ x : α, r) → r := by
   try auto;
   sorry
