@@ -19,3 +19,9 @@ set_option trace.auto.printLemmas true
 example (a : Nat) (H : ∀ x, x = a) : a = a := by
   try auto [H];
   sorry
+
+-- This example is not supposed to work because it contains
+--   dependent type
+-- example (β : Prop) (a : β → β) (H : ∃ x, x = a) : a = a := by
+--   auto [H];
+--   sorry

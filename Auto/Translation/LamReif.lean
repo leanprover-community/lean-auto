@@ -34,6 +34,8 @@ structure State where
   forallLamTy : Array (FVarId × LamSort)        := #[]
   existLamTy  : Array (FVarId × LamSort)        := #[]
   -- `tyVal` is the inverse of `tyVarMap`
+  -- The first `FVarId` is the interpretation of the sort atom
+  -- The second `level` is the level of the un-lifted counterpart of `FVarId`
   tyVal       : Array (FVarId × Level)          := #[]
   eqVal       : Array Expr                      := #[]
   forallVal   : Array Expr                      := #[]
@@ -75,9 +77,11 @@ open Embedding in
 def interpLamSortAsLifted (s : LamSort) : ReifM Expr :=
   match s with
   | .atom n => do
-    let .some (id, _) := (← getTyVal).get? n
+    let .some (id, lvl) := (← getTyVal).get? n
       | throwError "interpLamSortAsLifted :: Unexpected sort atom {n}"
-    return .fvar id
+    let .some orig := (← getUnliftMap).find? id
+      | throwError "interpLamSortAslifted :: Unable to find un-lifted counterpart of {Expr.fvar id}"
+    return Expr.app (.const ``GLift [lvl, ← getU]) orig
   | .base b => do
     let u ← getU
     let lvl₁ := Level.succ .zero
@@ -105,7 +109,7 @@ partial def updownFunc (s : LamSort) : ReifM (Expr × Expr × Expr × Expr) :=
       | throwError "upFunc :: Unable to find un-lifted counterpart of {Expr.fvar id}"
     let up := Expr.app (.const ``GLift.up [lvl, (← getU)]) orig
     let down := Expr.app (.const ``GLift.down [lvl, (← getU)]) orig
-    return (up, down, orig, .fvar id)
+    return (up, down, orig, Expr.app (.const ``GLift [lvl, ← getU]) orig)
   | .base b => do
     let u ← getU
     let lvl₁ := Level.succ .zero
@@ -133,6 +137,42 @@ partial def updownFunc (s : LamSort) : ReifM (Expr × Expr × Expr × Expr) :=
     let up := Expr.lam `_ fty (Expr.lam `_ tyUp₁ (.app uf₂ (.app (.bvar 1) (.app df₁ (.bvar 0)))) .default) .default
     let down := Expr.lam `_ ftyUp (Expr.lam `_ ty₁ (.app df₂ (.app (.bvar 1) (.app uf₁ (.bvar 0)))) .default) .default
     return (up, down, fty, ftyUp)
+
+section
+
+  open Embedding
+
+  private def mkImportAux (s : LamSort) : ReifM (Expr × Expr × Expr × Expr × Level) := do
+    let (upFunc, downFunc, ty, upTy) ← updownFunc s
+    let sortOrig ← instantiateMVars (← Meta.inferType ty)
+    let sortOrig ← Meta.withTransparency .all <| Meta.whnf sortOrig
+    let .sort uOrig := sortOrig
+      | throwError "mkIsomType :: Unexpected sort {sortOrig} when processing sort {repr s}"
+    return (upFunc, downFunc, ty, upTy, uOrig)
+
+  def mkIsomType (upFunc downFunc ty upTy : Expr) (uOrig : Level) : ReifM Expr := do
+    let u ← getU
+    let eq₁ : Expr := mkLambda `_ .default ty (mkAppN (.const ``Eq.refl [uOrig]) #[ty, .bvar 0])
+    let eq₂ : Expr := mkLambda `_ .default upTy (mkAppN (.const ``Eq.refl [.succ u]) #[upTy, .bvar 0])
+    let isomTy : Expr := mkAppN (.const ``Embedding.IsomType.mk [uOrig, .succ u]) #[ty, upTy, upFunc, downFunc, eq₁, eq₂]
+    return isomTy
+  
+  def mkImportingEqLift (s : LamSort) := do
+    let (upFunc, downFunc, ty, upTy, uOrig) ← mkImportAux s
+    let isomTy ← mkIsomType upFunc downFunc ty upTy uOrig
+    return mkAppN (.const ``EqLift.ofEqLift [uOrig, .succ (← getU)]) #[ty, upTy, isomTy]
+
+  def mkImportingForallLift (s : LamSort) := do
+    let (upFunc, downFunc, ty, upTy, uOrig) ← mkImportAux s
+    let isomTy ← mkIsomType upFunc downFunc ty upTy uOrig
+    return mkAppN (.const ``Embedding.ForallLift.ofForallLift [uOrig, .succ (← getU), .zero]) #[ty, upTy, isomTy]
+
+  def mkImportingExistLift (s : LamSort) := do
+    let (upFunc, downFunc, ty, upTy, uOrig) ← mkImportAux s
+    let isomTy ← mkIsomType upFunc downFunc ty upTy uOrig
+    return  mkAppN (.const ``Embedding.ExistLift.ofExistLift [uOrig, .succ (← getU)]) #[ty, upTy, isomTy]
+
+end
 
 -- Accept a new free variable representing term atom or lifted logical constant
 -- Returns the index of it in the corresponding Array after we've inserted it into
@@ -199,7 +239,8 @@ def processTypeFVar (fid : FVarId) : ReifM LamSort := do
 -- This is an auxiliary function for `reifTerm`. Please refer to `reifTerm`
 --   `fid` is an interpreted constant, lifted from `val`.
 def processLiftedInterped (val : Expr) (fid : FVarId) (reifType : Expr → ReifM LamSort) : ReifM LamTerm := do
-  let mut info : FVarType × Level × Expr := Inhabited.default
+  let fidTy ← fid.getType
+  let mut fvTy : FVarType := Inhabited.default
   match val with
   | .const ``True [] => return .base .trueE
   | .const ``False [] => return .base .falseE
@@ -214,52 +255,40 @@ def processLiftedInterped (val : Expr) (fid : FVarId) (reifType : Expr → ReifM
   | .const ``Iff [] => return .base .iff
   -- **TODO: Integer, Real number, Bit vector**
   -- `α` is the original (un-lifted) type
-  | .app (.const ``Eq [uOrig]) α =>
-    info := (FVarType.eqVar, uOrig, α)
-  | .app (.const ``Embedding.forallF [uOrig, _]) α =>
-    info := (FVarType.forallVar, uOrig, α)
-  | .app (.const ``Exists [uOrig]) α =>
-    info := (FVarType.existVar, uOrig, α)
+  | .app (.const ``Eq _) _ =>
+    fvTy := FVarType.eqVar
+  | .app (.const ``Embedding.forallF _) _ =>
+    fvTy := FVarType.forallVar
+  | .app (.const ``Exists _) _ =>
+    fvTy := FVarType.existVar
   | _ => throwError "processTermFVar :: Unexpected interpreted constant {val}"
-  let (fvTy, uOrig, α) := info
-  -- Process `=, ∀, ∃`
-  -- Make `IsomType`. We choose not to call `termULift` and `typeULift` at this stage
-  let u ← getU
-  let (upFunc, upTy) ← Meta.withLocalDeclD `_ α fun down => do
-    let (up, upTy) ← cstULiftPos u down (← instantiateMVars α)
-    let upFunc ← Meta.mkLambdaFVars #[down] up
-    return (upFunc, upTy)
-  let downFunc ← Meta.withLocalDeclD `_ upTy fun up => do
-    let (down, _) ← cstULiftNeg u up (← instantiateMVars α)
-    Meta.mkLambdaFVars #[up] down
-  let eq₁ : Expr := mkLambda `_ .default α (mkAppN (.const ``Eq.refl [uOrig]) #[α, .bvar 0])
-  let eq₂ : Expr := mkLambda `_ .default upTy (mkAppN (.const ``Eq.refl [u]) #[upTy, .bvar 0])
-  let isomTy : Expr := mkAppN (.const ``Embedding.IsomType.mk [uOrig, u]) #[α, upTy, upFunc, downFunc, eq₁, eq₂]
-  let fidTy ← fid.getType
   match fvTy with
   | .var => throwError "processTermFVar :: Unexpected error"
   | .eqVar =>
     let .forallE _ upTy' _ _ := fidTy
       | throwError "processTermFVar :: Unexpected `=` type {fidTy}"
     let s ← reifType upTy'
-    let eqLift := mkAppN (.const ``Embedding.EqLift.ofEqLift [uOrig, u])
-      #[α, upTy, isomTy]
+    let eqLift := ← mkImportingEqLift s
+    if !(← Meta.isTypeCorrect eqLift) then
+      throwError "processTermFVar :: Malformed eqLift {eqLift}"
     setEqVal ((← getEqVal).push eqLift)
     newTermFVar .eqVar fid s
   | .forallVar =>
     let .forallE _ (.forallE _ upTy' _ _) _ _ := fidTy
       | throwError "processTermFVar :: Unexpected `∀` type {fidTy}"
     let s ← reifType upTy'
-    let forallLift := mkAppN (.const ``Embedding.ForallLift.ofForallLift [uOrig, u, .zero])
-      #[α, upTy, isomTy]
+    let forallLift ← mkImportingForallLift s
+    if !(← Meta.isTypeCorrect forallLift) then
+      throwError "processTermFVar :: Malformed forallLift {forallLift}"
     setForallVal ((← getForallVal).push forallLift)
     newTermFVar .forallVar fid s
   | .existVar =>
     let .forallE _ (.forallE _ upTy' _ _) _ _ := fidTy
       | throwError "processTermFVar :: Unexpected `∃` type {fidTy}"
     let s ← reifType upTy'
-    let existLift := mkAppN (.const ``Embedding.ExistLift.ofExistLift [uOrig, u])
-      #[α, upTy, isomTy]
+    let existLift ← mkImportingExistLift s
+    if !(← Meta.isTypeCorrect existLift) then
+      throwError "processTermFVar :: Malformed existLift {existLift}"
     setExistVal ((← getExistVal).push existLift)
     newTermFVar .existVar fid s
 
