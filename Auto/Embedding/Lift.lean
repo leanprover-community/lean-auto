@@ -16,7 +16,7 @@ def orLift.{u} (p q : GLift.{1, u} Prop) :=
 def iffLift.{u} (p q : GLift.{1, u} Prop) :=
   GLift.up (Iff p.down q.down)
 
-def ImpF.{u, v} (p : Sort u) (q : Sort v) := p → q
+@[reducible] def ImpF.{u, v} (p : Sort u) (q : Sort v) := p → q
 
 def impLift.{u}
   (p : GLift.{t + 1, v} (Sort t))
@@ -60,7 +60,7 @@ def EqLift.ofEqLift {α : Sort u} {β : Sort v} (I : IsomType α β) : EqLift β
 def EqLift.default (β : Sort u) : EqLift β :=
   ⟨fun x y => GLift.up (@Eq β x y), fun _ _ => id, fun _ _ => id⟩
 
-def forallF {α : Sort u} (p : α → Sort v) := ∀ (x : α), p x
+@[reducible] def forallF {α : Sort u} (p : α → Sort v) := ∀ (x : α), p x
 
 -- Isomorphic domain, β is the lifted one
 def forallLift {α : Sort u} {β : Sort v} (I : IsomType α β)

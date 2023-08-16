@@ -523,8 +523,7 @@ section
       --   because `e` might contain free variables that are binders in the
       --   original expression and has already been lifted.
       let eUp ← termULift e
-      let eUpSort ← (instantiateMVars (← Meta.inferType eUp))
-      let eUpSort ← Meta.withTransparency .all <| Meta.whnf eUpSort
+      let eUpSort ← Util.normalizeType (← Meta.inferType eUp)
       let .app (.const ``GLift [vsucc, _]) _ := eUpSort
         | throwError "typeULift :: Unexpected type ⦗⦗{eUp} : {eUpSort}⦘⦘"
       let u ← getU

@@ -122,7 +122,7 @@ where
 
 def lamFOL2SMT (s : LamReif.State) : TransM LamAtom (Array IR.SMT.Command) := do
   let assertions := s.assertions
-  let lamVarTy : Array LamSort := s.lamVarTy.map (·.2)
+  let lamVarTy : Array LamSort := s.lamVarVal.map (·.2)
   for (_, lterm) in assertions do
     let sterm ← lamTerm2STerm lamVarTy lterm
     addCommand (.assert sterm)

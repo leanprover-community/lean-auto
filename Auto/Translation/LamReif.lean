@@ -23,22 +23,22 @@ structure State where
   tyVarMap    : HashMap FVarId Nat              := HashMap.empty
   -- Maps fvars representing free variables to their index
   varMap      : HashMap FVarId (FVarType × Nat) := HashMap.empty
-  -- Corresponds to fields of `LamValuation`
-  lamVarTy    : Array (FVarId × LamSort)        := #[]
-  -- For `eqLamTy`, `forallLamTy` and `existLamTy`,
-  --   the `LamSort` is the corresponding sort where
-  --   we'll use in `<eq/forall/exist>LamVal`, and
-  --   the `FVarId` is the expression we'll use in
-  --   `<eq/forall/exist>Val`
-  eqLamTy     : Array (FVarId × LamSort)        := #[]
-  forallLamTy : Array (FVarId × LamSort)        := #[]
-  existLamTy  : Array (FVarId × LamSort)        := #[]
   -- `tyVal` is the inverse of `tyVarMap`
   -- The first `FVarId` is the interpretation of the sort atom
+  -- The second `FVarId` is the un-lifted counterpart of the interpretation
   -- The second `level` is the level of the un-lifted counterpart of `FVarId`
-  tyVal       : Array (FVarId × Level)          := #[]
+  tyVal       : Array (FVarId × Expr × Level)   := #[]
+  -- The first `FVarId` is the valuation of the atom
+  -- The second `LamSort` is the λ sort of the atom
+  lamVarVal   : Array (FVarId × LamSort)        := #[]
+  -- For `eqLamTy`, `forallLamTy` and `existLamTy`,
+  --   the `LamSort` is the corresponding sort where
+  --   we'll use in `<eq/forall/exist>LamVal`.
+  eqLamTy     : Array LamSort                   := #[]
   eqVal       : Array Expr                      := #[]
+  forallLamTy : Array LamSort                   := #[]
   forallVal   : Array Expr                      := #[]
+  existLamTy  : Array LamSort                   := #[]
   existVal    : Array Expr                      := #[]
   -- This array contains assertions that have external (lean) proof
   --   The first `Expr` is the proof of the assertion
@@ -57,10 +57,8 @@ abbrev ReifM := StateRefT State ULiftM
 def interpLamSortAsUnlifted (s : LamSort) : ReifM Expr :=
   match s with
   | .atom n => do
-    let .some (id, _) := (← getTyVal).get? n
+    let .some (_, orig, _) := (← getTyVal).get? n
       | throwError "interpLamSortAsUnlifted :: Unexpected sort atom {n}"
-    let .some orig := (← getUnliftMap).find? id
-      | throwError "interpLamSortAsUnlifted :: Unable to find un-lifted counterpart of {Expr.fvar id}"
     return orig
   | .base b =>
     match b with
@@ -77,10 +75,8 @@ open Embedding in
 def interpLamSortAsLifted (s : LamSort) : ReifM Expr :=
   match s with
   | .atom n => do
-    let .some (id, lvl) := (← getTyVal).get? n
+    let .some (_, orig, lvl) := (← getTyVal).get? n
       | throwError "interpLamSortAsLifted :: Unexpected sort atom {n}"
-    let .some orig := (← getUnliftMap).find? id
-      | throwError "interpLamSortAslifted :: Unable to find un-lifted counterpart of {Expr.fvar id}"
     return Expr.app (.const ``GLift [lvl, ← getU]) orig
   | .base b => do
     let u ← getU
@@ -103,10 +99,8 @@ open Embedding in
 partial def updownFunc (s : LamSort) : ReifM (Expr × Expr × Expr × Expr) :=
   match s with
   | .atom n => do
-    let .some (id, lvl) := (← getTyVal).get? n
+    let .some (_, orig, lvl) := (← getTyVal).get? n
       | throwError "upFunc :: Unexpected sort atom {n}"
-    let .some orig := (← getUnliftMap).find? id
-      | throwError "upFunc :: Unable to find un-lifted counterpart of {Expr.fvar id}"
     let up := Expr.app (.const ``GLift.up [lvl, (← getU)]) orig
     let down := Expr.app (.const ``GLift.down [lvl, (← getU)]) orig
     return (up, down, orig, Expr.app (.const ``GLift [lvl, ← getU]) orig)
@@ -144,8 +138,7 @@ section
 
   private def mkImportAux (s : LamSort) : ReifM (Expr × Expr × Expr × Expr × Level) := do
     let (upFunc, downFunc, ty, upTy) ← updownFunc s
-    let sortOrig ← instantiateMVars (← Meta.inferType ty)
-    let sortOrig ← Meta.withTransparency .all <| Meta.whnf sortOrig
+    let sortOrig ← Util.normalizeType (← Meta.inferType ty)
     let .sort uOrig := sortOrig
       | throwError "mkIsomType :: Unexpected sort {sortOrig} when processing sort {repr s}"
     return (upFunc, downFunc, ty, upTy, uOrig)
@@ -181,27 +174,27 @@ def newTermFVar (fvty : FVarType) (id : FVarId) (sort : LamSort) : ReifM LamTerm
   let varMap ← getVarMap
   match fvty with
   | .var   =>
-    let lamVarTy ← getLamVarTy
-    let idx := lamVarTy.size
-    setLamVarTy (lamVarTy.push (id, sort))
+    let lamVarVal ← getLamVarVal
+    let idx := lamVarVal.size
+    setLamVarVal (lamVarVal.push (id, sort))
     setVarMap (varMap.insert id (fvty, idx))
     return .atom idx
   | .eqVar =>
     let eqLamTy ← getEqLamTy
     let idx := eqLamTy.size
-    setEqLamTy (eqLamTy.push (id, sort))
+    setEqLamTy (eqLamTy.push sort)
     setVarMap (varMap.insert id (fvty, idx))
     return .base (.eq idx)
   | .forallVar =>
     let forallLamTy ← getForallLamTy
     let idx := forallLamTy.size
-    setForallLamTy (forallLamTy.push (id, sort))
+    setForallLamTy (forallLamTy.push sort)
     setVarMap (varMap.insert id (fvty, idx))
     return .base (.forallE idx)
   | .existVar =>
     let existLamTy ← getExistLamTy
     let idx := existLamTy.size
-    setExistLamTy (existLamTy.push (id, sort))
+    setExistLamTy (existLamTy.push sort)
     setVarMap (varMap.insert id (fvty, idx))
     return .base (.existE idx)
 
@@ -214,7 +207,9 @@ def newTypeFVar (id : FVarId) : ReifM LamSort := do
   let origSort := (← instantiateMVars origSort).headBeta
   let .sort lvl := origSort
     | throwError "newTypeFVar :: Unexpected sort {origSort}"
-  setTyVal (tyVal.push (id, lvl))
+  let .some orig := (← getUnliftMap).find? id
+    | throwError "newTypeFVar :: Unable to find un-lifted counterpart of {Expr.fvar id}"
+  setTyVal (tyVal.push (id, orig, lvl))
   setTyVarMap (tyVarMap.insert id idx)
   return .atom idx
 
@@ -236,7 +231,7 @@ def processTypeFVar (fid : FVarId) : ReifM LamSort := do
     | _ => throwError "processTypeFVar :: Unexpected interpreted constant {val}"
   | .none     => newTypeFVar fid
 
--- This is an auxiliary function for `reifTerm`. Please refer to `reifTerm`
+-- This is an auxiliary function for `processTermFVar`. Please refer to `processTermFVar`
 --   `fid` is an interpreted constant, lifted from `val`.
 def processLiftedInterped (val : Expr) (fid : FVarId) (reifType : Expr → ReifM LamSort) : ReifM LamTerm := do
   let fidTy ← fid.getType
