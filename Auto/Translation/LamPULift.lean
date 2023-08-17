@@ -615,19 +615,6 @@ def deBruijn? (id : FVarId) : ULiftM (Option Nat) := do
       throwError "checkFactLift :: Malformed lifted type ⦗⦗{ty'}⦘⦘ of ⦗⦗{proof}⦘⦘"
     if !(← Meta.isDefEq ty ty') then
       throwError "checkFactLift :: Error: ⦗⦗{proof}⦘⦘ is not of type ⦗⦗{ty'}⦘⦘"
-
-  private def withULiftedFactsAux (fact : Reif.UMonoFact) {α : Type}
-    (cont : Array ULiftedFact → ULiftM α) (arr : Array ULiftedFact) : ULiftM α := do
-    let (proof, ty) := fact
-    let tya ← collectAtomic ty
-    trace[auto.lamPULift] "Collected atomic expressions {tya.toList} for ⦗⦗{ty}⦘⦘"
-    tya.foldl (fun cont' a => withProcessedAtomicImp checkInterpretedConst a cont') (do
-      trace[auto.lamPULift] "Term lifting ⦗⦗{ty}⦘⦘, the type of ⦗⦗{proof}⦘⦘"
-      let gLiftTy ← termULift ty
-      -- Now we check that `proof : GLift.down gLiftTy`
-      checkFactLift proof gLiftTy
-      cont (arr.push (proof, gLiftTy))
-    )
   
   -- Note that we're not introducing binders into the local context.
   partial def collectUniverseLevels : Expr → MetaM (HashSet Level)
@@ -660,6 +647,19 @@ def deBruijn? (id : FVarId) : ULiftM (Option Nat) := do
   | .mdata _ e' => collectUniverseLevels e'
   | .proj .. => throwError "Please unfold projections before collecting universe levels"
   
+  private def withULiftedFactsAux (fact : Reif.UMonoFact) {α : Type}
+    (cont : Array ULiftedFact → ULiftM α) (arr : Array ULiftedFact) : ULiftM α := do
+    let (proof, ty) := fact
+    let tya ← collectAtomic ty
+    trace[auto.lamPULift] "Collected atomic expressions {tya.toList} for ⦗⦗{ty}⦘⦘"
+    tya.foldl (fun cont' a => withProcessedAtomicImp checkInterpretedConst a cont') (do
+      trace[auto.lamPULift] "Term lifting ⦗⦗{ty}⦘⦘, the type of ⦗⦗{proof}⦘⦘"
+      let gLiftTy ← termULift ty
+      -- Now we check that `proof : GLift.down gLiftTy`
+      checkFactLift proof gLiftTy
+      cont (arr.push (proof, gLiftTy))
+    )
+
   -- Note that the facts to be processed are stored in `ReifM.state`
   private def withULiftedFactsImp (facts : Array Reif.UMonoFact) (cont : Array ULiftedFact → ULiftM α) : ULiftM α := do
     -- Collect universe levels

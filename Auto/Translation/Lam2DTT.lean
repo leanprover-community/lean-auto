@@ -1,5 +1,7 @@
 import Lean
+import Duper.Tactic
 import Auto.Util.ExprExtra
+import Auto.Util.MetaExtra
 import Auto.Embedding.LamBase
 import Auto.Translation.LamReif
 open Lean
@@ -154,5 +156,58 @@ def withTranslatedLamTerms (ts : Array LamTerm) (externCont : Array Expr → Met
       )
     )
   extern.run {}
+
+-- Override the one in duper so that it works for `MetaM`
+def Duper.withoutModifyingCoreEnv (m : MetaM α) : MetaM α :=
+  try
+    let env := (← liftM (get : CoreM Core.State)).env
+    let ret ← m
+    liftM (modify fun s => {s with env := env} : CoreM Unit)
+    return ret
+  catch e =>
+    throwError e.toMessageData
+
+-- Override the one in duper so that it works for `MetaM`
+def Duper.rconsProof (state : Duper.ProverM.State) : MetaM Expr := do
+  let some emptyClause := state.emptyClause
+    | throwError "rconsProof :: Can't find empty clause in ProverM's state"
+  let l := (← Elab.Tactic.collectClauses state emptyClause (#[], Std.BinomialHeap.empty)).2.toList.eraseDups.map Prod.snd
+  trace[ProofReconstruction] "Collected clauses: {l}"
+  -- First make proof for skolems, then make proof for clauses
+  let proof ← Elab.Tactic.mkAllProof state l
+  trace[ProofReconstruction] "rconsProof :: Reconstructed proof {proof}"
+  return proof
+
+-- Invoke Duper to get a proof of `ts ⊢ ⊥`
+def callDuper (ts : Array LamTerm) : ReifM Expr :=
+  withTranslatedLamTerms ts (fun exprs => do
+    let startTime ← IO.monoMsNow
+    for expr in exprs do
+      if !(← Meta.isTypeCorrect expr) then
+        throwError "callDuper :: Malformed hypothesis {expr}"
+      if !(← Meta.isProp expr) then
+        throwError "callDuper :: Hypothesis {expr} is not a proposition"
+    Util.Meta.withHyps exprs (fun fvars => do
+      if exprs.size != fvars.size then
+        throwError "callDuper :: Unexpected error"
+      let lemmas : Array (Expr × Expr × Array Name) ←
+        (exprs.zip fvars).mapM (fun (ty, proof) => do
+          return (ty, ← Meta.mkAppM ``eq_true #[.fvar proof], #[]))
+      let state ← Duper.withoutModifyingCoreEnv <| do
+        let skSorryName ← Elab.Tactic.addSkolemSorry
+        let (_, state) ←
+          Duper.ProverM.ProverM.runWithExprs (ctx := {}) (s := {skolemSorryName := skSorryName})
+            Duper.ProverM.saturateNoPreprocessingClausification
+            lemmas.toList
+        return state
+      match state.result with
+      | .contradiction =>
+        IO.println s!"callDuper :: Contradiction found. Time: {(← IO.monoMsNow) - startTime}ms"
+        Duper.rconsProof state
+      | .saturated =>
+        throwError "callDuper :: Duper saturated"
+      | .unknown => throwError "callDuper :: Duper was terminated"
+    )
+  )
 
 end Auto

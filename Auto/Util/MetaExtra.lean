@@ -7,7 +7,20 @@ def Meta.withoutMVarAssignments (m : MetaM α) : MetaM α := do
   let mctx ← getMCtx
   Meta.withMCtx {mctx with eAssignment := {}, lAssignment := {}} m
 
-initialize Lean.registerTraceClass `Meta.inspectMVarAssignments
+-- Given a list of non-dependent types `ty₁, ty₂, ⋯, tyₙ`, add
+--   free variables `x₁ : ty₁, x₂ : ty₂, ⋯, xₙ : tyₙ` into local context,
+--   and supply `#[x₁, x₂, ⋯, xₙ]` to `cont`
+private def Meta.withHypsImp (tys : Array Expr) (cont : Array FVarId → MetaM α) : MetaM α :=
+  let aux (ty : Expr) (cont : Array FVarId → MetaM α) (arr : Array FVarId) : MetaM α :=
+    withLocalDeclD `_ ty fun fvar => cont (arr.push fvar.fvarId!)
+  let cont' := tys.reverse.foldl (β := Array FVarId → MetaM α) (fun cont ty => aux ty cont) cont
+  cont' #[]
+
+def Meta.withHyps [Monad n] [MonadControlT MetaM n] (tys : Array Expr) (k : Array FVarId → n α) : n α :=
+  map1MetaM (fun k => withHypsImp tys k) k
+
+initialize
+  registerTraceClass `auto.inspectMVarAssignments
 
 def Meta.inspectMVarAssignments : MetaM Unit := do
   let mctx ← getMCtx
@@ -25,9 +38,9 @@ def Meta.inspectMVarAssignments : MetaM Unit := do
     return .compose rm "]"
   Meta.withMCtx {mctx with eAssignment := {}, lAssignment := {}} <| do
     let ems := eAssignmentList.map (fun (id, e) => MessageData.compose m!"{Expr.mvar id} := " m!"{e}")
-    trace[Meta.inspectMVarAssignments] .compose "ExprMVar Assignments: " (← composeAssignMessage ems)
+    trace[auto.inspectMVarAssignments] .compose "ExprMVar Assignments: " (← composeAssignMessage ems)
     let lms := lAssignmentList.map (fun (id, l) => MessageData.compose m!"{Level.mvar id} := " m!"{l}")
-    trace[Meta.inspectMVarAssignments] .compose "LevelMVar Assignments: " (← composeAssignMessage lms)
+    trace[auto.inspectMVarAssignments] .compose "LevelMVar Assignments: " (← composeAssignMessage lms)
 
 syntax (name := fromMetaTactic) "fromMetaTactic" "[" ident "]" : tactic
 
