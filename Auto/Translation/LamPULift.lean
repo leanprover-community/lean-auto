@@ -330,7 +330,7 @@ structure Context where
   --   during `termULift` and `typeULift`.
   -- For example, suppose we call `termULift` on `λ x y. g`, then
   --   `boundFVars` should have `x -> 0, y -> 1` when we're inspecting `g`.
-  -- The de-bruijn indice corresponding to a free variable `fvar` can be
+-- The de-bruijn indice corresponding to a free variable `fvar` can be
   --   calculated by `boundFVars.size - 1 - boundFVars.get! fvar`
   -- Note that we don't need to calculate de-bruijin indices during
   --   `termULift`, but we'll need that during reification.
@@ -443,7 +443,7 @@ section
     | _ => throwError "getLifted? :: Unexpected expression {e}"
   
   private def withBoundFVarImp (id : FVarId) (k : ULiftM α) : ULiftM α :=
-    withReader (fun ctx => ⟨ctx.boundFVars.insert id (ctx.boundFVars.size)⟩) k
+    withReader (fun ctx => ⟨ctx.boundFVars.insert id ctx.boundFVars.size⟩) k
   
   def withBoundFVar [Monad n] [MonadControlT ULiftM n] (id : FVarId) (k : n α) :=
     mapULiftM (withBoundFVarImp id) k
@@ -457,11 +457,11 @@ section
     (name : Name) (bi : BinderInfo) (type : Expr) (k : Expr → n α) :=
     map1ULiftM (withLocalDeclAsBoundFVarImp name bi type) k
   
-  def deBruijn! (id : FVarId) : ULiftM Nat := do
+def deBruijn? (id : FVarId) : ULiftM (Option Nat) := do
     let boundFVars ← getBoundFVars
     match boundFVars.find? id with
     | .some n => return boundFVars.size - 1 - n
-    | .none   => throwError "deBruijn! :: Unknown bound fvar {Expr.fvar id}"
+    | .none   => return none
   
   mutual
   
@@ -495,10 +495,11 @@ section
       | .some id' => return (.fvar id')
       | none =>
         let boundFVars ← getBoundFVars
-        match boundFVars.find? id with
-        -- A binder inside the original expression
-        | .some _ => return (.fvar id)
-        | none => throwError "termULift :: Unexpected error"
+        if boundFVars.contains id then
+          -- A binder inside the original expression
+          return (.fvar id)
+        else
+          throwError "termULift :: Unexpected error"
     | e => do
       let some eUp ← getLifted? e
         | throwError "termULift :: Cannot find lifted counterpart of {e}"
@@ -532,12 +533,6 @@ section
       return Expr.app (.const ``LiftTyConv [v, u]) eUp
   
   end
-  
-  private def mergeArray (a1 a2 : Array α) :=
-    if a1.size < a2.size then
-      a2 ++ a1
-    else
-      a1 ++ a2
   
   -- Runs in `MetaM`, but does not use `MetaM` facilities
   def collectAtomic : (e : Expr) → ULiftM (Array Expr)
@@ -634,12 +629,6 @@ section
       checkFactLift proof gLiftTy
       cont (arr.push (proof, gLiftTy))
     )
-  
-  private def mergeHashSet {α : Type u} [BEq α] [Hashable α] (a1 a2 : HashSet α) :=
-    if a1.size < a2.size then
-      a2.insertMany a1.toArray
-    else
-      a1.insertMany a2.toArray
   
   -- Note that we're not introducing binders into the local context.
   partial def collectUniverseLevels : Expr → MetaM (HashSet Level)

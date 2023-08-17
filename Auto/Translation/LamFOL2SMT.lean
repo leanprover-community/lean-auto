@@ -4,6 +4,9 @@ import Auto.Translation.LamReif
 import Auto.IR.SMT
 open Lean
 
+initialize
+  registerTraceClass `auto.lamFOL2SMT
+
 -- LamFOL2SMT : First-order fragment of simply-typed lambda calculus to SMT IR
 
 namespace Auto
@@ -122,9 +125,10 @@ where
 
 def lamFOL2SMT (s : LamReif.State) : TransM LamAtom (Array IR.SMT.Command) := do
   let assertions := s.assertions
-  let lamVarTy : Array LamSort := s.lamVarVal.map (·.2)
+  let lamVarTy : Array LamSort := s.varVal.map (·.2.2)
   for (_, lterm) in assertions do
     let sterm ← lamTerm2STerm lamVarTy lterm
+    trace[auto.lamFOL2SMT] "λ term {repr lterm} translated to SMT term {sterm}"
     addCommand (.assert sterm)
   getCommands
 

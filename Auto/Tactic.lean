@@ -129,8 +129,8 @@ def runAuto
       let assertions := s.assertions
       for (expr, lterm) in assertions do
         trace[auto.tactic] "Proof: {expr}, λ Term: {repr lterm}"
-      let lamVarVal := s.lamVarVal
-      for (id, lams) in lamVarVal do
+      let varVal := s.varVal
+      for (id, lams) in varVal do
         trace[auto.tactic] "FVar: {Expr.fvar id}, λ Sort: {repr lams}"
       let commands := (← (lamFOL2SMT s).run {}).1
       let _ ← liftM <| commands.mapM (fun c => IO.println s!"Command: {c}")

@@ -468,6 +468,27 @@ inductive LamTerm
   | app     : LamSort → LamTerm → LamTerm → LamTerm
 deriving Inhabited, Hashable
 
+-- Check whether the term contains loose bound variables `idx` levels
+--   above local context root
+def LamTerm.hasLooseBVarEq (idx : Nat) : LamTerm → Bool
+| .atom _ => false
+| .base _ => false
+| .bvar n => idx.beq n
+| .lam _ t => t.hasLooseBVarEq (.succ idx)
+| .app _ t₁ t₂ => t₁.hasLooseBVarEq idx || t₂.hasLooseBVarEq idx
+
+-- Check whether the term contains loose bound variables greater
+--   or equal to `idx` levels above local context root
+def LamTerm.hasLooseBVarGe (idx : Nat) : LamTerm → Bool
+| .atom _ => false
+| .base _ => false
+| .bvar n => idx.ble n
+| .lam _ t => t.hasLooseBVarGe (.succ idx)
+| .app _ t₁ t₂ => t₁.hasLooseBVarGe idx || t₂.hasLooseBVarGe idx
+
+-- Whether the term contains any loose bound variables
+def LamTerm.hasLooseBVar := LamTerm.hasLooseBVarGe 0
+
 def LamTerm.reprPrec (t : LamTerm) (n : Nat) :=
   let s :=
     match t with

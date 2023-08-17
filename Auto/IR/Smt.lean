@@ -350,6 +350,7 @@ section
     let currName := s!"smtd_{idx}"
     if l2hMap.contains currName then
       throwError "disposableName :: Unexpected error"
+    setIdx (idx + 1)
     return currName
 
   -- Note that this function is idempotent

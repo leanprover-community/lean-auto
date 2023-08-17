@@ -1,5 +1,6 @@
 import Lean
 import Auto.Util.MonadUtils
+import Auto.Lib.Containers
 open Lean
 
 namespace Auto.Reif

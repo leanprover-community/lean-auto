@@ -25,12 +25,13 @@ structure State where
   varMap      : HashMap FVarId (FVarType × Nat) := HashMap.empty
   -- `tyVal` is the inverse of `tyVarMap`
   -- The first `FVarId` is the interpretation of the sort atom
-  -- The second `FVarId` is the un-lifted counterpart of the interpretation
-  -- The second `level` is the level of the un-lifted counterpart of `FVarId`
+  -- The second `Expr` is the un-lifted counterpart of the first `FVarId`
+  -- The `level` is the sort level of the second `Expr`
   tyVal       : Array (FVarId × Expr × Level)   := #[]
-  -- The first `FVarId` is the valuation of the atom
-  -- The second `LamSort` is the λ sort of the atom
-  lamVarVal   : Array (FVarId × LamSort)        := #[]
+  -- The `FVarId` is the valuation of the atom
+  -- The `Expr` is the un-lifted counterpart of `FVarId`
+  -- The `LamSort` is the λ sort of the atom
+  varVal      : Array (FVarId × Expr × LamSort) := #[]
   -- For `eqLamTy`, `forallLamTy` and `existLamTy`,
   --   the `LamSort` is the corresponding sort where
   --   we'll use in `<eq/forall/exist>LamVal`.
@@ -51,44 +52,30 @@ abbrev ReifM := StateRefT State ULiftM
 
 #genMonadState ReifM
 
--- Takes a `s : LamSort` and produces the
---   `un-lifted` version of `s.interp` (note that `s.interp`
---   is lifted)
-def interpLamSortAsUnlifted (s : LamSort) : ReifM Expr :=
-  match s with
-  | .atom n => do
-    let .some (_, orig, _) := (← getTyVal).get? n
-      | throwError "interpLamSortAsUnlifted :: Unexpected sort atom {n}"
-    return orig
-  | .base b =>
-    match b with
-    | .prop => return .sort .zero
-    | .int  => return .const ``Int []
-    | .real => return .const ``Real []
-    | .bv n => return .app (.const ``Bitvec []) (.lit (.natVal n))
-  | .func s₁ s₂ => do
-    return .forallE `_ (← interpLamSortAsUnlifted s₁) (← interpLamSortAsUnlifted s₂) .default
+-- Lookup valuation of term atom
+def lookupVarVal! (n : Nat) : ReifM (FVarId × Expr × LamSort) := do
+  if let .some r := (← getVarVal)[n]? then
+    return r
+  else
+    throwError "lookipVarVal :: Unknown term atom {n}"
 
--- Takes a `s : LamSort` and produces the expression definitionally
---   equal to `s.interp`
-open Embedding in
-def interpLamSortAsLifted (s : LamSort) : ReifM Expr :=
-  match s with
-  | .atom n => do
-    let .some (_, orig, lvl) := (← getTyVal).get? n
-      | throwError "interpLamSortAsLifted :: Unexpected sort atom {n}"
-    return Expr.app (.const ``GLift [lvl, ← getU]) orig
-  | .base b => do
-    let u ← getU
-    let lvl₁ := Level.succ .zero
-    let lift₁ := Expr.app (.const ``GLift [lvl₁, u])
-    match b with
-    | .prop => return lift₁ (.sort .zero)
-    | .int => return lift₁ (.const ``Int [])
-    | .real => return lift₁ (.const ``Real [])
-    | .bv n => return lift₁ (.app (.const ``Bitvec []) (.lit (.natVal n)))
-  | .func s₁ s₂ => do
-    return .forallE `_ (← interpLamSortAsLifted s₁) (← interpLamSortAsLifted s₂) .default
+def lookupEqLamTy! (n : Nat) : ReifM LamSort := do
+  if let .some s := (← getEqLamTy)[n]? then
+    return s
+  else
+    throwError "lookupEqLamTy! :: Unknown eq {n}"
+
+def lookupForallLamTy! (n : Nat) : ReifM LamSort := do
+  if let .some s := (← getForallLamTy)[n]? then
+    return s
+  else
+    throwError "lookupForallLamTy! :: Unknown forall {n}"
+
+def lookupExistLamTy! (n : Nat) : ReifM LamSort := do
+  if let .some s := (← getExistLamTy)[n]? then
+    return s
+  else
+    throwError "lookupExistLamTy! :: Unknown exist {n}"
 
 -- Computes `upFunc` and `downFunc` between `s.interpAsUnlifted` and `s.interpAsLifted`
 --   The first `Expr` is `upFunc`
@@ -132,7 +119,7 @@ partial def updownFunc (s : LamSort) : ReifM (Expr × Expr × Expr × Expr) :=
     let down := Expr.lam `_ ftyUp (Expr.lam `_ ty₁ (.app df₂ (.app (.bvar 1) (.app uf₁ (.bvar 0)))) .default) .default
     return (up, down, fty, ftyUp)
 
-section
+section ILLifting
 
   open Embedding
 
@@ -153,19 +140,68 @@ section
   def mkImportingEqLift (s : LamSort) := do
     let (upFunc, downFunc, ty, upTy, uOrig) ← mkImportAux s
     let isomTy ← mkIsomType upFunc downFunc ty upTy uOrig
-    return mkAppN (.const ``EqLift.ofEqLift [uOrig, .succ (← getU)]) #[ty, upTy, isomTy]
+    let eqLift := mkAppN (.const ``EqLift.ofEqLift [uOrig, .succ (← getU)]) #[ty, upTy, isomTy]
+    if !(← Meta.isTypeCorrect eqLift) then
+      throwError "mkImportingEqLift :: Malformed eqLift {eqLift}"
+    return eqLift
 
   def mkImportingForallLift (s : LamSort) := do
     let (upFunc, downFunc, ty, upTy, uOrig) ← mkImportAux s
     let isomTy ← mkIsomType upFunc downFunc ty upTy uOrig
-    return mkAppN (.const ``Embedding.ForallLift.ofForallLift [uOrig, .succ (← getU), .zero]) #[ty, upTy, isomTy]
+    let forallLift := mkAppN (.const ``Embedding.ForallLift.ofForallLift [uOrig, .succ (← getU), .zero]) #[ty, upTy, isomTy]
+    if !(← Meta.isTypeCorrect forallLift) then
+      throwError "mkImportingForallLift :: Malformed forallLift {forallLift}"
+    return forallLift
 
   def mkImportingExistLift (s : LamSort) := do
     let (upFunc, downFunc, ty, upTy, uOrig) ← mkImportAux s
     let isomTy ← mkIsomType upFunc downFunc ty upTy uOrig
-    return  mkAppN (.const ``Embedding.ExistLift.ofExistLift [uOrig, .succ (← getU)]) #[ty, upTy, isomTy]
+    let existLift := mkAppN (.const ``Embedding.ExistLift.ofExistLift [uOrig, .succ (← getU)]) #[ty, upTy, isomTy]
+    if !(← Meta.isTypeCorrect existLift) then
+      throwError "mkImportingExistLift :: Malformed existLift {existLift}"
+    return existLift
 
-end
+end ILLifting
+
+section Atoms
+
+  def collectLamSortAtoms : LamSort → HashSet Nat
+  | .atom n => HashSet.empty.insert n
+  | .base _ => HashSet.empty
+  | .func a b => (collectLamSortAtoms a).insertMany (collectLamSortAtoms b)
+
+  -- Collect type atoms given a LamBaseTerm
+  def collectLamBaseTermAtoms (b : LamBaseTerm) : ReifM (HashSet Nat) := do
+    let s? : Option LamSort ← (do
+      match b with
+      | .eq n => lookupEqLamTy! n
+      | .forallE n => lookupForallLamTy! n
+      | .existE n => lookupExistLamTy! n
+      | _ => return none)
+    if let .some s := s? then
+      return collectLamSortAtoms s
+    else
+      return HashSet.empty    
+
+  -- The first hashset is the type atoms
+  -- The second hashset is the term atoms
+  def collectAtoms : LamTerm → ReifM (HashSet Nat × HashSet Nat)
+  | .atom n => do
+    let (_, _, s) ← lookupVarVal! n
+    return (collectLamSortAtoms s, HashSet.empty)
+  | .base b => do
+    return (← collectLamBaseTermAtoms b, HashSet.empty)
+  | .bvar _ => pure (HashSet.empty, HashSet.empty)
+  | .lam s t => do
+    let (typeHs, termHs) ← collectAtoms t
+    let sHs := collectLamSortAtoms s
+    return (mergeHashSet typeHs sHs, termHs)
+  | .app _ t₁ t₂ => do
+    let (typeHs₁, termHs₁) ← collectAtoms t₁
+    let (typeHs₂, termHs₂) ← collectAtoms t₂
+    return (mergeHashSet typeHs₁ typeHs₂, mergeHashSet termHs₁ termHs₂)
+
+end Atoms
 
 -- Accept a new free variable representing term atom or lifted logical constant
 -- Returns the index of it in the corresponding Array after we've inserted it into
@@ -174,9 +210,11 @@ def newTermFVar (fvty : FVarType) (id : FVarId) (sort : LamSort) : ReifM LamTerm
   let varMap ← getVarMap
   match fvty with
   | .var   =>
-    let lamVarVal ← getLamVarVal
-    let idx := lamVarVal.size
-    setLamVarVal (lamVarVal.push (id, sort))
+    let varVal ← getVarVal
+    let idx := varVal.size
+    let .some orig := (← getUnliftMap).find? id
+      | throwError "newTermFVar :: Unable to find un-lifted counterpart of {Expr.fvar id}"
+    setVarVal (varVal.push (id, orig, sort))
     setVarMap (varMap.insert id (fvty, idx))
     return .atom idx
   | .eqVar =>
@@ -264,8 +302,6 @@ def processLiftedInterped (val : Expr) (fid : FVarId) (reifType : Expr → ReifM
       | throwError "processTermFVar :: Unexpected `=` type {fidTy}"
     let s ← reifType upTy'
     let eqLift := ← mkImportingEqLift s
-    if !(← Meta.isTypeCorrect eqLift) then
-      throwError "processTermFVar :: Malformed eqLift {eqLift}"
     setEqVal ((← getEqVal).push eqLift)
     newTermFVar .eqVar fid s
   | .forallVar =>
@@ -273,8 +309,6 @@ def processLiftedInterped (val : Expr) (fid : FVarId) (reifType : Expr → ReifM
       | throwError "processTermFVar :: Unexpected `∀` type {fidTy}"
     let s ← reifType upTy'
     let forallLift ← mkImportingForallLift s
-    if !(← Meta.isTypeCorrect forallLift) then
-      throwError "processTermFVar :: Malformed forallLift {forallLift}"
     setForallVal ((← getForallVal).push forallLift)
     newTermFVar .forallVar fid s
   | .existVar =>
@@ -282,17 +316,14 @@ def processLiftedInterped (val : Expr) (fid : FVarId) (reifType : Expr → ReifM
       | throwError "processTermFVar :: Unexpected `∃` type {fidTy}"
     let s ← reifType upTy'
     let existLift ← mkImportingExistLift s
-    if !(← Meta.isTypeCorrect existLift) then
-      throwError "processTermFVar :: Malformed existLift {existLift}"
     setExistVal ((← getExistVal).push existLift)
     newTermFVar .existVar fid s
 
 mutual
 
   partial def processTermFVar (fid : FVarId) : ReifM LamTerm := do
-    let boundFVars ← getBoundFVars
-    if let .some idx := boundFVars.find? fid then
-      return .bvar (boundFVars.size - 1 - idx)
+    if let .some n ← deBruijn? fid then
+      return .bvar n
     let varMap ← getVarMap
     -- If the free variable has already been processed
     if let .some (fvarType, id) := varMap.find? fid then
