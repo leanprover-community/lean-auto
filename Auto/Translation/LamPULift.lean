@@ -586,19 +586,18 @@ def deBruijn? (id : FVarId) : ULiftM (Option Nat) := do
     trace[auto.lamPULift] "withProcessedAtomic :: Processing expression {e}"
     -- If `e` is already processed, return
     if let .some _ ← getLifted? e then
-      cont
-    else
-      (fun (cont' : ULiftM α) => do
-        if let .fvar id := e then
-          -- Collect atomic expressions within the type of a free variable
-          let ia := (← collectAtomic (← instantiateMVars (← id.getType)))
-          ia.foldl (β := ULiftM α) (fun cont'' a => withProcessedAtomicImp a cont'') cont'
-        else if e.isMVar ∨ e.isConst ∨ e.isLit then
-          -- Collect atomic expressions within the type of a constant or a metavariable
-          let ia := (← collectAtomic (← instantiateMVars (← Meta.inferType e)))
-          ia.foldl (β := ULiftM α) (fun cont'' a => withProcessedAtomicImp a cont'') cont'
-        else
-          cont') (withProcessedAtomicImpAux checkInterpretedConst e cont)
+      return ← cont
+    (fun (cont' : ULiftM α) => do
+      if let .fvar id := e then
+        -- Collect atomic expressions within the type of a free variable
+        let ia := (← collectAtomic (← instantiateMVars (← id.getType)))
+        ia.foldl (β := ULiftM α) (fun cont'' a => withProcessedAtomicImp a cont'') cont'
+      else if e.isMVar ∨ e.isConst ∨ e.isLit then
+        -- Collect atomic expressions within the type of a constant or a metavariable
+        let ia := (← collectAtomic (← instantiateMVars (← Meta.inferType e)))
+        ia.foldl (β := ULiftM α) (fun cont'' a => withProcessedAtomicImp a cont'') cont'
+      else
+        cont') (withProcessedAtomicImpAux checkInterpretedConst e cont)
   
   def withProcessedAtomic [Monad n] [MonadControlT ULiftM n] (e : Expr) (cont : n α) : n α :=
     mapULiftM (withProcessedAtomicImp checkInterpretedConst e) cont

@@ -19,7 +19,7 @@ set_option maxRecDepth 2000 in
 #reduce LamSort.beq_eq (manyArgFuncTy 100 40) (manyArgFuncTy 100 40)
 
 -- λ (x₁ x₂ ... xₙ : (.atom 0)) . (.atom 0) x₁ x₂ ... xₙ
--- Note that the first `.atom 0` is a sort atom, while the
+-- Note that the first `.atom 0` is a type atom, while the
 --   second `.atom 0` is a term atom
 def manyBinders (n : Nat) : LamTerm :=
   manyBindersAux n 0

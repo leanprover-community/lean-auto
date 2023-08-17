@@ -24,7 +24,7 @@ structure State where
   -- Maps fvars representing free variables to their index
   varMap      : HashMap FVarId (FVarType × Nat) := HashMap.empty
   -- `tyVal` is the inverse of `tyVarMap`
-  -- The first `FVarId` is the interpretation of the sort atom
+  -- The first `FVarId` is the interpretation of the type atom
   -- The second `Expr` is the un-lifted counterpart of the first `FVarId`
   -- The `level` is the sort level of the second `Expr`
   tyVal       : Array (FVarId × Expr × Level)   := #[]
@@ -52,12 +52,18 @@ abbrev ReifM := StateRefT State ULiftM
 
 #genMonadState ReifM
 
+def lookupTyVal! (n : Nat) : ReifM (FVarId × Expr × Level) := do
+  if let .some r := (← getTyVal)[n]? then
+    return r
+  else
+    throwError "lookupTyVal! :: Unknown type atom {n}"
+
 -- Lookup valuation of term atom
 def lookupVarVal! (n : Nat) : ReifM (FVarId × Expr × LamSort) := do
   if let .some r := (← getVarVal)[n]? then
     return r
   else
-    throwError "lookipVarVal :: Unknown term atom {n}"
+    throwError "lookupVarVal! :: Unknown term atom {n}"
 
 def lookupEqLamTy! (n : Nat) : ReifM LamSort := do
   if let .some s := (← getEqLamTy)[n]? then
@@ -86,8 +92,7 @@ open Embedding in
 partial def updownFunc (s : LamSort) : ReifM (Expr × Expr × Expr × Expr) :=
   match s with
   | .atom n => do
-    let .some (_, orig, lvl) := (← getTyVal).get? n
-      | throwError "upFunc :: Unexpected sort atom {n}"
+    let (_, orig, lvl) ← lookupTyVal! n
     let up := Expr.app (.const ``GLift.up [lvl, (← getU)]) orig
     let down := Expr.app (.const ``GLift.down [lvl, (← getU)]) orig
     return (up, down, orig, Expr.app (.const ``GLift [lvl, ← getU]) orig)
