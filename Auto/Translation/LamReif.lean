@@ -193,7 +193,7 @@ section Atoms
   def collectAtoms : LamTerm → ReifM (HashSet Nat × HashSet Nat)
   | .atom n => do
     let (_, _, s) ← lookupVarVal! n
-    return (collectLamSortAtoms s, HashSet.empty)
+    return (collectLamSortAtoms s, HashSet.empty.insert n)
   | .base b => do
     return (← collectLamBaseTermAtoms b, HashSet.empty)
   | .bvar _ => pure (HashSet.empty, HashSet.empty)

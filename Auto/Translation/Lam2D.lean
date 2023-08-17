@@ -6,7 +6,7 @@ import Auto.Embedding.LamBase
 import Auto.Translation.LamReif
 open Lean
 
--- Lam2DTT : Simply-typed lambda calculus to Lean
+-- Lam2D : Simply-typed lambda calculus to Lean
 -- The reason we need this file is that, sometimes we want external
 --   provers (e.g. duper) to help us complete proofs. Note that
 --   external provers does not work with things like `GLift.up Prop`.
@@ -16,7 +16,7 @@ open Lean
 --   expressions is to deal with `=, ∀` and `∃`, namely assigning
 --   the appropriate valuation so that the type matches.
 
-namespace Auto
+namespace Auto.Lam2D
 
 open LamReif
 open Embedding.Lam
@@ -137,7 +137,7 @@ def interpLamTermAsUnlifted : LamTerm → ExternM Expr
 | .lam s t => do
   let sinterp ← interpLamSortAsUnlifted s
   let tinterp ← interpLamTermAsUnlifted t
-  return .lam `_ sinterp tinterp .default
+  return .lam (← mkFreshId) sinterp tinterp .default
 | .app _ fn arg => do
   return .app (← interpLamTermAsUnlifted fn) (← interpLamTermAsUnlifted arg)
 
@@ -178,7 +178,8 @@ def Duper.rconsProof (state : Duper.ProverM.State) : MetaM Expr := do
   trace[ProofReconstruction] "rconsProof :: Reconstructed proof {proof}"
   return proof
 
--- Invoke Duper to get a proof of `ts ⊢ ⊥`
+-- Given `ts = #[t₀, t₁, ⋯, kₖ₋₁]`, invoke Duper to get a proof 
+--   `t₀ → t₁ → ⋯ → tₖ₋1 → ⊥`
 def callDuper (ts : Array LamTerm) : ReifM Expr :=
   withTranslatedLamTerms ts (fun exprs => do
     let startTime ← IO.monoMsNow
@@ -187,6 +188,8 @@ def callDuper (ts : Array LamTerm) : ReifM Expr :=
         throwError "callDuper :: Malformed hypothesis {expr}"
       if !(← Meta.isProp expr) then
         throwError "callDuper :: Hypothesis {expr} is not a proposition"
+    -- Reduce `forallF` and `impF`
+    let exprs ← Meta.withTransparency .reducible <| exprs.mapM (fun e => liftM <| Meta.reduce e)
     Util.Meta.withHyps exprs (fun fvars => do
       if exprs.size != fvars.size then
         throwError "callDuper :: Unexpected error"
@@ -203,11 +206,12 @@ def callDuper (ts : Array LamTerm) : ReifM Expr :=
       match state.result with
       | .contradiction =>
         IO.println s!"callDuper :: Contradiction found. Time: {(← IO.monoMsNow) - startTime}ms"
-        Duper.rconsProof state
+        let expr ← Duper.rconsProof state
+        Meta.mkLambdaFVars (fvars.map (.fvar ·)) expr
       | .saturated =>
         throwError "callDuper :: Duper saturated"
       | .unknown => throwError "callDuper :: Duper was terminated"
     )
   )
 
-end Auto
+end Auto.Lam2D

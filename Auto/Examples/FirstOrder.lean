@@ -14,14 +14,15 @@ variable (r : Prop)
 
 set_option smt.solver.name "cvc5"
 
+set_option trace.auto.tactic true
 example : (∃ x : α, r) → r := by
-  try auto;
+  auto;
   sorry
 example (a : α) : r → (∃ x : α, r) := by
   try auto;
   sorry
 example : (∃ x, p x ∧ r) ↔ (∃ x, p x) ∧ r := by
-  try auto;
+  auto;
   sorry
 example : (∃ x, p x ∨ q x) ↔ (∃ x, p x) ∨ (∃ x, q x) := by
   try auto;
@@ -102,6 +103,8 @@ end
 -- other examples
 
 section
+
+set_option trace.auto.tactic true
 variable (X : Type) (P Q R : X → Prop) (T : X → X → Prop) (a b : X)
 
 example (H : ∀ x, P x → Q x) (H₁ : ∀ x, P x) : Q a := by
@@ -131,7 +134,7 @@ example (x : X) : ∃ x, ((∃ y, P y) → P x) := by
   try auto;
   sorry
 example : (∃ x, ∀ y, T x y) → ∀ y, ∃ x, T x y := by
-  try auto;
+  auto;
   sorry
 
 end

@@ -134,7 +134,10 @@ def runAuto
         trace[auto.tactic] "FVar: {Expr.fvar id}, λ Sort: {repr lams}"
       let commands := (← (lamFOL2SMT s).run {}).1
       let _ ← liftM <| commands.mapM (fun c => IO.println s!"Command: {c}")
-      Solver.SMT.querySolver commands)
+      Solver.SMT.querySolver commands
+      let proof ← Lam2D.callDuper ((← LamReif.getAssertions).map (·.2))
+      trace[auto.tactic] "Duper found proof of {← Meta.inferType proof}"
+      )
     let afterMonomorphization : Reif.ReifM Unit := (do
       let ufacts ← liftM <| Reif.getFacts
       ((LamReif.uLiftAndReify ufacts afterReify).run' {}).run')
