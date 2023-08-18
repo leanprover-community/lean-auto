@@ -4,6 +4,9 @@ structure GLift.{u, v} (α : Sort u) : Sort (max u (v + 1)) where
   /-- Lift a value into `GLift α` -/    up ::
   /-- Extract a value from `GLift α` -/ down : α
 
+def GLift.down.inj (x y : GLift α) (H : GLift.down x = GLift.down y) : x = y :=
+  show GLift.up (GLift.down x) = GLift.up (GLift.down y) by rw [H]
+
 def notLift.{u} (p : GLift.{1, u} Prop) :=
   GLift.up (Not p.down)
 
@@ -32,6 +35,10 @@ structure IsomType (α : Sort u) (β : Sort v) where
   eq₁ : ∀ (x : α), g (f x) = x
   eq₂ : ∀ (x : β), f (g x) = x
 
+structure IsomType' (β : Sort v) where
+  α : Sort u
+  isom : IsomType α β
+
 -- Isomorphic domain, β is the lifted one
 def eqLift {α : Sort u} {β : Sort v} (I : IsomType α β) (x y : β) :=
   GLift.up.{_, v} (I.g x = I.g y)
@@ -56,6 +63,8 @@ structure EqLift (β : Sort u) where
 
 def EqLift.ofEqLift {α : Sort u} {β : Sort v} (I : IsomType α β) : EqLift β :=
   ⟨eqLift I, eqLift.down I, eqLift.up I⟩
+
+def eqLiftFn.{u} {β : Type u} (x y : β) := GLift.up.{1, u} (@Eq β x y)
 
 def EqLift.default (β : Sort u) : EqLift β :=
   ⟨fun x y => GLift.up (@Eq β x y), fun _ _ => id, fun _ _ => id⟩
@@ -87,6 +96,8 @@ structure ForallLift (β : Sort v') where
 def ForallLift.ofForallLift.{u, v, w} {α : Sort u} {β : Sort v} (I : IsomType α β) : ForallLift β :=
   ⟨forallLift.{u, v, w} I, forallLift.down I, forallLift.up I⟩
 
+def forallLiftFn.{u} (β : Type u) (p : β → GLift.{1, u} Prop) := GLift.up.{1, u} (∀ x, GLift.down (p x))
+
 def ForallLift.default (β : Sort v') : ForallLift.{v', v, w, imax v' w} β :=
   ⟨fun (p : β → GLift.{w + 1, v} (Sort w)) => GLift.up (∀ (x : β), GLift.down (p x)), fun _ => id, fun _ => id⟩
 
@@ -114,6 +125,8 @@ structure ExistLift (β : Sort v') where
 
 def ExistLift.ofExistLift.{u, v} {α : Sort u} {β : Sort v} (I : IsomType α β) : ExistLift β :=
   ⟨existLift.{u, v} I, existLift.down I, existLift.up I⟩
+
+def existLiftFn.{u} (β : Type u) (p : β → GLift.{1, u} Prop) := GLift.up.{1, u} (∃ x, GLift.down (p x))
 
 def ExistLift.default (β : Sort v') : ExistLift.{v', w} β :=
   ⟨fun (p : β → GLift.{1, w} Prop) => GLift.up (∃ (x : β), GLift.down (p x)), fun _ => id, fun _ => id⟩
