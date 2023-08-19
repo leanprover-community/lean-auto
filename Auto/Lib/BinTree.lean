@@ -1,4 +1,5 @@
 import Std.Data.Nat.Lemmas
+import Auto.Lib.NatExtra
 import Auto.Lib.Containers
 
 namespace Auto
@@ -121,13 +122,21 @@ theorem get?.equiv (bt : BinTree α) (n : Nat) :
   get? bt n = get?WF bt n :=
   get?Aux.equiv _ _ n .refl
 
-theorem get?.succSucc (bt : BinTree α) (n : Nat) :
+theorem get?_succSucc (bt : BinTree α) (n : Nat) :
   get? bt (n + 2) = 
     match (n + 2) % 2 with
     | 0 => get? bt.left! ((n + 2) / 2)
     | _ + 1 => get? bt.right! ((n + 2) / 2) := by
   rw [get?.equiv bt, get?.equiv bt.left!, get?.equiv bt.right!]
   apply get?WF.succSucc
+
+theorem get?_leaf (n : Nat) : @get? α .leaf n = .none := by
+  apply Bin.induction (motive := fun n => @get? α .leaf n = .none)
+  case base₀ => rfl
+  case base₁ => rfl
+  case ind =>
+    intro n IH; rw [get?_succSucc];
+    cases (n + 2) % 2 <;> exact IH
 
 def insertWF (bt : BinTree α) (n : Nat) (x : α) : BinTree α :=
   match h : n with
@@ -243,7 +252,7 @@ theorem insert.correct₁ (bt : BinTree β) (n : Nat) (x : β) : n ≠ 0 → get
     have hne' : (n + 2) / 2 ≠ 0 := by
       rw [Nat.add_div_right _ (.step .refl)]; intro h; cases h
     let IH' := fun bt => IH bt hne'
-    rw [get?.succSucc, insert.succSucc, left!, right!]
+    rw [get?_succSucc, insert.succSucc, left!, right!]
     cases (n + 2) % 2 <;> cases bt <;> dsimp <;> rw [IH']
 
 theorem insert.correct₂ (bt : BinTree β) (n₁ n₂ : Nat) (x : β) : n₁ ≠ n₂ → get? (insert bt n₁ x) n₂ = get? bt n₂ := by
@@ -260,7 +269,7 @@ theorem insert.correct₂ (bt : BinTree β) (n₁ n₂ : Nat) (x : β) : n₁ �
     | n₂ + 2 => rw [insert.succSucc]; cases (n₂ + 2) % 2 <;> cases bt <;> rfl
   case ind =>
     intros n₂ IH bt n₁ hne;
-    rw [get?.succSucc bt, get?.succSucc (insert bt n₁ x)]
+    rw [get?_succSucc bt, get?_succSucc (insert bt n₁ x)]
     match n₁ with
     | 0 => cases bt <;> rfl
     | 1 => cases bt <;> rfl
@@ -291,6 +300,89 @@ theorem insert.correct₂ (bt : BinTree β) (n₁ n₂ : Nat) (x : β) : n₁ �
       case succ.succ.node =>
         rw [IH _ _ (hne' (.trans (hmod h₁) (.symm (hmod h₂))))]; rfl;
 
+def fold? (f : α → Option β → α → α) (init : α) : BinTree β → α
+| .leaf => init
+| .node l x r => f (fold? f init l) x (fold? f init r)
+
+def all (p : α → Bool) := fold? (fun l x r => l && x.all p && r) true
+
+theorem all_node (p : α → Bool) : all p (.node l x r) = (all p l && x.all p && all p r) := rfl
+
+theorem all_spec (p : α → Bool) : BinTree.all p bt ↔
+  (∀ n : Nat, (BinTree.get? bt n).all p = true) := by
+  induction bt
+  case leaf =>
+    dsimp [all, fold?]; apply Iff.intro
+    case mp => intro _ n; rw [get?_leaf]; rfl
+    case mpr => intro _; rfl
+  case node l x r IHl IHr =>
+    rw [all_node]; apply Iff.intro
+    case mp =>
+      intro h n;
+      simp at h; let ⟨⟨eql, eqx⟩, eqr⟩ := h
+      match n with
+      | 0 => rfl
+      | 1 => exact eqx
+      | n + 2 =>
+        rw [get?_succSucc];
+        cases (n + 2) % 2 <;> dsimp [left!, right!]
+        case zero => apply IHl.mp eql
+        case succ => apply IHr.mp eqr
+    case mpr =>
+      intro h; simp
+      apply And.intro; apply And.intro
+      case left.left =>
+        apply IHl.mpr; intro n;
+        match n with
+        | 0 => rfl
+        | 1 => exact (h 2)
+        | n + 2 =>
+          have h' := h (2 * n + 4);
+          rw [get?_succSucc] at h'
+          have eq₁ : (2 * n + 2 + 2) % 2 = 0 := by simp
+          have eq₂ : (2 * n + 2 + 2) / 2 = n + 2 := by simp
+          rw [eq₁, eq₂] at h'; exact h'
+      case left.right => exact (h 1)
+      case right =>
+        apply IHr.mpr; intro n;
+        match n with
+        | 0 => rfl
+        | 1 => exact (h 3)
+        | n + 2 =>
+          have h' := h (2 * n + 5)
+          rw [get?_succSucc] at h'
+          have eq₁ : (2 * n + 5) % 2 = 1 := by
+            rw [Nat.add_mod]; simp
+          have eq₂ : (2 * n + 5) / 2 = n + 2 := by
+            rw [Nat.add_comm _ 5];
+            rw [Nat.add_mul_div_left];
+            rw [Nat.add_comm (5 / 2)]; rfl
+            simp
+          rw [eq₁, eq₂] at h'; exact h'
+
+theorem all.insert (p : α → Bool) (bt : BinTree α) (n : Nat) (x : α) :
+  all p (insert bt n x) ↔ (n ≠ 0 → p x) ∧ (∀ n', n' ≠ n → (bt.get? n').all p) := by
+  rw [all_spec]; apply Iff.intro
+  case mp =>
+    intro H; apply And.intro
+    case left =>
+      intro hne; have H' := H n
+      rw [insert.correct₁ _ _ _ hne] at H'; exact H'
+    case right =>
+      intro n' hne; have H' := H n'
+      rw [insert.correct₂ _ _ _ _ (fun h => hne (Eq.symm h))] at H'; exact H'
+  case mpr =>
+    intro ⟨hzero, hsucc⟩ n';
+    cases h : n.beq n'
+    case false =>
+      let h' := Nat.ne_of_beq_eq_false h
+      rw [insert.correct₂ _ _ _ _ h']; apply hsucc _ (fun h => h' (Eq.symm h))
+    case true =>
+      let h' := Nat.eq_of_beq_eq_true h; cases h'
+      cases n
+      case zero => rfl
+      case succ n => rw [insert.correct₁]; apply hzero; simp; simp
+
 end BinTree
     
 structure BinList (α : Sort _) where
@@ -302,7 +394,34 @@ namespace BinList
 def get? (bl : BinList α) (n : Nat) : Option α :=
   match n with
   | 0 => bl.head
-  | n => bl.tail.get? n
+  | _ + 1 => bl.tail.get? n
+
+def insert (bl : BinList α) (n : Nat) (x : α) : BinList α :=
+  match n with
+  | 0 =>
+    match bl with | ⟨_, tail⟩ => ⟨.some x, tail⟩
+  | _ + 1 =>
+    match bl with | ⟨head, tail⟩ => ⟨head, tail.insert n x⟩
+
+theorem insert.correct₁ (bl : BinList α) (n : Nat) (x : α) : get? (insert bl n x) n = .some x := by
+  match n with
+  | 0 =>
+    match bl with
+    | ⟨_, tail⟩ => rfl
+  | n + 1 => exact BinTree.insert.correct₁ _ _ _ (by intro h; cases h)
+
+theorem insert.correct₂ (bl : BinList α) (n₁ n₂ : Nat) (x : α) : n₁ ≠ n₂ → get? (insert bl n₁ x) n₂ = get? bl n₂ := by
+  match n₂ with
+  | 0 =>
+    match bl with
+    | ⟨_, tail⟩ => intro hne; cases n₁ <;> first | contradiction | rfl
+  | n + 1 =>
+    match bl with
+    | ⟨head, tail⟩ =>
+      intro hne; dsimp [get?, insert];
+      cases n₁
+      case zero => rfl
+      case succ _ => exact BinTree.insert.correct₂ _ _ _ _ hne
 
 end BinList
 
