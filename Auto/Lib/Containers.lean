@@ -15,4 +15,11 @@ def mergeArray (a1 a2 : Array α) :=
   else
     a1 ++ a2
 
+-- Effectively a map from `α` to arbitrary type
+class Container {α : Type u} (C : Type v → Type w) where
+  get?   : ∀ {β}, C β → α → Option β
+  insert : ∀ {β}, C β → α → β → C β
+  insertCorrect₁ : ∀ (c : C β) (k : α) (v : β), get? (insert c k v) k = .some val
+  insertCorrect₂ : ∀ (c : C β) (k₁ k₂ : α) (v : β), k₁ ≠ k₂ → get? (insert c k₁ v) k₂ = get? c k₂
+
 end Auto

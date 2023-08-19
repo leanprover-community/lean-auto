@@ -280,10 +280,10 @@ inductive LamBaseTerm.LamWF (ltv : LamTyVal) : LamBaseTerm → LamSort → Type
   | ofExistE s   : LamWF ltv (.existE s) (.func (.func s (.base .prop)) (.base .prop))
 
 def LamBaseTerm.LamWF.unique {ltv : LamTyVal} {b : LamBaseTerm} {s₁ s₂ : LamSort}
-  (lbwf₁ : LamBaseTerm.LamWF ltv b s₁) (lbwf₂ : LamBaseTerm.LamWF ltv b s₂) : s₁ = s₂ ∧ HEq lbwf₁ lbwf₂ := by
+  (lbwf₁ : LamWF ltv b s₁) (lbwf₂ : LamWF ltv b s₂) : s₁ = s₂ ∧ HEq lbwf₁ lbwf₂ := by
   cases lbwf₁ <;> cases lbwf₂ <;> trivial
 
-def LamBaseTerm.LamWF.reprPrec (wf : LamBaseTerm.LamWF ltv s t) (n : Nat) :=
+def LamBaseTerm.LamWF.reprPrec (wf : LamWF ltv s t) (n : Nat) :=
   let s :=
     match wf with
     | .ofTrueE      => f!".ofTrueE"
@@ -325,13 +325,13 @@ def LamBaseTerm.LamWF.ofLamBaseTerm (ltv : LamTyVal) : (b : LamBaseTerm) → (s 
 | .forallE s  => ⟨.func (.func _ (.base .prop)) (.base .prop), .ofForallE s⟩
 | .existE s   => ⟨.func (.func _ (.base .prop)) (.base .prop), .ofExistE s⟩
 
-def LamBaseTerm.wf_complete (wf : LamBaseTerm.LamWF ltv b s) : LamBaseTerm.LamWF.ofLamBaseTerm ltv b = ⟨s, wf⟩ := by
+def LamBaseTerm.wf_complete (wf : LamWF ltv b s) : LamWF.ofLamBaseTerm ltv b = ⟨s, wf⟩ := by
   cases wf <;> rfl
 
-def LamBaseTerm.lamCheck_of_LamWF (H : LamBaseTerm.LamWF ltv b s) : b.lamCheck ltv = s := by
+def LamBaseTerm.lamCheck_of_LamWF (H : LamWF ltv b s) : b.lamCheck ltv = s := by
   cases H <;> rfl
 
-def LamBaseTerm.wf_of_Check (H : b.lamCheck ltv = s) : LamBaseTerm.LamWF ltv b s := by
+def LamBaseTerm.wf_of_Check (H : b.lamCheck ltv = s) : LamWF ltv b s := by
   cases H; cases b <;> constructor
 
 structure ILValuation extends LamTyVal where
@@ -366,7 +366,7 @@ def LamBaseTerm.interp (ilVal : ILValuation.{u}) : (b : LamBaseTerm) → (b.lamC
 | .forallE s  => @forallLiftFn (s.interp ilVal.tyVal)
 | .existE s   => @existLiftFn (s.interp ilVal.tyVal)
 
-def LamBaseWF.interp (ilVal : ILValuation.{u}) : (lwf : LamBaseTerm.LamWF ilVal.toLamTyVal b s) → s.interp ilVal.tyVal
+def LamBaseTerm.LamWF.interp (ilVal : ILValuation.{u}) : (lwf : LamWF ilVal.toLamTyVal b s) → s.interp ilVal.tyVal
 | .ofTrueE      => GLift.up True
 | .ofFalseE     => GLift.up False
 | .ofNot        => notLift
@@ -384,18 +384,18 @@ def LamBaseWF.interp (ilVal : ILValuation.{u}) : (lwf : LamBaseTerm.LamWF ilVal.
 | .ofForallE s  => @forallLiftFn (s.interp ilVal.tyVal)
 | .ofExistE s   => @existLiftFn (s.interp ilVal.tyVal)
 
-theorem LamBaseWF.interp.heq (ilVal : ILValuation.{u})
-  (lwf₁ : LamBaseTerm.LamWF ilVal.toLamTyVal b₁ s₁)
-  (lwf₂ : LamBaseTerm.LamWF ilVal.toLamTyVal b₂ s₂)
-  (HBeq : b₁ = b₂) : HEq (LamBaseWF.interp ilVal lwf₁) (LamBaseWF.interp ilVal lwf₂) := by
+theorem LamBaseTerm.LamWF.interp.heq (ilVal : ILValuation.{u})
+  (lwf₁ : LamWF ilVal.toLamTyVal b₁ s₁)
+  (lwf₂ : LamWF ilVal.toLamTyVal b₂ s₂)
+  (HBeq : b₁ = b₂) : HEq (LamWF.interp ilVal lwf₁) (LamWF.interp ilVal lwf₂) := by
   cases HBeq;
-  cases LamBaseTerm.LamWF.unique lwf₁ lwf₂
+  cases LamWF.unique lwf₁ lwf₂
   case intro seq lweq =>
     cases seq; cases lweq; apply HEq.rfl
 
 def LamBaseTerm.interp.equiv (ilVal : ILValuation.{u})
-  (lwf : LamBaseTerm.LamWF ilVal.toLamTyVal b (b.lamCheck ilVal.toLamTyVal)) :
-  LamBaseWF.interp ilVal lwf = LamBaseTerm.interp ilVal b := by
+  (lwf : LamWF ilVal.toLamTyVal b (b.lamCheck ilVal.toLamTyVal)) :
+  LamWF.interp ilVal lwf = interp ilVal b := by
   cases lwf <;> rfl
 
 -- Judgement, `rterm ≝ mterm : ty`
@@ -451,11 +451,11 @@ def LamBaseTerm.check.{u} (baseVal : BaseValuation.{u}) : LamBaseTerm → Type u
 | .existE s   => (s.interp baseVal.tyVal → GLift.{1, u} Prop) → GLift.{1, u} Prop
 
 def LamBaseTerm.check_of_LamWF
-  (ilVal : ILValuation) (H : LamBaseTerm.LamWF ilVal.toLamTyVal b s) :
-  LamBaseTerm.check (.ofILValuation ilVal) b = s.interp ilVal.tyVal := by
+  (ilVal : ILValuation) (H : LamWF ilVal.toLamTyVal b s) :
+  check (.ofILValuation ilVal) b = s.interp ilVal.tyVal := by
   cases H <;> rfl
 
-inductive LamBaseTerm.WF.{u} (baseVal : BaseValuation.{u}) : LamBaseTerm.Judgement.{u} → Type u
+inductive LamBaseTerm.WF.{u} (baseVal : BaseValuation.{u}) : Judgement.{u} → Type u
   | ofTrueE      : WF baseVal ⟨.trueE, GLift.{1, u} Prop, GLift.up True⟩
   | ofFalseE     : WF baseVal ⟨.falseE, GLift.{1, u} Prop, GLift.up False⟩
   | ofNot        : WF baseVal ⟨.not, GLift.{1, u} Prop → GLift.{1, u} Prop, notLift.{u}⟩
@@ -477,14 +477,14 @@ inductive LamBaseTerm.WF.{u} (baseVal : BaseValuation.{u}) : LamBaseTerm.Judgeme
                                @existLiftFn.{u} (s.interp baseVal.tyVal)⟩
 
 def LamBaseTerm.WF.unique.{u} (baseVal : BaseValuation.{u})
-  (bwf₁ : LamBaseTerm.WF baseVal ⟨t, ty₁, val₁⟩)
-  (bwf₂ : LamBaseTerm.WF baseVal ⟨t, ty₂, val₂⟩)
+  (bwf₁ : WF baseVal ⟨t, ty₁, val₁⟩)
+  (bwf₂ : WF baseVal ⟨t, ty₂, val₂⟩)
   : ty₁ = ty₂ ∧ HEq val₁ val₂ ∧ HEq bwf₁ bwf₂ := by
   cases bwf₁ <;> cases bwf₂ <;> trivial
 
 def LamBaseTerm.wf_of_lamWF.{u} (ilVal : ILValuation.{u})
-  : (lwf : LamBaseTerm.LamWF ilVal.toLamTyVal b s) →
-     WF (.ofILValuation ilVal) ⟨b, s.interp ilVal.tyVal, LamBaseWF.interp ilVal lwf⟩
+  : (lwf : LamWF ilVal.toLamTyVal b s) →
+     WF (.ofILValuation ilVal) ⟨b, s.interp ilVal.tyVal, LamWF.interp ilVal lwf⟩
 | .ofTrueE      => .ofTrueE (baseVal:=.ofILValuation ilVal)
 | .ofFalseE     => .ofFalseE (baseVal:=.ofILValuation ilVal)
 | .ofNot        => .ofNot (baseVal:=.ofILValuation ilVal)
@@ -969,7 +969,7 @@ def LamWF.interp.{u} (lval : LamValuation.{u}) :
   (lctxTy : Nat → LamSort) → (lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal) →
   (lwf : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, t, rty⟩) → rty.interp lval.ilVal.tyVal
 | _,      lctxTerm, .ofAtom n => lval.varVal n
-| _,      _       , .ofBase H => LamBaseWF.interp lval.ilVal H
+| _,      _       , .ofBase H => LamBaseTerm.LamWF.interp lval.ilVal H
 | lctxTy, lctxTerm, .ofBVar n => lctxTerm n
 | lctxTy, lctxTerm, @LamWF.ofLam _ _ argTy _ body H =>
   fun (x : argTy.interp lval.ilVal.tyVal) =>

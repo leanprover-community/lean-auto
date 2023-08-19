@@ -1,5 +1,7 @@
 import Std.Data.Nat.Lemmas
 
+namespace Auto.BinNat
+
 inductive Pos where
   | xH : Pos
   | xO : Pos → Pos
@@ -31,18 +33,13 @@ theorem Pos.toNat_not_zero (p : Pos) : Pos.toNat p ≠ 0 := by
   case xI p' _ =>
     simp [Pos.toNat] 
 
-theorem Pos.ofNatWF_rec_lemma (n : Nat) : n ≥ 2 → n / 2 < n := by
+private theorem Pos.ofNatWFAux (n n' : Nat) : n = n' + 2 → n / 2 < n := by
   intro H; apply Nat.div_lt_self
   case hLtN =>
     cases n;
     contradiction;
     apply Nat.succ_le_succ; apply Nat.zero_le
   case hLtK => apply Nat.le_refl
-
-theorem Pos.ofNatWF_rec_lemma' (n n' : Nat) : n = n' + 2 → n / 2 < n := by
-  intro h; apply ofNatWF_rec_lemma; rw [h];
-  apply Nat.succ_le_succ; apply Nat.succ_le_succ;
-  apply Nat.zero_le
 
 def Pos.ofNatWF (n : Nat) :=
   match h : n with
@@ -52,7 +49,7 @@ def Pos.ofNatWF (n : Nat) :=
     match n % 2 with
     | 0 => .xO (Pos.ofNatWF (n / 2))
     | _ => .xI (Pos.ofNatWF (n / 2))
-decreasing_by apply Pos.ofNatWF_rec_lemma'; assumption
+decreasing_by apply Pos.ofNatWFAux; assumption
 
 theorem Pos.ofNatWF.inductionOn.{u}
   {motive : Nat → Sort u} (x : Nat)
@@ -62,7 +59,7 @@ theorem Pos.ofNatWF.inductionOn.{u}
   | 0 => base₀
   | 1 => base₁
   | x' + 2 => ind x' (inductionOn ((x' + 2) / 2) ind base₀ base₁)
-decreasing_by apply Pos.ofNatWF_rec_lemma'; rfl
+decreasing_by apply Pos.ofNatWFAux; rfl
 
 theorem Pos.ofNatWF.induction
   {motive : Nat → Sort u}
@@ -291,3 +288,5 @@ theorem Pos.neq_XH_succ_pred_eq (p : Pos) : p ≠ .xH → Pos.succ (Pos.pred p) 
 
 theorem Pos.succ_inj (p q : Pos) : Pos.succ p = Pos.succ q → p = q := fun H =>
   Pos.pred_succ_eq p ▸ Pos.pred_succ_eq q ▸ (congrArg _ H : pred (succ p) = pred (succ q))
+
+end Auto.BinNat
