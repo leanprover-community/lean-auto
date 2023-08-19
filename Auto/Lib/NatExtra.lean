@@ -33,4 +33,24 @@ theorem Nat.one_add (n : Nat) : 1 + n = Nat.succ n := by simp [Nat.add_comm]
 theorem Nat.pred_sub (n m : Nat) : Nat.pred n - m = Nat.pred (n - m) := by
   rw [← Nat.sub_one, Nat.sub_sub, one_add, Nat.sub_succ]
 
+theorem Nat.le_max (m n k : Nat) : k ≤ max m n ↔ k ≤ m ∨ k ≤ n := by
+  apply Iff.intro
+  case mp =>
+    intro h; rw [Nat.max_def] at h;
+    cases h' : Nat.ble m n
+    case false =>
+      have h' := Nat.not_le_of_lt (Nat.lt_of_ble_eq_false h')
+      simp [h'] at h; exact Or.inl h
+    case true =>
+      simp [Nat.le_of_ble_eq_true h'] at h; exact Or.inr h
+  case mpr =>
+    intro h; cases h
+    case inl h => exact Nat.le_trans h (Nat.le_max_left _ _)
+    case inr h => exact Nat.le_trans h (Nat.le_max_right _ _)
+
+theorem Nat.le_pred_of_succ_le {n m : Nat} : m ≠ 0 → Nat.succ n ≤ m → n ≤ Nat.pred m :=
+  match m with
+  | 0 => fun h _ => by contradiction
+  | _+1 => fun _ h => Nat.le_of_succ_le_succ h
+
 end Auto
