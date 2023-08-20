@@ -1,5 +1,6 @@
 import Std.Data.Nat.Lemmas
 import Auto.Lib.NatExtra
+import Auto.Lib.OptionExtra
 import Auto.Lib.Containers
 
 namespace Auto
@@ -360,7 +361,7 @@ theorem all_spec (p : α → Bool) : BinTree.all p bt ↔
             simp
           rw [eq₁, eq₂] at h'; exact h'
 
-theorem all.insert (p : α → Bool) (bt : BinTree α) (n : Nat) (x : α) :
+theorem all_insert (p : α → Bool) (bt : BinTree α) (n : Nat) (x : α) :
   all p (insert bt n x) ↔ (n ≠ 0 → p x) ∧ (∀ n', n' ≠ n → (bt.get? n').all p) := by
   rw [all_spec]; apply Iff.intro
   case mp =>
@@ -381,6 +382,31 @@ theorem all.insert (p : α → Bool) (bt : BinTree α) (n : Nat) (x : α) :
       let h' := Nat.eq_of_beq_eq_true h; cases h'
       cases n
       case zero => rfl
+      case succ n => rw [insert.correct₁]; apply hzero; simp; simp
+
+def allp (p : α → Prop) (bt : BinTree α) := ∀ n, Option.allp p (bt.get? n)
+
+theorem allp_insert (p : α → Prop) (bt : BinTree α) (n : Nat) (x : α) :
+  allp p (insert bt n x) ↔ (n ≠ 0 → p x) ∧ (∀ n', n' ≠ n → Option.allp p (bt.get? n')) := by
+  apply Iff.intro
+  case mp =>
+    intro H; apply And.intro
+    case left =>
+      intro hne; have H' := H n
+      rw [insert.correct₁ _ _ _ hne] at H'; exact H'
+    case right =>
+      intro n' hne; have H' := H n'
+      rw [insert.correct₂ _ _ _ _ (fun h => hne (Eq.symm h))] at H'; exact H'
+  case mpr =>
+    intro ⟨hzero, hsucc⟩ n';
+    cases h : n.beq n'
+    case false =>
+      let h' := Nat.ne_of_beq_eq_false h
+      rw [insert.correct₂ _ _ _ _ h']; apply hsucc _ (fun h => h' (Eq.symm h))
+    case true =>
+      let h' := Nat.eq_of_beq_eq_true h; cases h'
+      cases n
+      case zero => exact True.intro
       case succ n => rw [insert.correct₁]; apply hzero; simp; simp
 
 end BinTree
