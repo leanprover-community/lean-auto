@@ -98,6 +98,12 @@ private partial def lamTerm2STerm (lamVarTy : Array LamSort) :
   LamTerm → TransM LamAtom STerm
 | .base b => lamBaseTerm2STerm_Arity0 b
 | .bvar n => return .bvar n
+| .app _ (.app _ (.base (.eqI _)) _) _ =>
+  throwError ("lamTerm2STerm :: " ++ LamReif.exportError.ImpPolyLog)
+| .app _ (.base (.forallEI _)) (.lam _ _) =>
+  throwError ("lamTerm2STerm :: " ++ LamReif.exportError.ImpPolyLog)
+| .app _ (.base (.existEI _)) (.lam _ _) =>
+  throwError ("lamTerm2STerm :: " ++ LamReif.exportError.ImpPolyLog)
 | .app _ (.app _ (.base (.eq _)) arg₁) arg₂ => do
   let arg₁' ← lamTerm2STerm lamVarTy arg₁
   let arg₂' ← lamTerm2STerm lamVarTy arg₂
@@ -123,12 +129,15 @@ where
     (ts.push arg, t)
   | t => (#[], t)
 
-def lamFOL2SMT (s : LamReif.State) : TransM LamAtom (Array IR.SMT.Command) := do
-  let assertions := s.assertions
-  let lamVarTy : Array LamSort := s.varVal.map (·.2.2)
-  for (_, lterm) in assertions do
-    let sterm ← lamTerm2STerm lamVarTy lterm
-    trace[auto.lamFOL2SMT] "λ term {repr lterm} translated to SMT term {sterm}"
+def lamFOL2SMT
+  -- This should be retrieved from the corresponding field of `LamReif.State`
+  (varVal : Array (FVarId × Expr × Embedding.Lam.LamSort))
+  -- `facts` should not contain import versions of `eq, ∀` or `∃`
+  (facts : Array LamTerm) : TransM LamAtom (Array IR.SMT.Command) := do
+  let lamVarTy := varVal.map (·.2.2)
+  for t in facts do
+    let sterm ← lamTerm2STerm lamVarTy t
+    trace[auto.lamFOL2SMT] "λ term {repr t} translated to SMT term {sterm}"
     addCommand (.assert sterm)
   getCommands
 

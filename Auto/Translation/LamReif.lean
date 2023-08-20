@@ -21,7 +21,11 @@ deriving Inhabited, Hashable, BEq
 structure State where
   -- Maps fvars representing (lifted) type to their index
   tyVarMap    : HashMap FVarId Nat              := HashMap.empty
-  -- Maps fvars representing free variables to their index
+  -- Maps reified free variables to their index
+  -- Whenever we encounter a free variable, we look up
+  --   `varMap`. If it's already reified, then `varMap`
+  --   tells us about its index. If it's not reified, insert
+  --   it to `varMap`.
   varMap      : HashMap FVarId (FVarType × Nat) := HashMap.empty
   -- `tyVal` is the inverse of `tyVarMap`
   -- The first `FVarId` is the interpretation of the type atom
@@ -32,17 +36,20 @@ structure State where
   -- The `Expr` is the un-lifted counterpart of `FVarId`
   -- The `LamSort` is the λ sort of the atom
   varVal      : Array (FVarId × Expr × LamSort) := #[]
-  -- For `eqLamTy`, `forallLamTy` and `existLamTy`,
-  --   the `LamSort` is the corresponding sort where
-  --   we'll use in `<eq/forall/exist>LamVal`.
-  eqLamTy     : Array LamSort                   := #[]
-  eqVal       : Array Expr                      := #[]
-  forallLamTy : Array LamSort                   := #[]
-  forallVal   : Array Expr                      := #[]
-  existLamTy  : Array LamSort                   := #[]
-  existVal    : Array Expr                      := #[]
+  isomTys   : Array LamSort                   := #[]
+  -- Inverse of ``isomTys
+  isomTyMap : HashMap LamSort Nat             := HashMap.empty
+  -- If `eqLamTy[n] = s`, then `s` is the corresponding
+  --   sort where we'll use in `<eq/forall/exist>LamVal n`
+  -- The same holds for `forallLamTy` and `existLamTy`
+  eqLamTy     : Array Nat                       := #[]
+  forallLamTy : Array Nat                       := #[]
+  existLamTy  : Array Nat                       := #[]
   -- This array contains assertions that have external (lean) proof
-  --   The first `Expr` is the proof of the assertion
+  --   The first `e : Expr` is the proof of the assertion
+  --   The second `t : LamTerm` is the corresponding λ term,
+  --     where all `eq, ∀, ∃` are import version
+  -- To be precise, we require that `e : GLift.down t.interp`
   assertions  : Array (Expr × LamTerm)          := #[]
 deriving Inhabited
 
@@ -51,6 +58,17 @@ abbrev ReifM := StateRefT State ULiftM
 @[inline] def ReifM.run' (x : ReifM α) (s : State) := Prod.fst <$> x.run s
 
 #genMonadState ReifM
+
+def sort2IsomTysIdx (s : LamSort) : ReifM Nat := do
+  let isomTyMap ← getIsomTyMap
+  match isomTyMap.find? s with
+  | .some n => return n
+  | .none =>
+    let isomTys ← getIsomTys
+    let idx := isomTys.size
+    setIsomTys (isomTys.push s)
+    setIsomTyMap (isomTyMap.insert s idx)
+    return idx
 
 def lookupTyVal! (n : Nat) : ReifM (FVarId × Expr × Level) := do
   if let .some r := (← getTyVal)[n]? then
@@ -65,21 +83,27 @@ def lookupVarVal! (n : Nat) : ReifM (FVarId × Expr × LamSort) := do
   else
     throwError "lookupVarVal! :: Unknown term atom {n}"
 
-def lookupEqLamTy! (n : Nat) : ReifM LamSort := do
-  if let .some s := (← getEqLamTy)[n]? then
+def lookupIsomTy! (idx : Nat) : ReifM LamSort := do
+  if let .some s := (← getIsomTys)[idx]? then
     return s
+  else
+    throwError "lookupIsomTy! :: Unknown index {idx}"
+
+def lookupEqLamTy! (n : Nat) : ReifM LamSort := do
+  if let .some idx := (← getEqLamTy)[n]? then
+    lookupIsomTy! idx
   else
     throwError "lookupEqLamTy! :: Unknown eq {n}"
 
 def lookupForallLamTy! (n : Nat) : ReifM LamSort := do
-  if let .some s := (← getForallLamTy)[n]? then
-    return s
+  if let .some idx := (← getForallLamTy)[n]? then
+    lookupIsomTy! idx
   else
     throwError "lookupForallLamTy! :: Unknown forall {n}"
 
 def lookupExistLamTy! (n : Nat) : ReifM LamSort := do
-  if let .some s := (← getExistLamTy)[n]? then
-    return s
+  if let .some idx := (← getExistLamTy)[n]? then
+    lookupIsomTy! idx
   else
     throwError "lookupExistLamTy! :: Unknown exist {n}"
 
@@ -168,46 +192,6 @@ section ILLifting
 
 end ILLifting
 
-section Atoms
-
-  def collectLamSortAtoms : LamSort → HashSet Nat
-  | .atom n => HashSet.empty.insert n
-  | .base _ => HashSet.empty
-  | .func a b => (collectLamSortAtoms a).insertMany (collectLamSortAtoms b)
-
-  -- Collect type atoms given a LamBaseTerm
-  def collectLamBaseTermAtoms (b : LamBaseTerm) : ReifM (HashSet Nat) := do
-    let s? : Option LamSort ← (do
-      match b with
-      | .eq n => lookupEqLamTy! n
-      | .forallE n => lookupForallLamTy! n
-      | .existE n => lookupExistLamTy! n
-      | _ => return none)
-    if let .some s := s? then
-      return collectLamSortAtoms s
-    else
-      return HashSet.empty    
-
-  -- The first hashset is the type atoms
-  -- The second hashset is the term atoms
-  def collectAtoms : LamTerm → ReifM (HashSet Nat × HashSet Nat)
-  | .atom n => do
-    let (_, _, s) ← lookupVarVal! n
-    return (collectLamSortAtoms s, HashSet.empty.insert n)
-  | .base b => do
-    return (← collectLamBaseTermAtoms b, HashSet.empty)
-  | .bvar _ => pure (HashSet.empty, HashSet.empty)
-  | .lam s t => do
-    let (typeHs, termHs) ← collectAtoms t
-    let sHs := collectLamSortAtoms s
-    return (mergeHashSet typeHs sHs, termHs)
-  | .app _ t₁ t₂ => do
-    let (typeHs₁, termHs₁) ← collectAtoms t₁
-    let (typeHs₂, termHs₂) ← collectAtoms t₂
-    return (mergeHashSet typeHs₁ typeHs₂, mergeHashSet termHs₁ termHs₂)
-
-end Atoms
-
 -- Accept a new free variable representing term atom or lifted logical constant
 -- Returns the index of it in the corresponding Array after we've inserted it into
 --   its Array and HashMap
@@ -225,21 +209,21 @@ def newTermFVar (fvty : FVarType) (id : FVarId) (sort : LamSort) : ReifM LamTerm
   | .eqVar =>
     let eqLamTy ← getEqLamTy
     let idx := eqLamTy.size
-    setEqLamTy (eqLamTy.push sort)
+    setEqLamTy (eqLamTy.push (← sort2IsomTysIdx sort))
     setVarMap (varMap.insert id (fvty, idx))
-    return .base (.eq idx)
+    return .base (.eqI idx)
   | .forallVar =>
     let forallLamTy ← getForallLamTy
     let idx := forallLamTy.size
-    setForallLamTy (forallLamTy.push sort)
+    setForallLamTy (forallLamTy.push (← sort2IsomTysIdx sort))
     setVarMap (varMap.insert id (fvty, idx))
-    return .base (.forallE idx)
+    return .base (.forallEI idx)
   | .existVar =>
     let existLamTy ← getExistLamTy
     let idx := existLamTy.size
-    setExistLamTy (existLamTy.push sort)
+    setExistLamTy (existLamTy.push (← sort2IsomTysIdx sort))
     setVarMap (varMap.insert id (fvty, idx))
-    return .base (.existE idx)
+    return .base (.existEI idx)
 
 def newTypeFVar (id : FVarId) : ReifM LamSort := do
   let tyVarMap ← getTyVarMap
@@ -306,22 +290,16 @@ def processLiftedInterped (val : Expr) (fid : FVarId) (reifType : Expr → ReifM
     let .forallE _ upTy' _ _ := fidTy
       | throwError "processTermFVar :: Unexpected `=` type {fidTy}"
     let s ← reifType upTy'
-    let eqLift := ← mkImportingEqLift s
-    setEqVal ((← getEqVal).push eqLift)
     newTermFVar .eqVar fid s
   | .forallVar =>
     let .forallE _ (.forallE _ upTy' _ _) _ _ := fidTy
       | throwError "processTermFVar :: Unexpected `∀` type {fidTy}"
     let s ← reifType upTy'
-    let forallLift ← mkImportingForallLift s
-    setForallVal ((← getForallVal).push forallLift)
     newTermFVar .forallVar fid s
   | .existVar =>
     let .forallE _ (.forallE _ upTy' _ _) _ _ := fidTy
       | throwError "processTermFVar :: Unexpected `∃` type {fidTy}"
     let s ← reifType upTy'
-    let existLift ← mkImportingExistLift s
-    setExistVal ((← getExistVal).push existLift)
     newTermFVar .existVar fid s
 
 mutual
@@ -334,9 +312,9 @@ mutual
     if let .some (fvarType, id) := varMap.find? fid then
       match fvarType with
       | .var => return .atom id
-      | .eqVar => return .base (.eq id)
-      | .forallVar => return .base (.forallE id)
-      | .existVar => return .base (.existE id)
+      | .eqVar => return .base (.eqI id)
+      | .forallVar => return .base (.forallEI id)
+      | .existVar => return .base (.existEI id)
     -- If the free variable has not been processed
     match (← getLiftedInterped).find? fid with
     | .some val => processLiftedInterped val fid reifType      
@@ -404,5 +382,79 @@ def checkInterpretedConst : Expr → MetaM Bool
 -- `cont` is what we need to do after we ulift and reify the facts
 def uLiftAndReify (facts : Array Reif.UMonoFact) (cont : ReifM α) : ReifM α :=
   withULiftedFacts checkInterpretedConst facts (fun pfacts => do reifFacts pfacts; cont)
+
+-- Functions which models checker steps on the `meta` level
+-- Steps that only requires looking at the `LamTerm`s and does not
+--   require looking up the valuation should be put in the files
+--   in the `Embedding` folder. There is no need to model them
+--   on the `meta` level
+section Checker
+
+  def resolveLamBaseTermImport : LamBaseTerm → ReifM LamBaseTerm
+  | .eqI n      => do return .eq (← lookupEqLamTy! n)
+  | .forallEI n => do return .forallE (← lookupForallLamTy! n)
+  | .existEI n  => do return .existE (← lookupExistLamTy! n)
+  | t           => pure t
+
+  def resolveImport : LamTerm → ReifM LamTerm
+  | .atom n       => return .atom n
+  | .base b       => return .base (← resolveLamBaseTermImport b)
+  | .bvar n       => return .bvar n
+  | .lam s t      => return .lam s (← resolveImport t)
+  | .app s fn arg => return .app s (← resolveImport fn) (← resolveImport arg)
+
+end Checker
+
+-- This section should only be used when exporting terms to external provers
+section ExportUtils
+
+  def exportError.ImpPolyLog :=
+    "Import versions of polymorphic logical " ++
+    "constants should have been eliminated"
+
+  def collectLamSortAtoms : LamSort → HashSet Nat
+  | .atom n => HashSet.empty.insert n
+  | .base _ => HashSet.empty
+  | .func a b => (collectLamSortAtoms a).insertMany (collectLamSortAtoms b)
+
+  -- Collect type atoms in a LamBaseTerm
+  def collectLamBaseTermAtoms (b : LamBaseTerm) : ReifM (HashSet Nat) := do
+    let s? : Option LamSort ← (do
+      match b with
+      | .eqI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
+      | .forallEI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
+      | .existEI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
+      | .eq s => return .some s
+      | .forallE s => return .some s
+      | .existE s => return .some s
+      | _ => return none)
+    if let .some s := s? then
+      return collectLamSortAtoms s
+    else
+      return HashSet.empty    
+
+  -- The first hashset is the type atoms
+  -- The second hashset is the term atoms
+  -- This function is called when we're trying to export terms
+  --   from `λ` to external provers, e.g. Lean/Duper
+  -- Therefore, we expect that `eqI, forallEI` and `existEI`
+  --   does not occur in the `LamTerm`
+  def collectAtoms : LamTerm → ReifM (HashSet Nat × HashSet Nat)
+  | .atom n => do
+    let (_, _, s) ← lookupVarVal! n
+    return (collectLamSortAtoms s, HashSet.empty.insert n)
+  | .base b => do
+    return (← collectLamBaseTermAtoms b, HashSet.empty)
+  | .bvar _ => pure (HashSet.empty, HashSet.empty)
+  | .lam s t => do
+    let (typeHs, termHs) ← collectAtoms t
+    let sHs := collectLamSortAtoms s
+    return (mergeHashSet typeHs sHs, termHs)
+  | .app _ t₁ t₂ => do
+    let (typeHs₁, termHs₁) ← collectAtoms t₁
+    let (typeHs₂, termHs₂) ← collectAtoms t₂
+    return (mergeHashSet typeHs₁ typeHs₂, mergeHashSet termHs₁ termHs₂)
+
+end ExportUtils
 
 end Auto.LamReif

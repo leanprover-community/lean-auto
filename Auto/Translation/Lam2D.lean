@@ -94,34 +94,28 @@ def interpCstrRealAsUnlifted (c : CstrReal) : Expr :=
 
 open Embedding in
 def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
-| .trueE     => return .const ``True []
-| .falseE    => return .const ``False []
-| .not       => return .const ``Not []
-| .and       => return .const ``And []
-| .or        => return .const ``Or []
-| .imp       => return .const ``ImpF [.zero, .zero]
-| .iff       => return .const ``Iff []
-| .intVal _  => throwError "Not implemented"
-| .realVal c => return interpCstrRealAsUnlifted c
-| .bvVal _   => throwError "Not implemented"
-| .eq n      => do
-  let eqLamTy ← getEqLamTy
-  let .some s := eqLamTy[n]?
-    | throwError "interpLamBaseTermAsUnlifted :: Unknown eq {n}"
+| .trueE      => return .const ``True []
+| .falseE     => return .const ``False []
+| .not        => return .const ``Not []
+| .and        => return .const ``And []
+| .or         => return .const ``Or []
+| .imp        => return .const ``ImpF [.zero, .zero]
+| .iff        => return .const ``Iff []
+| .intVal _   => throwError "Not implemented"
+| .realVal c  => return interpCstrRealAsUnlifted c
+| .bvVal _    => throwError "Not implemented"
+| .eqI _      => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
+| .forallEI _ => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
+| .existEI _  => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
+| .eq s       => do
   return ← Meta.mkAppOptM ``Eq #[← interpLamSortAsUnlifted s]
-| .forallE n => do
-  let forallLamTy ← getForallLamTy
-  let .some s := forallLamTy[n]?
-    | throwError "interpLamBaseTermAsUnlifted :: Unknown forall {n}"
+| .forallE s  => do
   let ty ← interpLamSortAsUnlifted s
   let sort ← Util.normalizeType (← Meta.inferType ty)
   let Expr.sort lvl := sort
     | throwError "interpLamBaseTermAsUnlifted :: Unexpected sort {sort}"
   return mkAppN (.const ``forallF [lvl, .zero]) #[← interpLamSortAsUnlifted s]
-| .existE n => do
-  let existLamTy ← getExistLamTy
-  let .some s := existLamTy[n]?
-    | throwError "interpLamBaseTermAsUnlifted :: Unknown exist {n}"
+| .existE s  => do
   return ← Meta.mkAppOptM ``Exists #[← interpLamSortAsUnlifted s]
 
 -- Takes a `t : LamTerm` and produces the `un-lifted` version of `t.interp`.

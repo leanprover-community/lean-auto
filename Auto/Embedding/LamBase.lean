@@ -103,6 +103,9 @@ def LamSort.beq : LamSort → LamSort → Bool
 | .func m₁ n₁, .func m₂ n₂ => LamSort.beq m₁ m₂ && LamSort.beq n₁ n₂
 | _,           _           => false
 
+instance : BEq LamSort where
+  beq := LamSort.beq
+
 def LamSort.beq_refl : (a : LamSort) → (a.beq a) = true
 | .atom m => Nat.beq_refl' m
 | .base b => LamBaseSort.beq_refl b
@@ -193,9 +196,15 @@ inductive LamBaseTerm
   | intVal   : Int → LamBaseTerm
   | realVal  : CstrReal → LamBaseTerm
   | bvVal    : List Bool → LamBaseTerm
-  | eqI      : Nat → LamBaseTerm -- Version of `eq` when we're importing external facts
-  | forallEI : Nat → LamBaseTerm -- Version of `forall` when we're importing external facts
-  | existEI  : Nat → LamBaseTerm -- Version of `exist` when we're importing external facts
+  -- Versions of `eq, ∀, ∃` when we're importing external facts
+  -- Note that the [import versions] of `eq, ∀, ∃` should only be used when
+  --   we're importing external facts. When facts are imported, we call
+  --   `resolveImport` on them and these [import versions] are turned into
+  --   [non-import versions]
+  | eqI      : Nat → LamBaseTerm
+  | forallEI : Nat → LamBaseTerm
+  | existEI  : Nat → LamBaseTerm
+  -- Non-import versions of `eq, ∀, ∃`
   | eq       : LamSort → LamBaseTerm
   | forallE  : LamSort → LamBaseTerm
   | existE   : LamSort → LamBaseTerm
@@ -1721,6 +1730,7 @@ theorem LamThmValid.prepend (H : LamThmValid lval lctx t)
       case H.h₆ =>
         apply HEq.funext; intro n; apply eqRec_heq'
 
+-- Only accepts propositions `p` without loose bound variables
 theorem LamThmValid.ofInterpAsProp
   (lval : LamValuation) (p : LamTerm)
   (h₁ : LamTerm.lamCheck? lval.ilVal.toLamTyVal dfLCtxTy p = .some (.base .prop))

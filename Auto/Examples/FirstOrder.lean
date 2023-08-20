@@ -16,13 +16,13 @@ set_option smt.solver.name "cvc5"
 
 set_option trace.auto.tactic true
 example : (∃ x : α, r) → r := by
-  auto;
+  try auto;
   sorry
 example (a : α) : r → (∃ x : α, r) := by
   try auto;
   sorry
 example : (∃ x, p x ∧ r) ↔ (∃ x, p x) ∧ r := by
-  auto;
+  try auto;
   sorry
 example : (∃ x, p x ∨ q x) ↔ (∃ x, p x) ∨ (∃ x, q x) := by
   try auto;
@@ -134,7 +134,10 @@ example (x : X) : ∃ x, ((∃ y, P y) → P x) := by
   try auto;
   sorry
 example : (∃ x, ∀ y, T x y) → ∀ y, ∃ x, T x y := by
-  auto;
+  try auto;
+  sorry
+example (x y : Nat) (f : Nat → Nat) : x = y → f x = f y := by
+  try auto;
   sorry
 
 end
