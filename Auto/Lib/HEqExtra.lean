@@ -21,6 +21,13 @@ theorem congr_h_heq {f₁ : α₁ → β₁} {f₂ : α₂ → β₂} {x₁ : α
   (Hβ : β₁ = β₂) (h₁ : HEq f₁ f₂) (h₂ : HEq x₁ x₂) : HEq (f₁ x₁) (f₂ x₂) := by
   cases h₂; cases Hβ; cases h₁; apply HEq.rfl
 
+theorem congr₂_h_heq
+  {f₁ : α₁ → β₁ → γ₁} {f₂ : α₂ → β₂ → γ₂}
+  {x₁ : α₁} {x₂ : α₂} {y₁ : β₁} {y₂ : β₂}
+  (Hγ : γ₁ = γ₂) (h₁ : HEq f₁ f₂) (h₂ : HEq x₁ x₂) (h₃ : HEq y₁ y₂) :
+  HEq (f₁ x₁ y₁) (f₂ x₂ y₂) := by
+  cases h₂; cases h₃; cases Hγ; cases h₁; apply HEq.rfl
+
 theorem congr_hd_heq
   {β₁ : α₁ → Sort u} {β₂ : α₂ → Sort u}
   {f₁ : ∀ (x : α₁), β₁ x} {f₂ : ∀ (x : α₂), β₂ x} {x₁ : α₁} {x₂ : α₂}
