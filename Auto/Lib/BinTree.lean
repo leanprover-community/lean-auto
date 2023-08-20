@@ -1,4 +1,5 @@
 import Std.Data.Nat.Lemmas
+import Auto.Lib.BoolExtra
 import Auto.Lib.NatExtra
 import Auto.Lib.OptionExtra
 import Auto.Lib.Containers
@@ -301,19 +302,42 @@ theorem insert.correct₂ (bt : BinTree β) (n₁ n₂ : Nat) (x : β) : n₁ �
       case succ.succ.node =>
         rw [IH _ _ (hne' (.trans (hmod h₁) (.symm (hmod h₂))))]; rfl;
 
-def fold? (f : α → Option β → α → α) (init : α) : BinTree β → α
+def foldl (f : α → β → α) (init : α) : BinTree β → α
 | .leaf => init
-| .node l x r => f (fold? f init l) x (fold? f init r)
+| .node l x r =>
+  let lf := foldl f init l
+  let mf :=
+    match x with
+    | .some x => f lf x
+    | .none => lf
+  foldl f mf r
 
-def all (p : α → Bool) := fold? (fun l x r => l && x.all p && r) true
+def all (p : α → Bool) := BinTree.foldl (fun i x => i && p x) true
 
-theorem all_node (p : α → Bool) : all p (.node l x r) = (all p l && x.all p && all p r) := rfl
+theorem all_with_init (p : α → Bool) (bt : BinTree α) (init : Bool) :
+  foldl (fun i x => i && p x) init bt = (all p bt && init) := by
+  cases init <;> simp
+  case false =>
+    induction bt
+    case leaf => rfl
+    case node l x r IHl IHr =>
+      cases x <;> dsimp [foldl] <;> rw [IHl] <;> simp <;> exact IHr
+  case true => rfl
 
-theorem all_spec (p : α → Bool) : BinTree.all p bt ↔
-  (∀ n : Nat, (BinTree.get? bt n).all p = true) := by
+theorem all_node (p : α → Bool) :
+  all p (.node l x r) = (l.all p && x.all p && r.all p) := by
+  dsimp [all, foldl]; rw [all_with_init]; dsimp [all]
+  cases x <;> dsimp [Option.all]
+  case none =>
+    simp; apply Bool.and_comm
+  case some x =>
+    apply Bool.and_comm
+
+theorem all_spec (p : α → Bool) (bt : BinTree α) :
+  all p bt ↔ (∀ n : Nat, (get? bt n).all p = true) := by
   induction bt
   case leaf =>
-    dsimp [all, fold?]; apply Iff.intro
+    dsimp [all, foldl]; apply Iff.intro
     case mp => intro _ n; rw [get?_leaf]; rfl
     case mpr => intro _; rfl
   case node l x r IHl IHr =>
@@ -360,6 +384,12 @@ theorem all_spec (p : α → Bool) : BinTree.all p bt ↔
             rw [Nat.add_comm (5 / 2)]; rfl
             simp
           rw [eq₁, eq₂] at h'; exact h'
+
+theorem all_spec' (p : α → Bool) (bt : BinTree α) :
+  all p bt ↔ (∀ n : Nat, Option.allp (fun x => p x = true) (get? bt n)) := by
+  rw [all_spec]; apply Iff.intro <;> intro h n
+  case mp => rw [← Option.p_all_eq_true]; apply h
+  case mpr => rw [Option.p_all_eq_true]; apply h
 
 theorem all_insert (p : α → Bool) (bt : BinTree α) (n : Nat) (x : α) :
   all p (insert bt n x) ↔ (n ≠ 0 → p x) ∧ (∀ n', n' ≠ n → (bt.get? n').all p) := by
@@ -423,11 +453,7 @@ def get? (bl : BinList α) (n : Nat) : Option α :=
   | _ + 1 => bl.tail.get? n
 
 def insert (bl : BinList α) (n : Nat) (x : α) : BinList α :=
-  match n with
-  | 0 =>
-    match bl with | ⟨_, tail⟩ => ⟨.some x, tail⟩
-  | _ + 1 =>
-    match bl with | ⟨head, tail⟩ => ⟨head, tail.insert n x⟩
+  ⟨match n with | 0 => .some x | _ + 1 => bl.head, bl.tail.insert n x⟩
 
 theorem insert.correct₁ (bl : BinList α) (n : Nat) (x : α) : get? (insert bl n x) n = .some x := by
   match n with
@@ -448,6 +474,121 @@ theorem insert.correct₂ (bl : BinList α) (n₁ n₂ : Nat) (x : α) : n₁ �
       cases n₁
       case zero => rfl
       case succ _ => exact BinTree.insert.correct₂ _ _ _ _ hne
+
+def foldl (f : α → β → α) (init : α) (bl : BinList β) : α :=
+  match bl.head with
+  | .some x => bl.tail.foldl f (f init x)
+  | .none => bl.tail.foldl f init
+
+def all (p : α → Bool) := BinList.foldl (fun i x => i && p x) true
+
+theorem all_down (p : α → Bool) (bl : BinList α) :
+  bl.all p = (bl.head.all p && bl.tail.all p) :=
+  match bl with
+  | ⟨head, tail⟩ => by
+    cases head <;> dsimp [all, foldl]
+    case none => rfl
+    case some x =>
+      rw [BinTree.all_with_init]; simp; apply Bool.and_comm
+
+def allp (p : α → Prop) (bl : BinList α) := ∀ n, Option.allp p (bl.get? n)
+
+theorem allp_down (p : α → Prop) (bl : BinList α) :
+  bl.allp p ↔ Option.allp p bl.head ∧ bl.tail.allp p :=
+  match bl with
+  | ⟨.none, _⟩ =>
+    Iff.intro
+      (fun h => ⟨.intro, fun n => match n with | 0 => True.intro | .succ n => h (.succ n)⟩)
+      (fun ⟨_, h⟩ n => match n with | 0 => True.intro | .succ n => h (.succ n))
+  | ⟨.some _, _⟩ =>
+    Iff.intro
+      (fun h => ⟨h 0, fun n => match n with | 0 => True.intro | .succ n => h (.succ n)⟩)
+      (fun ⟨hHead, hTail⟩ n => match n with | 0 => hHead | .succ n => hTail (.succ n))
+
+theorem all_spec (p : α → Bool) (bl : BinList α) :
+  all p bl ↔ (∀ n : Nat, (get? bl n).all p = true) := by
+  rw [all_down]; rw [Bool.and_eq_true]; rw [BinTree.all_spec']
+  apply Iff.intro
+  case mp =>
+    intro ⟨hHead, hTail⟩;
+    intro n; rw [Option.p_all_eq_true]; revert n; apply (allp_down _ _).mpr
+    apply And.intro
+    case left => rw [← Option.p_all_eq_true]; exact hHead
+    case right => exact hTail
+  case mpr =>
+    intro h;
+    apply And.intro
+    case left => exact (h 0)
+    case right =>
+      intro n; cases n
+      case zero => exact True.intro
+      case succ n => rw [← Option.p_all_eq_true]; exact (h (.succ n))
+
+theorem all_insert (p : α → Bool) (bl : BinList α) (n : Nat) (x : α) :
+  all p (insert bl n x) ↔ p x ∧ (∀ n', n' ≠ n → (bl.get? n').all p) :=
+  match bl with
+  | .mk head tail => by
+    rw [all_down]; rw [Bool.and_eq_true]; dsimp [insert]
+    rw [BinTree.all_insert]
+    apply Iff.intro
+    case mp =>
+      intro ⟨hHead, hTail⟩; apply And.intro
+      case left =>
+        cases n
+        case zero => exact hHead
+        case succ n => apply hTail.left; intro h; cases h
+      case right =>
+        intro n'; cases n'
+        case zero =>
+          intro h; cases n
+          case zero => contradiction
+          case succ n => exact hHead
+        case succ n' =>
+          apply hTail.right
+    case mpr =>
+      intro ⟨hHead, hTail⟩; apply And.intro
+      case left =>
+        cases n
+        case zero => exact hHead
+        case succ n => exact (hTail 0 (by intro h; cases h))
+      case right =>
+        apply And.intro (fun _ => hHead)
+        intro n' h; cases n'
+        case zero => rfl
+        case succ n' => exact hTail (.succ n') h
+
+theorem allp_insert (p : α → Prop) (bl : BinList α) (n : Nat) (x : α) :
+  allp p (insert bl n x) ↔ p x ∧ (∀ n', n' ≠ n → Option.allp p (bl.get? n')) :=
+  match bl with
+  | .mk head tail => by
+    rw [allp_down]; dsimp [insert]
+    rw [BinTree.allp_insert]
+    apply Iff.intro
+    case mp =>
+      intro ⟨hHead, hTail⟩; apply And.intro
+      case left =>
+        cases n
+        case zero => exact hHead
+        case succ n => apply hTail.left; intro h; cases h
+      case right =>
+        intro n'; cases n'
+        case zero =>
+          intro h; cases n
+          case zero => contradiction
+          case succ n => exact hHead
+        case succ n' =>
+          apply hTail.right
+    case mpr =>
+      intro ⟨hHead, hTail⟩; apply And.intro
+      case left =>
+        cases n
+        case zero => exact hHead
+        case succ n => exact (hTail 0 (by intro h; cases h))
+      case right =>
+        apply And.intro (fun _ => hHead)
+        intro n' h; cases n'
+        case zero => exact True.intro
+        case succ n' => exact hTail (.succ n') h
 
 end BinList
 
