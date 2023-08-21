@@ -39,12 +39,12 @@ structure State where
   isomTys     : Array LamSort                   := #[]
   -- Inverse of ``isomTys
   isomTyMap   : HashMap LamSort Nat             := HashMap.empty
-  -- If `eqLamTy[n] = s`, then `s` is the corresponding
+  -- If `eqLamVal[n] = s`, then `s` is the corresponding
   --   sort where we'll use in `<eq/forall/exist>LamVal n`
-  -- The same holds for `forallLamTy` and `existLamTy`
-  eqLamTy     : Array Nat                       := #[]
-  forallLamTy : Array Nat                       := #[]
-  existLamTy  : Array Nat                       := #[]
+  -- The same holds for `forallLamVal` and `existLamVal`
+  eqLamVal     : Array Nat                       := #[]
+  forallLamVal : Array Nat                       := #[]
+  existLamVal  : Array Nat                       := #[]
   -- This array contains assertions that have external (lean) proof
   --   The first `e : Expr` is the proof of the assertion
   --   The second `t : LamTerm` is the corresponding λ term,
@@ -95,23 +95,23 @@ def lookupIsomTy! (idx : Nat) : ReifM LamSort := do
   else
     throwError "lookupIsomTy! :: Unknown index {idx}"
 
-def lookupEqLamTy! (n : Nat) : ReifM LamSort := do
-  if let .some idx := (← getEqLamTy)[n]? then
+def lookupEqLamVal! (n : Nat) : ReifM LamSort := do
+  if let .some idx := (← getEqLamVal)[n]? then
     lookupIsomTy! idx
   else
-    throwError "lookupEqLamTy! :: Unknown eq {n}"
+    throwError "lookupEqLamVal! :: Unknown eq {n}"
 
-def lookupForallLamTy! (n : Nat) : ReifM LamSort := do
-  if let .some idx := (← getForallLamTy)[n]? then
+def lookupForallLamVal! (n : Nat) : ReifM LamSort := do
+  if let .some idx := (← getForallLamVal)[n]? then
     lookupIsomTy! idx
   else
-    throwError "lookupForallLamTy! :: Unknown forall {n}"
+    throwError "lookupForallLamVal! :: Unknown forall {n}"
 
-def lookupExistLamTy! (n : Nat) : ReifM LamSort := do
-  if let .some idx := (← getExistLamTy)[n]? then
+def lookupExistLamVal! (n : Nat) : ReifM LamSort := do
+  if let .some idx := (← getExistLamVal)[n]? then
     lookupIsomTy! idx
   else
-    throwError "lookupExistLamTy! :: Unknown exist {n}"
+    throwError "lookupExistLamVal! :: Unknown exist {n}"
 
 -- Computes `upFunc` and `downFunc` between `s.interpAsUnlifted` and `s.interpAsLifted`
 --   The first `Expr` is `upFunc`
@@ -213,21 +213,21 @@ def newTermFVar (fvty : FVarType) (id : FVarId) (sort : LamSort) : ReifM LamTerm
     setVarMap (varMap.insert id (fvty, idx))
     return .atom idx
   | .eqVar =>
-    let eqLamTy ← getEqLamTy
-    let idx := eqLamTy.size
-    setEqLamTy (eqLamTy.push (← sort2IsomTysIdx sort))
+    let eqLamVal ← getEqLamVal
+    let idx := eqLamVal.size
+    setEqLamVal (eqLamVal.push (← sort2IsomTysIdx sort))
     setVarMap (varMap.insert id (fvty, idx))
     return .base (.eqI idx)
   | .forallVar =>
-    let forallLamTy ← getForallLamTy
-    let idx := forallLamTy.size
-    setForallLamTy (forallLamTy.push (← sort2IsomTysIdx sort))
+    let forallLamVal ← getForallLamVal
+    let idx := forallLamVal.size
+    setForallLamVal (forallLamVal.push (← sort2IsomTysIdx sort))
     setVarMap (varMap.insert id (fvty, idx))
     return .base (.forallEI idx)
   | .existVar =>
-    let existLamTy ← getExistLamTy
-    let idx := existLamTy.size
-    setExistLamTy (existLamTy.push (← sort2IsomTysIdx sort))
+    let existLamVal ← getExistLamVal
+    let idx := existLamVal.size
+    setExistLamVal (existLamVal.push (← sort2IsomTysIdx sort))
     setVarMap (varMap.insert id (fvty, idx))
     return .base (.existEI idx)
 
@@ -391,17 +391,37 @@ def uLiftAndReify (facts : Array Reif.UMonoFact) (cont : ReifM α) : ReifM α :=
 
 section Checker
 
-  -- Some unit test
-  -- unsafe def act (e : Expr) : Lean.Elab.TermElabM Unit := do
-  --   IO.println (← Util.exprFromExpr e)
-  -- 
-  -- #getExprAndApply[Lean.toExpr (ChkStep.wfOfAppend [.base .prop] 3)|act]
+  /- `Unit test`
+  unsafe def act (e : Expr) : Lean.Elab.TermElabM Unit := do
+    let e' ← Util.exprFromExpr e
+    IO.println e'
+    IO.println (← Meta.isTypeCorrect e')
+  
+  #getExprAndApply[BinList.toLCtx (α:=LamSort) (BinList.ofList [LamSort.base .prop])|act]
+  -/
 
   -- Functions that turns data structure in `ReifM.State` into `Expr`
 
   def buildChkSteps : ReifM Expr := do
     let chkSteps ← getChkSteps
-    return Lean.toExpr (BinList.ofList chkSteps.data)
+    let e := Lean.toExpr (BinList.ofList chkSteps.data)
+    if !(← Meta.isTypeCorrect e) then
+      throwError "buildChkSteps :: Malformed expression"
+    return e
+
+  def buildLamTyVal : ReifM Expr := do
+    let lamVarTy := (← getVarVal).data.map (·.2.2)
+    let lamVarTyExpr := BinList.toLCtx (α:=LamSort) (BinList.ofList lamVarTy)
+    let eqLamVal ← (← getEqLamVal).data.mapM lookupIsomTy!
+    let eqLamValExpr := BinList.toLCtx (α:=LamSort) (BinList.ofList eqLamVal)
+    let forallLamVal ← (← getForallLamVal).data.mapM lookupIsomTy!
+    let forallLamValExpr := BinList.toLCtx (α:=LamSort) (BinList.ofList forallLamVal)
+    let existLamVal ← (← getExistLamVal).data.mapM lookupIsomTy!
+    let existLamValExpr := BinList.toLCtx (α:=LamSort) (BinList.ofList existLamVal)
+    let e := Lean.mkApp4 (.const ``LamTyVal.mk []) lamVarTyExpr eqLamValExpr forallLamValExpr existLamValExpr
+    if !(← Meta.isTypeCorrect e) then
+      throwError "buildLamTyVal :: Malformed expression"
+    return e
 
   -- Functions which models checker steps on the `meta` level
   -- Steps that only requires looking at the `LamTerm`s and does not
@@ -410,9 +430,9 @@ section Checker
   --   on the `meta` level
 
   def resolveLamBaseTermImport : LamBaseTerm → ReifM LamBaseTerm
-  | .eqI n      => do return .eq (← lookupEqLamTy! n)
-  | .forallEI n => do return .forallE (← lookupForallLamTy! n)
-  | .existEI n  => do return .existE (← lookupExistLamTy! n)
+  | .eqI n      => do return .eq (← lookupEqLamVal! n)
+  | .forallEI n => do return .forallE (← lookupForallLamVal! n)
+  | .existEI n  => do return .existE (← lookupExistLamVal! n)
   | t           => pure t
 
   def resolveImport : LamTerm → ReifM LamTerm

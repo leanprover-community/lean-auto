@@ -37,7 +37,7 @@ theorem induction.{u}
 
 end Bin
 
-inductive BinTree (α : Sort _) where
+inductive BinTree (α : Type u) where
   | leaf : BinTree α
   | node : BinTree α → Option α → BinTree α → BinTree α
 deriving Repr
@@ -48,8 +48,8 @@ instance : Inhabited (BinTree α) where
   default := .leaf
 
 open Lean in
-def toExpr {α : Type u} [ToSortLevel.{u + 1}] [Lean.ToExpr α] (bt : BinTree α) : Expr :=
-  let lvl := ToSortLevel.toSortLevel.{u + 1}
+def toExpr {α : Type u} [ToSortLevel.{u}] [Lean.ToExpr α] (bt : BinTree α) : Expr :=
+  let lvl := ToSortLevel.toSortLevel.{u}
   let ty := Lean.toTypeExpr α
   match bt with
   | .leaf => .app (.const ``BinTree.leaf [lvl]) ty
@@ -60,10 +60,11 @@ def toExpr {α : Type u} [ToSortLevel.{u + 1}] [Lean.ToExpr α] (bt : BinTree α
       | .some e => mkApp2 (.const ``Option.some [lvl]) ty (Lean.toExpr e)
     mkApp4 (.const ``BinTree.node [lvl]) ty l.toExpr xExpr r.toExpr
 
-instance [ToSortLevel.{u + 1}] [Lean.ToExpr α] : Lean.ToExpr (BinTree α) where
+open Lean in
+instance [ToSortLevel.{u}] [ToExpr α] : Lean.ToExpr (BinTree α) where
   toExpr := BinTree.toExpr
   toTypeExpr :=
-    let lvl := ToSortLevel.toSortLevel.{u + 1}
+    let lvl := ToSortLevel.toSortLevel.{u}
     .app (.const ``BinTree [lvl]) (Lean.toTypeExpr α)
 
 def val? (bt : BinTree α) : Option α :=
@@ -493,7 +494,7 @@ def ofList (xs : List α) : BinTree α :=
 
 end BinTree
     
-structure BinList (α : Sort _) where
+structure BinList (α : Type u) where
   head : Option α
   tail : BinTree α
 
@@ -503,22 +504,30 @@ instance : Inhabited (BinList α) where
   default := ⟨.none, .leaf⟩
 
 open Lean in
-def toExpr {α : Type u} [ToSortLevel.{u + 1}] [Lean.ToExpr α] (bl : BinList α) : Expr :=
-  let lvl := ToSortLevel.toSortLevel.{u + 1}
+def toExpr {α : Type u} [ToSortLevel.{u}] [ToExpr α] (bl : BinList α) : Expr :=
+  let lvl := ToSortLevel.toSortLevel.{u}
   let ty := Lean.toTypeExpr α
   let ⟨head, tail⟩ := bl
   mkApp3 (.const ``BinList.mk [lvl]) ty (Lean.toExpr head) (Lean.toExpr tail)
 
-instance [ToSortLevel.{u + 1}] [Lean.ToExpr α] : Lean.ToExpr (BinList α) where
+open Lean in
+instance {α : Type u} [ToSortLevel.{u}] [ToExpr α] : Lean.ToExpr (BinList α) where
   toExpr := BinList.toExpr
   toTypeExpr :=
-    let lvl := ToSortLevel.toSortLevel.{u + 1}
+    let lvl := ToSortLevel.toSortLevel.{u}
     .app (.const ``BinList [lvl]) (Lean.toTypeExpr α)
 
 def get? (bl : BinList α) (n : Nat) : Option α :=
   match n with
   | 0 => bl.head
   | _ + 1 => bl.tail.get? n
+
+-- Given a `bl : BinList α`, return `Lean.toExpr (fun n => BinList.get? bl n)`
+open Lean in
+def toLCtx {α : Type u} [ToSortLevel.{u}] [Lean.ToExpr α] (bl : BinList α) : Expr :=
+  let lvl := ToSortLevel.toSortLevel.{u}
+  let type := toTypeExpr α
+  .lam `n (.const ``Nat []) (mkApp3 (.const ``BinList.get? [lvl]) type (toExpr bl) (.bvar 0)) .default
 
 def insert (bl : BinList α) (n : Nat) (x : α) : BinList α :=
   ⟨match n with | 0 => .some x | _ + 1 => bl.head, bl.tail.insert n x⟩
