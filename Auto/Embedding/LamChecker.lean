@@ -10,7 +10,7 @@ namespace Auto.Embedding.Lam
 structure RTable where
   -- Well-formed formulas, with types
   -- We do not import well-formedness facts because
-  --   we have `LamWF.ofCheck?`
+  --   we have `LamWF.ofLamCheck?`
   wf    : Auto.BinList (List LamSort × LamSort × LamTerm)
   -- Valid propositions
   -- The initial formulas in the `valid` table will be
@@ -23,6 +23,11 @@ inductive REntry where
   | wf      : List LamSort → LamSort → LamTerm → REntry
   | valid   : List LamSort → LamTerm → REntry
 
+def REntry.correct (lval : LamValuation.{u}) : REntry → Prop
+| .none => True
+| .wf lctx s t => LamThmWFP lval lctx s t
+| .valid lctx t => LamThmValid lval lctx t
+
 def RTable.addEntry (r : RTable) (n : Nat) : REntry → RTable
 | .none         => r
 | .wf lctx s t  => ⟨r.wf.insert n ⟨lctx, s, t⟩, r.valid⟩
@@ -31,14 +36,26 @@ def RTable.addEntry (r : RTable) (n : Nat) : REntry → RTable
 -- Invariant of `wf`
 def RTable.wfInv
   (lval : LamValuation.{u})
-  (wf : Auto.BinList (List LamSort × LamSort × LamTerm)) :=
-  wf.allp (fun ⟨lctx, rty, t⟩ => LamThmWF' lval lctx rty t)
+  (wf : BinList (List LamSort × LamSort × LamTerm)) :=
+  wf.allp (fun ⟨lctx, rty, t⟩ => LamThmWFP lval lctx rty t)
+
+theorem RTable.wfInv_get
+  {wf : BinList _} (inv : RTable.wfInv lval wf)
+  (h : BinList.get? wf n = Option.some val) :
+  LamThmWF lval val.fst val.snd.fst val.snd.snd := by
+  have inv' := inv n; rw [h] at inv'; exact LamThmWF.ofLamThmWFP inv'
 
 -- Invariant of `valid
 def RTable.validInv
   (lval : LamValuation.{u})
   (valid : Auto.BinList (List LamSort × LamTerm)) :=
   valid.allp (fun ⟨lctx, t⟩ => LamThmValid lval lctx t)
+
+theorem RTable.validInv_get
+  {valid : BinList _} (inv : RTable.validInv lval valid)
+  (h : BinList.get? valid n = Option.some val) :
+  LamThmValid lval val.fst val.snd := by
+  have inv' := inv n; rw [h] at inv'; exact inv'
 
 -- Invariant of `RTable`
 def RTable.inv (lval : LamValuation.{u}) (r : RTable) :=
@@ -75,6 +92,12 @@ theorem RTable.import_correct (it : ImportTable lval) :
 inductive ChkStep where
   -- Adds `⟨lctx, t, t.lamCheck!⟩` to `rtable.wf`
   | wfOfCheck (lctx : List LamSort) (t : LamTerm) : ChkStep
+  | wfOfAppend (ex : List LamSort) (wPos : Nat) : ChkStep
+  | wfOfPrepend (ex : List LamSort) (wPos : Nat) : ChkStep
+  | wfOfResolveImport (wPos : Nat) : ChkStep
+  | wfOfHeadBeta (wPos : Nat) : ChkStep
+  | validOfResolveImport (vPos : Nat) : ChkStep
+  | validOfHeadBeta (vPos : Nat) : ChkStep
 
 def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → REntry
 | .wfOfCheck lctx t =>
@@ -84,5 +107,86 @@ def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → REntry
     | true  => .wf lctx rty t
     | false => .none
   | .none => .none
+| .wfOfAppend ex wPos =>
+  match r.wf.get? wPos with
+  | .some ⟨lctx, s, t⟩ => .wf (lctx ++ ex) s t
+  | .none => .none
+| .wfOfPrepend ex wPos =>
+  match r.wf.get? wPos with
+  | .some ⟨lctx, s, t⟩ => .wf (ex ++ lctx) s (t.bvarLifts ex.length)
+  | .none => .none
+| .wfOfResolveImport wPos =>
+  match r.wf.get? wPos with
+  | .some ⟨lctx, s, t⟩ => .wf lctx s (t.resolveImport ltv)
+  | .none => .none
+| .wfOfHeadBeta wPos =>
+  match r.wf.get? wPos with
+  | .some ⟨lctx, s, t⟩ => .wf lctx s t.headBeta
+  | .none => .none
+| .validOfResolveImport vPos =>
+  match r.valid.get? vPos with
+  | .some ⟨lctx, t⟩ => .valid lctx (t.resolveImport ltv)
+  | .none => .none
+| .validOfHeadBeta vPos =>
+  match r.valid.get? vPos with
+  | .some ⟨lctx, t⟩ => .valid lctx t.headBeta
+  | .none => .none
+
+theorem ChkStep.correct
+  (lval : LamValuation.{u}) (r : RTable) (inv : r.inv lval) :
+  (cs : ChkStep) → REntry.correct lval (cs.eval lval.ilVal.toLamTyVal r)
+| .wfOfCheck lctx t => by
+  dsimp [eval]
+  cases h₁ : LamTerm.lamCheck? lval.ilVal.toLamTyVal (pushLCtxs lctx dfLCtxTy) t <;> try exact True.intro
+  case some s =>
+    cases h₂ : Nat.ble (LamTerm.maxLooseBVarSucc t) (List.length lctx) <;> try exact True.intro
+    dsimp [REntry.correct]; apply LamThmWFP.ofLamThmWF
+    exact LamThmWF.ofLamCheck? h₁ (Nat.le_of_ble_eq_true h₂)
+| .wfOfAppend ex wPos => by
+  dsimp [eval]
+  cases h : BinList.get? r.wf wPos <;> try exact True.intro
+  case some lctxst =>
+    match lctxst with
+    | (lctx, s, t) =>
+      apply LamThmWFP.ofLamThmWF;
+      apply LamThmWF.append (RTable.wfInv_get inv.left h)
+| .wfOfPrepend ex wPos => by
+  dsimp [eval]
+  cases h : BinList.get? r.wf wPos <;> try exact True.intro
+  case some lctxst =>
+    match lctxst with
+    | (lctx, s, t) =>
+      apply LamThmWFP.ofLamThmWF;
+      apply LamThmWF.prepend (RTable.wfInv_get inv.left h)
+| .wfOfResolveImport wPos => by
+  dsimp [eval]
+  cases h : BinList.get? r.wf wPos <;> try exact True.intro
+  case some lctxst =>
+    match lctxst with
+    | (lctx, s, t) =>
+      apply LamThmWFP.ofLamThmWF;
+      apply LamThmWF.resolveImport (RTable.wfInv_get inv.left h)
+| .wfOfHeadBeta wPos => by
+  dsimp [eval]
+  cases h : BinList.get? r.wf wPos <;> try exact True.intro
+  case some lctxst =>
+    match lctxst with
+    | (lctx, s, t) =>
+      apply LamThmWFP.ofLamThmWF;
+      apply LamThmWF.headBeta (RTable.wfInv_get inv.left h)
+| .validOfResolveImport vPos => by
+  dsimp [eval]
+  cases h : BinList.get? r.valid vPos <;> try exact True.intro
+  case some lctxt =>
+    match lctxt with
+    | (lctx, t) =>
+      apply LamThmValid.resolveImport (RTable.validInv_get inv.right h)
+| .validOfHeadBeta vPos => by
+  dsimp [eval]
+  cases h : BinList.get? r.valid vPos <;> try exact True.intro
+  case some lctxt =>
+    match lctxt with
+    | (lctx, t) =>
+      apply LamThmValid.headBeta (RTable.validInv_get inv.right h)
 
 end Auto.Embedding.Lam

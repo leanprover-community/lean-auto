@@ -175,6 +175,11 @@ def LamWF.headBeta
     match wf with
     | .ofApp _ wfFn wfArg => LamWF.headBetaAux lctx wfArg wfFn
 
+def LamThmWF.headBeta
+  {lval : LamValuation} {lctx : List LamSort} {rty : LamSort} {t : LamTerm}
+  (wf : LamThmWF lval lctx rty t) : LamThmWF lval lctx rty t.headBeta := by
+  intro lctx; apply LamWF.headBeta _ _ (wf lctx)
+
 theorem LamWF.headBeta.correct
   {lval : LamValuation.{u}} {t : LamTerm} {ty : LamSort}
   (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal)
@@ -189,6 +194,11 @@ theorem LamWF.headBeta.correct
   | .app .. =>
     match wfT with
     | .ofApp _ wfFn wfArg => LamWF.headBetaAux.correct lctxTy lctxTerm wfArg wfFn
+
+theorem LamThmValid.headBeta  (H : LamThmValid lval lctx t) :
+  LamThmValid lval lctx t.headBeta := by
+  intros lctx; let ⟨wf, h⟩ := H lctx; exists (LamWF.headBeta _ _ wf);
+  intro lctxTerm; rw [← LamWF.headBeta.correct]; apply h
 
 def LamBaseTerm.resolveImport (ltv : LamTyVal) : LamBaseTerm → LamBaseTerm
 | .eqI n      => .eq (ltv.eqLamVal n)
@@ -235,7 +245,8 @@ def LamTerm.resolveImport (ltv : LamTyVal) : LamTerm → LamTerm
 | .lam s t      => .lam s (t.resolveImport ltv)
 | .app s fn arg => .app s (fn.resolveImport ltv) (arg.resolveImport ltv)
 
-def LamWF.resolveImport {ltv : LamTyVal} {t : LamTerm} {ty : LamSort}
+def LamWF.resolveImport
+  {ltv : LamTyVal} {t : LamTerm} {ty : LamSort}
   {lctx : Nat → LamSort} (wfT : LamWF ltv ⟨lctx, t, ty⟩) :
   LamWF ltv ⟨lctx, LamTerm.resolveImport ltv t, ty⟩ :=
   match wfT with
@@ -244,6 +255,11 @@ def LamWF.resolveImport {ltv : LamTyVal} {t : LamTerm} {ty : LamSort}
   | .ofBVar n => .ofBVar n
   | .ofLam s hwf => .ofLam s hwf.resolveImport
   | .ofApp s fn arg => .ofApp s fn.resolveImport arg.resolveImport
+
+def LamThmWF.resolveImport
+  {lval : LamValuation} {lctx : List LamSort} {rty : LamSort} {t : LamTerm}
+  (wf : LamThmWF lval lctx rty t) : LamThmWF lval lctx rty (t.resolveImport lval.ilVal.toLamTyVal) :=
+  fun lctx => LamWF.resolveImport (wf lctx)
 
 theorem LamWF.resolveImport.correct
   {lval : LamValuation.{u}} {t : LamTerm} {ty : LamSort}
@@ -263,6 +279,12 @@ theorem LamWF.resolveImport.correct
     rw [LamWF.resolveImport.correct _ _ wfFn]
     rw [LamWF.resolveImport.correct _ _ wfArg]
 
+theorem LamThmValid.resolveImport (H : LamThmValid lval lctx t) :
+  LamThmValid lval lctx (t.resolveImport lval.ilVal.toLamTyVal) := by
+  intro lctx; let ⟨wf, h⟩ := H lctx;
+  exists (LamWF.resolveImport wf); intro lctxTerm
+  rw [← LamWF.resolveImport.correct]; apply h
+
 -- Semantic Equivalence
 -- Note that we do not expect to reorder binders or remove
 --   unused binders, because doing so makes the term not equivalent
@@ -276,10 +298,10 @@ def LamEquiv (lval : LamValuation) (lctx : List LamSort) (rty : LamSort)
     LamWF.interp lval (pushLCtxs lctx lctx') lctxTerm wf₁ =
       LamWF.interp lval (pushLCtxs lctx lctx') lctxTerm wf₂
 
-theorem LamEquiv.refl (lval : LamValuation) (wf : LamThmWF' lval lctx s t) :
+theorem LamEquiv.refl (lval : LamValuation) (wf : LamThmWF lval lctx s t) :
   LamEquiv lval lctx s t t := by
   dsimp [LamEquiv]; intros lctx';
-  let ⟨wf'⟩ := wf lctx'
+  let wf' := wf lctx'
   exists wf'; exists wf'
   intros lctxTerm; rfl
 
@@ -370,27 +392,27 @@ theorem LamEquiv.congr (lval : LamValuation)
 
 theorem LamEquiv.congrFn (lval : LamValuation)
   (eFn : LamEquiv lval lctx (.func argTy resTy) fn₁ fn₂)
-  (wfArg : LamThmWF' lval lctx argTy arg) :
+  (wfArg : LamThmWF lval lctx argTy arg) :
   LamEquiv lval lctx resTy (.app argTy fn₁ arg) (.app argTy fn₂ arg) :=
   LamEquiv.congr lval eFn (LamEquiv.refl lval wfArg)
 
 theorem LamEquiv.congrArg (lval : LamValuation)
-  (wfFn : LamThmWF' lval lctx (.func argTy resTy) fn)
+  (wfFn : LamThmWF lval lctx (.func argTy resTy) fn)
   (eArg : LamEquiv lval lctx argTy arg₁ arg₂) :
   LamEquiv lval lctx resTy (.app argTy fn arg₁) (.app argTy fn arg₂) :=
   LamEquiv.congr lval (LamEquiv.refl lval wfFn) eArg
 
-theorem LamEquiv.ofHeadBeta (wf : LamThmWF' lval lctx s t) :
+theorem LamEquiv.ofHeadBeta (wf : LamThmWF lval lctx s t) :
   LamEquiv lval lctx s t t.headBeta := by
-  dsimp [LamEquiv]; intros lctx'; let ⟨wf'⟩ := wf lctx'
+  dsimp [LamEquiv]; intros lctx'; let wf' := wf lctx'
   exists wf'; exists LamWF.headBeta _ _ wf'
   intros lctxTerm; apply LamWF.headBeta.correct
 
 theorem LamEquiv.ofResolveImport
-  (lval : LamValuation) (wfT : LamThmWF' lval lctx s t) :
+  (lval : LamValuation) (wfT : LamThmWF lval lctx s t) :
   LamEquiv lval lctx s t (t.resolveImport lval.ilVal.toLamTyVal) := by
   dsimp [LamEquiv]; intros lctx';
-  let ⟨wfT'⟩ := wfT lctx'; exists wfT'; exists (LamWF.resolveImport wfT')
+  let wfT' := wfT lctx'; exists wfT'; exists (LamWF.resolveImport wfT')
   intros lctxTerm; apply LamWF.resolveImport.correct
 
 theorem LamThmValid.ofLamEquiv
@@ -449,21 +471,21 @@ theorem Eq.subst (lval : LamValuation) (lctx : List LamSort)
   apply LamEquiv.congrArg
   case wfFn =>
     intros lctx'
-    let ⟨.ofApp _ Hp _⟩ := LamThmWF'.ofLamThmValid hPa lctx'
-    exact Nonempty.intro Hp
+    let .ofApp _ Hp _ := LamThmWF.ofLamThmValid hPa lctx'
+    exact Hp
   case eArg =>
     apply LamEquiv.ofLamThmValid _ _ hEq
 
 theorem Eq.congr (lval : LamValuation) (lctx : List LamSort)
   (hEq : LamThmValid lval lctx (.mkEq s' a b))
-  (wfT : LamThmWF' lval lctx s (.app s' f a))
+  (wfT : LamThmWF lval lctx s (.app s' f a))
   : LamThmValid lval lctx (.mkEq s (.app s' f a) (.app s' f b)) := by
   apply LamThmValid.ofLamEquiv
   apply LamEquiv.congrArg
   case wfFn =>
     intros lctx'
-    let ⟨.ofApp _ Hf _⟩ := wfT lctx'
-    exact Nonempty.intro Hf
+    let .ofApp _ Hf _ := wfT lctx'
+    exact Hf
   case eArg => exact LamEquiv.ofLamThmValid _ _ hEq
 
 end Auto.Embedding.Lam
