@@ -1,25 +1,11 @@
+import Auto.Lib.BoolExtra
 import Auto.Lib.HEqExtra
 import Auto.Lib.NatExtra
-import Auto.Lib.BoolExtra
+import Auto.Lib.ListExtra
+import Auto.Lib.HList
 import Std.Data.List.Lemmas
 
 namespace Auto.Embedding
-
-
-section hlist
-
-  inductive HList (β : α → Sort _) : List α → Sort _
-    | nil  : HList β .nil
-    | cons : (x : β ty) → HList β tys → HList β (ty :: tys)
-
-  def HList.getD {β : α → Sort _} {ty : α} (default : β ty) :
-    {tys : List α} → HList β tys → (n : Nat) → β (tys.getD n ty)
-    | .nil, .nil,       _       => default
-    | .(_), .cons a _,  0       => a
-    | .(_), .cons _ as, .succ n => HList.getD default as n
-
-end hlist
-
 
 section generic
 
@@ -500,33 +486,6 @@ section push
     HEq (fun n => pushLCtxsAtDep xs (.succ pos) lctx (.succ n)) (pushLCtxsAtDep xs pos (fun n => lctx (.succ n))) := by
     dsimp [pushLCtxsAtDep]; apply restoreAtDep.succ_succ_Fn
 
-  -- This function is slow and is not meant to be used in
-  --   computation. It's main use is in the pushs_pops theorems
-  def List.ofFun (f : Nat → α) (n : Nat) : List α :=
-    match n with
-    | 0 => .nil
-    | .succ n' => f 0 :: ofFun (fun n => f (.succ n)) n'
-
-  theorem List.ofFun_length (f : Nat → α) (n : Nat) :
-    (List.ofFun f n).length = n := by
-    revert f; induction n <;> intros f
-    case zero => rfl
-    case succ n IH => dsimp [ofFun]; rw [IH]
-
-  theorem List.ofFun_get?_eq_some (f : Nat → α) (n m : Nat) (h : n > m) :
-    (List.ofFun f n).get? m = .some (f m) := by
-    revert f n; induction m <;> intros f n h
-    case zero =>
-      cases n
-      case zero => cases h
-      case succ n => rfl
-    case succ m IH =>
-      cases n
-      case zero => cases h
-      case succ n =>
-        let h' := Nat.le_of_succ_le_succ h
-        dsimp [ofFun]; rw [IH (fun n => f (.succ n)) _ h']
-
   theorem List.ofFun_get?_eq_none (f : Nat → α) (n m : Nat) (h : n ≤ m) :
     (List.ofFun f n).get? m = .none := by
     revert f n; induction m <;> intros f n h
@@ -539,7 +498,7 @@ section push
       case zero => rfl
       case succ n =>
         let h' := Nat.le_of_succ_le_succ h
-        dsimp [ofFun]; rw [IH (fun n => f (.succ n)) _ h']
+        dsimp [List.ofFun]; rw [IH (fun n => f (.succ n)) _ h']
 
   theorem List.ofFun.ofPushLCtx
     (xs : List α) (heq : xs.length = n) (lctx : Nat → α) :
@@ -549,7 +508,7 @@ section push
       dsimp at heq; rw [← heq]; rfl
     | .cons x xs, _ => by
       dsimp at heq; rw [← heq];
-      dsimp [ofFun]; rw [pushLCtxs.cons_zero]; apply congrArg
+      dsimp [List.ofFun]; rw [pushLCtxs.cons_zero]; apply congrArg
       rw [pushLCtxs.cons_succ_Fn]
       exact List.ofFun.ofPushLCtx xs rfl lctx
 

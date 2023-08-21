@@ -346,9 +346,48 @@ def LamBaseTerm.LamWF.ofCheck (H : b.lamCheck ltv = s) : LamWF ltv b s := by
 
 structure ILValuation extends LamTyVal where
   tyVal     : Nat → Type u
+  -- In the checker metacode, we'll first construct
+  --   `<?>ValBundle : Nat → (s : LamSort) × (<?>Lift (s.interp tyVal))`
+  -- and assign
+  --   `<?>LamTy := fun n => (<?>ValBundle n).fst`
+  --   `<?>Val   := fun n => (<?>ValBundle n).snd`
+  -- Note that `(s : LamSort) × (<?>Lift (s.interp tyVal)) : Type u`
   eqVal     : ∀ (n : Nat), EqLift.{u + 1, u} ((eqLamVal n).interp tyVal)
   forallVal : ∀ (n : Nat), ForallLift.{u + 1, u, 0, 0} ((forallLamVal n).interp tyVal)
   existVal  : ∀ (n : Nat), ExistLift.{u + 1, u} ((existLamVal n).interp tyVal)
+
+-- Used in checker metacode to construct `eqValBundle`
+def eqValSigmaβ.{u} (tyVal : Nat → Type u) (s : LamSort) : Type u :=
+  EqLift.{u + 1, u} (s.interp tyVal)
+
+def eqValSigmaMk.{u} (tyVal : Nat → Type u) :=
+  @Sigma.mk LamSort (eqValSigmaβ.{u} tyVal)
+
+def eqValSigmaFst.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (eqValSigmaβ.{u} tyVal)) : LamSort := sig.fst
+
+def eqValSigmaSnd.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (eqValSigmaβ.{u} tyVal)) : eqValSigmaβ.{u} tyVal sig.fst := sig.snd
+
+-- Used in checker metacode to construct `forallValBundle`
+def forallValSigmaβ.{u} (tyVal : Nat → Type u) (s : LamSort) : Type u :=
+  ForallLift.{u + 1, u, 0, 0} (s.interp tyVal)
+
+def forallValSigmaMk.{u} (tyVal : Nat → Type u) :=
+  @Sigma.mk LamSort (forallValSigmaβ.{u} tyVal)
+
+def forallValSigmaFst.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (forallValSigmaβ.{u} tyVal)) : LamSort := sig.fst
+
+def forallValSigmaSnd.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (forallValSigmaβ.{u} tyVal)) : forallValSigmaβ.{u} tyVal sig.fst := sig.snd
+
+-- Used in checker metacode to construct `existValBundle`
+def existValSigmaβ.{u} (tyVal : Nat → Type u) (s : LamSort) : Type u :=
+  ExistLift.{u + 1, u} (s.interp tyVal)
+
+def existValSigmaMk.{u} (tyVal : Nat → Type u) :=
+  @Sigma.mk LamSort (existValSigmaβ.{u} tyVal)
+
+def existValSigmaFst.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (existValSigmaβ.{u} tyVal)) : LamSort := sig.fst
+
+def existValSigmaSnd.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (existValSigmaβ.{u} tyVal)) : existValSigmaβ.{u} tyVal sig.fst := sig.snd
 
 def eqVal.default (eqLamVal : Nat → LamSort) (tyVal : Nat → Type u) :
   ∀ (n : Nat), EqLift.{u + 1, u} ((eqLamVal n).interp tyVal) :=
@@ -357,6 +396,10 @@ def eqVal.default (eqLamVal : Nat → LamSort) (tyVal : Nat → Type u) :
 def forallVal.default (forallLamVal : Nat → LamSort) (tyVal : Nat → Type u) :
   ∀ (n : Nat), ForallLift.{u + 1, u, 0, 0} ((forallLamVal n).interp tyVal) :=
   fun n => ForallLift.default ((forallLamVal n).interp tyVal)
+
+def existVal.default (existLamVal : Nat → LamSort) (tyVal : Nat → Type u) :
+  ∀ (n : Nat), ExistLift.{u + 1, u} ((existLamVal n).interp tyVal) :=
+  fun n => ExistLift.default ((existLamVal n).interp tyVal)
 
 def LamBaseTerm.interp (ilVal : ILValuation.{u}) : (b : LamBaseTerm) → (b.lamCheck ilVal.toLamTyVal).interp ilVal.tyVal
 | .trueE      => GLift.up True
@@ -1003,7 +1046,22 @@ def LamWF.ofLamCheck? {ltv : LamTyVal} :
 
 structure LamValuation.{u} where
   ilVal     : ILValuation.{u}
+  -- In the checker metacode, we'll first construct 
+  --   `varValBundle : Nat → (s : LamSort) × (s.interp ilVal.tyVal)`
+  -- and assign
+  --   `lamVarTy := fun n => (varValBundle n).fst`
+  --   `varVal   := fun n => (varValBundle n).snd`
+  -- Note that `(s : LamSort) × (s.interp ilVal.tyVal) : Type u`
   varVal    : ∀ (n : Nat), (ilVal.lamVarTy n).interp ilVal.tyVal
+
+-- Used in checker metacode to construct `varValBundle`
+-- We don't need `varValSigmaβ` because that's exactly `LamSort.interp`
+def varValSigmaMk.{u} (tyVal : Nat → Type u) :=
+  @Sigma.mk LamSort (LamSort.interp tyVal)
+
+def varValSigmaFst.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (LamSort.interp tyVal)) : LamSort := sig.fst
+
+def varValSigmaSnd.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (LamSort.interp tyVal)) : LamSort.interp tyVal sig.fst := sig.snd
 
 def LamTerm.interp.{u}
   (dfSort : LamSort) (lval : LamValuation.{u}) (dfVal : dfSort.interp lval.ilVal.tyVal)

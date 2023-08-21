@@ -57,6 +57,12 @@ structure State where
   wfTable     : Array (List LamSort × LamSort × LamTerm) := #[]
   -- `Embedding/LamChecker/RTable.valid`
   validTable  : Array (List LamSort × LamTerm)           := #[]
+  -- Something about the universes level `u`
+  -- Suppose `u ← getU`
+  -- 1. `tyVal : Nat → Type u`
+  -- 2. `ILValuation.{u}`
+  -- 3. `LamValuation.{u}`
+  -- 4. All the `GLift/GLift.up/GLift.down` has level parameter list `[?, u]`
 deriving Inhabited
 
 abbrev ReifM := StateRefT State ULiftM
@@ -165,33 +171,37 @@ section ILLifting
       | throwError "mkIsomType :: Unexpected sort {sortOrig} when processing sort {repr s}"
     return (upFunc, downFunc, ty, upTy, uOrig)
 
+  set_option pp.universes true
   def mkIsomType (upFunc downFunc ty upTy : Expr) (uOrig : Level) : ReifM Expr := do
     let u ← getU
     let eq₁ : Expr := mkLambda `_ .default ty (mkAppN (.const ``Eq.refl [uOrig]) #[ty, .bvar 0])
     let eq₂ : Expr := mkLambda `_ .default upTy (mkAppN (.const ``Eq.refl [.succ u]) #[upTy, .bvar 0])
     let isomTy : Expr := mkAppN (.const ``Embedding.IsomType.mk [uOrig, .succ u]) #[ty, upTy, upFunc, downFunc, eq₁, eq₂]
     return isomTy
-  
+
+  -- Suppose `u ← getU`, this function returns a term of type `EqLift.{u + 1, u} s.interpAsLifted`
   def mkImportingEqLift (s : LamSort) := do
     let (upFunc, downFunc, ty, upTy, uOrig) ← mkImportAux s
     let isomTy ← mkIsomType upFunc downFunc ty upTy uOrig
-    let eqLift := mkAppN (.const ``EqLift.ofEqLift [uOrig, .succ (← getU)]) #[ty, upTy, isomTy]
+    let eqLift := mkAppN (.const ``EqLift.ofEqLift [uOrig, .succ (← getU), (← getU)]) #[ty, upTy, isomTy]
     if !(← Meta.isTypeCorrect eqLift) then
       throwError "mkImportingEqLift :: Malformed eqLift {eqLift}"
     return eqLift
 
+  -- Suppose `u ← getU`, this function returns a term of type `ForallLift.{u + 1, u, 0, 0} s.interpAsLifted`
   def mkImportingForallLift (s : LamSort) := do
     let (upFunc, downFunc, ty, upTy, uOrig) ← mkImportAux s
     let isomTy ← mkIsomType upFunc downFunc ty upTy uOrig
-    let forallLift := mkAppN (.const ``Embedding.ForallLift.ofForallLift [uOrig, .succ (← getU), .zero]) #[ty, upTy, isomTy]
+    let forallLift := mkAppN (.const ``ForallLift.ofForallLift [uOrig, .succ (← getU), .zero, (← getU)]) #[ty, upTy, isomTy]
     if !(← Meta.isTypeCorrect forallLift) then
       throwError "mkImportingForallLift :: Malformed forallLift {forallLift}"
     return forallLift
 
+  -- Suppose `u ← getU`, this function returns a term of type `ExistLift.{u + 1, u} s.interpAsLifted`
   def mkImportingExistLift (s : LamSort) := do
     let (upFunc, downFunc, ty, upTy, uOrig) ← mkImportAux s
     let isomTy ← mkIsomType upFunc downFunc ty upTy uOrig
-    let existLift := mkAppN (.const ``Embedding.ExistLift.ofExistLift [uOrig, .succ (← getU)]) #[ty, upTy, isomTy]
+    let existLift := mkAppN (.const ``ExistLift.ofExistLift [uOrig, .succ (← getU), (← getU)]) #[ty, upTy, isomTy]
     if !(← Meta.isTypeCorrect existLift) then
       throwError "mkImportingExistLift :: Malformed existLift {existLift}"
     return existLift
@@ -409,19 +419,95 @@ section Checker
       throwError "buildChkSteps :: Malformed expression"
     return e
 
-  def buildLamTyVal : ReifM Expr := do
-    let lamVarTy := (← getVarVal).data.map (·.2.2)
-    let lamVarTyExpr := BinList.toLCtx (α:=LamSort) (BinList.ofList lamVarTy)
+  def buildLamValuation : ReifM Expr := do
+    let u ← getU
+    let lamSortExpr := Expr.const ``LamSort []
+  -- Building `tyVal`
+    -- `tyVal : List (Type u)`
+    let tyVal : List Expr := (← getTyVal).data.map (·.2.1)
+    -- Given a list of expression of type `ty`, construct the corresponding `lctx`
+    let listToLCtx (l : List Expr) (ty : Expr) :=
+      @BinList.toLCtx Expr _ (instExprToExprId ty) (BinList.ofList l)
+    -- `tyValExpr : Nat → Type u`
+    let tyValExpr := listToLCtx tyVal (.sort (.succ u))
+  -- Building `LamVarTy` and `varVal`
+    let varValPair := (← getVarVal).data.map (·.2)
+    let vars := varValPair.map (fun (val, s) =>
+      let sExpr := toExpr s
+      Lean.mkApp3 (.const ``varValSigmaMk [u]) tyValExpr sExpr val)
+    let varBundleExpr := listToLCtx vars (Lean.mkApp2
+      (.const ``Sigma [.zero, u]) lamSortExpr
+      (.app (.const ``LamSort.interp [u]) tyValExpr))
+    let lamVarTyExpr := Expr.lam `n (.const ``Nat []) (
+        Lean.mkApp2 (.const ``varValSigmaFst [u]) tyValExpr (.app varBundleExpr (.bvar 0))
+      ) .default
+    let varValExpr := Expr.lam `n (.const ``Nat []) (
+        Lean.mkApp2 (.const ``varValSigmaSnd [u]) tyValExpr (.app varBundleExpr (.bvar 0))
+      ) .default
+  -- Building `eqLamVal` and `eqVal`
     let eqLamVal ← (← getEqLamVal).data.mapM lookupIsomTy!
-    let eqLamValExpr := BinList.toLCtx (α:=LamSort) (BinList.ofList eqLamVal)
+    -- `eqs : List ((s : LamSort) × EqLift.{u + 1, u} (s.interp tyVal))`
+    let eqs ← eqLamVal.mapM (fun s => do
+      let sExpr := toExpr s
+      let eqVal ← mkImportingEqLift s
+      return Lean.mkApp3 (.const ``eqValSigmaMk [u]) tyValExpr sExpr eqVal)
+    let eqBundleExpr := listToLCtx eqs (Lean.mkApp2
+      (.const ``Sigma [.zero, u]) lamSortExpr
+      (.app (.const ``eqValSigmaβ [u]) tyValExpr))
+    let eqLamValExpr := Expr.lam `n (.const ``Nat []) (
+        Lean.mkApp2 (.const ``eqValSigmaFst [u]) tyValExpr (.app eqBundleExpr (.bvar 0))
+      ) .default
+    let eqValExpr := Expr.lam `n (.const ``Nat []) (
+        Lean.mkApp2 (.const ``eqValSigmaSnd [u]) tyValExpr (.app eqBundleExpr (.bvar 0))
+      ) .default
+  -- Building `forallLamVal` and `forallVal`
     let forallLamVal ← (← getForallLamVal).data.mapM lookupIsomTy!
-    let forallLamValExpr := BinList.toLCtx (α:=LamSort) (BinList.ofList forallLamVal)
+    -- `forallEs : List ((s : LamSort) × ForallLift.{u + 1, u, 0, 0} (s.interp tyVal))`
+    let forallEs ← forallLamVal.mapM (fun s => do
+      let sExpr := toExpr s
+      let forallVal ← mkImportingForallLift s
+      return Lean.mkApp3 (.const ``forallValSigmaMk [u]) tyValExpr sExpr forallVal)
+    let forallBundleExpr := listToLCtx forallEs (Lean.mkApp2
+      (.const ``Sigma [.zero, u]) lamSortExpr
+      (.app (.const ``forallValSigmaβ [u]) tyValExpr))
+    let forallLamValExpr := Expr.lam `n (.const ``Nat []) (
+        Lean.mkApp2 (.const ``forallValSigmaFst [u]) tyValExpr (.app forallBundleExpr (.bvar 0))
+      ) .default
+    let forallValExpr := Expr.lam `n (.const ``Nat []) (
+        Lean.mkApp2 (.const ``forallValSigmaSnd [u]) tyValExpr (.app forallBundleExpr (.bvar 0))
+      ) .default
+  -- Building `existLamVal` and `existVal`
     let existLamVal ← (← getExistLamVal).data.mapM lookupIsomTy!
-    let existLamValExpr := BinList.toLCtx (α:=LamSort) (BinList.ofList existLamVal)
-    let e := Lean.mkApp4 (.const ``LamTyVal.mk []) lamVarTyExpr eqLamValExpr forallLamValExpr existLamValExpr
-    if !(← Meta.isTypeCorrect e) then
-      throwError "buildLamTyVal :: Malformed expression"
-    return e
+    -- `existEs : List ((s : LamSort) × ExistLift.{u + 1, u} (s.interp tyVal))`
+    let existEs ← existLamVal.mapM (fun s => do
+      let sExpr := toExpr s
+      let existVal ← mkImportingExistLift s
+      return Lean.mkApp3 (.const ``existValSigmaMk [u]) tyValExpr sExpr existVal)
+    let existBundleExpr := listToLCtx existEs (Lean.mkApp2
+      (.const ``Sigma [.zero, u]) lamSortExpr
+      (.app (.const ``existValSigmaβ [u]) tyValExpr))
+    let existLamValExpr := Expr.lam `n (.const ``Nat []) (
+        Lean.mkApp2 (.const ``existValSigmaFst [u]) tyValExpr (.app existBundleExpr (.bvar 0))
+      ) .default
+    let existValExpr := Expr.lam `n (.const ``Nat []) (
+        Lean.mkApp2 (.const ``existValSigmaSnd [u]) tyValExpr (.app existBundleExpr (.bvar 0))
+      ) .default
+    -- Building `LamTyVal`
+    let lamTyValExpr := Lean.mkApp4 (.const ``LamTyVal.mk [])
+      lamVarTyExpr eqLamValExpr forallLamValExpr existLamValExpr
+    if !(← Meta.isTypeCorrect lamTyValExpr) then
+      throwError "buildLamValuation :: Malformed LamTyVal"
+    -- Building `ILValuation`
+    let ilValuationExpr := Lean.mkApp5 (.const ``ILValuation [u])
+      lamTyValExpr tyValExpr eqValExpr forallValExpr existValExpr
+    if !(← Meta.isTypeCorrect ilValuationExpr) then
+      throwError "buildLamValuation :: Malformed ILValuation"
+    -- Building `LamValuation`
+    let lamValuationExpr := Lean.mkApp2 (.const ``LamValuation [u])
+      ilValuationExpr varValExpr
+    if !(← Meta.isTypeCorrect lamValuationExpr) then
+      throwError  "buildLamValuation :: Malformed LamValuation"
+    return lamValuationExpr
 
   -- Functions which models checker steps on the `meta` level
   -- Steps that only requires looking at the `LamTerm`s and does not
