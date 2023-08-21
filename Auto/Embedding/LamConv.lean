@@ -488,4 +488,13 @@ theorem Eq.congr (lval : LamValuation) (lctx : List LamSort)
     exact Hf
   case eArg => exact LamEquiv.ofLamThmValid _ _ hEq
 
+-- Given `ts = [t₁, t₂, ⋯, tₙ]` and `t`, return `t₁ → t₂ → ⋯ → tₙ → t`
+def LamTerm.imps (ts : List LamTerm) (t : LamTerm) :=
+  ts.foldr (fun curr b => mkImp b curr) t
+
+theorem LamThmValid.imps
+  {ts : List LamTerm} (tsValid : HList (LamThmValid lval lctx) t)
+  {t : LamTerm} (tImpValid : LamThmValid lval lctx (t.imps ts)) :
+  LamThmValid lval lctx t := sorry
+
 end Auto.Embedding.Lam

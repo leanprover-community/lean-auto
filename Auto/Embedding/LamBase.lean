@@ -2,6 +2,7 @@ import Auto.Embedding.Lift
 import Auto.Embedding.LCtx
 import Auto.Util.ExprExtra
 import Auto.Lib.HEqExtra
+import Lean
 import Std.Data.List.Lemmas
 import Mathlib.Data.Real.Basic
 import Mathlib.Data.BitVec.Defs
@@ -17,7 +18,7 @@ inductive LamBaseSort
   | int  : LamBaseSort             -- GLift `int`
   | real : LamBaseSort             -- GLift `real`
   | bv   : (n : Nat) → LamBaseSort -- GLift `bv n`
-deriving BEq, Hashable, Inhabited
+deriving BEq, Hashable, Inhabited, Lean.ToExpr
 
 def LamBaseSort.reprPrec (b : LamBaseSort) (n : Nat) :=
   let str :=
@@ -81,7 +82,7 @@ inductive LamSort
 | atom : Nat → LamSort
 | base : LamBaseSort → LamSort
 | func : LamSort → LamSort → LamSort
-deriving Inhabited, Hashable
+deriving Inhabited, Hashable, Lean.ToExpr
 
 def LamSort.reprPrec (s : LamSort) (n : Nat) :=
   let str :=
@@ -144,7 +145,7 @@ theorem LamSort.beq_eq_true_eq (a b : LamSort) : (a.beq b = true) = (a = b) :=
 inductive CstrReal
   | zero    : CstrReal
   | one     : CstrReal
-deriving Inhabited, Hashable
+deriving Inhabited, Hashable, Lean.ToExpr
 
 def CstrReal.reprPrec (c : CstrReal) (n : Nat) :=
   let s :=
@@ -208,7 +209,7 @@ inductive LamBaseTerm
   | eq       : LamSort → LamBaseTerm
   | forallE  : LamSort → LamBaseTerm
   | existE   : LamSort → LamBaseTerm
-deriving Inhabited, Hashable
+deriving Inhabited, Hashable, Lean.ToExpr
 
 def LamBaseTerm.reprPrec (l : LamBaseTerm) (n : Nat) :=
   let s :=
@@ -520,7 +521,12 @@ inductive LamTerm
   --   the function and argument can be inferred directly
   --   when we know the type of the application
   | app     : LamSort → LamTerm → LamTerm → LamTerm
-deriving Inhabited, Hashable
+deriving Inhabited, Hashable, Lean.ToExpr
+
+def tmp := @Lean.toExpr LamTerm _
+
+def LamTerm.mkImp (t₁ t₂ : LamTerm) : LamTerm :=
+  .app (.base .prop) (.app (.base .prop) (.base .imp) t₁) t₂
 
 def LamTerm.mkEq (s : LamSort) (t₁ t₂ : LamTerm) : LamTerm :=
   .app s (.app s (.base (.eq s)) t₁) t₂

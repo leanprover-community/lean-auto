@@ -4,6 +4,8 @@ import Auto.Lib.LogicExtra
 import Auto.Lib.NatExtra
 import Auto.Lib.OptionExtra
 import Auto.Lib.Containers
+import Auto.Lib.ToExprExtra
+import Lean
 
 namespace Auto
 
@@ -38,11 +40,31 @@ end Bin
 inductive BinTree (α : Sort _) where
   | leaf : BinTree α
   | node : BinTree α → Option α → BinTree α → BinTree α
+deriving Repr
 
 namespace BinTree
 
 instance : Inhabited (BinTree α) where
   default := .leaf
+
+open Lean in
+def toExpr {α : Type u} [ToSortLevel.{u + 1}] [Lean.ToExpr α] (bt : BinTree α) : Expr :=
+  let lvl := ToSortLevel.toSortLevel.{u + 1}
+  let ty := Lean.toTypeExpr α
+  match bt with
+  | .leaf => .app (.const ``BinTree.leaf [lvl]) ty
+  | .node l x r =>
+    let xExpr : Expr :=
+      match x with
+      | .none => .app (.const ``Option.none [lvl]) ty
+      | .some e => mkApp2 (.const ``Option.some [lvl]) ty (Lean.toExpr e)
+    mkApp4 (.const ``BinTree.node [lvl]) ty l.toExpr xExpr r.toExpr
+
+instance [ToSortLevel.{u + 1}] [Lean.ToExpr α] : Lean.ToExpr (BinTree α) where
+  toExpr := BinTree.toExpr
+  toTypeExpr :=
+    let lvl := ToSortLevel.toSortLevel.{u + 1}
+    .app (.const ``BinTree [lvl]) (Lean.toTypeExpr α)
 
 def val? (bt : BinTree α) : Option α :=
   match bt with
@@ -464,6 +486,11 @@ theorem mapOpt_allp (f : α → Option β) (p : β → Prop) :
   suffices h : Option.allp p (Option.bind x f) ↔ Option.allp (fun x => Option.allp p (f x)) x by rw [h]
   cases x <;> rfl
 
+-- **TODO**: Prove properties
+def ofList (xs : List α) : BinTree α :=
+  let xs' := xs.zip (List.range xs.length)
+  xs'.foldl (fun bt (x, n) => bt.insert n x) .leaf
+
 end BinTree
     
 structure BinList (α : Sort _) where
@@ -471,6 +498,22 @@ structure BinList (α : Sort _) where
   tail : BinTree α
 
 namespace BinList
+
+instance : Inhabited (BinList α) where
+  default := ⟨.none, .leaf⟩
+
+open Lean in
+def toExpr {α : Type u} [ToSortLevel.{u + 1}] [Lean.ToExpr α] (bl : BinList α) : Expr :=
+  let lvl := ToSortLevel.toSortLevel.{u + 1}
+  let ty := Lean.toTypeExpr α
+  let ⟨head, tail⟩ := bl
+  mkApp3 (.const ``BinList.mk [lvl]) ty (Lean.toExpr head) (Lean.toExpr tail)
+
+instance [ToSortLevel.{u + 1}] [Lean.ToExpr α] : Lean.ToExpr (BinList α) where
+  toExpr := BinList.toExpr
+  toTypeExpr :=
+    let lvl := ToSortLevel.toSortLevel.{u + 1}
+    .app (.const ``BinList [lvl]) (Lean.toTypeExpr α)
 
 def get? (bl : BinList α) (n : Nat) : Option α :=
   match n with
@@ -632,6 +675,22 @@ theorem mapOpt_allp (f : α → Option β) (p : β → Prop) :
 | ⟨head, tail⟩ => by
   rw [allp_down p]; rw [allp_down]; dsimp [mapOpt]
   rw [BinTree.mapOpt_allp]; cases head <;> rfl
+
+def ofList (xs : List α) : BinList α :=
+  ⟨xs.get? 0, BinTree.ofList xs⟩
+
+/- Performance test
+#eval (Lean.toExpr (BinList.ofList (List.range 20000))).hash
+#eval (Lean.toExpr (BinList.ofList (List.range 20000))).hash
+#eval (Lean.toExpr (BinList.ofList (List.range 20000))).hash
+#eval (Lean.toExpr (BinList.ofList (List.range 20000))).hash
+#eval (Lean.toExpr (BinList.ofList (List.range 20000))).hash
+#eval (Lean.toExpr (BinList.ofList (List.range 20000))).hash
+#eval (Lean.toExpr (BinList.ofList (List.range 20000))).hash
+#eval (Lean.toExpr (BinList.ofList (List.range 20000))).hash
+#eval (Lean.toExpr (BinList.ofList (List.range 20000))).hash
+#eval (Lean.toExpr (BinList.ofList (List.range 20000))).hash
+-/
 
 end BinList
 

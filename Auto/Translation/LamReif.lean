@@ -2,7 +2,7 @@ import Lean
 import Auto.Util.MonadUtils
 import Auto.Util.ExprExtra
 import Auto.Translation.LamPULift
-import Auto.Embedding.LamBase
+import Auto.Embedding.LamChecker
 open Lean
 
 initialize
@@ -36,9 +36,9 @@ structure State where
   -- The `Expr` is the un-lifted counterpart of `FVarId`
   -- The `LamSort` is the λ sort of the atom
   varVal      : Array (FVarId × Expr × LamSort) := #[]
-  isomTys   : Array LamSort                   := #[]
+  isomTys     : Array LamSort                   := #[]
   -- Inverse of ``isomTys
-  isomTyMap : HashMap LamSort Nat             := HashMap.empty
+  isomTyMap   : HashMap LamSort Nat             := HashMap.empty
   -- If `eqLamTy[n] = s`, then `s` is the corresponding
   --   sort where we'll use in `<eq/forall/exist>LamVal n`
   -- The same holds for `forallLamTy` and `existLamTy`
@@ -51,6 +51,12 @@ structure State where
   --     where all `eq, ∀, ∃` are import version
   -- To be precise, we require that `e : GLift.down t.interp`
   assertions  : Array (Expr × LamTerm)          := #[]
+  -- `Embedding/LamChecker/ChkSteps`
+  chkSteps    : Array (ChkStep × Nat)           := #[]
+  -- `Embedding/LamChecker/RTable.wf`
+  wfTable     : Array (List LamSort × LamSort × LamTerm) := #[]
+  -- `Embedding/LamChecker/RTable.valid`
+  validTable  : Array (List LamSort × LamTerm)           := #[]
 deriving Inhabited
 
 abbrev ReifM := StateRefT State ULiftM
@@ -383,12 +389,19 @@ def checkInterpretedConst : Expr → MetaM Bool
 def uLiftAndReify (facts : Array Reif.UMonoFact) (cont : ReifM α) : ReifM α :=
   withULiftedFacts checkInterpretedConst facts (fun pfacts => do reifFacts pfacts; cont)
 
--- Functions which models checker steps on the `meta` level
--- Steps that only requires looking at the `LamTerm`s and does not
---   require looking up the valuation should be put in the files
---   in the `Embedding` folder. There is no need to model them
---   on the `meta` level
 section Checker
+
+  -- Functions that turns data structure in `ReifM.State` into `Expr`
+
+  def buildChkSteps : ReifM Expr := do
+    let chkSteps ← getChkSteps
+    return Lean.toExpr (BinList.ofList chkSteps.data)
+
+  -- Functions which models checker steps on the `meta` level
+  -- Steps that only requires looking at the `LamTerm`s and does not
+  --   require looking up the valuation should be put in the files
+  --   in the `Embedding` folder. There is no need to model them
+  --   on the `meta` level
 
   def resolveLamBaseTermImport : LamBaseTerm → ReifM LamBaseTerm
   | .eqI n      => do return .eq (← lookupEqLamTy! n)

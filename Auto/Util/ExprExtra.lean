@@ -24,16 +24,16 @@ syntax (name := getExprAndApply) "#getExprAndApply" "[" term "|" ident "]" : com
 unsafe def elabGetExprAndApply : CommandElab := fun stx =>
   runTermElabM fun _ => do
     match stx with
-    | `(command | #getExprAndApply[ $t:term | $i:ident ]) => do
+    | `(command | #getExprAndApply[ $t:term | $i:ident ]) => withRef stx <| do
       let some iexpr ← Term.resolveId? i
         | throwError "elabGetExprAndApply :: Unknown identifier {i}"
       let e ← Term.elabTerm t none
       Term.synthesizeSyntheticMVarsNoPostponing (ignoreStuckTC := true)
       let e ← Term.levelMVarToParam (← instantiateMVars e)
       let fname := iexpr.constName!
-      let Except.ok f := (← getEnv).evalConst (Expr → TermElabM Unit) (← getOptions) fname
-        | throwError "elabGetExprAndApply :: Failed to evaluate {fname} to a term of type (Expr → TermElabM Unit)"
-      f e
+      match (← getEnv).evalConst (Expr → TermElabM Unit) (← getOptions) fname with
+      | Except.ok f => f e
+      | Except.error err => throwError "elabGetExprAndApply :: Failed to evaluate {fname} to a term of type (Expr → TermElabM Unit), error : {err}"
     | _ => throwUnsupportedSyntax
 
 syntax (name := lazyReduce) "#lazyReduce" term : command
@@ -78,5 +78,105 @@ open Meta in
       if printTime? then
         IO.println s!"{(← IO.monoMsNow) - startTime} ms"
   | _ => throwUnsupportedSyntax
-    
+
+section EvalAtTermElabM
+
+  open Meta
+
+  private def mkEvalInstCore (evalClassName : Name) (e : Expr) : MetaM Expr := do
+    let α    ← inferType e
+    let u    ← getDecLevel α
+    let inst := mkApp (Lean.mkConst evalClassName [u]) α
+    try
+      synthInstance inst
+    catch _ =>
+      -- Put `α` in WHNF and try again
+      try
+        let α ← whnf α
+        synthInstance (mkApp (Lean.mkConst evalClassName [u]) α)
+      catch _ =>
+        -- Fully reduce `α` and try again
+        try
+          let α ← reduce (skipTypes := false) α
+          synthInstance (mkApp (Lean.mkConst evalClassName [u]) α)
+        catch _ =>
+          throwError "expression{indentExpr e}\nhas type{indentExpr α}\nbut instance{indentExpr inst}\nfailed to be synthesized, this instance instructs Lean on how to display the resulting value, recall that any type implementing the `Repr` class also implements the `{evalClassName}` class"
+  
+  
+  private def mkRunMetaEval (e : Expr) : MetaM Expr :=
+    withLocalDeclD `env (mkConst ``Lean.Environment) fun env =>
+    withLocalDeclD `opts (mkConst ``Lean.Options) fun opts => do
+      let α ← inferType e
+      let u ← getDecLevel α
+      let instVal ← mkEvalInstCore ``Lean.MetaEval e
+      let e := mkAppN (mkConst ``Lean.runMetaEval [u]) #[α, instVal, env, opts, e]
+      instantiateMVars (← mkLambdaFVars #[env, opts] e)
+  
+  private def mkRunEval (e : Expr) : MetaM Expr := do
+    let α ← inferType e
+    let u ← getDecLevel α
+    let instVal ← mkEvalInstCore ``Lean.Eval e
+    instantiateMVars (mkAppN (mkConst ``Lean.runEval [u]) #[α, instVal, mkSimpleThunk e])
+  
+  unsafe def termElabEval (elabEvalTerm : Expr) : TermElabM Unit := do
+    let declName := `_eval
+    let addAndCompile (value : Expr) : TermElabM Unit := do
+      let value ← Term.levelMVarToParam (← instantiateMVars value)
+      let type ← inferType value
+      let us := collectLevelParams {} value |>.params
+      let value ← instantiateMVars value
+      let decl := Declaration.defnDecl {
+        name        := declName
+        levelParams := us.toList
+        type        := type
+        value       := value
+        hints       := ReducibilityHints.opaque
+        safety      := DefinitionSafety.unsafe
+      }
+      Term.ensureNoUnassignedMVars decl
+      addAndCompile decl
+    -- Elaborate `term`
+    -- Evaluate using term using `MetaEval` class.
+    let elabMetaEval : TermElabM Unit := do
+      -- act? is `some act` if elaborated `term` has type `TermElabM α`
+      let act? ← Term.withDeclName declName do
+        let e := elabEvalTerm
+        let eType ← instantiateMVars (← inferType e)
+        if eType.isAppOfArity ``TermElabM 1 then
+          let mut stx ← Term.exprToSyntax e
+          unless (← isDefEq eType.appArg! (mkConst ``Unit)) do
+            stx ← `($stx >>= fun v => IO.println (repr v))
+          let act ← Lean.Elab.Term.evalTerm (TermElabM Unit) (mkApp (mkConst ``TermElabM) (mkConst ``Unit)) stx
+          pure <| some act
+        else
+          let e ← mkRunMetaEval e
+          let env ← getEnv
+          let opts ← getOptions
+          let act ← try addAndCompile e; evalConst (Environment → Options → IO (String × Except IO.Error Environment)) declName finally setEnv env
+          let (out, res) ← act env opts -- we execute `act` using the environment
+          logInfo out
+          match res with
+          | Except.error e => throwError e.toString
+          | Except.ok env  => do setEnv env; pure none
+      let some act := act? | return ()
+      act
+    -- Evaluate using term using `Eval` class.
+    let elabEval : TermElabM Unit := Term.withDeclName declName do
+      -- fall back to non-meta eval if MetaEval hasn't been defined yet
+      -- modify e to `runEval e`
+      let e ← mkRunEval elabEvalTerm
+      let env ← getEnv
+      let act ← try addAndCompile e; evalConst (IO (String × Except IO.Error Unit)) declName finally setEnv env
+      let (out, res) ← liftM (m := IO) act
+      logInfo out
+      match res with
+      | Except.error e => throwError e.toString
+      | Except.ok _    => pure ()
+    if (← getEnv).contains ``Lean.MetaEval then do
+      elabMetaEval
+    else
+      elabEval
+
+end EvalAtTermElabM
+      
 end Auto.Util

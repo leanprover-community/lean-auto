@@ -98,6 +98,7 @@ inductive ChkStep where
   | wfOfHeadBeta (wPos : Nat) : ChkStep
   | validOfResolveImport (vPos : Nat) : ChkStep
   | validOfHeadBeta (vPos : Nat) : ChkStep
+  deriving Lean.ToExpr
 
 def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → REntry
 | .wfOfCheck lctx t =>
@@ -190,7 +191,9 @@ theorem ChkStep.eval_correct
       apply LamThmValid.headBeta (RTable.validInv_get inv.right h)
 
 -- The first `ChkStep` specifies the checker step
--- The second `Nat` specifies the position to place the resulting term
+-- The second `Nat` specifies the position to insert the resulting term
+-- Note that we decide where (`wf` or `valid`) to insert the resulting
+--   term by looking at `(c : ChkStep).eval`
 abbrev ChkSteps := BinList (ChkStep × Nat)
 
 def ChkStep.run (ltv : LamTyVal) (r : RTable) (c : ChkStep) (n : Nat) : RTable :=
