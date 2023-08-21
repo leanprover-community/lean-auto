@@ -36,6 +36,32 @@ unsafe def elabGetExprAndApply : CommandElab := fun stx =>
       | Except.error err => throwError "elabGetExprAndApply :: Failed to evaluate {fname} to a term of type (Expr → TermElabM Unit), error : {err}"
     | _ => throwUnsupportedSyntax
 
+-- Consider the canonical instance of `Lean.ToExpr Expr`. We require that
+--   `(← exprFromExpr (← Lean.toExpr e)) ≝ e`
+unsafe def exprFromExpr (eToExpr : Expr) : TermElabM Expr := do
+  let ty ← Meta.inferType eToExpr
+  if ! (← Meta.isDefEq ty (.const ``Expr [])) then
+    throwError "exprFromExpr :: Type `{ty}` of input is not definitionally equal to `Expr`"
+  let declName := `_exprFromExpr
+  let addAndCompile (value : Expr) : TermElabM Unit := do
+    let value ← Term.levelMVarToParam (← instantiateMVars value)
+    let type ← Meta.inferType value
+    let us := collectLevelParams {} value |>.params
+    let value ← instantiateMVars value
+    let decl := Declaration.defnDecl {
+      name        := declName
+      levelParams := us.toList
+      type        := type
+      value       := value
+      hints       := ReducibilityHints.opaque
+      safety      := DefinitionSafety.unsafe
+    }
+    Term.ensureNoUnassignedMVars decl
+    addAndCompile decl
+  let env ← getEnv
+  let e ← try addAndCompile eToExpr; evalConst Expr declName finally setEnv env
+  return e
+
 syntax (name := lazyReduce) "#lazyReduce" term : command
 
 register_option lazyReduce.skipProof : Bool := {
@@ -101,7 +127,6 @@ section EvalAtTermElabM
           synthInstance (mkApp (Lean.mkConst evalClassName [u]) α)
         catch _ =>
           throwError "expression{indentExpr e}\nhas type{indentExpr α}\nbut instance{indentExpr inst}\nfailed to be synthesized, this instance instructs Lean on how to display the resulting value, recall that any type implementing the `Repr` class also implements the `{evalClassName}` class"
-  
   
   private def mkRunMetaEval (e : Expr) : MetaM Expr :=
     withLocalDeclD `env (mkConst ``Lean.Environment) fun env =>

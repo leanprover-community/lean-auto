@@ -391,6 +391,12 @@ def uLiftAndReify (facts : Array Reif.UMonoFact) (cont : ReifM α) : ReifM α :=
 
 section Checker
 
+  -- Some unit test
+  -- unsafe def act (e : Expr) : Lean.Elab.TermElabM Unit := do
+  --   IO.println (← Util.exprFromExpr e)
+  -- 
+  -- #getExprAndApply[Lean.toExpr (ChkStep.wfOfAppend [.base .prop] 3)|act]
+
   -- Functions that turns data structure in `ReifM.State` into `Expr`
 
   def buildChkSteps : ReifM Expr := do
