@@ -357,37 +357,37 @@ structure ILValuation extends LamTyVal where
   existVal  : ∀ (n : Nat), ExistLift.{u + 1, u} ((existLamVal n).interp tyVal)
 
 -- Used in checker metacode to construct `eqValBundle`
-def eqValSigmaβ.{u} (tyVal : Nat → Type u) (s : LamSort) : Type u :=
+abbrev eqValSigmaβ.{u} (tyVal : Nat → Type u) (s : LamSort) : Type u :=
   EqLift.{u + 1, u} (s.interp tyVal)
 
-def eqValSigmaMk.{u} (tyVal : Nat → Type u) :=
+abbrev eqValSigmaMk.{u} (tyVal : Nat → Type u) :=
   @Sigma.mk LamSort (eqValSigmaβ.{u} tyVal)
 
-def eqValSigmaFst.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (eqValSigmaβ.{u} tyVal)) : LamSort := sig.fst
+abbrev eqValSigmaFst.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (eqValSigmaβ.{u} tyVal)) : LamSort := sig.fst
 
-def eqValSigmaSnd.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (eqValSigmaβ.{u} tyVal)) : eqValSigmaβ.{u} tyVal sig.fst := sig.snd
+abbrev eqValSigmaSnd.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (eqValSigmaβ.{u} tyVal)) : eqValSigmaβ.{u} tyVal sig.fst := sig.snd
 
 -- Used in checker metacode to construct `forallValBundle`
-def forallValSigmaβ.{u} (tyVal : Nat → Type u) (s : LamSort) : Type u :=
+abbrev forallValSigmaβ.{u} (tyVal : Nat → Type u) (s : LamSort) : Type u :=
   ForallLift.{u + 1, u, 0, 0} (s.interp tyVal)
 
-def forallValSigmaMk.{u} (tyVal : Nat → Type u) :=
+abbrev forallValSigmaMk.{u} (tyVal : Nat → Type u) :=
   @Sigma.mk LamSort (forallValSigmaβ.{u} tyVal)
 
-def forallValSigmaFst.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (forallValSigmaβ.{u} tyVal)) : LamSort := sig.fst
+abbrev forallValSigmaFst.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (forallValSigmaβ.{u} tyVal)) : LamSort := sig.fst
 
-def forallValSigmaSnd.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (forallValSigmaβ.{u} tyVal)) : forallValSigmaβ.{u} tyVal sig.fst := sig.snd
+abbrev forallValSigmaSnd.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (forallValSigmaβ.{u} tyVal)) : forallValSigmaβ.{u} tyVal sig.fst := sig.snd
 
 -- Used in checker metacode to construct `existValBundle`
-def existValSigmaβ.{u} (tyVal : Nat → Type u) (s : LamSort) : Type u :=
+abbrev existValSigmaβ.{u} (tyVal : Nat → Type u) (s : LamSort) : Type u :=
   ExistLift.{u + 1, u} (s.interp tyVal)
 
-def existValSigmaMk.{u} (tyVal : Nat → Type u) :=
+abbrev existValSigmaMk.{u} (tyVal : Nat → Type u) :=
   @Sigma.mk LamSort (existValSigmaβ.{u} tyVal)
 
-def existValSigmaFst.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (existValSigmaβ.{u} tyVal)) : LamSort := sig.fst
+abbrev existValSigmaFst.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (existValSigmaβ.{u} tyVal)) : LamSort := sig.fst
 
-def existValSigmaSnd.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (existValSigmaβ.{u} tyVal)) : existValSigmaβ.{u} tyVal sig.fst := sig.snd
+abbrev existValSigmaSnd.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (existValSigmaβ.{u} tyVal)) : existValSigmaβ.{u} tyVal sig.fst := sig.snd
 
 def eqVal.default (eqLamVal : Nat → LamSort) (tyVal : Nat → Type u) :
   ∀ (n : Nat), EqLift.{u + 1, u} ((eqLamVal n).interp tyVal) :=
@@ -1056,12 +1056,12 @@ structure LamValuation.{u} where
 
 -- Used in checker metacode to construct `varValBundle`
 -- We don't need `varValSigmaβ` because that's exactly `LamSort.interp`
-def varValSigmaMk.{u} (tyVal : Nat → Type u) :=
+abbrev varValSigmaMk.{u} (tyVal : Nat → Type u) :=
   @Sigma.mk LamSort (LamSort.interp tyVal)
 
-def varValSigmaFst.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (LamSort.interp tyVal)) : LamSort := sig.fst
+abbrev varValSigmaFst.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (LamSort.interp tyVal)) : LamSort := sig.fst
 
-def varValSigmaSnd.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (LamSort.interp tyVal)) : LamSort.interp tyVal sig.fst := sig.snd
+abbrev varValSigmaSnd.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (LamSort.interp tyVal)) : LamSort.interp tyVal sig.fst := sig.snd
 
 def LamTerm.interp.{u}
   (dfSort : LamSort) (lval : LamValuation.{u}) (dfVal : dfSort.interp lval.ilVal.tyVal)

@@ -48,9 +48,11 @@ structure State where
   -- This array contains assertions that have external (lean) proof
   --   The first `e : Expr` is the proof of the assertion
   --   The second `t : LamTerm` is the corresponding λ term,
-  --     where all `eq, ∀, ∃` are import version
+  --     where all `eq, ∀, ∃` are of import version
   -- To be precise, we require that `e : GLift.down t.interp`
   assertions  : Array (Expr × LamTerm)          := #[]
+  -- `((it : ImportTable).get! n).fst ≝ assertions[importMap.get! n]!.snd`
+  importMap   : HashMap Nat Nat                 := HashMap.empty
   -- `Embedding/LamChecker/ChkSteps`
   chkSteps    : Array (ChkStep × Nat)           := #[]
   -- `Embedding/LamChecker/RTable.wf`
@@ -118,6 +120,18 @@ def lookupExistLamVal! (n : Nat) : ReifM LamSort := do
     lookupIsomTy! idx
   else
     throwError "lookupExistLamVal! :: Unknown exist {n}"
+
+def lookupImportMap! (wPos : Nat) : ReifM Nat := do
+  if let .some idx := (← getImportMap).find? wPos then
+    return idx
+  else
+    throwError "lookupImportMap! :: Unknown import table entry {wPos}"
+
+def lookupImportTableEntry! (wPos : Nat) : ReifM (Expr × LamTerm) := do
+  if let .some r := (← getAssertions).get? (← lookupImportMap! wPos) then
+    return r
+  else
+    throwError "lookupImportTableEntry! :: Unknown import table entry {wPos}"
 
 -- Computes `upFunc` and `downFunc` between `s.interpAsUnlifted` and `s.interpAsLifted`
 --   The first `Expr` is `upFunc`
@@ -422,7 +436,7 @@ section Checker
   def buildLamValuation : ReifM Expr := do
     let u ← getU
     let lamSortExpr := Expr.const ``LamSort []
-  -- Building `tyVal`
+  -- **Building `tyVal`**
     -- `tyVal : List (Type u)`
     let tyVal : List Expr := (← getTyVal).data.map (·.2.1)
     -- Given a list of expression of type `ty`, construct the corresponding `lctx`
@@ -430,7 +444,7 @@ section Checker
       @BinList.toLCtx Expr _ (instExprToExprId ty) (BinList.ofList l)
     -- `tyValExpr : Nat → Type u`
     let tyValExpr := listToLCtx tyVal (.sort (.succ u))
-  -- Building `LamVarTy` and `varVal`
+  -- **Building `LamVarTy` and `varVal`**
     let varValPair := (← getVarVal).data.map (·.2)
     let vars := varValPair.map (fun (val, s) =>
       let sExpr := toExpr s
@@ -444,7 +458,7 @@ section Checker
     let varValExpr := Expr.lam `n (.const ``Nat []) (
         Lean.mkApp2 (.const ``varValSigmaSnd [u]) tyValExpr (.app varBundleExpr (.bvar 0))
       ) .default
-  -- Building `eqLamVal` and `eqVal`
+  -- **Building `eqLamVal` and `eqVal`**
     let eqLamVal ← (← getEqLamVal).data.mapM lookupIsomTy!
     -- `eqs : List ((s : LamSort) × EqLift.{u + 1, u} (s.interp tyVal))`
     let eqs ← eqLamVal.mapM (fun s => do
@@ -460,7 +474,7 @@ section Checker
     let eqValExpr := Expr.lam `n (.const ``Nat []) (
         Lean.mkApp2 (.const ``eqValSigmaSnd [u]) tyValExpr (.app eqBundleExpr (.bvar 0))
       ) .default
-  -- Building `forallLamVal` and `forallVal`
+  -- **Building `forallLamVal` and `forallVal`**
     let forallLamVal ← (← getForallLamVal).data.mapM lookupIsomTy!
     -- `forallEs : List ((s : LamSort) × ForallLift.{u + 1, u, 0, 0} (s.interp tyVal))`
     let forallEs ← forallLamVal.mapM (fun s => do
@@ -476,7 +490,7 @@ section Checker
     let forallValExpr := Expr.lam `n (.const ``Nat []) (
         Lean.mkApp2 (.const ``forallValSigmaSnd [u]) tyValExpr (.app forallBundleExpr (.bvar 0))
       ) .default
-  -- Building `existLamVal` and `existVal`
+  -- **Building `existLamVal` and `existVal`**
     let existLamVal ← (← getExistLamVal).data.mapM lookupIsomTy!
     -- `existEs : List ((s : LamSort) × ExistLift.{u + 1, u} (s.interp tyVal))`
     let existEs ← existLamVal.mapM (fun s => do
@@ -492,22 +506,50 @@ section Checker
     let existValExpr := Expr.lam `n (.const ``Nat []) (
         Lean.mkApp2 (.const ``existValSigmaSnd [u]) tyValExpr (.app existBundleExpr (.bvar 0))
       ) .default
-    -- Building `LamTyVal`
+  -- **Building `LamTyVal`**
     let lamTyValExpr := Lean.mkApp4 (.const ``LamTyVal.mk [])
       lamVarTyExpr eqLamValExpr forallLamValExpr existLamValExpr
     if !(← Meta.isTypeCorrect lamTyValExpr) then
       throwError "buildLamValuation :: Malformed LamTyVal"
-    -- Building `ILValuation`
+  -- **Building `ILValuation`**
     let ilValuationExpr := Lean.mkApp5 (.const ``ILValuation [u])
       lamTyValExpr tyValExpr eqValExpr forallValExpr existValExpr
     if !(← Meta.isTypeCorrect ilValuationExpr) then
       throwError "buildLamValuation :: Malformed ILValuation"
-    -- Building `LamValuation`
+  -- **Building `LamValuation`**
     let lamValuationExpr := Lean.mkApp2 (.const ``LamValuation [u])
       ilValuationExpr varValExpr
     if !(← Meta.isTypeCorrect lamValuationExpr) then
       throwError  "buildLamValuation :: Malformed LamValuation"
     return lamValuationExpr
+
+  -- `lvalExpr` is the `LamValuation`
+  def buildImportTable (lvalExpr : Expr) : ReifM Expr := do
+    let u ← getU
+    let lamTermExpr := Expr.const ``LamTerm []
+    let mut importTable : BinList Expr := BinList.empty
+    for (step, _) in (← getChkSteps) do
+      if let .validOfResolveImport vPos := step then
+        let (e, t) ← lookupImportTableEntry! vPos
+        let tExpr := Lean.toExpr t
+        let itEntry := Lean.mkApp3 (.const ``ImportTablePSigmaMk [u]) lvalExpr tExpr e
+        importTable := importTable.insert vPos itEntry
+    let type := Lean.mkApp2 (.const ``PSigma [.succ .zero, .zero])
+      lamTermExpr (.app (.const ``ImportTablePSigmaβ [u]) lvalExpr)
+    let importTableExpr := @BinList.toLCtx Expr _ (instExprToExprId type) importTable
+    if !(← Meta.isTypeCorrect importTableExpr) then
+      throwError "buildImportTable :: Malformed importTable"
+    return importTableExpr
+
+  def buildChecker : ReifM Expr := do
+    let u ← getU
+    let lvalExpr ← buildLamValuation
+    let itExpr ← buildImportTable lvalExpr
+    let csExpr ← buildChkSteps
+    let checker := Lean.mkApp3 (.const ``Checker [u]) lvalExpr itExpr csExpr
+    if !(← Meta.isTypeCorrect checker) then
+      throwError "buildChecker :: Malformed checker"
+    return checker
 
   -- Functions which models checker steps on the `meta` level
   -- Steps that only requires looking at the `LamTerm`s and does not

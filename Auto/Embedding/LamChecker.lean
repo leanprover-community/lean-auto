@@ -65,7 +65,14 @@ def RTable.inv (lval : LamValuation.{u}) (r : RTable) :=
 abbrev ImportTable (lval : LamValuation.{u}) :=
   Auto.BinList (@PSigma LamTerm (fun p => (LamTerm.interpAsProp lval dfLCtxTy (dfLCtxTerm _) p).down))
 
-def RTable.importFacts (it : ImportTable lval) : BinList (List LamSort × LamTerm) :=
+-- Used by the meta code of the checker to build `ImportTable`
+abbrev ImportTablePSigmaβ (lval : LamValuation.{u}) (p : LamTerm) :=
+  (LamTerm.interpAsProp lval dfLCtxTy (dfLCtxTerm _) p).down
+
+abbrev ImportTablePSigmaMk (lval : LamValuation.{u}) :=
+  @PSigma.mk LamTerm (ImportTablePSigmaβ lval)
+
+def ImportTable.importFacts (it : ImportTable lval) : BinList (List LamSort × LamTerm) :=
   it.mapOpt (fun ⟨p, _⟩ =>
     match p.lamCheck? lval.ilVal.toLamTyVal dfLCtxTy with
     | .some (.base .prop) =>
@@ -74,7 +81,7 @@ def RTable.importFacts (it : ImportTable lval) : BinList (List LamSort × LamTer
       | _ + 1 => .none
     | _                   => .none)
 
-theorem RTable.import_correct (it : ImportTable lval) :
+theorem ImportTable.importFacts_correct (it : ImportTable lval) :
   RTable.validInv lval (importFacts it) := by
   dsimp [RTable.validInv, importFacts]; rw [BinList.mapOpt_allp]
   intro n; apply Option.allp_uniform;
@@ -91,16 +98,17 @@ theorem RTable.import_correct (it : ImportTable lval) :
 
 inductive ChkStep where
   -- Adds `⟨lctx, t, t.lamCheck!⟩` to `rtable.wf`
+  | nop : ChkStep
   | wfOfCheck (lctx : List LamSort) (t : LamTerm) : ChkStep
   | wfOfAppend (ex : List LamSort) (wPos : Nat) : ChkStep
   | wfOfPrepend (ex : List LamSort) (wPos : Nat) : ChkStep
-  | wfOfResolveImport (wPos : Nat) : ChkStep
   | wfOfHeadBeta (wPos : Nat) : ChkStep
   | validOfResolveImport (vPos : Nat) : ChkStep
   | validOfHeadBeta (vPos : Nat) : ChkStep
   deriving Lean.ToExpr
 
 def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → REntry
+| .nop => .none
 | .wfOfCheck lctx t =>
   match LamTerm.lamCheck? ltv (pushLCtxs lctx dfLCtxTy) t with
   | .some rty =>
@@ -115,10 +123,6 @@ def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → REntry
 | .wfOfPrepend ex wPos =>
   match r.wf.get? wPos with
   | .some ⟨lctx, s, t⟩ => .wf (ex ++ lctx) s (t.bvarLifts ex.length)
-  | .none => .none
-| .wfOfResolveImport wPos =>
-  match r.wf.get? wPos with
-  | .some ⟨lctx, s, t⟩ => .wf lctx s (t.resolveImport ltv)
   | .none => .none
 | .wfOfHeadBeta wPos =>
   match r.wf.get? wPos with
@@ -136,6 +140,7 @@ def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → REntry
 theorem ChkStep.eval_correct
   (lval : LamValuation.{u}) (r : RTable) (inv : r.inv lval) :
   (cs : ChkStep) → REntry.correct lval (cs.eval lval.ilVal.toLamTyVal r)
+| .nop => True.intro
 | .wfOfCheck lctx t => by
   dsimp [eval]
   cases h₁ : LamTerm.lamCheck? lval.ilVal.toLamTyVal (pushLCtxs lctx dfLCtxTy) t <;> try exact True.intro
@@ -159,14 +164,6 @@ theorem ChkStep.eval_correct
     | (lctx, s, t) =>
       apply LamThmWFP.ofLamThmWF;
       apply LamThmWF.prepend (RTable.wfInv_get inv.left h)
-| .wfOfResolveImport wPos => by
-  dsimp [eval]
-  cases h : BinList.get? r.wf wPos <;> try exact True.intro
-  case some lctxst =>
-    match lctxst with
-    | (lctx, s, t) =>
-      apply LamThmWFP.ofLamThmWF;
-      apply LamThmWF.resolveImport (RTable.wfInv_get inv.left h)
 | .wfOfHeadBeta wPos => by
   dsimp [eval]
   cases h : BinList.get? r.wf wPos <;> try exact True.intro
@@ -192,6 +189,11 @@ theorem ChkStep.eval_correct
 
 -- The first `ChkStep` specifies the checker step
 -- The second `Nat` specifies the position to insert the resulting term
+-- Note that
+--   1. All entries `(x : ChkStep × Nat)` that insert result into the
+--      `wf` table should have distinct second component
+--   2. All entries `(x : ChkStep × Nat)` that insert result into the
+--      `valid` table should have distinct second component
 -- Note that we decide where (`wf` or `valid`) to insert the resulting
 --   term by looking at `(c : ChkStep).eval`
 abbrev ChkSteps := BinList (ChkStep × Nat)
@@ -231,9 +233,19 @@ def ChkSteps.run (ltv : LamTyVal) (r : RTable) (cs : ChkSteps) : RTable :=
   BinList.foldl (fun r (c, n) => ChkStep.run ltv r c n) r cs
 
 theorem CheckSteps.run_correct
-  (lval : LamValuation.{u}) (r : RTable) (inv : r.inv lval) (c : ChkSteps) :
+  (lval : LamValuation.{u}) (r : RTable) (inv : r.inv lval) (cs : ChkSteps) :
   (ChkSteps.run lval.ilVal.toLamTyVal r cs).inv lval := by
   dsimp [ChkSteps.run]; apply BinList.foldl_inv (RTable.inv lval) inv
   intro r (c, n) inv'; exact ChkStep.run_correct lval r inv' c n
+
+theorem Checker
+  (lval : LamValuation.{u}) (it : ImportTable lval) (cs : ChkSteps) :
+  (ChkSteps.run lval.ilVal.toLamTyVal ⟨.empty, it.importFacts⟩ cs).inv lval := by
+  apply CheckSteps.run_correct; apply And.intro;
+  case left =>
+    intro n; cases n <;> dsimp [BinList.get?]
+    case zero => exact True.intro
+    case succ n => dsimp [BinList.empty]; rw [BinTree.get?_leaf]; exact True.intro
+  case right => apply ImportTable.importFacts_correct
 
 end Auto.Embedding.Lam

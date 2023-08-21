@@ -500,8 +500,10 @@ structure BinList (α : Type u) where
 
 namespace BinList
 
+def empty : BinList α := ⟨none, BinTree.leaf⟩
+
 instance : Inhabited (BinList α) where
-  default := ⟨.none, .leaf⟩
+  default := empty
 
 open Lean in
 def toExpr {α : Type u} [ToSortLevel.{u}] [ToExpr α] (bl : BinList α) : Expr :=
