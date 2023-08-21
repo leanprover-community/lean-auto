@@ -313,6 +313,19 @@ def foldl (f : α → β → α) (init : α) : BinTree β → α
     | .none => lf
   foldl f mf r
 
+theorem foldl_inv
+  {f : α → β → α} {init : α} {bt : BinTree β}
+  (inv : α → Prop) (zero : inv init) (ind : ∀ a b, inv a → inv (f a b)) :
+  inv (foldl f init bt) := by
+  revert init; induction bt <;> intros init zero
+  case leaf => exact zero
+  case node l x r IHl IHr =>
+    dsimp [foldl]; apply IHr
+    cases x
+    case none => exact IHl zero
+    case some x =>
+      dsimp; apply ind; apply IHl zero
+
 def allp (p : α → Prop) (bt : BinTree α) := ∀ n, Option.allp p (bt.get? n)
 
 theorem allp_leaf (p : α → Prop) : BinTree.leaf.allp p ↔ True :=
@@ -491,6 +504,15 @@ def foldl (f : α → β → α) (init : α) (bl : BinList β) : α :=
   match bl.head with
   | .some x => bl.tail.foldl f (f init x)
   | .none => bl.tail.foldl f init
+
+theorem foldl_inv
+  {f : α → β → α} {init : α} {bt : BinList β}
+  (inv : α → Prop) (zero : inv init) (ind : ∀ a b, inv a → inv (f a b)) :
+  inv (foldl f init bt) := by
+  dsimp [foldl]
+  cases bt.head;
+  case none => apply BinTree.foldl_inv inv zero ind
+  case some x => apply BinTree.foldl_inv inv (ind _ _ zero) ind
 
 def allp (p : α → Prop) (bl : BinList α) := ∀ n, Option.allp p (bl.get? n)
 

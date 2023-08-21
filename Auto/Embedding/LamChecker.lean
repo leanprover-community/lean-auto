@@ -132,7 +132,7 @@ def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → REntry
   | .some ⟨lctx, t⟩ => .valid lctx t.headBeta
   | .none => .none
 
-theorem ChkStep.correct
+theorem ChkStep.eval_correct
   (lval : LamValuation.{u}) (r : RTable) (inv : r.inv lval) :
   (cs : ChkStep) → REntry.correct lval (cs.eval lval.ilVal.toLamTyVal r)
 | .wfOfCheck lctx t => by
@@ -188,5 +188,49 @@ theorem ChkStep.correct
     match lctxt with
     | (lctx, t) =>
       apply LamThmValid.headBeta (RTable.validInv_get inv.right h)
+
+-- The first `ChkStep` specifies the checker step
+-- The second `Nat` specifies the position to place the resulting term
+abbrev ChkSteps := BinList (ChkStep × Nat)
+
+def ChkStep.run (ltv : LamTyVal) (r : RTable) (c : ChkStep) (n : Nat) : RTable :=
+  match ChkStep.eval ltv r c with
+  | .none => r
+  | .wf lctx s t => ⟨r.wf.insert n (lctx, s, t), r.valid⟩
+  | .valid lctx t => ⟨r.wf, r.valid.insert n (lctx, t)⟩
+
+theorem ChkStep.run_correct
+  (lval : LamValuation.{u}) (r : RTable) (inv : r.inv lval) (c : ChkStep) (n : Nat) :
+  (ChkStep.run lval.ilVal.toLamTyVal r c n).inv lval := by
+  dsimp [ChkStep.run]
+  have eval_correct := ChkStep.eval_correct lval r inv c; revert eval_correct
+  cases h : eval lval.ilVal.toLamTyVal r c <;> intro eval_correct
+  case none => exact inv
+  case wf lctx s t =>
+    apply And.intro
+    case left =>
+      dsimp [RTable.wfInv]; rw [BinList.allp_insert]; dsimp
+      apply And.intro
+      case left => exact eval_correct
+      case right => intros; apply inv.left
+    case right =>
+      exact inv.right
+  case valid lctx t =>
+    apply And.intro <;> dsimp
+    case left => exact inv.left
+    case right =>
+      dsimp [RTable.validInv]; rw [BinList.allp_insert]; dsimp
+      apply And.intro
+      case left => exact eval_correct
+      case right => intros; apply inv.right
+
+def ChkSteps.run (ltv : LamTyVal) (r : RTable) (cs : ChkSteps) : RTable :=
+  BinList.foldl (fun r (c, n) => ChkStep.run ltv r c n) r cs
+
+theorem CheckSteps.run_correct
+  (lval : LamValuation.{u}) (r : RTable) (inv : r.inv lval) (c : ChkSteps) :
+  (ChkSteps.run lval.ilVal.toLamTyVal r cs).inv lval := by
+  dsimp [ChkSteps.run]; apply BinList.foldl_inv (RTable.inv lval) inv
+  intro r (c, n) inv'; exact ChkStep.run_correct lval r inv' c n
 
 end Auto.Embedding.Lam
