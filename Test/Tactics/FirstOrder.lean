@@ -3,6 +3,7 @@ import Auto.Tactic
 open Auto Embedding
 
 set_option pp.universes true
+set_option trace.auto.lamReif true
 example : True := by
   try auto [True.intro];
   sorry
@@ -20,6 +21,12 @@ example (a b : Nat) (f : Nat → Nat)
 set_option trace.auto.printLemmas true
 example (a : Nat) (H : ∀ x, x = a) : a = a := by
   try auto [H];
+  sorry
+
+-- set_option trace.auto.tactic true
+example (a : Nat) (f : Nat → Nat) (H : ∀ x, f x = x) :
+  f x = f (f (f (f (f (f (f x)))))) := by
+  auto [H];
   sorry
 
 -- This example is not supposed to work because it contains

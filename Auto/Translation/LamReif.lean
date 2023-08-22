@@ -622,6 +622,7 @@ section Checker
     return importTableExpr
 
   def buildChecker : ReifM Expr := do
+    let startTime ← IO.monoMsNow
     let u ← getU
     let lvalExpr ← buildLamValuation
     let itExpr ← buildImportTable lvalExpr
@@ -629,6 +630,7 @@ section Checker
     let checker := Lean.mkApp3 (.const ``Checker [u]) lvalExpr itExpr csExpr
     if !(← Meta.isTypeCorrect checker) then
       throwError "buildChecker :: Malformed checker"
+    trace[auto.lamReif] "Checker built in time {(← IO.monoMsNow) - startTime}"
     return checker
 
 end Checker

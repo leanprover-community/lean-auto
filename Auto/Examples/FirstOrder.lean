@@ -62,6 +62,7 @@ end
 section
 variable (α : Type) (p q : α → Prop)
 
+set_option trace.auto.tactic true
 example : (∀ x, p x ∧ q x) ↔ (∀ x, p x) ∧ (∀ x, q x) := by
   try auto;
   sorry
