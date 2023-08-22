@@ -16,6 +16,8 @@ instance : ToSortLevel.{1} where
 instance : ToSortLevel.{2} where
   toSortLevel := .succ (.succ .zero)
 
+def instToSortLevelExplicit (lvl : Level) : ToSortLevel.{u} := {toSortLevel := lvl}
+
 attribute [-instance] Lean.instToExprNat
 instance : ToExpr Nat where
   toExpr := fun n => .lit (.natVal n)

@@ -524,12 +524,14 @@ def get? (bl : BinList α) (n : Nat) : Option α :=
   | 0 => bl.head
   | _ + 1 => bl.tail.get? n
 
--- Given a `bl : BinList α`, return `Lean.toExpr (fun n => BinList.get? bl n)`
+-- Given a `bl : BinList α`, return `Lean.toExpr (fun n => (BinList.get? bl n).getD default)`
 open Lean in
-def toLCtx {α : Type u} [ToSortLevel.{u}] [Lean.ToExpr α] (bl : BinList α) : Expr :=
+def toLCtx {α : Type u} [ToSortLevel.{u}] [ToExpr α] (bl : BinList α) (default : α) : Expr :=
   let lvl := ToSortLevel.toSortLevel.{u}
   let type := toTypeExpr α
-  .lam `n (.const ``Nat []) (mkApp3 (.const ``BinList.get? [lvl]) type (toExpr bl) (.bvar 0)) .default
+  let get?Expr := mkApp3 (.const ``BinList.get? [lvl]) type (toExpr bl) (.bvar 0)
+  let getDExpr := mkApp3 (.const ``Option.getD [lvl]) type get?Expr (ToExpr.toExpr default)
+  .lam `n (.const ``Nat []) getDExpr .default
 
 def insert (bl : BinList α) (n : Nat) (x : α) : BinList α :=
   ⟨match n with | 0 => .some x | _ + 1 => bl.head, bl.tail.insert n x⟩

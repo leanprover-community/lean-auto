@@ -128,7 +128,7 @@ def runAuto
       let assertions ← LamReif.getAssertions
       for (expr, lterm) in assertions do
         trace[auto.tactic] "Proof: {expr}, λ Term: {repr lterm}"
-      let exportFacts ← (assertions.map (·.2)).mapM LamReif.resolveImport
+      let exportFacts ← (assertions.map (·.2.1)).mapM LamReif.resolveImport
       for (id, lams) in (← LamReif.getVarVal) do
         trace[auto.tactic] "FVar: {Expr.fvar id}, λ Sort: {repr lams}"
       let commands := (← (lamFOL2SMT (← LamReif.getVarVal) exportFacts).run {}).1
@@ -136,6 +136,8 @@ def runAuto
       Solver.SMT.querySolver commands
       let proof ← Lam2D.callDuper exportFacts
       trace[auto.tactic] "Duper found proof of {← Meta.inferType proof}"
+      let checker ← LamReif.buildChecker
+      trace[auto.tactic] "Checker says that {← Meta.inferType checker}"
       )
     let afterMonomorphization : Reif.ReifM Unit := (do
       let ufacts ← liftM <| Reif.getFacts

@@ -2,10 +2,12 @@ import Auto.Tactic
 
 open Auto Embedding
 
+set_option pp.universes true
 example : True := by
   try auto [True.intro];
   sorry
 
+#check Lam.LamSort.interp.{2}
 example (a b : Prop) : a ∨ b ∨ a := by
   try auto;
   sorry

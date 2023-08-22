@@ -66,11 +66,15 @@ abbrev ImportTable (lval : LamValuation.{u}) :=
   Auto.BinList (@PSigma LamTerm (fun p => (LamTerm.interpAsProp lval dfLCtxTy (dfLCtxTerm _) p).down))
 
 -- Used by the meta code of the checker to build `ImportTable`
-abbrev ImportTablePSigmaβ (lval : LamValuation.{u}) (p : LamTerm) :=
+abbrev importTablePSigmaβ (lval : LamValuation.{u}) (p : LamTerm) :=
   (LamTerm.interpAsProp lval dfLCtxTy (dfLCtxTerm _) p).down
 
-abbrev ImportTablePSigmaMk (lval : LamValuation.{u}) :=
-  @PSigma.mk LamTerm (ImportTablePSigmaβ lval)
+abbrev importTablePSigmaMk (lval : LamValuation.{u}) :=
+  @PSigma.mk LamTerm (importTablePSigmaβ lval)
+
+abbrev importTablePSigmaDefault (lval : LamValuation.{u}) :
+  @PSigma LamTerm (fun p => (LamTerm.interpAsProp lval dfLCtxTy (dfLCtxTerm _) p).down) :=
+  ⟨.base .trueE, True.intro⟩
 
 def ImportTable.importFacts (it : ImportTable lval) : BinList (List LamSort × LamTerm) :=
   it.mapOpt (fun ⟨p, _⟩ =>

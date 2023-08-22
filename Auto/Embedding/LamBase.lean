@@ -367,6 +367,9 @@ abbrev eqValSigmaFst.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (eqValSi
 
 abbrev eqValSigmaSnd.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (eqValSigmaβ.{u} tyVal)) : eqValSigmaβ.{u} tyVal sig.fst := sig.snd
 
+abbrev eqValSigmaDefault.{u} (tyVal : Nat → Type u) : @Sigma LamSort (eqValSigmaβ.{u} tyVal) :=
+  ⟨.base .prop, EqLift.default _⟩
+
 -- Used in checker metacode to construct `forallValBundle`
 abbrev forallValSigmaβ.{u} (tyVal : Nat → Type u) (s : LamSort) : Type u :=
   ForallLift.{u + 1, u, 0, 0} (s.interp tyVal)
@@ -378,6 +381,9 @@ abbrev forallValSigmaFst.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (for
 
 abbrev forallValSigmaSnd.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (forallValSigmaβ.{u} tyVal)) : forallValSigmaβ.{u} tyVal sig.fst := sig.snd
 
+abbrev forallValSigmaDefault.{u} (tyVal : Nat → Type u) : @Sigma LamSort (forallValSigmaβ.{u} tyVal) :=
+  ⟨.base .prop, ForallLift.default _⟩
+
 -- Used in checker metacode to construct `existValBundle`
 abbrev existValSigmaβ.{u} (tyVal : Nat → Type u) (s : LamSort) : Type u :=
   ExistLift.{u + 1, u} (s.interp tyVal)
@@ -388,6 +394,9 @@ abbrev existValSigmaMk.{u} (tyVal : Nat → Type u) :=
 abbrev existValSigmaFst.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (existValSigmaβ.{u} tyVal)) : LamSort := sig.fst
 
 abbrev existValSigmaSnd.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (existValSigmaβ.{u} tyVal)) : existValSigmaβ.{u} tyVal sig.fst := sig.snd
+
+abbrev existValSigmaDefault.{u} (tyVal : Nat → Type u) : @Sigma LamSort (existValSigmaβ.{u} tyVal) :=
+  ⟨.base .prop, ExistLift.default _⟩
 
 def eqVal.default (eqLamVal : Nat → LamSort) (tyVal : Nat → Type u) :
   ∀ (n : Nat), EqLift.{u + 1, u} ((eqLamVal n).interp tyVal) :=
@@ -1062,6 +1071,9 @@ abbrev varValSigmaMk.{u} (tyVal : Nat → Type u) :=
 abbrev varValSigmaFst.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (LamSort.interp tyVal)) : LamSort := sig.fst
 
 abbrev varValSigmaSnd.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (LamSort.interp tyVal)) : LamSort.interp tyVal sig.fst := sig.snd
+
+abbrev varValSigmaDefault.{u} (tyVal : Nat → Type u) : @Sigma LamSort (LamSort.interp tyVal) :=
+  ⟨.base .prop, GLift.up False⟩
 
 def LamTerm.interp.{u}
   (dfSort : LamSort) (lval : LamValuation.{u}) (dfVal : dfSort.interp lval.ilVal.tyVal)
