@@ -7,6 +7,11 @@ import Auto.Lib.Containers
 import Auto.Lib.ToExprExtra
 import Lean
 
+/- Polymorphic binary tree
+  For definitions with `'`, the tree behaves as `{n : Nat // n ≠ 0} → α`
+  For definitions without `'`, the tree behaves as `Nat → α`
+-/
+
 namespace Auto
 
 namespace Bin
@@ -85,24 +90,24 @@ def right! (bt : BinTree α) :=
   | .leaf => leaf
   | .node _ _ r => r
 
-def get?WF (bt : BinTree α) (n : Nat) : Option α :=
+def get?'WF (bt : BinTree α) (n : Nat) : Option α :=
   match h : n with
   | 0 => .none
   | 1 => bt.val?
   | _ + 2 =>
     match Nat.mod n 2 with
-    | 0 => get?WF bt.left! (Nat.div n 2)
-    | _ + 1 => get?WF bt.right! (Nat.div n 2)
-termination_by get?WF bt n => n
+    | 0 => get?'WF bt.left! (Nat.div n 2)
+    | _ + 1 => get?'WF bt.right! (Nat.div n 2)
+termination_by get?'WF bt n => n
 decreasing_by apply Bin.wfAux; assumption
 
-theorem get?WF.succSucc (bt : BinTree α) (n : Nat) :
-  get?WF bt (n + 2) = 
+theorem get?'WF.succSucc (bt : BinTree α) (n : Nat) :
+  get?'WF bt (n + 2) = 
     match Nat.mod (n + 2) 2 with
-    | 0 => get?WF bt.left! (Nat.div (n + 2) 2)
-    | _ + 1 => get?WF bt.right! (Nat.div (n + 2) 2) := rfl
+    | 0 => get?'WF bt.left! (Nat.div (n + 2) 2)
+    | _ + 1 => get?'WF bt.right! (Nat.div (n + 2) 2) := rfl
 
-def get?Aux (bt : BinTree α) (n rd : Nat) : Option α :=
+def get?'Aux (bt : BinTree α) (n rd : Nat) : Option α :=
   match rd with
   | 0 => .none
   | .succ rd' =>
@@ -111,23 +116,23 @@ def get?Aux (bt : BinTree α) (n rd : Nat) : Option α :=
     | 1 => bt.val?
     | _ + 2 =>
       match Nat.mod n 2 with
-      | 0 => get?Aux bt.left! (Nat.div n 2) rd'
-      | _ + 1 => get?Aux bt.right! (Nat.div n 2) rd'
+      | 0 => get?'Aux bt.left! (Nat.div n 2) rd'
+      | _ + 1 => get?'Aux bt.right! (Nat.div n 2) rd'
 
-theorem get?Aux.equiv (bt : BinTree α) (n rd : Nat) :
-  rd ≥ n → get?Aux bt n rd = get?WF bt n := by
+theorem get?'Aux.equiv (bt : BinTree α) (n rd : Nat) :
+  rd ≥ n → get?'Aux bt n rd = get?'WF bt n := by
   revert n bt; induction rd <;> intros bt n H
   case zero =>
     have hzero : n = 0 := Nat.eq_zero_of_le_zero H
     rw [hzero]; rfl
   case succ rd' IH =>
-    dsimp [get?Aux]
+    dsimp [get?'Aux]
     match n with
     | 0 => rfl
     | 1 => rfl
     | n' + 2 =>
       dsimp;
-      rw [get?WF.succSucc];
+      rw [get?'WF.succSucc];
       have heq' : Nat.mod (n' + 2) 2 = n' % 2 := by
         suffices (n' + 2) % 2 = n' % 2 by exact this
         rw [Nat.add_mod_right]
@@ -141,30 +146,31 @@ theorem get?Aux.equiv (bt : BinTree α) (n rd : Nat) :
         apply (Nat.le_of_succ_le_succ H)
       rw [IH (left! bt), IH (right! bt)] <;> assumption
 
-def get? (bt : BinTree α) (n : Nat) : Option α :=
-  get?Aux bt n n
+def get?' (bt : BinTree α) (n : Nat) : Option α := get?'Aux bt n n
 
-theorem get?.equiv (bt : BinTree α) (n : Nat) :
-  get? bt n = get?WF bt n :=
-  get?Aux.equiv _ _ n .refl
+def get? (bt : BinTree α) (n : Nat) : Option α := get?' bt (.succ n)
 
-theorem get?_succSucc (bt : BinTree α) (n : Nat) :
-  get? bt (n + 2) = 
+theorem get?'.equiv (bt : BinTree α) (n : Nat) :
+  get?' bt n = get?'WF bt n :=
+  get?'Aux.equiv _ _ n .refl
+
+theorem get?'_succSucc (bt : BinTree α) (n : Nat) :
+  get?' bt (n + 2) = 
     match (n + 2) % 2 with
-    | 0 => get? bt.left! ((n + 2) / 2)
-    | _ + 1 => get? bt.right! ((n + 2) / 2) := by
-  rw [get?.equiv bt, get?.equiv bt.left!, get?.equiv bt.right!]
-  apply get?WF.succSucc
+    | 0 => get?' bt.left! ((n + 2) / 2)
+    | _ + 1 => get?' bt.right! ((n + 2) / 2) := by
+  rw [get?'.equiv bt, get?'.equiv bt.left!, get?'.equiv bt.right!]
+  apply get?'WF.succSucc
 
-theorem get?_leaf (n : Nat) : @get? α .leaf n = .none := by
-  apply Bin.induction (motive := fun n => @get? α .leaf n = .none)
+theorem get?'_leaf (n : Nat) : @get?' α .leaf n = .none := by
+  apply Bin.induction (motive := fun n => @get?' α .leaf n = .none)
   case base₀ => rfl
   case base₁ => rfl
   case ind =>
-    intro n IH; rw [get?_succSucc];
+    intro n IH; rw [get?'_succSucc];
     cases (n + 2) % 2 <;> exact IH
 
-def insertWF (bt : BinTree α) (n : Nat) (x : α) : BinTree α :=
+def insert'WF (bt : BinTree α) (n : Nat) (x : α) : BinTree α :=
   match h : n with
   | 0 => bt
   | 1 =>
@@ -175,28 +181,28 @@ def insertWF (bt : BinTree α) (n : Nat) (x : α) : BinTree α :=
     match Nat.mod n 2 with
     | 0 =>
       match bt with
-      | .leaf => .node (insertWF .leaf (Nat.div n 2) x) .none .leaf
-      | .node l v r => .node (insertWF l (Nat.div n 2) x) v r
+      | .leaf => .node (insert'WF .leaf (Nat.div n 2) x) .none .leaf
+      | .node l v r => .node (insert'WF l (Nat.div n 2) x) v r
     | _ + 1 =>
       match bt with
-      | .leaf => .node .leaf .none (insertWF .leaf (Nat.div n 2) x)
-      | .node l v r => .node l v (insertWF r (Nat.div n 2) x)
-termination_by insertWF bt n x => n
+      | .leaf => .node .leaf .none (insert'WF .leaf (Nat.div n 2) x)
+      | .node l v r => .node l v (insert'WF r (Nat.div n 2) x)
+termination_by insert'WF bt n x => n
 decreasing_by rw [← h]; apply Bin.wfAux; assumption
 
-theorem insertWF.succSucc (bt : BinTree α) (n : Nat) (x : α) :
-  insertWF bt (n + 2) x = 
+theorem insert'WF.succSucc (bt : BinTree α) (n : Nat) (x : α) :
+  insert'WF bt (n + 2) x = 
     match Nat.mod (n + 2) 2 with
     | 0 =>
       match bt with
-      | .leaf => .node (insertWF .leaf (Nat.div (n + 2) 2) x) .none .leaf
-      | .node l v r => .node (insertWF l (Nat.div (n + 2) 2) x) v r
+      | .leaf => .node (insert'WF .leaf (Nat.div (n + 2) 2) x) .none .leaf
+      | .node l v r => .node (insert'WF l (Nat.div (n + 2) 2) x) v r
     | _ + 1 =>
       match bt with
-      | .leaf => .node .leaf .none (insertWF .leaf (Nat.div (n + 2) 2) x)
-      | .node l v r => .node l v (insertWF r (Nat.div (n + 2) 2) x) := rfl
+      | .leaf => .node .leaf .none (insert'WF .leaf (Nat.div (n + 2) 2) x)
+      | .node l v r => .node l v (insert'WF r (Nat.div (n + 2) 2) x) := rfl
 
-def insertAux (bt : BinTree α) (n : Nat) (x : α) (rd : Nat) : BinTree α :=
+def insert'Aux (bt : BinTree α) (n : Nat) (x : α) (rd : Nat) : BinTree α :=
   match rd with
   | 0 => bt
   | .succ rd' =>
@@ -210,27 +216,27 @@ def insertAux (bt : BinTree α) (n : Nat) (x : α) (rd : Nat) : BinTree α :=
       match Nat.mod n 2 with
       | 0 =>
         match bt with
-        | .leaf => .node (insertAux .leaf (Nat.div n 2) x rd') .none .leaf
-        | .node l v r => .node (insertAux l (Nat.div n 2) x rd') v r
+        | .leaf => .node (insert'Aux .leaf (Nat.div n 2) x rd') .none .leaf
+        | .node l v r => .node (insert'Aux l (Nat.div n 2) x rd') v r
       | _ + 1 =>
         match bt with
-        | .leaf => .node .leaf .none (insertAux .leaf (Nat.div n 2) x rd')
-        | .node l v r => .node l v (insertAux r (Nat.div n 2) x rd')
+        | .leaf => .node .leaf .none (insert'Aux .leaf (Nat.div n 2) x rd')
+        | .node l v r => .node l v (insert'Aux r (Nat.div n 2) x rd')
 
-theorem insertAux.equiv (bt : BinTree α) (n : Nat) (x : α) (rd : Nat) :
-  rd ≥ n → insertAux bt n x rd = insertWF bt n x := by
+theorem insert'Aux.equiv (bt : BinTree α) (n : Nat) (x : α) (rd : Nat) :
+  rd ≥ n → insert'Aux bt n x rd = insert'WF bt n x := by
   revert n bt; induction rd <;> intros bt n H
   case zero =>
     have hzero : n = 0 := Nat.eq_zero_of_le_zero H
     rw [hzero]; rfl
   case succ rd' IH =>
-    dsimp [get?Aux]
+    dsimp [get?'Aux]
     match n with
     | 0 => rfl
     | 1 => rfl
     | n' + 2 =>
-      dsimp [insertAux];
-      rw [insertWF.succSucc];
+      dsimp [insert'Aux];
+      rw [insert'WF.succSucc];
       have heq' : Nat.mod (n' + 2) 2 = n' % 2 := by
         suffices (n' + 2) % 2 = n' % 2 by exact this
         rw [Nat.add_mod_right]
@@ -244,32 +250,34 @@ theorem insertAux.equiv (bt : BinTree α) (n : Nat) (x : α) (rd : Nat) :
         apply (Nat.le_of_succ_le_succ H)
       cases (n' % 2) <;> cases bt <;> dsimp <;> rw [IH] <;> assumption
 
-def insert (bt : BinTree α) (n : Nat) (x : α) := insertAux bt n x n
+def insert' (bt : BinTree α) (n : Nat) (x : α) := insert'Aux bt n x n
 
-theorem insert.equiv (bt : BinTree α) (n : Nat) (x : α) :
-  insert bt n x = insertWF bt n x :=
-  insertAux.equiv _ n x n .refl
+def insert (bt : BinTree α) (n : Nat) (x : α) := insert' bt (.succ n) x
 
-theorem insert.succSucc (bt : BinTree α) (n : Nat) (x : α) :
-  insert bt (n + 2) x = 
+theorem insert'.equiv (bt : BinTree α) (n : Nat) (x : α) :
+  insert' bt n x = insert'WF bt n x :=
+  insert'Aux.equiv _ n x n .refl
+
+theorem insert'.succSucc (bt : BinTree α) (n : Nat) (x : α) :
+  insert' bt (n + 2) x = 
     match (n + 2) % 2 with
     | 0 =>
       match bt with
-      | .leaf => .node (insert .leaf ((n + 2) / 2) x) .none .leaf
-      | .node l v r => .node (insert l ((n + 2) / 2) x) v r
+      | .leaf => .node (insert' .leaf ((n + 2) / 2) x) .none .leaf
+      | .node l v r => .node (insert' l ((n + 2) / 2) x) v r
     | _ + 1 =>
       match bt with
-      | .leaf => .node .leaf .none (insert .leaf ((n + 2) / 2) x)
-      | .node l v r => .node l v (insert r ((n + 2) / 2) x) := by
-  rw [insert.equiv bt, insertWF.succSucc]
+      | .leaf => .node .leaf .none (insert' .leaf ((n + 2) / 2) x)
+      | .node l v r => .node l v (insert' r ((n + 2) / 2) x) := by
+  rw [insert'.equiv bt, insert'WF.succSucc]
   rw [show Nat.mod (n + 2) 2 = (n + 2) % 2 by rfl]
   rw [show Nat.div (n + 2) 2 = (n + 2) / 2 by rfl]
-  cases (n + 2) % 2 <;> cases bt <;> dsimp <;> rw [insert.equiv];
+  cases (n + 2) % 2 <;> cases bt <;> dsimp <;> rw [insert'.equiv];
 
-theorem insert.correct₁ (bt : BinTree β) (n : Nat) (x : β) : n ≠ 0 → get? (insert bt n x) n = .some x := by
+theorem insert'.correct₁ (bt : BinTree β) (n : Nat) (x : β) : n ≠ 0 → get?' (insert' bt n x) n = .some x := by
   revert bt;
   let motive := fun n => ∀ (bt : BinTree β), n ≠ 0 →
-    get? (insert bt n x) n = .some x
+    get?' (insert' bt n x) n = .some x
   apply Bin.induction (motive := motive)
   case base₀ => intros bt contra; contradiction
   case base₁ => intros bt _; cases bt <;> rfl
@@ -278,13 +286,16 @@ theorem insert.correct₁ (bt : BinTree β) (n : Nat) (x : β) : n ≠ 0 → get
     have hne' : (n + 2) / 2 ≠ 0 := by
       rw [Nat.add_div_right _ (.step .refl)]; intro h; cases h
     let IH' := fun bt => IH bt hne'
-    rw [get?_succSucc, insert.succSucc, left!, right!]
+    rw [get?'_succSucc, insert'.succSucc, left!, right!]
     cases (n + 2) % 2 <;> cases bt <;> dsimp <;> rw [IH']
 
-theorem insert.correct₂ (bt : BinTree β) (n₁ n₂ : Nat) (x : β) : n₁ ≠ n₂ → get? (insert bt n₁ x) n₂ = get? bt n₂ := by
+theorem insert.correct₁ (bt : BinTree β) (n : Nat) (x : β) : get? (insert bt n x) n = .some x :=
+  insert'.correct₁ bt (.succ n) x (by intro h; cases h)
+
+theorem insert'.correct₂ (bt : BinTree β) (n₁ n₂ : Nat) (x : β) : n₁ ≠ n₂ → get?' (insert' bt n₁ x) n₂ = get?' bt n₂ := by
   revert bt n₁;
   let motive := fun n₂ => ∀ (bt : BinTree β) (n₁ : Nat), n₁ ≠ n₂ →
-    get? (insert bt n₁ x) n₂ = get? bt n₂
+    get?' (insert' bt n₁ x) n₂ = get?' bt n₂
   apply Bin.induction (motive:=motive)
   case base₀ => intros bt n₂ _; cases bt <;> rfl
   case base₁ =>
@@ -292,15 +303,15 @@ theorem insert.correct₂ (bt : BinTree β) (n₁ n₂ : Nat) (x : β) : n₁ �
     match n₂ with
     | 0 => rfl
     | 1 => contradiction
-    | n₂ + 2 => rw [insert.succSucc]; cases (n₂ + 2) % 2 <;> cases bt <;> rfl
+    | n₂ + 2 => rw [insert'.succSucc]; cases (n₂ + 2) % 2 <;> cases bt <;> rfl
   case ind =>
     intros n₂ IH bt n₁ hne;
-    rw [get?_succSucc bt, get?_succSucc (insert bt n₁ x)]
+    rw [get?'_succSucc bt, get?'_succSucc (insert' bt n₁ x)]
     match n₁ with
     | 0 => cases bt <;> rfl
     | 1 => cases bt <;> rfl
     | n₁ + 2 =>
-      rw [insert.succSucc, left!, right!]
+      rw [insert'.succSucc, left!, right!]
       have hne' : (n₁ + 2) % 2 = (n₂ + 2) % 2 → (n₁ + 2) / 2 ≠ (n₂ + 2) / 2 := by
         intro heq h; apply hne;
         rw [← Nat.div_add_mod (n₁ + 2) 2, ← Nat.div_add_mod (n₂ + 2) 2]
@@ -326,6 +337,9 @@ theorem insert.correct₂ (bt : BinTree β) (n₁ n₂ : Nat) (x : β) : n₁ �
       case succ.succ.node =>
         rw [IH _ _ (hne' (.trans (hmod h₁) (.symm (hmod h₂))))]; rfl;
 
+theorem insert.correct₂ (bt : BinTree β) (n₁ n₂ : Nat) (x : β) (H : n₁ ≠ n₂) : get? (insert bt n₁ x) n₂ = get? bt n₂ :=
+  insert'.correct₂ bt (.succ n₁) (.succ n₂) x (fun h => H (Nat.succ.inj h))
+
 def foldl (f : α → β → α) (init : α) : BinTree β → α
 | .leaf => init
 | .node l x r =>
@@ -349,14 +363,24 @@ theorem foldl_inv
     case some x =>
       dsimp; apply ind; apply IHl zero
 
+def allp' (p : α → Prop) (bt : BinTree α) := ∀ n, Option.allp p (bt.get?' n)
+
 def allp (p : α → Prop) (bt : BinTree α) := ∀ n, Option.allp p (bt.get? n)
 
-theorem allp_leaf (p : α → Prop) : BinTree.leaf.allp p ↔ True :=
-  Iff.intro (fun _ => True.intro) (fun _ n => by rw [get?_leaf]; exact True.intro)
+theorem allp_equiv : allp' p bt ↔ allp p bt := by
+  apply Iff.intro <;> intro h n
+  case mp => apply h
+  case mpr =>
+    cases n;
+    case zero => exact True.intro
+    case succ n => apply h
 
-theorem allp_node (p : α → Prop) :
-  (BinTree.node l x r).allp p ↔ (l.allp p) ∧ (Option.allp p x) ∧ (r.allp p) := by
-  dsimp [allp]; apply Iff.intro <;> intro h
+theorem allp'_leaf (p : α → Prop) : BinTree.leaf.allp' p ↔ True :=
+  Iff.intro (fun _ => True.intro) (fun _ n => by rw [get?'_leaf]; exact True.intro)
+
+theorem allp'_node (p : α → Prop) :
+  (BinTree.node l x r).allp' p ↔ (l.allp' p) ∧ (Option.allp p x) ∧ (r.allp' p) := by
+  dsimp [allp']; apply Iff.intro <;> intro h
   case mp =>
     apply And.intro ?left (And.intro ?middle ?right);
     case left =>
@@ -366,7 +390,7 @@ theorem allp_node (p : α → Prop) :
       | 1 => exact (h 2)
       | n + 2 =>
         have h' := h (2 * n + 4);
-        rw [get?_succSucc] at h'
+        rw [get?'_succSucc] at h'
         have eq₁ : (2 * n + 2 + 2) % 2 = 0 := by simp
         have eq₂ : (2 * n + 2 + 2) / 2 = n + 2 := by simp
         rw [eq₁, eq₂] at h'; exact h'
@@ -378,7 +402,7 @@ theorem allp_node (p : α → Prop) :
       | 1 => exact (h 3)
       | n + 2 =>
         have h' := h (2 * n + 5)
-        rw [get?_succSucc] at h'
+        rw [get?'_succSucc] at h'
         have eq₁ : (2 * n + 5) % 2 = 1 := by
           rw [Nat.add_mod]; simp
         have eq₂ : (2 * n + 5) / 2 = n + 2 := by
@@ -393,33 +417,41 @@ theorem allp_node (p : α → Prop) :
     | 0 => exact True.intro
     | 1 => exact eqx
     | n + 2 =>
-      rw [get?_succSucc];
+      rw [get?'_succSucc];
       cases (n + 2) % 2 <;> dsimp [left!, right!]
       case zero => apply eql
       case succ => apply eqr
 
-theorem allp_insert (p : α → Prop) (bt : BinTree α) (n : Nat) (x : α) :
-  allp p (insert bt n x) ↔ (n ≠ 0 → p x) ∧ (∀ n', n' ≠ n → Option.allp p (bt.get? n')) := by
+theorem allp'_insert' (p : α → Prop) (bt : BinTree α) (n : Nat) (x : α) :
+  allp' p (insert' bt n x) ↔ (n ≠ 0 → p x) ∧ (∀ n', n' ≠ n → Option.allp p (bt.get?' n')) := by
   apply Iff.intro
   case mp =>
     intro H; apply And.intro
     case left =>
       intro hne; have H' := H n
-      rw [insert.correct₁ _ _ _ hne] at H'; exact H'
+      rw [insert'.correct₁ _ _ _ hne] at H'; exact H'
     case right =>
       intro n' hne; have H' := H n'
-      rw [insert.correct₂ _ _ _ _ (fun h => hne (Eq.symm h))] at H'; exact H'
+      rw [insert'.correct₂ _ _ _ _ (fun h => hne (Eq.symm h))] at H'; exact H'
   case mpr =>
     intro ⟨hzero, hsucc⟩ n';
     cases h : n.beq n'
     case false =>
       let h' := Nat.ne_of_beq_eq_false h
-      rw [insert.correct₂ _ _ _ _ h']; apply hsucc _ (fun h => h' (Eq.symm h))
+      rw [insert'.correct₂ _ _ _ _ h']; apply hsucc _ (fun h => h' (Eq.symm h))
     case true =>
       let h' := Nat.eq_of_beq_eq_true h; cases h'
       cases n
       case zero => exact True.intro
-      case succ n => rw [insert.correct₁]; apply hzero; simp; simp
+      case succ n => rw [insert'.correct₁]; apply hzero; simp; simp
+
+theorem allp_insert (p : α → Prop) (bt : BinTree α) (n : Nat) (x : α) :
+  allp p (insert bt n x) ↔ p x ∧ (∀ n', n' ≠ n → Option.allp p (bt.get? n')) := by
+  dsimp [insert]; rw [← allp_equiv]; rw [allp'_insert']; simp; intro _
+  apply Iff.intro <;> intro h n' eq
+  case mp => apply h; exact (fun h' => eq (Nat.succ.inj h'))
+  case mpr =>
+    match n' with | 0 => exact True.intro | .succ n' => apply h; exact (fun h' => eq (congrArg _ h'))
 
 def all (p : α → Bool) := BinTree.foldl (fun i x => i && p x) true
 
@@ -442,269 +474,97 @@ theorem all_node (p : α → Bool) :
   case some x =>
     apply Bool.and_comm
 
-theorem all_allp (p : α → Bool) (bt : BinTree α) :
-  (bt.all p = true) ↔ bt.allp (fun x => p x = true) := by
+theorem all_allp' (p : α → Bool) (bt : BinTree α) :
+  (bt.all p = true) ↔ bt.allp' (fun x => p x = true) := by
   induction bt
   case leaf =>
-    dsimp [all, foldl, allp]
-    refine Iff.intro (fun _ n => by rw [get?_leaf]; exact True.intro) (fun _ => rfl)
+    dsimp [all, foldl, allp']
+    refine Iff.intro (fun _ n => by rw [get?'_leaf]; exact True.intro) (fun _ => rfl)
   case node l x r IHl IHr =>
     rw [all_node]; rw [Bool.and_eq_true]; rw [Bool.and_eq_true]
-    rw [IHl, IHr]; rw [allp_node]; rw [And.assoc]; rw [Option.all_allp]
+    rw [IHl, IHr]; rw [allp'_node]; rw [And.assoc]; rw [Option.all_allp]
 
-theorem all_spec (p : α → Bool) (bt : BinTree α) :
-  (all p bt = true) ↔ (∀ n : Nat, (get? bt n).all p = true) := by
-  rw [all_allp]; dsimp [allp]; apply Iff.intro <;> intro h n
+theorem all_allp (p : α → Bool) (bt : BinTree α) :
+  (bt.all p = true) ↔ bt.allp (fun x => p x = true) := by
+  rw [← allp_equiv]; apply all_allp'
+
+theorem all_spec' (p : α → Bool) (bt : BinTree α) :
+  (bt.all p = true) ↔ (∀ n : Nat, (get?' bt n).all p = true) := by
+  rw [all_allp']; dsimp [allp']; apply Iff.intro <;> intro h n
   case mp =>
     rw [Option.all_allp]; apply h
   case mpr =>
     rw [← Option.all_allp]; apply h
 
-theorem all_spec' (p : α → Bool) (bt : BinTree α) :
-  all p bt ↔ (∀ n : Nat, Option.allp (fun x => p x = true) (get? bt n)) := by
-  rw [all_allp]; rfl
+theorem all_spec (p : α → Bool) (bt : BinTree α) :
+  (bt.all p = true) ↔ (∀ n : Nat, (get? bt n).all p = true) :=
+  Iff.intro
+    (fun h n => (all_spec' p bt).mp h (.succ n))
+    (fun h => (all_spec' p bt).mpr (fun n => match n with | 0 => rfl | .succ n => h n))
 
-theorem all_insert (p : α → Bool) (bt : BinTree α) (n : Nat) (x : α) :
-  (all p (insert bt n x) = true) ↔ (n ≠ 0 → p x) ∧ (∀ n', n' ≠ n → (bt.get? n').all p) := by
-  rw [all_allp]; rw [allp_insert]; simp; intro _;
+theorem all_insert' (p : α → Bool) (bt : BinTree α) (n : Nat) (x : α) :
+  (all p (insert' bt n x) = true) ↔ (n ≠ 0 → p x) ∧ (∀ n', n' ≠ n → (bt.get?' n').all p = true) := by
+  rw [all_allp']; rw [allp'_insert']; simp; intro _;
   apply Iff.intro <;> intro h n' eq;
   case mp => rw [Option.all_allp]; apply h _ eq
   case mpr => rw [← Option.all_allp]; apply h _ eq
+
+theorem all_insert (p : α → Bool) (bt : BinTree α) (n : Nat) (x : α) :
+  (all p (insert bt n x) = true) ↔ p x ∧ (∀ n', n' ≠ n → (bt.get? n').all p = true) := by
+  dsimp [insert]; rw [all_insert']; simp; intro _;
+  apply Iff.intro <;> intro h n' eq
+  case mp => apply h; exact (fun h' => eq (Nat.succ.inj h'))
+  case mpr =>
+    match n' with | 0 => rfl | .succ n' => apply h; exact (fun h' => eq (congrArg _ h'))
 
 def mapOpt (f : α → Option β) : BinTree α → BinTree β
 | .leaf => .leaf
 | .node l x r => .node (mapOpt f l) (x.bind f) (mapOpt f r)
 
-theorem mapOpt_allp (f : α → Option β) (p : β → Prop) :
-  (bt : BinTree α) → (bt.mapOpt f).allp p ↔ bt.allp (fun x => Option.allp p (f x))
+theorem mapOpt_allp' (f : α → Option β) (p : β → Prop) :
+  (bt : BinTree α) → (bt.mapOpt f).allp' p ↔ bt.allp' (fun x => Option.allp p (f x))
 | .leaf =>
   Iff.intro
-    (fun _ n => by rw [get?_leaf]; exact True.intro)
-    (fun _ n => by dsimp [mapOpt]; rw [get?_leaf]; exact True.intro)
+    (fun _ n => by rw [get?'_leaf]; exact True.intro)
+    (fun _ n => by dsimp [mapOpt]; rw [get?'_leaf]; exact True.intro)
 | .node l x r => by
-  dsimp [mapOpt]; rw [allp_node p]; rw [allp_node]
-  rw [mapOpt_allp f p l]; rw [mapOpt_allp f p r];
+  dsimp [mapOpt]; rw [allp'_node p]; rw [allp'_node]
+  rw [mapOpt_allp' f p l]; rw [mapOpt_allp' f p r];
   suffices h : Option.allp p (Option.bind x f) ↔ Option.allp (fun x => Option.allp p (f x)) x by rw [h]
   cases x <;> rfl
+
+theorem mapOpt_allp (f : α → Option β) (p : β → Prop) (bt : BinTree α) :
+  (bt.mapOpt f).allp p ↔ bt.allp (fun x => Option.allp p (f x)) := by
+  rw [← allp_equiv]; rw [← allp_equiv]; apply mapOpt_allp'
 
 -- **TODO**: Prove properties
 def ofList (xs : List α) : BinTree α :=
   let xs' := xs.zip (List.range xs.length)
-  xs'.foldl (fun bt (x, n) => bt.insert n x) .leaf
+  xs'.foldl (fun bt (x, n) => bt.insert' (.succ n) x) .leaf
 
-end BinTree
-    
-structure BinList (α : Type u) where
-  head : Option α
-  tail : BinTree α
-
-namespace BinList
-
-def empty : BinList α := ⟨none, BinTree.leaf⟩
-
-instance : Inhabited (BinList α) where
-  default := empty
-
+-- Given a `bl : BinTree α`, return `Lean.toExpr (fun n => (BinTree.get? bl n).getD default)`
 open Lean in
-def toExpr {α : Type u} [ToSortLevel.{u}] [ToExpr α] (bl : BinList α) : Expr :=
-  let lvl := ToSortLevel.toSortLevel.{u}
-  let ty := Lean.toTypeExpr α
-  let ⟨head, tail⟩ := bl
-  mkApp3 (.const ``BinList.mk [lvl]) ty (Lean.toExpr head) (Lean.toExpr tail)
-
-open Lean in
-instance {α : Type u} [ToSortLevel.{u}] [ToExpr α] : Lean.ToExpr (BinList α) where
-  toExpr := BinList.toExpr
-  toTypeExpr :=
-    let lvl := ToSortLevel.toSortLevel.{u}
-    .app (.const ``BinList [lvl]) (Lean.toTypeExpr α)
-
-def get? (bl : BinList α) (n : Nat) : Option α :=
-  match n with
-  | 0 => bl.head
-  | _ + 1 => bl.tail.get? n
-
--- Given a `bl : BinList α`, return `Lean.toExpr (fun n => (BinList.get? bl n).getD default)`
-open Lean in
-def toLCtx {α : Type u} [ToSortLevel.{u}] [ToExpr α] (bl : BinList α) (default : α) : Expr :=
+def toLCtx {α : Type u} [ToSortLevel.{u}] [ToExpr α] (bl : BinTree α) (default : α) : Expr :=
   let lvl := ToSortLevel.toSortLevel.{u}
   let type := toTypeExpr α
-  let get?Expr := mkApp3 (.const ``BinList.get? [lvl]) type (toExpr bl) (.bvar 0)
+  let get?Expr := mkApp3 (.const ``BinTree.get? [lvl]) type (toExpr bl) (.bvar 0)
   let getDExpr := mkApp3 (.const ``Option.getD [lvl]) type get?Expr (ToExpr.toExpr default)
   .lam `n (.const ``Nat []) getDExpr .default
 
-def insert (bl : BinList α) (n : Nat) (x : α) : BinList α :=
-  ⟨match n with | 0 => .some x | _ + 1 => bl.head, bl.tail.insert n x⟩
-
-theorem insert.correct₁ (bl : BinList α) (n : Nat) (x : α) : get? (insert bl n x) n = .some x := by
-  match n with
-  | 0 =>
-    match bl with
-    | ⟨_, tail⟩ => rfl
-  | n + 1 => exact BinTree.insert.correct₁ _ _ _ (by intro h; cases h)
-
-theorem insert.correct₂ (bl : BinList α) (n₁ n₂ : Nat) (x : α) : n₁ ≠ n₂ → get? (insert bl n₁ x) n₂ = get? bl n₂ := by
-  match n₂ with
-  | 0 =>
-    match bl with
-    | ⟨_, tail⟩ => intro hne; cases n₁ <;> first | contradiction | rfl
-  | n + 1 =>
-    match bl with
-    | ⟨head, tail⟩ =>
-      intro hne; dsimp [get?, insert];
-      cases n₁
-      case zero => rfl
-      case succ _ => exact BinTree.insert.correct₂ _ _ _ _ hne
-
-def foldl (f : α → β → α) (init : α) (bl : BinList β) : α :=
-  match bl.head with
-  | .some x => bl.tail.foldl f (f init x)
-  | .none => bl.tail.foldl f init
-
-theorem foldl_inv
-  {f : α → β → α} {init : α} {bt : BinList β}
-  (inv : α → Prop) (zero : inv init) (ind : ∀ a b, inv a → inv (f a b)) :
-  inv (foldl f init bt) := by
-  dsimp [foldl]
-  cases bt.head;
-  case none => apply BinTree.foldl_inv inv zero ind
-  case some x => apply BinTree.foldl_inv inv (ind _ _ zero) ind
-
-def allp (p : α → Prop) (bl : BinList α) := ∀ n, Option.allp p (bl.get? n)
-
-theorem allp_down (p : α → Prop) (bl : BinList α) :
-  bl.allp p ↔ Option.allp p bl.head ∧ bl.tail.allp p :=
-  match bl with
-  | ⟨.none, _⟩ =>
-    Iff.intro
-      (fun h => ⟨.intro, fun n => match n with | 0 => True.intro | .succ n => h (.succ n)⟩)
-      (fun ⟨_, h⟩ n => match n with | 0 => True.intro | .succ n => h (.succ n))
-  | ⟨.some _, _⟩ =>
-    Iff.intro
-      (fun h => ⟨h 0, fun n => match n with | 0 => True.intro | .succ n => h (.succ n)⟩)
-      (fun ⟨hHead, hTail⟩ n => match n with | 0 => hHead | .succ n => hTail (.succ n))
-
-theorem allp_insert (p : α → Prop) (bl : BinList α) (n : Nat) (x : α) :
-  allp p (insert bl n x) ↔ p x ∧ (∀ n', n' ≠ n → Option.allp p (bl.get? n')) :=
-  match bl with
-  | .mk head tail => by
-    rw [allp_down]; dsimp [insert]
-    rw [BinTree.allp_insert]
-    apply Iff.intro
-    case mp =>
-      intro ⟨hHead, hTail⟩; apply And.intro
-      case left =>
-        cases n
-        case zero => exact hHead
-        case succ n => apply hTail.left; intro h; cases h
-      case right =>
-        intro n'; cases n'
-        case zero =>
-          intro h; cases n
-          case zero => contradiction
-          case succ n => exact hHead
-        case succ n' =>
-          apply hTail.right
-    case mpr =>
-      intro ⟨hHead, hTail⟩; apply And.intro
-      case left =>
-        cases n
-        case zero => exact hHead
-        case succ n => exact (hTail 0 (by intro h; cases h))
-      case right =>
-        apply And.intro (fun _ => hHead)
-        intro n' h; cases n'
-        case zero => exact True.intro
-        case succ n' => exact hTail (.succ n') h
-
-def all (p : α → Bool) := BinList.foldl (fun i x => i && p x) true
-
-theorem all_down (p : α → Bool) (bl : BinList α) :
-  bl.all p = (bl.head.all p && bl.tail.all p) :=
-  match bl with
-  | ⟨head, tail⟩ => by
-    cases head <;> dsimp [all, foldl]
-    case none => rfl
-    case some x =>
-      rw [BinTree.all_with_init]; simp; apply Bool.and_comm
-
-theorem all_allp (p : α → Bool) (bl : BinList α) :
-  (bl.all p = true) ↔ bl.allp (fun x => p x = true) :=
-  match bl with
-  | ⟨head, tail⟩ => by
-    rw [all_down, allp_down, Bool.and_eq_true]; dsimp
-    rw [Option.all_allp, BinTree.all_allp]
-
-theorem all_spec (p : α → Bool) (bl : BinList α) :
-  all p bl ↔ (∀ n : Nat, (get? bl n).all p = true) := by
-  rw [all_allp]; dsimp [allp]; apply Iff.intro <;> intro h n
-  case mp =>
-    rw [Option.all_allp]; apply h
-  case mpr =>
-    rw [← Option.all_allp]; apply h
-
-theorem all_spec' (p : α → Bool) (bl : BinList α) :
-  all p bl ↔ (∀ n : Nat, Option.allp (fun x => p x = true) (get? bl n)) := by
-  rw [all_allp]; rfl
-
-theorem all_insert (p : α → Bool) (bl : BinList α) (n : Nat) (x : α) :
-  all p (insert bl n x) ↔ p x ∧ (∀ n', n' ≠ n → (bl.get? n').all p) :=
-  match bl with
-  | .mk head tail => by
-    rw [all_down]; rw [Bool.and_eq_true]; dsimp [insert]
-    rw [BinTree.all_insert]
-    apply Iff.intro
-    case mp =>
-      intro ⟨hHead, hTail⟩; apply And.intro
-      case left =>
-        cases n
-        case zero => exact hHead
-        case succ n => apply hTail.left; intro h; cases h
-      case right =>
-        intro n'; cases n'
-        case zero =>
-          intro h; cases n
-          case zero => contradiction
-          case succ n => exact hHead
-        case succ n' =>
-          apply hTail.right
-    case mpr =>
-      intro ⟨hHead, hTail⟩; apply And.intro
-      case left =>
-        cases n
-        case zero => exact hHead
-        case succ n => exact (hTail 0 (by intro h; cases h))
-      case right =>
-        apply And.intro (fun _ => hHead)
-        intro n' h; cases n'
-        case zero => rfl
-        case succ n' => exact hTail (.succ n') h
-
-def mapOpt (f : α → Option β) (bl : BinList α) : BinList β :=
-  ⟨bl.head.bind f, bl.tail.mapOpt f⟩
-
-theorem mapOpt_allp (f : α → Option β) (p : β → Prop) :
-  (bl : BinList α) → (bl.mapOpt f).allp p ↔ bl.allp (fun x => Option.allp p (f x))
-| ⟨head, tail⟩ => by
-  rw [allp_down p]; rw [allp_down]; dsimp [mapOpt]
-  rw [BinTree.mapOpt_allp]; cases head <;> rfl
-
-def ofList (xs : List α) : BinList α :=
-  ⟨xs.get? 0, BinTree.ofList xs⟩
-
-/- Performance test
-#eval (Lean.toExpr (BinList.ofList (List.range 20000))).hash
-#eval (Lean.toExpr (BinList.ofList (List.range 20000))).hash
-#eval (Lean.toExpr (BinList.ofList (List.range 20000))).hash
-#eval (Lean.toExpr (BinList.ofList (List.range 20000))).hash
-#eval (Lean.toExpr (BinList.ofList (List.range 20000))).hash
-#eval (Lean.toExpr (BinList.ofList (List.range 20000))).hash
-#eval (Lean.toExpr (BinList.ofList (List.range 20000))).hash
-#eval (Lean.toExpr (BinList.ofList (List.range 20000))).hash
-#eval (Lean.toExpr (BinList.ofList (List.range 20000))).hash
-#eval (Lean.toExpr (BinList.ofList (List.range 20000))).hash
+/- test
+#eval (Lean.toExpr (BinTree.ofList [1,2,3]))
+#eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
+#eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
+#eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
+#eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
+#eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
+#eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
+#eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
+#eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
+#eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
+#eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
 -/
 
-end BinList
+end BinTree
 
 end Auto

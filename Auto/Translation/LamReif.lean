@@ -478,14 +478,14 @@ section Checker
     IO.println e'
     Util.Meta.coreCheck e'
   
-  #getExprAndApply[BinList.toLCtx (α:=LamSort) (BinList.ofList [LamSort.base .prop]) (.base .prop)|act]
+  #getExprAndApply[BinTree.toLCtx (α:=LamSort) (BinTree.ofList [LamSort.base .prop]) (.base .prop)|act]
   -/
 
   -- Functions that turns data structure in `ReifM.State` into `Expr`
 
   def buildChkStepsExpr : ReifM Expr := do
     let chkSteps ← getChkSteps
-    let e := Lean.toExpr (BinList.ofList chkSteps.data)
+    let e := Lean.toExpr (BinTree.ofList chkSteps.data)
     if !(← Util.Meta.isTypeCorrectCore e) then
       throwError "buildChkSteps :: Malformed expression"
     return e
@@ -494,7 +494,7 @@ section Checker
     let u ← getU
     let lamSortExpr := Expr.const ``LamSort []
     let listToLCtx (l : List Expr) (lvl : Level) (ty : Expr) :=
-      @BinList.toLCtx Expr (instToSortLevelExplicit lvl) (instExprToExprId ty) (BinList.ofList l)
+      @BinTree.toLCtx Expr (instToSortLevelExplicit lvl) (instExprToExprId ty) (BinTree.ofList l)
     -- `tyValExpr : Nat → Type u`
   -- **Building `tyVal`**
     -- `tyVal : List (Type u)`
@@ -610,7 +610,7 @@ section Checker
   def buildImportTableExpr (lvalExpr : Expr) : ReifM Expr := do
     let u ← getU
     let lamTermExpr := Expr.const ``LamTerm []
-    let mut importTable : BinList Expr := BinList.empty
+    let mut importTable : BinTree Expr := BinTree.leaf
     for (step, _) in (← getChkSteps) do
       if let .validOfResolveImport vPos := step then
         let (e, t, _) ← lookupImportTableEntry! vPos
@@ -619,7 +619,7 @@ section Checker
         importTable := importTable.insert vPos itEntry
     let type := Lean.mkApp2 (.const ``PSigma [.succ .zero, .zero])
       lamTermExpr (.app (.const ``importTablePSigmaβ [u]) lvalExpr)
-    let importTableExpr := @BinList.toExpr Expr
+    let importTableExpr := @BinTree.toExpr Expr
       (instToSortLevelExplicit .zero) (instExprToExprId type) importTable
     if !(← Util.Meta.isTypeCorrectCore importTableExpr) then
       throwError "buildImportTable :: Malformed ImportTable"

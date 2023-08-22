@@ -73,6 +73,7 @@ def Meta.exprAddAndCompile (value : Expr) (declName : Name) : MetaM Unit := do
   addAndCompile decl
 
 def Meta.coreCheck (e : Expr) : MetaM Unit := do
+  let startTime ← IO.monoMsNow
   let mut curr := e
   while true do
     let next ← instantiateMVars (← zetaReduce curr)
@@ -90,8 +91,14 @@ def Meta.coreCheck (e : Expr) : MetaM Unit := do
   if e.hasFVar then
     throwError "Meta.coreCheck :: Unexpected error, {e} contains free variable after abstractFVar"
   -- Use `Core.addAndCompile` to typecheck `e`
+  let coreChkStart ← IO.monoMsNow
+  trace[auto.metaExtra] "Meta.coreCheck :: Preprocessing done in {coreChkStart - startTime}"
   let env ← getEnv
-  try Meta.exprAddAndCompile e `_coreCheck finally setEnv env
+  try
+    Meta.exprAddAndCompile e `_coreCheck
+  finally
+    trace[auto.metaExtra] "Meta.coreCheck :: Core check done in {(← IO.monoMsNow) - coreChkStart}"
+    setEnv env
 
 def Meta.isTypeCorrectCore (e : Expr) : MetaM Bool := do
   try
