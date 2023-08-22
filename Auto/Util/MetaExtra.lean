@@ -1,6 +1,9 @@
 import Lean
 open Lean Meta Elab
 
+initialize
+  registerTraceClass `auto.metaExtra
+
 namespace Auto.Util
 
 def Meta.withoutMVarAssignments (m : MetaM α) : MetaM α := do
@@ -54,5 +57,49 @@ unsafe def evalFromMetaTactic : Tactic.Tactic
     | throwError "evalFromMetaTactic :: Failed to evaluate {mtname} to a term of type (Expr → TermElabM Unit)"
   Tactic.liftMetaTactic mt
 | _ => Elab.throwUnsupportedSyntax
+
+-- We assume that `value` contains no free variables or metavariables
+def Meta.exprAddAndCompile (value : Expr) (declName : Name) : MetaM Unit := do
+  let type ← inferType value
+  let us := collectLevelParams {} value |>.params
+  let decl := Declaration.defnDecl {
+    name        := declName
+    levelParams := us.toList
+    type        := type
+    value       := value
+    hints       := ReducibilityHints.opaque
+    safety      := DefinitionSafety.unsafe
+  }
+  addAndCompile decl
+
+def Meta.coreCheck (e : Expr) : MetaM Unit := do
+  let mut curr := e
+  while true do
+    let next ← instantiateMVars (← zetaReduce curr)
+    if next == curr then
+      break
+    curr := next
+  let e := curr
+  -- Now `(e == (← instantiateMVars) e) && (e == (← zetaReduce e))`
+  let res ← Meta.abstractMVars e
+  -- Now metavariables in `e` are abstracted
+  let e := res.expr
+  let (_, collectFVarsState) ← e.collectFVars.run {}
+  -- Now free variables in `e` are abstracted
+  let e ← mkLambdaFVars (collectFVarsState.fvarIds.map Expr.fvar) e
+  if e.hasFVar then
+    throwError "Meta.coreCheck :: Unexpected error, {e} contains free variable after abstractFVar"
+  -- Use `Core.addAndCompile` to typecheck `e`
+  let env ← getEnv
+  try Meta.exprAddAndCompile e `_coreCheck finally setEnv env
+
+def Meta.isTypeCorrectCore (e : Expr) : MetaM Bool := do
+  try
+    Meta.coreCheck e
+    pure true
+  catch e =>
+    let msg := MessageData.compose "Meta.isTypeCorrectCore failed with message : \n" e.toMessageData
+    trace[auto.metaExtra] msg
+    pure false
 
 end Auto.Util

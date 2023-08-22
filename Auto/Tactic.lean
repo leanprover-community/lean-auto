@@ -136,7 +136,7 @@ def runAuto
       Solver.SMT.querySolver commands
       let proof ← Lam2D.callDuper exportFacts
       trace[auto.tactic] "Duper found proof of {← Meta.inferType proof}"
-      let _ ← LamReif.buildChecker
+      let checker ← LamReif.buildChecker
       trace[auto.tactic] "Checker is built"
       )
     let afterMonomorphization : Reif.ReifM Unit := (do

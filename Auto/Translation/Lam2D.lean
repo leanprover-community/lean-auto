@@ -183,7 +183,7 @@ def callDuper (ts : Array LamTerm) : ReifM Expr :=
       if !(← Meta.isProp expr) then
         throwError "callDuper :: Hypothesis {expr} is not a proposition"
     -- Reduce `forallF` and `impF`
-    let exprs ← Meta.withTransparency .reducible <| exprs.mapM (fun e => liftM <| Meta.reduce e)
+    let exprs ← Meta.withTransparency .reducible <| exprs.mapM (fun e => liftM <| Meta.reduceAll e)
     Util.Meta.withHyps exprs (fun fvars => do
       if exprs.size != fvars.size then
         throwError "callDuper :: Unexpected error"
