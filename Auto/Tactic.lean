@@ -125,6 +125,8 @@ def runAuto
   | .none =>
     -- Testing. Skipping universe level instantiation and monomorphization
     let afterReify : LamReif.ReifM PUnit := (do
+      let preChecker ← LamReif.buildCheckerExpr
+      trace[auto.tactic] "preChecker is built"
       let assertions ← LamReif.getAssertions
       for (expr, lterm) in assertions do
         trace[auto.tactic] "Proof: {expr}, λ Term: {repr lterm}"
@@ -136,8 +138,6 @@ def runAuto
       Solver.SMT.querySolver commands
       let proof ← Lam2D.callDuper exportFacts
       trace[auto.tactic] "Duper found proof of {← Meta.inferType proof}"
-      let checker ← LamReif.buildChecker
-      trace[auto.tactic] "Checker is built"
       )
     let afterMonomorphization : Reif.ReifM Unit := (do
       let ufacts ← liftM <| Reif.getFacts

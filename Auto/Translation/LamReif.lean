@@ -502,8 +502,6 @@ section Checker
       Expr.app (.const ``Embedding.LiftTyConv [lvl, u]) (.fvar id))
     -- Given a list of expression of type `ty`, construct the corresponding `lctx`
     let tyValExpr := listToLCtx tyVal (.succ u) (.sort (.succ u)) (.sort u)
-    if !(← Util.Meta.isTypeCorrectCore tyValExpr) then
-      throwError "buildLamValuation :: Malformed tyVal"
   -- **Building `LamVarTy` and `varVal`**
     let varValPair := (← getVarVal).data
     let vars := varValPair.map (fun (id, _, s) =>
@@ -516,13 +514,9 @@ section Checker
     let lamVarTyExpr := Expr.lam `n (.const ``Nat []) (
         Lean.mkApp2 (.const ``varValSigmaFst [u]) tyValExpr (.app varBundleExpr (.bvar 0))
       ) .default
-    if !(← Util.Meta.isTypeCorrectCore lamVarTyExpr) then
-      throwError "buildLamValuation :: Malformed lamVarTy"
     let varValExpr := Expr.lam `n (.const ``Nat []) (
         Lean.mkApp2 (.const ``varValSigmaSnd [u]) tyValExpr (.app varBundleExpr (.bvar 0))
       ) .default
-    if !(← Util.Meta.isTypeCorrectCore varValExpr) then
-      throwError "buildLamValuation :: Malformed varVal"
   -- **Building `eqLamVal` and `eqVal`**
     let eqLamVal ← (← getEqLamVal).data.mapM lookupIsomTy!
     -- `eqs : List ((s : LamSort) × EqLift.{u + 1, u} (s.interp tyVal))`
@@ -542,8 +536,6 @@ section Checker
     let eqValExpr := Expr.lam `n (.const ``Nat []) (
         Lean.mkApp2 (.const ``eqValSigmaSnd [u]) tyValExpr (.app eqBundleExpr (.bvar 0))
       ) .default
-    if !(← Util.Meta.isTypeCorrectCore eqValExpr) then
-      throwError "buildLamValuation :: Malformed eqVal"
   -- **Building `forallLamVal` and `forallVal`**
     let forallLamVal ← (← getForallLamVal).data.mapM lookupIsomTy!
     -- `forallEs : List ((s : LamSort) × ForallLift.{u + 1, u, 0, 0} (s.interp tyVal))`
@@ -558,13 +550,9 @@ section Checker
     let forallLamValExpr := Expr.lam `n (.const ``Nat []) (
         Lean.mkApp2 (.const ``forallValSigmaFst [u]) tyValExpr (.app forallBundleExpr (.bvar 0))
       ) .default
-    if !(← Util.Meta.isTypeCorrectCore forallLamValExpr) then
-      throwError "buildLamValuation :: Malformed forallLamVal"
     let forallValExpr := Expr.lam `n (.const ``Nat []) (
         Lean.mkApp2 (.const ``forallValSigmaSnd [u]) tyValExpr (.app forallBundleExpr (.bvar 0))
       ) .default
-    if !(← Util.Meta.isTypeCorrectCore forallValExpr) then
-      throwError "buildLamValuation :: Malformed forallVal"
   -- **Building `existLamVal` and `existVal`**
     let existLamVal ← (← getExistLamVal).data.mapM lookupIsomTy!
     -- `existEs : List ((s : LamSort) × ExistLift.{u + 1, u} (s.interp tyVal))`
@@ -579,28 +567,43 @@ section Checker
     let existLamValExpr := Expr.lam `n (.const ``Nat []) (
         Lean.mkApp2 (.const ``existValSigmaFst [u]) tyValExpr (.app existBundleExpr (.bvar 0))
       ) .default
-    if !(← Util.Meta.isTypeCorrectCore existLamValExpr) then
-      throwError "buildLamValuation :: Malformed existLamVal"
     let existValExpr := Expr.lam `n (.const ``Nat []) (
         Lean.mkApp2 (.const ``existValSigmaSnd [u]) tyValExpr (.app existBundleExpr (.bvar 0))
       ) .default
-    if !(← Util.Meta.isTypeCorrectCore existValExpr) then
-      throwError "buildLamValuation :: Malformed existVal"
   -- **Building `LamTyVal`**
     let lamTyValExpr := Lean.mkApp4 (.const ``LamTyVal.mk [])
       lamVarTyExpr eqLamValExpr forallLamValExpr existLamValExpr
-    if !(← Util.Meta.isTypeCorrectCore lamTyValExpr) then
-      throwError "buildLamValuation :: Malformed LamTyVal"
   -- **Building `ILValuation`**
     let ilValuationExpr := Lean.mkApp5 (.const ``ILValuation.mk [u])
       lamTyValExpr tyValExpr eqValExpr forallValExpr existValExpr
-    if !(← Util.Meta.isTypeCorrectCore ilValuationExpr) then
-      throwError "buildLamValuation :: Malformed ILValuation"
   -- **Building `LamValuation`**
     let lamValuationExpr := Lean.mkApp2 (.const ``LamValuation.mk [u])
       ilValuationExpr varValExpr
+  -- **Type checking**
     if !(← Util.Meta.isTypeCorrectCore lamValuationExpr) then
-      throwError  "buildLamValuation :: Malformed LamValuation"
+      trace[auto.lamReif] "buildLamValuation :: Malformed LamValuation"
+      if !(← Util.Meta.isTypeCorrectCore ilValuationExpr) then
+        trace[auto.lamReif] "buildLamValuation :: Malformed ILValuation"
+        if !(← Util.Meta.isTypeCorrectCore lamTyValExpr) then
+          if !(← Util.Meta.isTypeCorrectCore tyValExpr) then
+            throwError "buildLamValuation :: Malformed tyVal"
+          if !(← Util.Meta.isTypeCorrectCore lamVarTyExpr) then
+            throwError "buildLamValuation :: Malformed lamVarTy"
+          if !(← Util.Meta.isTypeCorrectCore forallLamValExpr) then
+            throwError "buildLamValuation :: Malformed forallLamVal"
+          if !(← Util.Meta.isTypeCorrectCore existLamValExpr) then
+            throwError "buildLamValuation :: Malformed existLamVal"
+          throwError "buildLamValuation :: Malformed LamTyVal, but all arguments of LamTyVal are well-formed"
+        if !(← Util.Meta.isTypeCorrectCore eqValExpr) then
+          throwError "buildLamValuation :: Malformed eqVal"
+        if !(← Util.Meta.isTypeCorrectCore forallValExpr) then
+          throwError "buildLamValuation :: Malformed forallVal"
+        if !(← Util.Meta.isTypeCorrectCore existValExpr) then
+          throwError "buildLamValuation :: Malformed existVal"
+        throwError "buildLamValuation :: Malformed ILValuation, but all arguments of ILValuation are well-formed"
+      if !(← Util.Meta.isTypeCorrectCore varValExpr) then
+        throwError "buildLamValuation :: Malformed varVal"
+      throwError "buildLamValuation :: Malformed LamValuation, but all arguments of LamValuation are well-formed"
     return lamValuationExpr
 
   -- `lvalExpr` is the `LamValuation`
@@ -619,19 +622,21 @@ section Checker
     let importTableExpr := @BinList.toExpr Expr
       (instToSortLevelExplicit .zero) (instExprToExprId type) importTable
     if !(← Util.Meta.isTypeCorrectCore importTableExpr) then
-      throwError "buildImportTable :: Malformed importTable"
+      throwError "buildImportTable :: Malformed ImportTable"
     return importTableExpr
 
-  def buildChecker : ReifM Expr := do
+  def buildCheckerExpr : ReifM Expr := do
     let startTime ← IO.monoMsNow
     let u ← getU
     let lvalExpr ← buildLamValuationExpr
     let itExpr ← buildImportTableExpr lvalExpr
     let csExpr ← buildChkStepsExpr
     let checker := Lean.mkApp3 (.const ``Checker [u]) lvalExpr itExpr csExpr
+    trace[auto.lamReif] "Checker expression built in time {(← IO.monoMsNow) - startTime}"
+    let startTime ← IO.monoMsNow
     if !(← Util.Meta.isTypeCorrectCore checker) then
-      throwError "buildChecker :: Malformed checker"
-    trace[auto.lamReif] "Checker built in time {(← IO.monoMsNow) - startTime}"
+      throwError "buildCheckerExpr :: Malformed checker"
+    trace[auto.lamReif] "Checker typechecked in time {(← IO.monoMsNow) - startTime}"
     return checker
 
 end Checker
