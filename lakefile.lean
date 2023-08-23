@@ -2,6 +2,7 @@ import Lake
 open Lake DSL
 
 package «auto» {
+  precompileModules := true
   -- add any package configuration options here
 }
 
