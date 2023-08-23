@@ -160,7 +160,7 @@ def parseSexp (s : String) (p : String.Pos) (partialResult : PartialResult) : Pa
     | ⟨.complete, matched, _, state⟩ =>
       -- A unique attribute should be returned, according to `SMTSexp.lexiconADFA`
       let [attr] := (SMTSexp.lexiconADFA.getAttrs state).toList
-        | return panic! "parseSexp :: Unexpected error"
+        | return panic! s!"parseSexp :: Unexpected error"
       p := matched.stopPos
       let lexval := LexVal.ofString (lexpart ++ matched.toString) attr
       -- Restore lexer state
@@ -192,7 +192,7 @@ def parseSexp (s : String) (p : String.Pos) (partialResult : PartialResult) : Pa
         pstk := pstk.modify (pstk.size - 1) (fun arr => arr.push (.atom l))
     | ⟨.incomplete, m, _, lst'⟩ => return .incomplete ⟨lst', lexpart ++ m.toString, pstk⟩ m.stopPos
     | ⟨.malformed, _, _, _⟩  => return .malformed
-  return panic! "parseSexp :: Unexpected error"
+  return panic! s!"parseSexp :: Unexpected error when parsing string {s}"
 
 /-
 

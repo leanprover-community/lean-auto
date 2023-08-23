@@ -1097,7 +1097,7 @@ def LamTerm.interp.{u}
     dsimp
     match heq : LamSort.beq argTy' s, heqa : LamSort.beq argTy s with
     | true, true =>
-      intros fnInterp argInterp; dsimp at fnInterp
+      intros fnInterp argInterp;
       have heq' := LamSort.beq_eq _ _ heq; cases heq'
       have heqa' := LamSort.beq_eq _ _ heqa; cases heqa'
       dsimp [LamSort.interp] at fnInterp

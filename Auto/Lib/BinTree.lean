@@ -230,7 +230,6 @@ theorem insert'Aux.equiv (bt : BinTree α) (n : Nat) (x : α) (rd : Nat) :
     have hzero : n = 0 := Nat.eq_zero_of_le_zero H
     rw [hzero]; rfl
   case succ rd' IH =>
-    dsimp [get?'Aux]
     match n with
     | 0 => rfl
     | 1 => rfl
@@ -462,7 +461,7 @@ theorem all_with_init (p : α → Bool) (bt : BinTree α) (init : Bool) :
     induction bt
     case leaf => rfl
     case node l x r IHl IHr =>
-      cases x <;> dsimp [foldl] <;> rw [IHl] <;> simp <;> exact IHr
+      cases x <;> dsimp [foldl] <;> rw [IHl] <;> exact IHr
   case true => rfl
 
 theorem all_node (p : α → Bool) :

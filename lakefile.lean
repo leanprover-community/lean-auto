@@ -9,7 +9,7 @@ package «auto» {
 require mathlib from git
   "https://github.com/leanprover-community/mathlib4.git"
 
-require duper from git
+require Duper from git
   "https://github.com/leanprover-community/duper.git"
 
 @[default_target]
