@@ -1,3 +1,5 @@
+import Std.Data.List.Lemmas
+
 namespace Auto
 
 -- This function is slow and is not meant to be used in
@@ -26,6 +28,23 @@ theorem List.ofFun_get?_eq_some (f : Nat → α) (n m : Nat) (h : n > m) :
     case succ n =>
       let h' := Nat.le_of_succ_le_succ h
       dsimp [ofFun, List.get?]; rw [IH (fun n => f (.succ n)) _ h']
+
+theorem List.beq_refl [BEq α] (H : ∀ (x : α), (x == x) = true) :
+  (l : List α) → (List.beq l l) = true
+| .nil => rfl
+| .cons x xs => by
+  dsimp [List.beq]; rw [Bool.and_eq_true];
+  exact And.intro (H x) (List.beq_refl H xs)
+
+theorem List.beq_eq [BEq α] (H : ∀ (x y : α), (x == y) = true → x = y) :
+  (l₁ l₂ : List α) → List.beq l₁ l₂ → l₁ = l₂
+| .nil,       .nil       => fun _ => rfl
+| .nil,       .cons _ _  => fun h => by cases h
+| .cons _ _,  .nil       => fun h => by cases h
+| .cons u us, .cons v vs => fun h => by
+  dsimp [List.beq] at h; rw [Bool.and_eq_true] at h
+  have ⟨hHead, hTail⟩ := h
+  exact congr (congrArg _ (H _ _ hHead)) (List.beq_eq H _ _ hTail)
 
 section
 

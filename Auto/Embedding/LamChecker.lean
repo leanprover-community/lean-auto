@@ -109,6 +109,8 @@ inductive ChkStep where
   | wfOfHeadBeta (wPos : Nat) : ChkStep
   | validOfResolveImport (vPos : Nat) : ChkStep
   | validOfHeadBeta (vPos : Nat) : ChkStep
+  -- `t₁ → t₂` and `t₁` implies `t₂`
+  | validOfImp (p₁₂ : Nat) (p₁ : Nat) : ChkStep
   deriving Lean.ToExpr
 
 def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → REntry
@@ -139,6 +141,22 @@ def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → REntry
 | .validOfHeadBeta vPos =>
   match r.valid.get? vPos with
   | .some ⟨lctx, t⟩ => .valid lctx t.headBeta
+  | .none => .none
+| .validOfImp p₁₂ p₁ =>
+  match r.valid.get? p₁₂ with
+  | .some ⟨lctx₁, t₁₂⟩ =>
+    match r.valid.get? p₁ with
+    | .some ⟨lctx₂, t₁⟩ =>
+      match lctx₁.beq lctx₂ with
+      | true =>
+        match t₁₂ with
+        | .app (.base .prop) (.app (.base .prop) (.base .imp) t₁') t₂ =>
+          match LamTerm.beq t₁' t₁ with
+          | true => .valid lctx₁ t₂
+          | false => .none
+        | _ => .none
+      | false => .none
+    | .none => .none
   | .none => .none
 
 theorem ChkStep.eval_correct
@@ -190,6 +208,43 @@ theorem ChkStep.eval_correct
     match lctxt with
     | (lctx, t) =>
       apply LamThmValid.headBeta (RTable.validInv_get inv.right h)
+| .validOfImp p₁₂ p₁ => by
+  dsimp [eval]
+  match h₁ : BinTree.get? r.valid p₁₂ with
+  | .some (lctx₁, t₁₂) =>
+    dsimp
+    match h₂ : BinTree.get? r.valid p₁ with
+    | .some (lctx₂, t₁) =>
+      dsimp
+      match h₃ : List.beq lctx₁ lctx₂ with
+      | true =>
+        dsimp
+        have lctxeq := List.beq_eq LamSort.beq_eq _ _ h₃; cases lctxeq
+        cases t₁₂ <;> try exact True.intro;
+        case app argTy₁ fn₁ arg₁ =>
+          cases argTy₁ <;> try exact True.intro
+          case base b =>
+            cases b <;> try exact True.intro
+            cases fn₁ <;> try exact True.intro
+            case app argTy₂ fn₂ arg₂ =>
+              cases argTy₂ <;> try exact True.intro;
+              case base b =>
+                cases b <;> try exact True.intro
+                cases fn₂ <;> try exact True.intro
+                case base bt =>
+                  cases bt <;> try exact True.intro
+                  case imp =>
+                    dsimp
+                    match h₄ : LamTerm.beq arg₂ t₁ with
+                    | true =>
+                      have teq := LamTerm.beq_eq _ _ h₄; cases teq
+                      let h₁' := RTable.validInv_get inv.right h₁
+                      let h₂' := RTable.validInv_get inv.right h₂
+                      apply LamThmValid.imp h₁' h₂'
+                    | false => exact True.intro
+      | false => exact True.intro
+    | .none => exact True.intro
+  | .none => exact True.intro
 
 -- The first `ChkStep` specifies the checker step
 -- The second `Nat` specifies the position to insert the resulting term

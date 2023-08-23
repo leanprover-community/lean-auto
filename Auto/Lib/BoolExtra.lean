@@ -1,5 +1,11 @@
 namespace Auto
 
+theorem Bool.beq_refl (a : Bool) : a == a := by
+  cases a <;> rfl
+
+theorem Bool.beq_eq (a b : Bool) (h : a == b) : a = b := by
+  cases a <;> cases b <;> cases h <;> rfl
+
 theorem Bool.eq_false_of_ne_true {a : Bool} : a ≠ true → a = false := by
   cases a <;> decide
 

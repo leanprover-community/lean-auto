@@ -3,12 +3,13 @@ import Auto.Embedding.Lift
 import Auto.Embedding.LCtx
 import Auto.Util.ExprExtra
 import Auto.Lib.NatExtra
+import Auto.Lib.IntExtra
 import Auto.Lib.HEqExtra
+import Auto.Lib.ListExtra
 -- import Mathlib.Data.Real.Basic
 -- import Mathlib.Data.BitVec.Defs
 -- import Mathlib.Data.Int.Basic
 import Auto.MathlibEmulator
-import Std.Data.List.Lemmas
 
 -- Embedding Simply Typed Lambda Calculus into Dependent Type Theory
 -- Simply Typed Lambda Calculus = HOL (without polymorphism)
@@ -43,11 +44,6 @@ def LamBaseSort.beq : LamBaseSort → LamBaseSort → Bool
 | .real, .real => true
 | .bv n, .bv m => n == m
 | _,     _     => false
-
--- A version of `Nat.beq_refl` that reduces to `Eq.refl`
-private def Nat.beq_refl' : (a : Nat) → (a.beq a) = true
-| 0 => rfl
-| n + 1 => Nat.beq_refl' n
 
 def LamBaseSort.beq_refl : (b : LamBaseSort) → (b.beq b) = true
 | .prop => rfl
@@ -162,6 +158,18 @@ def CstrReal.reprPrec (c : CstrReal) (n : Nat) :=
 instance : Repr CstrReal where
   reprPrec := CstrReal.reprPrec
 
+def CstrReal.beq : CstrReal → CstrReal → Bool
+| .zero, .zero => true
+| .one,  .one  => true
+| _,     _     => false
+
+theorem CstrReal.beq_refl : (c : CstrReal) → (c.beq c) = true
+| .zero => rfl
+| .one  => rfl
+
+theorem CstrReal.beq_eq (c₁ c₂ : CstrReal) : c₁.beq c₂ → c₁ = c₂ := by
+  intro h; cases c₁ <;> cases c₂ <;> try cases h <;> rfl
+
 def CstrReal.interp : (c : CstrReal) → Real
 | zero => 0
 | one  => 1
@@ -239,6 +247,38 @@ def LamBaseTerm.reprPrec (l : LamBaseTerm) (n : Nat) :=
 
 instance : Repr LamBaseTerm where
   reprPrec := LamBaseTerm.reprPrec
+
+def LamBaseTerm.beq : LamBaseTerm → LamBaseTerm → Bool
+| .trueE,       .trueE       => true
+| .falseE,      .falseE      => true
+| .not,         .not         => true
+| .and,         .and         => true
+| .or,          .or          => true
+| .imp,         .imp         => true
+| .iff,         .iff         => true
+| .intVal n₁,   .intVal n₂   => Int.beq n₁ n₂
+| .realVal cr₁, .realVal cr₂ => cr₁.beq cr₂
+| .bvVal l₁,    .bvVal l₂    => l₁.beq l₂
+| .eqI n₁,      .eqI n₂      => n₁.beq n₂
+| .forallEI n₁, .forallEI n₂ => n₁.beq n₂
+| .existEI n₁,  .existEI n₂  => n₁.beq n₂
+| .eq s₁,       .eq s₂       => s₁.beq s₂
+| .forallE s₁,  .forallE s₂  => s₁.beq s₂
+| .existE s₁,   .existE s₂   => s₁.beq s₂
+| _,            _            => false
+
+def LamBaseTerm.beq_refl (b : LamBaseTerm) : (b.beq b) = true := by
+  cases b <;> first | rfl | apply LamSort.beq_refl | apply Nat.beq_refl | skip
+  case intVal i => apply Int.beq_refl
+  case realVal c => apply CstrReal.beq_refl
+  case bvVal s => apply List.beq_refl Bool.beq_refl
+
+def LamBaseTerm.beq_eq (b₁ b₂ : LamBaseTerm) (H : b₁.beq b₂) : b₁ = b₂ := by
+  cases b₁ <;> cases b₂ <;> (first | contradiction | rfl | apply congrArg | skip) <;>
+    (try apply LamSort.beq_eq _ _ H) <;> (try apply Nat.eq_of_beq_eq_true H)
+  case intVal.intVal.h n₁ n₂ => apply Int.beq_eq _ _ H
+  case realVal.realVal.h c₁ c₂ => apply CstrReal.beq_eq _ _ H
+  case bvVal.bvVal.h v₁ v₂ => apply List.beq_eq Bool.beq_eq _ _ H
 
 structure LamTyVal where
   lamVarTy     : Nat → LamSort
@@ -668,6 +708,38 @@ def LamTerm.reprPrec (t : LamTerm) (n : Nat) :=
 
 instance : Repr LamTerm where
   reprPrec f n := LamTerm.reprPrec f n
+
+def LamTerm.beq : LamTerm → LamTerm → Bool
+| .atom n₁, .atom n₂ => n₁.beq n₂
+| .base b₁, .base b₂ => b₁.beq b₂
+| .bvar n₁, .bvar n₂ => n₁.beq n₂
+| .lam s₁ t₁, .lam s₂ t₂ => s₁.beq s₂ && t₁.beq t₂
+| .app s₁ fn₁ arg₁, .app s₂ fn₂ arg₂ => s₁.beq s₂ && fn₁.beq fn₂ && arg₁.beq arg₂
+| _, _ => false
+
+theorem LamTerm.beq_refl (t : LamTerm) : (t.beq t = true) := by
+  induction t <;> dsimp [beq] <;> try apply Nat.beq_refl
+  case base b => apply LamBaseTerm.beq_refl
+  case lam s t IH => rw [LamSort.beq_refl, IH]; rfl
+  case app s fn arg IHFn IHArg =>
+    rw [LamSort.beq_refl, IHFn, IHArg]; rfl
+
+theorem LamTerm.beq_eq (t₁ t₂ : LamTerm) : (t₁.beq t₂ = true) → t₁ = t₂ := by
+  revert t₂; induction t₁ <;> intro t₂ H <;> cases t₂ <;> try cases H
+  case atom.atom n₁ n₂ => apply congrArg _ (Nat.eq_of_beq_eq_true H)
+  case base.base b₁ b₂ => apply congrArg _ (LamBaseTerm.beq_eq _ _ H)
+  case bvar.bvar n₁ n₂ => apply congrArg _ (Nat.eq_of_beq_eq_true H)
+  case lam.lam s₁ t₁ IH s₂ t₂ =>
+    dsimp [beq] at H; rw [Bool.and_eq_true] at H
+    have seq := LamSort.beq_eq _ _ H.left
+    have teq := IH _ H.right
+    rw [seq, teq]
+  case app.app s₁ fn₁ arg₁ IHFn IHArg s₂ fn₂ arg₂ =>
+    dsimp [beq] at H; rw [Bool.and_eq_true] at H; rw [Bool.and_eq_true] at H
+    let seq := LamSort.beq_eq _ _ H.left.left
+    let fneq := IHFn _ H.left.right
+    let argeq := IHArg _ H.right
+    rw [seq, fneq, argeq]
 
 -- Typecheck. `ltv, lctx ⊢ term : type?`
 -- `ltv`          : LamTyVal

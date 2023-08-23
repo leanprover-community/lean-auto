@@ -613,6 +613,7 @@ section Checker
     return (existLamValExpr, existValExpr)
 
   def buildLamValuationExpr : ReifM Expr := do
+    let startTime ← IO.monoMsNow
     let u ← getU
     let tyValExpr ← buildTyVal
     let tyValTy := Expr.forallE `_ (.const ``Nat []) (.sort (.succ u)) .default
@@ -628,13 +629,14 @@ section Checker
       let lamValuationExpr := Lean.mkApp2 (.const ``LamValuation.mk [u])
         ilValuationExpr varValExpr
       Meta.mkLetFVars #[tyValFVarExpr] lamValuationExpr
-    -- **Type checking**
     if !(← Util.Meta.isTypeCorrectCore lamValuationExpr) then
       throwError "buildLamValuation :: Malformed LamValuation"
+    trace[auto.buildChecker] "LamValuation typechecked in time {(← IO.monoMsNow) - startTime}"
     return lamValuationExpr
 
   -- `lvalExpr` is the `LamValuation`
   def buildImportTableExpr (lvalExpr : Expr) : ReifM Expr := do
+    let startTime ← IO.monoMsNow
     let u ← getU
     let lamTermExpr := Expr.const ``LamTerm []
     let mut importTable : BinTree Expr := BinTree.leaf
@@ -650,6 +652,7 @@ section Checker
       (instExprToExprId type) ⟨.zero, Prop⟩).toExpr importTable
     if !(← Util.Meta.isTypeCorrectCore importTableExpr) then
       throwError "buildImportTable :: Malformed ImportTable"
+    trace[auto.buildChecker] "ImportTable typechecked in time {(← IO.monoMsNow) - startTime}"
     return importTableExpr
 
   def buildCheckerExpr : ReifM Expr := do
