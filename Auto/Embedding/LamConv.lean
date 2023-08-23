@@ -88,7 +88,7 @@ private def LamWF.subst.correct.{u}
       case h.HLCtxTermEq =>
         apply HEq.trans (pushLCtxDep_pushLCtxAtDep _ _ _ _)
         apply heq_of_eq
-        apply congr_arg (f := fun x => pushLCtxAtDep x _ _)
+        apply congrArg (f := fun x => pushLCtxAtDep x _ _)
         rw [LamWF.ofBVarLiftIdx.correct (idx:=0) lval _ lctxTerm x _ wfArg]
         apply eq_of_heq; apply interp.heq
         case h.h.HLCtxTyEq => rw [pushLCtxAt.zero]
@@ -154,7 +154,7 @@ def LamWF.headBetaAux.correct.{u} {lval : LamValuation.{u}}
         dsimp
         rw [← LamWF.subst.correct]
         apply eq_of_heq; apply LamWF.interp.heq <;> try rfl
-        apply heq_of_eq; apply congr_arg (f := fun x => pushLCtxAtDep x 0 lctxTerm);
+        apply heq_of_eq; apply congrArg (f := fun x => pushLCtxAtDep x 0 lctxTerm);
         apply eq_of_heq; apply LamWF.interp.heq <;> try rfl
         dsimp [LamTerm.bvarLifts]; rw [LamTerm.bvarLiftsIdx.zero 0 arg]
   | .app _ _ _ => rfl
@@ -351,13 +351,13 @@ theorem LamEquiv.fromLam (lval : LamValuation)
   let .ofLam _ Hb := wfb
   exists (pushLCtxs.cons _ _ ▸ Ha); exists (pushLCtxs.cons _ _ ▸ Hb);
   intros lctxTerm
-  let lctxTerm' : (n : ℕ) → LamSort.interp lval.ilVal.tyVal (pushLCtxs lctx lctx' n) :=
+  let lctxTerm' : (n : Nat) → LamSort.interp lval.ilVal.tyVal (pushLCtxs lctx lctx' n) :=
     fun n => pushLCtxs.cons_succ _ _ _ ▸ lctxTerm (.succ n)
   let x : LamSort.interp lval.ilVal.tyVal w := by
     let x' := lctxTerm 0
     rw [pushLCtxs.cons_zero] at x'
     exact x'
-  let ieq := congr_fun (Hab lctxTerm') x
+  let ieq := congrFun (Hab lctxTerm') x
   apply Eq.trans _ (Eq.trans ieq _)
   case _ =>
     apply eq_of_heq; apply LamWF.interp.heq <;> try rfl

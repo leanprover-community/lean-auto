@@ -1,9 +1,11 @@
 import Std.Data.Nat.Lemmas
+import Auto.MathlibEmulator
 import Auto.Lib.BoolExtra
 import Auto.Lib.LogicExtra
 import Auto.Lib.NatExtra
 import Auto.Lib.OptionExtra
 import Auto.Lib.Containers
+-- Make sure that `Lean.toExpr Nat` is overriden
 import Auto.Lib.ToExprExtra
 import Lean
 
@@ -45,32 +47,12 @@ end Bin
 inductive BinTree (α : Type u) where
   | leaf : BinTree α
   | node : BinTree α → Option α → BinTree α → BinTree α
-deriving Repr
+deriving Repr, Lean.ToExpr
 
 namespace BinTree
 
 instance : Inhabited (BinTree α) where
   default := .leaf
-
-open Lean in
-def toExpr {α : Type u} [ToSortLevel.{u}] [Lean.ToExpr α] (bt : BinTree α) : Expr :=
-  let lvl := ToSortLevel.toSortLevel.{u}
-  let ty := Lean.toTypeExpr α
-  match bt with
-  | .leaf => .app (.const ``BinTree.leaf [lvl]) ty
-  | .node l x r =>
-    let xExpr : Expr :=
-      match x with
-      | .none => .app (.const ``Option.none [lvl]) ty
-      | .some e => mkApp2 (.const ``Option.some [lvl]) ty (Lean.toExpr e)
-    mkApp4 (.const ``BinTree.node [lvl]) ty l.toExpr xExpr r.toExpr
-
-open Lean in
-instance [ToSortLevel.{u}] [ToExpr α] : Lean.ToExpr (BinTree α) where
-  toExpr := BinTree.toExpr
-  toTypeExpr :=
-    let lvl := ToSortLevel.toSortLevel.{u}
-    .app (.const ``BinTree [lvl]) (Lean.toTypeExpr α)
 
 def val? (bt : BinTree α) : Option α :=
   match bt with
@@ -543,8 +525,8 @@ def ofList (xs : List α) : BinTree α :=
 
 -- Given a `bl : BinTree α`, return `Lean.toExpr (fun n => (BinTree.get? bl n).getD default)`
 open Lean in
-def toLCtx {α : Type u} [ToSortLevel.{u}] [ToExpr α] (bl : BinTree α) (default : α) : Expr :=
-  let lvl := ToSortLevel.toSortLevel.{u}
+def toLCtx {α : Type u} [ToLevel.{u}] [ToExpr α] (bl : BinTree α) (default : α) : Expr :=
+  let lvl := ToLevel.toLevel.{u}
   let type := toTypeExpr α
   let get?Expr := mkApp3 (.const ``BinTree.get? [lvl]) type (toExpr bl) (.bvar 0)
   let getDExpr := mkApp3 (.const ``Option.getD [lvl]) type get?Expr (ToExpr.toExpr default)

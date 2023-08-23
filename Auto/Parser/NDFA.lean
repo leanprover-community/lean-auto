@@ -1,6 +1,6 @@
 -- Computational NFA and DFA
 import Lean
-import Mathlib.Data.List.Sort
+import Auto.Lib.ListExtra
 open Lean
 
 namespace Auto
@@ -432,7 +432,7 @@ section DFA
     let mut dstates : Array (List Nat) := #[sort (n.εClosureOfStates (HashSet.empty.insert 0)).toList]
     -- Map from state to idx of state
     let mut idxmap : HashMap (List Nat) Nat :=
-      HashMap.empty.insert dstates[0] 0
+      HashMap.empty.insert dstates[0]! 0
     -- `Unit` represents the `malformed input` state
     let mut tr : Array (HashMap σ (Nat ⊕ Unit)) := #[HashMap.empty]
     -- Next state to process
@@ -440,7 +440,7 @@ section DFA
     while h : cur < dstates.size do
       let st := dstates[cur]
       let moves := n.moves (HashSet.empty.insertMany st)
-      for (c, st) in moves do
+      for (c, st) in moves.toList do
         -- If `st` is empty, then the move ends in `malformed input` state
         if st.size == 0 then
           tr := tr.modify cur (fun hmap => hmap.insert c (.inr .unit))

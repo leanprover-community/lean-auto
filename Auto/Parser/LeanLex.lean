@@ -218,7 +218,7 @@ section
     fun ⟨ngroup, all, charMap⟩ =>
       let img := charMap.fold (fun hs _ n => hs.insert n) HashSet.empty
       let surj := (sort img.toList) == List.range ngroup
-      let allInCharMap := all.all (fun c => charMap.contains c)
+      let allInCharMap := all.toList.all (fun c => charMap.contains c)
       let sizeEq := all.size == charMap.size
       surj && allInCharMap && sizeEq
   
@@ -226,7 +226,7 @@ section
     fun ⟨ngroup, _, charMap⟩ => Id.run <| do
       let mut arr : Array (HashSet σ) := 
         Array.mk ((List.range ngroup).map (fun _ => HashSet.empty))
-      for (c, idx) in charMap do
+      for (c, idx) in charMap.toList do
         arr := arr.modify idx (fun hs => hs.insert c)
       return arr
 

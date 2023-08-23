@@ -333,12 +333,9 @@ section push
     pushLCtxs (x :: xs) lctx = pushLCtx x (pushLCtxs xs lctx) := by
     apply funext; intros n; cases n
     case h.zero =>
-      dsimp [pushLCtxs, pushLCtx, Nat.blt, Nat.ble]
-      rw [Nat.ble_eq_true_of_le]; rfl
-      apply Nat.zero_le
+      dsimp [pushLCtxs, pushLCtx, Nat.blt, Nat.ble]; rw [Nat.zero_ble]
     case h.succ n =>
-      dsimp [pushLCtxs, pushLCtx, Nat.blt, Nat.ble]
-      rw [Nat.succ_sub_succ]; rfl
+      dsimp [pushLCtxs, pushLCtx, Nat.blt, Nat.ble]; rw [Nat.succ_sub_succ]
 
   theorem pushLCtxs.append (xs ys : List α) (lctx : Nat → α) :
     pushLCtxs (xs ++ ys) lctx = pushLCtxs xs (pushLCtxs ys lctx) := by
@@ -352,9 +349,7 @@ section push
 
   theorem pushLCtxs.cons_zero (xs : List α) (lctx : Nat → α) :
     pushLCtxs (x :: xs) lctx 0 = x := by
-    dsimp [pushLCtxs, Nat.blt, Nat.ble];
-    rw [Nat.ble_eq_true_of_le]; rfl
-    apply Nat.zero_le
+    dsimp [pushLCtxs, Nat.blt, Nat.ble]; rw [Nat.zero_ble]
 
   theorem pushLCtxs.cons_succ (xs : List α) (lctx : Nat → α) (n : Nat) :
     pushLCtxs (x :: xs) lctx (.succ n) = pushLCtxs xs lctx n := by
@@ -727,7 +722,7 @@ section genericInst
         simp at heq
         rw [← IH xs heq lctx n]
         dsimp [pushLCtxs, Nat.blt, Nat.ble, Nat.add_succ];
-        rw [Nat.succ_sub_succ]; rfl
+        rw [Nat.succ_sub_succ];
 
   theorem covPairDep.ofPushsDepPopsDep
     {lctxty : α → Sort u} (lvl : Nat) {tys : List α}

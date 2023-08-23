@@ -1,5 +1,8 @@
 namespace Auto
 
+theorem heq_of_cast_eq : ∀ (e : α = β) (_ : cast e a = a'), HEq a a'
+  | rfl, h => Eq.recOn h (HEq.refl _)
+
 def HEq.tyEq {α β : Sort u} (x : α) (y : β) (H : HEq x y) : α = β :=
   match β, y, H with
   | .(α), .(x), HEq.refl _ => Eq.refl _

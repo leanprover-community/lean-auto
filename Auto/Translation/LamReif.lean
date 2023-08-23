@@ -2,6 +2,7 @@ import Lean
 import Auto.Util.MonadUtils
 import Auto.Util.ExprExtra
 import Auto.Util.MetaExtra
+import Auto.MathlibEmulator
 import Auto.Translation.LamPULift
 import Auto.Embedding.LamChecker
 open Lean
@@ -510,7 +511,7 @@ section Checker
 
     -- Given a list of expression of type `ty`, construct the corresponding `lctx`
   private def exprListToLCtx (l : List Expr) (lvl : Level) (ty : Expr) :=
-    @BinTree.toLCtx Expr (instToSortLevelExplicit lvl) (instExprToExprId ty) (BinTree.ofList l)
+    @BinTree.toLCtx Expr ⟨lvl, Prop⟩ (instExprToExprId ty) (BinTree.ofList l)
 
   def buildTyVal : ReifM Expr := do
     let u ← getU
@@ -645,8 +646,8 @@ section Checker
         importTable := importTable.insert vPos itEntry
     let type := Lean.mkApp2 (.const ``PSigma [.succ .zero, .zero])
       lamTermExpr (.app (.const ``importTablePSigmaβ [u]) lvalExpr)
-    let importTableExpr := @BinTree.toExpr Expr
-      (instToSortLevelExplicit .zero) (instExprToExprId type) importTable
+    let importTableExpr := (@instToExprBinTree Expr
+      (instExprToExprId type) ⟨.zero, Prop⟩).toExpr importTable
     if !(← Util.Meta.isTypeCorrectCore importTableExpr) then
       throwError "buildImportTable :: Malformed ImportTable"
     return importTableExpr

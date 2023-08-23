@@ -1,12 +1,14 @@
+import Lean
 import Auto.Embedding.Lift
 import Auto.Embedding.LCtx
 import Auto.Util.ExprExtra
+import Auto.Lib.NatExtra
 import Auto.Lib.HEqExtra
-import Lean
+-- import Mathlib.Data.Real.Basic
+-- import Mathlib.Data.BitVec.Defs
+-- import Mathlib.Data.Int.Basic
+import Auto.MathlibEmulator
 import Std.Data.List.Lemmas
-import Mathlib.Data.Real.Basic
-import Mathlib.Data.BitVec.Defs
-import Mathlib.Data.Int.Basic
 
 -- Embedding Simply Typed Lambda Calculus into Dependent Type Theory
 -- Simply Typed Lambda Calculus = HOL (without polymorphism)
@@ -647,7 +649,9 @@ theorem LamTerm.maxLooseBVarSucc.spec (m : Nat) :
     case succ _ => intro _; simp
 | .app _ t₁ t₂ => by
   dsimp [hasLooseBVarGe, maxLooseBVarSucc];
-  rw [Bool.or_eq_true]; simp; rw [spec m t₁]; rw [spec m t₂]
+  rw [Bool.or_eq_true]; rw [spec m t₁]; rw [spec m t₂];
+  simp [Nat.max]; rw [Nat.gt_eq_succ_le]; rw [Nat.gt_eq_succ_le]; rw [Nat.gt_eq_succ_le];
+  rw [Nat.le_max_iff]
 
 def LamTerm.reprPrec (t : LamTerm) (n : Nat) :=
   let s :=
@@ -1779,7 +1783,7 @@ theorem LamThmValid.append (H : LamThmValid lval lctx t)
   dsimp [LamThmValid]; intros lctx'; let ⟨wft, Ht⟩ := H (pushLCtxs ex lctx')
   exists (pushLCtxs.append _ _ _ ▸ wft); intros lctxTerm
   let Ht' := Ht (pushLCtxs.append _ _ _ ▸ lctxTerm)
-  apply Eq.mp _ Ht'; apply congr_arg (f:=GLift.down)
+  apply Eq.mp _ Ht'; apply congrArg (f:=GLift.down)
   apply eq_of_heq; apply LamWF.interp.heq <;> try rfl
   case h.HLCtxTyEq => apply Eq.symm; apply pushLCtxs.append
   case h.HLCtxTermEq => apply eqRec_heq'
@@ -1790,10 +1794,10 @@ theorem LamThmValid.prepend (H : LamThmValid lval lctx t)
   let wft' := @LamWF.ofBVarLiftsIdx _ _ _ 0 _ ex rfl _ wft
   rw [pushLCtxsAt.zero, ← pushLCtxs.append] at wft'; exists wft'
   intros lctxTerm;
-  let lctxTerm₁ : (n : ℕ) → LamSort.interp lval.ilVal.tyVal (pushLCtxs lctx lctx' n) :=
+  let lctxTerm₁ : (n : Nat) → LamSort.interp lval.ilVal.tyVal (pushLCtxs lctx lctx' n) :=
     fun n => pushLCtxs.append_add _ _ _ _  rfl _ ▸ lctxTerm (n + ex.length)
   let Ht' := Ht lctxTerm₁
-  apply Eq.mp _ Ht'; apply congr_arg (f:=GLift.down)
+  apply Eq.mp _ Ht'; apply congrArg (f:=GLift.down)
   let Hl := HList.ofFun lctxTerm ex.length
   let Hl' : HList (LamSort.interp lval.ilVal.tyVal) ex := by
     rw [pushLCtxs.append] at Hl; rw [List.ofFun.ofPushLCtx] at Hl;

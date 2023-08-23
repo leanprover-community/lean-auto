@@ -25,6 +25,8 @@ theorem Nat.ble_add (a b e : Nat) : Nat.ble a b = Nat.ble (a + e) (b + e) := by
   case zero => rfl
   case succ e => rw [e]; rfl
 
+theorem Nat.zero_ble (b : Nat) : Nat.ble 0 b = true := by cases b <;> rfl
+
 theorem Nat.eq_of_le_of_lt_succ {n m : Nat} (h₁ : n ≤ m) (h₂ : m < n + 1) : m = n :=
   Nat.le_antisymm (Nat.le_of_succ_le_succ h₂) h₁
 
@@ -33,7 +35,7 @@ theorem Nat.one_add (n : Nat) : 1 + n = Nat.succ n := by simp [Nat.add_comm]
 theorem Nat.pred_sub (n m : Nat) : Nat.pred n - m = Nat.pred (n - m) := by
   rw [← Nat.sub_one, Nat.sub_sub, one_add, Nat.sub_succ]
 
-theorem Nat.le_max (m n k : Nat) : k ≤ max m n ↔ k ≤ m ∨ k ≤ n := by
+theorem Nat.le_max_iff (m n k : Nat) : k ≤ max m n ↔ k ≤ m ∨ k ≤ n := by
   apply Iff.intro
   case mp =>
     intro h; rw [Nat.max_def] at h;
@@ -47,6 +49,8 @@ theorem Nat.le_max (m n k : Nat) : k ≤ max m n ↔ k ≤ m ∨ k ≤ n := by
     intro h; cases h
     case inl h => exact Nat.le_trans h (Nat.le_max_left _ _)
     case inr h => exact Nat.le_trans h (Nat.le_max_right _ _)
+
+theorem Nat.gt_eq_succ_le {m n : Nat} : m > n ↔ .succ n ≤ m := by rfl
 
 theorem Nat.le_pred_of_succ_le {n m : Nat} : m ≠ 0 → Nat.succ n ≤ m → n ≤ Nat.pred m :=
   match m with
