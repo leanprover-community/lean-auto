@@ -50,10 +50,17 @@ def addpolylog (e : Expr) (cont : HashMap Expr FVarId → MetaM α)
     Meta.withLetDecl name (← Meta.inferType e) e fun fvar =>
       cont (hmap.insert e fvar.fvarId!)
 
+-- Temporary function
+private def autometafind! [Hashable α] [BEq α] (hmap : HashMap α β) (x : α) : MetaM β := do
+  if let .some b := hmap.find? x then
+    return b
+  else
+    throwError "autometafind! :: Unfindable"
+
 -- For test purpose
 partial def replacepolylog (hmap : HashMap Expr FVarId) : Expr → MetaM Expr
-| e@(.app (.const ``Eq _) _) => return .fvar (hmap.find! e)
-| e@(.app (.const ``Exists _) _) => return .fvar (hmap.find! e)
+| e@(.app (.const ``Eq _) _) => return .fvar (← autometafind! hmap e)
+| e@(.app (.const ``Exists _) _) => return .fvar (← autometafind! hmap e)
 | .forallE name ty body binfo => do
   let tylvl := (← instantiateMVars (← Meta.inferType ty)).sortLevel!
   let (bodysort, rep) ← Meta.withLocalDecl name binfo ty fun fvar => do
@@ -63,10 +70,10 @@ partial def replacepolylog (hmap : HashMap Expr FVarId) : Expr → MetaM Expr
     return (bodysort, ← Meta.mkLambdaFVars #[fvar] bodyrep)
   let bodylvl := (← instantiateMVars bodysort).sortLevel!
   if body.hasLooseBVar 0 ∨ !(← Meta.isLevelDefEq tylvl .zero) ∨ !(← Meta.isLevelDefEq bodylvl .zero) then
-    let forallFun := Expr.fvar (hmap.find! (.app (.const ``forallF [tylvl, bodylvl]) ty))
+    let forallFun := Expr.fvar (← autometafind! hmap (.app (.const ``forallF [tylvl, bodylvl]) ty))
     return .app forallFun rep
   else
-    let impFun := Expr.fvar (hmap.find! (.const ``ImpF [tylvl, bodylvl]))
+    let impFun := Expr.fvar (← autometafind! hmap (.const ``ImpF [tylvl, bodylvl]))
     return .app (.app impFun (← replacepolylog hmap ty)) (← replacepolylog hmap body)
 | .lam name ty body binfo =>
   Meta.withLocalDecl name binfo ty fun fvar => do
