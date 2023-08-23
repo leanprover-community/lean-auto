@@ -488,32 +488,77 @@ theorem Eq.congr (lval : LamValuation) (lctx : List LamSort)
     exact Hf
   case eArg => exact LamEquiv.ofLamThmValid _ _ hEq
 
-theorem LamWF.imp
-  (ltv : LamTyVal) {t₁ t₂ : LamTerm} (lctx : Nat → LamSort)
-  (wf₁ : LamWF ltv ⟨lctx, .mkImp t₁ t₂, .base .prop⟩) : 
-  LamWF ltv ⟨lctx, t₂, .base .prop⟩ :=
-  match wf₁ with
-  | .ofApp _ _ HArg => HArg
+def LamTerm.impApp (t₁₂ t₁ : LamTerm) :=
+  match t₁₂ with
+  | .app _ fn concl =>
+    match fn with
+    | .app _ imp hyp =>
+      match hyp.beq t₁ with
+      | true =>
+        match imp with
+        | .base b =>
+          match b with
+          | .imp => concl
+          | _ => t₁₂
+        | _ => t₁₂
+      | false => t₁₂
+    | _ => t₁₂
+  | _ => t₁₂
 
-theorem LamWF.imp.correct {t₁ t₂ : LamTerm}
-  (wf₁ : LamWF lval.ilVal.toLamTyVal ⟨lctx, .mkImp t₁ t₂, .base .prop⟩)
-  (wf₂ : LamWF lval.ilVal.toLamTyVal ⟨lctx, t₁, .base .prop⟩)
-  (valid₁ : GLift.down (LamWF.interp lval lctx lctxTerm wf₁))
-  (valid₂ : GLift.down (LamWF.interp lval lctx lctxTerm wf₂)) :
-  GLift.down (LamWF.interp lval lctx lctxTerm (LamWF.imp _ _ wf₁)) :=
-  match wf₁ with
-  | .ofApp _ (.ofApp _ (.ofBase .ofImp) HArg₁) HArg₂ => by
-    dsimp [LamWF.interp, LamBaseTerm.LamWF.interp] at valid₁
-    unfold LamWF.imp; dsimp; apply valid₁; apply Eq.mp _ valid₂
-    apply congrArg; apply eq_of_heq; apply LamWF.interp.heq <;> rfl
+-- `t₁ → t₂` and `t₁` implies `t₂`
+def LamWF.impApp
+  (ltv : LamTyVal) {t₁₂ t₁ : LamTerm} (lctx : Nat → LamSort)
+  (wf : LamWF ltv ⟨lctx, t₁₂, .base .prop⟩) :
+  LamWF ltv ⟨lctx, LamTerm.impApp t₁₂ t₁, .base .prop⟩ := by
+  cases t₁₂ <;> try exact wf
+  case app bp₁ hypimp concl =>
+    cases hypimp <;> try exact wf
+    case app bp₂ imp hyp =>
+      dsimp [LamTerm.impApp]; 
+      match LamTerm.beq hyp t₁ with
+      | true =>
+        cases imp <;> try exact wf
+        case base b =>
+          cases b <;> try exact wf
+          case imp =>
+            dsimp
+            match wf with
+            | .ofApp _ (.ofApp _ (.ofBase .ofImp) _) wfConcl => exact wfConcl
+      | false => exact wf
+
+theorem LamWF.imp.correct {t₁₂ t₁ : LamTerm}
+  (wf₁₂ : LamWF lval.ilVal.toLamTyVal ⟨lctx, t₁₂, .base .prop⟩)
+  (wf₁ : LamWF lval.ilVal.toLamTyVal ⟨lctx, t₁, .base .prop⟩)
+  (valid₁₂ : GLift.down (LamWF.interp lval lctx lctxTerm wf₁₂))
+  (valid₁ : GLift.down (LamWF.interp lval lctx lctxTerm wf₁)) :
+  GLift.down (LamWF.interp lval lctx lctxTerm (LamWF.impApp (t₁:=t₁) _ _ wf₁₂)) := by
+  cases t₁₂ <;> try exact valid₁₂
+  case app bp₁ hypimp concl =>
+    cases hypimp <;> try exact valid₁₂
+    case app bp₂ imp hyp =>
+      dsimp [LamTerm.impApp, LamWF.impApp]
+      match h : LamTerm.beq hyp t₁ with
+      | true =>
+        dsimp; cases imp <;> try exact valid₁₂
+        case base b =>
+          cases b <;> try exact valid₁₂
+          case imp =>
+            dsimp
+            match wf₁₂ with
+            | .ofApp _ (.ofApp _ (.ofBase .ofImp) _) wfConcl =>
+              dsimp; apply valid₁₂; apply Eq.mp _ valid₁
+              apply congrArg; apply eq_of_heq;
+              apply LamWF.interp.heq <;> try rfl
+              exact _root_.Eq.symm (LamTerm.beq_eq _ _ h)
+      | false => exact valid₁₂
 
 theorem LamThmValid.imp
-  (H₁ : LamThmValid lval lctx (.mkImp t₁ t₂))
-  (H₂ : LamThmValid lval lctx t₁) : LamThmValid lval lctx t₂ := by
-  intro lctx'; let ⟨wf₁, H₁⟩ := H₁ lctx'; let ⟨wf₂, H₂⟩ := H₂ lctx'
-  exists (LamWF.imp _ _ wf₁); intro lctxTerm;
-  apply LamWF.imp.correct
+  (H₁₂ : LamThmValid lval lctx t₁₂)
+  (H₁ : LamThmValid lval lctx t₁) : LamThmValid lval lctx (LamTerm.impApp t₁₂ t₁) := by
+  intro lctx'; let ⟨wf₁₂, H₁₂⟩ := H₁₂ lctx'; let ⟨wf₁, H₁⟩ := H₁ lctx'
+  exists (LamWF.impApp _ _ wf₁₂); intro lctxTerm;
+  apply LamWF.imp.correct (t₁:=t₁)
+  case valid₁₂ => apply H₁₂
   case valid₁ => apply H₁
-  case valid₂ => apply H₂
 
 end Auto.Embedding.Lam

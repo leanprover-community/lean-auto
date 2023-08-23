@@ -148,13 +148,7 @@ def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → REntry
     match r.valid.get? p₁ with
     | .some ⟨lctx₂, t₁⟩ =>
       match lctx₁.beq lctx₂ with
-      | true =>
-        match t₁₂ with
-        | .app (.base .prop) (.app (.base .prop) (.base .imp) t₁') t₂ =>
-          match LamTerm.beq t₁' t₁ with
-          | true => .valid lctx₁ t₂
-          | false => .none
-        | _ => .none
+      | true => .valid lctx₁ (LamTerm.impApp t₁₂ t₁)
       | false => .none
     | .none => .none
   | .none => .none
@@ -220,28 +214,9 @@ theorem ChkStep.eval_correct
       | true =>
         dsimp
         have lctxeq := List.beq_eq LamSort.beq_eq _ _ h₃; cases lctxeq
-        cases t₁₂ <;> try exact True.intro;
-        case app argTy₁ fn₁ arg₁ =>
-          cases argTy₁ <;> try exact True.intro
-          case base b =>
-            cases b <;> try exact True.intro
-            cases fn₁ <;> try exact True.intro
-            case app argTy₂ fn₂ arg₂ =>
-              cases argTy₂ <;> try exact True.intro;
-              case base b =>
-                cases b <;> try exact True.intro
-                cases fn₂ <;> try exact True.intro
-                case base bt =>
-                  cases bt <;> try exact True.intro
-                  case imp =>
-                    dsimp
-                    match h₄ : LamTerm.beq arg₂ t₁ with
-                    | true =>
-                      have teq := LamTerm.beq_eq _ _ h₄; cases teq
-                      let h₁' := RTable.validInv_get inv.right h₁
-                      let h₂' := RTable.validInv_get inv.right h₂
-                      apply LamThmValid.imp h₁' h₂'
-                    | false => exact True.intro
+        have h₁' := RTable.validInv_get inv.right h₁
+        have h₂' := RTable.validInv_get inv.right h₂
+        apply LamThmValid.imp h₁' h₂'
       | false => exact True.intro
     | .none => exact True.intro
   | .none => exact True.intro
