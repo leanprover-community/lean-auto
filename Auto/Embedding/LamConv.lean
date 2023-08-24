@@ -526,7 +526,7 @@ def LamWF.impApp
             | .ofApp _ (.ofApp _ (.ofBase .ofImp) _) wfConcl => exact wfConcl
       | false => exact wf
 
-theorem LamWF.imp.correct {t₁₂ t₁ : LamTerm}
+theorem LamWF.impApp.correct {t₁₂ t₁ : LamTerm}
   (wf₁₂ : LamWF lval.ilVal.toLamTyVal ⟨lctx, t₁₂, .base .prop⟩)
   (wf₁ : LamWF lval.ilVal.toLamTyVal ⟨lctx, t₁, .base .prop⟩)
   (valid₁₂ : GLift.down (LamWF.interp lval lctx lctxTerm wf₁₂))
@@ -552,12 +552,12 @@ theorem LamWF.imp.correct {t₁₂ t₁ : LamTerm}
               exact _root_.Eq.symm (LamTerm.beq_eq _ _ h)
       | false => exact valid₁₂
 
-theorem LamThmValid.imp
+theorem LamThmValid.impApp
   (H₁₂ : LamThmValid lval lctx t₁₂)
   (H₁ : LamThmValid lval lctx t₁) : LamThmValid lval lctx (LamTerm.impApp t₁₂ t₁) := by
   intro lctx'; let ⟨wf₁₂, H₁₂⟩ := H₁₂ lctx'; let ⟨wf₁, H₁⟩ := H₁ lctx'
   exists (LamWF.impApp _ _ wf₁₂); intro lctxTerm;
-  apply LamWF.imp.correct (t₁:=t₁)
+  apply LamWF.impApp.correct (t₁:=t₁)
   case valid₁₂ => apply H₁₂
   case valid₁ => apply H₁
 

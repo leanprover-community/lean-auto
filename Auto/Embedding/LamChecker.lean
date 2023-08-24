@@ -216,7 +216,7 @@ theorem ChkStep.eval_correct
         have lctxeq := List.beq_eq LamSort.beq_eq _ _ h₃; cases lctxeq
         have h₁' := RTable.validInv_get inv.right h₁
         have h₂' := RTable.validInv_get inv.right h₂
-        apply LamThmValid.imp h₁' h₂'
+        apply LamThmValid.impApp h₁' h₂'
       | false => exact True.intro
     | .none => exact True.intro
   | .none => exact True.intro
@@ -266,16 +266,19 @@ theorem ChkStep.run_correct
 def ChkSteps.run (ltv : LamTyVal) (r : RTable) (cs : ChkSteps) : RTable :=
   BinTree.foldl (fun r (c, n) => ChkStep.run ltv r c n) r cs
 
-theorem CheckSteps.run_correct
+theorem ChkSteps.run_correct
   (lval : LamValuation.{u}) (r : RTable) (inv : r.inv lval) (cs : ChkSteps) :
   (ChkSteps.run lval.ilVal.toLamTyVal r cs).inv lval := by
   dsimp [ChkSteps.run]; apply BinTree.foldl_inv (RTable.inv lval) inv
   intro r (c, n) inv'; exact ChkStep.run_correct lval r inv' c n
 
+def ChkSteps.runFromBeginning (lval : LamValuation.{u}) (it : ImportTable lval) (cs : ChkSteps) :=
+  ChkSteps.run lval.ilVal.toLamTyVal ⟨.leaf, it.importFacts⟩ cs
+
 theorem Checker
   (lval : LamValuation.{u}) (it : ImportTable lval) (cs : ChkSteps) :
-  (ChkSteps.run lval.ilVal.toLamTyVal ⟨.leaf, it.importFacts⟩ cs).inv lval := by
-  apply CheckSteps.run_correct; apply And.intro;
+  (ChkSteps.runFromBeginning lval it cs).inv lval := by
+  apply ChkSteps.run_correct; apply And.intro;
   case left =>
     intro n;
     dsimp [RTable.wfInv, BinTree.allp, BinTree.get?]

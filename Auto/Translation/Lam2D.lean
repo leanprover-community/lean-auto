@@ -46,7 +46,21 @@ def withTypeAtomAsFVar (atom : Nat) (cont : ExternM Expr) : ExternM Expr := do
   Meta.withLocalDeclD ("_exTypeAtom_" ++ freshId) (.sort lvl) (fun newFVar =>
     withReader (fun s => {s with typeAtomFVars := s.typeAtomFVars.insert atom newFVar.fvarId!}) (do
       let abst ← Meta.mkLambdaFVars #[newFVar] (← cont)
-      return mkApp abst orig)
+      -- We have to `headBeta` this `appExpr`, otherwise the term
+      --   might not be type correct
+      -- For example, suppose we have `x : α`, where `α` is type
+      --   atom 0, and `x` is term atom 0. Now we call the external
+      --   prover, which returns an expression `termAtom 0 = termAtom 0`.
+      --   After going up `with<Type/Term>AtomAsFVar`, it will
+      --   become `(fun (α' : Sort _) => (fun (x' : α') => x' = x') (x : α)) α`
+      --   and the application `(fun (x' : α') => x' = x') (x : α)` is not
+      --   type correct.
+      -- However, the above term will be type correct if we `headBeta1`
+      --   at each `withTypeAtomAsFVar
+      match abst with
+      | .lam _ _ body _ => return body.instantiate1 orig
+      | _ => throwError "withTypeAtomAsFVar :: Unexpected expression {abst}"
+      )
     )
 
 def withTypeAtomsAsFVar (atoms : Array Nat) (cont : ExternM Expr) : ExternM Expr :=

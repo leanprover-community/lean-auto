@@ -1174,9 +1174,8 @@ def LamTerm.interp.{u}
     match heq : LamSort.beq argTy' s, heqa : LamSort.beq argTy s with
     | true, true =>
       intros fnInterp argInterp;
-      have heq' := LamSort.beq_eq _ _ heq; cases heq'
-      have heqa' := LamSort.beq_eq _ _ heqa; cases heqa'
-      dsimp [LamSort.interp] at fnInterp
+      have heq' := LamSort.beq_eq _ _ heq; rw [heq'] at fnInterp
+      have heqa' := LamSort.beq_eq _ _ heqa; rw [heqa'] at argInterp
       exact (fnInterp argInterp)
     | true,  false => intros _ _; exact dfVal
     | false, true  => intros _ _; exact dfVal
@@ -1334,7 +1333,9 @@ theorem LamTerm.interp.equiv
       case Hγ => dsimp [lamCheck!] at HApp; rw [HApp]
       case h₁ =>
         rw [HFn', HArg']; dsimp
-        rw [LamSort.beq_refl]
+        rw [LamSort.beq_refl]; dsimp
+        apply HEq.funext; intro fn; apply HEq.funext; intro arg
+        apply congr_h_heq <;> rfl
       case h₂ => apply IHFn
       case h₃ => apply IHArg
 
@@ -1801,6 +1802,18 @@ def LamThmValid (lval : LamValuation) (lctx : List LamSort) (t : LamTerm) :=
 
 @[reducible] def dfLCtxTerm (val : Nat → Type u) : ∀ n, LamSort.interp val (dfLCtxTy n) :=
   fun _ => GLift.up.{1, u} False
+
+theorem LamThmValid.getDefault (H : LamThmValid lval [] t) :
+  GLift.down (LamTerm.interpAsProp lval dfLCtxTy (dfLCtxTerm lval.ilVal.tyVal) t) :=
+  let ⟨wf, H⟩ := H dfLCtxTy
+  have hCheck! := LamTerm.lamCheck!_of_lamWF (default:=.base .prop) wf
+  have hPropEquiv := LamTerm.interpAsProp.equiv lval _ (dfLCtxTerm _) _ hCheck!
+  have hTermEquiv := LamTerm.interp.equiv (dfSort:=.base .prop) (dfVal := GLift.up False) _ (dfLCtxTerm _) wf
+  have hEquiv := HEq.trans hTermEquiv hPropEquiv.symm
+  (fun h => Eq.mp h (H (dfLCtxTerm _))) (congrArg _ (eq_of_heq hEquiv))
+
+theorem LamThmValid.getFalse (H : LamThmValid lval [] (.base .falseE)) : False :=
+  LamThmValid.getDefault H
 
 theorem LamThmWFP.ofLamThmWF (H : LamThmWF lval lctx s t) :
   LamThmWFP lval lctx s t :=

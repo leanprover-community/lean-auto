@@ -61,7 +61,7 @@ structure State where
   --     the ImportTable
   -- To be precise, we require that `e : GLift.down t.interp`
   assertions  : Array (Expr × LamTerm × Nat)    := #[]
-  -- `(it : ImportTable).get! n ∼ assertions[importMap.get! n]!`
+  -- The `n`-th element of the ImportTable would be `assertions[importMap.get! n]!`
   importMap   : HashMap Nat Nat                 := HashMap.empty
   -- `Embedding/LamChecker/ChkSteps`
   chkSteps    : Array (ChkStep × Nat)           := #[]
@@ -146,6 +146,37 @@ def lookupImportTableEntry! (wPos : Nat) : ReifM (Expr × LamTerm × Nat) := do
   else
     throwError "lookupImportTableEntry! :: Unknown import table entry {wPos}"
 
+def lookupWfTable! (wPos : Nat) : ReifM (List LamSort × LamSort × LamTerm) := do
+  if let .some r := (← getWfTable).get? wPos then
+    return r
+  else
+    throwError "lookupWfTable :: Unknown wfTable entry {wPos}"
+
+def lookupValidTable! (vPos : Nat) : ReifM (List LamSort ×  LamTerm) := do
+  if let .some r := (← getValidTable).get? vPos then
+    return r
+  else
+    throwError "lookupValidTable! :: Unknown validTable entry {vPos}"
+
+-- Return the `n` we'll put in `.base (.eqI n)`
+def eqIIdx (sort : LamSort) : ReifM Nat := do
+  let eqLamVal ← getEqLamVal
+  let idx := eqLamVal.size
+  setEqLamVal (eqLamVal.push (← sort2IsomTysIdx sort))
+  return idx
+
+def forallEIIdx (sort : LamSort) : ReifM Nat := do
+  let forallLamVal ← getForallLamVal
+  let idx := forallLamVal.size
+  setForallLamVal (forallLamVal.push (← sort2IsomTysIdx sort))
+  return idx
+
+def existEIIdx (sort : LamSort) : ReifM Nat := do
+  let existLamVal ← getExistLamVal
+  let idx := existLamVal.size
+  setExistLamVal (existLamVal.push (← sort2IsomTysIdx sort))
+  return idx
+
 -- Functions which models checker steps on the `meta` level
 -- Steps that only requires looking at the `LamTerm`s and does not
 --   require looking up the valuation should be put in the files
@@ -167,17 +198,25 @@ def resolveImport : LamTerm → ReifM LamTerm
 
 -- A new `ChkStep` that produces `LamThmWF` certificate
 -- `res` is the result of the `ChkStep`
-def newWfChkStep (c : ChkStep) (res : List LamSort × LamSort × LamTerm) : ReifM Unit := do
+-- Returns the position of the result of this `ChkStep` in the `wfTable`
+def newWfChkStep (c : ChkStep) (res : List LamSort × LamSort × LamTerm) : ReifM Nat := do
   setChkSteps ((← getChkSteps).push (c, (← getWfTable).size))
+  let wfsize := (← getWfTable).size
   setWfTable ((← getWfTable).push res)
+  return wfsize
 
 -- A new `ChkStep` that produces `LamThmValid` certificate
 -- `res` is the result of the `ChkStep`
-def newValidChkStep (c : ChkStep) (res : List LamSort × LamTerm) : ReifM Unit := do
+-- Returns the position of the result of this `ChkStep` in the `validTable`
+def newValidChkStep (c : ChkStep) (res : List LamSort × LamTerm) : ReifM Nat := do
   setChkSteps ((← getChkSteps).push (c, (← getValidTable).size))
+  let vsize := (← getValidTable).size
   setValidTable ((← getValidTable).push res)
+  return vsize
 
-def newAssertion (proof : Expr) (ty : LamTerm) : ReifM Unit := do
+-- A new assertion `proof : ty`
+-- Returns the position of the `resolveImport`-ed LamTerm inside the `validTable`
+def newAssertion (proof : Expr) (ty : LamTerm) : ReifM Nat := do
   let validTable ← getValidTable
   -- Position of external proof within the ImportTable
   let wPos := validTable.size
@@ -185,12 +224,13 @@ def newAssertion (proof : Expr) (ty : LamTerm) : ReifM Unit := do
   -- First push the term into `validTable` so that `validTable[wPos] = ty`,
   --   then call `newChkStepValid` so that the `(← getValidTable).size` within
   --   it gives the desired result
-  newValidChkStep (.validOfResolveImport wPos) ([], ← resolveImport ty)
+  let ret ← newValidChkStep (.validOfResolveImport wPos) ([], ← resolveImport ty)
   let assertions ← getAssertions
   -- `assertionIdx` is the index of the new (Expr × LamTerm) within `assertions`
   let assertionIdx := assertions.size
   setAssertions (assertions.push (proof, ty, wPos))
   setImportMap ((← getImportMap).insert wPos assertionIdx)
+  return ret
 
 -- Computes `upFunc` and `downFunc` between `s.interpAsUnlifted` and `s.interpAsLifted`
 --   The first `Expr` is `upFunc`
@@ -296,21 +336,15 @@ def newTermFVar (fvty : FVarType) (id : FVarId) (sort : LamSort) : ReifM LamTerm
     setVarMap (varMap.insert id (fvty, idx))
     return .atom idx
   | .eqVar =>
-    let eqLamVal ← getEqLamVal
-    let idx := eqLamVal.size
-    setEqLamVal (eqLamVal.push (← sort2IsomTysIdx sort))
+    let idx ← eqIIdx sort
     setVarMap (varMap.insert id (fvty, idx))
     return .base (.eqI idx)
   | .forallVar =>
-    let forallLamVal ← getForallLamVal
-    let idx := forallLamVal.size
-    setForallLamVal (forallLamVal.push (← sort2IsomTysIdx sort))
+    let idx ← forallEIIdx sort
     setVarMap (varMap.insert id (fvty, idx))
     return .base (.forallEI idx)
   | .existVar =>
-    let existLamVal ← getExistLamVal
-    let idx := existLamVal.size
-    setExistLamVal (existLamVal.push (← sort2IsomTysIdx sort))
+    let idx ← existEIIdx sort
     setVarMap (varMap.insert id (fvty, idx))
     return .base (.existEI idx)
 
@@ -444,10 +478,13 @@ mutual
 
 end
 
-def reifFacts (facts : Array ULiftedFact) : ReifM Unit := do
-  let _ ← facts.mapM (fun (proof, tyLift) => do
-    trace[auto.lamReif] m!"Reifying {proof} : {tyLift}"
+-- Returns the positions of the reified and `resolveImport`-ed facts
+--   within the `validTable`
+def reifFacts (facts : Array ULiftedFact) : ReifM (Array Nat) :=
+  facts.mapM (fun (proof, tyLift) => do
+    trace[auto.lamReif] "Reifying {proof} : {tyLift}"
     let lamty ← reifTerm tyLift
+    trace[auto.lamReif] "Successfully reified proof to λterm `{repr lamty}`"
     newAssertion proof lamty)
 
 -- **TODO:** Real and bitvec
@@ -468,9 +505,13 @@ def checkInterpretedConst : Expr → MetaM Bool
 | .const ``Iff []      => return true
 | _                    => return false
 
--- `cont` is what we need to do after we ulift and reify the facts
-def uLiftAndReify (facts : Array Reif.UMonoFact) (cont : ReifM α) : ReifM α :=
-  withULiftedFacts checkInterpretedConst facts (fun pfacts => do reifFacts pfacts; cont)
+-- `cont` is what we need to do after we ulift and reify the facts. Its
+--    argument is the position of the reified and `resolveImport`-ed
+--    facts within the `validTable`
+def uLiftAndReify (facts : Array Reif.UMonoFact) (cont : Array Nat → ReifM α) : ReifM α :=
+  withULiftedFacts checkInterpretedConst facts (fun pfacts => do
+    let arr ← reifFacts pfacts;
+    cont arr)
 
 section Checker
 
@@ -480,8 +521,30 @@ section Checker
     IO.println e'
     Util.Meta.coreCheck e'
   
-  #getExprAndApply[BinTree.toLCtx (α:=LamSort) (BinTree.ofList [LamSort.base .prop]) (.base .prop)|act]
+  #getExprAndApply[BinTree.toLCtx (α:=LamSort) (BinTree.ofListFoldl [LamSort.base .prop]) (.base .prop)|act]
   -/
+
+  -- Functions that operates on the checker table
+
+  -- `t₁ → t₂ → ⋯ → tₙ → t` , `t₁`, `t₂`, ⋯, `tₙ` implies `t`
+  -- `imp` is the position of `t₁ → t₂ → ⋯ → tₙ → t` in the `wfTable`
+  -- `hyps` are the positions of `t₁`, `t₂`, ⋯, `tₙ` in the `validTable`
+  -- Returns the position of the new `t` in the valid table
+  def impApps (imp : Nat) (hyps : Array Nat) : ReifM Nat := do
+    let mut imp := imp
+    let mut impV ← lookupValidTable! imp
+    for hyp in hyps do
+      let (lctx, t) := impV
+      let (lctx', t') ← lookupValidTable! hyp
+      if !(lctx'.beq lctx) then
+        throwError "impApps : LCtx mismatch, `{repr lctx'}` ≠ `{repr lctx}`"
+      let .app (.base .prop) (.app (.base .prop) (.base .imp) hypT) conclT := t
+        | throwError "imApps : Error, `{repr t}` is not an implication"
+      if !(hypT.beq t') then
+        throwError "impApps : Term mismatch, `{repr hypT}` ≠ `{repr t'}`"
+      impV := (lctx, conclT)
+      imp ← newValidChkStep (.validOfImp imp hyp) impV
+    return imp
 
   -- Functions that turns data structure in `ReifM.State` into `Expr`
 
@@ -504,14 +567,15 @@ section Checker
 
   def buildChkStepsExpr : ReifM Expr := do
     let chkSteps ← getChkSteps
-    let e := Lean.toExpr (BinTree.ofList chkSteps.data)
+    -- `ChkSteps` are run using `foldl`, so we use `BinTree.ofListFoldl`
+    let e := Lean.toExpr (BinTree.ofListFoldl chkSteps.data)
     if !(← Util.Meta.isTypeCorrectCore e) then
       throwError "buildChkSteps :: Malformed expression"
     return e
 
     -- Given a list of expression of type `ty`, construct the corresponding `lctx`
   private def exprListToLCtx (l : List Expr) (lvl : Level) (ty : Expr) :=
-    @BinTree.toLCtx Expr ⟨lvl, Prop⟩ (instExprToExprId ty) (BinTree.ofList l)
+    @BinTree.toLCtx Expr ⟨lvl, Prop⟩ (instExprToExprId ty) (BinTree.ofListGet l)
 
   def buildTyVal : ReifM Expr := do
     let u ← getU
@@ -561,8 +625,6 @@ section Checker
     let eqLamValExpr := Expr.lam `n (.const ``Nat []) (
         Lean.mkApp2 (.const ``eqValSigmaFst [u]) tyValExpr (.app eqBundleExpr (.bvar 0))
       ) .default
-    if !(← Util.Meta.isTypeCorrectCore eqLamValExpr) then
-      throwError "buildLamValuation :: Malformed eqLamVal"
     let eqValExpr := Expr.lam `n (.const ``Nat []) (
         Lean.mkApp2 (.const ``eqValSigmaSnd [u]) tyValExpr (.app eqBundleExpr (.bvar 0))
       ) .default
@@ -629,16 +691,21 @@ section Checker
       let lamValuationExpr := Lean.mkApp2 (.const ``LamValuation.mk [u])
         ilValuationExpr varValExpr
       Meta.mkLetFVars #[tyValFVarExpr] lamValuationExpr
-    if !(← Util.Meta.isTypeCorrectCore lamValuationExpr) then
-      throwError "buildLamValuation :: Malformed LamValuation"
-    trace[auto.buildChecker] "LamValuation typechecked in time {(← IO.monoMsNow) - startTime}"
+    -- if !(← Util.Meta.isTypeCorrectCore lamValuationExpr) then
+    --   throwError "buildLamValuation :: Malformed LamValuation"
+    -- trace[auto.buildChecker] "LamValuation typechecked in time {(← IO.monoMsNow) - startTime}"
     return lamValuationExpr
+
+  -- debug
+  -- def ofType (α : Sort u) (x : α) := x
 
   -- `lvalExpr` is the `LamValuation`
   def buildImportTableExpr (lvalExpr : Expr) : ReifM Expr := do
     let startTime ← IO.monoMsNow
     let u ← getU
     let lamTermExpr := Expr.const ``LamTerm []
+    -- Record the entries in the importTable for debug purpose
+    let mut entries : Array (Expr × Expr) := #[]
     let mut importTable : BinTree Expr := BinTree.leaf
     for (step, _) in (← getChkSteps) do
       if let .validOfResolveImport vPos := step then
@@ -646,16 +713,34 @@ section Checker
         let tExpr := Lean.toExpr t
         let itEntry := Lean.mkApp3 (.const ``importTablePSigmaMk [u]) lvalExpr tExpr e
         importTable := importTable.insert vPos itEntry
+        entries := entries.push (e, tExpr)
     let type := Lean.mkApp2 (.const ``PSigma [.succ .zero, .zero])
       lamTermExpr (.app (.const ``importTablePSigmaβ [u]) lvalExpr)
     let importTableExpr := (@instToExprBinTree Expr
       (instExprToExprId type) ⟨.zero, Prop⟩).toExpr importTable
-    if !(← Util.Meta.isTypeCorrectCore importTableExpr) then
-      throwError "buildImportTable :: Malformed ImportTable"
-    trace[auto.buildChecker] "ImportTable typechecked in time {(← IO.monoMsNow) - startTime}"
+    -- if !(← Util.Meta.isTypeCorrectCore importTableExpr) then
+    --   let tyValExpr ← buildTyVal
+    --   for (e, tExpr) in entries do
+    --     let tInterp := Lean.mkApp4 (.const ``LamTerm.interpAsProp [u])
+    --       lvalExpr (.const ``dfLCtxTy []) (.app (.const ``dfLCtxTerm [u]) tyValExpr) tExpr
+    --     let tInterp ← Meta.zetaReduce tInterp
+    --     let ofTypeExpr := Lean.mkApp2 (.const ``ofType [.succ u])
+    --       (.app (.const ``Embedding.LiftTyConv [.zero, u]) tInterp)
+    --       (Lean.mkApp2 (.const ``Embedding.GLift.up [.zero, u]) (← Meta.inferType e) e)
+    --     if !(← Meta.isTypeCorrect e) then
+    --       trace[auto.buildChecker] "buildImportTable :: Proof {e} is not type correct"
+    --       Meta.check e
+    --     if !(← Meta.isTypeCorrect ofTypeExpr) then
+    --       throwError "buildImportTable :: Malformed ImportTable Entry, proof : {e}, interp : {tInterp}"
+    --     else
+    --       trace[auto.buildChecker] "Well-formed ImportTable Entry"
+    --   throwError "buildImportTable :: Malformed ImportTable, but all entries are well-formed"
+    -- trace[auto.buildChecker] "ImportTable typechecked in time {(← IO.monoMsNow) - startTime}"
     return importTableExpr
 
-  def buildCheckerExpr : ReifM Expr := do
+  -- `entryIdx` is the entry we want to retrieve from the `validTable`
+  -- The `expr` returned is a proof of the `LamThmValid`-ness of the entry
+  def buildCheckerExpr (entryIdx : Nat) : ReifM Expr := do
     printCheckerStats
     let startTime ← IO.monoMsNow
     let u ← getU
@@ -664,14 +749,27 @@ section Checker
     let checker ← Meta.withLetDecl `lval lvalTy lvalExpr fun lvalFVarExpr => do
       let itExpr ← buildImportTableExpr lvalFVarExpr
       let csExpr ← buildChkStepsExpr
-      let checker := Lean.mkApp3 (.const ``Checker [u]) lvalFVarExpr itExpr csExpr
-      let checker ← Meta.mkLetFVars #[lvalFVarExpr] checker
+      let wholeChecker := Lean.mkApp3 (.const ``Checker [u]) lvalFVarExpr itExpr csExpr
+      let validInv ← Meta.mkAppM ``And.right #[wholeChecker]
+      let validExpr := Lean.toExpr (BinTree.ofListGet (← getValidTable).data)
+      let valExpr := Lean.toExpr (← lookupValidTable! entryIdx)
+      let nExpr := Lean.toExpr entryIdx
+      let eqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[valExpr]]
+      let getEntry := Lean.mkApp6 (.const ``RTable.validInv_get [u])
+        lvalExpr nExpr valExpr validExpr validInv eqExpr
+      let getEntry ← Meta.mkLetFVars #[lvalFVarExpr] getEntry
+      -- debug
+      -- let rt := Lean.mkApp3 (.const ``ChkSteps.runFromBeginning [u]) lvalExpr itExpr csExpr
+      -- let rt ← Meta.withTransparency .all <| Meta.reduceAll rt
+      -- trace[auto.buildChecker] "Final RTable : {rt}, Expected valid : {validExpr}"
       trace[auto.buildChecker] "Checker expression built in time {(← IO.monoMsNow) - startTime}"
-      return checker
-    let startTime ← IO.monoMsNow
-    if !(← Util.Meta.isTypeCorrectCore checker) then
-      throwError "buildCheckerExpr :: Malformed checker"
-    trace[auto.buildChecker] "Checker typechecked in time {(← IO.monoMsNow) - startTime}"
+      return getEntry
+    -- debug
+    -- let startTime ← IO.monoMsNow
+    -- if !(← Util.Meta.isTypeCorrectCore checker) then
+    --   trace[auto.buildChecker] "buildCheckerExpr :: Malformed checker {checker}"
+    --   Meta.check checker
+    -- trace[auto.buildChecker] "Checker typechecked in time {(← IO.monoMsNow) - startTime}"
     return checker
 
 end Checker
@@ -702,7 +800,7 @@ section ExportUtils
     if let .some s := s? then
       return collectLamSortAtoms s
     else
-      return HashSet.empty    
+      return HashSet.empty
 
   -- The first hashset is the type atoms
   -- The second hashset is the term atoms
@@ -725,6 +823,30 @@ section ExportUtils
     let (typeHs₁, termHs₁) ← collectAtoms t₁
     let (typeHs₂, termHs₂) ← collectAtoms t₂
     return (mergeHashSet typeHs₁ typeHs₂, mergeHashSet termHs₁ termHs₂)
+
+  -- After exporting `LamTerm`s to external prover and running
+  --   the external prover, we would like to accept the proof
+  --   returned by the prover. If we already know that the proof
+  --   returned by the prover corresponds to `t : LamTerm`, then
+  --   we don't need to `uLiftAndReify` the proof again.
+  -- However, since `t` is exported from `ReifM`, all import
+  --   versions of `eq, ∀, ∃` are already resolved and `t.interp`
+  --   may not be defeq to the type of the proof returned by
+  --   the prover. So, we have to build the import version `tI`
+  --   of `t` so that `tI.interp ≝ proof`
+  def mkImportVersion : LamTerm → ReifM LamTerm
+  | .atom n => return (.atom n)
+  | .base b =>
+    match b with
+    | .eq s      => return .base (.eqI (← eqIIdx s))
+    | .forallE s => return .base (.forallEI (← forallEIIdx s))
+    | .existE s  => return .base (.existEI (← existEIIdx s))
+    | b => return .base b
+  | .bvar n => return (.bvar n)
+  | .lam s t => do
+    return .lam s (← mkImportVersion t)
+  | .app s t₁ t₂ => do
+    return .app s (← mkImportVersion t₁) (← mkImportVersion t₂)
 
 end ExportUtils
 

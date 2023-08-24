@@ -321,6 +321,7 @@ theorem insert'.correct₂ (bt : BinTree β) (n₁ n₂ : Nat) (x : β) : n₁ �
 theorem insert.correct₂ (bt : BinTree β) (n₁ n₂ : Nat) (x : β) (H : n₁ ≠ n₂) : get? (insert bt n₁ x) n₂ = get? bt n₂ :=
   insert'.correct₂ bt (.succ n₁) (.succ n₂) x (fun h => H (Nat.succ.inj h))
 
+-- Depth-first preorder traversal of the `BinTree`
 def foldl (f : α → β → α) (init : α) : BinTree β → α
 | .leaf => init
 | .node l x r =>
@@ -519,9 +520,21 @@ theorem mapOpt_allp (f : α → Option β) (p : β → Prop) (bt : BinTree α) :
   rw [← allp_equiv]; rw [← allp_equiv]; apply mapOpt_allp'
 
 -- **TODO**: Prove properties
-def ofList (xs : List α) : BinTree α :=
+-- Property : `xs.get? n = (ofListGet xs).get? n`
+def ofListGet (xs : List α) : BinTree α :=
   let xs' := xs.zip (List.range xs.length)
   xs'.foldl (fun bt (x, n) => bt.insert' (.succ n) x) .leaf
+
+-- Property : `xs.foldl f init = (ofListFoldl xs).foldl f init`
+partial def ofListFoldl (xs : List α) : BinTree α :=
+  match xs with
+  | [] => .leaf
+  | _ :: _ =>
+    let nElem := Nat.div xs.length 2
+    let l := xs.take nElem
+    let r := xs.drop (.succ nElem)
+    let mid := xs.get? nElem
+    .node (ofListFoldl l) mid (ofListFoldl r)
 
 -- Given a `bl : BinTree α`, return `Lean.toExpr (fun n => (BinTree.get? bl n).getD default)`
 open Lean in

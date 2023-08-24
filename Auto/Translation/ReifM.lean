@@ -24,7 +24,7 @@ structure State where
   -- The first `Expr` is the proof, and the second `Expr` is the fact
   facts           : Array UMonoFact     := #[]
   -- During monomorphization, interpreted polymorphic
-  --   constants (=, ∀, ∃, →, Bitvec) will be turned into free variables
+  --   constants (=, ∀, ∃, →, Bitvec) will be turned into let-free variables
   --   representing (instances of) these constants. We have to record
   --   these free variables so that we know they're interpreted
   --   constants during reification.

@@ -5,30 +5,29 @@ open Auto Embedding
 set_option pp.universes true
 set_option trace.auto.lamReif true in
 example : True := by
-  try auto [True.intro];
-  sorry
+  auto [True.intro];
 
-#check Lam.LamSort.interp.{2}
-example (a b : Prop) : a ∨ b ∨ a := by
-  try auto;
-  sorry
+set_option pp.explicit true in
+set_option trace.auto.buildChecker true in
+example (a b : Prop) : a ∨ b ∨ ¬ a := by
+  auto
 
 set_option pp.explicit true in
 example (a b : Nat) (f : Nat → Nat)
  (eqNat : Nat → Nat → Prop) (H : eqNat (f a) (f b)) : True := by
-  try auto [H];
-  sorry
+  auto [H]
 
+set_option trace.auto.tactic true in
+set_option trace.auto.buildChecker true in
 set_option trace.auto.printLemmas true in
-example (a : Nat) (H : ∀ x, x = a) : a = a := by
-  try auto [H];
-  sorry
+example {α β : Type} (a : α) (b : β) (H : b = b) : a = a := by
+  auto [H]
 
+set_option trace.auto.buildChecker true in
 set_option trace.auto.tactic true in
 example (a : Nat) (f : Nat → Nat) (H : ∀ x, f x = x) :
   f x = f (f (f (f (f (f (f (f (f x)))))))) := by
-  try auto [H];
-  sorry
+  auto [H]
 
 set_option trace.auto.buildChecker true in
 example (x y : Nat) (f₁ f₂ f₃ f₄ f₅ f₆ f₇ f₈ f₉ f₁₀ f₁₁ f₁₂ f₁₃ f₁₄ : Nat → Nat → Nat)
@@ -36,8 +35,7 @@ example (x y : Nat) (f₁ f₂ f₃ f₄ f₅ f₆ f₇ f₈ f₉ f₁₀ f₁�
     f₁ (f₂ (f₃ x₁ x₂) (f₄ x₃ x₄)) (f₅ (f₆ x₅ x₆) (f₇ x₇ x₈)) =
     f₈ (f₉ (f₁₀ x₈ x₇) (f₁₁ x₆ x₅)) (f₁₂ (f₁₃ x₄ x₃) (f₁₄ x₂ x₁))) :
   True := by
-  try auto [H];
-  sorry
+  auto [H]
 
 -- This example is not supposed to work because it contains
 --   dependent type
@@ -62,8 +60,7 @@ example (f : Nat → Nat → Nat)
          (f (f (f x8 x9) (f x10 x11)) (f (f x12 x13) (f x14 x15))))
       (f (f (f (f x16 x17) (f x18 x19)) (f (f x20 x21) (f x22 x23)))
          (f (f (f x24 x25) (f x26 x27)) (f (f x28 x29) (f x30 x31)))))) : True := by
-  try auto [H]
-  sorry
+  auto [H]
 
 -- Multiple formulas
 -- Checker typechecked in time 1017
@@ -106,8 +103,7 @@ example
   (H₃₄ : ∀ (x₁ x₂ x₃ x₄), f₂ (f₃ x₁ x₂) (f₁ x₃ x₄) = g₃ (g₂ x₁ x₂) (g₁ x₃ x₄))
   (H₃₅ : ∀ (x₁ x₂ x₃ x₄), f₃ (f₁ x₁ x₂) (f₂ x₃ x₄) = g₃ (g₂ x₁ x₂) (g₁ x₃ x₄))
   (H₃₆ : ∀ (x₁ x₂ x₃ x₄), f₃ (f₂ x₁ x₂) (f₁ x₃ x₄) = g₃ (g₂ x₁ x₂) (g₁ x₃ x₄)) : True := by
-  try auto [H₁, H₂, H₃, H₄, H₅, H₆, H₇, H₈, H₉, H₁₀,
-            H₁₁, H₁₂, H₁₃, H₁₄, H₁₅, H₁₆, H₁₇, H₁₈, H₁₉, H₂₀,
-            H₂₁, H₂₂, H₂₃, H₂₄, H₂₅, H₂₆, H₂₇, H₂₈, H₂₉, H₃₀,
-            H₃₁, H₃₂, H₃₃, H₃₄, H₃₅, H₃₆]
-  sorry
+  auto [H₁, H₂, H₃, H₄, H₅, H₆, H₇, H₈, H₉, H₁₀,
+        H₁₁, H₁₂, H₁₃, H₁₄, H₁₅, H₁₆, H₁₇, H₁₈, H₁₉, H₂₀,
+        H₂₁, H₂₂, H₂₃, H₂₄, H₂₅, H₂₆, H₂₇, H₂₈, H₂₉, H₃₀,
+        H₃₁, H₃₂, H₃₃, H₃₄, H₃₅, H₃₆]
