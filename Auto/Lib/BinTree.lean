@@ -1,3 +1,4 @@
+import Lean
 import Std.Data.Nat.Lemmas
 import Auto.MathlibEmulator
 import Auto.Lib.BoolExtra
@@ -5,9 +6,9 @@ import Auto.Lib.LogicExtra
 import Auto.Lib.NatExtra
 import Auto.Lib.OptionExtra
 import Auto.Lib.Containers
+import Auto.Lib.Pos
 -- Make sure that `Lean.toExpr Nat` is overriden
 import Auto.Lib.ToExprExtra
-import Lean
 
 /- Polymorphic binary tree
   For definitions with `'`, the tree behaves as `{n : Nat // n ≠ 0} → α`
@@ -558,6 +559,132 @@ def toLCtx {α : Type u} [ToLevel.{u}] [ToExpr α] (bl : BinTree α) (default : 
 #eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
 #eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
 -/
+
+end BinTree
+
+
+namespace BinTree
+
+def get?Pos (bt : BinTree α) (p : Pos) : Option α :=
+  match p with
+  | .xH => bt.val?
+  | .xO p' => get?Pos bt.left! p'
+  | .xI p' => get?Pos bt.right! p'
+
+theorem get?Pos_leaf (p : Pos) : @get?Pos α .leaf p = .none :=
+  match p with
+  | .xH => rfl
+  | .xO p' => get?Pos_leaf p'
+  | .xI p' => get?Pos_leaf p'
+
+def insertPos (bt : BinTree α) (p : Pos) (x : α) : BinTree α :=
+  match p with
+  | .xH =>
+    match bt with
+    | .leaf => .node .leaf x .leaf
+    | .node l _ r => .node l x r
+  | .xO p' =>
+    match bt with
+    | .leaf => .node (insertPos .leaf p' x) .none .leaf
+    | .node l v r => .node (insertPos l p' x) v r
+  | .xI p' =>
+    match bt with
+    | .leaf => .node .leaf .none (insertPos .leaf p' x)
+    | .node l v r => .node l v (insertPos r p' x)
+
+theorem insertPos.correct₁ (bt : BinTree β) (p : Pos) (x : β) : get?Pos (insertPos bt p x) p = .some x := by
+  revert bt; induction p <;> intro bt
+  case xH =>
+    cases bt <;> rfl
+  case xO p' IH =>
+    cases bt <;> apply IH
+  case xI p' IH =>
+    cases bt <;> apply IH
+
+theorem insertPos.correct₂ (bt : BinTree β) (p₁ p₂ : Pos) (x : β) : p₁ ≠ p₂ → get?Pos (insertPos bt p₁ x) p₂ = get?Pos bt p₂ := by
+  revert bt p₂; induction p₁ <;> intro bt p₂ hne
+  case xH =>
+    cases p₂ <;> cases bt <;> first | rfl | exact (False.elim (hne rfl))
+  case xO p₁' IH =>
+    cases bt <;> cases p₂ <;> try rfl
+    case leaf.xO p₂' =>
+      dsimp [insertPos, get?Pos, left!]; rw [IH _ _ (fun h => hne (congrArg _ h))]
+    case node.xO l v r p₂' =>
+      dsimp [insertPos, get?Pos, left!]; rw [IH _ _ (fun h => hne (congrArg _ h))]
+  case xI p₁' IH =>
+    cases bt <;> cases p₂ <;> try rfl
+    case leaf.xI p₂' =>
+      dsimp [insertPos, get?Pos, right!]; rw [IH _ _ (fun h => hne (congrArg _ h))]
+    case node.xI l v r p₂' =>
+      dsimp [insertPos, get?Pos, right!]; rw [IH _ _ (fun h => hne (congrArg _ h))]
+
+def allpPos (p : α → Prop) (bt : BinTree α) := ∀ q, Option.allp p (bt.get?Pos q)
+
+theorem allpPos_leaf (p : α → Prop) : BinTree.leaf.allpPos p ↔ True :=
+  Iff.intro (fun _ => True.intro) (fun _ p => by rw [get?Pos_leaf]; exact True.intro)
+
+theorem allpPos_node (p : α → Prop) :
+  (BinTree.node l x r).allpPos p ↔ (l.allpPos p) ∧ Option.allp p x ∧ (r.allpPos p) := by
+  dsimp [allpPos]; apply Iff.intro
+  case mp =>
+    intro h; apply And.intro ?left (And.intro ?middle ?right)
+    case left =>
+      intro p; exact (h (.xO p))
+    case middle => exact (h .xH)
+    case right =>
+      intro p; exact (h (.xI p))
+  case mpr =>
+    intro ⟨hl, hx, hr⟩ q; cases q
+    case xH => exact hx
+    case xO p' => exact hl p'
+    case xI p' => exact hr p'
+
+theorem allpPos_insert (p : α → Prop) (bt : BinTree α) (q : Pos) (x : α) :
+  allpPos p (insertPos bt q x) ↔ p x ∧ (∀ q', q ≠ q' → Option.allp p (bt.get?Pos q')) := by
+  apply Iff.intro
+  case mp =>
+    intro H; apply And.intro
+    case left =>
+      have H' := H q; rw [insertPos.correct₁] at H'; exact H'
+    case right =>
+      intro q' hne;
+      have H' := H q'; rw [insertPos.correct₂ _ _ _ _ hne] at H'; exact H'
+  case mpr =>
+    intro ⟨hx, ht⟩ q'; cases h : q.beq q'
+    case false =>
+      have hne : q ≠ q' := Pos.beq_eq_false_ne _ _ h
+      rw [insertPos.correct₂ _ _ _ _ hne]; apply ht _ hne
+    case true =>
+      have he : q = q' := Pos.beq_eq _ _ h
+      rw [he]; rw [insertPos.correct₁]; exact hx
+
+theorem mapOpt_allpPos (f : α → Option β) (p : β → Prop) :
+  (bt : BinTree α) → (bt.mapOpt f).allpPos p ↔ bt.allpPos (fun x => Option.allp p (f x))
+| .leaf =>
+  Iff.intro
+    (fun _ n => by rw [get?Pos_leaf]; exact True.intro)
+    (fun _ n => by dsimp [mapOpt]; rw [get?Pos_leaf]; exact True.intro)
+| .node l x r => by
+  dsimp [mapOpt]; rw [allpPos_node]; rw [allpPos_node];
+  apply Iff.intro
+  case mp =>
+    intro ⟨hl, hx, hr⟩;
+    apply And.intro ?left (And.intro ?middle ?right)
+    case left => exact (mapOpt_allpPos _ _ _).mp hl
+    case middle =>
+      cases x
+      case none => exact True.intro
+      case some x => exact hx
+    case right => exact (mapOpt_allpPos _ _ _).mp hr
+  case mpr =>
+    intro ⟨hl, hx, hr⟩;
+    apply And.intro ?left (And.intro ?middle ?right)
+    case left => exact (mapOpt_allpPos _ _ _).mpr hl
+    case middle =>
+      cases x
+      case none => exact True.intro
+      case some x => exact hx
+    case right => exact (mapOpt_allpPos _ _ _).mpr hr
 
 end BinTree
 

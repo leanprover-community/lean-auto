@@ -1,6 +1,6 @@
 import Std.Data.Nat.Lemmas
 
-namespace Auto.BinNat
+namespace Auto
 
 inductive Pos where
   | xH : Pos
@@ -8,32 +8,28 @@ inductive Pos where
   | xI : Pos → Pos
 deriving Inhabited
 
-abbrev Pos.one := xH
+namespace Pos
 
-inductive Bin where
-  | zero : Bin
-  | pos : Pos → Bin
+abbrev one := xH
 
-abbrev Bin.one := pos .xH
-
-def Pos.toNat : Pos → Nat
+def toNat : Pos → Nat
 | xH => 1
 | xO p' => p'.toNat * 2
 | xI p' => p'.toNat * 2 + 1
 
-theorem Pos.toNat_not_zero (p : Pos) : Pos.toNat p ≠ 0 := by
+theorem toNat_not_zero (p : Pos) : toNat p ≠ 0 := by
   induction p
   case xH => intro H; contradiction
   case xO p' IH =>
-    simp [Pos.toNat]; intro H
+    simp [toNat]; intro H
     rw [Nat.mul_eq_zero] at H
     cases H
     case inl H' => revert H'; exact IH
     case inr H' => cases H'
   case xI p' _ =>
-    simp [Pos.toNat] 
+    simp [toNat] 
 
-private theorem Pos.ofNatWFAux (n n' : Nat) : n = n' + 2 → n / 2 < n := by
+private theorem ofNatWFAux (n n' : Nat) : n = n' + 2 → n / 2 < n := by
   intro H; apply Nat.div_lt_self
   case hLtN =>
     cases n;
@@ -41,17 +37,17 @@ private theorem Pos.ofNatWFAux (n n' : Nat) : n = n' + 2 → n / 2 < n := by
     apply Nat.succ_le_succ; apply Nat.zero_le
   case hLtK => apply Nat.le_refl
 
-def Pos.ofNatWF (n : Nat) :=
+def ofNatWF (n : Nat) :=
   match h : n with
   | 0 => xH
   | 1 => xH
   | _ + 2 =>
     match n % 2 with
-    | 0 => .xO (Pos.ofNatWF (n / 2))
-    | _ => .xI (Pos.ofNatWF (n / 2))
-decreasing_by apply Pos.ofNatWFAux; assumption
+    | 0 => .xO (ofNatWF (n / 2))
+    | _ => .xI (ofNatWF (n / 2))
+decreasing_by apply ofNatWFAux; assumption
 
-theorem Pos.ofNatWF.inductionOn.{u}
+theorem ofNatWF.inductionOn.{u}
   {motive : Nat → Sort u} (x : Nat)
   (ind : ∀ x, motive ((x + 2) / 2) → motive (x + 2))
   (base₀ : motive 0) (base₁ : motive 1) : motive x :=
@@ -59,42 +55,42 @@ theorem Pos.ofNatWF.inductionOn.{u}
   | 0 => base₀
   | 1 => base₁
   | x' + 2 => ind x' (inductionOn ((x' + 2) / 2) ind base₀ base₁)
-decreasing_by apply Pos.ofNatWFAux; rfl
+decreasing_by apply ofNatWFAux; rfl
 
-theorem Pos.ofNatWF.induction
+theorem ofNatWF.induction
   {motive : Nat → Sort u}
   (ind : ∀ x, motive ((x + 2) / 2) → motive (x + 2))
   (base₀ : motive 0) (base₁ : motive 1) : ∀ x, motive x :=
-  fun x => Pos.ofNatWF.inductionOn x ind base₀ base₁
+  fun x => ofNatWF.inductionOn x ind base₀ base₁
 
-theorem Pos.ofNatWF.succSucc (n : Nat) :
-  Pos.ofNatWF (n + 2) =
+theorem ofNatWF.succSucc (n : Nat) :
+  ofNatWF (n + 2) =
     match (n + 2) % 2 with
-    | 0 => .xO (Pos.ofNatWF ((n + 2) / 2))
-    | _ => .xI (Pos.ofNatWF ((n + 2) / 2)) := rfl
+    | 0 => .xO (ofNatWF ((n + 2) / 2))
+    | _ => .xI (ofNatWF ((n + 2) / 2)) := rfl
 
-theorem Pos.ofNatWF.double_xO (n : Nat) :
-  n ≠ 0 → Pos.ofNatWF (n * 2) = xO (Pos.ofNatWF n) :=
+theorem ofNatWF.double_xO (n : Nat) :
+  n ≠ 0 → ofNatWF (n * 2) = xO (ofNatWF n) :=
   match n with
   | 0 => by intro H; contradiction
   | 1 => fun _ => by simp [ofNatWF]
-  | n' + 2 => fun H => by
-    simp; rw [Nat.mul_comm, Nat.mul_add];
-    rw [Pos.ofNatWF.succSucc];
+  | n' + 2 => fun _ => by
+    rw [Nat.mul_comm, Nat.mul_add];
+    rw [ofNatWF.succSucc];
     have heq : (2 * n' + 2 + 2) % 2 = 0 := by
       rw [Nat.add_mod_right]; rw [Nat.add_mod_right]
       rw [Nat.mul_mod]; simp
     rw [heq]; simp
 
-theorem Pos.ofNatWF.doubleSucc_xI (n : Nat) :
-  n ≠ 0 → Pos.ofNatWF ((n * 2) + 1) = xI (Pos.ofNatWF n) :=
+theorem ofNatWF.doubleSucc_xI (n : Nat) :
+  n ≠ 0 → ofNatWF ((n * 2) + 1) = xI (ofNatWF n) :=
   match n with
   | 0 => by intro H; contradiction
   | 1 => fun _ => by simp [ofNatWF]
-  | n' + 2 => fun H => by
-    simp; rw [Nat.mul_comm, Nat.mul_add];
+  | n' + 2 => fun _ => by
+    rw [Nat.mul_comm, Nat.mul_add];
     have : (2 * n' + 2 * 2 + 1) = (2 * n') + 3 + 2 := rfl
-    rw [Pos.ofNatWF.succSucc];
+    rw [ofNatWF.succSucc];
     have heq : (2 * n' + 3 + 2) % 2 = 1 := by
       rw [Nat.add_mod_right]; rw [Nat.add_mod]
       rw [Nat.mul_mod]; simp
@@ -104,20 +100,20 @@ theorem Pos.ofNatWF.doubleSucc_xI (n : Nat) :
       rw [Nat.add_mul_div_left _ _ (by simp)]; rw [Nat.add_comm]; rfl;
     rw [heq']
 
-theorem Pos.ofNatWF_toNat (p : Pos) : Pos.ofNatWF (Pos.toNat p) = p := by
+theorem ofNatWF_toNat (p : Pos) : ofNatWF (toNat p) = p := by
   induction p
   case xH => rfl
   case xO p' IH =>
-    dsimp [Pos.toNat];
-    rw [Pos.ofNatWF.double_xO];
-    rw [IH]; apply Pos.toNat_not_zero
+    dsimp [toNat];
+    rw [ofNatWF.double_xO];
+    rw [IH]; apply toNat_not_zero
   case xI p' IH =>
-    dsimp [Pos.toNat];
-    rw [Pos.ofNatWF.doubleSucc_xI];
-    rw [IH]; apply Pos.toNat_not_zero
+    dsimp [toNat];
+    rw [ofNatWF.doubleSucc_xI];
+    rw [IH]; apply toNat_not_zero
 
-theorem Pos.toNat_ofNatWF (n : Nat) : n ≠ 0 → Pos.toNat (Pos.ofNatWF n) = n := by
-  revert n; apply Pos.ofNatWF.induction
+theorem toNat_ofNatWF (n : Nat) : n ≠ 0 → toNat (ofNatWF n) = n := by
+  revert n; apply ofNatWF.induction
   case base₀ => intro H; contradiction
   case base₁ => intro H; rfl
   case ind =>
@@ -148,7 +144,7 @@ theorem Pos.toNat_ofNatWF (n : Nat) : n ≠ 0 → Pos.toNat (Pos.ofNatWF n) = n 
       apply Nat.mod_lt; simp
       apply Nat.succ_le_succ; apply Nat.succ_le_succ; apply Nat.zero_le
 
-def Pos.ofNatRD (rd : Nat) (n : Nat) :=
+def ofNatRD (rd : Nat) (n : Nat) :=
   match rd with
   | 0 => xH
   | .succ rd' =>
@@ -157,10 +153,10 @@ def Pos.ofNatRD (rd : Nat) (n : Nat) :=
     | 1 => xH
     | _ =>
       match Nat.mod n 2 with
-      | 0 => .xO (Pos.ofNatRD rd' (Nat.div n 2))
-      | _ => .xI (Pos.ofNatRD rd' (Nat.div n 2))
+      | 0 => .xO (ofNatRD rd' (Nat.div n 2))
+      | _ => .xI (ofNatRD rd' (Nat.div n 2))
 
-theorem Pos.ofNat.equivAux (rd n : Nat) : rd ≥ n → Pos.ofNatWF n = Pos.ofNatRD rd n := by
+theorem ofNat.equivAux (rd n : Nat) : rd ≥ n → ofNatWF n = ofNatRD rd n := by
   revert n; induction rd <;> intros n H
   case zero =>
     have hzero : n = 0 := Nat.eq_zero_of_le_zero H
@@ -171,7 +167,7 @@ theorem Pos.ofNat.equivAux (rd n : Nat) : rd ≥ n → Pos.ofNatWF n = Pos.ofNat
     | 0 => rfl
     | 1 => rfl
     | n' + 2 =>
-      rw [Pos.ofNatWF.succSucc]; simp;
+      rw [ofNatWF.succSucc]; simp;
       have heq' : Nat.mod (n' + 2) 2 = n' % 2 := by
         suffices (n' + 2) % 2 = n' % 2 by exact this
         rw [Nat.add_mod_right]
@@ -183,110 +179,107 @@ theorem Pos.ofNat.equivAux (rd n : Nat) : rd ≥ n → Pos.ofNatWF n = Pos.ofNat
       case a.a => apply Nat.succ_le_succ; apply Nat.div_le_self
       case a.a => apply Nat.le_of_succ_le_succ H
 
-def Pos.ofNat n := Pos.ofNatRD n n
+def ofNat n := ofNatRD n n
 
-theorem Pos.ofNat.equiv (n : Nat) : Pos.ofNatWF n = Pos.ofNat n :=
-  Pos.ofNat.equivAux n n (Nat.le_refl _)
+theorem ofNat.equiv (n : Nat) : ofNatWF n = ofNat n :=
+  ofNat.equivAux n n (Nat.le_refl _)
 
-def Bin.ofNat (n : Nat) : Bin :=
-  match n with
-  | 0 => zero
-  | _ => pos (Pos.ofNat n)
-
-def Pos.beq : (p q : Pos) → Bool
+def beq : (p q : Pos) → Bool
 | xH,    xH    => true
 | xO p', xO q' => p'.beq q'
 | xI p', xI q' => p'.beq q'
 | _,     _     => false
 
-theorem Pos.beq_refl (p : Pos) : p.beq p = true := by
+theorem beq_refl (p : Pos) : p.beq p = true := by
   induction p
   case xH => rfl
   case xO p' IH => simp [beq, IH]
   case xI p' IH => simp [beq, IH]
 
-theorem Pos.beq_eq : (p q : Pos) → p.beq q = true → p = q
+theorem beq_eq : (p q : Pos) → p.beq q = true → p = q
 | xH,    xH    => fun _ => rfl
 | xH,    xO  _ => fun H => by cases H
 | xH,    xI _  => fun H => by cases H
 | xO _,  xH    => fun H => by cases H
-| xO p', xO q' => fun H => by simp [beq, Pos.beq_eq p' q' H]
+| xO p', xO q' => fun H => by simp [beq, beq_eq p' q' H]
 | xO p', xI q' => fun H => by cases H
 | xI _,  xH    => fun H => by cases H
 | xI _,  xO _  => fun H => by cases H
-| xI p', xI q' => fun H => by simp [beq, Pos.beq_eq p' q' H]
+| xI p', xI q' => fun H => by simp [beq, beq_eq p' q' H]
+
+theorem beq_eq_false_ne (p q : Pos) : p.beq q = false → p ≠ q :=
+  match he : p.beq q with
+  | true => fun h => by cases h
+  | false => fun _ he' => by cases he'; rw [beq_refl] at he; cases he
 
 instance : BEq Pos where
-  beq := Pos.beq
+  beq := beq
 
-def Pos.succ (p : Pos) : Pos :=
+def succ (p : Pos) : Pos :=
   match p with
   | xH     => .xO .xH
   | .xO p' => .xI p'
-  | .xI p' => .xO (Pos.succ p')
+  | .xI p' => .xO (succ p')
 
-def Pos.predXO : Pos → Pos
+def predXO : Pos → Pos
 | xH   => xH
 | xO p => xI (predXO p)
 | xI p => xI (xO p)
 
-def Pos.pred (p : Pos) : Pos :=
+def pred (p : Pos) : Pos :=
   match p with
   | xH      => .xH
   | xO p'  => p'.predXO
   | xI p'  => .xO p'
 
-def Bin.ofPredPos : (p : Pos) → Bin
-| .xH    => zero
-| .xO p' => pos (.predXO p')
-| .xI p' => pos (.xO p')
-
-theorem Pos.succ_neq (p : Pos) : p ≠ Pos.succ p := by
+theorem succ_neq (p : Pos) : p ≠ succ p := by
   cases p <;> intro h <;> contradiction
 
-theorem Pos.pred_neq (p : Pos) : p ≠ .xH → p ≠ Pos.pred p := by
+theorem pred_neq (p : Pos) : p ≠ .xH → p ≠ pred p := by
   cases p <;> intro h₁ h₂ <;> try contradiction
   case xO p' => cases p' <;> try contradiction
 
-theorem Pos.predXO_spec (p : Pos) : p.predXO = (xO p).pred := by
+theorem predXO_spec (p : Pos) : p.predXO = (xO p).pred := by
   cases p <;> rfl
 
-theorem Pos.succ_predXO (p : Pos) : succ (predXO p) = xO p := by
+theorem succ_predXO (p : Pos) : succ (predXO p) = xO p := by
   induction p <;> try rfl
   case xO a IH => simp [predXO, succ, IH]
 
-theorem Pos.predXO_succ (p : Pos) : predXO (succ p) = xI p := by
+theorem predXO_succ (p : Pos) : predXO (succ p) = xI p := by
   induction p <;> try rfl
   case xI a IH => simp [predXO, succ, IH]
 
-theorem Pos.double_succ (p : Pos) : xO (succ p) = succ (succ (xO p)) := by
+theorem double_succ (p : Pos) : xO (succ p) = succ (succ (xO p)) := by
   cases p <;> rfl
 
-theorem Pos.predXO_neq_xO (p : Pos) : predXO p ≠ xO p := by
+theorem predXO_neq_xO (p : Pos) : predXO p ≠ xO p := by
   cases p <;> intro h <;> contradiction
 
-theorem succ_not_1 (p : Pos) : Pos.succ p ≠ .one := by
+theorem succ_not_1 (p : Pos) : succ p ≠ .one := by
   cases p <;> intro h <;> try contradiction
 
-theorem Pos.pred_succ_eq (p : Pos) : Pos.pred (.succ p) = p := by
+theorem pred_succ_eq (p : Pos) : pred (.succ p) = p := by
   cases p <;> try rfl
   case xI p' => apply predXO_succ
 
-theorem Pos.succ_pred_xO (p : Pos) : succ (pred (xO p)) = xO p := by
+theorem succ_pred_xO (p : Pos) : succ (pred (xO p)) = xO p := by
   induction p <;> try rfl
   case xO p' IH =>
     dsimp [succ, pred]; dsimp [succ, pred] at IH; rw [IH]
 
-theorem Pos.succ_pred_xI (p : Pos) : succ (pred (xI p)) = xI p := by
+theorem succ_pred_xI (p : Pos) : succ (pred (xI p)) = xI p := by
   cases p <;> rfl
 
-theorem Pos.neq_XH_succ_pred_eq (p : Pos) : p ≠ .xH → Pos.succ (Pos.pred p) = p := by
+theorem neq_XH_succ_pred_eq (p : Pos) : p ≠ .xH → succ (pred p) = p := by
   cases p <;> intro h
   case xH => contradiction
-  case xO _ => apply Pos.succ_pred_xO
-  case xI _ => apply Pos.succ_pred_xI
+  case xO _ => apply succ_pred_xO
+  case xI _ => apply succ_pred_xI
 
-theorem Pos.succ_inj (p q : Pos) : Pos.succ p = Pos.succ q → p = q := fun H =>
-  Pos.pred_succ_eq p ▸ Pos.pred_succ_eq q ▸ (congrArg _ H : pred (succ p) = pred (succ q))
+theorem succ_inj (p q : Pos) : succ p = succ q → p = q := fun H =>
+  pred_succ_eq p ▸ pred_succ_eq q ▸ (congrArg _ H : pred (succ p) = pred (succ q))
 
-end Auto.BinNat
+end Pos
+
+end Auto
