@@ -1,3 +1,4 @@
+import Auto.MathlibEmulator
 import Std.Data.Nat.Lemmas
 
 namespace Auto
@@ -6,7 +7,7 @@ inductive Pos where
   | xH : Pos
   | xO : Pos → Pos
   | xI : Pos → Pos
-deriving Inhabited
+deriving Inhabited, Hashable, Lean.ToExpr
 
 namespace Pos
 
@@ -183,6 +184,12 @@ def ofNat n := ofNatRD n n
 
 theorem ofNat.equiv (n : Nat) : ofNatWF n = ofNat n :=
   ofNat.equivAux n n (Nat.le_refl _)
+
+def reprPrec (p : Pos) (_ : Nat) : Lean.Format :=
+  f!"Pos.ofNat {p.toNat}"
+
+instance : Repr Pos where
+  reprPrec := Pos.reprPrec
 
 def beq : (p q : Pos) → Bool
 | xH,    xH    => true
