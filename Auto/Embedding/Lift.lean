@@ -35,10 +35,6 @@ structure IsomType (α : Sort u) (β : Sort v) where
   eq₁ : ∀ (x : α), g (f x) = x
   eq₂ : ∀ (x : β), f (g x) = x
 
-structure IsomType' (β : Sort v) where
-  α : Sort u
-  isom : IsomType α β
-
 -- Isomorphic domain, β is the lifted one
 def eqLift.{u, v, w} {α : Sort u} {β : Sort v} (I : IsomType α β) (x y : β) :=
   GLift.up.{_, w} (I.g x = I.g y)
@@ -61,7 +57,7 @@ structure EqLift (β : Sort u) where
   down : ∀ (x y : β), (eqF x y).down → x = y
   up   : ∀ (x y : β), x = y → (eqF x y).down
 
-def EqLift.ofEqLift {α : Sort u} {β : Sort v} (I : IsomType α β) : EqLift.{v, w} β :=
+def EqLift.ofIsomTy {α : Sort u} {β : Sort v} (I : IsomType α β) : EqLift.{v, w} β :=
   ⟨eqLift.{u, v, w} I, eqLift.down.{u, v, w} I, eqLift.up.{u, v, w} I⟩
 
 def eqLiftFn.{u} {β : Type u} (x y : β) := GLift.up.{1, u} (@Eq β x y)
@@ -93,7 +89,7 @@ structure ForallLift (β : Sort v') where
   down    : ∀ (p : β → GLift.{w + 1, v} (Sort w)), (forallF p).down → (∀ x : β, (p x).down)
   up      : ∀ (p : β → GLift.{w + 1, v} (Sort w)), (∀ x : β, (p x).down) → (forallF p).down
  
-def ForallLift.ofForallLift.{u, v, w, x} {α : Sort u} {β : Sort v} (I : IsomType α β) : ForallLift β :=
+def ForallLift.ofIsomTy.{u, v, w, x} {α : Sort u} {β : Sort v} (I : IsomType α β) : ForallLift β :=
   ⟨forallLift.{u, v, w, x} I, forallLift.down I, forallLift.up I⟩
 
 def forallLiftFn.{u} (β : Type u) (p : β → GLift.{1, u} Prop) := GLift.up.{1, u} (∀ x, GLift.down (p x))
@@ -123,12 +119,33 @@ structure ExistLift (β : Sort v') where
   down    : ∀ (p : β → GLift.{1, v} Prop), (existF p).down → (∃ x : β, (p x).down)
   up      : ∀ (p : β → GLift.{1, v} Prop), (∃ x : β, (p x).down) → (existF p).down
 
-def ExistLift.ofExistLift.{u, v, x} {α : Sort u} {β : Sort v} (I : IsomType α β) : ExistLift β :=
+def ExistLift.ofIsomTy.{u, v, x} {α : Sort u} {β : Sort v} (I : IsomType α β) : ExistLift β :=
   ⟨existLift.{u, v, x} I, existLift.down I, existLift.up I⟩
 
 def existLiftFn.{u} (β : Type u) (p : β → GLift.{1, u} Prop) := GLift.up.{1, u} (∃ x, GLift.down (p x))
 
 def ExistLift.default (β : Sort v') : ExistLift.{v', w} β :=
   ⟨fun (p : β → GLift.{1, w} Prop) => GLift.up (∃ (x : β), GLift.down (p x)), fun _ => id, fun _ => id⟩
+
+-- !! First generalization (of `EqLift`)
+--
+-- structure FLift (β : Sort u) (f : ∀ (α : Sort u), α → α → Prop) where
+--   fF   : β → β → Prop
+--   down : ∀ (x y : β), fF x y → f β x y
+--   up   : ∀ (x y : β), f β x y → fF x y
+--
+-- !! Rewrite of the above `FLift`
+--
+-- structure FLift (β : Sort u) (f : ∀ (α : Sort u), PProd α α → Prop) where
+--   fF   : PProd β β → Prop
+--   down : ∀ (x y : β), fF ⟨x, y⟩ → f β ⟨x, y⟩
+--   up   : ∀ (x y : β), f β ⟨x, y⟩ → fF ⟨x, y⟩
+--
+-- !!Second Generalization (of the above `FLift`)
+--
+-- structure FLift (β : Sort u) (γ : Sort u → Sort u) (f : ∀ (α : Sort u), γ α → Prop) where
+--   fF   : γ β → Prop
+--   down : ∀ (x : γ β), fF x → f β x
+--   up   : ∀ (x : γ β), f β x → fF x
 
 end Auto.Embedding

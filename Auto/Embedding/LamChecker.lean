@@ -78,7 +78,7 @@ abbrev importTablePSigmaDefault (lval : LamValuation.{u}) :
 
 def ImportTable.importFacts (it : ImportTable lval) : BinTree (List LamSort × LamTerm) :=
   it.mapOpt (fun ⟨p, _⟩ =>
-    match p.lamCheck? lval.ilVal.toLamTyVal dfLCtxTy with
+    match p.lamCheck? lval.toLamTyVal dfLCtxTy with
     | .some (.base .prop) =>
       match p.maxLooseBVarSucc with
       | 0 => .some ([], p)
@@ -90,7 +90,7 @@ theorem ImportTable.importFacts_correct (it : ImportTable lval) :
   dsimp [RTable.validInv, importFacts]; rw [BinTree.mapOpt_allp]
   intro n; apply Option.allp_uniform;
   intro ⟨p, validp⟩; dsimp
-  cases h₁ : LamTerm.lamCheck? lval.ilVal.toLamTyVal dfLCtxTy p <;> try exact True.intro
+  cases h₁ : LamTerm.lamCheck? lval.toLamTyVal dfLCtxTy p <;> try exact True.intro
   case a.some s =>
     cases s <;> try exact True.intro
     case base b =>
@@ -155,11 +155,11 @@ def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → REntry
 
 theorem ChkStep.eval_correct
   (lval : LamValuation.{u}) (r : RTable) (inv : r.inv lval) :
-  (cs : ChkStep) → REntry.correct lval (cs.eval lval.ilVal.toLamTyVal r)
+  (cs : ChkStep) → REntry.correct lval (cs.eval lval.toLamTyVal r)
 | .nop => True.intro
 | .wfOfCheck lctx t => by
   dsimp [eval]
-  cases h₁ : LamTerm.lamCheck? lval.ilVal.toLamTyVal (pushLCtxs lctx dfLCtxTy) t <;> try exact True.intro
+  cases h₁ : LamTerm.lamCheck? lval.toLamTyVal (pushLCtxs lctx dfLCtxTy) t <;> try exact True.intro
   case some s =>
     cases h₂ : Nat.ble (LamTerm.maxLooseBVarSucc t) (List.length lctx) <;> try exact True.intro
     dsimp [REntry.correct]; apply LamThmWFP.ofLamThmWF
@@ -240,10 +240,10 @@ def ChkStep.run (ltv : LamTyVal) (r : RTable) (c : ChkStep) (n : Nat) : RTable :
 
 theorem ChkStep.run_correct
   (lval : LamValuation.{u}) (r : RTable) (inv : r.inv lval) (c : ChkStep) (n : Nat) :
-  (ChkStep.run lval.ilVal.toLamTyVal r c n).inv lval := by
+  (ChkStep.run lval.toLamTyVal r c n).inv lval := by
   dsimp [ChkStep.run]
   have eval_correct := ChkStep.eval_correct lval r inv c; revert eval_correct
-  cases h : eval lval.ilVal.toLamTyVal r c <;> intro eval_correct
+  cases h : eval lval.toLamTyVal r c <;> intro eval_correct
   case none => exact inv
   case wf lctx s t =>
     apply And.intro
@@ -268,12 +268,12 @@ def ChkSteps.run (ltv : LamTyVal) (r : RTable) (cs : ChkSteps) : RTable :=
 
 theorem ChkSteps.run_correct
   (lval : LamValuation.{u}) (r : RTable) (inv : r.inv lval) (cs : ChkSteps) :
-  (ChkSteps.run lval.ilVal.toLamTyVal r cs).inv lval := by
+  (ChkSteps.run lval.toLamTyVal r cs).inv lval := by
   dsimp [ChkSteps.run]; apply BinTree.foldl_inv (RTable.inv lval) inv
   intro r (c, n) inv'; exact ChkStep.run_correct lval r inv' c n
 
 def ChkSteps.runFromBeginning (lval : LamValuation.{u}) (it : ImportTable lval) (cs : ChkSteps) :=
-  ChkSteps.run lval.ilVal.toLamTyVal ⟨.leaf, it.importFacts⟩ cs
+  ChkSteps.run lval.toLamTyVal ⟨.leaf, it.importFacts⟩ cs
 
 theorem Checker
   (lval : LamValuation.{u}) (it : ImportTable lval) (cs : ChkSteps) :

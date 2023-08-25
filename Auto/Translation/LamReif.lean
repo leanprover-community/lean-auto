@@ -44,15 +44,10 @@ structure State where
   -- The `Expr` is the un-lifted counterpart of `FVarId`
   -- The `LamSort` is the λ sort of the atom
   varVal      : Array (FVarId × Expr × LamSort) := #[]
-  isomTys     : Array LamSort                   := #[]
-  -- Inverse of ``isomTys
+  -- lamILTy
+  lamILTy     : Array LamSort                   := #[]
+  -- Inverse of `lamILTy`
   isomTyMap   : HashMap LamSort Nat             := HashMap.empty
-  -- If `eqLamVal[n] = s`, then `s` is the corresponding
-  --   sort where we'll use in `<eq/forall/exist>LamVal n`
-  -- The same holds for `forallLamVal` and `existLamVal`
-  eqLamVal     : Array Nat                       := #[]
-  forallLamVal : Array Nat                       := #[]
-  existLamVal  : Array Nat                       := #[]
   -- This array contains assertions that have external (lean) proof
   --   The first `e : Expr` is the proof of the assertion
   --   The second `t : LamTerm` is the corresponding λ term,
@@ -75,9 +70,8 @@ structure State where
   -- Something about the universes level `u`
   -- Suppose `u ← getU`
   -- 1. `tyVal : Nat → Type u`
-  -- 2. `ILValuation.{u}`
-  -- 3. `LamValuation.{u}`
-  -- 4. All the `GLift/GLift.up/GLift.down` has level parameter list `[?, u]`
+  -- 2. `LamValuation.{u}`
+  -- 3. All the `GLift/GLift.up/GLift.down` has level parameter list `[?, u]`
 deriving Inhabited
 
 abbrev ReifM := StateRefT State ULiftM
@@ -86,14 +80,14 @@ abbrev ReifM := StateRefT State ULiftM
 
 #genMonadState ReifM
 
-def sort2IsomTysIdx (s : LamSort) : ReifM Nat := do
+def sort2LamILTyIdx (s : LamSort) : ReifM Nat := do
   let isomTyMap ← getIsomTyMap
   match isomTyMap.find? s with
   | .some n => return n
   | .none =>
-    let isomTys ← getIsomTys
-    let idx := isomTys.size
-    setIsomTys (isomTys.push s)
+    let lamILTy ← getLamILTy
+    let idx := lamILTy.size
+    setLamILTy (lamILTy.push s)
     setIsomTyMap (isomTyMap.insert s idx)
     return idx
 
@@ -110,29 +104,11 @@ def lookupVarVal! (n : Nat) : ReifM (FVarId × Expr × LamSort) := do
   else
     throwError "lookupVarVal! :: Unknown term atom {n}"
 
-def lookupIsomTy! (idx : Nat) : ReifM LamSort := do
-  if let .some s := (← getIsomTys)[idx]? then
+def lookupLamILTy! (idx : Nat) : ReifM LamSort := do
+  if let .some s := (← getLamILTy)[idx]? then
     return s
   else
     throwError "lookupIsomTy! :: Unknown index {idx}"
-
-def lookupEqLamVal! (n : Nat) : ReifM LamSort := do
-  if let .some idx := (← getEqLamVal)[n]? then
-    lookupIsomTy! idx
-  else
-    throwError "lookupEqLamVal! :: Unknown eq {n}"
-
-def lookupForallLamVal! (n : Nat) : ReifM LamSort := do
-  if let .some idx := (← getForallLamVal)[n]? then
-    lookupIsomTy! idx
-  else
-    throwError "lookupForallLamVal! :: Unknown forall {n}"
-
-def lookupExistLamVal! (n : Nat) : ReifM LamSort := do
-  if let .some idx := (← getExistLamVal)[n]? then
-    lookupIsomTy! idx
-  else
-    throwError "lookupExistLamVal! :: Unknown exist {n}"
 
 def lookupImportMap! (wPos : Nat) : ReifM Nat := do
   if let .some idx := (← getImportMap).find? wPos then
@@ -158,25 +134,6 @@ def lookupValidTable! (vPos : Nat) : ReifM (List LamSort ×  LamTerm) := do
   else
     throwError "lookupValidTable! :: Unknown validTable entry {vPos}"
 
--- Return the `n` we'll put in `.base (.eqI n)`
-def eqIIdx (sort : LamSort) : ReifM Nat := do
-  let eqLamVal ← getEqLamVal
-  let idx := eqLamVal.size
-  setEqLamVal (eqLamVal.push (← sort2IsomTysIdx sort))
-  return idx
-
-def forallEIIdx (sort : LamSort) : ReifM Nat := do
-  let forallLamVal ← getForallLamVal
-  let idx := forallLamVal.size
-  setForallLamVal (forallLamVal.push (← sort2IsomTysIdx sort))
-  return idx
-
-def existEIIdx (sort : LamSort) : ReifM Nat := do
-  let existLamVal ← getExistLamVal
-  let idx := existLamVal.size
-  setExistLamVal (existLamVal.push (← sort2IsomTysIdx sort))
-  return idx
-
 -- Functions which models checker steps on the `meta` level
 -- Steps that only requires looking at the `LamTerm`s and does not
 --   require looking up the valuation should be put in the files
@@ -184,9 +141,9 @@ def existEIIdx (sort : LamSort) : ReifM Nat := do
 --   on the `meta` level
 
 def resolveLamBaseTermImport : LamBaseTerm → ReifM LamBaseTerm
-| .eqI n      => do return .eq (← lookupEqLamVal! n)
-| .forallEI n => do return .forallE (← lookupForallLamVal! n)
-| .existEI n  => do return .existE (← lookupExistLamVal! n)
+| .eqI n      => do return .eq (← lookupLamILTy! n)
+| .forallEI n => do return .forallE (← lookupLamILTy! n)
+| .existEI n  => do return .existE (← lookupLamILTy! n)
 | t           => pure t
 
 def resolveImport : LamTerm → ReifM LamTerm
@@ -292,32 +249,14 @@ section ILLifting
     let isomTy : Expr := mkAppN (.const ``Embedding.IsomType.mk [uOrig, .succ u]) #[ty, upTy, upFunc, downFunc, eq₁, eq₂]
     return isomTy
 
-  -- Suppose `u ← getU`, this function returns a term of type `EqLift.{u + 1, u} s.interpAsLifted`
-  def mkImportingEqLift (s : LamSort) := do
+  -- Suppose `u ← getU`, this function returns a term of type `ILLift.{u} s.interpAsLifted`
+  def mkImportingILLift (s : LamSort) := do
     let (upFunc, downFunc, ty, upTy, uOrig) ← mkImportAux s
     let isomTy ← mkIsomType upFunc downFunc ty upTy uOrig
-    let eqLift := mkAppN (.const ``EqLift.ofEqLift [uOrig, .succ (← getU), (← getU)]) #[ty, upTy, isomTy]
-    if !(← Util.Meta.isTypeCorrectCore eqLift) then
-      throwError "mkImportingEqLift :: Malformed eqLift {eqLift}"
-    return eqLift
-
-  -- Suppose `u ← getU`, this function returns a term of type `ForallLift.{u + 1, u, 0, 0} s.interpAsLifted`
-  def mkImportingForallLift (s : LamSort) := do
-    let (upFunc, downFunc, ty, upTy, uOrig) ← mkImportAux s
-    let isomTy ← mkIsomType upFunc downFunc ty upTy uOrig
-    let forallLift := mkAppN (.const ``ForallLift.ofForallLift [uOrig, .succ (← getU), .zero, (← getU)]) #[ty, upTy, isomTy]
-    if !(← Util.Meta.isTypeCorrectCore forallLift) then
-      throwError "mkImportingForallLift :: Malformed forallLift {forallLift}"
-    return forallLift
-
-  -- Suppose `u ← getU`, this function returns a term of type `ExistLift.{u + 1, u} s.interpAsLifted`
-  def mkImportingExistLift (s : LamSort) := do
-    let (upFunc, downFunc, ty, upTy, uOrig) ← mkImportAux s
-    let isomTy ← mkIsomType upFunc downFunc ty upTy uOrig
-    let existLift := mkAppN (.const ``ExistLift.ofExistLift [uOrig, .succ (← getU), (← getU)]) #[ty, upTy, isomTy]
-    if !(← Util.Meta.isTypeCorrectCore existLift) then
-      throwError "mkImportingExistLift :: Malformed existLift {existLift}"
-    return existLift
+    let ilLift := mkAppN (.const ``ILLift.ofIsomTy [uOrig, (← getU)]) #[ty, upTy, isomTy]
+    if !(← Util.Meta.isTypeCorrectCore ilLift) then
+      throwError "mkImportingEqLift :: Malformed eqLift {ilLift}"
+    return ilLift
 
 end ILLifting
 
@@ -336,15 +275,15 @@ def newTermFVar (fvty : FVarType) (id : FVarId) (sort : LamSort) : ReifM LamTerm
     setVarMap (varMap.insert id (fvty, idx))
     return .atom idx
   | .eqVar =>
-    let idx ← eqIIdx sort
+    let idx ← sort2LamILTyIdx sort
     setVarMap (varMap.insert id (fvty, idx))
     return .base (.eqI idx)
   | .forallVar =>
-    let idx ← forallEIIdx sort
+    let idx ← sort2LamILTyIdx sort
     setVarMap (varMap.insert id (fvty, idx))
     return .base (.forallEI idx)
   | .existVar =>
-    let idx ← existEIIdx sort
+    let idx ← sort2LamILTyIdx sort
     setVarMap (varMap.insert id (fvty, idx))
     return .base (.existEI idx)
 
@@ -551,9 +490,7 @@ section Checker
   def checkerStats : ReifM (Array (String × Nat)) := do
     let ret : Array (String × Nat) := #[]
     let ret := ret.push ("tyVal", (← getTyVal).size)
-    let ret := ret.push ("eqLamVal", (← getEqLamVal).size)
-    let ret := ret.push ("forallLamVal", (← getForallLamVal).size)
-    let ret := ret.push ("existLamVal", (← getExistLamVal).size)
+    let ret := ret.push ("ilLamTy", (← getLamILTy).size)
     let ret := ret.push ("importTable", (← getImportMap).size)
     let ret := ret.push ("chkSteps", (← getChkSteps).size)
     let ret := ret.push ("wfTable", (← getWfTable).size)
@@ -608,88 +545,38 @@ section Checker
       ) .default
     return (lamVarTyExpr, varValExpr)
 
-  -- **Build `eqLamVal` and `eqVal`**
-  def buildEqValExpr (tyValExpr : Expr) : ReifM (Expr × Expr) := do
+  -- **Build `lamILTy` and `ilVal`**
+  def buildILValExpr (tyValExpr : Expr) : ReifM (Expr × Expr) := do
     let u ← getU
     let lamSortExpr := Expr.const ``LamSort []
-    let eqLamVal ← (← getEqLamVal).data.mapM lookupIsomTy!
-    -- `eqs : List ((s : LamSort) × EqLift.{u + 1, u} (s.interp tyVal))`
-    let eqs ← eqLamVal.mapM (fun s => do
+    let lamILTy := (← getLamILTy).data
+    -- `ils : List ((s : LamSort) × ILLift.{u} (s.interp tyVal))`
+    let ils ← lamILTy.mapM (fun s => do
       let sExpr := toExpr s
-      let eqVal ← mkImportingEqLift s
-      return Lean.mkApp3 (.const ``eqValSigmaMk [u]) tyValExpr sExpr eqVal)
-    let eqBundleExpr := exprListToLCtx eqs u (Lean.mkApp2
+      let ilVal ← mkImportingILLift s
+      return Lean.mkApp3 (.const ``ilValSigmaMk [u]) tyValExpr sExpr ilVal)
+    let ilBundleExpr := exprListToLCtx ils u (Lean.mkApp2
       (.const ``Sigma [.zero, u]) lamSortExpr
-      (.app (.const ``eqValSigmaβ [u]) tyValExpr))
-      (.app (.const ``eqValSigmaDefault [u]) tyValExpr)
-    let eqLamValExpr := Expr.lam `n (.const ``Nat []) (
-        Lean.mkApp2 (.const ``eqValSigmaFst [u]) tyValExpr (.app eqBundleExpr (.bvar 0))
+      (.app (.const ``ilValSigmaβ [u]) tyValExpr))
+      (.app (.const ``ilValSigmaDefault [u]) tyValExpr)
+    let lamILTyExpr := Expr.lam `n (.const ``Nat []) (
+        Lean.mkApp2 (.const ``ilValSigmaFst [u]) tyValExpr (.app ilBundleExpr (.bvar 0))
       ) .default
-    let eqValExpr := Expr.lam `n (.const ``Nat []) (
-        Lean.mkApp2 (.const ``eqValSigmaSnd [u]) tyValExpr (.app eqBundleExpr (.bvar 0))
+    let ilValExpr := Expr.lam `n (.const ``Nat []) (
+        Lean.mkApp2 (.const ``ilValSigmaSnd [u]) tyValExpr (.app ilBundleExpr (.bvar 0))
       ) .default
-    return (eqLamValExpr, eqValExpr)
-
-  -- **Build `forallLamVal` and `forallVal`**
-  def buildForallValExpr (tyValExpr : Expr) : ReifM (Expr × Expr) := do
-    let u ← getU
-    let lamSortExpr := Expr.const ``LamSort []
-    let forallLamVal ← (← getForallLamVal).data.mapM lookupIsomTy!
-    -- `forallEs : List ((s : LamSort) × ForallLift.{u + 1, u, 0, 0} (s.interp tyVal))`
-    let forallEs ← forallLamVal.mapM (fun s => do
-      let sExpr := toExpr s
-      let forallVal ← mkImportingForallLift s
-      return Lean.mkApp3 (.const ``forallValSigmaMk [u]) tyValExpr sExpr forallVal)
-    let forallBundleExpr := exprListToLCtx forallEs u (Lean.mkApp2
-      (.const ``Sigma [.zero, u]) lamSortExpr
-      (.app (.const ``forallValSigmaβ [u]) tyValExpr))
-      (.app (.const ``forallValSigmaDefault [u]) tyValExpr)
-    let forallLamValExpr := Expr.lam `n (.const ``Nat []) (
-        Lean.mkApp2 (.const ``forallValSigmaFst [u]) tyValExpr (.app forallBundleExpr (.bvar 0))
-      ) .default
-    let forallValExpr := Expr.lam `n (.const ``Nat []) (
-        Lean.mkApp2 (.const ``forallValSigmaSnd [u]) tyValExpr (.app forallBundleExpr (.bvar 0))
-      ) .default
-    return (forallLamValExpr, forallValExpr)
-
-  -- **Build `existLamVal` and `existVal`**
-  def buildExistValExpr (tyValExpr : Expr) : ReifM (Expr × Expr) := do
-    let u ← getU
-    let lamSortExpr := Expr.const ``LamSort []
-    let existLamVal ← (← getExistLamVal).data.mapM lookupIsomTy!
-    -- `existEs : List ((s : LamSort) × ExistLift.{u + 1, u} (s.interp tyVal))`
-    let existEs ← existLamVal.mapM (fun s => do
-      let sExpr := toExpr s
-      let existVal ← mkImportingExistLift s
-      return Lean.mkApp3 (.const ``existValSigmaMk [u]) tyValExpr sExpr existVal)
-    let existBundleExpr := exprListToLCtx existEs u (Lean.mkApp2
-      (.const ``Sigma [.zero, u]) lamSortExpr
-      (.app (.const ``existValSigmaβ [u]) tyValExpr))
-      (.app (.const ``existValSigmaDefault [u]) tyValExpr)
-    let existLamValExpr := Expr.lam `n (.const ``Nat []) (
-        Lean.mkApp2 (.const ``existValSigmaFst [u]) tyValExpr (.app existBundleExpr (.bvar 0))
-      ) .default
-    let existValExpr := Expr.lam `n (.const ``Nat []) (
-        Lean.mkApp2 (.const ``existValSigmaSnd [u]) tyValExpr (.app existBundleExpr (.bvar 0))
-      ) .default
-    return (existLamValExpr, existValExpr)
+    return (lamILTyExpr, ilValExpr)
 
   def buildLamValuationExpr : ReifM Expr := do
-    let startTime ← IO.monoMsNow
+    -- let startTime ← IO.monoMsNow
     let u ← getU
     let tyValExpr ← buildTyVal
     let tyValTy := Expr.forallE `_ (.const ``Nat []) (.sort (.succ u)) .default
     let lamValuationExpr ← Meta.withLetDecl `tyVal tyValTy tyValExpr fun tyValFVarExpr => do
       let (lamVarTyExpr, varValExpr) ← buildVarValExpr tyValFVarExpr
-      let (eqLamValExpr, eqValExpr) ← buildEqValExpr tyValFVarExpr
-      let (forallLamValExpr, forallValExpr) ← buildForallValExpr tyValFVarExpr
-      let (existLamValExpr, existValExpr) ← buildExistValExpr tyValFVarExpr
-      let lamTyValExpr := Lean.mkApp4 (.const ``LamTyVal.mk [])
-        lamVarTyExpr eqLamValExpr forallLamValExpr existLamValExpr
-      let ilValuationExpr := Lean.mkApp5 (.const ``ILValuation.mk [u])
-        lamTyValExpr tyValExpr eqValExpr forallValExpr existValExpr
-      let lamValuationExpr := Lean.mkApp2 (.const ``LamValuation.mk [u])
-        ilValuationExpr varValExpr
+      let (lamILTyExpr, ilValExpr) ← buildILValExpr tyValFVarExpr
+      let lamTyValExpr := Lean.mkApp2 (.const ``LamTyVal.mk []) lamVarTyExpr lamILTyExpr
+      let lamValuationExpr := Lean.mkApp4 (.const ``LamValuation.mk [u]) lamTyValExpr tyValExpr ilValExpr varValExpr
       Meta.mkLetFVars #[tyValFVarExpr] lamValuationExpr
     -- if !(← Util.Meta.isTypeCorrectCore lamValuationExpr) then
     --   throwError "buildLamValuation :: Malformed LamValuation"
@@ -701,7 +588,7 @@ section Checker
 
   -- `lvalExpr` is the `LamValuation`
   def buildImportTableExpr (lvalExpr : Expr) : ReifM Expr := do
-    let startTime ← IO.monoMsNow
+    -- let startTime ← IO.monoMsNow
     let u ← getU
     let lamTermExpr := Expr.const ``LamTerm []
     -- Record the entries in the importTable for debug purpose
@@ -838,9 +725,9 @@ section ExportUtils
   | .atom n => return (.atom n)
   | .base b =>
     match b with
-    | .eq s      => return .base (.eqI (← eqIIdx s))
-    | .forallE s => return .base (.forallEI (← forallEIIdx s))
-    | .existE s  => return .base (.existEI (← existEIIdx s))
+    | .eq s      => return .base (.eqI (← sort2LamILTyIdx s))
+    | .forallE s => return .base (.forallEI (← sort2LamILTyIdx s))
+    | .existE s  => return .base (.existEI (← sort2LamILTyIdx s))
     | b => return .base b
   | .bvar n => return (.bvar n)
   | .lam s t => do

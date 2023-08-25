@@ -54,10 +54,10 @@ private def LamWF.subst
 private def LamWF.subst.correct.{u}
   (lval : LamValuation.{u}) (idx : Nat)
   {arg : LamTerm} {argTy : LamSort} {body : LamTerm} {bodyTy : LamSort} :
-  (lctxTy : Nat → LamSort) → (lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal) →
-  (wfArg : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, LamTerm.bvarLifts idx arg, argTy⟩) →
-  (wfBody : LamWF lval.ilVal.toLamTyVal ⟨pushLCtxAt argTy idx lctxTy, body, bodyTy⟩) →
-  let wfSubst' := LamWF.subst lval.ilVal.toLamTyVal idx lctxTy wfArg wfBody
+  (lctxTy : Nat → LamSort) → (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal) →
+  (wfArg : LamWF lval.toLamTyVal ⟨lctxTy, LamTerm.bvarLifts idx arg, argTy⟩) →
+  (wfBody : LamWF lval.toLamTyVal ⟨pushLCtxAt argTy idx lctxTy, body, bodyTy⟩) →
+  let wfSubst' := LamWF.subst lval.toLamTyVal idx lctxTy wfArg wfBody
   (LamWF.interp lval (pushLCtxAt argTy idx lctxTy)
     (pushLCtxAtDep (LamWF.interp lval lctxTy lctxTerm wfArg) idx lctxTerm) wfBody
   = LamWF.interp lval lctxTy lctxTerm wfSubst')
@@ -128,9 +128,9 @@ def LamWF.headBetaAux (ltv : LamTyVal)
 
 def LamWF.headBetaAux.correct.{u} (lval : LamValuation.{u})
   {arg : LamTerm} {argTy : LamSort} {fn : LamTerm} {resTy : LamSort}
-  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal)
-  (wfArg : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, arg, argTy⟩)
-  (wfFn : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, fn, .func argTy resTy⟩) :
+  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal)
+  (wfArg : LamWF lval.toLamTyVal ⟨lctxTy, arg, argTy⟩)
+  (wfFn : LamWF lval.toLamTyVal ⟨lctxTy, fn, .func argTy resTy⟩) :
   let wfHB := LamWF.headBetaAux _ lctxTy wfArg wfFn
   (LamWF.interp lval lctxTy lctxTerm (.ofApp _ wfFn wfArg)
   = LamWF.interp lval lctxTy lctxTerm wfHB) :=
@@ -182,9 +182,9 @@ def LamThmWF.headBeta
 
 theorem LamWF.headBeta.correct
   {lval : LamValuation.{u}} {t : LamTerm} {ty : LamSort}
-  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal)
-  (wfT : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, t, ty⟩) :
-  let wfHB := LamWF.headBeta lval.ilVal.toLamTyVal lctxTy wfT
+  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal)
+  (wfT : LamWF lval.toLamTyVal ⟨lctxTy, t, ty⟩) :
+  let wfHB := LamWF.headBeta lval.toLamTyVal lctxTy wfT
   LamWF.interp lval lctxTy lctxTerm wfT = LamWF.interp lval lctxTy lctxTerm wfHB :=
   match t with
   | .atom _ => rfl
@@ -201,9 +201,9 @@ theorem LamThmValid.headBeta (H : LamThmValid lval lctx t) :
   intro lctxTerm; rw [← LamWF.headBeta.correct]; apply h
 
 def LamBaseTerm.resolveImport (ltv : LamTyVal) : LamBaseTerm → LamBaseTerm
-| .eqI n      => .eq (ltv.eqLamVal n)
-| .forallEI n => .forallE (ltv.forallLamVal n)
-| .existEI n  => .existE (ltv.existLamVal n)
+| .eqI n      => .eq (ltv.lamILTy n)
+| .forallEI n => .forallE (ltv.lamILTy n)
+| .existEI n  => .existE (ltv.lamILTy n)
 | t           => t
 
 def LamBaseTerm.LamWF.resolveImport {ltv : LamTyVal} {b : LamBaseTerm} {ty : LamSort}
@@ -211,32 +211,32 @@ def LamBaseTerm.LamWF.resolveImport {ltv : LamTyVal} {b : LamBaseTerm} {ty : Lam
   cases wfB <;> constructor
 
 theorem LamBaseTerm.LamWF.resolveImport.correct
-  (ilVal : ILValuation.{u}) {b : LamBaseTerm} {ty : LamSort}
-  (wfB : LamBaseTerm.LamWF ilVal.toLamTyVal b ty) :
+  (lval : LamValuation.{u}) {b : LamBaseTerm} {ty : LamSort}
+  (wfB : LamBaseTerm.LamWF lval.toLamTyVal b ty) :
   let wfRB := LamBaseTerm.LamWF.resolveImport wfB
-  LamBaseTerm.LamWF.interp ilVal wfB = LamBaseTerm.LamWF.interp ilVal wfRB := by
+  LamBaseTerm.LamWF.interp lval wfB = LamBaseTerm.LamWF.interp lval wfRB := by
   cases wfB <;> first | rfl | dsimp [resolveImport, LamBaseTerm.resolveImport, interp]
   case ofEqI n =>
-    generalize ILValuation.eqVal ilVal n = eqVal
-    cases eqVal
-    case mk eqF eqDown eqUp =>
+    generalize LamValuation.ilVal lval n = ilVal
+    cases ilVal
+    case mk eqL _ _ =>
       apply funext; intros a; apply funext; intros b;
       apply GLift.down.inj; apply propext;
-      apply Iff.intro (eqDown _ _) (eqUp _ _)
+      apply Iff.intro (eqL.down _ _) (eqL.up _ _)
   case ofForallEI n =>
-    generalize ILValuation.forallVal ilVal n = eqVal
-    cases eqVal
-    case mk forallF forallDown forallUp =>
+    generalize LamValuation.ilVal lval n = ilVal
+    cases ilVal
+    case mk _ forallL _ =>
       apply funext; intros p;
       apply GLift.down.inj; apply propext;
-      apply Iff.intro (forallDown _) (forallUp _)
+      apply Iff.intro (forallL.down _) (forallL.up _)
   case ofExistEI n =>
-    generalize ILValuation.existVal ilVal n = eqVal
-    cases eqVal
-    case mk existF existDown existUp =>
+    generalize LamValuation.ilVal lval n = ilVal
+    cases ilVal
+    case mk _ _ existL =>
       apply funext; intros p;
       apply GLift.down.inj; apply propext;
-      apply Iff.intro (existDown _) (existUp _)
+      apply Iff.intro (existL.down _) (existL.up _)
 
 def LamTerm.resolveImport (ltv : LamTyVal) : LamTerm → LamTerm
 | .atom n       => .atom n
@@ -258,18 +258,18 @@ def LamWF.resolveImport
 
 def LamThmWF.resolveImport
   {lval : LamValuation} {lctx : List LamSort} {rty : LamSort} {t : LamTerm}
-  (wf : LamThmWF lval lctx rty t) : LamThmWF lval lctx rty (t.resolveImport lval.ilVal.toLamTyVal) :=
+  (wf : LamThmWF lval lctx rty t) : LamThmWF lval lctx rty (t.resolveImport lval.toLamTyVal) :=
   fun lctx => LamWF.resolveImport (wf lctx)
 
 theorem LamWF.resolveImport.correct
   {lval : LamValuation.{u}} {t : LamTerm} {ty : LamSort}
-  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.ilVal.tyVal)
-  (wfT : LamWF lval.ilVal.toLamTyVal ⟨lctxTy, t, ty⟩) :
+  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal)
+  (wfT : LamWF lval.toLamTyVal ⟨lctxTy, t, ty⟩) :
   let wfRB := LamWF.resolveImport wfT
   LamWF.interp lval lctxTy lctxTerm wfT = LamWF.interp lval lctxTy lctxTerm wfRB :=
   match wfT with
   | .ofAtom _ => rfl
-  | .ofBase b => LamBaseTerm.LamWF.resolveImport.correct lval.ilVal b
+  | .ofBase b => LamBaseTerm.LamWF.resolveImport.correct lval b
   | .ofBVar n => rfl
   | .ofLam s hwf => by
     apply funext; intros x; dsimp [interp]
@@ -280,7 +280,7 @@ theorem LamWF.resolveImport.correct
     rw [LamWF.resolveImport.correct _ _ wfArg]
 
 theorem LamThmValid.resolveImport (H : LamThmValid lval lctx t) :
-  LamThmValid lval lctx (t.resolveImport lval.ilVal.toLamTyVal) := by
+  LamThmValid lval lctx (t.resolveImport lval.toLamTyVal) := by
   intro lctx; let ⟨wf, h⟩ := H lctx;
   exists (LamWF.resolveImport wf); intro lctxTerm
   rw [← LamWF.resolveImport.correct]; apply h
@@ -292,9 +292,9 @@ theorem LamThmValid.resolveImport (H : LamThmValid lval lctx t) :
 def LamEquiv (lval : LamValuation) (lctx : List LamSort) (rty : LamSort)
   (t₁ t₂ : LamTerm) :=
   ∀ (lctx' : Nat → LamSort),
-    ∃ (wf₁ : LamWF lval.ilVal.toLamTyVal ⟨pushLCtxs lctx lctx', t₁, rty⟩),
-    ∃ (wf₂ : LamWF lval.ilVal.toLamTyVal ⟨pushLCtxs lctx lctx', t₂, rty⟩),
-    ∀ (lctxTerm : ∀ n, (pushLCtxs lctx lctx' n).interp lval.ilVal.tyVal),
+    ∃ (wf₁ : LamWF lval.toLamTyVal ⟨pushLCtxs lctx lctx', t₁, rty⟩),
+    ∃ (wf₂ : LamWF lval.toLamTyVal ⟨pushLCtxs lctx lctx', t₂, rty⟩),
+    ∀ (lctxTerm : ∀ n, (pushLCtxs lctx lctx' n).interp lval.tyVal),
     LamWF.interp lval (pushLCtxs lctx lctx') lctxTerm wf₁ =
       LamWF.interp lval (pushLCtxs lctx lctx') lctxTerm wf₂
 
@@ -351,9 +351,9 @@ theorem LamEquiv.fromLam (lval : LamValuation)
   let .ofLam _ Hb := wfb
   exists (pushLCtxs.cons _ _ ▸ Ha); exists (pushLCtxs.cons _ _ ▸ Hb);
   intros lctxTerm
-  let lctxTerm' : (n : Nat) → LamSort.interp lval.ilVal.tyVal (pushLCtxs lctx lctx' n) :=
+  let lctxTerm' : (n : Nat) → LamSort.interp lval.tyVal (pushLCtxs lctx lctx' n) :=
     fun n => pushLCtxs.cons_succ _ _ _ ▸ lctxTerm (.succ n)
-  let x : LamSort.interp lval.ilVal.tyVal w := by
+  let x : LamSort.interp lval.tyVal w := by
     let x' := lctxTerm 0
     rw [pushLCtxs.cons_zero] at x'
     exact x'
@@ -410,7 +410,7 @@ theorem LamEquiv.ofHeadBeta (wf : LamThmWF lval lctx s t) :
 
 theorem LamEquiv.ofResolveImport
   (lval : LamValuation) (wfT : LamThmWF lval lctx s t) :
-  LamEquiv lval lctx s t (t.resolveImport lval.ilVal.toLamTyVal) := by
+  LamEquiv lval lctx s t (t.resolveImport lval.toLamTyVal) := by
   dsimp [LamEquiv]; intros lctx';
   let wfT' := wfT lctx'; exists wfT'; exists (LamWF.resolveImport wfT')
   intros lctxTerm; apply LamWF.resolveImport.correct
@@ -527,8 +527,8 @@ def LamWF.impApp
       | false => exact wf
 
 theorem LamWF.impApp.correct {t₁₂ t₁ : LamTerm}
-  (wf₁₂ : LamWF lval.ilVal.toLamTyVal ⟨lctx, t₁₂, .base .prop⟩)
-  (wf₁ : LamWF lval.ilVal.toLamTyVal ⟨lctx, t₁, .base .prop⟩)
+  (wf₁₂ : LamWF lval.toLamTyVal ⟨lctx, t₁₂, .base .prop⟩)
+  (wf₁ : LamWF lval.toLamTyVal ⟨lctx, t₁, .base .prop⟩)
   (valid₁₂ : GLift.down (LamWF.interp lval lctx lctxTerm wf₁₂))
   (valid₁ : GLift.down (LamWF.interp lval lctx lctxTerm wf₁)) :
   GLift.down (LamWF.interp lval lctx lctxTerm (LamWF.impApp (t₁:=t₁) _ _ wf₁₂)) := by
