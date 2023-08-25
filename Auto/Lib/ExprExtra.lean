@@ -1,7 +1,7 @@
 import Lean
 open Lean Elab Command
 
-namespace Auto.Util
+namespace Auto
 
 def Expr.binders (e : Expr) : Array (Name × Expr × BinderInfo) :=
   let rec aux (e : Expr) :=
@@ -20,7 +20,7 @@ def normalizeType (ty : Expr) : MetaM Expr := do
 -- Compiles `term` into `Expr`, then applies `ident` to it
 syntax (name := getExprAndApply) "#getExprAndApply" "[" term "|" ident "]" : command
 
-@[command_elab Auto.Util.getExprAndApply]
+@[command_elab Auto.getExprAndApply]
 unsafe def elabGetExprAndApply : CommandElab := fun stx =>
   runTermElabM fun _ => do
     match stx with
@@ -85,7 +85,7 @@ register_option lazyReduce.printTime : Bool := {
 }
 
 open Meta in
-@[command_elab Auto.Util.lazyReduce] def elabLazyReduce : CommandElab
+@[command_elab Auto.lazyReduce] def elabLazyReduce : CommandElab
   | `(#lazyReduce%$tk $term) => withoutModifyingEnv <| runTermElabM fun _ => Term.withDeclName `_reduce do
     let startTime ← IO.monoMsNow
     let e ← Term.elabTerm term none
@@ -204,4 +204,4 @@ section EvalAtTermElabM
 
 end EvalAtTermElabM
       
-end Auto.Util
+end Auto

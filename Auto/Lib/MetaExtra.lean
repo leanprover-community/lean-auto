@@ -4,7 +4,7 @@ open Lean Meta Elab
 initialize
   registerTraceClass `auto.metaExtra
 
-namespace Auto.Util
+namespace Auto
 
 def Meta.withoutMVarAssignments (m : MetaM α) : MetaM α := do
   let mctx ← getMCtx
@@ -109,4 +109,4 @@ def Meta.isTypeCorrectCore (e : Expr) : MetaM Bool := do
     trace[auto.metaExtra] msg
     pure false
 
-end Auto.Util
+end Auto

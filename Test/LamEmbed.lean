@@ -1,5 +1,5 @@
 import Auto.Embedding.LamBase
-import Auto.Util.ExprExtra
+import Auto.Lib.ExprExtra
 
 open Auto.Embedding.Lam
 

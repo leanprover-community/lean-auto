@@ -1,8 +1,8 @@
 import Lean
-import Auto.Util.DeCompile
+import Auto.Lib.DeCompile
 open Lean Elab Command
 
-namespace Auto.Util
+namespace Auto
 
 -- Given
 -- 1. structure State (param₁ ... paramₙ) where
@@ -165,18 +165,18 @@ where
       addDefnitionValFromExpr fnBody setFnName
       fieldCnt := fieldCnt + 1
 
-@[command_elab Auto.Util.genMonadContext]
+@[command_elab Auto.genMonadContext]
 def elabGenMonadContext : CommandElab := fun stx => withRef stx do
   match stx with
   | `(command | #genMonadContext $m:term) =>
     elabGenMonadContextAux m stx
   | _ => throwUnsupportedSyntax
 
-@[command_elab Auto.Util.genMonadState]
+@[command_elab Auto.genMonadState]
 def elabGenMonadState : CommandElab := fun stx => withRef stx do
   match stx with
   | `(command | #genMonadState $m:term) =>
     elabGenMonadStateAux m stx
   | _ => throwUnsupportedSyntax
 
-end Auto.Util
+end Auto

@@ -1,5 +1,5 @@
 import Lean
-import Auto.Util.MonadUtils
+import Auto.Lib.MonadUtils
 open Lean
 
 -- Propositional reification terms

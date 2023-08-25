@@ -1,7 +1,7 @@
 import Lean
-import Auto.Util.MonadUtils
-import Auto.Util.ExprExtra
-import Auto.Util.MetaExtra
+import Auto.Lib.MonadUtils
+import Auto.Lib.ExprExtra
+import Auto.Lib.MetaExtra
 import Auto.MathlibEmulator
 import Auto.Translation.LamPULift
 import Auto.Embedding.LamChecker
@@ -236,7 +236,7 @@ section ILLifting
 
   private def mkImportAux (s : LamSort) : ReifM (Expr × Expr × Expr × Expr × Level) := do
     let (upFunc, downFunc, ty, upTy) ← updownFunc s
-    let sortOrig ← Util.normalizeType (← Meta.inferType ty)
+    let sortOrig ← normalizeType (← Meta.inferType ty)
     let .sort uOrig := sortOrig
       | throwError "mkIsomType :: Unexpected sort {sortOrig} when processing sort {repr s}"
     return (upFunc, downFunc, ty, upTy, uOrig)
@@ -254,7 +254,7 @@ section ILLifting
     let (upFunc, downFunc, ty, upTy, uOrig) ← mkImportAux s
     let isomTy ← mkIsomType upFunc downFunc ty upTy uOrig
     let ilLift := mkAppN (.const ``ILLift.ofIsomTy [uOrig, (← getU)]) #[ty, upTy, isomTy]
-    if !(← Util.Meta.isTypeCorrectCore ilLift) then
+    if !(← Meta.isTypeCorrectCore ilLift) then
       throwError "mkImportingEqLift :: Malformed eqLift {ilLift}"
     return ilLift
 
@@ -456,9 +456,9 @@ section Checker
 
   /-- `Unit test`
   unsafe def act (e : Expr) : Lean.Elab.TermElabM Unit := do
-    let e' ← Util.exprFromExpr e
+    let e' ← exprFromExpr e
     IO.println e'
-    Util.Meta.coreCheck e'
+    Meta.coreCheck e'
   
   #getExprAndApply[BinTree.toLCtx (α:=LamSort) (BinTree.ofListFoldl [LamSort.base .prop]) (.base .prop)|act]
   -/
@@ -506,7 +506,7 @@ section Checker
     let chkSteps ← getChkSteps
     -- `ChkSteps` are run using `foldl`, so we use `BinTree.ofListFoldl`
     let e := Lean.toExpr (BinTree.ofListFoldl chkSteps.data)
-    if !(← Util.Meta.isTypeCorrectCore e) then
+    if !(← Meta.isTypeCorrectCore e) then
       throwError "buildChkSteps :: Malformed expression"
     return e
 
@@ -521,7 +521,7 @@ section Checker
       Expr.app (.const ``Embedding.LiftTyConv [lvl, u]) (.fvar id))
     -- `tyValExpr : Nat → Type u`
     let tyValExpr := exprListToLCtx tyVal (.succ u) (.sort (.succ u)) (.sort u)
-    if !(← Util.Meta.isTypeCorrectCore tyValExpr) then
+    if !(← Meta.isTypeCorrectCore tyValExpr) then
       throwError "buildLamValuation :: Malformed tyVal"
     return tyValExpr
 
@@ -578,7 +578,7 @@ section Checker
       let lamTyValExpr := Lean.mkApp2 (.const ``LamTyVal.mk []) lamVarTyExpr lamILTyExpr
       let lamValuationExpr := Lean.mkApp4 (.const ``LamValuation.mk [u]) lamTyValExpr tyValExpr ilValExpr varValExpr
       Meta.mkLetFVars #[tyValFVarExpr] lamValuationExpr
-    -- if !(← Util.Meta.isTypeCorrectCore lamValuationExpr) then
+    -- if !(← Meta.isTypeCorrectCore lamValuationExpr) then
     --   throwError "buildLamValuation :: Malformed LamValuation"
     -- trace[auto.buildChecker] "LamValuation typechecked in time {(← IO.monoMsNow) - startTime}"
     return lamValuationExpr
@@ -605,7 +605,7 @@ section Checker
       lamTermExpr (.app (.const ``importTablePSigmaβ [u]) lvalExpr)
     let importTableExpr := (@instToExprBinTree Expr
       (instExprToExprId type) ⟨.zero, Prop⟩).toExpr importTable
-    -- if !(← Util.Meta.isTypeCorrectCore importTableExpr) then
+    -- if !(← Meta.isTypeCorrectCore importTableExpr) then
     --   let tyValExpr ← buildTyVal
     --   for (e, tExpr) in entries do
     --     let tInterp := Lean.mkApp4 (.const ``LamTerm.interpAsProp [u])
@@ -653,7 +653,7 @@ section Checker
       return getEntry
     -- debug
     -- let startTime ← IO.monoMsNow
-    -- if !(← Util.Meta.isTypeCorrectCore checker) then
+    -- if !(← Meta.isTypeCorrectCore checker) then
     --   trace[auto.buildChecker] "buildCheckerExpr :: Malformed checker {checker}"
     --   Meta.check checker
     -- trace[auto.buildChecker] "Checker typechecked in time {(← IO.monoMsNow) - startTime}"

@@ -1,7 +1,7 @@
 import Lean
 import Auto.Embedding.Lift
 import Auto.Embedding.LCtx
-import Auto.Util.ExprExtra
+import Auto.Lib.ExprExtra
 import Auto.Lib.NatExtra
 import Auto.Lib.IntExtra
 import Auto.Lib.HEqExtra

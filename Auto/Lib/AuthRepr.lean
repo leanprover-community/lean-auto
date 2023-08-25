@@ -1,7 +1,7 @@
 import Lean
 open Lean
 
-namespace Auto.Util
+namespace Auto
 
 -- Lean's "repr" does not deal with LevelMVarId correctly
 partial def levelAuthRepr (l : Level) : String :=
@@ -32,4 +32,4 @@ partial def exprAuthRepr (e : Expr) : String :=
   | Expr.fvar id => "Expr.fvar (Lean.FVarId.mk " ++ id.name.toString ++ ")"
   | Expr.bvar n => "Expr.bvar " ++ n.repr
 
-end Auto.Util
+end Auto

@@ -1,7 +1,7 @@
 import Lean
 open Lean
 
-namespace Auto.Util
+namespace Auto
 
 def MessageData.exprPair : Expr × Expr → MessageData
 | (e1, e2) => MessageData.compose m!"({e1}, " m!"{e2})"
@@ -19,4 +19,4 @@ def MessageData.list (as : List α) (f : α → MessageData) : MessageData :=
 def MessageData.array (as : Array α) (f : α → MessageData) : MessageData :=
   MessageData.list as.data f
 
-end Auto.Util
+end Auto

@@ -1,8 +1,8 @@
 import Lean
 import Auto.Embedding.Lift
 import Auto.Translation.ReifM
-import Auto.Util.ExprExtra
-import Auto.Util.MonadUtils
+import Auto.Lib.ExprExtra
+import Auto.Lib.MonadUtils
 open Lean
 open Auto.Embedding
 
@@ -524,7 +524,7 @@ def deBruijn? (id : FVarId) : ULiftM (Option Nat) := do
       --   because `e` might contain free variables that are binders in the
       --   original expression and has already been lifted.
       let eUp ← termULift e
-      let eUpSort ← Util.normalizeType (← Meta.inferType eUp)
+      let eUpSort ← normalizeType (← Meta.inferType eUp)
       let .app (.const ``GLift [vsucc, _]) _ := eUpSort
         | throwError "typeULift :: Unexpected type ⦗⦗{eUp} : {eUpSort}⦘⦘"
       let u ← getU

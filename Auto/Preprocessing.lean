@@ -1,6 +1,6 @@
 import Lean
-import Auto.Util.AbstractMVars
-import Auto.Util.MessageData
+import Auto.Lib.AbstractMVars
+import Auto.Lib.MessageData
 open Lean Meta Elab Tactic
 
 initialize
@@ -15,7 +15,7 @@ structure Lemma where
 
 instance : ToMessageData Lemma where
   toMessageData lem := MessageData.compose
-    m!"⦗⦗ {lem.proof} : {lem.type} @@ " (.compose (Util.MessageData.array lem.params toMessageData) m!" ⦘⦘")
+    m!"⦗⦗ {lem.proof} : {lem.type} @@ " (.compose (MessageData.array lem.params toMessageData) m!" ⦘⦘")
 
 namespace Prep
 

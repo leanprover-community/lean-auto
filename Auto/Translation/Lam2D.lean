@@ -1,7 +1,7 @@
 import Lean
 import Duper.Tactic
-import Auto.Util.ExprExtra
-import Auto.Util.MetaExtra
+import Auto.Lib.ExprExtra
+import Auto.Lib.MetaExtra
 import Auto.Embedding.LamBase
 import Auto.Translation.LamReif
 open Lean
@@ -125,7 +125,7 @@ def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
   return ← Meta.mkAppOptM ``Eq #[← interpLamSortAsUnlifted s]
 | .forallE s  => do
   let ty ← interpLamSortAsUnlifted s
-  let sort ← Util.normalizeType (← Meta.inferType ty)
+  let sort ← normalizeType (← Meta.inferType ty)
   let Expr.sort lvl := sort
     | throwError "interpLamBaseTermAsUnlifted :: Unexpected sort {sort}"
   return mkAppN (.const ``forallF [lvl, .zero]) #[← interpLamSortAsUnlifted s]
@@ -198,7 +198,7 @@ def callDuper (ts : Array LamTerm) : ReifM Expr :=
         throwError "callDuper :: Hypothesis {expr} is not a proposition"
     -- Reduce `forallF` and `impF`
     let exprs ← Meta.withTransparency .reducible <| exprs.mapM (fun e => liftM <| Meta.reduceAll e)
-    Util.Meta.withHyps exprs (fun fvars => do
+    Meta.withHyps exprs (fun fvars => do
       if exprs.size != fvars.size then
         throwError "callDuper :: Unexpected error"
       let lemmas : Array (Expr × Expr × Array Name) ←

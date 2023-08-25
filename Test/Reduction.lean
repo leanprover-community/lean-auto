@@ -1,4 +1,4 @@
-import Auto.Util.ExprExtra
+import Auto.Lib.ExprExtra
 
 set_option lazyReduce.printTime true
 set_option maxRecDepth 50000 in

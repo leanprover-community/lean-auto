@@ -1,8 +1,8 @@
 import Lean
-import Auto.Util.ExprExtra
+import Auto.Lib.ExprExtra
 open Lean
 
-namespace Auto.Util
+namespace Auto
 
 namespace ExprDeCompile
 
@@ -159,7 +159,7 @@ def exprDeCompile (e : Expr) : MetaM String := do
 
 syntax (name := testDeComp) "#testDeComp" term : command
 
-@[command_elab Auto.Util.testDeComp]
+@[command_elab Auto.testDeComp]
 def elabTestDeComp : Elab.Command.CommandElab := fun stx => do
   match stx with
   | `(command | #testDeComp $x:term) => Elab.Command.runTermElabM (fun _ => do
@@ -210,4 +210,4 @@ universe u
 
 --/
 
-end Auto.Util
+end Auto
