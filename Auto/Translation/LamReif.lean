@@ -128,7 +128,7 @@ def lookupWfTable! (wPos : Nat) : ReifM (List LamSort × LamSort × LamTerm) := 
   else
     throwError "lookupWfTable :: Unknown wfTable entry {wPos}"
 
-def lookupValidTable! (vPos : Nat) : ReifM (List LamSort ×  LamTerm) := do
+def lookupValidTable! (vPos : Nat) : ReifM (List LamSort × LamTerm) := do
   if let .some r := (← getValidTable).get? vPos then
     return r
   else
@@ -490,6 +490,7 @@ section Checker
   def checkerStats : ReifM (Array (String × Nat)) := do
     let ret : Array (String × Nat) := #[]
     let ret := ret.push ("tyVal", (← getTyVal).size)
+    let ret := ret.push ("varVal", (← getVarVal).size)
     let ret := ret.push ("ilLamTy", (← getLamILTy).size)
     let ret := ret.push ("importTable", (← getImportMap).size)
     let ret := ret.push ("chkSteps", (← getChkSteps).size)
