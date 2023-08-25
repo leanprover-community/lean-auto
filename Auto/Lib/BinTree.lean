@@ -686,6 +686,15 @@ theorem mapOpt_allpPos (f : α → Option β) (p : β → Prop) :
       case some x => exact hx
     case right => exact (mapOpt_allpPos _ _ _).mpr hr
 
+-- Given a `bl : BinTree α`, return `Lean.toExpr (fun n => (BinTree.get?Pos bl n).getD default)`
+open Lean in
+def toLCtxPos {α : Type u} [ToLevel.{u}] [ToExpr α] (bl : BinTree α) (default : α) : Expr :=
+  let lvl := ToLevel.toLevel.{u}
+  let type := toTypeExpr α
+  let get?Expr := mkApp3 (.const ``BinTree.get?Pos [lvl]) type (toExpr bl) (.bvar 0)
+  let getDExpr := mkApp3 (.const ``Option.getD [lvl]) type get?Expr (ToExpr.toExpr default)
+  .lam `n (.const ``Pos []) getDExpr .default
+
 end BinTree
 
 end Auto
