@@ -18,30 +18,30 @@ In addition, we provide some additional `ToExpr` instances for core definitions.
 set_option autoImplicit true
 
 section override
-namespace Lean
+namespace Auto
 
 attribute [-instance] Lean.instToExprOption
 
-deriving instance ToExpr for Option
+deriving instance Lean.ToExpr for Option
 
 attribute [-instance] Lean.instToExprList
 
-deriving instance ToExpr for List
+deriving instance Lean.ToExpr for List
 
 attribute [-instance] Lean.instToExprArray
 
-instance {α : Type u} [ToExpr α] [ToLevel.{u}] : ToExpr (Array α) :=
-  let type := toTypeExpr α
-  { toExpr     := fun as => mkApp2 (mkConst ``List.toArray [toLevel.{u}]) type (toExpr as.toList)
-    toTypeExpr := mkApp (mkConst ``Array [toLevel.{u}]) type }
+instance {α : Type u} [Lean.ToExpr α] [ToLevel.{u}] : Lean.ToExpr (Array α) :=
+  let type := Lean.toTypeExpr α
+  { toExpr     := fun as => Lean.mkApp2 (Lean.mkConst ``List.toArray [toLevel.{u}]) type (Lean.toExpr as.toList)
+    toTypeExpr := Lean.mkApp (Lean.mkConst ``Array [toLevel.{u}]) type }
 
 attribute [-instance] Lean.instToExprProd
 
-deriving instance ToExpr for Prod
+deriving instance Lean.ToExpr for Prod
 
-deriving instance ToExpr for System.FilePath
+deriving instance Lean.ToExpr for System.FilePath
 
-end Lean
+end Auto
 end override
 
 namespace Auto

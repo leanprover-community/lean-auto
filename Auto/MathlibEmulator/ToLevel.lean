@@ -17,13 +17,13 @@ override the ones from Lean 4 core.
 
 set_option autoImplicit true
 
-namespace Lean
+namespace Auto
 
 /-- A class to create `Level` expressions that denote particular universe levels in Lean.
 `Lean.ToLevel.toLevel.{u}` evaluates to a `Lean.Level` term representing `u` -/
 class ToLevel.{u} where
   /-- A `Level` that represents the universe level `u`. -/
-  toLevel : Level
+  toLevel : Lean.Level
   /-- The universe itself. This is only here to avoid the "unused universe parameter" error. -/
   univ : Type u := Sort u
 export ToLevel (toLevel)
@@ -42,4 +42,4 @@ def ToLevel.max [ToLevel.{u}] [ToLevel.{v}] : ToLevel.{max u v} where
 def ToLevel.imax [ToLevel.{u}] [ToLevel.{v}] : ToLevel.{imax u v} where
   toLevel := .imax toLevel.{u} toLevel.{v}
 
-end Lean
+end Auto

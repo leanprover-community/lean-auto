@@ -211,7 +211,7 @@ def mkInstanceCmds (ctx : Deriving.Context) (typeNames : Array Name) :
 def mkToExprInstanceCmds (declNames : Array Name) : TermElabM (Array Syntax) := do
   let ctx ← mkContext "toExpr" declNames[0]!
   let cmds := #[← mkMutualBlock ctx] ++ (← mkInstanceCmds ctx declNames)
-  trace[Elab.Deriving.toExpr] "\n{cmds}"
+  trace[Auto.Deriving.toExpr] "\n{cmds}"
   return cmds
 
 /-- The main entry point to the `ToExpr` derive handler. -/
@@ -225,6 +225,6 @@ def mkToExprInstanceHandler (declNames : Array Name) : CommandElabM Bool := do
 
 initialize
   registerDerivingHandler `Lean.ToExpr mkToExprInstanceHandler
-  registerTraceClass `Elab.Deriving.toExpr
+  registerTraceClass `Auto.Deriving.toExpr
 
 end Auto.Deriving.ToExpr
