@@ -274,8 +274,8 @@ section ILLifting
     let (upFunc, downFunc, ty, upTy, uOrig) ← mkImportAux s
     let isomTy ← mkIsomType upFunc downFunc ty upTy uOrig
     let ilLift := mkAppN (.const ``ILLift.ofIsomTy [uOrig, (← getU)]) #[ty, upTy, isomTy]
-    if !(← Meta.isTypeCorrectCore ilLift) then
-      throwError "mkImportingEqLift :: Malformed eqLift {ilLift}"
+    -- if !(← Meta.isTypeCorrectCore ilLift) then
+    --   throwError "mkImportingEqLift :: Malformed eqLift {ilLift}"
     return ilLift
 
 end ILLifting
@@ -527,8 +527,8 @@ section Checker
     let chkSteps ← getChkSteps
     -- `ChkSteps` are run using `foldl`, so we use `BinTree.ofListFoldl`
     let e := Lean.toExpr (BinTree.ofListFoldl chkSteps.data)
-    if !(← Meta.isTypeCorrectCore e) then
-      throwError "buildChkSteps :: Malformed expression"
+    -- if !(← Meta.isTypeCorrectCore e) then
+    --   throwError "buildChkSteps :: Malformed expression"
     return e
 
     -- Given a list of expression of type `ty`, construct the corresponding `lctx`
@@ -542,8 +542,8 @@ section Checker
       Expr.app (.const ``Embedding.LiftTyConv [lvl, u]) (.fvar id))
     -- `tyValExpr : Nat → Type u`
     let tyValExpr := exprListToLCtx tyVal (.succ u) (.sort (.succ u)) (.sort u)
-    if !(← Meta.isTypeCorrectCore tyValExpr) then
-      throwError "buildLamValuation :: Malformed tyVal"
+    -- if !(← Meta.isTypeCorrectCore tyValExpr) then
+    --   throwError "buildLamValuation :: Malformed tyVal"
     return tyValExpr
 
   -- **Build `LamVarTy` and `varVal`**
@@ -670,7 +670,7 @@ section Checker
       -- let rt := Lean.mkApp3 (.const ``ChkSteps.runFromBeginning [u]) lvalExpr itExpr csExpr
       -- let rt ← Meta.withTransparency .all <| Meta.reduceAll rt
       -- trace[auto.buildChecker] "Final RTable : {rt}, Expected valid : {validExpr}"
-      trace[auto.buildChecker] "Checker expression built in time {(← IO.monoMsNow) - startTime}"
+      trace[auto.buildChecker] "Checker expression built in time {(← IO.monoMsNow) - startTime}ms"
       return getEntry
     -- debug
     -- let startTime ← IO.monoMsNow

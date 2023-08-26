@@ -14,16 +14,15 @@ namespace Auto
 -- **TODO**: Extend
 syntax hintelem := term <|> "*"
 syntax hints := ("[" hintelem,* "]")?
-syntax autoinstr := ("@p")?
+syntax autoinstr := ("👍")?
 syntax (name := auto) "auto" autoinstr hints : tactic
 
 inductive Instruction where
   | none
-  | p
 
 def parseInstr : TSyntax ``Auto.autoinstr → TacticM Instruction
 | `(autoinstr|) => return .none
-| `(autoinstr|@p) => return .p
+| `(autoinstr|👍) => throwError "We appreciate your flatter 😎"
 | _ => throwUnsupportedSyntax
 
 inductive HintElem where
@@ -151,15 +150,6 @@ def runAuto
       (lemmas.map (fun x => (x.proof, x.type)))
     trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
     return .unsat proof
-    -- testing
-  | .p =>
-    let types := lemmas.map (fun x => x.type)
-    let PState := (← (types.mapM (fun e => do
-        PReif.addAssertion (ω := Expr) (← D2P e))).run {}).2
-    let commands := (← (P2SMT PState).run {}).1
-    let _ ← liftM <| commands.mapM (fun c => IO.println s!"Command: {c}")
-    Solver.SMT.querySolver commands
-    throwError "runAuto :: Not implemented"
 
 @[tactic auto]
 def evalAuto : Tactic
@@ -177,7 +167,7 @@ def evalAuto : Tactic
     let result ← runAuto instr hints ngoal
     match result with
     | Result.unsat e => do
-      IO.println s!"Unsat. Time spent by auto : {(← IO.monoMsNow) - startTime}"
+      IO.println s!"Unsat. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
       absurd.assign e
     | Result.sat assig => throwError "Sat"
     | Result.unknown => throwError "Unknown"
