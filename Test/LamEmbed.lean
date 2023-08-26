@@ -1,9 +1,9 @@
-import Auto.Embedding.LamBase
+import Auto.Embedding.LamConv
 import Auto.Lib.ExprExtra
 
 open Auto.Embedding.Lam
 
-#print LamWF.subst
+#print LamTerm.headBeta
 
 -- (.atom k) → (.atom k) → ⋯ → (.atom k) → (.atom k)
 def manyArgFuncTy (n : Nat) (k : Nat) : LamSort :=
@@ -30,14 +30,14 @@ where
     | n' + 1 => .lam (.atom 0) (manyBindersAux n' (Nat.succ idx))
   manyApp (t : LamTerm) : (idx : Nat) → LamTerm
   | 0 => t
-  | n' + 1 => .app (manyApp t n') (.bvar n')
+  | n' + 1 => .app (.atom 0) (manyApp t n') (.bvar n')
 
 -- **Succeeds in a reasonable amount of time**
 set_option maxRecDepth 10000 in
 set_option lazyReduce.logInfo false in
 #lazyReduce manyBinders 3000
 
-def wfManyBinders (narg : Nat) := @LamTerm.lamWF_of_check
+def wfManyBinders (narg : Nat) := @LamWF.ofLamCheck?
   (ltv := {(Inhabited.default : LamTyVal) with
     lamVarTy := fun n => if n == 0 then manyArgFuncTy narg 0 else .atom 0})
   (lctx := fun _ => .atom 0)
@@ -65,7 +65,7 @@ set_option lazyReduce.logInfo false in
 set_option lazyReduce.printTime true in
 set_option maxRecDepth 2000 in
 set_option maxHeartbeats 20000000 in
-#reduce (wfManyBinders 20 rfl)
+#reduce (wfManyBinders 50 rfl)
 -- #eval (wfManyBinders 20 rfl)
 -- Reduce 50  => 3369 ms
 -- Reduce 100 => 17426 ms

@@ -2,6 +2,7 @@ import Auto.Translation.LamPULift
 
 set_option pp.universes true
 namespace Auto
+open Embedding
 
 axiom f : ∀ (α : Type) (β : α → Type) (x : α), β x
 

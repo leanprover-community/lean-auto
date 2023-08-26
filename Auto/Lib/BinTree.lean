@@ -252,8 +252,8 @@ theorem insert'.succSucc (bt : BinTree α) (n : Nat) (x : α) :
       | .leaf => .node .leaf .none (insert' .leaf ((n + 2) / 2) x)
       | .node l v r => .node l v (insert' r ((n + 2) / 2) x) := by
   rw [insert'.equiv bt, insert'WF.succSucc]
-  rw [show Nat.mod (n + 2) 2 = (n + 2) % 2 by rfl]
-  rw [show Nat.div (n + 2) 2 = (n + 2) / 2 by rfl]
+  rw [@id (Nat.mod (n + 2) 2 = (n + 2) % 2) rfl]
+  rw [@id (Nat.div (n + 2) 2 = (n + 2) / 2) rfl]
   cases (n + 2) % 2 <;> cases bt <;> dsimp <;> rw [insert'.equiv];
 
 theorem insert'.correct₁ (bt : BinTree β) (n : Nat) (x : β) : n ≠ 0 → get?' (insert' bt n x) n = .some x := by
