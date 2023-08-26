@@ -604,9 +604,6 @@ section Checker
     -- trace[auto.buildChecker] "LamValuation typechecked in time {(← IO.monoMsNow) - startTime}"
     return lamValuationExpr
 
-  -- debug
-  -- def ofType (α : Sort u) (x : α) := x
-
   -- `lvalExpr` is the `LamValuation`
   def buildImportTableExpr (lvalExpr : Expr) : ReifM Expr := do
     -- let startTime ← IO.monoMsNow
@@ -632,7 +629,7 @@ section Checker
     --     let tInterp := Lean.mkApp4 (.const ``LamTerm.interpAsProp [u])
     --       lvalExpr (.const ``dfLCtxTy []) (.app (.const ``dfLCtxTerm [u]) tyValExpr) tExpr
     --     let tInterp ← Meta.zetaReduce tInterp
-    --     let ofTypeExpr := Lean.mkApp2 (.const ``ofType [.succ u])
+    --     let ofTypeExpr := Lean.mkApp2 (.const ``id [.succ u])
     --       (.app (.const ``Embedding.LiftTyConv [.zero, u]) tInterp)
     --       (Lean.mkApp2 (.const ``Embedding.GLift.up [.zero, u]) (← Meta.inferType e) e)
     --     if !(← Meta.isTypeCorrect e) then

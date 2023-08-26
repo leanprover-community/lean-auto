@@ -43,9 +43,10 @@ Experiments in automation for Lean
   * Lifted constantes should be introduced into the local context. Theorems corresponding to the original one but using only lifted constants and with uniform universe levels, should also be introduced into the local context. Later translations should only use theorems and constants with uniform universe levels.
 * $\lambda \to \lambda(\text{TPTP TF0})$: Instantiating function arguments
   * $\lambda$ is the reified $COC(\lambda)$
-* **There should also be a process similar to ULifting that "lifts" Bool into Prop**
+* **There should also be a process similar to ULifting that "lifts" Bool into Prop, Nat to Int**
 
 ## Reification
 * $COC(\lambda) \to \lambda(\text{TPTP\ TH0})$
   * ```Auto/Translation/LamReif.lean```
 * $\lambda(\text{TPTP TF0}) \to \text{TPTP TF0}$
+  * ```Auto/Translation/LamFOL2SMT.lean```

@@ -3,9 +3,9 @@ open Lean
 
 namespace Auto
 
-def showClasses (env : Environment) : Except String (List (ConstantInfo × Array Nat)) := do
+def showClasses (env : Environment) : Except String (Array (ConstantInfo × Array Nat)) := do
   let outParamMap := (classExtension.getState env).outParamMap
-  outParamMap.toList.mapM (fun (name, outParams) => do
+  (Array.mk outParamMap.toList).mapM (fun (name, outParams) => do
     let .some decl := env.find? name
       | throw s!"showClasses :: unknown declarationn {name}"
     return (decl, outParams))

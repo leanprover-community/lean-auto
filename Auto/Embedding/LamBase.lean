@@ -175,27 +175,20 @@ def CstrReal.interp : (c : CstrReal) → Real
 | one  => 1
 
 -- Interpreted constants
--- Note that `eq`, `forallE`, `existE` have `(eq/forall/exist)(Val/LamVal)`
+-- Note that `eq`, `forallE`, `existE` have `ilVal/lamILTy`
 --   associated with them. During proof reconstruction, we should collect
 --   the sort arguments of all `eq, forallE, existE` that occurs in the
---   proof into `eqLamVal, forallLamVal` and `existLamVal`, respectively.
--- For `eqVal, forallVal` and `existVal`, we need to use `EqLift.ofIsomTy`,
---   `ForallLift.ofIsomTy` and `ExistLift.ofIsomTy` to construct
---   `EqLift/ForallLift/ExistLift` structures for the assumptions.
---   For any other `eq, forall, exist` that occurs in the proof, use
---   `(EqLift/ForallLift/ExistLift).default` instead. The idea is that
---   we want the interpretation of reified assumptions to be definitionally
+--   proof into `ilVal`.
+-- For `ilVal`, we need to use `ILLift.ofIsomTy` to construct
+--   `ILLift` structures. The idea is that we want the interpretation
+--   of reified assumptions to be definitionally
 --   equal to the assumption (or `GLift.up` applied to the assumption, to
 --   be precise), so we'll have to use the specially designed
---   `of(Eq/Forall/Exist)Lift` function. However, at the end of the proof,
---   we'll have a `LamTerm.base .falseE`, no `=, ∀, ∃` left,
---   so whatever `(Eq/Forall/Exist)Lift` structure are within the
---   `(eq/forall/lam)Val`, the final result will always interpret to
---   `GLift.up False`.
--- The correctness theorem of the checker existentially quantify over
---   over `eqVal, forallVal` and `lamVal` to reduce kernel overhead
---   while performing proof checking, but the speedup would probably
---   be insignificant.
+--   `of(Eq/Forall/Exist)Lift` function.
+-- Note that at the end of the proof, we'll have a `LamTerm.base .falseE`,
+--   no `=, ∀, ∃` left, so whatever `(Eq/Forall/Exist)Lift`
+--   structure are within the `(eq/forall/lam)Val`, the final result
+--   will always interpret to `GLift.up False`.
 inductive LamBaseTerm
   | trueE    : LamBaseTerm -- Propositional `true`
   | falseE   : LamBaseTerm -- Propositional `false`
