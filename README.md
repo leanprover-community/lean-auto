@@ -46,8 +46,6 @@ Experiments in automation for Lean
 * **There should also be a process similar to ULifting that "lifts" Bool into Prop**
 
 ## Reification
-* $CIC \to \text{Propositional}$
-  * ```Auto/Translation/PReif.lean```
 * $COC(\lambda) \to \lambda(\text{TPTP\ TH0})$
   * ```Auto/Translation/LamReif.lean```
 * $\lambda(\text{TPTP TF0}) \to \text{TPTP TF0}$

@@ -16,3 +16,11 @@ open Lean Auto
 
 #check IsAtomistic
 #check VAddAssocClass
+#check isCoatomistic_dual_iff_isAtomistic
+#check sSup_atoms_le_eq
+#check IsAtom
+#check FirstOrder.Language.Theory.Model
+#check UniformContinuousConstVAdd
+#check BooleanAlgebra
+#check CircularPartialOrder
+#check IsInvariantSubfield
