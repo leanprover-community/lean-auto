@@ -134,24 +134,44 @@ def lookupValidTable! (vPos : Nat) : ReifM (List LamSort × LamTerm) := do
   else
     throwError "lookupValidTable! :: Unknown validTable entry {vPos}"
 
--- Functions which models checker steps on the `meta` level
--- Steps that only requires looking at the `LamTerm`s and does not
---   require looking up the valuation should be put in the files
---   in the `Embedding` folder. There is no need to model them
---   on the `meta` level
-
 def resolveLamBaseTermImport : LamBaseTerm → ReifM LamBaseTerm
 | .eqI n      => do return .eq (← lookupLamILTy! n)
 | .forallEI n => do return .forallE (← lookupLamILTy! n)
 | .existEI n  => do return .existE (← lookupLamILTy! n)
 | t           => pure t
 
+-- Models `resolveImport` on the `meta` level
 def resolveImport : LamTerm → ReifM LamTerm
 | .atom n       => return .atom n
 | .base b       => return .base (← resolveLamBaseTermImport b)
 | .bvar n       => return .bvar n
 | .lam s t      => return .lam s (← resolveImport t)
 | .app s fn arg => return .app s (← resolveImport fn) (← resolveImport arg)
+
+-- This is the inverse of `resolveImport`
+-- After exporting `LamTerm`s to external prover and running
+--   the external prover, we would like to accept the proof
+--   returned by the prover. If we already know that the proof
+--   returned by the prover corresponds to `t : LamTerm`, then
+--   we don't need to `uLiftAndReify` the proof again.
+-- However, since `t` is exported from `ReifM`, all import
+--   versions of `eq, ∀, ∃` are already resolved and `t.interp`
+--   may not be defeq to the type of the proof returned by
+--   the prover. So, we have to build the import version `tI`
+--   of `t` so that `tI.interp ≝ proof`
+def mkImportVersion : LamTerm → ReifM LamTerm
+| .atom n => return (.atom n)
+| .base b =>
+  match b with
+  | .eq s      => return .base (.eqI (← sort2LamILTyIdx s))
+  | .forallE s => return .base (.forallEI (← sort2LamILTyIdx s))
+  | .existE s  => return .base (.existEI (← sort2LamILTyIdx s))
+  | b => return .base b
+| .bvar n => return (.bvar n)
+| .lam s t => do
+  return .lam s (← mkImportVersion t)
+| .app s t₁ t₂ => do
+  return .app s (← mkImportVersion t₁) (← mkImportVersion t₂)
 
 -- A new `ChkStep` that produces `LamThmWF` certificate
 -- `res` is the result of the `ChkStep`
@@ -711,30 +731,6 @@ section ExportUtils
     let (typeHs₁, termHs₁) ← collectAtoms t₁
     let (typeHs₂, termHs₂) ← collectAtoms t₂
     return (mergeHashSet typeHs₁ typeHs₂, mergeHashSet termHs₁ termHs₂)
-
-  -- After exporting `LamTerm`s to external prover and running
-  --   the external prover, we would like to accept the proof
-  --   returned by the prover. If we already know that the proof
-  --   returned by the prover corresponds to `t : LamTerm`, then
-  --   we don't need to `uLiftAndReify` the proof again.
-  -- However, since `t` is exported from `ReifM`, all import
-  --   versions of `eq, ∀, ∃` are already resolved and `t.interp`
-  --   may not be defeq to the type of the proof returned by
-  --   the prover. So, we have to build the import version `tI`
-  --   of `t` so that `tI.interp ≝ proof`
-  def mkImportVersion : LamTerm → ReifM LamTerm
-  | .atom n => return (.atom n)
-  | .base b =>
-    match b with
-    | .eq s      => return .base (.eqI (← sort2LamILTyIdx s))
-    | .forallE s => return .base (.forallEI (← sort2LamILTyIdx s))
-    | .existE s  => return .base (.existEI (← sort2LamILTyIdx s))
-    | b => return .base b
-  | .bvar n => return (.bvar n)
-  | .lam s t => do
-    return .lam s (← mkImportVersion t)
-  | .app s t₁ t₂ => do
-    return .app s (← mkImportVersion t₁) (← mkImportVersion t₂)
 
 end ExportUtils
 
