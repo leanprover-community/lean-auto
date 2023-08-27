@@ -46,6 +46,14 @@ theorem heq_of_eqRec_eq' {motive : γ → Sort u} {α β : γ} (h₁ : α = β)
   subst h₁
   apply HEq.refl
 
+theorem eq_sigma_of_heq {p : α → Type v} {ty₁ ty₂ : α} {val₁ : p ty₁} {val₂ : p ty₂}
+  (h₁ : ty₁ = ty₂) (h₂ : HEq val₁ val₂) : @Eq ((x : α) × (p x)) ⟨ty₁, val₁⟩ ⟨ty₂, val₂⟩ := by
+  cases h₁; cases h₂; rfl
+
+theorem heq_of_eq_sigma {p : α → Type v} {ty₁ ty₂ : α} {val₁ : p ty₁} {val₂ : p ty₂}
+  (h : @Eq ((x : α) × (p x)) ⟨ty₁, val₁⟩ ⟨ty₂, val₂⟩) : ty₁ = ty₂ ∧ HEq val₁ val₂ := by
+  cases h; apply And.intro; rfl; apply HEq.refl
+
 theorem eqRec_heq' {α : Sort u_1} {a' : α} {motive : (a : α) → a' = a → Sort u}
     (p : motive a' (rfl : a' = a')) {a : α} (t : a' = a) :
     HEq (@Eq.rec α a' motive p a t) p :=
