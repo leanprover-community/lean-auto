@@ -10,6 +10,40 @@ def Expr.binders (e : Expr) : Array (Name × Expr × BinderInfo) :=
     | _ => []
   Array.mk (aux e)
 
+private def Expr.instArgsIdx (e : Expr) (idx : Nat) : List Nat :=
+  match e with
+  | .forallE _ _ body bi =>
+    let trail := instArgsIdx body (.succ idx)
+    match bi with
+    | .instImplicit => idx :: trail
+    | _ => trail
+  | _ => .nil
+
+-- Given an expression `e`, which is the type of some
+--   term `t`, find the arguments of `t` that are class
+--   instances
+def Expr.instArgs (e : Expr) : Array Nat := ⟨Expr.instArgsIdx e 0⟩
+
+private def Expr.depArgsIdx (e : Expr) (idx : Nat) : List Nat :=
+  match e with
+  | .forallE _ _ body _ =>
+    let trail := depArgsIdx body (.succ idx)
+    match body.hasLooseBVar idx with
+    | true  => idx :: trail
+    | false => trail
+  | _ => .nil
+
+-- Given `e = ∀ (xs : αs), t`, return the indexes of dependent `∀` binders
+--  within `xs`
+def Expr.depArgs (e : Expr) : Array Nat := ⟨Expr.depArgsIdx e 0⟩
+
+-- Given the name `c` of a constant, suppose `@c : ty`, return
+--   `Expr.depArgs ty`
+def Expr.constDepArgs (c : Name) : CoreM (Array Nat) := do
+  let .some decl := (← getEnv).find? c
+    | throwError "Expr.constDepArgs :: Unknown constant {c}"
+  return Expr.depArgs decl.type
+
 -- This should only be used when we're sure that reducing `ty`
 --   won't be too expensive
 def normalizeType (ty : Expr) : MetaM Expr := do

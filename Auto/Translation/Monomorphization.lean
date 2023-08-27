@@ -1,5 +1,7 @@
 import Lean
 import Auto.Embedding.Lift
+import Auto.Translation.Assumptions
+import Auto.Lib.ExprExtra
 open Lean
 
 initialize
@@ -7,6 +9,58 @@ initialize
 
 namespace Auto.Monomorphization
 open Embedding
+
+-- If a constant `c` is of type `∀ (xs : αs), t`,
+--   then its valid instance will be `c` with all of its
+--   universe levels and dependent arguments instantiated.
+--   So, we record the instantiation of universe levels
+--   and dependent arguments.
+structure ConstInst where
+  params  : Array Level
+  depargs : Array Expr
+  
+-- Array of instances of a polymorphic constant
+abbrev ConstInsts := Array ConstInst
+
+-- Array of instances of assumption
+-- If assumption `H : ∀ (xs : αs), t`, then its instance will be like
+--   `⟨ys.length, fun (ys : βs) => t, (∀ (ys : βs), ty), params⟩`
+abbrev AssumptionInsts := Array (Nat × Lemma)
+
+/-
+  Monomorphization works as follows:
+  (1) Compute the number of `∀` binders for each input assumption.
+      They form the initial elements of `asMap`
+  (2) Scan through all assumptions to find subterms that are
+      valid instances of constants (dependent arguments fully
+      instantiated). They form the initial elements of `ciMap`
+      and `activeCi`
+  (3) Repeat:
+      · Dequeue an element `(name, n)` from `activeCi`
+      · For each element `ais : AssumptionInsts` in `asMap`,
+        for each expression `e` in `ais`, traverse `e` to
+        find applications `app := name ...` of constant `name`.
+        Try unifying `app` with `ciMap[name][n].snd`.
+        If we get a new instance `i` of an assumption (which means
+        that its `type` is not defeq to any existing ones in `ais`)
+        · We add `i` to `ais`. 
+        · We traverse `i` to collect instances of constants.
+          If we find an instance `ci` of constant `name'`, we
+          first look at `cdepargs[name']` to see whether it's
+          a new instance. If it's new, we add it to `ciMap`
+          and `activeCi`.
+-/
+structure State where
+  -- Dependent arguments of a constant
+  cdepargs : HashMap Name (Array Nat)
+  ciMap    : HashMap Name ConstInsts
+  activeCi : Std.Queue (Name × Nat)
+  asMap    : Array AssumptionInsts
+
+def State.dequeueActiveCi (s : State) : Option ((Name × Nat) × State) :=
+  match s.activeCi.dequeue? with
+  | .some (elem, a') => .some (elem, {s with activeCi := a'})
+  | .none => .none
 
 -- For test purpose
 register_option testCollectPolyLog : Bool := {

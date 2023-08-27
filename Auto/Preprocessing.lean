@@ -1,21 +1,13 @@
 import Lean
 import Auto.Lib.AbstractMVars
 import Auto.Lib.MessageData
+import Auto.Translation.Assumptions
 open Lean Meta Elab Tactic
 
 initialize
   registerTraceClass `auto.Prep
 
 namespace Auto
-
-structure Lemma where
-  proof  : Expr       -- Proof of the lemma
-  type   : Expr       -- The statement of the lemma
-  params : Array Name -- Universe Levels
-
-instance : ToMessageData Lemma where
-  toMessageData lem := MessageData.compose
-    m!"⦗⦗ {lem.proof} : {lem.type} @@ " (.compose (MessageData.array lem.params toMessageData) m!" ⦘⦘")
 
 namespace Prep
 
