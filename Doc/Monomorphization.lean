@@ -2,6 +2,7 @@ import Lean
 import Mathlib.Data.Set.Intervals.Basic
 import Mathlib.FieldTheory.Fixed
 import Mathlib.Algebra.Hom.Group
+import Mathlib.Order.Circular
 
 section InstExamples
 
@@ -31,8 +32,11 @@ section InstExamples
   -/
   #check @FixedPoints.linearIndependent_smul_of_linearIndependent
 
-  #check @injective_iff_map_eq_zero
-
-  #check HAdd.hAdd
+  /-
+    Subterm `btw a b c` depends on `a, b` and `c`, but `btw a b c : Prop`,
+      so this does not count. Also no other subterms depend on `a, b` and
+      `c`, so they don't need to be instantiated
+  -/
+  #check @CircularPartialOrder.btw_antisymm
 
 end InstExamples

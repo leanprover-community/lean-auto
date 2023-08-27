@@ -14,13 +14,13 @@ Experiments in automation for Lean
 
 ## Monomorphization Strategy
 * Let $H : \alpha$ be an assumption. We require that
-  * $(1)$ If the type of any subterm of $\alpha$ depends on a bound variable $x$ inside $\alpha$, then $x$ must be instantiated.
+  * $(1)$ If the type $\beta$ of any subterm $t$ of $\alpha$ depends on a bound variable $x$ inside $\alpha$, and $\beta$ is not of type $Prop$, then $x$ must be instantiated. Examples: [Monomorphization](./Doc/Monomorphization.lean), section `InstExamples`
   * $(2)$ If any binder $x$ of $\alpha$ has binderinfo `instImplicit`, then the binder $x$ must be instantiated via typeclass inference.
-  
-  Examples: [Monomorphization](./Doc/Monomorphization.lean), section `InstExamples`
 * We define the **skeleton** of an expression $e$, denoted as $\mathsf{skel}(e)$, to be the expression with anything associated with typeclass stripped off
   * For example, ```∀ (a : A) [inst : HAdd A A A], HAdd.hAdd A A A inst a a = HAdd.hAdd A A A inst a a``` becomes ```∀ (a : A), HAdd.hAdd A A A a a = HAdd.hadd A A A a a```
-* Now, we describe an algorithm to check $(1)$. The algorithm is an approximation of what it should be, and the approximation is based on the fact that, **if the type of an ``instImplicit`` forall binder of a user-provided fact depends on a bound variable `x`, then `x` usually occurs in the skeleton of the body**. The algorithm runs as follows: Given an assumption $H : \alpha$, do check $(1)$ for $\mathsf{skel}(\alpha)$.
+* **Fact 1**: If the type of an ``instImplicit`` forall binder of a user-provided fact depends on a bound variable `x`, then `x` usually occurs in the skeleton of the body.
+* **Fact 2**: Non-prop, non-class type constructors usually does not take typeclass instance as arguments.
+* Now, we describe an algorithm to check $(1)$. The algorithm is an approximation of what it should be, and the approximation is based on the **Fact 1**. The algorithm runs as follows: Given an assumption $H : \alpha$, do check $(1)$ for $\mathsf{skel}(\alpha)$.
 
 ## Translation Workflow (Tentative)
 * Collecting assumptions from local context and user-provided facts
@@ -55,3 +55,7 @@ Experiments in automation for Lean
   * ```Auto/Translation/LamReif.lean```
 * $\lambda(\text{TPTP TF0}) \to \text{TPTP TF0}$
   * ```Auto/Translation/LamFOL2SMT.lean```
+
+## Checker
+* The checker is based on a deep embedding of simply-typed lambda calculus into dependent type theory.
+* The checker is slow on large input assumptions. For example, it takes ``2.5s`` to typecheck the final example in ```Test/Tactics/FirstOrder.lean```, and ```9s``` to typecheck the final example in ```BinderComplexity.lean```. However, this is probably acceptable for mathlib usages, because e.g ```Mathlib/Analysis/BoxIntegral/DivergenceTheorem.lean``` has two theorems that take ```4s``` to compile (but a large portion of the ```4s``` are spent on typeclass inference)

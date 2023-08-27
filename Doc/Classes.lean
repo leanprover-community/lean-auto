@@ -22,5 +22,6 @@ open Lean Auto
 #check FirstOrder.Language.Theory.Model
 #check UniformContinuousConstVAdd
 #check BooleanAlgebra
-#check CircularPartialOrder
-#check IsInvariantSubfield
+#check CircularPartialOrder.btw_antisymm
+#check IsInvariantSubfield.smul_mem
+#check @HilbertBasis
