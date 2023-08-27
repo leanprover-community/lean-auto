@@ -428,9 +428,9 @@ mutual
   | .app (.const ``Embedding.LiftTyConv _) (.fvar fid) =>
     processTypeFVar fid
   | .mdata _ e => reifType e
-  | .forallE _ ty body _ => do
+  | e@(.forallE _ ty body _) => do
     if body.hasLooseBVar 0 then
-      throwError "reifType :: Dependently typed functions are not supported"
+      throwError "reifType :: The type {e} has dependent ∀"
     else
       return .func (← reifType ty) (← reifType body)
   | e => throwError "reifType :: {e} should have been lifted into fvar"

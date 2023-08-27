@@ -8,6 +8,7 @@ open Lean Elab Tactic
 initialize
   registerTraceClass `auto.tactic
   registerTraceClass `auto.printLemmas
+  registerTraceClass `auto.printProof
 
 namespace Auto
 
@@ -130,7 +131,7 @@ def runAuto
         trace[auto.tactic] "FVar: {Expr.fvar id}, λ Sort: {repr lams}"
       let proof ← Lam2D.callDuper exportFacts
       let proofLamTerm := exportFacts.foldr (fun t' t => t'.mkImp t) (.base .falseE)
-      trace[auto.tactic] "Duper found proof of {← Meta.inferType proof} // {repr proofLamTerm}"
+      trace[auto.printProof] "Duper found proof {← instantiateMVars proof}"
       let imp ← LamReif.newAssertion proof (← LamReif.mkImportVersion proofLamTerm)
       let contra ← LamReif.impApps imp arr
       let checker ← LamReif.buildCheckerExpr contra

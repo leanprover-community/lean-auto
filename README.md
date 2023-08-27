@@ -12,20 +12,25 @@ Experiments in automation for Lean
 * Command ```#fromMetaTactic [<ident>]```: Calls ```Tactic.liftMetaTactic``` on ```<ident>```. The constant ```<ident>``` must be already declared and be of type ```MVarId → MetaM (List MVarId)```
 * Lexical Analyzer Generator: ```Parser/LeanLex.lean```. The frontend is not yet implemented. The backend can be found in ```NDFA.lean```.
 
+## Monomorphization Strategy
+* Let $H : \alpha$ be an assumption. We require that
+  * $(1)$ If the type of any subterm of $\alpha$ depends on a bound variable $x$ inside $\alpha$, then $x$ must be instantiated.
+  * $(2)$ If any binder $x$ of $\alpha$ has binderinfo `instImplicit`, then the binder $x$ must be instantiated via typeclass inference.
+  
+  Examples: [Monomorphization](./Doc/Monomorphization.lean), section `InstExamples`
+* We define the **skeleton** of an expression $e$, denoted as $\mathsf{skel}(e)$, to be the expression with anything associated with typeclass stripped off
+  * For example, ```∀ (a : A) [inst : HAdd A A A], HAdd.hAdd A A A inst a a = HAdd.hAdd A A A inst a a``` becomes ```∀ (a : A), HAdd.hAdd A A A a a = HAdd.hadd A A A a a```
+* Now, we describe an algorithm to check $(1)$. The algorithm is an approximation of what it should be, and the approximation is based on the fact that, **if the type of an ``instImplicit`` forall binder of a user-provided fact depends on a bound variable `x`, then `x` usually occurs in the skeleton of the body**. The algorithm runs as follows: Given an assumption $H : \alpha$, do check $(1)$ for $\mathsf{skel}(\alpha)$.
+
 ## Translation Workflow (Tentative)
 * Collecting assumptions from local context and user-provided facts
+  * We reduce ```let``` binders and unfold projections when we collect assumptions. So, in the following discussion, we'll assume that the expression contains no ```let``` binders and no ```proj```s.
+  * We also $\beta$ reduce user provided facts so that there are nothing like $(\lambda x. t_1) \ t_2$
 * $CIC \to COC$: Collecting constructors and recursors for inductive types (effectively, not directly)
   * e.g collecting equational theorem for *match* constructs
   * e.g collect fields of typeclasses (we probably won't do so because typeclass can get very complicated and there are simply too many fields)
   * e.g collect constructors for inductively defined propositions
-* $COC \to COC^{p.i}$: Erase proofs??
-  * $p.i.$ stands for "proof irrelevance"
-* $COC^{p.i} \to COC({p.i.})$: Instantiating (types depending on types), (types depending on terms) and (terms depending on types) while ignoring all typeclass arguments of functions
-  * This should be done **before instantiating universe levels and instantiating typeclass arguments**
-* $COC^{p.i.} \to COC^{p.i.}$: Instantiating typeclass arguments
-  * First of all, synthesize instance according to the dependent arguments that the function takes (these arguments are filled by the last step).
-  * The problem is that two definitionally equal instances might be syntactically different. To deal with this, whenever there are two instances of the function `f` which takes the [same dependent arguments (excluding typeclass arguments)], we call `isDefEq` on their instance argument to see whether they're definitionally equal.
-* $COC^{p.i.} \to COC(\lambda^{c.u.})$: Instantiating universe levels
+* $COC \to COC(\lambda^{c.u.})$: Monomorphization
   * $c.u.$ stands for "constant universe level"
   * Note that at this stage, all the facts we've obtained are still valid $CIC$ expressions and are directly provable from the assumptions.
 * $COC(\lambda^{c.u.}) \to COC(\lambda)$
