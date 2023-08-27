@@ -1044,6 +1044,9 @@ def LamWF.ofLamCheck? {ltv : LamTyVal} :
   rfl
 -/
 
+-- Interpreting while typechecking a `λ` term. If the term fails to
+--   typecheck at some point, return `⟨.base .prop, GLift.up False⟩`
+--   as a default value.
 def LamTerm.interp.{u} (lval : LamValuation.{u}) (lctxTy : Nat → LamSort) :
   (t : LamTerm) → (s : LamSort) ×
     ((lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal) → s.interp lval.tyVal)

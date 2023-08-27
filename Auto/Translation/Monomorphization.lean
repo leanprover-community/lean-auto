@@ -2,6 +2,7 @@ import Lean
 import Auto.Embedding.Lift
 import Auto.Translation.Assumptions
 import Auto.Lib.ExprExtra
+import Auto.Lib.MonadUtils
 open Lean
 
 initialize
@@ -10,22 +11,112 @@ initialize
 namespace Auto.Monomorphization
 open Embedding
 
--- If a constant `c` is of type `∀ (xs : αs), t`,
---   then its valid instance will be `c` with all of its
---   universe levels and dependent arguments instantiated.
---   So, we record the instantiation of universe levels
---   and dependent arguments.
+/-
+  If a constant `c` is of type `∀ (xs : αs), t`,
+    then its valid instance will be `c` with all of its
+    universe levels and dependent arguments instantiated.
+    So, we record the instantiation of universe levels
+    and dependent arguments.
+  
+  As to monomorphization, we will not record instances
+    of monomorphic constants. We will also not record
+    instances of `∃` because it's a construct in HOL.
+-/
 structure ConstInst where
+  name    : Name
   params  : Array Level
   depargs : Array Expr
-  
+
+def ConstInst.equiv (ci₁ ci₂ : ConstInst) : MetaM Bool := Meta.withNewMCtxDepth <| do
+  let ⟨name₁, params₁, depargs₁⟩ := ci₁
+  let ⟨name₂, params₂, depargs₂⟩ := ci₂
+  if name₁ != name₂ || params₁.size != params₂.size || depargs₁.size != depargs₂.size then
+    throwError "ConstInst.equiv :: Unexpected error"
+  for (param₁, param₂) in params₁.zip params₂ do
+    if !(← Meta.isLevelDefEq param₁ param₂) then
+      return false
+  for (arg₁, arg₂) in depargs₁.zip depargs₂ do
+    if !(← Meta.isDefEq arg₁ arg₂) then
+      return false
+  return true
+
+-- Given an hypothesis `t`, we will traverse the hypothesis
+--   to find instances of a constant. Binders of the hypothesis
+--   are not introduced as fvars/mvars, so they remain loose
+--   bound variables inside the body.
+-- So, the criterion that an expression `e` is a valid instance
+--   is that, all dependent arguments are applied, and no
+--   dependent argument contains `ExprMVar`s.
+def constInst? (e : Expr) : CoreM (Option ConstInst) := do
+  let fn := e.getAppFn
+  let args := e.getAppArgs
+  let .const name lvls := fn
+    | return .none
+  -- Do not record instances of monomorphic constants
+  let depargIndexes ← Expr.constDepArgs name
+  if depargIndexes.size == 0 then
+    return none
+  -- Do not record instances of `∃`
+  if name == ``Exists then
+    return none
+  let lastDeparg := depargIndexes[depargIndexes.size - 1]!
+  if args.size ≤ lastDeparg then
+    return none
+  let mut depargs := #[]
+  for idx in depargIndexes do
+    let arg := args[idx]!
+    if arg.hasLooseBVars then
+      return none
+    depargs := depargs.push arg
+  return some ⟨name, ⟨lvls⟩, depargs⟩
+
+partial def collectConstInsts : Expr → CoreM (Array ConstInst)
+-- Note that we never need to inspect `.const Name (ListLevel)`,
+--  because either the constant is monomorphic or it's not
+--  applied (thus its dependent arguments are not instantiated)
+| e@(.app ..) => do
+  let fn := e.getAppFn
+  let args := e.getAppArgs
+  let insts := (← (args.push fn).mapM collectConstInsts).concatMap id
+  match ← constInst? e with
+  | .some ci => return insts.push ci
+  | .none => return insts
+| .lam _ ty body bi => do
+  let insts ← collectConstInsts body
+  -- Do not look into instance binders
+  if bi.isInstImplicit then
+    return insts
+  else
+    return insts ++ (← collectConstInsts ty)
+| .forallE _ ty body bi => do
+  let insts ← collectConstInsts body
+  -- Do not look into instance binders
+  if bi.isInstImplicit then
+    return insts
+  else
+    return insts ++ (← collectConstInsts ty)
+| .letE .. => throwError "collectConstInsts :: Let-expressions should have been reduced"
+| .mdata .. => throwError "collectConstInsts :: mdata should have been consumed"
+| .proj .. => throwError "collectConstInsts :: Projections should have been turned into ordinary expressions"
+| _ => return #[]
+
 -- Array of instances of a polymorphic constant
 abbrev ConstInsts := Array ConstInst
+
+-- Given an array `cis` and a potentially new instance `ci`,
+--   determine whether `ci` is a new instance.
+-- · If `ci` is new, add it to `ConstInsts` and return `true`
+-- · If `ci` is not new, return the original `ConstInsts` and `false`
+def ConstInsts.processInst (cis : ConstInsts) (ci : ConstInst) : MetaM (ConstInsts × Bool) := do
+  for ci' in cis do
+    if ← ci'.equiv ci then
+      return (cis, false)
+  return (cis.push ci, true)
 
 -- Array of instances of assumption
 -- If assumption `H : ∀ (xs : αs), t`, then its instance will be like
 --   `⟨ys.length, fun (ys : βs) => t, (∀ (ys : βs), ty), params⟩`
-abbrev AssumptionInsts := Array (Nat × Lemma)
+abbrev LemmaInsts := Array Lemma
 
 /-
   Monomorphization works as follows:
@@ -51,11 +142,40 @@ abbrev AssumptionInsts := Array (Nat × Lemma)
           and `activeCi`.
 -/
 structure State where
-  -- Dependent arguments of a constant
-  cdepargs : HashMap Name (Array Nat)
-  ciMap    : HashMap Name ConstInsts
-  activeCi : Std.Queue (Name × Nat)
-  asMap    : Array AssumptionInsts
+  ciMap    : HashMap Name ConstInsts := HashMap.empty
+  activeCi : Std.Queue (Name × Nat)  := Std.Queue.empty
+  -- During initialization, we supply an array `lemmas` of lemmas
+  --   `liArr[i]` are instances of `lemmas[i]`.
+  liArr    : Array LemmaInsts        := #[]
+
+abbrev MonoM := StateRefT State MetaM
+
+#genMonadState MonoM
+
+-- Process a potentially new ConstInst. If it's new, return its index
+--   in the corresponding `ConstInsts` array. If it's not new, return
+--   `.none`.
+def processConstInst (ci : ConstInst) : MonoM (Option Nat) := do
+  match (← getCiMap).find? ci.name with
+  | .some insts =>
+    let ⟨insts', new⟩ ← insts.processInst ci
+    setCiMap ((← getCiMap).insert ci.name insts')
+    if new then
+      return .some insts.size
+    else
+      return .none
+  | .none =>
+    setCiMap ((← getCiMap).insert ci.name #[ci])
+    return .some 0
+
+def initializeMonoM (lemmas : Array Lemma) : MonoM Unit := do
+  setLiArr (lemmas.map (fun x => #[x]))
+  for lem in lemmas do
+    let cis ← collectConstInsts lem.type
+    for ci in cis do
+      match (← processConstInst ci) with
+      | .some idx => setActiveCi ((← getActiveCi).enqueue (ci.name, idx))
+      | .none => continue
 
 def State.dequeueActiveCi (s : State) : Option ((Name × Nat) × State) :=
   match s.activeCi.dequeue? with
@@ -165,6 +285,5 @@ def collectPolyLog (cont : HashMap Expr FVarId → Array (Expr × Expr) → Meta
     cont' HashMap.empty #[]
   else
     cont HashMap.empty facts
-  
 
 end Auto.Monomorphization
