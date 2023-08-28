@@ -113,6 +113,10 @@ def ConstInsts.processInst (cis : ConstInsts) (ci : ConstInst) : MetaM (ConstIns
       return (cis, false)
   return (cis.push ci, true)
 
+-- Given an expression `ref` and one of its subexpressions `e`,
+--   try to match `e` against `ci`.
+def ConstInsts.match (ci : ConstInst) (ref : Expr) : Expr → MetaM Unit := sorry
+
 -- Array of instances of assumption
 -- If assumption `H : ∀ (xs : αs), t`, then its instance will be like
 --   `⟨ys.length, fun (ys : βs) => t, (∀ (ys : βs), ty), params⟩`
@@ -177,10 +181,27 @@ def initializeMonoM (lemmas : Array Lemma) : MonoM Unit := do
       | .some idx => setActiveCi ((← getActiveCi).enqueue (ci.name, idx))
       | .none => continue
 
-def State.dequeueActiveCi (s : State) : Option ((Name × Nat) × State) :=
-  match s.activeCi.dequeue? with
-  | .some (elem, a') => .some (elem, {s with activeCi := a'})
-  | .none => .none
+def dequeueActiveCi? : MonoM (Option (Name × Nat)) := do
+  match (← getActiveCi).dequeue? with
+  | .some (elem, ci') =>
+    setActiveCi ci'
+    return .some elem
+  | .none => return .none
+
+def lookupActiveCi! (name : Name) (idx : Nat) : MonoM ConstInst := do
+  let .some cis := (← getCiMap).find? name
+    | throwError "lookupActiveCi :: Unknown constant name {name}"
+  let .some ci := cis[idx]?
+    | throwError "lookupActiveCi :: Index {idx} out of bound"
+  return ci
+
+def saturate : MonoM Unit := do
+  while true do
+    match ← dequeueActiveCi? with
+    | .some (name, idx) =>
+      let ci ← lookupActiveCi! name idx
+      
+    | .none => continue
 
 -- For test purpose
 register_option testCollectPolyLog : Bool := {

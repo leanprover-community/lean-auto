@@ -3,12 +3,41 @@ open Lean Elab Command
 
 namespace Auto
 
-def Expr.binders (e : Expr) : Array (Name × Expr × BinderInfo) :=
+def Expr.forallBinders (e : Expr) : Array (Name × Expr × BinderInfo) :=
   let rec aux (e : Expr) :=
     match e with
     | .forallE n ty b bi => (n, ty, bi) :: aux b
     | _ => []
   Array.mk (aux e)
+
+def Expr.lambdaBinders (e : Expr) : Array (Name × Expr × BinderInfo) :=
+  let rec aux (e : Expr) :=
+    match e with
+    | .lam n ty b bi => (n, ty, bi) :: aux b
+    | _ => []
+  Array.mk (aux e)
+
+def Expr.mkForallBinderDescrs (binders : Array (Name × Expr × BinderInfo)) (e : Expr) :=
+  binders.foldr (fun (n, ty, bi) e => Expr.forallE n ty e bi) e
+
+def Expr.mkLambdaBinderDescrs (binders : Array (Name × Expr × BinderInfo)) (e : Expr) :=
+  binders.foldr (fun (n, ty, bi) e => Expr.lam n ty e bi) e
+
+def Expr.stripForall (n : Nat) (e : Expr) : Option Expr :=
+  match n with
+  | 0 => .some e
+  | n' + 1 =>
+    match e with
+    | .forallE _ _ body _ => Expr.stripForall n' body
+    | _ => .none
+
+def Expr.stripLambda (n : Nat) (e : Expr) : Option Expr :=
+  match n with
+  | 0 => .some e
+  | n' + 1 =>
+    match e with
+    | .lam _ _ body _ => Expr.stripLambda n' body
+    | _ => .none
 
 private def Expr.instArgsIdx (e : Expr) (idx : Nat) : List Nat :=
   match e with

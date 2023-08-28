@@ -106,7 +106,7 @@ where
       | throwError s!"exprDeCompile :: Unknown identifier {cst.constName!}"
     let ty := val.type
     let lparams := val.levelParams
-    let bs := Expr.binders ty
+    let bs := Expr.forallBinders ty
     let extra := bs.size - appliedArgs
     let mut e := e
     for i in [0:extra] do
