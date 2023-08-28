@@ -3,6 +3,7 @@ import Auto.Embedding.Lift
 import Auto.Translation.Assumptions
 import Auto.Lib.ExprExtra
 import Auto.Lib.MonadUtils
+import Auto.Lib.Containers
 open Lean
 
 initialize
@@ -24,19 +25,41 @@ open Embedding
 -/
 structure ConstInst where
   name    : Name
-  params  : Array Level
+  levels  : Array Level
   depargs : Array Expr
 
 def ConstInst.equiv (ci₁ ci₂ : ConstInst) : MetaM Bool := Meta.withNewMCtxDepth <| do
-  let ⟨name₁, params₁, depargs₁⟩ := ci₁
-  let ⟨name₂, params₂, depargs₂⟩ := ci₂
-  if name₁ != name₂ || params₁.size != params₂.size || depargs₁.size != depargs₂.size then
+  let ⟨name₁, levels₁, depargs₁⟩ := ci₁
+  let ⟨name₂, levels₂, depargs₂⟩ := ci₂
+  if name₁ != name₂ || levels₁.size != levels₂.size || depargs₁.size != depargs₂.size then
     throwError "ConstInst.equiv :: Unexpected error"
-  for (param₁, param₂) in params₁.zip params₂ do
+  for (param₁, param₂) in levels₁.zip levels₂ do
     if !(← Meta.isLevelDefEq param₁ param₂) then
       return false
   for (arg₁, arg₂) in depargs₁.zip depargs₂ do
     if !(← Meta.isDefEq arg₁ arg₂) then
+      return false
+  return true
+
+def ConstInst.matchExpr (e : Expr) (ci : ConstInst) : MetaM Bool := do
+  let fn := e.getAppFn
+  let .const name lvls := fn
+    | return false
+  if name != ci.name then
+    return false
+  if lvls.length != ci.levels.size then
+    throwError "ConstInst.matchExpr :: Unexpected error"
+  for (lvl, lvl') in lvls.zip ci.levels.data do
+    if !(← Meta.isLevelDefEq lvl lvl') then
+      return false
+  let depargsIdx ← Expr.constDepArgs ci.name
+  if depargsIdx.size != ci.depargs.size then
+    throwError "ConstInst.matchExpr :: Unexpected error"
+  let args := e.getAppArgs
+  for (idx, ciarg) in depargsIdx.zip ci.depargs do
+    let .some arg := args[idx]?
+      | return false
+    if !(← Meta.isDefEq arg ciarg) then
       return false
   return true
 
@@ -47,7 +70,7 @@ def ConstInst.equiv (ci₁ ci₂ : ConstInst) : MetaM Bool := Meta.withNewMCtxDe
 -- So, the criterion that an expression `e` is a valid instance
 --   is that, all dependent arguments are applied, and no
 --   dependent argument contains `ExprMVar`s.
-def constInst? (e : Expr) : CoreM (Option ConstInst) := do
+def ConstInst.ofExpr? (e : Expr) : CoreM (Option ConstInst) := do
   let fn := e.getAppFn
   let args := e.getAppArgs
   let .const name lvls := fn
@@ -78,7 +101,7 @@ partial def collectConstInsts : Expr → CoreM (Array ConstInst)
   let fn := e.getAppFn
   let args := e.getAppArgs
   let insts := (← (args.push fn).mapM collectConstInsts).concatMap id
-  match ← constInst? e with
+  match ← ConstInst.ofExpr? e with
   | .some ci => return insts.push ci
   | .none => return insts
 | .lam _ ty body bi => do
@@ -113,26 +136,65 @@ def ConstInsts.processInst (cis : ConstInsts) (ci : ConstInst) : MetaM (ConstIns
       return (cis, false)
   return (cis.push ci, true)
 
--- Given an expression `ref` and one of its subexpressions `e`,
---   try to match `e` against `ci`.
-def ConstInsts.match (ci : ConstInst) (ref : Expr) : Expr → MetaM Unit := sorry
+-- Given an MLemmaInst `mi` and a subexpressions `e` of `mi.type`,
+--   try to match `e` and the subexpressions of `e` against `ci`.
+-- This function is used by `LemmaInst.matchConstInst` only
+private partial def MLemmaInst.matchConstInst (ci : ConstInst) (mi : MLemmaInst) : Expr → MetaM (HashSet LemmaInst)
+| .bvar _ => throwError "MLemmaInst.matchConstInst :: Loose bound variable"
+| e@(.app ..) => do
+  let fn := e.getAppFn
+  let args := e.getAppArgs
+  let mut ret ← MLemmaInst.matchConstInst ci mi fn
+  for arg in args do
+    ret := mergeHashSet ret (← MLemmaInst.matchConstInst ci mi arg)
+  let s ← saveState
+  if (← ci.matchExpr e) then
+    ret := ret.insert (← LemmaInst.ofMLemmaInst mi)
+  restoreState s
+  return ret
+| e@(.forallE ..) => Meta.forallTelescope e fun xs body => do
+    let mut ret ← MLemmaInst.matchConstInst ci mi body
+    for x in xs do
+      let .fvar id := x
+        | throwError "MLemmaInst.matchConstInst :: Unexpected error"
+      let type ← id.getType
+      ret := mergeHashSet ret (← MLemmaInst.matchConstInst ci mi type)
+    return ret
+| .lam name ty body bi => Meta.withLocalDecl name bi ty fun _ => do
+    let tyInst ← MLemmaInst.matchConstInst ci mi ty
+    let bodyInst ← MLemmaInst.matchConstInst ci mi body
+    return mergeHashSet tyInst bodyInst
+| .letE .. => throwError "MLemmaInst.matchConstInst :: Let-expressions should have been reduced"
+| .mdata .. => throwError "MLemmaInst.matchConstInst :: mdata should have been consumed"
+| .proj .. => throwError "MLemmaInst.matchConstInst :: Projections should have been turned into ordinary expressions"
+| _ => return HashSet.empty
 
--- Array of instances of assumption
--- If assumption `H : ∀ (xs : αs), t`, then its instance will be like
---   `⟨ys.length, fun (ys : βs) => t, (∀ (ys : βs), ty), params⟩`
-abbrev LemmaInsts := Array Lemma
+-- Given a LemmaInst `li` and a ConstInst `ci`, try to match all subexpressions
+--   of `li` against `ci`
+def LemmaInst.matchConstInst (ci : ConstInst) (li : LemmaInst) : MetaM (HashSet LemmaInst) :=
+  Meta.withNewMCtxDepth do
+    let mi ← MLemmaInst.ofLemmaInst li
+    MLemmaInst.matchConstInst ci mi mi.type
+
+abbrev LemmaInsts := Array LemmaInst
+
+def LemmaInsts.processInst (lis : LemmaInsts) (li : LemmaInst) : MetaM (LemmaInsts × Bool) := do
+  for li' in lis do
+    if ← li'.toLemma.equivQuick li.toLemma then
+      return (lis, false)
+  return (lis.push li, true)
 
 /-
   Monomorphization works as follows:
   (1) Compute the number of `∀` binders for each input assumption.
-      They form the initial elements of `asMap`
+      They form the initial elements of `liArr`
   (2) Scan through all assumptions to find subterms that are
       valid instances of constants (dependent arguments fully
       instantiated). They form the initial elements of `ciMap`
       and `activeCi`
   (3) Repeat:
       · Dequeue an element `(name, n)` from `activeCi`
-      · For each element `ais : AssumptionInsts` in `asMap`,
+      · For each element `ais : LemmaInsts` in `liArr`,
         for each expression `e` in `ais`, traverse `e` to
         find applications `app := name ...` of constant `name`.
         Try unifying `app` with `ciMap[name][n].snd`.
@@ -150,7 +212,7 @@ structure State where
   activeCi : Std.Queue (Name × Nat)  := Std.Queue.empty
   -- During initialization, we supply an array `lemmas` of lemmas
   --   `liArr[i]` are instances of `lemmas[i]`.
-  liArr    : Array LemmaInsts        := #[]
+  lisArr    : Array LemmaInsts        := #[]
 
 abbrev MonoM := StateRefT State MetaM
 
@@ -159,27 +221,27 @@ abbrev MonoM := StateRefT State MetaM
 -- Process a potentially new ConstInst. If it's new, return its index
 --   in the corresponding `ConstInsts` array. If it's not new, return
 --   `.none`.
-def processConstInst (ci : ConstInst) : MonoM (Option Nat) := do
+def processConstInst (ci : ConstInst) : MonoM Unit := do
   match (← getCiMap).find? ci.name with
   | .some insts =>
     let ⟨insts', new⟩ ← insts.processInst ci
     setCiMap ((← getCiMap).insert ci.name insts')
     if new then
-      return .some insts.size
+      setActiveCi ((← getActiveCi).enqueue (ci.name, insts.size))
     else
-      return .none
+      return
   | .none =>
     setCiMap ((← getCiMap).insert ci.name #[ci])
-    return .some 0
+    setActiveCi ((← getActiveCi).enqueue (ci.name, 0))
 
 def initializeMonoM (lemmas : Array Lemma) : MonoM Unit := do
-  setLiArr (lemmas.map (fun x => #[x]))
+  let lemmaInsts ← liftM <| lemmas.mapM LemmaInst.ofLemma
+  let lemmaInsts := lemmaInsts.map (fun x => #[x])
+  setLisArr lemmaInsts
   for lem in lemmas do
     let cis ← collectConstInsts lem.type
     for ci in cis do
-      match (← processConstInst ci) with
-      | .some idx => setActiveCi ((← getActiveCi).enqueue (ci.name, idx))
-      | .none => continue
+      processConstInst ci
 
 def dequeueActiveCi? : MonoM (Option (Name × Nat)) := do
   match (← getActiveCi).dequeue? with
@@ -195,13 +257,43 @@ def lookupActiveCi! (name : Name) (idx : Nat) : MonoM ConstInst := do
     | throwError "lookupActiveCi :: Index {idx} out of bound"
   return ci
 
-def saturate : MonoM Unit := do
+def saturate (threshold : Nat) : MonoM Unit := do
+  let mut cnt := 0
   while true do
+    cnt := cnt + 1
+    if cnt > threshold then
+      trace[auto.monomorphization] "saturate :: Threshold {threshold} reached"
+      return
     match ← dequeueActiveCi? with
-    | .some (name, idx) =>
-      let ci ← lookupActiveCi! name idx
-      
+    | .some (name, cisIdx) =>
+      let ci ← lookupActiveCi! name cisIdx
+      let lisArr ← getLisArr
+      for (lis, idx) in lisArr.zip ⟨List.range lisArr.size⟩ do
+        cnt := cnt + 1
+        let mut newLis := lis
+        for li in lis do
+          cnt := cnt + 1
+          let matchLis := (← LemmaInst.matchConstInst ci li).toArray
+          for matchLi in matchLis do
+            cnt := cnt + 1
+            if cnt > threshold then
+              trace[auto.monomorphization] "saturate :: Threshold {threshold} reached"
+              return
+            let (newLis', new?) ← newLis.processInst matchLi
+            newLis := newLis'
+            -- A new instance of an assumption
+            if new? then
+              let newCis ← collectConstInsts matchLi.type
+              for newCi in newCis do
+                processConstInst newCi
+        setLisArr ((← getLisArr).set! idx newLis)
     | .none => continue
+
+def monomorphize (lemmas : Array Lemma) (threshold : Nat) : MetaM State := do
+  let (_, ret) ← (do
+    initializeMonoM lemmas
+    saturate threshold).run {}
+  return ret
 
 -- For test purpose
 register_option testCollectPolyLog : Bool := {

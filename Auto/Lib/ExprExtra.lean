@@ -48,6 +48,25 @@ private def Expr.instArgsIdx (e : Expr) (idx : Nat) : List Nat :=
     | _ => trail
   | _ => .nil
 
+def Expr.getAppFnN (n : Nat) (e : Expr) : Option Expr :=
+  match n with
+  | 0 => .some e
+  | n' + 1 =>
+    match e with
+    | .app fn _ => Expr.getAppFnN n' fn
+    | _ => .none
+
+private def Expr.getAppBoundedArgsAux (n : Nat) (e : Expr) : List Expr :=
+  match n with
+  | 0 => .nil
+  | n' + 1 =>
+    match e with
+    | .app fn arg => arg :: Expr.getAppBoundedArgsAux n' fn
+    | _ => .nil
+
+def Expr.getAppBoundedArgs (n : Nat) (e : Expr) : Array Expr :=
+  ⟨Expr.getAppBoundedArgsAux n e⟩
+
 -- Given an expression `e`, which is the type of some
 --   term `t`, find the arguments of `t` that are class
 --   instances
