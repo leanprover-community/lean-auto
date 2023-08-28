@@ -23,7 +23,7 @@ inductive Instruction where
 
 def parseInstr : TSyntax ``Auto.autoinstr → TacticM Instruction
 | `(autoinstr|) => return .none
-| `(autoinstr|👍) => throwError "We appreciate your flatter 😎"
+| `(autoinstr|👍) => throwError "Your flatter is appreciated 😎"
 | _ => throwUnsupportedSyntax
 
 inductive HintElem where

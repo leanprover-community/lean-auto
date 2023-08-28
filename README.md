@@ -1,4 +1,6 @@
-# lean-auto
+![Logo](Logo.bmp)
+**The above logo is temporary**
+
 Experiments in automation for Lean
 
 ## Coding Style
