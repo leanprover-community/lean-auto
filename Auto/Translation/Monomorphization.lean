@@ -290,9 +290,11 @@ def saturate (threshold : Nat) : MonoM Unit := do
     | .none => continue
 
 def monomorphize (lemmas : Array Lemma) (threshold : Nat) : MetaM State := do
+  let startTime ← IO.monoMsNow
   let (_, ret) ← (do
     initializeMonoM lemmas
     saturate threshold).run {}
+  trace[auto.monomorphization] "Monomorphization took {(← IO.monoMsNow) - startTime}ms"
   return ret
 
 -- For test purpose

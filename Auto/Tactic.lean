@@ -116,10 +116,12 @@ def runAuto
   (hintstx : TSyntax ``hints) (ngoal : FVarId) : TacticM Result := do
   let instr ← parseInstr instrstx
   let inputHints ← parseHints hintstx
+  let startTime ← IO.monoMsNow
   let lctxLemmas ← collectLctxLemmas inputHints.lctxhyps ngoal
   traceLemmas "Lemmas collected from local context:" lctxLemmas
   let userLemmas ← collectUserLemmas inputHints.terms
   traceLemmas "Lemmas collected from user-provided terms:" userLemmas
+  trace[auto.tactic] "Preprocessing took {(← IO.monoMsNow) - startTime}ms"
   let lemmas := lctxLemmas ++ userLemmas
   match instr with
   | .none =>
