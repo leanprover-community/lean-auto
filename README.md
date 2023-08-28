@@ -1,7 +1,7 @@
 ![Logo](Logo.bmp)
-**The above logo is temporary**
 
-Experiments in automation for Lean
+Experiments in automation for Lean  
+Type **"auto 👍"** to see whether auto is set up.
 
 ## Coding Style
 * ``Array``/``List``: In computational code, we only use ``Array``, functions whose signature contains ``List`` should be declared as ``private``. In verification code, we only use ```List```?
