@@ -11,7 +11,8 @@ initialize
 
 /-
   ULift for system `λP`, i.e. supports `types depending on terms`
-    and `terms depending on terms`.
+    and `terms depending on terms`. This file is merely here to
+    show what universe lifting means in the most general case.
   (1) For functions `f` used in user-provided facts, call
       `cstULift` to obtain a lifted version of `f` where
       all the arguments are lifted versions of the original

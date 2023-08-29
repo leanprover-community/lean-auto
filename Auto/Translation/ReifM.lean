@@ -23,18 +23,24 @@ structure State where
   --   versions will be added to `facts`.
   -- The first `Expr` is the proof, and the second `Expr` is the fact
   facts           : Array UMonoFact     := #[]
-  -- During monomorphization, interpreted polymorphic
-  --   constants (=, ∀, ∃, →, Bitvec) will be turned into let-free variables
-  --   representing (instances of) these constants. We have to record
-  --   these free variables so that we know they're interpreted
-  --   constants during reification.
-  iPolyLog        : HashMap FVarId Expr := HashMap.empty
+  -- During monomorphization, polymorphic constants will be turned
+  --   into free variables. This map records the original expression
+  --   corresponding to these free variables.
+  polyVal         : HashMap FVarId Expr := HashMap.empty
 
 abbrev ReifM := StateT State MetaM
+
 #genMonadState ReifM
 
 @[inline] def pushFVar (id : FVarId) : ReifM Unit := do
   let fvarsToAbstract ← getFvarsToAbstract
   setFvarsToAbstract (fvarsToAbstract.push id)
+
+-- Given an expression `e`, if it's a `fvar` and is in `polyVal`,
+--   return its value recorded in `polyVal`. Otherwise return `e`
+@[inline] def resolvePolyVal (e : Expr) : ReifM Expr :=
+  match e with
+  | .fvar id => do return ((← getPolyVal).find? id).getD e
+  | _ => return e
 
 end Auto.Reif

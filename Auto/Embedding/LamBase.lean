@@ -231,8 +231,8 @@ def LamBaseTerm.reprPrec (l : LamBaseTerm) (n : Nat) :=
     | .forallEI n => f!".forallEI {n}"
     | .existEI n  => f!".existEI {n}"
     | .eq s       => f!".eq {LamSort.reprPrec s 1}"
-    | .forallE s  => f!".forallE {LamSort.reprPrec s 1}}"
-    | .existE s   => f!".existE {LamSort.reprPrec s 1}}"
+    | .forallE s  => f!".forallE {LamSort.reprPrec s 1}"
+    | .existE s   => f!".existE {LamSort.reprPrec s 1}"
   if n == 0 then
     f!"Auto.Embedding.Lam.LamBaseTerm" ++ s
   else

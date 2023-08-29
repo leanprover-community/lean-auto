@@ -123,37 +123,39 @@ def runAuto
   traceLemmas "Lemmas collected from user-provided terms:" userLemmas
   trace[auto.tactic] "Preprocessing took {(← IO.monoMsNow) - startTime}ms"
   let lemmas := lctxLemmas ++ userLemmas
-  -- Testing monomorphization
-  let mst ← Monomorphization.monomorphize lemmas
-  throwError "Auto :: Not implemented"
+  -- ! Testing monomorphization
+  -- let mst ← Monomorphization.monomorphize lemmas
+  -- throwError "Auto :: Not implemented"
   match instr with
   | .none =>
     -- Testing. Skipping universe level instantiation and monomorphization
-    let afterReify (arr : Array Nat) : LamReif.ReifM Expr := (do
+    let afterReify (ufacts : Array Reif.UMonoFact) : LamReif.ReifM Expr := (do
+      let arr ← LamReif.reifFacts ufacts
       let valids ← arr.mapM LamReif.lookupValidTable!
       let exportFacts := valids.map (·.2)
-      for (id, lams) in (← LamReif.getVarVal) do
-        trace[auto.tactic] "FVar: {Expr.fvar id}, λ Sort: {repr lams}"
+      for (e, lams) in (← LamReif.getVarVal) do
+        trace[auto.tactic] "Expr: {e}, λ Sort: {repr lams}"
       let proof ← Lam2D.callDuper exportFacts
       let proofLamTerm := exportFacts.foldr (fun t' t => t'.mkImp t) (.base .falseE)
       trace[auto.printProof] "Duper found proof {← instantiateMVars proof}"
-      let imp ← LamReif.newAssertion proof (← LamReif.mkImportVersion proofLamTerm)
+      let imp ← LamReif.newAssertion proof proofLamTerm
       let contra ← LamReif.impApps imp arr
       let checker ← LamReif.buildCheckerExpr contra
       let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
       Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra
-      -- smt
+      -- ! smt
       -- let commands := (← (lamFOL2SMT (← LamReif.getVarVal) exportFacts).run {}).1
       -- let _ ← liftM <| commands.mapM (fun c => IO.println s!"Command: {c}")
       -- Solver.SMT.querySolver commands
       )
     let afterMonomorphization : Reif.ReifM Expr := (do
       let ufacts ← liftM <| Reif.getFacts
-      ((LamReif.uLiftAndReify ufacts afterReify).run' {}).run')
+      let u ← LamReif.computeMaxLevel ufacts
+      (afterReify ufacts).run' {u := u})
     let proof ← Monomorphization.collectPolyLog (fun hmap mfacts =>
       let hmaprev := hmap.toList.foldl (fun hm (key, val) => hm.insert val key) HashMap.empty
       -- Skipping monomorphization
-      afterMonomorphization.run' { facts := mfacts, iPolyLog := hmaprev })
+      afterMonomorphization.run' { facts := mfacts, polyVal := hmaprev })
       (lemmas.map (fun x => (x.proof, x.type)))
     trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
     return .unsat proof

@@ -42,7 +42,7 @@ def withTypeAtomAsFVar (atom : Nat) (cont : ExternM Expr) : ExternM Expr := do
   if (← getTypeAtomFVars).contains atom then
     return ← cont
   let freshId := (← mkFreshId).toString
-  let (_, orig, lvl) ← lookupTyVal! atom
+  let (e, lvl) ← lookupTyVal! atom
   Meta.withLocalDeclD ("_exTypeAtom_" ++ freshId) (.sort lvl) (fun newFVar =>
     withReader (fun s => {s with typeAtomFVars := s.typeAtomFVars.insert atom newFVar.fvarId!}) (do
       let abst ← Meta.mkLambdaFVars #[newFVar] (← cont)
@@ -58,7 +58,7 @@ def withTypeAtomAsFVar (atom : Nat) (cont : ExternM Expr) : ExternM Expr := do
       -- However, the above term will be type correct if we `headBeta1`
       --   at each `withTypeAtomAsFVar
       match abst with
-      | .lam _ _ body _ => return body.instantiate1 orig
+      | .lam _ _ body _ => return body.instantiate1 e
       | _ => throwError "withTypeAtomAsFVar :: Unexpected expression {abst}"
       )
     )
@@ -88,7 +88,7 @@ def withTermAtomAsFVar (atom : Nat) (cont : ExternM Expr) : ExternM Expr := do
   if (← getTermAtomFVars).contains atom then
     return ← cont
   let freshId := (← mkFreshId).toString
-  let (_, e, s) ← lookupVarVal! atom
+  let (e, s) ← lookupVarVal! atom
   let sinterp ← interpLamSortAsUnlifted s
   Meta.withLocalDeclD ("_exTermAtom_" ++ freshId) sinterp (fun newFVar =>
     withReader (fun s => {s with termAtomFVars := s.termAtomFVars.insert atom newFVar.fvarId!}) (do
