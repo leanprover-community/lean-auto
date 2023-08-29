@@ -18,11 +18,7 @@ Type **"auto 👍"** to see whether auto is set up.
 * Let $H : \alpha$ be an assumption. We require that
   * $(1)$ If the type $\beta$ of any subterm $t$ of $\alpha$ depends on a bound variable $x$ inside $\alpha$, and $\beta$ is not of type $Prop$, then $x$ must be instantiated. Examples: [Monomorphization](./Doc/Monomorphization.lean), section `InstExamples`
   * $(2)$ If any binder $x$ of $\alpha$ has binderinfo `instImplicit`, then the binder $x$ must be instantiated via typeclass inference.
-* We define the **skeleton** of an expression $e$, denoted as $\mathsf{skel}(e)$, to be the expression with anything associated with typeclass stripped off
-  * For example, ```∀ (a : A) [inst : HAdd A A A], HAdd.hAdd A A A inst a a = HAdd.hAdd A A A inst a a``` becomes ```∀ (a : A), HAdd.hAdd A A A a a = HAdd.hadd A A A a a```
-* **Fact 1**: If the type of an ``instImplicit`` forall binder of a user-provided fact depends on a bound variable `x`, then `x` usually occurs in the skeleton of the body.
-* **Fact 2**: Non-prop, non-class type constructors usually does not take typeclass instance as arguments.
-* Now, we describe an algorithm to check $(1)$. The algorithm is an approximation of what it should be, and the approximation is based on the **Fact 1**. The algorithm runs as follows: Given an assumption $H : \alpha$, do check $(1)$ for $\mathsf{skel}(\alpha)$.
+* **TODO**
 
 ## Translation Workflow (Tentative)
 * Collecting assumptions from local context and user-provided facts
@@ -30,11 +26,11 @@ Type **"auto 👍"** to see whether auto is set up.
   * We also $\beta$ reduce user provided facts so that there are nothing like $(\lambda x. t_1) \ t_2$
 * $CIC \to COC$: Collecting constructors and recursors for inductive types (effectively, not directly)
   * e.g collecting equational theorem for *match* constructs
-  * e.g collect fields of typeclasses (we probably won't do so because typeclass can get very complicated and there are simply too many fields)
   * e.g collect constructors for inductively defined propositions
 * $COC \to COC(\lambda^{c.u.})$: Monomorphization
+  * Monomorphize all (dependently typed/universe polymorphic) facts to higher-order universe-monomorphic facts
   * $c.u.$ stands for "constant universe level"
-  * Note that at this stage, all the facts we've obtained are still valid $CIC$ expressions and are directly provable from the assumptions.
+  * Note that at this stage, all the facts we've obtained are still valid $CIC$ expressions and has convenient CIC proofs from the assumptions.
 * $COC(\lambda^{c.u.}) \to COC(\lambda)$
   * We want all types $α$ occuring in the signature of constants and variables to be of sort ```Type (u + 1)```, i.e., $α : Type \ (u + 1)$. This is necessary because we want to write a checker (instead of directly reconstructing proof in DTT) and the valuation function from less expressive logic to dependent type theory requires [the elements in the range of the valuation function] to be [of the same sort].
   * To do this, we use ```GLift```. For example, ```Nat.add``` is transformed into ```Nat.addLift```
@@ -60,4 +56,4 @@ Type **"auto 👍"** to see whether auto is set up.
 
 ## Checker
 * The checker is based on a deep embedding of simply-typed lambda calculus into dependent type theory.
-* The checker is slow on large input assumptions. For example, it takes ``2.5s`` to typecheck the final example in ```Test/Tactics/FirstOrder.lean```, and ```9s``` to typecheck the final example in ```BinderComplexity.lean```. However, this is probably acceptable for mathlib usages, because e.g ```Mathlib/Analysis/BoxIntegral/DivergenceTheorem.lean``` has two theorems that take ```4s``` to compile (but a large portion of the ```4s``` are spent on typeclass inference)
+* The checker is slow on large input assumptions. For example, it takes ``1.4s`` to typecheck the final example in ```Test/Tactics/FirstOrder.lean```, and ```6.3s``` to typecheck the final example in ```BinderComplexity.lean```. However, this is probably acceptable for mathlib usages, because e.g ```Mathlib/Analysis/BoxIntegral/DivergenceTheorem.lean``` has two theorems that take ```4s``` to compile (but a large portion of the ```4s``` are spent on typeclass inference)

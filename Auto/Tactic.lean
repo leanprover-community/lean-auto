@@ -134,11 +134,11 @@ def runAuto
   trace[auto.tactic] "Preprocessing took {(← IO.monoMsNow) - startTime}ms"
   let lemmas := lctxLemmas ++ userLemmas
   -- ! Testing monomorphization
-  let mst ← Monomorphization.monomorphize lemmas
-  for x in mst.lisArr.concatMap id do
-    if ← Monomorphization.LemmaInst.monomorphic x then
-      trace[auto.tactic] "Monomorphized :: {x}"
-  throwError "Auto :: Not implemented"
+  -- let mst ← Monomorphization.monomorphize lemmas
+  -- for x in mst.lisArr.concatMap id do
+  --   if ← Monomorphization.LemmaInst.monomorphic x then
+  --     trace[auto.tactic] "Monomorphized :: {x}"
+  -- throwError "Auto :: Not implemented"
   match instr with
   | .none =>
     -- Testing. Skipping universe level instantiation and monomorphization
