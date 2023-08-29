@@ -1,7 +1,6 @@
 /-
 Problems in First Order Logic.
 -/
-import Mathlib.Data.Nat.Basic
 import Auto.Tactic
 
 -- From TPIL
@@ -119,6 +118,3 @@ example (x y : Nat) (f : Nat → Nat) : x = y → f x = f y := by
   auto
 
 end
-
-
-

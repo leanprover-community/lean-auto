@@ -189,16 +189,17 @@ def resolveImport : LamTerm → ReifM LamTerm
 | .app s fn arg => return .app s (← resolveImport fn) (← resolveImport arg)
 
 -- This is the inverse of `resolveImport`
--- After exporting `LamTerm`s to external prover and running
---   the external prover, we would like to accept the proof
---   returned by the prover. If we already know that the proof
---   returned by the prover corresponds to `t : LamTerm`, then
---   we don't need to `uLiftAndReify` the proof again.
--- However, since `t` is exported from `ReifM`, all import
---   versions of `eq, ∀, ∃` are already resolved and `t.interp`
---   may not be defeq to the type of the proof returned by
---   the prover. So, we have to build the import version `tI`
---   of `t` so that `tI.interp ≝ proof`
+-- · When importing external proof `H : α`, we will reify `α`
+--   into `t : LamTerm` using `reifTerm`. The `t` returned
+--   by `reifTerm` has `eq` for `Eq`, `forallE` for `∀` and
+--   `existE` for `∃`.
+-- · It's easy to see that `t.interp` will not be definitionally
+--   equal to `α` because `=, ∀, ∃` within `α` operates on the
+--   original domain, while `=, ∀, ∃` in `t.interp` operates on
+--   the lifted domain
+-- · Therefore, we need to turn `=, ∀, ∃` in `t` into import
+--   version to get `t'`, and design an appropriate `ilVal`,
+--   such that `GLift.down t'.interp` is definitionally equal to `α`   
 def mkImportVersion : LamTerm → ReifM LamTerm
 | .atom n => return (.atom n)
 | .base b =>
@@ -335,7 +336,7 @@ section ILLifting
 
 end ILLifting
 
--- Accept a new free variable representing term atom
+-- Accept a new expression representing λterm atom
 -- Returns the index of it in the `varVal` array
 def newTermExpr (e : Expr) (sort : LamSort) : ReifM LamTerm := do
   let varMap ← getVarMap
