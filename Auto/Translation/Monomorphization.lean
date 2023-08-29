@@ -17,6 +17,11 @@ register_option auto.mono.saturationThreshold : Nat := {
     " instances generated during the saturation loop of monomorphization"
 }
 
+register_option auto.mono.recordInstInst : Bool := {
+  defValue := false
+  descr := "Whether to record instances of constants with the `instance` attribute"
+}
+
 namespace Auto.Monomorphization
 open Embedding
 
@@ -27,10 +32,10 @@ open Embedding
     So, we record the instantiation of universe levels
     and dependent arguments.
   
-  As to monomorphization, we will not record instances
-    of monomorphic constants. We will also not record
-    instances of `∃` and `Eq` because they're constructs
-    in HOL.
+  As to monomorphization, we will not record instances of
+    · monomorphic constants
+    · `∃` and `Eq`
+    · constants with `instance` attribute
 -/
 structure ConstInst where
   name    : Name
@@ -91,6 +96,9 @@ def ConstInst.ofExpr? (e : Expr) : CoreM (Option ConstInst) := do
   let args := e.getAppArgs
   let .const name lvls := fn
     | return .none
+  -- Do not record instances of a constant with attribute `instance`
+  if (← Meta.isInstance name) && !(auto.mono.recordInstInst.get (← getOptions)) then
+    return .none
   -- Do not record instances of `∃` or `Eq`
   if name == ``Exists || name == ``Eq then
     return none
