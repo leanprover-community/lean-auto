@@ -114,6 +114,24 @@ def Expr.constInstDepArgs (c : Name) : CoreM (Array Nat) := do
     | throwError "Expr.constInstDepArgs :: Unknown constant {c}"
   return Expr.instDepArgs decl.type
 
+-- Turn all `Prop` binders into `True`
+private partial def Expr.isMonomorphicFactAux : Expr → MetaM Expr
+| .forallE name ty body bi => do
+  let ty := if (← Meta.isProp ty) ∧ !body.hasLooseBVars then .const ``False [] else ty
+  Meta.withLocalDecl name bi ty fun x => do
+    let body := body.instantiate1 x
+    let body ← isMonomorphicFactAux body
+    Meta.mkForallFVars #[x] body
+| _ => pure (.const ``False [])
+
+-- Test whether `e` is a monomorphic fact.
+-- `e` is a monomorphic fact iff for all subterms `t : α` of `e`
+--    where `α` is not of type `Prop`, `α` does not depend on bound
+--    variables.
+def Expr.isMonomorphicFact (e : Expr) : MetaM Bool := do
+  let e ← Expr.isMonomorphicFactAux e
+  return (Expr.depArgs e).size == 0
+
 -- This should only be used when we're sure that reducing `ty`
 --   won't be too expensive
 def normalizeType (ty : Expr) : MetaM Expr := do

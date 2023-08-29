@@ -91,6 +91,13 @@ def collectLctxLemmas (lctxhyps : Bool) (ngoal : FVarId) : TacticM (Array Lemma)
         lemmas := lemmas.push ⟨mkFVar fVarId, declType, #[]⟩
     return lemmas
 
+def checkDuplicatedFact (terms : Array Term) : TacticM Unit :=
+  let n := terms.size
+  for i in [0:n] do
+    for j in [i+1:n] do
+      if terms[i]? == terms[j]? then
+        throwError "Auto does not accept duplicated input terms"
+
 def collectUserLemmas (terms : Array Term) : TacticM (Array Lemma) :=
   Meta.withNewMCtxDepth do
     let mut lemmas := #[]
@@ -121,12 +128,16 @@ def runAuto
   let startTime ← IO.monoMsNow
   let lctxLemmas ← collectLctxLemmas inputHints.lctxhyps ngoal
   traceLemmas "Lemmas collected from local context:" lctxLemmas
+  checkDuplicatedFact inputHints.terms
   let userLemmas ← collectUserLemmas inputHints.terms
   traceLemmas "Lemmas collected from user-provided terms:" userLemmas
   trace[auto.tactic] "Preprocessing took {(← IO.monoMsNow) - startTime}ms"
   let lemmas := lctxLemmas ++ userLemmas
   -- ! Testing monomorphization
   let mst ← Monomorphization.monomorphize lemmas
+  for x in mst.lisArr.concatMap id do
+    if ← Monomorphization.LemmaInst.monomorphic x then
+      trace[auto.tactic] "Monomorphized :: {x}"
   throwError "Auto :: Not implemented"
   match instr with
   | .none =>

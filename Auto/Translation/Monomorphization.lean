@@ -211,6 +211,21 @@ def LemmaInst.matchConstInst (ci : ConstInst) (li : LemmaInst) : MetaM (HashSet 
   restoreState s
   return ret
 
+def LemmaInst.monomorphic (lem : LemmaInst) : MetaM Bool := do
+  if lem.params.size != 0 then
+    return false
+  if !(← Expr.isMonomorphicFact lem.type) then
+    return false
+  if auto.mono.instantiateInstanceArgs.get (← getOptions) then
+    (Meta.forallTelescope lem.type fun xs _ => do
+      for x in xs do
+        let ty ← x.fvarId!.getType
+        if let .some _ ← Meta.isClass? ty then
+          return false
+      return true)
+  else
+    return true
+
 abbrev LemmaInsts := Array LemmaInst
 
 def LemmaInsts.newInst? (lis : LemmaInsts) (li : LemmaInst) : MetaM Bool := do

@@ -6,6 +6,7 @@ import Mathlib.Data.Set.Function
 
 set_option auto.prep.redMode "reducible"
 set_option trace.auto.mono true
+set_option trace.auto.tactic true
 
 set_option trace.auto.printLemmas true in
 set_option trace.auto.mono.printLemmaInst true in
