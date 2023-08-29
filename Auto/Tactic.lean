@@ -80,27 +80,29 @@ instance : ToMessageData Result where
     (MessageData.array es (fun (id, e) => m!"{mkFVar id} := {e}"))
   | .unknown => m!"Result.unknown"
 
-def collectLctxLemmas (lctxhyps : Bool) (ngoal : FVarId) : TacticM (Array Lemma) := do
-  let fVarIds := (if lctxhyps then (← getLCtx).getFVarIds else #[ngoal])
-  let mut lemmas := #[]
-  for fVarId in fVarIds do
-    let decl ← FVarId.getDecl fVarId
-    if ¬ decl.isAuxDecl ∧ (← Meta.isProp decl.type) then
-      let declType ← Prep.preprocessTerm (← instantiateMVars decl.type)
-      lemmas := lemmas.push ⟨mkFVar fVarId, declType, #[]⟩
-  return lemmas
+def collectLctxLemmas (lctxhyps : Bool) (ngoal : FVarId) : TacticM (Array Lemma) :=
+  Meta.withNewMCtxDepth do
+    let fVarIds := (if lctxhyps then (← getLCtx).getFVarIds else #[ngoal])
+    let mut lemmas := #[]
+    for fVarId in fVarIds do
+      let decl ← FVarId.getDecl fVarId
+      if ¬ decl.isAuxDecl ∧ (← Meta.isProp decl.type) then
+        let declType ← Prep.preprocessTerm (← instantiateMVars decl.type)
+        lemmas := lemmas.push ⟨mkFVar fVarId, declType, #[]⟩
+    return lemmas
 
-def collectUserLemmas (terms : Array Term) : TacticM (Array Lemma) := do
-  let mut lemmas := #[]
-  for lems in ← terms.mapM Prep.elabLemma do
-    for ⟨proof, type, params⟩ in lems do
-      if ← Meta.isProp type then
-        let type ← Prep.preprocessTerm (← instantiateMVars type)
-        lemmas := lemmas.push ⟨proof, type, params⟩
-      else
-        -- **TODO**: Relax condition?
-        throwError "invalid lemma {type} for auto, proposition expected"
-  return lemmas
+def collectUserLemmas (terms : Array Term) : TacticM (Array Lemma) :=
+  Meta.withNewMCtxDepth do
+    let mut lemmas := #[]
+    for lems in ← terms.mapM Prep.elabLemma do
+      for ⟨proof, type, params⟩ in lems do
+        if ← Meta.isProp type then
+          let type ← Prep.preprocessTerm (← instantiateMVars type)
+          lemmas := lemmas.push ⟨proof, type, params⟩
+        else
+          -- **TODO**: Relax condition?
+          throwError "invalid lemma {type} for auto, proposition expected"
+    return lemmas
 
 def traceLemmas (pre : String) (lemmas : Array Lemma) : TacticM Unit := do
   let mut cnt : Nat := 0
@@ -124,8 +126,8 @@ def runAuto
   trace[auto.tactic] "Preprocessing took {(← IO.monoMsNow) - startTime}ms"
   let lemmas := lctxLemmas ++ userLemmas
   -- ! Testing monomorphization
-  -- let mst ← Monomorphization.monomorphize lemmas
-  -- throwError "Auto :: Not implemented"
+  let mst ← Monomorphization.monomorphize lemmas
+  throwError "Auto :: Not implemented"
   match instr with
   | .none =>
     -- Testing. Skipping universe level instantiation and monomorphization

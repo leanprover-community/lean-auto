@@ -22,6 +22,11 @@ register_option auto.mono.recordInstInst : Bool := {
   descr := "Whether to record instances of constants with the `instance` attribute"
 }
 
+register_option auto.mono.instantiateInstanceArgs : Bool := {
+  defValue := true
+  descr := "Whether to force instantiation of instance arguments of constants"
+}
+
 namespace Auto.Monomorphization
 open Embedding
 
@@ -38,9 +43,10 @@ open Embedding
     · constants with `instance` attribute
 -/
 structure ConstInst where
-  name    : Name
-  levels  : Array Level
-  depargs : Array Expr
+  name       : Name
+  levels     : Array Level
+  depargs    : Array Expr
+  depargsIdx : Array Nat
 
 instance : ToMessageData ConstInst where
   toMessageData ci := MessageData.compose
@@ -50,9 +56,10 @@ instance : ToMessageData ConstInst where
             m!" ⦘⦘"))
 
 def ConstInst.equiv (ci₁ ci₂ : ConstInst) : MetaM Bool := Meta.withNewMCtxDepth <| do
-  let ⟨name₁, levels₁, depargs₁⟩ := ci₁
-  let ⟨name₂, levels₂, depargs₂⟩ := ci₂
-  if name₁ != name₂ || levels₁.size != levels₂.size || depargs₁.size != depargs₂.size then
+  let ⟨name₁, levels₁, depargs₁, idx₁⟩ := ci₁
+  let ⟨name₂, levels₂, depargs₂, idx₂⟩ := ci₂
+  if name₁ != name₂ || levels₁.size != levels₂.size ||
+      depargs₁.size != depargs₂.size || idx₁ != idx₂ then
     throwError "ConstInst.equiv :: Unexpected error"
   for (param₁, param₂) in levels₁.zip levels₂ do
     if !(← Meta.isLevelDefEq param₁ param₂) then
@@ -73,7 +80,7 @@ def ConstInst.matchExpr (e : Expr) (ci : ConstInst) : MetaM Bool := do
   for (lvl, lvl') in lvls.zip ci.levels.data do
     if !(← Meta.isLevelDefEq lvl lvl') then
       return false
-  let depargsIdx ← Expr.constDepArgs ci.name
+  let depargsIdx := ci.depargsIdx
   if depargsIdx.size != ci.depargs.size then
     throwError "ConstInst.matchExpr :: Unexpected error"
   let args := e.getAppArgs
@@ -103,7 +110,8 @@ def ConstInst.ofExpr? (e : Expr) : CoreM (Option ConstInst) := do
   if name == ``Exists || name == ``Eq then
     return none
   -- Do not record instances of monomorphic constants
-  let depargIndexes ← Expr.constDepArgs name
+  let instinst? := auto.mono.instantiateInstanceArgs.get (← getOptions)
+  let depargIndexes := if instinst? then (← Expr.constInstDepArgs name) else (← Expr.constDepArgs name)
   if depargIndexes.size == 0 then
     return none
   let lastDeparg := depargIndexes[depargIndexes.size - 1]!
@@ -115,7 +123,7 @@ def ConstInst.ofExpr? (e : Expr) : CoreM (Option ConstInst) := do
     if arg.hasLooseBVars then
       return none
     depargs := depargs.push arg
-  return some ⟨name, ⟨lvls⟩, depargs⟩
+  return some ⟨name, ⟨lvls⟩, depargs, depargIndexes⟩
 
 partial def collectConstInsts : Expr → CoreM (Array ConstInst)
 -- Note that we never need to inspect `.const Name (ListLevel)`,
@@ -184,9 +192,9 @@ private partial def MLemmaInst.matchConstInst (ci : ConstInst) (mi : MLemmaInst)
       let type ← id.getType
       ret := mergeHashSet ret (← MLemmaInst.matchConstInst ci mi type)
     return ret
-| .lam name ty body bi => Meta.withLocalDecl name bi ty fun _ => do
+| .lam name ty body bi => Meta.withLocalDecl name bi ty fun x => do
     let tyInst ← MLemmaInst.matchConstInst ci mi ty
-    let bodyInst ← MLemmaInst.matchConstInst ci mi body
+    let bodyInst ← MLemmaInst.matchConstInst ci mi (body.instantiate1 x)
     return mergeHashSet tyInst bodyInst
 | .letE .. => throwError "MLemmaInst.matchConstInst :: Let-expressions should have been reduced"
 | .mdata .. => throwError "MLemmaInst.matchConstInst :: mdata should have been consumed"
@@ -230,7 +238,7 @@ def LemmaInsts.newInst? (lis : LemmaInsts) (li : LemmaInst) : MetaM Bool := do
         · We add `i` to `ais`. 
         · We traverse `i` to collect instances of constants.
           If we find an instance `ci` of constant `name'`, we
-          first look at `cdepargs[name']` to see whether it's
+          first look at `ciMap[name']` to see whether it's
           a new instance. If it's new, we add it to `ciMap`
           and `activeCi`.
 -/

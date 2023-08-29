@@ -39,15 +39,6 @@ def Expr.stripLambda (n : Nat) (e : Expr) : Option Expr :=
     | .lam _ _ body _ => Expr.stripLambda n' body
     | _ => .none
 
-private def Expr.instArgsIdx (e : Expr) (idx : Nat) : List Nat :=
-  match e with
-  | .forallE _ _ body bi =>
-    let trail := instArgsIdx body (.succ idx)
-    match bi with
-    | .instImplicit => idx :: trail
-    | _ => trail
-  | _ => .nil
-
 def Expr.getAppFnN (n : Nat) (e : Expr) : Option Expr :=
   match n with
   | 0 => .some e
@@ -66,6 +57,15 @@ private def Expr.getAppBoundedArgsAux (n : Nat) (e : Expr) : List Expr :=
 
 def Expr.getAppBoundedArgs (n : Nat) (e : Expr) : Array Expr :=
   ⟨(Expr.getAppBoundedArgsAux n e).reverse⟩
+
+private def Expr.instArgsIdx (e : Expr) (idx : Nat) : List Nat :=
+  match e with
+  | .forallE _ _ body bi =>
+    let trail := instArgsIdx body (.succ idx)
+    match bi with
+    | .instImplicit => idx :: trail
+    | _ => trail
+  | _ => .nil
 
 -- Given an expression `e`, which is the type of some
 --   term `t`, find the arguments of `t` that are class
@@ -95,6 +95,24 @@ def Expr.constDepArgs (c : Name) : CoreM (Array Nat) := do
   let .some decl := (← getEnv).find? c
     | throwError "Expr.constDepArgs :: Unknown constant {c}"
   return Expr.depArgs decl.type
+
+private partial def Expr.instDepArgsIdx (e : Expr) (idx : Nat) : List Nat :=
+  match e with
+  | .forallE _ _ body bi =>
+    let body' := body.instantiate1 (.sort .zero)
+    let trail := instDepArgsIdx body' (.succ idx)
+    if bi == .instImplicit || body.hasLooseBVars then
+      idx :: trail
+    else
+      trail
+  | _ => .nil
+
+def Expr.instDepArgs (e : Expr) : Array Nat := ⟨Expr.instDepArgsIdx e 0⟩
+
+def Expr.constInstDepArgs (c : Name) : CoreM (Array Nat) := do
+  let .some decl := (← getEnv).find? c
+    | throwError "Expr.constInstDepArgs :: Unknown constant {c}"
+  return Expr.instDepArgs decl.type
 
 -- This should only be used when we're sure that reducing `ty`
 --   won't be too expensive
