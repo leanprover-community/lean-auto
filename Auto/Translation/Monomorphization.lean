@@ -7,7 +7,9 @@ import Auto.Lib.Containers
 open Lean
 
 initialize
-  registerTraceClass `auto.monomorphization
+  registerTraceClass `auto.mono
+  registerTraceClass `auto.mono.printLemmaInst
+  registerTraceClass `auto.mono.printConstInst
 
 namespace Auto.Monomorphization
 open Embedding
@@ -21,12 +23,20 @@ open Embedding
   
   As to monomorphization, we will not record instances
     of monomorphic constants. We will also not record
-    instances of `∃` because it's a construct in HOL.
+    instances of `∃` and `Eq` because they're constructs
+    in HOL.
 -/
 structure ConstInst where
   name    : Name
   levels  : Array Level
   depargs : Array Expr
+
+instance : ToMessageData ConstInst where
+  toMessageData ci := MessageData.compose
+    m!"ConstInst ⦗⦗ {Expr.const ci.name ci.levels.data}" (.compose
+        m!" " (.compose
+          (MessageData.intercalate " " (ci.depargs.data.map (fun e => m!"({e})")))
+            m!" ⦘⦘"))
 
 def ConstInst.equiv (ci₁ ci₂ : ConstInst) : MetaM Bool := Meta.withNewMCtxDepth <| do
   let ⟨name₁, levels₁, depargs₁⟩ := ci₁
@@ -75,12 +85,12 @@ def ConstInst.ofExpr? (e : Expr) : CoreM (Option ConstInst) := do
   let args := e.getAppArgs
   let .const name lvls := fn
     | return .none
+  -- Do not record instances of `∃` or `Eq`
+  if name == ``Exists || name == ``Eq then
+    return none
   -- Do not record instances of monomorphic constants
   let depargIndexes ← Expr.constDepArgs name
   if depargIndexes.size == 0 then
-    return none
-  -- Do not record instances of `∃`
-  if name == ``Exists then
     return none
   let lastDeparg := depargIndexes[depargIndexes.size - 1]!
   if args.size ≤ lastDeparg then
@@ -130,11 +140,11 @@ abbrev ConstInsts := Array ConstInst
 --   determine whether `ci` is a new instance.
 -- · If `ci` is new, add it to `ConstInsts` and return `true`
 -- · If `ci` is not new, return the original `ConstInsts` and `false`
-def ConstInsts.processInst (cis : ConstInsts) (ci : ConstInst) : MetaM (ConstInsts × Bool) := do
+def ConstInsts.newInst? (cis : ConstInsts) (ci : ConstInst) : MetaM Bool := do
   for ci' in cis do
     if ← ci'.equiv ci then
-      return (cis, false)
-  return (cis.push ci, true)
+      return false
+  return true
 
 -- Given an MLemmaInst `mi` and a subexpressions `e` of `mi.type`,
 --   try to match `e` and the subexpressions of `e` against `ci`.
@@ -171,18 +181,21 @@ private partial def MLemmaInst.matchConstInst (ci : ConstInst) (mi : MLemmaInst)
 
 -- Given a LemmaInst `li` and a ConstInst `ci`, try to match all subexpressions
 --   of `li` against `ci`
-def LemmaInst.matchConstInst (ci : ConstInst) (li : LemmaInst) : MetaM (HashSet LemmaInst) :=
-  Meta.withNewMCtxDepth do
+def LemmaInst.matchConstInst (ci : ConstInst) (li : LemmaInst) : MetaM (HashSet LemmaInst) := do
+  let s ← saveState
+  let ret ← Meta.withNewMCtxDepth do
     let mi ← MLemmaInst.ofLemmaInst li
     MLemmaInst.matchConstInst ci mi mi.type
+  restoreState s
+  return ret
 
 abbrev LemmaInsts := Array LemmaInst
 
-def LemmaInsts.processInst (lis : LemmaInsts) (li : LemmaInst) : MetaM (LemmaInsts × Bool) := do
+def LemmaInsts.newInst? (lis : LemmaInsts) (li : LemmaInst) : MetaM Bool := do
   for li' in lis do
     if ← li'.toLemma.equivQuick li.toLemma then
-      return (lis, false)
-  return (lis.push li, true)
+      return false
+  return true
 
 /-
   Monomorphization works as follows:
@@ -224,13 +237,13 @@ abbrev MonoM := StateRefT State MetaM
 def processConstInst (ci : ConstInst) : MonoM Unit := do
   match (← getCiMap).find? ci.name with
   | .some insts =>
-    let ⟨insts', new⟩ ← insts.processInst ci
-    setCiMap ((← getCiMap).insert ci.name insts')
-    if new then
+    let new? ← insts.newInst? ci
+    if new? then
+      trace[auto.mono.printConstInst] "New {ci}"
+      setCiMap ((← getCiMap).insert ci.name (insts.push ci))
       setActiveCi ((← getActiveCi).enqueue (ci.name, insts.size))
-    else
-      return
   | .none =>
+    trace[auto.mono.printConstInst] "New {ci}"
     setCiMap ((← getCiMap).insert ci.name #[ci])
     setActiveCi ((← getActiveCi).enqueue (ci.name, 0))
 
@@ -262,7 +275,7 @@ def saturate (threshold : Nat) : MonoM Unit := do
   while true do
     cnt := cnt + 1
     if cnt > threshold then
-      trace[auto.monomorphization] "saturate :: Threshold {threshold} reached"
+      trace[auto.mono] "saturate :: Threshold {threshold} reached"
       return
     match ← dequeueActiveCi? with
     | .some (name, cisIdx) =>
@@ -275,14 +288,16 @@ def saturate (threshold : Nat) : MonoM Unit := do
           cnt := cnt + 1
           let matchLis := (← LemmaInst.matchConstInst ci li).toArray
           for matchLi in matchLis do
+            -- `matchLi` is a result of matching a subterm of `li` against `ci`
             cnt := cnt + 1
             if cnt > threshold then
-              trace[auto.monomorphization] "saturate :: Threshold {threshold} reached"
+              trace[auto.mono] "saturate :: Threshold {threshold} reached"
               return
-            let (newLis', new?) ← newLis.processInst matchLi
-            newLis := newLis'
+            let new? ← newLis.newInst? matchLi
             -- A new instance of an assumption
             if new? then
+              trace[auto.mono.printLemmaInst] "New {matchLi}"
+              newLis := newLis.push matchLi
               let newCis ← collectConstInsts matchLi.type
               for newCi in newCis do
                 processConstInst newCi
@@ -294,7 +309,7 @@ def monomorphize (lemmas : Array Lemma) (threshold : Nat) : MetaM State := do
   let (_, ret) ← (do
     initializeMonoM lemmas
     saturate threshold).run {}
-  trace[auto.monomorphization] "Monomorphization took {(← IO.monoMsNow) - startTime}ms"
+  trace[auto.mono] "Monomorphization took {(← IO.monoMsNow) - startTime}ms"
   return ret
 
 -- For test purpose
@@ -326,7 +341,7 @@ partial def polylogs : Expr → MetaM (HashSet Expr)
   let fna ← polylogs fn
   let arga ← polylogs arg
   return fna.insertMany arga
-| e => return HashSet.empty
+| _ => return HashSet.empty
 
 -- For test purpose
 def addpolylog (e : Expr) (cont : HashMap Expr FVarId → MetaM α)
@@ -392,9 +407,9 @@ def collectPolyLog (cont : HashMap Expr FVarId → Array (Expr × Expr) → Meta
     let cont' := facts.foldl (β := HashMap Expr FVarId → Array (Expr × Expr) → MetaM α)
       (fun cont' fact => collectPolyLogAux fact cont') (fun hmap mfacts => do
         for fact in mfacts do
-          trace[auto.monomorphization] "Monomorphized: {fact.fst} : {fact.snd}"
+          trace[auto.mono] "Monomorphized: {fact.fst} : {fact.snd}"
         for (expr, fvar) in hmap.toList do
-          trace[auto.monomorphization] "Expression {expr} turned into {Expr.fvar fvar}"
+          trace[auto.mono] "Expression {expr} turned into {Expr.fvar fvar}"
         cont hmap mfacts
       )
     cont' HashMap.empty #[]

@@ -11,6 +11,22 @@ namespace Auto
 
 namespace Prep
 
+def unfoldProj (e : Expr) : MetaM Expr :=
+  match e with
+  | .proj name idx struct => do
+    let some (.inductInfo indi) := (← getEnv).find? name
+      | throwError s!"unfoldProj :: {name} is not a inductive type"
+    let some structInfo := getStructureInfo? (← getEnv) name
+      | throwError s!"unfoldProj :: {name} is not a structure"
+    let nameMap : HashMap Name StructureFieldInfo := HashMap.ofList
+      (structInfo.fieldInfo.map (fun sfi => (sfi.fieldName, sfi))).data
+    let sorted := structInfo.fieldNames.map (fun name => nameMap.find? name)
+    let .some (.some sfi) := sorted[idx]?
+      | throwError s!"unfoldProj :: Projection index out of bound"
+    let nones : List (Option Expr) := (List.range indi.numParams).map (fun _ => .none)
+    Meta.mkAppOptM sfi.projFn ((Array.mk nones).push struct)
+  | _ => return e
+
 /-- This function is expensive and should only be used in preprocessing -/
 partial def preprocessTerm (term : Expr) : MetaM Expr := do
   let red (e : Expr) : MetaM TransformStep := do
@@ -19,6 +35,10 @@ partial def preprocessTerm (term : Expr) : MetaM Expr := do
     return .continue e
   -- Reduce
   let term ← Meta.withTransparency .instances <| Meta.transform term (pre := red) (usedLetOnly := false)
+  let redProj (e : Expr) : MetaM TransformStep := do
+    let e ← unfoldProj e
+    return .continue e
+  let term ← Meta.withTransparency .instances <| Meta.transform term (pre := redProj)
   return term
 
 -- **TODO**: Review

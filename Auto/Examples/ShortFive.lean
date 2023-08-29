@@ -1,6 +1,7 @@
 import Mathlib.Tactic
 import Mathlib.Data.Set.Lattice
 import Mathlib.Data.Set.Function
+import Auto.Tactic
 
 /-
 It would be great if `short_five_mono` and `short_five_epi` could be proved fully automatically
@@ -40,11 +41,13 @@ variable (square₀      : ∀ a, k (f₀ a) = f₁ (h a))
 variable (square₁      : ∀ b, l (g₀ b) = g₁ (k b))
 
 open is_short_exact
-
+set_option trace.auto.tactic true
+set_option trace.auto.printLemmas true
 theorem short_five_mono (injh : Injective h) (injl : Injective l) :
     Injective k := by
   rw [injective_iff_map_eq_zero]
   intro b kb0
+  -- have : l (g₀ b) = l 0 := by auto [square₁, kb0, map_zero, map_zero]
   have : l (g₀ b) = l 0 := by rw [square₁, kb0, map_zero, map_zero]
   have : g₀ b = 0 := injl this
   rcases ker_in_im short_exact₀ _ this with ⟨a, f₀a⟩

@@ -65,24 +65,28 @@ private def Expr.getAppBoundedArgsAux (n : Nat) (e : Expr) : List Expr :=
     | _ => .nil
 
 def Expr.getAppBoundedArgs (n : Nat) (e : Expr) : Array Expr :=
-  ⟨Expr.getAppBoundedArgsAux n e⟩
+  ⟨(Expr.getAppBoundedArgsAux n e).reverse⟩
 
 -- Given an expression `e`, which is the type of some
 --   term `t`, find the arguments of `t` that are class
 --   instances
 def Expr.instArgs (e : Expr) : Array Nat := ⟨Expr.instArgsIdx e 0⟩
 
-private def Expr.depArgsIdx (e : Expr) (idx : Nat) : List Nat :=
+private partial def Expr.depArgsIdx (e : Expr) (idx : Nat) : List Nat :=
   match e with
   | .forallE _ _ body _ =>
-    let trail := depArgsIdx body (.succ idx)
-    match body.hasLooseBVar idx with
+    -- Instantiate loose bound variable with any expression
+    --   that does not contain loose bound variables
+    let body' := body.instantiate1 (.sort .zero)
+    let trail := depArgsIdx body' (.succ idx)
+    match body.hasLooseBVars with
     | true  => idx :: trail
     | false => trail
   | _ => .nil
 
 -- Given `e = ∀ (xs : αs), t`, return the indexes of dependent `∀` binders
---  within `xs`
+--   within `xs`. This function only works for expressions that does not
+--   contain loose bound variables
 def Expr.depArgs (e : Expr) : Array Nat := ⟨Expr.depArgsIdx e 0⟩
 
 -- Given the name `c` of a constant, suppose `@c : ty`, return

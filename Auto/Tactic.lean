@@ -123,6 +123,9 @@ def runAuto
   traceLemmas "Lemmas collected from user-provided terms:" userLemmas
   trace[auto.tactic] "Preprocessing took {(← IO.monoMsNow) - startTime}ms"
   let lemmas := lctxLemmas ++ userLemmas
+  -- Testing monomorphization
+  let mst ← Monomorphization.monomorphize lemmas 100
+  throwError "Auto :: Not implemented"
   match instr with
   | .none =>
     -- Testing. Skipping universe level instantiation and monomorphization
@@ -139,6 +142,7 @@ def runAuto
       let checker ← LamReif.buildCheckerExpr contra
       let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
       Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra
+      -- smt
       -- let commands := (← (lamFOL2SMT (← LamReif.getVarVal) exportFacts).run {}).1
       -- let _ ← liftM <| commands.mapM (fun c => IO.println s!"Command: {c}")
       -- Solver.SMT.querySolver commands

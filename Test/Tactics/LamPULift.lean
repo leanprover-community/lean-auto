@@ -73,12 +73,12 @@ example (eqNat : Nat → Nat → Prop) (x : Nat)
   try auto [H];
   sorry
 
-set_option trace.auto.monomorphization true in
+set_option trace.auto.mono true in
 example (a : Nat) (H : ∀ x, x = a) : a = a := by
   try auto [H];
   sorry
 
-set_option trace.auto.monomorphization true in
+set_option trace.auto.mono true in
 -- When monomorphization is not implemented, this example will fail
 example (f : Nat → Nat) : True :=
   let H : ∃ (z : Real), ∀ (x : Nat), x = 6 → ∃ (y : Prop), f x = 2 := sorry
