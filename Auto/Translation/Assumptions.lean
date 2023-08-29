@@ -37,33 +37,24 @@ def Lemma.equivQuick (lem₁ lem₂ : Lemma) : MetaM Bool := do
   let s₂₁ ← Lemma.subsumeQuick lem₂ lem₁
   return s₁₂ && s₂₁
 
-axiom List.map_append.{u_2, u_1} : ∀ {α : Type u_2} {β : Type u_1} (f : α → β) (l₁ l₂ : List α),
-  List.map f (l₁ ++ l₂) = List.map f l₁ ++ List.map f l₂
-
-def sjd (_ : Expr) : Elab.Term.TermElabM Unit := do
-  let proof := Expr.const ``List.map_append [.param `x, .param `y]
-  let type ← Meta.inferType proof
-  let lem := Lemma.mk proof type #[`x, `y]
-  let b ← Lemma.subsumeQuick lem lem
-  logInfo m!"{b}, {lem}"
-  return
-
-#getExprAndApply[2|sjd]
-
--- An instance of a `Lemma`. If a lemma has proof `H`,
---   then an instance of the lemma would be like
---   `fun (ys : βs), H ts`,
---   where `ts` can depend on `ys`
--- Note that if `li : LemmaInst`, then `li.toLemma` would not be the
---   original lemmas that `li` is an instance of. Instead,
---   `(li.stripForall nbinders).getAppFnN nargs` would be the
---   original lemma
+/-
+  An instance of a `Lemma`. If a lemma has proof `H`,
+    then an instance of the lemma would be like
+    `fun (ys : βs), H ts`,
+    where `ts` can depend on `ys`
+  Note that if `li : LemmaInst`, then `li.toLemma` would not be the
+    original lemmas that `li` is an instance of. Instead,
+    `(li.stripForall nbinders).getAppFnN nargs` would be the
+    original lemma
+-/
 structure LemmaInst extends Lemma where
   -- Number of binders, i.e. the length of the above `ys`
   nbinders : Nat
   -- Number of arguments that are supplied to the lemma
   -- This should be equal to the number of top-level `∀` binders
   --   of the original lemma's type
+  -- Therefore, if two LemmaInsts are instances of the same
+  --   lemma, they should have the same `nargs`
   nargs    : Nat
 deriving Inhabited, Hashable, BEq
 
@@ -78,6 +69,35 @@ instance : ToMessageData LemmaInst where
   toMessageData li := MessageData.compose
     m!"LemmaInst (binders:={li.nbinders}) (args:={li.nargs}) "
     (toMessageData li.toLemma)
+
+def LemmaInst.subsumeQuick (li₁ li₂ : LemmaInst) : MetaM Bool := Meta.withNewMCtxDepth <| do
+  if li₁.nargs != li₂.nargs then
+    throwError "LemmaInst.subsumeQuick :: {li₁} and {li₂} are not instance of the same lemma"
+  let lem₁ := li₁.toLemma
+  let lem₂ := li₂.toLemma
+  let s ← saveState
+  let (_, _, body₂) ← Meta.lambdaMetaTelescope lem₂.proof li₂.nbinders
+  let args₂ := Expr.getAppBoundedArgs li₂.nargs body₂
+  if args₂.size != li₂.nargs then
+    throwError "LemmaInst.subsumeQuick :: {li₂} is expected to have {li₂.nargs} args, but actually has {args₂.size}"
+  let ret ← Meta.withNewMCtxDepth do
+    let paramInst₁ ← lem₁.params.mapM (fun _ => Meta.mkFreshLevelMVar)
+    let (_, _, body₁) ← Meta.lambdaMetaTelescope lem₁.proof li₁.nbinders
+    let args₁ := Expr.getAppBoundedArgs li₁.nargs body₁
+    if args₁.size != li₁.nargs then
+      throwError "LemmaInst.subsumeQuick :: {li₁} is expected to have {li₁.nargs} args, but actually has {args₁.size}"
+    let args₁ := args₁.map (fun e => e.instantiateLevelParamsArray lem₁.params paramInst₁)
+    for (arg₁, arg₂) in args₁.zip args₂ do
+      if !(← Meta.isDefEq arg₁ arg₂) then
+        return false
+    return true
+  restoreState s
+  return ret
+
+def LemmaInst.equivQuick (li₁ li₂ : LemmaInst) : MetaM Bool := do
+  let s₁₂ ← LemmaInst.subsumeQuick li₁ li₂
+  let s₂₁ ← LemmaInst.subsumeQuick li₂ li₁
+  return s₁₂ && s₂₁
 
 -- A `LemmaInst`, but after `lambdaMetaTelescope` on the `proof`
 structure MLemmaInst where

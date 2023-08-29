@@ -124,7 +124,7 @@ def runAuto
   trace[auto.tactic] "Preprocessing took {(← IO.monoMsNow) - startTime}ms"
   let lemmas := lctxLemmas ++ userLemmas
   -- Testing monomorphization
-  let mst ← Monomorphization.monomorphize lemmas 100
+  let mst ← Monomorphization.monomorphize lemmas
   throwError "Auto :: Not implemented"
   match instr with
   | .none =>

@@ -11,6 +11,12 @@ initialize
   registerTraceClass `auto.mono.printLemmaInst
   registerTraceClass `auto.mono.printConstInst
 
+register_option auto.mono.saturationThreshold : Nat := {
+  defValue := 100
+  descr := "Threshold for number of potentially new lemma" ++
+    " instances generated during the saturation loop of monomorphization"
+}
+
 namespace Auto.Monomorphization
 open Embedding
 
@@ -193,7 +199,7 @@ abbrev LemmaInsts := Array LemmaInst
 
 def LemmaInsts.newInst? (lis : LemmaInsts) (li : LemmaInst) : MetaM Bool := do
   for li' in lis do
-    if ← li'.toLemma.equivQuick li.toLemma then
+    if ← li'.equivQuick li then
       return false
   return true
 
@@ -270,17 +276,25 @@ def lookupActiveCi! (name : Name) (idx : Nat) : MonoM ConstInst := do
     | throwError "lookupActiveCi :: Index {idx} out of bound"
   return ci
 
-def saturate (threshold : Nat) : MonoM Unit := do
+def saturationThresholdReached? (cnt : Nat) : CoreM Bool := do
+  let threshold := auto.mono.saturationThreshold.get (← getOptions)
+  if cnt > threshold then
+    trace[auto.mono] "Monomorphization saturation :: Threshold {threshold} reached"
+    return true
+  else
+    return false
+
+def saturate : MonoM Unit := do
   let mut cnt := 0
   while true do
     cnt := cnt + 1
-    if cnt > threshold then
-      trace[auto.mono] "saturate :: Threshold {threshold} reached"
+    if (← saturationThresholdReached? cnt) then
       return
     match ← dequeueActiveCi? with
     | .some (name, cisIdx) =>
       let ci ← lookupActiveCi! name cisIdx
       let lisArr ← getLisArr
+      trace[auto.mono] "Matching against {ci}"
       for (lis, idx) in lisArr.zip ⟨List.range lisArr.size⟩ do
         cnt := cnt + 1
         let mut newLis := lis
@@ -290,8 +304,7 @@ def saturate (threshold : Nat) : MonoM Unit := do
           for matchLi in matchLis do
             -- `matchLi` is a result of matching a subterm of `li` against `ci`
             cnt := cnt + 1
-            if cnt > threshold then
-              trace[auto.mono] "saturate :: Threshold {threshold} reached"
+            if (← saturationThresholdReached? cnt) then
               return
             let new? ← newLis.newInst? matchLi
             -- A new instance of an assumption
@@ -302,13 +315,15 @@ def saturate (threshold : Nat) : MonoM Unit := do
               for newCi in newCis do
                 processConstInst newCi
         setLisArr ((← getLisArr).set! idx newLis)
-    | .none => continue
+    | .none =>
+      trace[auto.mono] "Monomorphization Saturated after {cnt} small steps"
+      return
 
-def monomorphize (lemmas : Array Lemma) (threshold : Nat) : MetaM State := do
+def monomorphize (lemmas : Array Lemma) : MetaM State := do
   let startTime ← IO.monoMsNow
   let (_, ret) ← (do
     initializeMonoM lemmas
-    saturate threshold).run {}
+    saturate).run {}
   trace[auto.mono] "Monomorphization took {(← IO.monoMsNow) - startTime}ms"
   return ret
 

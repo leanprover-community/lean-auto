@@ -5,7 +5,28 @@ import Auto.Translation.Assumptions
 open Lean Meta Elab Tactic
 
 initialize
-  registerTraceClass `auto.Prep
+  registerTraceClass `auto.prep
+
+private instance : ToString TransparencyMode where
+  toString : TransparencyMode → String
+  | .all       => "all"
+  | .default   => "default"
+  | .reducible => "reducible"
+  | .instances => "instances"
+
+private instance : Lean.KVMap.Value TransparencyMode where
+  toDataValue t := toString t
+  ofDataValue?
+  | "all"       => some .all
+  | "default"   => some .default
+  | "reducible" => some .reducible
+  | "instances" => some .instances
+  | _           => none
+
+register_option auto.prep.redMode : TransparencyMode := {
+  defValue := .instances
+  descr := "TransparencyMode used when reducing collected facts"
+}
 
 namespace Auto
 
@@ -34,11 +55,12 @@ partial def preprocessTerm (term : Expr) : MetaM Expr := do
     let e ← Meta.whnf e
     return .continue e
   -- Reduce
-  let term ← Meta.withTransparency .instances <| Meta.transform term (pre := red) (usedLetOnly := false)
+  let trMode := auto.prep.redMode.get (← getOptions)
+  let term ← Meta.withTransparency trMode <| Meta.transform term (pre := red) (usedLetOnly := false)
   let redProj (e : Expr) : MetaM TransformStep := do
     let e ← unfoldProj e
     return .continue e
-  let term ← Meta.withTransparency .instances <| Meta.transform term (pre := redProj)
+  let term ← Meta.transform term (pre := redProj)
   return term
 
 -- **TODO**: Review
