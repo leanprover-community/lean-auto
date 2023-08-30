@@ -1,6 +1,7 @@
 import Lean
 import Auto.Embedding.Lift
 import Auto.Translation.Assumptions
+import Auto.Translation.ReifM
 import Auto.Lib.LevelExtra
 import Auto.Lib.ExprExtra
 import Auto.Lib.MonadUtils
@@ -95,7 +96,7 @@ def ConstInst.matchExpr (e : Expr) (ci : ConstInst) : MetaM Bool := do
 
 /-
   Given an hypothesis `t`, we will traverse the hypothesis to find
-    instances of some constant
+    instances of polymorphic constants
   · Binders of the hypothesis are not introduced as fvars/mvars, so
     they remain loose bound variables inside the body
   · `param` records universe level parameters of the hypothesis are
@@ -104,7 +105,7 @@ def ConstInst.matchExpr (e : Expr) (ci : ConstInst) : MetaM Bool := do
   · No loose bound variables
   · The expression does not contain level parameters in `params`
 -/
-def ConstInst.ofExpr? (params : Array Name) (e : Expr) : CoreM (Option ConstInst) := do
+def ConstInst.ofExpr?Poly (params : Array Name) (e : Expr) : CoreM (Option ConstInst) := do
   let fn := e.getAppFn
   let args := e.getAppArgs
   let .const name lvls := fn
@@ -138,7 +139,7 @@ private def ConstInst.toExprAux (args : List (Option Expr))
   match args with
   | .nil =>
     Option.some <| Prod.fst <| tys.foldl (fun (e, idx) (name, bty, bi) =>
-      (Expr.forallE name bty e bi, .succ idx)) (e, 0)
+      (Expr.lam name bty e bi, .succ idx)) (e, 0)
   | .none :: args' =>
     match ty with
     | .forallE name bty body bi =>
@@ -147,8 +148,8 @@ private def ConstInst.toExprAux (args : List (Option Expr))
     | _ => .none
   | .some arg :: args' =>
     match ty with
-    | .forallE name bty body bi =>
-      toExprAux args' ((name, bty, bi) :: tys) (.app e arg) (body.instantiate1 arg)
+    | .forallE _ _ body _ =>
+      toExprAux args' tys (.app e arg) (body.instantiate1 arg)
     | _ => .none
 
 def ConstInst.toExpr (ci : ConstInst) : CoreM Expr := do
@@ -163,7 +164,7 @@ def ConstInst.toExpr (ci : ConstInst) : CoreM Expr := do
     | throwError "ConstInst.toExpr :: Unexpected error"
   return ret
 
--- Precondition : `.some ci == ← ConstInst.ofExpr? e`
+-- Precondition : `.some ci == ← ConstInst.ofExpr?Poly e`
 -- Returns the list of non-dependent arguments in `e.getAppArgs`
 def ConstInst.getNonDepArgs (ci : ConstInst) (e : Expr) : CoreM (Array Expr) := do
   let mut args := e.getAppArgs.map Option.some
@@ -177,14 +178,14 @@ def ConstInst.getNonDepArgs (ci : ConstInst) (e : Expr) : CoreM (Array Expr) := 
 
 private partial def collectConstInsts (params : Array Name) : Expr → MetaM (Array ConstInst)
 | e@(.const ..) => do
-  match ← ConstInst.ofExpr? params e with
+  match ← ConstInst.ofExpr?Poly params e with
   | .some ci => return #[ci]
   | .none => return #[]
 | e@(.app ..) => do
   let fn := e.getAppFn
   let args := e.getAppArgs
   let insts := (← (args.push fn).mapM (collectConstInsts params)).concatMap id
-  match ← ConstInst.ofExpr? params e with
+  match ← ConstInst.ofExpr?Poly params e with
   | .some ci => return insts.push ci
   | .none => return insts
 | .lam _ ty body bi => do
@@ -446,7 +447,7 @@ private partial def replaceForall (lctx : Array Expr) : Expr → MonoM Expr
 | e => return e
 where addForallImpFInst (lctx : Array Expr) (e : Expr) : MonoM Unit := do
   let eabst := e.abstract lctx
-  match ← ConstInst.ofExpr? #[] eabst with
+  match ← ConstInst.ofExpr?Poly #[] eabst with
   | .some ci => processConstInst ci
   | .none => trace[auto.mono] "replaceForall :: Warning, {e} is not a valid instance of `forallF` or `ImpF`"
 
@@ -468,173 +469,95 @@ def postprocessSaturate : MonoM Unit := do
     return {li with type := type'}))
   setLisArr lisArr
 
-def monomorphize (lemmas : Array Lemma) : MetaM State := do
-  let startTime ← IO.monoMsNow
-  let (_, s) ← (do
-    initializeMonoM lemmas
-    saturate
-    postprocessSaturate).run {}
-  trace[auto.mono] "Monomorphization took {(← IO.monoMsNow) - startTime}ms"
-  return s
-
 namespace FVarRep
-
-structure State where
-  bfvars  : Array FVarId             := #[]
-  ffvars  : Array FVarId             := #[]
-  exprMap : HashMap Expr FVarId      := {}
-  ciMap   : HashMap ConstInst FVarId := {}
-
-abbrev FVarRepM := StateRefT State MetaState.MetaStateM
-
-#genMonadState FVarRepM
-
-def ConstInst2FVarId (ci : ConstInst) : FVarRepM FVarId := do
-  let ciMap ← FVarRep.getCiMap
-  match ciMap.find? ci with
-  | .some fid => return fid
-  | .none => do
+  
+  structure State where
+    bfvars  : Array FVarId             := #[]
+    ffvars  : Array FVarId             := #[]
+    exprMap : HashMap Expr FVarId      := {}
+    ciMap   : HashMap ConstInst FVarId := {}
+  
+  abbrev FVarRepM := StateRefT State MetaState.MetaStateM
+  
+  #genMonadState FVarRepM
+  
+  def ConstInst2FVarId (ci : ConstInst) : FVarRepM FVarId := do
+    let ciMap ← FVarRep.getCiMap
+    match ciMap.find? ci with
+    | .some fid => return fid
+    | .none => do
+      let fvarId ← mkFreshFVarId
+      setCiMap ((← getCiMap).insert ci fvarId)
+      let userName := (`cifvar).appendIndexAfter (← getCiMap).size
+      let cie ← ci.toExpr
+      let city ← MetaState.runMetaM (Meta.inferType cie)
+      MetaState.mkLetDecl fvarId userName city cie
+      setFfvars ((← getFfvars).push fvarId)
+      return fvarId
+  
+  def UnknownExpr2FVarId (e : Expr) : FVarRepM FVarId := do
+    for (e', fid) in (← getExprMap).toList do
+      if ← MetaState.runMetaM (Meta.withNewMCtxDepth <| Meta.isDefEq e e') then
+        return fid
     let fvarId ← mkFreshFVarId
-    setCiMap ((← getCiMap).insert ci fvarId)
-    let userName := (`cifvar).appendIndexAfter (← getCiMap).size
-    let cie ← ci.toExpr
-    let city ← MetaState.runMetaM (Meta.inferType cie)
-    MetaState.mkLetDecl fvarId userName city cie
+    setExprMap ((← getExprMap).insert e fvarId)
+    let userName := (`exfvar).appendIndexAfter (← getExprMap).size
+    let ety ← MetaState.runMetaM (Meta.inferType e)
+    MetaState.mkLetDecl fvarId userName ety e
     setFfvars ((← getFfvars).push fvarId)
     return fvarId
 
-def UnknownExpr2FVarId (e : Expr) : FVarRepM FVarId := do
-  for (e', fid) in (← getExprMap).toList do
-    if ← MetaState.runMetaM (Meta.withNewMCtxDepth <| Meta.isDefEq e e') then
-      return fid
-  let fvarId ← mkFreshFVarId
-  setExprMap ((← getExprMap).insert e fvarId)
-  let userName := (`exfvar).appendIndexAfter (← getExprMap).size
-  let ety ← MetaState.runMetaM (Meta.inferType e)
-  MetaState.mkLetDecl fvarId userName ety e
-  setFfvars ((← getFfvars).push fvarId)
-  return fvarId
+  -- Auxiliary function for `replacePolyWithFVar`
+  private def monoConstApp? (e : Expr) : CoreM Bool := do
+    let fn := e.getAppFn
+    let .const name [] := fn
+      | return false
+    let depargsIdx ← Expr.constDepArgs name
+    if depargsIdx.size != 0 then
+      return false
+    return true 
 
-partial def replacePolyWithFVar : Expr → FVarRepM Expr
-| .lam name ty body binfo => do
-  let fvarId ← mkFreshFVarId
-  MetaState.mkLocalDecl fvarId name ty binfo
-  setBfvars ((← getBfvars).push fvarId)
-  let b' ← replacePolyWithFVar (body.instantiate1 (.fvar fvarId))
-  MetaState.runMetaM <| Meta.mkLambdaFVars #[.fvar fvarId] b'
-| e => do
-  let eabst := e.abstract ((← getBfvars).map .fvar)
-  if let .some ci ← ConstInst.ofExpr? #[] eabst then
-    let ciId ← ConstInst2FVarId ci
-    let ciArgs ← ConstInst.getNonDepArgs ci e
-    let ciArgs ← ciArgs.mapM replacePolyWithFVar
-    return mkAppN (.fvar ciId) ciArgs
-  Expr.fvar <$> UnknownExpr2FVarId e
+  partial def replacePolyWithFVar : Expr → FVarRepM Expr
+  | .lam name ty body binfo => do
+    let fvarId ← mkFreshFVarId
+    MetaState.mkLocalDecl fvarId name ty binfo
+    setBfvars ((← getBfvars).push fvarId)
+    let b' ← replacePolyWithFVar (body.instantiate1 (.fvar fvarId))
+    MetaState.runMetaM <| Meta.mkLambdaFVars #[.fvar fvarId] b'
+  | e => do
+    let eabst := e.abstract ((← getBfvars).map .fvar)
+    if let .some ci ← ConstInst.ofExpr?Poly #[] eabst then
+      let ciId ← ConstInst2FVarId ci
+      let ciArgs ← ConstInst.getNonDepArgs ci e
+      let ciArgs ← ciArgs.mapM replacePolyWithFVar
+      return mkAppN (.fvar ciId) ciArgs
+    if ← monoConstApp? e then
+      let fn ← UnknownExpr2FVarId e.getAppFn
+      let args ← e.getAppArgs.mapM replacePolyWithFVar
+      return mkAppN (.fvar fn) args
+    Expr.fvar <$> UnknownExpr2FVarId e
 
 end FVarRep
 
--- For test purpose
-register_option testCollectPolyLog : Bool := {
-  defValue := true
-  descr    := "For test"
-}
-
--- For test purpose
-partial def polylogs : Expr → MetaM (HashSet Expr)
-| e@(.app (.const ``Eq _) _) => return HashSet.empty.insert e
-| e@(.app (.const ``Exists _) _) => return HashSet.empty.insert e
-| .forallE name ty body binfo => do
-  let hs' ← polylogs (.lam name ty body binfo)
-  let tylvl := (← instantiateMVars (← Meta.inferType ty)).sortLevel!
-  let bodysort ← Meta.withLocalDecl name binfo ty fun fvar =>
-    Meta.inferType (body.instantiate1 fvar)
-  let bodylvl := (← instantiateMVars bodysort).sortLevel!
-  if body.hasLooseBVar 0 ∨ !(← Meta.isLevelDefEq tylvl .zero) ∨ !(← Meta.isLevelDefEq bodylvl .zero)  then
-    return hs'.insert (.app (.const ``forallF [tylvl, bodylvl]) ty)
-  else
-    return hs'.insert (.const ``ImpF [tylvl, bodylvl])
-| .lam name ty body binfo => do
-  let hty ← polylogs ty
-  let hbody ← Meta.withLocalDecl name binfo ty fun fvar =>
-    polylogs (body.instantiate1 fvar)
-  return hbody.insertMany hty
-| .app fn arg => do
-  let fna ← polylogs fn
-  let arga ← polylogs arg
-  return fna.insertMany arga
-| _ => return HashSet.empty
-
--- For test purpose
-def addpolylog (e : Expr) (cont : HashMap Expr FVarId → MetaM α)
-  (hmap : HashMap Expr FVarId) : MetaM α := do
-  if hmap.contains e then
-    cont hmap
-  else
-    let fvarid ← mkFreshId
-    let name := "_pl_" ++ fvarid.toString
-    Meta.withLetDecl name (← Meta.inferType e) e fun fvar =>
-      cont (hmap.insert e fvar.fvarId!)
-
--- Temporary function
-private def autometafind! [Hashable α] [BEq α] (hmap : HashMap α β) (x : α) : MetaM β := do
-  if let .some b := hmap.find? x then
-    return b
-  else
-    throwError "autometafind! :: Unfindable"
-
--- For test purpose
-partial def replacepolylog (hmap : HashMap Expr FVarId) : Expr → MetaM Expr
-| e@(.app (.const ``Eq _) _) => return .fvar (← autometafind! hmap e)
-| e@(.app (.const ``Exists _) _) => return .fvar (← autometafind! hmap e)
-| .forallE name ty body binfo => do
-  let tylvl := (← instantiateMVars (← Meta.inferType ty)).sortLevel!
-  let (bodysort, rep) ← Meta.withLocalDecl name binfo ty fun fvar => do
-    let body' := body.instantiate1 fvar
-    let bodysort ← Meta.inferType body'
-    let bodyrep ← replacepolylog hmap body'
-    return (bodysort, ← Meta.mkLambdaFVars #[fvar] bodyrep)
-  let bodylvl := (← instantiateMVars bodysort).sortLevel!
-  if body.hasLooseBVar 0 ∨ !(← Meta.isLevelDefEq tylvl .zero) ∨ !(← Meta.isLevelDefEq bodylvl .zero) then
-    let forallFun := Expr.fvar (← autometafind! hmap (.app (.const ``forallF [tylvl, bodylvl]) ty))
-    return .app forallFun rep
-  else
-    let impFun := Expr.fvar (← autometafind! hmap (.const ``ImpF [tylvl, bodylvl]))
-    return .app (.app impFun (← replacepolylog hmap ty)) (← replacepolylog hmap body)
-| .lam name ty body binfo =>
-  Meta.withLocalDecl name binfo ty fun fvar => do
-    let b' ← replacepolylog hmap (body.instantiate1 fvar)
-    Meta.mkLambdaFVars #[fvar] b'
-| .app fn arg => do
-  let fn' ← replacepolylog hmap fn
-  let arg' ← replacepolylog hmap arg
-  return .app fn' arg'
-| e => return e
-
--- For test purpose
-def collectPolyLogAux (fact : Expr × Expr) {α : Type}
-  (cont : HashMap Expr FVarId → Array (Expr × Expr) → MetaM α)
-  (hmap₀ : HashMap Expr FVarId) (arr : Array (Expr × Expr)) : MetaM α := do
-  let (proof, ty) := fact
-  let plgs ← polylogs ty
-  plgs.fold (fun cont' e => addpolylog e cont') (fun hmap => do
-    cont hmap (arr.push (proof, ← replacepolylog hmap ty))) hmap₀
-
--- For test purpose
--- This function's semantics is incorrect. A full-fleged version should run
---   in `Reif.ReifM` and modify `fvarsToAbstract` and `iPolyLog` simultaneously
-def collectPolyLog (cont : HashMap Expr FVarId → Array (Expr × Expr) → MetaM α)
-  (facts : Array ((Expr × Expr))) : MetaM α := do
-  if testCollectPolyLog.get (← getOptions) then
-    let cont' := facts.foldl (β := HashMap Expr FVarId → Array (Expr × Expr) → MetaM α)
-      (fun cont' fact => collectPolyLogAux fact cont') (fun hmap mfacts => do
-        for fact in mfacts do
-          trace[auto.mono] "Monomorphized: {fact.fst} : {fact.snd}"
-        for (expr, fvar) in hmap.toList do
-          trace[auto.mono] "Expression {expr} turned into {Expr.fvar fvar}"
-        cont hmap mfacts
-      )
-    cont' HashMap.empty #[]
-  else
-    cont HashMap.empty facts
+def monomorphize (lemmas : Array Lemma) (k : Reif.State → MetaM α) : MetaM α := do
+  let startTime ← IO.monoMsNow
+  let monoMAction : MonoM Unit := (do
+    initializeMonoM lemmas
+    saturate
+    postprocessSaturate)
+  trace[auto.mono] "Monomorphization took {(← IO.monoMsNow) - startTime}ms"
+  let (_, monoSt) ← monoMAction.run {}
+  let fvarRepMAction : FVarRep.FVarRepM (Array Reif.UMonoFact) := (do
+    let lis := monoSt.lisArr.concatMap id
+    lis.mapM (fun li => do
+      trace[auto.mono] "6 :: Replacing {li.type}"
+      return ⟨li.proof, ← FVarRep.replacePolyWithFVar li.type⟩))
+  let metaStateMAction : MetaState.MetaStateM (Array FVarId × Reif.State) := (do
+    let (ufacts, s) ← fvarRepMAction.run {}
+    let exlis := s.exprMap.toList.map (fun (e, id) => (id, e))
+    let cilis ← s.ciMap.toList.mapM (fun (ci, id) => do return (id, ← ci.toExpr))
+    let polyVal := HashMap.ofList (exlis ++ cilis)
+    return (s.ffvars, Reif.State.mk s.ffvars ufacts polyVal))
+  MetaState.runWithIntroducedFVars metaStateMAction k
 
 end Auto.Monomorphization

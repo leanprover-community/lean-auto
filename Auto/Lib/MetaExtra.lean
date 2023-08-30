@@ -10,6 +10,22 @@ def Meta.withoutMVarAssignments (m : MetaM α) : MetaM α := do
   let mctx ← getMCtx
   Meta.withMCtx {mctx with eAssignment := {}, lAssignment := {}} m
 
+private def Meta.runWithFVarsImp (lctx : LocalContext) (fvarids : Array FVarId) (k : MetaM α) : MetaM α := do
+  let mut newlctx := (← read).lctx
+  for fid in fvarids do
+    match lctx.findFVar? (.fvar fid) with
+    | .some decl =>
+      match decl with
+      | .cdecl _ fvarId userName type bi kind =>
+        newlctx := newlctx.mkLocalDecl fvarId userName type bi kind
+      | .ldecl _ fvarId userName type value nonDep kind =>
+        newlctx := newlctx.mkLetDecl fvarId userName type value nonDep kind
+    | .none => throwError "runMetaMWithFVars :: Unknown free variable {Expr.fvar fid}"
+  withReader (fun ctx => {ctx with lctx := newlctx}) k
+
+def Meta.runWithFVars [MonadControlT MetaM n] [Monad n] (lctx : LocalContext) (fvarids : Array FVarId) (k : n α) : n α :=
+  Meta.mapMetaM (fun k => runWithFVarsImp lctx fvarids k) k
+
 -- Given a list of non-dependent types `ty₁, ty₂, ⋯, tyₙ`, add
 --   free variables `x₁ : ty₁, x₂ : ty₂, ⋯, xₙ : tyₙ` into local context,
 --   and supply `#[x₁, x₂, ⋯, xₙ]` to `cont`

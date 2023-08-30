@@ -8,6 +8,7 @@ namespace Auto.Reif
 -- Universe monomprphic facts
 -- User-supplied facts should have their universe level parameters
 --   instantiated before being put into `Reif.State.facts`
+-- The first `Expr` is the proof, and the second `Expr` is the fact
 abbrev UMonoFact := Expr × Expr
 
 structure State where
@@ -21,7 +22,6 @@ structure State where
   --   during monomorphization, the polymorphic facts
   --   will be removed from `facts` and the instantiated
   --   versions will be added to `facts`.
-  -- The first `Expr` is the proof, and the second `Expr` is the fact
   facts           : Array UMonoFact     := #[]
   -- During monomorphization, polymorphic constants will be turned
   --   into free variables. This map records the original expression

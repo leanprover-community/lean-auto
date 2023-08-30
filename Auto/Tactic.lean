@@ -133,12 +133,6 @@ def runAuto
   traceLemmas "Lemmas collected from user-provided terms:" userLemmas
   trace[auto.tactic] "Preprocessing took {(← IO.monoMsNow) - startTime}ms"
   let lemmas := lctxLemmas ++ userLemmas
-  -- ! Testing monomorphization
-  let mst ← Monomorphization.monomorphize lemmas
-  for x in mst.lisArr.concatMap id do
-    if ← Monomorphization.LemmaInst.monomorphic x then
-      trace[auto.tactic] "Monomorphized :: {x}"
-  throwError "Auto :: Not implemented"
   match instr with
   | .none =>
     -- Testing. Skipping universe level instantiation and monomorphization
@@ -161,15 +155,10 @@ def runAuto
       -- let _ ← liftM <| commands.mapM (fun c => IO.println s!"Command: {c}")
       -- Solver.SMT.querySolver commands
       )
-    let afterMonomorphization : Reif.ReifM Expr := (do
+    let (proof, _) ← Monomorphization.monomorphize lemmas (@id (Reif.ReifM Expr) do
       let ufacts ← liftM <| Reif.getFacts
       let u ← LamReif.computeMaxLevel ufacts
       (afterReify ufacts).run' {u := u})
-    let proof ← Monomorphization.collectPolyLog (fun hmap mfacts =>
-      let hmaprev := hmap.toList.foldl (fun hm (key, val) => hm.insert val key) HashMap.empty
-      -- Skipping monomorphization
-      afterMonomorphization.run' { facts := mfacts, polyVal := hmaprev })
-      (lemmas.map (fun x => (x.proof, x.type)))
     trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
     return .unsat proof
 

@@ -1,5 +1,6 @@
 import Lean
 import Auto.Lib.MonadUtils
+import Auto.Lib.MetaExtra
 open Lean
 
 namespace Auto.MetaState
@@ -48,21 +49,15 @@ def runMetaM (n : MetaM α) : MetaStateM α := do
   setToState s'
   return ret
 
-def runMetaMWithFVarsImp (ms : State) (fvars : Array FVarId) (k : MetaM α) : MetaM α := do
-  let mut lctx := (← read).lctx
-  for fid in fvars do
-    match ms.lctx.findFVar? (.fvar fid) with
-    | .some decl =>
-      match decl with
-      | .cdecl _ fvarId userName type bi kind =>
-        lctx := lctx.mkLocalDecl fvarId userName type bi kind
-      | .ldecl _ fvarId userName type value nonDep kind =>
-        lctx := lctx.mkLetDecl fvarId userName type value nonDep kind
-    | .none => throwError "runMetaMWithFVars :: Unknown free variable {Expr.fvar fid}"
-  withReader (fun ctx => {ctx with lctx := lctx}) k
+def runWithIntroducedFVarsImp (m : MetaStateM (Array FVarId × α)) (k : α → MetaM β) : MetaM β := do
+  let s ← get
+  let ctx ← read
+  let ((fvars, a), sc') ← m.run ⟨s, ctx⟩
+  Meta.runWithFVars sc'.lctx fvars (k a)
 
-def runMetaMWithFVars [MonadControlT MetaM n] [Monad n] (ms : State) (fvars : Array FVarId) (k : n α) : n α :=
-  Meta.mapMetaM (fun k => runMetaMWithFVarsImp ms fvars k) k
+def runWithIntroducedFVars [MonadControlT MetaM n] [Monad n]
+  (m : MetaStateM (Array FVarId × α)) (k : α → n β) : n β :=
+  Meta.map1MetaM (fun k => runWithIntroducedFVarsImp m k) k
 
 def mkLocalDecl (fvarId : FVarId) (userName : Name) (type : Expr)
   (bi : BinderInfo := BinderInfo.default) (kind : LocalDeclKind := LocalDeclKind.default) : MetaStateM Unit := do

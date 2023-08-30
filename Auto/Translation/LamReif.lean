@@ -420,12 +420,13 @@ def processTermExpr (lctx : HashMap FVarId Nat) (e : Expr) : ReifM LamTerm := do
   if let .fvar fid := e then
     if let .some n := deBruijn? lctx fid then
       return .bvar n
+  let e ← Reif.resolvePolyVal e
   let varMap ← getVarMap
   -- If the expression has already been processed
   if let .some id := varMap.find? e then
     return .atom id
   -- If the expression has not been processed
-  processTermExprAux (← Reif.resolvePolyVal e)
+  processTermExprAux e
 
 partial def reifTerm (lctx : HashMap FVarId Nat) : Expr → ReifM LamTerm
 | .app fn arg => do
