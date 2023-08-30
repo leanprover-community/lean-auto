@@ -1,7 +1,33 @@
 import Lean
+import Auto.Lib.LevelExtra
 open Lean Elab Command
 
 namespace Auto
+
+def Expr.hasCurrentDepthLevelMVar : Expr → MetaM Bool
+| .sort l => Level.hasCurrentDepthLevelMVar l
+| .const _ ls => ls.anyM Level.hasCurrentDepthLevelMVar
+| .forallE _ d b _ => or <$> hasCurrentDepthLevelMVar d <*> hasCurrentDepthLevelMVar b
+| .lam _ d b _ => or <$> hasCurrentDepthLevelMVar d <*> hasCurrentDepthLevelMVar b
+| .letE _ t v b _ =>
+  or <$> hasCurrentDepthLevelMVar t <*> (
+    or <$> hasCurrentDepthLevelMVar v <*> hasCurrentDepthLevelMVar b)
+| .app f a => or <$> hasCurrentDepthLevelMVar f <*> hasCurrentDepthLevelMVar a
+| .mdata _ b => hasCurrentDepthLevelMVar b
+| .proj _ _ e => hasCurrentDepthLevelMVar e
+| _ => pure false
+
+def Expr.findParam? (p : Name → Bool) : Expr → Option Name
+| .sort l => Level.findParam? p l
+| .const _ ls => ls.foldl (fun acc x => Option.orElse acc (fun _ => Level.findParam? p x)) .none
+| .forallE _ d b _ => Option.orElse (findParam? p d) (fun _ => findParam? p b)
+| .lam _ d b _ => Option.orElse (findParam? p d) (fun _ => findParam? p b)
+| .letE _ t v b _ => Option.orElse (findParam? p t) (fun _ =>
+    Option.orElse (findParam? p v) (fun _ => findParam? p b))
+| .app f a => Option.orElse (findParam? p f) (fun _ => findParam? p a)
+| .mdata _ b => findParam? p b
+| .proj _ _ e => findParam? p e
+| _ => .none
 
 def Expr.forallBinders (e : Expr) : Array (Name × Expr × BinderInfo) :=
   let rec aux (e : Expr) :=

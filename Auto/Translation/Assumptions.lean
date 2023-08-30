@@ -18,7 +18,6 @@ instance : ToMessageData Lemma where
 
 -- `lem₁` subsumes `lem₂`
 def Lemma.subsumeQuick (lem₁ lem₂ : Lemma) : MetaM Bool := Meta.withNewMCtxDepth <| do
-  let s ← saveState
   let paramInst₁ ← lem₁.params.mapM (fun _ => Meta.mkFreshLevelMVar)
   let type₁ := lem₁.type.instantiateLevelParamsArray lem₁.params paramInst₁
   -- Extremely important: Don't put the following line here
@@ -29,7 +28,6 @@ def Lemma.subsumeQuick (lem₁ lem₂ : Lemma) : MetaM Bool := Meta.withNewMCtxD
   let ret ← Meta.forallTelescope lem₂.type fun _ body₂ => do
     let (_, _, body₁) ← Meta.forallMetaTelescope type₁
     Meta.isDefEq body₁ body₂
-  restoreState s
   return ret
 
 def Lemma.equivQuick (lem₁ lem₂ : Lemma) : MetaM Bool := do
@@ -75,12 +73,11 @@ def LemmaInst.subsumeQuick (li₁ li₂ : LemmaInst) : MetaM Bool := Meta.withNe
     throwError "LemmaInst.subsumeQuick :: {li₁} and {li₂} are not instance of the same lemma"
   let lem₁ := li₁.toLemma
   let lem₂ := li₂.toLemma
-  let s ← saveState
   let (_, _, body₂) ← Meta.lambdaMetaTelescope lem₂.proof li₂.nbinders
   let args₂ := Expr.getAppBoundedArgs li₂.nargs body₂
   if args₂.size != li₂.nargs then
     throwError "LemmaInst.subsumeQuick :: {li₂} is expected to have {li₂.nargs} args, but actually has {args₂.size}"
-  let ret ← Meta.withNewMCtxDepth do
+  Meta.withNewMCtxDepth do
     let paramInst₁ ← lem₁.params.mapM (fun _ => Meta.mkFreshLevelMVar)
     let (_, _, body₁) ← Meta.lambdaMetaTelescope lem₁.proof li₁.nbinders
     let args₁ := Expr.getAppBoundedArgs li₁.nargs body₁
@@ -91,8 +88,6 @@ def LemmaInst.subsumeQuick (li₁ li₂ : LemmaInst) : MetaM Bool := Meta.withNe
       if !(← Meta.isDefEq arg₁ arg₂) then
         return false
     return true
-  restoreState s
-  return ret
 
 def LemmaInst.equivQuick (li₁ li₂ : LemmaInst) : MetaM Bool := do
   let s₁₂ ← LemmaInst.subsumeQuick li₁ li₂

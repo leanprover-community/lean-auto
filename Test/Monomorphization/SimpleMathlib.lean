@@ -21,14 +21,12 @@ example : f '' s ⊆ v ↔ s ⊆ f ⁻¹' v := by
   sorry
 
 set_option trace.auto.mono.printLemmaInst true in
-set_option auto.mono.saturationThreshold 300 in
 example (h : Function.Injective f) : f ⁻¹' (f '' s) ⊆ s := by
   try auto [Set.subset_def, Set.mem_preimage, Function.Injective.mem_set_image]
   sorry
 
 set_option trace.auto.mono.printLemmaInst true in
 set_option trace.auto.mono.printConstInst true in
-set_option auto.mono.saturationThreshold 200 in
 example : f '' (f ⁻¹' u) ⊆ u := by
   try auto [Set.subset_def, Set.mem_image, Set.mem_preimage]
   sorry
