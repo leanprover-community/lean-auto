@@ -26,8 +26,11 @@ set_option trace.auto.lamReif true in
 example {α β : Type} (a : α) (b : β) (H : b = b) : a = a := by
   auto [H]
 
+set_option pp.raw true in
 set_option trace.auto.buildChecker true in
 set_option trace.auto.tactic true in
+set_option trace.auto.lamReif true in
+set_option trace.auto.mono.printLemmaInst true in
 example (a : Nat) (f : Nat → Nat) (H : ∀ x, f x = x) :
   f x = f (f (f (f (f (f (f (f (f x)))))))) := by
   auto [H]
