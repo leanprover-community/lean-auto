@@ -59,6 +59,12 @@ def runWithIntroducedFVars [MonadControlT MetaM n] [Monad n]
   (m : MetaStateM (Array FVarId × α)) (k : α → n β) : n β :=
   Meta.map1MetaM (fun k => runWithIntroducedFVarsImp m k) k
 
+def inferType (e : Expr) : MetaStateM Expr := runMetaM (Meta.inferType e)
+
+def isDefEq (t s : Expr) : MetaStateM Bool := runMetaM (Meta.isDefEq t s)
+
+def isLevelDefEq (u v : Level) : MetaStateM Bool := runMetaM (Meta.isLevelDefEq u v)
+
 def mkLocalDecl (fvarId : FVarId) (userName : Name) (type : Expr)
   (bi : BinderInfo := BinderInfo.default) (kind : LocalDeclKind := LocalDeclKind.default) : MetaStateM Unit := do
   let ctx ← getToContext

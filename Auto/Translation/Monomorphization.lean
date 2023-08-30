@@ -167,7 +167,7 @@ def ConstInst.toExpr (ci : ConstInst) : CoreM Expr := do
 
 -- Precondition : `.some ci == ← ConstInst.ofExpr?Poly e`
 -- Returns the list of non-dependent arguments in `e.getAppArgs`
-def ConstInst.getNonargsInst (ci : ConstInst) (e : Expr) : CoreM (Array Expr) := do
+def ConstInst.getOtherArgs (ci : ConstInst) (e : Expr) : CoreM (Array Expr) := do
   let mut args := e.getAppArgs.map Option.some
   for idx in ci.argsToInst do
     args := args.setD idx .none
@@ -421,56 +421,10 @@ def saturate : MonoM Unit := do
       trace[auto.mono] "Monomorphization Saturated after {cnt} small steps"
       return
 
--- Since we're now dealing with monomorphized lemmas, there are no
---   bound level parameters
-private partial def replaceForall (lctx : Array Expr) : Expr → MonoM Expr
-| .forallE name ty body binfo => do
-  let tylvl := (← instantiateMVars (← Meta.inferType ty)).sortLevel!
-  let (bodysort, bodyrep) ← Meta.withLocalDecl name binfo ty fun fvar => do
-    let body' := body.instantiate1 fvar
-    let bodysort ← Meta.inferType body'
-    let bodyrep ← replaceForall (lctx.push fvar) body'
-    return (bodysort, ← Meta.mkLambdaFVars #[fvar] bodyrep)
-  let bodylvl := (← instantiateMVars bodysort).sortLevel!
-  if body.hasLooseBVar 0 ∨ !(← Meta.isLevelDefEq tylvl .zero) ∨ !(← Meta.isLevelDefEq bodylvl .zero) then
-    let forallFun := Expr.app (.const ``forallF [tylvl, bodylvl]) ty
-    addForallImpFInst lctx forallFun
-    return .app forallFun bodyrep
-  else
-    let impFun := Expr.const ``ImpF [tylvl, bodylvl]
-    addForallImpFInst lctx impFun
-    return .app (.app impFun (← replaceForall lctx ty)) bodyrep
-| .lam name ty body binfo =>
-  Meta.withLocalDecl name binfo ty fun fvar => do
-    let b' ← replaceForall (lctx.push fvar) (body.instantiate1 fvar)
-    Meta.mkLambdaFVars #[fvar] b'
-| .app fn arg => do
-  let fn' ← replaceForall lctx fn
-  let arg' ← replaceForall lctx arg
-  return .app fn' arg'
-| e => return e
-where addForallImpFInst (lctx : Array Expr) (e : Expr) : MonoM Unit := do
-  let eabst := e.abstract lctx
-  match ← ConstInst.ofExpr?Poly #[] eabst with
-  | .some ci => processConstInst ci
-  | .none => trace[auto.mono] "replaceForall :: Warning, {e} is not a valid instance of `forallF` or `ImpF`"
-
-/-
-  · Step 1 : Remove non-monomorphic lemma instances
-  · Step 2 :
-    · Turn `∀` into `Embedding.forallF`, `→` into `Embedding.impF`
-    · Record all instances of `Embedding.impF` and `Embedding.forallF`
-      into `ciMap`
--/
--- Turns `∀` into `Embedding.forallF`, `→` into `Embedding.impF`
+-- Remove non-monomorphic lemma instances
 def postprocessSaturate : MonoM Unit := do
   let lisArr ← getLisArr
   let lisArr ← liftM <| lisArr.mapM (fun lis => lis.filterM LemmaInst.monomorphic)
-  let lisArr ← lisArr.mapM (fun lis => lis.mapM (fun li => do
-    if li.params.size != 0 then
-      throwError "postprocessSaturate :: Unexpected error"
-    let type' ← replaceForall #[] li.type
-    return {li with type := type'}))
   setLisArr lisArr
 
 namespace FVarRep
@@ -494,7 +448,7 @@ namespace FVarRep
       setCiMap ((← getCiMap).insert ci fvarId)
       let userName := (`cifvar).appendIndexAfter (← getCiMap).size
       let cie ← ci.toExpr
-      let city ← MetaState.runMetaM (Meta.inferType cie)
+      let city ← MetaState.inferType cie
       MetaState.mkLetDecl fvarId userName city cie
       setFfvars ((← getFfvars).push fvarId)
       return fvarId
@@ -506,7 +460,7 @@ namespace FVarRep
     let fvarId ← mkFreshFVarId
     setExprMap ((← getExprMap).insert e fvarId)
     let userName := (`exfvar).appendIndexAfter (← getExprMap).size
-    let ety ← MetaState.runMetaM (Meta.inferType e)
+    let ety ← MetaState.inferType e
     MetaState.mkLetDecl fvarId userName ety e
     setFfvars ((← getFfvars).push fvarId)
     return fvarId
@@ -518,6 +472,8 @@ namespace FVarRep
     let argsToInst := if (← instInst?) then Expr.instDepArgs fnTy else Expr.depArgs fnTy
     return argsToInst.size == 0
 
+  -- Since we're now dealing with monomorphized lemmas, there are no
+  --   bound level parameters
   partial def replacePolyWithFVar : Expr → FVarRepM Expr
   | .lam name ty body binfo => do
     let fvarId ← mkFreshFVarId
@@ -525,6 +481,24 @@ namespace FVarRep
     setBfvars ((← getBfvars).push fvarId)
     let b' ← replacePolyWithFVar (body.instantiate1 (.fvar fvarId))
     MetaState.runMetaM <| Meta.mkLambdaFVars #[.fvar fvarId] b'
+  -- Turns `∀` into `Embedding.forallF`, `→` into `Embedding.ImpF`
+  | .forallE name ty body binfo => do
+    let .sort tylvl := (← instantiateMVars (← MetaState.inferType ty))
+      | throwError "replacePolyWithFVar :: Unexpected error"
+    let fvarId ← mkFreshFVarId
+    MetaState.mkLocalDecl fvarId name ty binfo
+    setBfvars ((← getBfvars).push fvarId)
+    let body' := body.instantiate1 (.fvar fvarId)
+    let bodysort ← MetaState.runMetaM <| Meta.inferType body'
+    let bodylvl := (← instantiateMVars bodysort).sortLevel!
+    let bodyrep ← replacePolyWithFVar body'
+    if body.hasLooseBVar 0 ∨ !(← MetaState.isLevelDefEq tylvl .zero) ∨ !(← MetaState.isLevelDefEq bodylvl .zero) then
+      let forallFun := Expr.app (.const ``forallF [tylvl, bodylvl]) ty
+      let forallFunId ← replacePolyWithFVar forallFun
+      return .app forallFunId (← MetaState.runMetaM <| Meta.mkLambdaFVars #[.fvar fvarId] bodyrep)
+    else
+      let impFun := Expr.const ``ImpF [.zero, .zero]
+      return .app (.app impFun (← replacePolyWithFVar ty)) bodyrep
   | e@(.fvar id) => do
     if (← getBfvars).contains id then
       return .fvar id
@@ -539,7 +513,7 @@ namespace FVarRep
     let eabst := e.abstract ((← getBfvars).map .fvar)
     if let .some ci ← ConstInst.ofExpr?Poly #[] eabst then
       let ciId ← ConstInst2FVarId ci
-      let ciArgs ← ConstInst.getNonargsInst ci e
+      let ciArgs ← ConstInst.getOtherArgs ci e
       let ciArgs ← ciArgs.mapM replacePolyWithFVar
       return mkAppN (.fvar ciId) ciArgs
     if ← MetaState.runMetaM (monoExprApp? e) then
@@ -562,10 +536,11 @@ def monomorphize (lemmas : Array Lemma) (k : Reif.State → MetaM α) : MetaM α
   let fvarRepMAction : FVarRep.FVarRepM (Array Reif.UMonoFact) := (do
     let lis := monoSt.lisArr.concatMap id
     lis.mapM (fun li => do
-      trace[auto.mono] "6 :: Replacing {li.type}"
       return ⟨li.proof, ← FVarRep.replacePolyWithFVar li.type⟩))
   let metaStateMAction : MetaState.MetaStateM (Array FVarId × Reif.State) := (do
     let (ufacts, s) ← fvarRepMAction.run {}
+    for (proof, ty) in ufacts do
+      trace[auto.mono] "Monomorphized :: {proof} : {ty}"
     let exlis := s.exprMap.toList.map (fun (e, id) => (id, e))
     let cilis ← s.ciMap.toList.mapM (fun (ci, id) => do return (id, ← ci.toExpr))
     let polyVal := HashMap.ofList (exlis ++ cilis)
