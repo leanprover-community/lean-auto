@@ -158,7 +158,7 @@ def ConstInst.toExpr (ci : ConstInst) : CoreM Expr := do
   let nargs := (Nat.succ <$> ci.depargsIdx[ci.depargsIdx.size - 1]?).getD 0
   let mut args : Array (Option Expr) := (Array.mk (List.range nargs)).map (fun n => .none)
   for (arg, idx) in ci.depargs.zip ci.depargsIdx do
-    args := args.set! idx (.some arg)
+    args := args.setD idx (.some arg)
   let .some ret := ConstInst.toExprAux args.data [] (.const ci.name ci.levels.data) type
     | throwError "ConstInst.toExpr :: Unexpected error"
   return ret
@@ -168,7 +168,7 @@ def ConstInst.toExpr (ci : ConstInst) : CoreM Expr := do
 def ConstInst.getNonDepArgs (ci : ConstInst) (e : Expr) : CoreM (Array Expr) := do
   let mut args := e.getAppArgs.map Option.some
   for idx in ci.depargsIdx do
-    args := args.set! idx .none
+    args := args.setD idx .none
   let mut ret := #[]
   for arg? in args do
     if let .some arg := arg? then

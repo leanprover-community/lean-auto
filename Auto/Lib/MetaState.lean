@@ -42,19 +42,27 @@ instance : MonadBacktrack SavedState MetaStateM where
 
 #genMonadState MetaStateM
 
--- Not all `MetaM` operations will succeed
 def runMetaM (n : MetaM α) : MetaStateM α := do
   let s ← get
   let (ret, s') ← n.run s.toContext s.toState
   setToState s'
   return ret
 
-def runAtMetaM (n : MetaStateM α) : MetaM (α × Meta.Context) := do
-  let s ← get
-  let c ← read
-  let (ret, sc') ← n.run ⟨s, c⟩
-  set sc'.toState
-  return (ret, sc'.toContext)
+def runMetaMWithFVarsImp (ms : State) (fvars : Array FVarId) (k : MetaM α) : MetaM α := do
+  let mut lctx := (← read).lctx
+  for fid in fvars do
+    match ms.lctx.findFVar? (.fvar fid) with
+    | .some decl =>
+      match decl with
+      | .cdecl _ fvarId userName type bi kind =>
+        lctx := lctx.mkLocalDecl fvarId userName type bi kind
+      | .ldecl _ fvarId userName type value nonDep kind =>
+        lctx := lctx.mkLetDecl fvarId userName type value nonDep kind
+    | .none => throwError "runMetaMWithFVars :: Unknown free variable {Expr.fvar fid}"
+  withReader (fun ctx => {ctx with lctx := lctx}) k
+
+def runMetaMWithFVars [MonadControlT MetaM n] [Monad n] (ms : State) (fvars : Array FVarId) (k : n α) : n α :=
+  Meta.mapMetaM (fun k => runMetaMWithFVarsImp ms fvars k) k
 
 def mkLocalDecl (fvarId : FVarId) (userName : Name) (type : Expr)
   (bi : BinderInfo := BinderInfo.default) (kind : LocalDeclKind := LocalDeclKind.default) : MetaStateM Unit := do
