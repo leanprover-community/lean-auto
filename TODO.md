@@ -1,0 +1,1 @@
+* Automatically synthesize instance if not instantiated. Refer to the "Set.Icc" example.
