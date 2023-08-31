@@ -559,16 +559,6 @@ namespace FVarRep
       let impFun := Expr.const ``ImpF [.zero, .zero]
       addForallImpFInst impFun
       return .app (.app impFun (← replacePolyWithFVar ty)) bodyrep
-  | e@(.fvar id) => do
-    if (← getBfvars).contains id then
-      return .fvar id
-    else
-      Expr.fvar <$> UnknownExpr2FVarId e
-  | e@(.const ..) => do
-    if let .some ci ← MetaState.runMetaM (ConstInst.ofExpr? #[] e) then
-      let ciId ← ConstInst2FVarId ci
-      return .fvar ciId
-    Expr.fvar <$> UnknownExpr2FVarId e
   | e@(.app ..) => do
     let eabst := e.abstract ((← getBfvars).map .fvar)
     if let .some ci ← MetaState.runMetaM (ConstInst.ofExpr? #[] eabst) then
@@ -577,7 +567,14 @@ namespace FVarRep
       let ciArgs ← ciArgs.mapM replacePolyWithFVar
       return mkAppN (.fvar ciId) ciArgs
     Expr.fvar <$> UnknownExpr2FVarId e
-  | e => Expr.fvar <$> UnknownExpr2FVarId e
+  | e => do
+    if let .fvar id := e then
+      if (← getBfvars).contains id then
+        return .fvar id
+    if let .some ci ← MetaState.runMetaM (ConstInst.ofExpr? #[] e) then
+      let ciId ← ConstInst2FVarId ci
+      return .fvar ciId
+    Expr.fvar <$> UnknownExpr2FVarId e
 where addForallImpFInst (e : Expr) : FVarRepM Unit := do
   let eabst := e.abstract ((← getBfvars).map Expr.fvar)
   match ← MetaState.runMetaM (ConstInst.ofExpr? #[] eabst) with
