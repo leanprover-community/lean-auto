@@ -211,15 +211,15 @@ private partial def collectConstInsts (params : Array Name) : Expr → MetaM (Ar
 -- Array of instances of a polymorphic constant
 abbrev ConstInsts := Array ConstInst
 
--- Given an array `cis` and a potentially new instance `ci`,
---   determine whether `ci` is a new instance.
+-- Given an array `cis` and a potentially new instance `ci`
 -- · If `ci` is new, add it to `ConstInsts` and return `true`
--- · If `ci` is not new, return the original `ConstInsts` and `false`
-def ConstInsts.newInst? (cis : ConstInsts) (ci : ConstInst) : MetaM Bool := do
+-- · If `ci` is not new, return an element of the original `ConstInsts`
+--   which is definitionally equal to `ci`
+def ConstInsts.canonicalize? (cis : ConstInsts) (ci : ConstInst) : MetaM (Option ConstInst) := do
   for ci' in cis do
     if ← ci'.equiv ci then
-      return false
-  return true
+      return .some ci'
+  return .none
 
 -- Given an MLemmaInst `mi` and a subexpressions `e` of `mi.type`,
 --   try to match `e` and the subexpressions of `e` against `ci`.
@@ -323,34 +323,43 @@ abbrev MonoM := StateRefT State MetaM
 
 #genMonadState MonoM
 
+/-
+  Returns:
+  1. Whether canonicalization is successful / Whether the constant is not new
+  2. `(ciMap.find? ci.name).getD #[]`
+  3. Canonicalized ConstInst
+-/
+def CiMap.canonicalize? (ciMap : HashMap Name ConstInsts) (ci : ConstInst) :
+  MetaM (Bool × ConstInsts × ConstInst) := do
+  match ciMap.find? ci.name with
+  | .some insts =>
+    match ← insts.canonicalize? ci with
+    | .some ci' => return (true, insts, ci')
+    | .none => return (false, insts, ci)
+  | .none => return (false, #[], ci)
+
 -- Process a potentially new ConstInst. If it's new, return its index
 --   in the corresponding `ConstInsts` array. If it's not new, return
 --   `.none`.
 def processConstInst (ci : ConstInst) : MonoM Unit := do
-  let cont (ci : ConstInst) (insts : Array ConstInst) := (do
-      trace[auto.mono.printConstInst] "New {ci}"
-      setCiMap ((← getCiMap).insert ci.name (insts.push ci))
-      -- Do not match against ConstInsts that are universe polymorphic
-      --   but has no argsInst
-      if ci.argsToInst.size == 0 then
-        return
-      -- Do not match against `=` and `∃`
-      -- If some polymorphic argument of the a theorem only occurs
-      --   as the first argument of `=` or `∃`, the theorem is probably
-      --   implied by the axioms of higher order logic, e.g.
-      -- `Eq.trans : ∀ {α} (x y z : α), x = y → y = z → x = z`
-      if ci.name == ``Exists || ci.name == ``Eq then
-        return
-      -- Insert `ci` into `activeCi` so that we can later match on it
-      setActiveCi ((← getActiveCi).enqueue (ci.name, insts.size))
-    )
-  match (← getCiMap).find? ci.name with
-  | .some insts =>
-    let new? ← insts.newInst? ci
-    if new? then
-      cont ci insts
-  | .none =>
-    cont ci #[]
+  let (old?, insts, ci) ← CiMap.canonicalize? (← getCiMap) ci
+  if old? then
+    return
+  trace[auto.mono.printConstInst] "New {ci}"
+  setCiMap ((← getCiMap).insert ci.name (insts.push ci))
+  -- Do not match against ConstInsts that are universe polymorphic
+  --   but has no argsInst
+  if ci.argsToInst.size == 0 then
+    return
+  -- Do not match against `=` and `∃`
+  -- If some polymorphic argument of the a theorem only occurs
+  --   as the first argument of `=` or `∃`, the theorem is probably
+  --   implied by the axioms of higher order logic, e.g.
+  -- `Eq.trans : ∀ {α} (x y z : α), x = y → y = z → x = z`
+  if ci.name == ``Exists || ci.name == ``Eq then
+    return
+  -- Insert `ci` into `activeCi` so that we can later match on it
+  setActiveCi ((← getActiveCi).enqueue (ci.name, insts.size))
 
 def initializeMonoM (lemmas : Array Lemma) : MonoM Unit := do
   let lemmaInsts ← liftM <| lemmas.mapM (fun lem => do
@@ -433,20 +442,34 @@ namespace FVarRep
     bfvars  : Array FVarId             := #[]
     ffvars  : Array FVarId             := #[]
     exprMap : HashMap Expr FVarId      := {}
-    ciMap   : HashMap ConstInst FVarId := {}
+    ciMap   : HashMap Name ConstInsts  
+    ciIdMap : HashMap ConstInst FVarId := {}
   
   abbrev FVarRepM := StateRefT State MetaState.MetaStateM
   
   #genMonadState FVarRepM
-  
+
+  -- Similar to `Monomorphization.processConstInst`
+  def processConstInst (ci : ConstInst) : FVarRepM Unit := do
+    let (old?, insts, ci) ← MetaState.runMetaM <| CiMap.canonicalize? (← getCiMap) ci
+    if old? then
+      return
+    trace[auto.mono.printConstInst] "New {ci}"
+    setCiMap ((← getCiMap).insert ci.name (insts.push ci))
+
   def ConstInst2FVarId (ci : ConstInst) : FVarRepM FVarId := do
     let ciMap ← FVarRep.getCiMap
-    match ciMap.find? ci with
+    let ci ← MetaState.runMetaM (do
+      match ← CiMap.canonicalize? ciMap ci with
+      | (true, _, ci') => return ci'
+      | _ => throwError "ConstInst2FVarId :: Cannot find canonicalized instance of {ci}")
+    let ciIdMap ← FVarRep.getCiIdMap
+    match ciIdMap.find? ci with
     | .some fid => return fid
     | .none => do
       let fvarId ← mkFreshFVarId
-      setCiMap ((← getCiMap).insert ci fvarId)
-      let userName := (`cifvar).appendIndexAfter (← getCiMap).size
+      setCiIdMap ((← getCiIdMap).insert ci fvarId)
+      let userName := (`cifvar).appendIndexAfter (← getCiIdMap).size
       let cie ← ci.toExpr
       let city ← MetaState.inferType cie
       MetaState.mkLetDecl fvarId userName city cie
@@ -494,10 +517,12 @@ namespace FVarRep
     let bodyrep ← replacePolyWithFVar body'
     if body.hasLooseBVar 0 ∨ !(← MetaState.isLevelDefEq tylvl .zero) ∨ !(← MetaState.isLevelDefEq bodylvl .zero) then
       let forallFun := Expr.app (.const ``forallF [tylvl, bodylvl]) ty
+      addForallImpFInst forallFun
       let forallFunId ← replacePolyWithFVar forallFun
       return .app forallFunId (← MetaState.runMetaM <| Meta.mkLambdaFVars #[.fvar fvarId] bodyrep)
     else
       let impFun := Expr.const ``ImpF [.zero, .zero]
+      addForallImpFInst impFun
       return .app (.app impFun (← replacePolyWithFVar ty)) bodyrep
   | e@(.fvar id) => do
     if (← getBfvars).contains id then
@@ -522,6 +547,11 @@ namespace FVarRep
       return mkAppN fn args
     Expr.fvar <$> UnknownExpr2FVarId e
   | e => Expr.fvar <$> UnknownExpr2FVarId e
+where addForallImpFInst (e : Expr) : FVarRepM Unit := do
+  let eabst := e.abstract ((← getBfvars).map Expr.fvar)
+  match ← ConstInst.ofExpr?Poly #[] eabst with
+  | .some ci => processConstInst ci
+  | .none => trace[auto.mono] "Warning, {e} is not a valid instance of `forallF` or `ImpF`"
 
 end FVarRep
 
@@ -530,19 +560,19 @@ def monomorphize (lemmas : Array Lemma) (k : Reif.State → MetaM α) : MetaM α
   let monoMAction : MonoM Unit := (do
     initializeMonoM lemmas
     saturate
-    postprocessSaturate)
-  trace[auto.mono] "Monomorphization took {(← IO.monoMsNow) - startTime}ms"
+    postprocessSaturate
+    trace[auto.mono] "Monomorphization took {(← IO.monoMsNow) - startTime}ms")
   let (_, monoSt) ← monoMAction.run {}
   let fvarRepMAction : FVarRep.FVarRepM (Array Reif.UMonoFact) := (do
     let lis := monoSt.lisArr.concatMap id
     lis.mapM (fun li => do
       return ⟨li.proof, ← FVarRep.replacePolyWithFVar li.type⟩))
   let metaStateMAction : MetaState.MetaStateM (Array FVarId × Reif.State) := (do
-    let (ufacts, s) ← fvarRepMAction.run {}
+    let (ufacts, s) ← fvarRepMAction.run { ciMap := monoSt.ciMap }
     for (proof, ty) in ufacts do
       trace[auto.mono] "Monomorphized :: {proof} : {ty}"
     let exlis := s.exprMap.toList.map (fun (e, id) => (id, e))
-    let cilis ← s.ciMap.toList.mapM (fun (ci, id) => do return (id, ← ci.toExpr))
+    let cilis ← s.ciIdMap.toList.mapM (fun (ci, id) => do return (id, ← ci.toExpr))
     let polyVal := HashMap.ofList (exlis ++ cilis)
     return (s.ffvars, Reif.State.mk s.ffvars ufacts polyVal))
   MetaState.runWithIntroducedFVars metaStateMAction k
