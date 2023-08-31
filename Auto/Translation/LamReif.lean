@@ -10,6 +10,7 @@ open Lean
 initialize
   registerTraceClass `auto.lamReif
   registerTraceClass `auto.buildChecker
+  registerTraceClass `auto.lamReif.printValuation
 
 namespace Auto.LamReif
 open Embedding.Lam
@@ -449,7 +450,7 @@ def reifFacts (facts : Array Reif.UMonoFact) : ReifM (Array Nat) :=
   facts.mapM (fun (proof, ty) => do
     trace[auto.lamReif] "Reifying {proof} : {ty}"
     let lamty ← reifTerm .empty ty
-    trace[auto.lamReif] "Successfully reified proof to λterm `{repr lamty}`"
+    trace[auto.lamReif] "Successfully reified proof to λterm `{toString lamty}`"
     newAssertion proof lamty)
 
 section Checker
@@ -476,11 +477,11 @@ section Checker
       let (lctx, t) := impV
       let (lctx', t') ← lookupValidTable! hyp
       if !(lctx'.beq lctx) then
-        throwError "impApps :: LCtx mismatch, `{repr lctx'}` ≠ `{repr lctx}`"
+        throwError "impApps :: LCtx mismatch, `{toString lctx'}` ≠ `{toString lctx}`"
       let .app (.base .prop) (.app (.base .prop) (.base .imp) hypT) conclT := t
-        | throwError "imApps :: Error, `{repr t}` is not an implication"
+        | throwError "imApps :: Error, `{toString t}` is not an implication"
       if !(hypT.beq t') then
-        throwError "impApps :: Term mismatch, `{repr hypT}` ≠ `{repr t'}`"
+        throwError "impApps :: Term mismatch, `{toString hypT}` ≠ `{toString t'}`"
       impV := (lctx, conclT)
       imp ← newValidChkStep (.validOfImp imp hyp) impV
     return imp
@@ -502,6 +503,14 @@ section Checker
     let stats := (← checkerStats).map (fun (s, n) => "  " ++ s ++ s!": {n}")
     let ss := #["Checker Statics :"] ++ stats
     trace[auto.buildChecker] (String.intercalate "\n" ss.data)
+
+  def printValuation : ReifM Unit := do
+    let varVal ← getVarVal
+    for ((e, s), idx) in varVal.zip ⟨List.range varVal.size⟩ do
+      trace[auto.lamReif.printValuation] "Term Atom {idx} : {toString s} := {e}"
+    let tyVal ← getTyVal
+    for ((e, lvl), idx) in tyVal.zip ⟨List.range tyVal.size⟩ do
+      trace[auto.lamReif.printValuation] "Type Atom {idx} := {e} : {Expr.sort lvl}"
 
   def buildChkStepsExpr : ReifM Expr := do
     let chkSteps ← getChkSteps

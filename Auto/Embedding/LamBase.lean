@@ -38,6 +38,15 @@ def LamBaseSort.reprPrec (b : LamBaseSort) (n : Nat) :=
 instance : Repr LamBaseSort where
   reprPrec s n := s.reprPrec n
 
+def LamBaseSort.toString : LamBaseSort → String
+| .prop => "Prop"
+| .int  => "Int"
+| .real => "Real"
+| .bv n => s!"Bitvec {n}"
+
+instance : ToString LamBaseSort where
+  toString := LamBaseSort.toString
+
 def LamBaseSort.beq : LamBaseSort → LamBaseSort → Bool
 | .prop, .prop => true
 | .int,  .int  => true
@@ -95,6 +104,14 @@ def LamSort.reprPrec (s : LamSort) (n : Nat) :=
 
 instance : Repr LamSort where
   reprPrec s n := s.reprPrec n 
+
+def LamSort.toString : LamSort → String
+| .atom n => s!"?{n}"
+| .base b => s!"{b}"
+| .func s1 s2 => s!"({LamSort.toString s1} → {LamSort.toString s2})"
+
+instance : ToString LamSort where
+  toString := LamSort.toString
 
 def LamSort.beq : LamSort → LamSort → Bool
 | .atom m,     .atom n     => m == n
@@ -214,6 +231,42 @@ inductive LamBaseTerm
   | existE   : LamSort → LamBaseTerm
 deriving Inhabited, Hashable, Lean.ToExpr
 
+def LamBaseTerm.isInt : LamBaseTerm → Bool
+| .intVal _ => true
+| _         => false
+
+def LamBaseTerm.isRealVal : LamBaseTerm → Bool
+| .realVal _ => true
+| _          => false
+
+def LamBaseTerm.isBvVal : LamBaseTerm → Bool
+| .bvVal _ => true
+| _        => false
+
+def LamBaseTerm.isEqI : LamBaseTerm → Bool
+| .eqI _ => true
+| _      => false
+
+def LamBaseTerm.isForallEI : LamBaseTerm → Bool
+| .forallEI _ => true
+| _           => false
+
+def LamBaseTerm.isExistEI : LamBaseTerm → Bool
+| .existEI _ => true
+| _          => false
+
+def LamBaseTerm.isEq : LamBaseTerm → Bool
+| .eq _ => true
+| _     => false
+
+def LamBaseTerm.isForallE : LamBaseTerm → Bool
+| .forallE _ => true
+| _          => false
+
+def LamBaseTerm.isExistE : LamBaseTerm → Bool
+| .existE _ => true
+| _         => false
+
 def LamBaseTerm.reprPrec (l : LamBaseTerm) (n : Nat) :=
   let s :=
     match l with
@@ -241,6 +294,27 @@ def LamBaseTerm.reprPrec (l : LamBaseTerm) (n : Nat) :=
 instance : Repr LamBaseTerm where
   reprPrec := LamBaseTerm.reprPrec
 
+def LamBaseTerm.toString : LamBaseTerm → String
+| .trueE      => "True"
+| .falseE     => "False"
+| .not        => "¬"
+| .and        => "∧"
+| .or         => "∨"
+| .imp        => "→"
+| .iff        => "↔"
+| .intVal n   => s!"{n} : Int"
+| .realVal cr => s!"{CstrReal.reprPrec cr 1} : Real"
+| .bvVal l    => s!"{l} : Bitvec {l.length}"
+| .eqI _      => "="
+| .forallEI _ => "∀"
+| .existEI _  => "∃"
+| .eq _       => "="
+| .forallE _  => "∀"
+| .existE _   => "∃"
+
+instance : ToString LamBaseTerm where
+  toString := LamBaseTerm.toString
+
 def LamBaseTerm.beq : LamBaseTerm → LamBaseTerm → Bool
 | .trueE,       .trueE       => true
 | .falseE,      .falseE      => true
@@ -267,7 +341,7 @@ def LamBaseTerm.beq_refl (b : LamBaseTerm) : (b.beq b) = true := by
   case bvVal s => apply List.beq_refl Bool.beq_refl
 
 def LamBaseTerm.beq_eq (b₁ b₂ : LamBaseTerm) (H : b₁.beq b₂) : b₁ = b₂ := by
-  cases b₁ <;> cases b₂ <;> (first | contradiction | rfl | apply congrArg | skip) <;>
+  cases b₁ <;> cases b₂ <;> (first | contradiction | rfl | apply congrArg) <;>
     (try apply LamSort.beq_eq _ _ H) <;> (try apply Nat.eq_of_beq_eq_true H)
   case intVal.intVal.h n₁ n₂ => apply Int.beq_eq _ _ H
   case realVal.realVal.h c₁ c₂ => apply CstrReal.beq_eq _ _ H
@@ -587,8 +661,6 @@ inductive LamTerm
   | app     : LamSort → LamTerm → LamTerm → LamTerm
 deriving Inhabited, Hashable, Lean.ToExpr
 
-def tmp := @Lean.toExpr LamTerm _
-
 def LamTerm.mkImp (t₁ t₂ : LamTerm) : LamTerm :=
   .app (.base .prop) (.app (.base .prop) (.base .imp) t₁) t₂
 
@@ -600,6 +672,14 @@ def LamTerm.mkForallE (s : LamSort) (p : LamTerm) : LamTerm :=
 
 def LamTerm.mkExistE (s : LamSort) (p : LamTerm) : LamTerm :=
   .app (.func s (.base .prop)) (.base (.existE s)) p
+
+def LamTerm.getAppFn : LamTerm → LamTerm
+| .app _ fn _ => getAppFn fn
+| t           => t
+
+def LamTerm.getAppArgsArray : LamTerm → Array LamTerm
+| .app _ fn arg => (getAppArgsArray fn).push arg
+| _             => #[]
 
 -- Check whether the term contains loose bound variables `idx` levels
 --   above local context root
@@ -1776,5 +1856,59 @@ theorem LamThmValid.ofInterpAsProp
   apply congrArg; apply eq_of_heq;
   apply LamWF.interp_irrelevance (lctxTy₁:=dfLCtxTy) (lctxTerm₁:=dfLCtxTerm _) _ _
   intros n h; rw [h₃] at h; cases h
+
+private def getILSortString : LamBaseTerm → String
+| .eq s => s!"{s}"
+| .forallE s => s!"{s}"
+| .existE s => s!"{s}"
+| _ => "❌"
+
+partial def LamTerm.toStringLCtx (lctx : Nat) : LamTerm → String
+| .atom n => s!"?{n}"
+| .base b =>
+  match b.beq .trueE || b.beq .falseE with
+  | true => s!"{b}"
+  | false => s!"({b})"
+| .bvar m =>
+  if m < lctx then
+    s!"x{lctx - m - 1}"
+  else
+    "❌"
+| .lam s t => s!"(λx{lctx} : {s}, {toStringLCtx (.succ lctx) t})"
+| t@(.app ..) =>
+  let fn := t.getAppFn
+  let args := t.getAppArgsArray
+  match fn with
+  | .base b =>
+    match b.beq .not with
+    | true =>
+      match args with
+      | #[arg] => s!"(¬ {toStringLCtx lctx arg})"
+      | _ => "❌"
+    | false =>
+      match b.beq .and || b.beq .or || b.beq .imp || b.beq .iff || b.isEq || b.isEqI with
+      | true =>
+        match args with
+        | #[arg] => s!"({toStringLCtx lctx arg} {b})"
+        | #[arg₁, arg₂] => s!"({toStringLCtx lctx arg₁} {b} {toStringLCtx lctx arg₂})"
+        | _ => "❌"
+      | false =>
+        match b.isForallE || b.isForallEI || b.isExistE || b.isExistEI with
+        | true =>
+          match args with
+          | #[arg] =>
+            match arg with
+            | .lam s t => s!"({b} x{lctx} : {s}, {toStringLCtx (.succ lctx) t})"
+            | arg =>
+              let arg's := toStringLCtx (.succ lctx) (arg.bvarLifts 1)
+              s!"({b}x{lctx} : {getILSortString b}, {arg's} x{lctx})"
+          | _ => "❌"
+        | false => "❌"
+  | fn => "(" ++ toStringLCtx lctx fn ++ " " ++ String.intercalate " " (args.map (toStringLCtx lctx)).data ++ ")"
+
+def LamTerm.toString := LamTerm.toStringLCtx 0
+
+instance : ToString LamTerm where
+  toString := LamTerm.toString
 
 end Auto.Embedding.Lam

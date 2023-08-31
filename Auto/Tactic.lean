@@ -140,10 +140,7 @@ def runAuto
       let arr ← LamReif.reifFacts ufacts
       let valids ← arr.mapM LamReif.lookupValidTable!
       let exportFacts := valids.map (·.2)
-      for (e, lams) in (← LamReif.getVarVal) do
-        trace[auto.tactic] "Varval :: {e}, λ Sort: {repr lams}"
-      for (e, lvl) in (← LamReif.getTyVal) do
-        trace[auto.tactic] "Tyval :: {e} : {Expr.sort lvl}"
+      LamReif.printValuation
       let proof ← Lam2D.callDuper exportFacts
       let proofLamTerm := exportFacts.foldr (fun t' t => t'.mkImp t) (.base .falseE)
       trace[auto.printProof] "Duper found proof {← instantiateMVars proof}"

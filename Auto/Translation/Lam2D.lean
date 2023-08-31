@@ -6,6 +6,9 @@ import Auto.Embedding.LamBase
 import Auto.Translation.LamReif
 open Lean
 
+initialize
+  registerTraceClass `auto.lam2D
+
 -- Lam2D : Simply-typed lambda calculus to Lean
 -- The reason we need this file is that, sometimes we want external
 --   provers (e.g. duper) to help us complete proofs. Note that
@@ -188,7 +191,10 @@ def Duper.rconsProof (state : Duper.ProverM.State) : MetaM Expr := do
 
 -- Given `ts = #[t₀, t₁, ⋯, kₖ₋₁]`, invoke Duper to get a proof 
 --   `t₀ → t₁ → ⋯ → tₖ₋1 → ⊥`
-def callDuper (ts : Array LamTerm) : ReifM Expr :=
+-- It is important to add `Meta.withNewMCtxDepth`, otherwise exprmvars
+--   or levelmvars of the current level will be assigned, and we'll
+--   get weird proof reconstruction error
+def callDuper (ts : Array LamTerm) : ReifM Expr := Meta.withNewMCtxDepth <|
   withTranslatedLamTerms ts (fun exprs => do
     let startTime ← IO.monoMsNow
     for expr in exprs do
