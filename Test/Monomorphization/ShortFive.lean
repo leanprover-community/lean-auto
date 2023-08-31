@@ -43,6 +43,21 @@ variable (square₁      : ∀ b, l (g₀ b) = g₁ (k b))
 open is_short_exact
 
 set_option auto.prep.redMode "reducible"
+set_option trace.auto.lamReif.printResult true
+set_option trace.auto.lamReif.printValuation true
+
+set_option trace.auto.printLemmas true
+set_option trace.auto.tactic true
+set_option auto.mono.saturationThreshold 500
+set_option trace.auto.mono.printLemmaInst true
+set_option trace.auto.mono true in
+theorem short_five_mono_dbg (injh : Injective h) (injl : Injective l) :
+    Injective k := by
+  intro b kb0
+  have : l (g₀ b) = l 0 := by
+    try auto [square₁]
+    sorry
+  sorry
 
 -- set_option pp.explicit true
 set_option trace.auto.printLemmas true

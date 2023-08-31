@@ -11,6 +11,8 @@ example : True := by
 
 set_option pp.explicit true in
 set_option trace.auto.buildChecker true in
+set_option trace.auto.mono true in
+set_option trace.auto.mono.printConstInst true in
 example (a b : Prop) : a ∨ b ∨ ¬ a := by
   auto
 

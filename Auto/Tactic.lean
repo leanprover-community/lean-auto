@@ -141,6 +141,14 @@ def runAuto
       let valids ← arr.mapM LamReif.lookupValidTable!
       let exportFacts := valids.map (·.2)
       LamReif.printValuation
+      -- ! smt
+      try
+        let commands := (← (lamFOL2SMT (← LamReif.getVarVal) exportFacts).run {}).1
+        let _ ← liftM <| commands.mapM (fun c => IO.println s!"Command: {c}")
+        Solver.SMT.querySolver commands
+      catch e =>
+        trace[auto.tactic] "SMT invocation failed with {e.toMessageData}"
+      -- reconstruction
       let proof ← Lam2D.callDuper exportFacts
       let proofLamTerm := exportFacts.foldr (fun t' t => t'.mkImp t) (.base .falseE)
       trace[auto.printProof] "Duper found proof {← instantiateMVars proof}"
@@ -149,10 +157,6 @@ def runAuto
       let checker ← LamReif.buildCheckerExpr contra
       let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
       Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra
-      -- ! smt
-      -- let commands := (← (lamFOL2SMT (← LamReif.getVarVal) exportFacts).run {}).1
-      -- let _ ← liftM <| commands.mapM (fun c => IO.println s!"Command: {c}")
-      -- Solver.SMT.querySolver commands
       )
     let (proof, _) ← Monomorphization.monomorphize lemmas (@id (Reif.ReifM Expr) do
       let ufacts ← liftM <| Reif.getFacts

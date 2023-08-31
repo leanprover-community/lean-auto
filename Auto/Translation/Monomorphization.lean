@@ -74,11 +74,12 @@ def CiHead.isInstanceQuick (ci : CiHead) : MetaM Bool := do
     return true
   return false
 
+-- **Remark**: This function assigns level mvars if necessary
 def CiHead.equiv (ch₁ ch₂ : CiHead) : MetaM Bool :=
   match ch₁, ch₂ with
   | .fvar id₁, .fvar id₂ => pure (id₁ == id₂)
   | .mvar id₁, .mvar id₂ => pure (id₁ == id₂)
-  | .const name₁ lvls₁, .const name₂ lvls₂ => Meta.withNewMCtxDepth do
+  | .const name₁ lvls₁, .const name₂ lvls₂ => do
     if name₁ != name₂ then
       return false
     if lvls₁.size != lvls₂.size then
@@ -115,7 +116,11 @@ instance : ToMessageData ConstInst where
           (MessageData.intercalate " " (ci.argsInst.data.map (fun e => m!"({e})")))
             m!" ⦘⦘"))
 
-def ConstInst.equiv (ci₁ ci₂ : ConstInst) : MetaM Bool := Meta.withNewMCtxDepth do
+-- **Remark**: This function assigns metavariables if necessary,
+--   but its only usage in this file is under `Meta.withNewMCtxDepth`
+-- Note that since `ci₁, ci₂` are both `ConstInst`, they does not
+--   contain loose bound variables
+def ConstInst.equiv (ci₁ ci₂ : ConstInst) : MetaM Bool := do
   let ⟨head₁, argsInst₁, idx₁⟩ := ci₁
   let ⟨head₂, argsInst₂, idx₂⟩ := ci₂
   if argsInst₁.size != argsInst₂.size || idx₁ != idx₂ then
@@ -127,6 +132,9 @@ def ConstInst.equiv (ci₁ ci₂ : ConstInst) : MetaM Bool := Meta.withNewMCtxDe
       return false
   return true
 
+-- **Remark**:
+-- · This function assigns metavariables if necessary
+-- · Runs in `MetaM`, so `e` should not have loose bound variables
 def ConstInst.matchExpr (e : Expr) (ci : ConstInst) : MetaM Bool := do
   let fn := e.getAppFn
   let .some ch := CiHead.ofExpr? fn
@@ -145,6 +153,8 @@ def ConstInst.matchExpr (e : Expr) (ci : ConstInst) : MetaM Bool := do
   return true
 
 /-
+  **Remark**: Runs in `MetaM`, but accepts `e` with loose bound variables.
+  **TODO**: Fix this
   Given an hypothesis `t`, we will traverse the hypothesis to find
     instances of polymorphic constants
   · Binders of the hypothesis are not introduced as fvars/mvars, so
@@ -222,10 +232,9 @@ def ConstInst.getOtherArgs (ci : ConstInst) (e : Expr) : CoreM (Array Expr) := d
   return ret
 
 private partial def collectConstInsts (params : Array Name) : Expr → MetaM (Array ConstInst)
-| e@(.const ..) => do
-  match ← ConstInst.ofExpr? params e with
-  | .some ci => return #[ci]
-  | .none => return #[]
+| e@(.const _ _) => processOther params e
+| e@(.fvar _) => processOther params e
+| e@(.mvar _) => processOther params e
 | e@(.app ..) => do
   let fn := e.getAppFn
   let args := e.getAppArgs
@@ -251,6 +260,10 @@ private partial def collectConstInsts (params : Array Name) : Expr → MetaM (Ar
 | .mdata .. => throwError "collectConstInsts :: mdata should have been consumed"
 | .proj .. => throwError "collectConstInsts :: Projections should have been turned into ordinary expressions"
 | _ => return #[]
+where processOther (params : Array Name) (e : Expr) : MetaM (Array ConstInst) := do
+  match ← ConstInst.ofExpr? params e with
+  | .some ci => return #[ci]
+  | .none => return #[]
 
 -- Array of instances of a polymorphic constant
 abbrev ConstInsts := Array ConstInst
@@ -261,7 +274,7 @@ abbrev ConstInsts := Array ConstInst
 --   which is definitionally equal to `ci`
 def ConstInsts.canonicalize? (cis : ConstInsts) (ci : ConstInst) : MetaM (Option ConstInst) := do
   for ci' in cis do
-    if ← ci'.equiv ci then
+    if ← Meta.withNewMCtxDepth (ci'.equiv ci) then
       return .some ci'
   return .none
 
@@ -560,6 +573,12 @@ namespace FVarRep
       addForallImpFInst impFun
       return .app (.app impFun (← replacePolyWithFVar ty)) bodyrep
   | e@(.app ..) => do
+    -- Head is bvar
+    if let .fvar id := e.getAppFn then
+      if ((← getBfvars).contains id) then
+        let ciArgs ← e.getAppArgs.mapM replacePolyWithFVar
+        return mkAppN (.fvar id) ciArgs
+    -- Head is fvar/mvar/const
     let eabst := e.abstract ((← getBfvars).map .fvar)
     if let .some ci ← MetaState.runMetaM (ConstInst.ofExpr? #[] eabst) then
       let ciId ← ConstInst2FVarId ci
@@ -567,6 +586,8 @@ namespace FVarRep
       let ciArgs ← ciArgs.mapM replacePolyWithFVar
       return mkAppN (.fvar ciId) ciArgs
     Expr.fvar <$> UnknownExpr2FVarId e
+  | e@(.sort _) => return e
+  | e@(.lit _) => return e
   | e => do
     if let .fvar id := e then
       if (← getBfvars).contains id then

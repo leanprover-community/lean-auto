@@ -131,10 +131,10 @@ where
 
 def lamFOL2SMT
   -- This should be retrieved from the corresponding field of `LamReif.State`
-  (varVal : Array (FVarId × Expr × Embedding.Lam.LamSort))
+  (varVal : Array (Expr × Embedding.Lam.LamSort))
   -- `facts` should not contain import versions of `eq, ∀` or `∃`
   (facts : Array LamTerm) : TransM LamAtom (Array IR.SMT.Command) := do
-  let lamVarTy := varVal.map (·.2.2)
+  let lamVarTy := varVal.map (·.2)
   for t in facts do
     let sterm ← lamTerm2STerm lamVarTy t
     trace[auto.lamFOL2SMT] "λ term {repr t} translated to SMT term {sterm}"
