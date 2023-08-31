@@ -25,15 +25,69 @@ register_option auto.mono.recordInstInst : Bool := {
   descr := "Whether to record instances of constants with the `instance` attribute"
 }
 
-register_option auto.mono.instantiateInstanceArgs : Bool := {
-  defValue := true
-  descr := "Whether to force instantiation of instance arguments of constants"
-}
-
 namespace Auto.Monomorphization
 open Embedding
 
-def instInst? : CoreM Bool := do return auto.mono.instantiateInstanceArgs.get (← getOptions)
+inductive CiHead where
+  | fvar  : FVarId → CiHead
+  | mvar  : MVarId → CiHead
+  | const : Name → Array Level → CiHead
+  deriving Inhabited, Hashable, BEq
+
+def CiHead.ofExpr? : Expr → Option CiHead
+| .fvar id => .some (.fvar id)
+| .mvar id => .some (.mvar id)
+| .const name lvls => .some (.const name ⟨lvls⟩)
+| _ => .none
+
+def CiHead.toExpr : CiHead → Expr
+| .fvar id => .fvar id
+| .mvar id => .mvar id
+| .const name lvls => .const name lvls.data
+
+-- Ignore constant's levels
+def CiHead.fingerPrint : CiHead → Expr
+| .fvar id => .fvar id
+| .mvar id => .mvar id
+| .const name _ => .const name []
+
+def CiHead.isConst : CiHead → Bool
+| .fvar _ => false
+| .mvar _ => false
+| .const _ _ => true
+
+def CiHead.isNamedConst (name : Name) : CiHead → Bool
+| .fvar _ => false
+| .mvar _ => false
+| .const name' _ => name == name'
+
+instance : ToMessageData CiHead where
+  toMessageData (ch : CiHead) := m!"{ch.toExpr}"
+
+def CiHead.inferType (ci : CiHead) : MetaM Expr := Meta.inferType ci.toExpr
+
+def CiHead.isInstanceQuick (ci : CiHead) : MetaM Bool := do
+  if let .const name _ := ci then
+    if ← Meta.isInstance name then
+      return true
+  if (← Meta.isClass? (← ci.inferType)).isSome then
+    return true
+  return false
+
+def CiHead.equiv (ch₁ ch₂ : CiHead) : MetaM Bool :=
+  match ch₁, ch₂ with
+  | .fvar id₁, .fvar id₂ => pure (id₁ == id₂)
+  | .mvar id₁, .mvar id₂ => pure (id₁ == id₂)
+  | .const name₁ lvls₁, .const name₂ lvls₂ => Meta.withNewMCtxDepth do
+    if name₁ != name₂ then
+      return false
+    if lvls₁.size != lvls₂.size then
+      return false
+    for (lvl₁, lvl₂) in lvls₁.zip lvls₂ do
+      if !(← Meta.isLevelDefEq lvl₁ lvl₂) then
+        return false
+    return true
+  | _, _ => pure false
 
 /-
   If a constant `c` is of type `∀ (xs : αs), t`,
@@ -47,28 +101,27 @@ def instInst? : CoreM Bool := do return auto.mono.instantiateInstanceArgs.get (�
     · constants with `instance` attribute
 -/
 structure ConstInst where
-  name       : Name
-  levels     : Array Level
+  head       : CiHead
   argsInst   : Array Expr
-  argsToInst : Array Nat
-  deriving Hashable, BEq
+  instDepArgs : Array Nat
+  deriving Inhabited, Hashable, BEq
+
+def ConstInst.fingerPrint (ci : ConstInst) := ci.head.fingerPrint
 
 instance : ToMessageData ConstInst where
   toMessageData ci := MessageData.compose
-    m!"ConstInst ⦗⦗ {Expr.const ci.name ci.levels.data}" (.compose
+    m!"ConstInst ⦗⦗ {ci.head}" (.compose
         m!" " (.compose
           (MessageData.intercalate " " (ci.argsInst.data.map (fun e => m!"({e})")))
             m!" ⦘⦘"))
 
-def ConstInst.equiv (ci₁ ci₂ : ConstInst) : MetaM Bool := Meta.withNewMCtxDepth <| do
-  let ⟨name₁, levels₁, argsInst₁, idx₁⟩ := ci₁
-  let ⟨name₂, levels₂, argsInst₂, idx₂⟩ := ci₂
-  if name₁ != name₂ || levels₁.size != levels₂.size ||
-      argsInst₁.size != argsInst₂.size || idx₁ != idx₂ then
+def ConstInst.equiv (ci₁ ci₂ : ConstInst) : MetaM Bool := Meta.withNewMCtxDepth do
+  let ⟨head₁, argsInst₁, idx₁⟩ := ci₁
+  let ⟨head₂, argsInst₂, idx₂⟩ := ci₂
+  if argsInst₁.size != argsInst₂.size || idx₁ != idx₂ then
     throwError "ConstInst.equiv :: Unexpected error"
-  for (param₁, param₂) in levels₁.zip levels₂ do
-    if !(← Meta.isLevelDefEq param₁ param₂) then
-      return false
+  if !(← head₁.equiv head₂) then
+    return false
   for (arg₁, arg₂) in argsInst₁.zip argsInst₂ do
     if !(← Meta.isDefEq arg₁ arg₂) then
       return false
@@ -76,20 +129,15 @@ def ConstInst.equiv (ci₁ ci₂ : ConstInst) : MetaM Bool := Meta.withNewMCtxDe
 
 def ConstInst.matchExpr (e : Expr) (ci : ConstInst) : MetaM Bool := do
   let fn := e.getAppFn
-  let .const name lvls := fn
+  let .some ch := CiHead.ofExpr? fn
     | return false
-  if name != ci.name then
+  if !(← ch.equiv ci.head) then
     return false
-  if lvls.length != ci.levels.size then
-    throwError "ConstInst.matchExpr :: Unexpected error"
-  for (lvl, lvl') in lvls.zip ci.levels.data do
-    if !(← Meta.isLevelDefEq lvl lvl') then
-      return false
-  let argsToInst := ci.argsToInst
-  if argsToInst.size != ci.argsInst.size then
+  let instDepArgs := ci.instDepArgs
+  if instDepArgs.size != ci.argsInst.size then
     throwError "ConstInst.matchExpr :: Unexpected error"
   let args := e.getAppArgs
-  for (idx, ciarg) in argsToInst.zip ci.argsInst do
+  for (idx, ciarg) in instDepArgs.zip ci.argsInst do
     let .some arg := args[idx]?
       | return false
     if !(← Meta.isDefEq arg ciarg) then
@@ -103,26 +151,24 @@ def ConstInst.matchExpr (e : Expr) (ci : ConstInst) : MetaM Bool := do
     they remain loose bound variables inside the body
   · `param` records universe level parameters of the hypothesis are
   So, the criterion that an expression `e` is a valid instance is that
-  · All argsToInst are applied
-  · No loose bound variables in argsToInst
+  · All instDepArgs are applied
+  · No loose bound variables in instDepArgs
   · The expression does not contain level parameters in `params`
 -/
-def ConstInst.ofExpr?Poly (params : Array Name) (e : Expr) : CoreM (Option ConstInst) := do
+def ConstInst.ofExpr? (params : Array Name) (e : Expr) : MetaM (Option ConstInst) := do
   let fn := e.getAppFn
   let args := e.getAppArgs
-  let .const name lvls := fn
+  let .some head := CiHead.ofExpr? fn
     | return .none
   let paramSet := HashSet.empty.insertMany params
+  -- `e` should not have bound parameters
   if let .some _ := Expr.findParam? (fun n => paramSet.contains n) e then
     return .none
   -- Do not record instances of a constant with attribute `instance`
-  if (← Meta.isInstance name) && !(auto.mono.recordInstInst.get (← getOptions)) then
+  if (← head.isInstanceQuick) && !(auto.mono.recordInstInst.get (← getOptions)) then
     return .none
   -- Refer to `auto.mono.instantiateInstanceArgs`
-  let depargIndexes := if (← instInst?) then (← Expr.constInstDepArgs name) else (← Expr.constDepArgs name)
-  -- Do not record instances of monomorphic constants
-  if depargIndexes.size == 0 && lvls.length == 0 then
-    return none
+  let depargIndexes := Expr.instDepArgs (← head.inferType)
   let lastDeparg? := depargIndexes[depargIndexes.size - 1]?
   if let .some lastDeparg := lastDeparg? then
     if args.size ≤ lastDeparg then
@@ -133,7 +179,7 @@ def ConstInst.ofExpr?Poly (params : Array Name) (e : Expr) : CoreM (Option Const
     if arg.hasLooseBVars then
       return none
     argsInst := argsInst.push arg
-  return some ⟨name, ⟨lvls⟩, argsInst, depargIndexes⟩
+  return some ⟨head, argsInst, depargIndexes⟩
 
 private def ConstInst.toExprAux (args : List (Option Expr))
   (tys : List (Name × Expr × BinderInfo)) (e ty : Expr) : Option Expr :=
@@ -153,23 +199,21 @@ private def ConstInst.toExprAux (args : List (Option Expr))
       toExprAux args' tys (.app e arg) (body.instantiate1 arg)
     | _ => .none
 
-def ConstInst.toExpr (ci : ConstInst) : CoreM Expr := do
-  let .some decl := (← getEnv).find? ci.name
-    | throwError "ConstInst.toExpr :: Unknown constant {ci.name}"
-  let type := decl.type
-  let nargs := (Nat.succ <$> ci.argsToInst[ci.argsToInst.size - 1]?).getD 0
+def ConstInst.toExpr (ci : ConstInst) : MetaM Expr := do
+  let type ← ci.head.inferType
+  let nargs := (Nat.succ <$> ci.instDepArgs[ci.instDepArgs.size - 1]?).getD 0
   let mut args : Array (Option Expr) := (Array.mk (List.range nargs)).map (fun n => .none)
-  for (arg, idx) in ci.argsInst.zip ci.argsToInst do
+  for (arg, idx) in ci.argsInst.zip ci.instDepArgs do
     args := args.setD idx (.some arg)
-  let .some ret := ConstInst.toExprAux args.data [] (.const ci.name ci.levels.data) type
+  let .some ret := ConstInst.toExprAux args.data [] ci.head.toExpr type
     | throwError "ConstInst.toExpr :: Unexpected error"
   return ret
 
--- Precondition : `.some ci == ← ConstInst.ofExpr?Poly e`
+-- Precondition : `.some ci == ← ConstInst.ofExpr? e`
 -- Returns the list of non-dependent arguments in `e.getAppArgs`
 def ConstInst.getOtherArgs (ci : ConstInst) (e : Expr) : CoreM (Array Expr) := do
   let mut args := e.getAppArgs.map Option.some
-  for idx in ci.argsToInst do
+  for idx in ci.instDepArgs do
     args := args.setD idx .none
   let mut ret := #[]
   for arg? in args do
@@ -179,14 +223,14 @@ def ConstInst.getOtherArgs (ci : ConstInst) (e : Expr) : CoreM (Array Expr) := d
 
 private partial def collectConstInsts (params : Array Name) : Expr → MetaM (Array ConstInst)
 | e@(.const ..) => do
-  match ← ConstInst.ofExpr?Poly params e with
+  match ← ConstInst.ofExpr? params e with
   | .some ci => return #[ci]
   | .none => return #[]
 | e@(.app ..) => do
   let fn := e.getAppFn
   let args := e.getAppArgs
   let insts := (← (args.push fn).mapM (collectConstInsts params)).concatMap id
-  match ← ConstInst.ofExpr?Poly params e with
+  match ← ConstInst.ofExpr? params e with
   | .some ci => return insts.push ci
   | .none => return insts
 | .lam _ ty body bi => do
@@ -271,14 +315,11 @@ def LemmaInst.monomorphic (lem : LemmaInst) : MetaM Bool := do
     return false
   if !(← Expr.isMonomorphicFact lem.type) then
     return false
-  if auto.mono.instantiateInstanceArgs.get (← getOptions) then
-    (Meta.forallTelescope lem.type fun xs _ => do
-      for x in xs do
-        let ty ← x.fvarId!.getType
-        if let .some _ ← Meta.isClass? ty then
-          return false
-      return true)
-  else
+  Meta.forallTelescope lem.type fun xs _ => do
+    for x in xs do
+      let ty ← x.fvarId!.getType
+      if let .some _ ← Meta.isClass? ty then
+        return false
     return true
 
 abbrev LemmaInsts := Array LemmaInst
@@ -313,8 +354,10 @@ def LemmaInsts.newInst? (lis : LemmaInsts) (li : LemmaInst) : MetaM Bool := do
           and `activeCi`.
 -/
 structure State where
-  ciMap    : HashMap Name ConstInsts := HashMap.empty
-  activeCi : Std.Queue (Name × Nat)  := Std.Queue.empty
+  -- The `Expr` is the fingerprint of the `ConstInst`
+  ciMap    : HashMap Expr ConstInsts := HashMap.empty
+  -- The `Expr` is the fingerprint of the `ConstInst`
+  activeCi : Std.Queue (Expr × Nat)  := Std.Queue.empty
   -- During initialization, we supply an array `lemmas` of lemmas
   --   `liArr[i]` are instances of `lemmas[i]`.
   lisArr    : Array LemmaInsts        := #[]
@@ -329,9 +372,9 @@ abbrev MonoM := StateRefT State MetaM
   2. `(ciMap.find? ci.name).getD #[]`
   3. Canonicalized ConstInst
 -/
-def CiMap.canonicalize? (ciMap : HashMap Name ConstInsts) (ci : ConstInst) :
+def CiMap.canonicalize? (ciMap : HashMap Expr ConstInsts) (ci : ConstInst) :
   MetaM (Bool × ConstInsts × ConstInst) := do
-  match ciMap.find? ci.name with
+  match ciMap.find? ci.fingerPrint with
   | .some insts =>
     match ← insts.canonicalize? ci with
     | .some ci' => return (true, insts, ci')
@@ -346,20 +389,19 @@ def processConstInst (ci : ConstInst) : MonoM Unit := do
   if old? then
     return
   trace[auto.mono.printConstInst] "New {ci}"
-  setCiMap ((← getCiMap).insert ci.name (insts.push ci))
-  -- Do not match against ConstInsts that are universe polymorphic
-  --   but has no argsInst
-  if ci.argsToInst.size == 0 then
+  setCiMap ((← getCiMap).insert ci.fingerPrint (insts.push ci))
+  -- Do not match against ConstInsts that do not have instDepArgs
+  if ci.instDepArgs.size == 0 then
     return
   -- Do not match against `=` and `∃`
   -- If some polymorphic argument of the a theorem only occurs
   --   as the first argument of `=` or `∃`, the theorem is probably
   --   implied by the axioms of higher order logic, e.g.
   -- `Eq.trans : ∀ {α} (x y z : α), x = y → y = z → x = z`
-  if ci.name == ``Exists || ci.name == ``Eq then
+  if ci.head.isNamedConst ``Exists || ci.head.isNamedConst ``Eq then
     return
   -- Insert `ci` into `activeCi` so that we can later match on it
-  setActiveCi ((← getActiveCi).enqueue (ci.name, insts.size))
+  setActiveCi ((← getActiveCi).enqueue (ci.fingerPrint, insts.size))
 
 def initializeMonoM (lemmas : Array Lemma) : MonoM Unit := do
   let lemmaInsts ← liftM <| lemmas.mapM (fun lem => do
@@ -373,16 +415,16 @@ def initializeMonoM (lemmas : Array Lemma) : MonoM Unit := do
     for ci in cis do
       processConstInst ci
 
-def dequeueActiveCi? : MonoM (Option (Name × Nat)) := do
+def dequeueActiveCi? : MonoM (Option (Expr × Nat)) := do
   match (← getActiveCi).dequeue? with
   | .some (elem, ci') =>
     setActiveCi ci'
     return .some elem
   | .none => return .none
 
-def lookupActiveCi! (name : Name) (idx : Nat) : MonoM ConstInst := do
-  let .some cis := (← getCiMap).find? name
-    | throwError "lookupActiveCi :: Unknown constant name {name}"
+def lookupActiveCi! (fgp : Expr) (idx : Nat) : MonoM ConstInst := do
+  let .some cis := (← getCiMap).find? fgp
+    | throwError "lookupActiveCi :: Unknown CiHead {fgp}"
   let .some ci := cis[idx]?
     | throwError "lookupActiveCi :: Index {idx} out of bound"
   return ci
@@ -442,7 +484,7 @@ namespace FVarRep
     bfvars  : Array FVarId             := #[]
     ffvars  : Array FVarId             := #[]
     exprMap : HashMap Expr FVarId      := {}
-    ciMap   : HashMap Name ConstInsts  
+    ciMap   : HashMap Expr ConstInsts  
     ciIdMap : HashMap ConstInst FVarId := {}
   
   abbrev FVarRepM := StateRefT State MetaState.MetaStateM
@@ -455,7 +497,7 @@ namespace FVarRep
     if old? then
       return
     trace[auto.mono.printConstInst] "New {ci}"
-    setCiMap ((← getCiMap).insert ci.name (insts.push ci))
+    setCiMap ((← getCiMap).insert ci.fingerPrint (insts.push ci))
 
   def ConstInst2FVarId (ci : ConstInst) : FVarRepM FVarId := do
     let ciMap ← FVarRep.getCiMap
@@ -470,7 +512,7 @@ namespace FVarRep
       let fvarId ← mkFreshFVarId
       setCiIdMap ((← getCiIdMap).insert ci fvarId)
       let userName := (`cifvar).appendIndexAfter (← getCiIdMap).size
-      let cie ← ci.toExpr
+      let cie ← MetaState.runMetaM ci.toExpr
       let city ← MetaState.inferType cie
       MetaState.mkLetDecl fvarId userName city cie
       setFfvars ((← getFfvars).push fvarId)
@@ -487,13 +529,6 @@ namespace FVarRep
     MetaState.mkLetDecl fvarId userName ety e
     setFfvars ((← getFfvars).push fvarId)
     return fvarId
-
-  -- Auxiliary function for `replacePolyWithFVar`
-  private def monoExprApp? (e : Expr) : MetaM Bool := do
-    let fn := e.getAppFn
-    let fnTy ← Meta.inferType fn
-    let argsToInst := if (← instInst?) then Expr.instDepArgs fnTy else Expr.depArgs fnTy
-    return argsToInst.size == 0
 
   -- Since we're now dealing with monomorphized lemmas, there are no
   --   bound level parameters
@@ -530,26 +565,22 @@ namespace FVarRep
     else
       Expr.fvar <$> UnknownExpr2FVarId e
   | e@(.const ..) => do
-    if let .some ci ← ConstInst.ofExpr?Poly #[] e then
+    if let .some ci ← MetaState.runMetaM (ConstInst.ofExpr? #[] e) then
       let ciId ← ConstInst2FVarId ci
       return .fvar ciId
     Expr.fvar <$> UnknownExpr2FVarId e
   | e@(.app ..) => do
     let eabst := e.abstract ((← getBfvars).map .fvar)
-    if let .some ci ← ConstInst.ofExpr?Poly #[] eabst then
+    if let .some ci ← MetaState.runMetaM (ConstInst.ofExpr? #[] eabst) then
       let ciId ← ConstInst2FVarId ci
       let ciArgs ← ConstInst.getOtherArgs ci e
       let ciArgs ← ciArgs.mapM replacePolyWithFVar
       return mkAppN (.fvar ciId) ciArgs
-    if ← MetaState.runMetaM (monoExprApp? e) then
-      let fn ← replacePolyWithFVar e.getAppFn
-      let args ← e.getAppArgs.mapM replacePolyWithFVar
-      return mkAppN fn args
     Expr.fvar <$> UnknownExpr2FVarId e
   | e => Expr.fvar <$> UnknownExpr2FVarId e
 where addForallImpFInst (e : Expr) : FVarRepM Unit := do
   let eabst := e.abstract ((← getBfvars).map Expr.fvar)
-  match ← ConstInst.ofExpr?Poly #[] eabst with
+  match ← MetaState.runMetaM (ConstInst.ofExpr? #[] eabst) with
   | .some ci => processConstInst ci
   | .none => trace[auto.mono] "Warning, {e} is not a valid instance of `forallF` or `ImpF`"
 
@@ -572,7 +603,7 @@ def monomorphize (lemmas : Array Lemma) (k : Reif.State → MetaM α) : MetaM α
     for (proof, ty) in ufacts do
       trace[auto.mono] "Monomorphized :: {proof} : {ty}"
     let exlis := s.exprMap.toList.map (fun (e, id) => (id, e))
-    let cilis ← s.ciIdMap.toList.mapM (fun (ci, id) => do return (id, ← ci.toExpr))
+    let cilis ← s.ciIdMap.toList.mapM (fun (ci, id) => do return (id, ← MetaState.runMetaM ci.toExpr))
     let polyVal := HashMap.ofList (exlis ++ cilis)
     return (s.ffvars, Reif.State.mk s.ffvars ufacts polyVal))
   MetaState.runWithIntroducedFVars metaStateMAction k
