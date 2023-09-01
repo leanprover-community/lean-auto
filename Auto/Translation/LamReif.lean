@@ -451,7 +451,7 @@ def reifFacts (facts : Array Reif.UMonoFact) : ReifM (Array Nat) :=
   facts.mapM (fun (proof, ty) => do
     trace[auto.lamReif] "Reifying {proof} : {ty}"
     let lamty ← reifTerm .empty ty
-    trace[auto.lamReif.printResult] "Successfully reified proof to λterm `{toString lamty}`"
+    trace[auto.lamReif.printResult] "Successfully reified proof of {← Meta.zetaReduce ty} to λterm `{toString lamty}`"
     newAssertion proof lamty)
 
 section Checker

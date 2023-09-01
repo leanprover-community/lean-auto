@@ -153,20 +153,24 @@ def ConstInst.matchExpr (e : Expr) (ci : ConstInst) : MetaM Bool := do
   return true
 
 /-
-  **Remark**: Runs in `MetaM`, but accepts `e` with loose bound variables.
-  **TODO**: Fix this
   Given an hypothesis `t`, we will traverse the hypothesis to find
     instances of polymorphic constants
-  · Binders of the hypothesis are not introduced as fvars/mvars, so
-    they remain loose bound variables inside the body
+  · Binders of the hypothesis are introduced as fvars, these fvars are
+    recorded in `bvars`
   · `param` records universe level parameters of the hypothesis are
   So, the criterion that an expression `e` is a valid instance is that
   · All instDepArgs are applied
-  · No loose bound variables in instDepArgs
+  · The head does not contain expressions in `bvars`
+  · Dependent arguments does not contains expressions in `bvars`
   · The expression does not contain level parameters in `params`
 -/
-def ConstInst.ofExpr? (params : Array Name) (e : Expr) : MetaM (Option ConstInst) := do
+def ConstInst.ofExpr? (params : Array Name) (bvars : Array Expr) (e : Expr) : MetaM (Option ConstInst) := do
+  let bvarSet := HashSet.empty.insertMany bvars
   let fn := e.getAppFn
+  -- If the head contains bound variable, then this is not
+  --   a valid instance
+  if let .some _ := fn.find? (fun e => bvarSet.contains e) then
+    return none
   let args := e.getAppArgs
   let .some head := CiHead.ofExpr? fn
     | return .none
@@ -185,7 +189,9 @@ def ConstInst.ofExpr? (params : Array Name) (e : Expr) : MetaM (Option ConstInst
   let mut argsInst := #[]
   for idx in depargIndexes do
     let arg := args[idx]!
-    if arg.hasLooseBVars then
+    -- If dependent argument contains bound variable, then this
+    --   is not a valid instance
+    if let .some _ := arg.find? (fun e => bvarSet.contains e) then
       return none
     argsInst := argsInst.push arg
   return some ⟨head, argsInst, depargIndexes⟩
@@ -230,37 +236,37 @@ def ConstInst.getOtherArgs (ci : ConstInst) (e : Expr) : CoreM (Array Expr) := d
       ret := ret.push arg
   return ret
 
-private partial def collectConstInsts (params : Array Name) : Expr → MetaM (Array ConstInst)
+private partial def collectConstInsts (params : Array Name) (bvars : Array Expr) : Expr → MetaM (Array ConstInst)
 | e@(.const _ _) => processOther params e
 | e@(.fvar _) => processOther params e
 | e@(.mvar _) => processOther params e
 | e@(.app ..) => do
   let fn := e.getAppFn
   let args := e.getAppArgs
-  let insts := (← (args.push fn).mapM (collectConstInsts params)).concatMap id
-  match ← ConstInst.ofExpr? params e with
+  let insts := (← (args.push fn).mapM (collectConstInsts params bvars)).concatMap id
+  match ← ConstInst.ofExpr? params bvars e with
   | .some ci => return insts.push ci
   | .none => return insts
-| .lam _ ty body bi => do
-  let insts ← collectConstInsts params body
+| .lam name ty body bi => Meta.withLocalDecl name bi ty fun x => do
+  let insts ← collectConstInsts params (bvars.push x) (body.instantiate1 x)
   -- Do not look into instance binders
   if bi.isInstImplicit then
     return insts
   else
-    return insts ++ (← collectConstInsts params ty)
-| .forallE _ ty body bi => do
-  let insts ← collectConstInsts params body
+    return insts ++ (← collectConstInsts params bvars ty)
+| .forallE name ty body bi => Meta.withLocalDecl name bi ty fun x => do
+  let insts ← collectConstInsts params (bvars.push x) (body.instantiate1 x)
   -- Do not look into instance binders
   if bi.isInstImplicit then
     return insts
   else
-    return insts ++ (← collectConstInsts params ty)
+    return insts ++ (← collectConstInsts params bvars ty)
 | .letE .. => throwError "collectConstInsts :: Let-expressions should have been reduced"
 | .mdata .. => throwError "collectConstInsts :: mdata should have been consumed"
 | .proj .. => throwError "collectConstInsts :: Projections should have been turned into ordinary expressions"
 | _ => return #[]
 where processOther (params : Array Name) (e : Expr) : MetaM (Array ConstInst) := do
-  match ← ConstInst.ofExpr? params e with
+  match ← ConstInst.ofExpr? params bvars e with
   | .some ci => return #[ci]
   | .none => return #[]
 
@@ -429,7 +435,7 @@ def initializeMonoM (lemmas : Array Lemma) : MonoM Unit := do
   let lemmaInsts := lemmaInsts.map (fun x => #[x])
   setLisArr lemmaInsts
   for lem in lemmas do
-    let cis ← collectConstInsts lem.params lem.type
+    let cis ← collectConstInsts lem.params #[] lem.type
     for ci in cis do
       processConstInst ci
 
@@ -482,7 +488,7 @@ def saturate : MonoM Unit := do
             if new? then
               trace[auto.mono.printLemmaInst] "New {matchLi}"
               newLis := newLis.push matchLi
-              let newCis ← collectConstInsts matchLi.params matchLi.type
+              let newCis ← collectConstInsts matchLi.params #[] matchLi.type
               for newCi in newCis do
                 processConstInst newCi
         setLisArr ((← getLisArr).set! idx newLis)
@@ -586,8 +592,8 @@ namespace FVarRep
         let ciArgs ← e.getAppArgs.mapM replacePolyWithFVar
         return mkAppN (.fvar id) ciArgs
     -- Head is fvar/mvar/const
-    let eabst := e.abstract ((← getBfvars).map .fvar)
-    if let .some ci ← MetaState.runMetaM (ConstInst.ofExpr? #[] eabst) then
+    let bfexprs := (← getBfvars).map Expr.fvar
+    if let .some ci ← MetaState.runMetaM (ConstInst.ofExpr? #[] bfexprs e) then
       let ciId ← ConstInst2FVarId ci
       let ciArgs ← ConstInst.getOtherArgs ci e
       let ciArgs ← ciArgs.mapM replacePolyWithFVar
@@ -599,13 +605,14 @@ namespace FVarRep
     if let .fvar id := e then
       if (← getBfvars).contains id then
         return .fvar id
-    if let .some ci ← MetaState.runMetaM (ConstInst.ofExpr? #[] e) then
+    let bfexprs := (← getBfvars).map Expr.fvar
+    if let .some ci ← MetaState.runMetaM (ConstInst.ofExpr? #[] bfexprs e) then
       let ciId ← ConstInst2FVarId ci
       return .fvar ciId
     Expr.fvar <$> UnknownExpr2FVarId e
 where addForallImpFInst (e : Expr) : FVarRepM Unit := do
-  let eabst := e.abstract ((← getBfvars).map Expr.fvar)
-  match ← MetaState.runMetaM (ConstInst.ofExpr? #[] eabst) with
+  let bfexprs := (← getBfvars).map Expr.fvar
+  match ← MetaState.runMetaM (ConstInst.ofExpr? #[] bfexprs e) with
   | .some ci => processConstInst ci
   | .none => trace[auto.mono] "Warning, {e} is not a valid instance of `forallF` or `ImpF`"
 

@@ -59,6 +59,10 @@ theorem short_five_mono_dbg (injh : Injective h) (injl : Injective l) :
     sorry
   sorry
 
+#check 2
+
+/-
+
 -- set_option pp.explicit true
 set_option trace.auto.printLemmas true
 set_option trace.auto.tactic true
