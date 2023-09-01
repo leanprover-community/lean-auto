@@ -160,6 +160,7 @@ def Expr.isMonomorphicFact (e : Expr) : MetaM Bool := do
 
 -- This should only be used when we're sure that reducing `ty`
 --   won't be too expensive
+-- e.g. `ty` must be defeq to `Expr.sort <?lvl>`
 def normalizeType (ty : Expr) : MetaM Expr := do
   let ty ← Meta.reduceAll ty
   return ← instantiateMVars ty

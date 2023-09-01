@@ -363,9 +363,9 @@ def newTypeExpr (e : Expr) : ReifM LamSort := do
 
 def processTypeExpr (e : Expr) : ReifM LamSort := do
   let tyVarMap ← getTyVarMap
+  let e ← Reif.resolveVal e
   if let .some idx := tyVarMap.find? e then
     return .atom idx
-  let e ← Reif.resolvePolyVal e
   match e with
   | .sort lvl =>
     if ← Meta.isLevelDefEq lvl .zero then
@@ -409,7 +409,7 @@ def processTermExprAux (e : Expr) : ReifM LamTerm :=
   | .app (.const ``Exists _) α =>
     return .base (.existE (← reifType α))
   | e => do
-    let eTy ← Meta.inferType e
+    let eTy ← instantiateMVars (← Meta.inferType e)
     let lamTy ← reifType eTy
     newTermExpr e lamTy
 
@@ -422,7 +422,7 @@ def processTermExpr (lctx : HashMap FVarId Nat) (e : Expr) : ReifM LamTerm := do
   if let .fvar fid := e then
     if let .some n := deBruijn? lctx fid then
       return .bvar n
-  let e ← Reif.resolvePolyVal e
+  let e ← Reif.resolveVal e
   let varMap ← getVarMap
   -- If the expression has already been processed
   if let .some id := varMap.find? e then

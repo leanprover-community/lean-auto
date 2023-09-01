@@ -38,7 +38,7 @@ abbrev ReifM := StateT State MetaM
 
 -- Given an expression `e`, if it's a `fvar` and is in `polyVal`,
 --   return its value recorded in `polyVal`. Otherwise return `e`
-@[inline] def resolvePolyVal (e : Expr) : ReifM Expr :=
+@[inline] def resolveVal (e : Expr) : ReifM Expr :=
   match e with
   | .fvar id => do return ((← getPolyVal).find? id).getD e
   | _ => return e

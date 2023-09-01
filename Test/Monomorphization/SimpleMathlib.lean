@@ -10,6 +10,7 @@ set_option trace.auto.mono true
 set_option trace.auto.tactic true
 set_option trace.auto.lamReif.printResult true
 
+set_option trace.auto.printLemmas true
 set_option trace.auto.lamReif.printValuation true
 set_option maxHeartbeats 20000 in
 example (a b c d : ℝ) (h1 : a < b) : Set.Icc a b ⊆ Set.Ico c d ↔ c ≤ a ∧ b < d := by

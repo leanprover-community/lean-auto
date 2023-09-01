@@ -210,7 +210,7 @@ private def ConstInst.toExprAux (args : List (Option Expr))
     | _ => .none
 
 def ConstInst.toExpr (ci : ConstInst) : MetaM Expr := do
-  let type ← ci.head.inferType
+  let type ← instantiateMVars (← ci.head.inferType)
   let nargs := (Nat.succ <$> ci.instDepArgs[ci.instDepArgs.size - 1]?).getD 0
   let mut args : Array (Option Expr) := (Array.mk (List.range nargs)).map (fun n => .none)
   for (arg, idx) in ci.argsInst.zip ci.instDepArgs do
@@ -526,7 +526,7 @@ namespace FVarRep
       setCiIdMap ((← getCiIdMap).insert ci fvarId)
       let userName := (`cifvar).appendIndexAfter (← getCiIdMap).size
       let cie ← MetaState.runMetaM ci.toExpr
-      let city ← MetaState.inferType cie
+      let city ← instantiateMVars (← MetaState.inferType cie)
       MetaState.mkLetDecl fvarId userName city cie
       setFfvars ((← getFfvars).push fvarId)
       return fvarId
@@ -538,7 +538,7 @@ namespace FVarRep
     let fvarId ← mkFreshFVarId
     setExprMap ((← getExprMap).insert e fvarId)
     let userName := (`exfvar).appendIndexAfter (← getExprMap).size
-    let ety ← MetaState.inferType e
+    let ety ← instantiateMVars (← MetaState.inferType e)
     MetaState.mkLetDecl fvarId userName ety e
     setFfvars ((← getFfvars).push fvarId)
     return fvarId
@@ -554,14 +554,16 @@ namespace FVarRep
     MetaState.runMetaM <| Meta.mkLambdaFVars #[.fvar fvarId] b'
   -- Turns `∀` into `Embedding.forallF`, `→` into `Embedding.ImpF`
   | .forallE name ty body binfo => do
-    let .sort tylvl := (← instantiateMVars (← MetaState.inferType ty))
-      | throwError "replacePolyWithFVar :: Unexpected error"
+    let tysort ← MetaState.runMetaM (do normalizeType (← Meta.inferType ty))
+    let .sort tylvl := tysort
+      | throwError "replacePolyWithFVar :: {tysort} is not a sort"
     let fvarId ← mkFreshFVarId
     MetaState.mkLocalDecl fvarId name ty binfo
     setBfvars ((← getBfvars).push fvarId)
     let body' := body.instantiate1 (.fvar fvarId)
-    let bodysort ← MetaState.runMetaM <| Meta.inferType body'
-    let bodylvl := (← instantiateMVars bodysort).sortLevel!
+    let bodysort ← MetaState.runMetaM <| do normalizeType (← Meta.inferType body')
+    let .sort bodylvl := bodysort
+      | throwError "replacePolyWithFVars :: Unexpected error"
     let bodyrep ← replacePolyWithFVar body'
     if body.hasLooseBVar 0 ∨ !(← MetaState.isLevelDefEq tylvl .zero) ∨ !(← MetaState.isLevelDefEq bodylvl .zero) then
       let forallFun := Expr.app (.const ``forallF [tylvl, bodylvl]) ty
