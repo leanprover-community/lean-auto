@@ -161,9 +161,15 @@ def Expr.isMonomorphicFact (e : Expr) : MetaM Bool := do
 -- This should only be used when we're sure that reducing `ty`
 --   won't be too expensive
 -- e.g. `ty` must be defeq to `Expr.sort <?lvl>`
-def normalizeType (ty : Expr) : MetaM Expr := do
+def Expr.normalizeType (ty : Expr) : MetaM Expr := do
   let ty ← Meta.reduceAll ty
   return ← instantiateMVars ty
+
+def Expr.whnfIfNotForall (e : Expr) : MetaM Expr := do
+  if e.isForall then
+    return e
+  else
+    return (← Meta.whnf e)
 
 -- `ident` must be of type `Expr → TermElabM Unit`
 -- Compiles `term` into `Expr`, then applies `ident` to it

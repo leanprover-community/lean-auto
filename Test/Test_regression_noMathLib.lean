@@ -74,8 +74,6 @@ example
   ap (ap as bs) (ap cs ds) = ap as (ap bs (ap cs ds)) := by
   auto [ap_assoc]
 
-#check fun α => @HAppend.hAppend (List α) (List α) (List α) instHAppend
-
 example
   (hap : ∀ {α β γ : Type u} [self : HAppend α β γ], α → β → γ)
   (ap_assoc : ∀ (α : Type u) (as bs cs : List α),
@@ -101,3 +99,16 @@ example (α : Type u) : True := by
   apply g;
   case ap_assoc_imp => intro hassoc; auto [hassoc]
   case ap => exact List.append
+
+-- A head expression may have different dependent arguments under
+--   different circumstances. This is first observed in `FunLike.coe`
+
+section FluidDep
+
+  variable (fundep : ∀ {α : Type u} (β : α → Type) (a : α), β a)
+
+  example (h : @fundep α (fun _ => Nat) = fun (_ : α) => x) :
+    @fundep α (fun _ => Nat) y = x := by
+    auto [h]
+
+end FluidDep

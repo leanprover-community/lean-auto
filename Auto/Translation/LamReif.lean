@@ -313,7 +313,7 @@ section ILLifting
 
   private def mkImportAux (s : LamSort) : ReifM (Expr × Expr × Expr × Expr × Level) := do
     let (upFunc, downFunc, ty, upTy) ← updownFunc s
-    let sortOrig ← normalizeType (← Meta.inferType ty)
+    let sortOrig ← Expr.normalizeType (← Meta.inferType ty)
     let .sort uOrig := sortOrig
       | throwError "mkImportAux :: Unexpected sort {sortOrig} when processing sort {repr s}"
     return (upFunc, downFunc, ty, upTy, uOrig)

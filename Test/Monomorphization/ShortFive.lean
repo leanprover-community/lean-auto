@@ -46,23 +46,6 @@ set_option auto.prep.redMode "reducible"
 set_option trace.auto.lamReif.printResult true
 set_option trace.auto.lamReif.printValuation true
 
-set_option trace.auto.printLemmas true
-set_option trace.auto.tactic true
-set_option auto.mono.saturationThreshold 500
-set_option trace.auto.mono.printLemmaInst true
-set_option trace.auto.mono true in
-theorem short_five_mono_dbg (injh : Injective h) (injl : Injective l) :
-    Injective k := by
-  intro b kb0
-  have : l (g₀ b) = l 0 := by
-    try auto [square₁]
-    sorry
-  sorry
-
-#check 2
-
-/-
-
 -- set_option pp.explicit true
 set_option trace.auto.printLemmas true
 set_option trace.auto.tactic true
@@ -71,18 +54,11 @@ theorem short_five_mono (injh : Injective h) (injl : Injective l) :
     Injective k := by
   rw [injective_iff_map_eq_zero]
   intro b kb0
-  have : l (g₀ b) = l 0 := by
-    try auto [square₁, kb0, map_zero]
-    sorry
-  have : g₀ b = 0 := injl this
+  have : g₀ b = 0 := by
+    auto [Function.Injective, injl, square₁, kb0, map_zero]
   rcases ker_in_im short_exact₀ _ this with ⟨a, f₀a⟩
-  have : f₁ (h a) = f₁ (h 0) := by
-    try auto [square₀, f₀a, kb0, map_zero]
-    sorry
-  have : h a = h 0 := short_exact₁.inj this
-  have : a = 0 := injh this
-  show b = 0
-  rw [←f₀a, this, map_zero]
+  -- Fix input issue : Should be able to input `short_exact₁.inj`
+  auto [Function.Injective, injh, is_short_exact.inj short_exact₁, square₀, f₀a, kb0, map_zero]
 
 theorem short_five_epi (surjh : Surjective h) (surjl : Surjective l) :
     Surjective k := by

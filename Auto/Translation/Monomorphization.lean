@@ -7,6 +7,7 @@ import Auto.Lib.ExprExtra
 import Auto.Lib.MonadUtils
 import Auto.Lib.Containers
 import Auto.Lib.MetaState
+import Auto.Lib.MetaExtra
 open Lean
 
 initialize
@@ -93,28 +94,43 @@ def CiHead.equiv (ch₁ ch₂ : CiHead) : MetaM Bool :=
 /-
   If a constant `c` is of type `∀ (xs : αs), t`,
     then its valid instance will be `c` with all of its
-    universe levels and dependent arguments instantiated.
-    So, we record the instantiation of universe levels
-    and dependent arguments.
+    universe levels, dependent arguments and instance
+    arguments instantiated.  So, we record the instantiation
+    of universe levels and dependent arguments.
   
   As to monomorphization, we will not record instances of
-    · monomorphic constants
-    · constants with `instance` attribute
+    constants with `instance` attribute or whose type is
+    a class.
 -/
 structure ConstInst where
   head       : CiHead
+  /-
+    · Instantiation of dependent arguments and instance arguments.
+    · Note that the same head may have different dependent arguments
+      under different circumstances. For example,
+      `Funlike.coe : {F : Sort u_3} → {α : Sort u_2} → {β : (α → Sort u_1)} → [self : FunLike F α β] → F → (a : α) → β a`
+      · For `β = id`, the argument `(a : α)` is a dependent argument
+      · For `β = fun _ => γ`, the argument `(a : α)` is non-dependent
+  -/
   argsInst   : Array Expr
-  instDepArgs : Array Nat
+  argsIdx    : Array Nat
   deriving Inhabited, Hashable, BEq
 
 def ConstInst.fingerPrint (ci : ConstInst) := ci.head.fingerPrint
 
+private def ConstInst.toMessageDataAux (ci : ConstInst) : MessageData :=
+  let nArgsIdx := ci.argsIdx.size
+  match nArgsIdx with
+  | 0 => m!""
+  | .succ _ =>
+    let narg := ci.argsIdx[nArgsIdx - 1]?.getD 0 + 1
+    let arr : Array (Option Expr) := Array.mk ((List.range narg).map (fun _ => .none))
+    let arr := (ci.argsInst.zip ci.argsIdx).foldl (fun acc (arg, idx) => acc.setD idx (.some arg)) arr
+    let arr := arr.map (fun e? => match e? with | .some e => m!" ({e})" | .none => m!" _")
+    MessageData.intercalate "" arr.data
+
 instance : ToMessageData ConstInst where
-  toMessageData ci := MessageData.compose
-    m!"ConstInst ⦗⦗ {ci.head}" (.compose
-        m!" " (.compose
-          (MessageData.intercalate " " (ci.argsInst.data.map (fun e => m!"({e})")))
-            m!" ⦘⦘"))
+  toMessageData ci := m!"ConstInst ⦗⦗ {ci.head}{ci.toMessageDataAux} ⦘⦘"
 
 -- **Remark**: This function assigns metavariables if necessary,
 --   but its only usage in this file is under `Meta.withNewMCtxDepth`
@@ -123,9 +139,11 @@ instance : ToMessageData ConstInst where
 def ConstInst.equiv (ci₁ ci₂ : ConstInst) : MetaM Bool := do
   let ⟨head₁, argsInst₁, idx₁⟩ := ci₁
   let ⟨head₂, argsInst₂, idx₂⟩ := ci₂
-  if argsInst₁.size != argsInst₂.size || idx₁ != idx₂ then
-    throwError "ConstInst.equiv :: Unexpected error"
+  if head₁.fingerPrint != head₂.fingerPrint then
+    throwError "ConstInst.equiv :: {ci₁.head} and {ci₂.head} have different fingerprints"
   if !(← head₁.equiv head₂) then
+    return false
+  if argsInst₁.size != argsInst₂.size || idx₁ != idx₂ then
     return false
   for (arg₁, arg₂) in argsInst₁.zip argsInst₂ do
     if !(← Meta.isDefEq arg₁ arg₂) then
@@ -141,11 +159,11 @@ def ConstInst.matchExpr (e : Expr) (ci : ConstInst) : MetaM Bool := do
     | return false
   if !(← ch.equiv ci.head) then
     return false
-  let instDepArgs := ci.instDepArgs
-  if instDepArgs.size != ci.argsInst.size then
+  let argsIdx := ci.argsIdx
+  if argsIdx.size != ci.argsInst.size then
     throwError "ConstInst.matchExpr :: Unexpected error"
   let args := e.getAppArgs
-  for (idx, ciarg) in instDepArgs.zip ci.argsInst do
+  for (idx, ciarg) in argsIdx.zip ci.argsInst do
     let .some arg := args[idx]?
       | return false
     if !(← Meta.isDefEq arg ciarg) then
@@ -159,12 +177,13 @@ def ConstInst.matchExpr (e : Expr) (ci : ConstInst) : MetaM Bool := do
     recorded in `bvars`
   · `param` records universe level parameters of the hypothesis are
   So, the criterion that an expression `e` is a valid instance is that
-  · All instDepArgs are applied
+  · All dependent arguments and instance arguments are applied
   · The head does not contain expressions in `bvars`
   · Dependent arguments does not contains expressions in `bvars`
   · The expression does not contain level parameters in `params`
 -/
 def ConstInst.ofExpr? (params : Array Name) (bvars : Array Expr) (e : Expr) : MetaM (Option ConstInst) := do
+  let paramSet := HashSet.empty.insertMany params
   let bvarSet := HashSet.empty.insertMany bvars
   let fn := e.getAppFn
   -- If the head contains bound variable, then this is not
@@ -174,27 +193,29 @@ def ConstInst.ofExpr? (params : Array Name) (bvars : Array Expr) (e : Expr) : Me
   let args := e.getAppArgs
   let .some head := CiHead.ofExpr? fn
     | return .none
-  let paramSet := HashSet.empty.insertMany params
   -- `e` should not have bound parameters
   if let .some _ := Expr.findParam? (fun n => paramSet.contains n) e then
     return .none
   -- Do not record instances of a constant with attribute `instance`
   if (← head.isInstanceQuick) && !(auto.mono.recordInstInst.get (← getOptions)) then
     return .none
-  let depargIndexes := Expr.instDepArgs (← head.inferType)
-  let lastDeparg? := depargIndexes[depargIndexes.size - 1]?
-  if let .some lastDeparg := lastDeparg? then
-    if args.size ≤ lastDeparg then
-      return none
+  let mut headType ← head.inferType
+  let mut argsIdx := #[]
   let mut argsInst := #[]
-  for idx in depargIndexes do
-    let arg := args[idx]!
-    -- If dependent argument contains bound variable, then this
-    --   is not a valid instance
-    if let .some _ := arg.find? (fun e => bvarSet.contains e) then
-      return none
-    argsInst := argsInst.push arg
-  return some ⟨head, argsInst, depargIndexes⟩
+  -- Check that all dependent and instance arguments are instantiated
+  for (arg, idx) in args.zip ⟨List.range args.size⟩ do
+    headType ← Core.betaReduce headType
+    let .forallE _ ty body bi := headType
+      | throwError "ConstInst.ofExpr? :: {headType} is not a `∀`"
+    if let some _ := ty.find? (fun e => bvarSet.contains e) then
+      return .none
+    if body.hasLooseBVar 0 || bi == .instImplicit then
+      if let some _ := arg.find? (fun e => bvarSet.contains e) then
+        return .none
+      argsIdx := argsIdx.push idx
+      argsInst := argsInst.push arg
+    headType := body.instantiate1 arg
+  return some ⟨head, argsInst, argsIdx⟩
 
 private def ConstInst.toExprAux (args : List (Option Expr))
   (tys : List (Name × Expr × BinderInfo)) (e ty : Expr) : Option Expr :=
@@ -216,9 +237,9 @@ private def ConstInst.toExprAux (args : List (Option Expr))
 
 def ConstInst.toExpr (ci : ConstInst) : MetaM Expr := do
   let type ← instantiateMVars (← ci.head.inferType)
-  let nargs := (Nat.succ <$> ci.instDepArgs[ci.instDepArgs.size - 1]?).getD 0
+  let nargs := (Nat.succ <$> ci.argsIdx[ci.argsIdx.size - 1]?).getD 0
   let mut args : Array (Option Expr) := (Array.mk (List.range nargs)).map (fun n => .none)
-  for (arg, idx) in ci.argsInst.zip ci.instDepArgs do
+  for (arg, idx) in ci.argsInst.zip ci.argsIdx do
     args := args.setD idx (.some arg)
   let .some ret := ConstInst.toExprAux args.data [] ci.head.toExpr type
     | throwError "ConstInst.toExpr :: Unexpected error"
@@ -228,7 +249,7 @@ def ConstInst.toExpr (ci : ConstInst) : MetaM Expr := do
 -- Returns the list of non-dependent arguments in `e.getAppArgs`
 def ConstInst.getOtherArgs (ci : ConstInst) (e : Expr) : CoreM (Array Expr) := do
   let mut args := e.getAppArgs.map Option.some
-  for idx in ci.instDepArgs do
+  for idx in ci.argsIdx do
     args := args.setD idx .none
   let mut ret := #[]
   for arg? in args do
@@ -414,8 +435,9 @@ def processConstInst (ci : ConstInst) : MonoM Unit := do
     return
   trace[auto.mono.printConstInst] "New {ci}"
   setCiMap ((← getCiMap).insert ci.fingerPrint (insts.push ci))
-  -- Do not match against ConstInsts that do not have instDepArgs
-  if ci.instDepArgs.size == 0 then
+  -- Do not match against ConstInsts that do not have dependent or
+  --   instance arguments
+  if ci.argsIdx.size == 0 then
     return
   -- Do not match against `=` and `∃`
   -- If some polymorphic argument of the a theorem only occurs
@@ -565,14 +587,14 @@ namespace FVarRep
     MetaState.runMetaM <| Meta.mkLambdaFVars #[.fvar fvarId] b'
   -- Turns `∀` into `Embedding.forallF`, `→` into `Embedding.ImpF`
   | .forallE name ty body binfo => do
-    let tysort ← MetaState.runMetaM (do normalizeType (← Meta.inferType ty))
+    let tysort ← MetaState.runMetaM (do Expr.normalizeType (← Meta.inferType ty))
     let .sort tylvl := tysort
       | throwError "replacePolyWithFVar :: {tysort} is not a sort"
     let fvarId ← mkFreshFVarId
     MetaState.mkLocalDecl fvarId name ty binfo
     setBfvars ((← getBfvars).push fvarId)
     let body' := body.instantiate1 (.fvar fvarId)
-    let bodysort ← MetaState.runMetaM <| do normalizeType (← Meta.inferType body')
+    let bodysort ← MetaState.runMetaM <| do Expr.normalizeType (← Meta.inferType body')
     let .sort bodylvl := bodysort
       | throwError "replacePolyWithFVars :: Unexpected error"
     let bodyrep ← replacePolyWithFVar body'

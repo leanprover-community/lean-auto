@@ -128,7 +128,7 @@ def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
   return ← Meta.mkAppOptM ``Eq #[← interpLamSortAsUnlifted s]
 | .forallE s  => do
   let ty ← interpLamSortAsUnlifted s
-  let sort ← normalizeType (← Meta.inferType ty)
+  let sort ← Expr.normalizeType (← Meta.inferType ty)
   let Expr.sort lvl := sort
     | throwError "interpLamBaseTermAsUnlifted :: Unexpected sort {sort}"
   return mkAppN (.const ``forallF [lvl, .zero]) #[← interpLamSortAsUnlifted s]
