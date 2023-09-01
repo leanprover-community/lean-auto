@@ -43,10 +43,10 @@ def Expr.lambdaBinders (e : Expr) : Array (Name × Expr × BinderInfo) :=
     | _ => []
   Array.mk (aux e)
 
-def Expr.mkForallBinderDescrs (binders : Array (Name × Expr × BinderInfo)) (e : Expr) :=
+def Expr.mkForallFromBinderDescrs (binders : Array (Name × Expr × BinderInfo)) (e : Expr) :=
   binders.foldr (fun (n, ty, bi) e => Expr.forallE n ty e bi) e
 
-def Expr.mkLambdaBinderDescrs (binders : Array (Name × Expr × BinderInfo)) (e : Expr) :=
+def Expr.mkLambdaFromBinderDescrs (binders : Array (Name × Expr × BinderInfo)) (e : Expr) :=
   binders.foldr (fun (n, ty, bi) e => Expr.lam n ty e bi) e
 
 def Expr.stripForall (n : Nat) (e : Expr) : Option Expr :=

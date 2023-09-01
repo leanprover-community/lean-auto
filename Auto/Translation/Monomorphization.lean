@@ -177,7 +177,6 @@ def ConstInst.ofExpr? (params : Array Name) (e : Expr) : MetaM (Option ConstInst
   -- Do not record instances of a constant with attribute `instance`
   if (← head.isInstanceQuick) && !(auto.mono.recordInstInst.get (← getOptions)) then
     return .none
-  -- Refer to `auto.mono.instantiateInstanceArgs`
   let depargIndexes := Expr.instDepArgs (← head.inferType)
   let lastDeparg? := depargIndexes[depargIndexes.size - 1]?
   if let .some lastDeparg := lastDeparg? then
@@ -315,25 +314,31 @@ private partial def MLemmaInst.matchConstInst (ci : ConstInst) (mi : MLemmaInst)
 --   of `li` against `ci`
 def LemmaInst.matchConstInst (ci : ConstInst) (li : LemmaInst) : MetaM (HashSet LemmaInst) :=
   Meta.withNewMCtxDepth do
-    let mi ← MLemmaInst.ofLemmaInst li
+    let (_, _, mi) ← MLemmaInst.ofLemmaInst li
     MLemmaInst.matchConstInst ci mi mi.type
 
 -- Test whether a lemma is type monomorphic && universe monomorphic
 --   By universe monomorphic we mean `lem.params = #[]`
--- If `auto.mono.instantiateInstanceArgs` is set to `true`, we
---   also require that all instance arguments (argument whose type
---   is a class) are instantiated.
-def LemmaInst.monomorphic (lem : LemmaInst) : MetaM Bool := do
-  if lem.params.size != 0 then
-    return false
-  if !(← Expr.isMonomorphicFact lem.type) then
-    return false
-  Meta.forallTelescope lem.type fun xs _ => do
-    for x in xs do
-      let ty ← x.fvarId!.getType
-      if let .some _ ← Meta.isClass? ty then
-        return false
-    return true
+-- We also require that all instance arguments (argument whose type
+--   is a class) are instantiated. If all dependent arguments are
+--   instantiated, but some instance arguments are not instantiated,
+--   we will try to synthesize the instance arguments
+def LemmaInst.monomorphic? (li : LemmaInst) : MetaM (Option LemmaInst) := do
+  if li.params.size != 0 then
+    return .none
+  if !(← Expr.isMonomorphicFact li.type) then
+    return .none
+  Meta.withNewMCtxDepth do
+    let (_, mvars, mi) ← MLemmaInst.ofLemmaInst li
+    for mvar in mvars do
+      let mvarTy ← instantiateMVars (← Meta.inferType mvar)
+      if let .some _ ← Meta.isClass? mvarTy then
+        let .some inst ← Meta.trySynthInstance mvarTy
+          | return .none
+        match mvar with
+        | .mvar id => id.assign inst
+        | _ => throwError "LemmaInst.monomorphic? :: Unexpected error"
+    LemmaInst.ofMLemmaInst mi
 
 abbrev LemmaInsts := Array LemmaInst
 
@@ -488,7 +493,7 @@ def saturate : MonoM Unit := do
 -- Remove non-monomorphic lemma instances
 def postprocessSaturate : MonoM Unit := do
   let lisArr ← getLisArr
-  let lisArr ← liftM <| lisArr.mapM (fun lis => lis.filterM LemmaInst.monomorphic)
+  let lisArr ← liftM <| lisArr.mapM (fun lis => lis.filterMapM LemmaInst.monomorphic?)
   setLisArr lisArr
 
 namespace FVarRep

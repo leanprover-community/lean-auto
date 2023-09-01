@@ -63,6 +63,10 @@ def LemmaInst.ofLemma (lem : Lemma) : MetaM LemmaInst := do
     let lem' : Lemma := ⟨proof, type, params⟩
     return ⟨lem', xs.size, xs.size⟩
 
+-- Get the proof of the lemma that `li` is an instance of
+def LemmaInst.getProofOfLemma (li : LemmaInst) : Option Expr :=
+  Option.bind (Expr.stripLambda li.nbinders li.proof) (Expr.getAppFnN li.nargs)
+
 instance : ToMessageData LemmaInst where
   toMessageData li := MessageData.compose
     m!"LemmaInst (binders:={li.nbinders}) (args:={li.nargs}) "
@@ -107,7 +111,7 @@ instance : ToMessageData MLemmaInst where
       (MessageData.intercalate " " (mi.args.data.map (fun e => m!"({e})")))
         m!" : {mi.type} ⦘⦘")
 
-def MLemmaInst.ofLemmaInst (li : LemmaInst) : MetaM MLemmaInst := do
+def MLemmaInst.ofLemmaInst (li : LemmaInst) : MetaM (Array Level × Array Expr × MLemmaInst) := do
   let ⟨proof, type, params⟩ := li.toLemma
   let lvls ← params.mapM (fun _ => Meta.mkFreshLevelMVar)
   let proof := proof.instantiateLevelParamsArray params lvls
@@ -119,7 +123,7 @@ def MLemmaInst.ofLemmaInst (li : LemmaInst) : MetaM MLemmaInst := do
   if args.size != li.nargs then
     throwError "MLemmaInst.ofLemmaInst :: Unexpected error"
   let type ← Meta.instantiateForall type mvars
-  return ⟨origProof, args, type⟩
+  return (lvls, mvars, ⟨origProof, args, type⟩)
 
 def LemmaInst.ofMLemmaInst (mi : MLemmaInst) : MetaM LemmaInst := do
   let ⟨origProof, args, type⟩ := mi

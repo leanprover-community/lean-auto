@@ -17,6 +17,10 @@ example (a b c d : ℝ) (h1 : a < b) : Set.Icc a b ⊆ Set.Ico c d ↔ c ≤ a �
   auto [Set.subset_def, Set.mem_Icc, Set.mem_Ico,
         @le_trans, @le_total, @lt_iff_not_le, DenselyOrdered.dense a b, h1]
 
+-- Testing SynthArg
+example (a b : ℝ) (h1 : a < b) : (∃ c, a < c ∧ c < b) := by
+  auto [DenselyOrdered.dense, h1]
+
 set_option trace.auto.printLemmas true in
 set_option trace.auto.mono.printLemmaInst true in
 example : f '' s ⊆ v ↔ s ⊆ f ⁻¹' v := by
