@@ -12,11 +12,14 @@ initialize
 
 namespace Auto
 
--- **TODO**: Extend
 syntax hintelem := term <|> "*"
 syntax hints := ("[" hintelem,* "]")?
+-- Must be topologically sorted, refer to `Lemma.unfoldConsts`
+-- **TODO**: Automatically topological sort
+syntax unfolds := ("u[" ident,* "]")?
+syntax defeqs := ("d[" ident,* "]")?
 syntax autoinstr := ("👍")?
-syntax (name := auto) "auto" autoinstr hints : tactic
+syntax (name := auto) "auto" autoinstr hints unfolds defeqs : tactic
 
 inductive Instruction where
   | none
@@ -65,6 +68,37 @@ def parseHints : TSyntax ``hints → TacticM InputHints
 | `(hints| ) => return ⟨#[], #[], true⟩
 | _ => throwUnsupportedSyntax
 
+private def defeqUnfoldErrHint :=
+  "Note that auto does not accept defeq/unfold hints which" ++
+  "are let-declarations in the local context, because " ++
+  "let-declarations are automatically unfolded by auto."
+
+def parseUnfolds : TSyntax ``unfolds → TacticM (Array Prep.ConstUnfoldInfo)
+| `(unfolds| u[ $[$hs],* ]) => do
+  let exprs ← hs.mapM (fun i => do
+    let some expr ← Term.resolveId? i
+      | throwError "parseUnfolds :: Unknown identifier {i}. {defeqUnfoldErrHint}"
+    return expr)
+  exprs.mapM (fun expr => do
+    let some name := expr.constName?
+      | throwError "parseUnfolds :: Unknown declaration {expr}. {defeqUnfoldErrHint}"
+    Prep.getConstUnfoldInfo name)
+| `(unfolds|) => pure #[]
+| _ => throwUnsupportedSyntax
+
+def parseDefeqs : TSyntax ``defeqs → TacticM (Array Name)
+| `(defeqs| d[ $[$hs],* ]) => do
+  let exprs ← hs.mapM (fun i => do
+    let some expr ← Term.resolveId? i
+      | throwError "parseDefeqs :: Unknown identifier {i}. {defeqUnfoldErrHint}"
+    return expr)
+  exprs.mapM (fun expr => do
+    let some name := expr.constName?
+      | throwError "parseDefeqs :: Unknown declaration {expr}. {defeqUnfoldErrHint}"
+    return name)
+| `(defeqs|) => pure #[]
+| _ => throwUnsupportedSyntax
+
 inductive Result where
   -- Unsatisfiable, witnessed by `e`
   | unsat : (e : Expr) → Result
@@ -87,29 +121,40 @@ def collectLctxLemmas (lctxhyps : Bool) (ngoal : FVarId) : TacticM (Array Lemma)
     for fVarId in fVarIds do
       let decl ← FVarId.getDecl fVarId
       if ¬ decl.isAuxDecl ∧ (← Meta.isProp decl.type) then
-        let declType ← Prep.preprocessTerm (← instantiateMVars decl.type)
-        lemmas := lemmas.push ⟨mkFVar fVarId, declType, #[]⟩
+        lemmas := lemmas.push ⟨mkFVar fVarId, ← instantiateMVars decl.type, #[]⟩
     return lemmas
-
-def checkDuplicatedFact (terms : Array Term) : TacticM Unit :=
-  let n := terms.size
-  for i in [0:n] do
-    for j in [i+1:n] do
-      if terms[i]? == terms[j]? then
-        throwError "Auto does not accept duplicated input terms"
 
 def collectUserLemmas (terms : Array Term) : TacticM (Array Lemma) :=
   Meta.withNewMCtxDepth do
     let mut lemmas := #[]
-    for lems in ← terms.mapM Prep.elabLemma do
-      for ⟨proof, type, params⟩ in lems do
-        if ← Meta.isProp type then
-          let type ← Prep.preprocessTerm (← instantiateMVars type)
-          lemmas := lemmas.push ⟨proof, type, params⟩
-        else
-          -- **TODO**: Relax condition?
-          throwError "invalid lemma {type} for auto, proposition expected"
+    for ⟨proof, type, params⟩ in ← terms.mapM Prep.elabLemma do
+      if ← Meta.isProp type then
+        lemmas := lemmas.push ⟨proof, ← instantiateMVars type, params⟩
+      else
+        -- **TODO**: Relax condition?
+        throwError "invalid lemma {type} for auto, proposition expected"
     return lemmas
+
+def collectDefeqLemmas (names : Array Name) : TacticM (Array Lemma) :=
+  Meta.withNewMCtxDepth do
+    let lemmas ← names.concatMapM Prep.elabDefEq
+    lemmas.mapM (fun (⟨proof, type, params⟩ : Lemma) => do
+      let type ← Prep.preprocessTerm (← instantiateMVars type)
+      return ⟨proof, type, params⟩)
+
+def unfoldConstAndPreprocessLemma (unfolds : Array Prep.ConstUnfoldInfo) (lem : Lemma) : TacticM Lemma := do
+  let mut type ← Prep.preprocessTerm (← instantiateMVars lem.type)
+  for ⟨uiname, val, params⟩ in unfolds do
+    type := type.replace (fun e =>
+      match e with
+      | .const name lvls =>
+        if name == uiname then
+          val.instantiateLevelParams params.data lvls
+        else
+          .none
+      | _ => .none)
+  type ← Core.betaReduce (← instantiateMVars type)
+  return {lem with type := type}
 
 def traceLemmas (pre : String) (lemmas : Array Lemma) : TacticM Unit := do
   let mut cnt : Nat := 0
@@ -119,20 +164,33 @@ def traceLemmas (pre : String) (lemmas : Array Lemma) : TacticM Unit := do
     cnt := cnt + 1
   trace[auto.printLemmas] mdatas.foldl MessageData.compose pre
 
+def checkDuplicatedFact (terms : Array Term) : TacticM Unit :=
+  let n := terms.size
+  for i in [0:n] do
+    for j in [i+1:n] do
+      if terms[i]? == terms[j]? then
+        throwError "Auto does not accept duplicated input terms"
+
 -- `ngoal` means `negated goal`
-def runAuto
-  (instrstx : TSyntax ``autoinstr)
-  (hintstx : TSyntax ``hints) (ngoal : FVarId) : TacticM Result := do
+def runAuto (instrstx : TSyntax ``autoinstr) (hintstx : TSyntax ``hints)
+  (unfolds : TSyntax `Auto.unfolds) (defeqs : TSyntax `Auto.defeqs) (ngoal : FVarId) : TacticM Result := do
   let instr ← parseInstr instrstx
   let inputHints ← parseHints hintstx
+  let unfoldInfos ← parseUnfolds unfolds
+  let defeqNames ← parseDefeqs defeqs
   let startTime ← IO.monoMsNow
   let lctxLemmas ← collectLctxLemmas inputHints.lctxhyps ngoal
+  let lctxLemmas ← lctxLemmas.mapM (unfoldConstAndPreprocessLemma unfoldInfos)
   traceLemmas "Lemmas collected from local context:" lctxLemmas
   checkDuplicatedFact inputHints.terms
   let userLemmas ← collectUserLemmas inputHints.terms
+  let userLemmas ← userLemmas.mapM (unfoldConstAndPreprocessLemma unfoldInfos)
   traceLemmas "Lemmas collected from user-provided terms:" userLemmas
+  let defeqLemmas ← collectDefeqLemmas defeqNames
+  let defeqLemmas ← defeqLemmas.mapM (unfoldConstAndPreprocessLemma unfoldInfos)
+  traceLemmas "Lemmas collected from user-provided defeq hints:" defeqLemmas
   trace[auto.tactic] "Preprocessing took {(← IO.monoMsNow) - startTime}ms"
-  let lemmas := lctxLemmas ++ userLemmas
+  let lemmas := lctxLemmas ++ userLemmas ++ defeqLemmas
   match instr with
   | .none =>
     -- Testing. Skipping universe level instantiation and monomorphization
@@ -142,12 +200,12 @@ def runAuto
       let exportFacts := valids.map (·.2)
       LamReif.printValuation
       -- ! smt
-      try
-        let commands := (← (lamFOL2SMT (← LamReif.getVarVal) exportFacts).run {}).1
-        let _ ← liftM <| commands.mapM (fun c => IO.println s!"Command: {c}")
-        Solver.SMT.querySolver commands
-      catch e =>
-        trace[auto.tactic] "SMT invocation failed with {e.toMessageData}"
+      -- try
+      --   let commands := (← (lamFOL2SMT (← LamReif.getVarVal) exportFacts).run {}).1
+      --   let _ ← liftM <| commands.mapM (fun c => IO.println s!"Command: {c}")
+      --   Solver.SMT.querySolver commands
+      -- catch e =>
+      --   trace[auto.tactic] "SMT invocation failed with {e.toMessageData}"
       -- reconstruction
       let proof ← Lam2D.callDuper exportFacts
       let proofLamTerm := exportFacts.foldr (fun t' t => t'.mkImp t) (.base .falseE)
@@ -167,7 +225,7 @@ def runAuto
 
 @[tactic auto]
 def evalAuto : Tactic
-| `(auto | auto $instr $hints) => withMainContext do
+| `(auto | auto $instr $hints $unfolds $defeqs) => withMainContext do
   let startTime ← IO.monoMsNow
   -- Suppose the goal is `∀ (x₁ x₂ ⋯ xₙ), G`
   -- First, apply `intros` to put `x₁ x₂ ⋯ xₙ` into the local context,
@@ -178,7 +236,7 @@ def evalAuto : Tactic
   let (ngoal, absurd) ← MVarId.intro1 nngoal
   replaceMainGoal [absurd]
   withMainContext do
-    let result ← runAuto instr hints ngoal
+    let result ← runAuto instr hints unfolds defeqs ngoal
     match result with
     | Result.unsat e => do
       IO.println s!"Unsat. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"

@@ -55,10 +55,10 @@ theorem short_five_mono (injh : Injective h) (injl : Injective l) :
   rw [injective_iff_map_eq_zero]
   intro b kb0
   have : g₀ b = 0 := by
-    auto [Function.Injective, injl, square₁, kb0, map_zero]
+    auto [injl, square₁, kb0, map_zero] u[Function.Injective]
   rcases ker_in_im short_exact₀ _ this with ⟨a, f₀a⟩
   -- Fix input issue : Should be able to input `short_exact₁.inj`
-  auto [Function.Injective, injh, is_short_exact.inj short_exact₁, square₀, f₀a, kb0, map_zero]
+  auto [injh, short_exact₁.inj, square₀, f₀a, kb0, map_zero] u[Function.Injective]
 
 theorem short_five_epi (surjh : Surjective h) (surjl : Surjective l) :
     Surjective k := by

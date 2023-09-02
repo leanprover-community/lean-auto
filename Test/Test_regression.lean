@@ -4,6 +4,58 @@ set_option auto.prep.redMode "reducible"
 set_option trace.auto.lamReif.printResult true
 set_option trace.auto.lamReif.printValuation true
 
+-- Tactic elaboration
+
+example : True := by auto d[]
+example : True := by auto u[]
+example : True := by auto [] u[] d[]
+example : True := by first | auto 👍 | exact True.intro
+
+-- Defeq Lemma collection
+
+section CollectLemma
+
+  set_option auto.prep.redMode "instance" in
+  example : (∀ (xs ys zs : List α), xs ++ ys ++ zs = xs ++ (ys ++ zs)) := by
+    intro xs; induction xs <;> auto [*] d[List.append]
+
+  set_option auto.prep.redMode "instance" in
+  example : (∀ (m n k : Nat), m + n + k = m + (n + k)) := by
+    intros m n k; revert m n; induction k <;> auto [*] d[Nat.add]
+
+end CollectLemma
+
+-- Constant unfolding
+
+section UnfoldConst
+
+  def c₁ := 2
+  def c₂ := c₁
+
+  example : c₁ = 2 := by auto u[c₁]
+  example : c₂ = 2 := by
+    try auto u[c₁, c₂];
+    auto u[c₂, c₁]
+  example : c₂ = 2 := by auto u[c₁] d[c₂]
+  example : c₂ = 2 := by auto u[c₂] d[c₁]
+  example (h : c₃ = c₁) : c₃ = 2 := by auto [h] u[c₁]
+  example : let c := 2; c = 2 := by
+    try auto u[c];
+    auto
+  set_option trace.auto.printLemmas true
+  example : True := by auto d[Nat.rec]
+
+  -- Brute force example
+  -- This must be fixed
+  set_option auto.prep.redMode "instance" in
+  set_option trace.auto.lamReif.printResult true in
+  set_option trace.auto.lamReif.printValuation true in
+  example : (∀ (m n k : Nat), m + n + k = m + (n + k)) := by
+    intros m n k; revert m n; induction k
+    case zero => auto u[Nat.add] d[Nat.rec]
+
+end UnfoldConst
+
 -- First Order
 
 example : True := by

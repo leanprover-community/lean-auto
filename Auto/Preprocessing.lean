@@ -63,10 +63,18 @@ partial def preprocessTerm (term : Expr) : MetaM Expr := do
   let term ← Meta.transform term (pre := redProj)
   return term
 
--- **TODO**: Review
--- Advise: For each recursive function (not only recursors)
---   `f : {recty} → ...`, apply
---   `f` to each constructor of {recty} and beta reduce!
+/-- From a user-provided term `stx`, produce a lemma -/
+def elabLemma (stx : Term) : TacticM Lemma :=
+  -- elaborate term as much as possible and abstract any remaining mvars:
+  Term.withoutModifyingElabMetaStateWithInfo <| withRef stx <| Term.withoutErrToSorry do
+    let e ← Term.elabTerm stx none
+    Term.synthesizeSyntheticMVars (mayPostpone := false) (ignoreStuckTC := true)
+    let e ← instantiateMVars e
+    let abstres ← Auto.abstractMVars e
+    let e := abstres.expr
+    let paramNames := abstres.paramNames
+    return Lemma.mk e (← inferType e) paramNames
+
 def addRecAsLemma (recVal : RecursorVal) : TacticM (Array Lemma) := do
   let some (.inductInfo indVal) := (← getEnv).find? recVal.getInduct
     | throwError "Expected inductive datatype: {recVal.getInduct}"
@@ -89,62 +97,39 @@ def addRecAsLemma (recVal : RecursorVal) : TacticM (Array Lemma) := do
       return ⟨proof, eq, recVal.levelParams.toArray⟩
   return Array.mk res
 
-/-- From a user-provided term `stx`, produce a lemma -/
-def elabLemma (stx : Term) : TacticM (Array Lemma) := do
-  match stx with
-  | `($id:ident) =>
-    let some expr ← Term.resolveId? id
-      | throwError "Unknown identifier {id}"
+def elabDefEq (name : Name) : TacticM (Array Lemma) := do
+  match (← getEnv).find? name with
+  | some (.recInfo val) =>
+    -- Generate definitional equation for recursor
+    addRecAsLemma val
+  | some (.defnInfo _) =>
+    -- Generate definitional equation for (possibly recursive) declaration
+    match ← getEqnsFor? name (nonRec := true) with
+    | some eqns => eqns.mapM fun eq => do elabLemma (← `($(mkIdent eq)))
+    | none => return #[]
+  | some (.axiomInfo _)  => return #[]
+  | some (.thmInfo _)    => return #[]
+  -- If we have inductively defined propositions, we might
+  --   need to add constructors as lemmas
+  | some (.ctorInfo _)   => return #[]
+  | some (.opaqueInfo _) => throwError "Opaque constants cannot be provided as lemmas"
+  | some (.quotInfo _)   => throwError "Quotient constants cannot be provided as lemmas"
+  | some (.inductInfo _) => throwError "Inductive types cannot be provided as lemmas"
+  | none => throwError "Unknown constant {name}"
 
-    let some cstname := expr.constName?
-      | return #[← lctxHyp expr]
+structure ConstUnfoldInfo where
+  name : Name
+  val : Expr
+  params : Array Name
 
-    match (← getEnv).find? cstname with
-    | some (.recInfo val) => addRecAsLemma val
-    | some (.defnInfo defval) =>
-      let term := defval.value
-      let type ← Meta.inferType term
-      let sort ← Meta.reduce (← Meta.inferType type) true true false
-      -- If the type is of sort `Prop`, add itself as a type
-      let mut ret := #[]
-      if sort.isProp then
-        ret := ret.push (← elabLemmaAux stx)
-      -- Generate definitional equation for the type
-      if let some eqns ← getEqnsFor? cstname (nonRec := true) then
-        ret := ret.append (← eqns.mapM fun eq => do elabLemmaAux (← `($(mkIdent eq))))
-      return ret
-    | some (.axiomInfo _)  => return #[← elabLemmaAux stx]
-    | some (.thmInfo _)    => return #[← elabLemmaAux stx]
-    -- If we have inductively defined propositions, we might
-    --   need to add constructors as lemmas
-    | some (.ctorInfo _)   => return #[← elabLemmaAux stx]
-    | some (.opaqueInfo _) => throwError "Opaque constants cannot be provided as lemmas"
-    | some (.quotInfo _)   => throwError "Quotient constants cannot be provided as lemmas"
-    | some (.inductInfo _) => throwError "Inductive types cannot be provided as lemmas"
-    | none => throwError "Unknown constant {cstname}"
-  | _ => return #[← elabLemmaAux stx]
-where
-  elabLemmaAux (stx : Term) : TacticM Lemma :=
-    -- elaborate term as much as possible and abstract any remaining mvars:
-    Term.withoutModifyingElabMetaStateWithInfo <| withRef stx <| Term.withoutErrToSorry do
-      let e ← Term.elabTerm stx none
-      Term.synthesizeSyntheticMVars (mayPostpone := false) (ignoreStuckTC := true)
-      let e ← instantiateMVars e
-      let abstres ← Auto.abstractMVars e
-      let e := abstres.expr
-      let paramNames := abstres.paramNames
-      return Lemma.mk e (← inferType e) paramNames
-  lctxHyp (e : Expr) : TacticM Lemma := do
-    let some localDecl := (← getLCtx).findFVar? e
-      | throwError "elabLemma :: Identifier {e} is neither a constant nor a local hypothesis"
-    if ← Meta.isProp localDecl.type then
-      return Lemma.mk e localDecl.type #[]
-    else if localDecl.isLet then
-      let proof ← mkAppM ``Eq.refl #[e]
-      let type  ← mkAppM ``Eq #[e, localDecl.value]
-      return Lemma.mk proof type #[]
-    else
-      throwError "elabLemma :: Local hypothesis {e} is neither a let declaration nor a proof of proposition"
+def getConstUnfoldInfo (name : Name) : MetaM ConstUnfoldInfo := do
+  let .some ci := (← getEnv).find? name
+    | throwError "getConstUnfoldInfo :: Unknown declaration {name}"
+  let .some val := ci.value?
+    | throwError "getConstUnfoldInfo :: {name} is not a definition, thus cannot be unfolded"
+  let val ← preprocessTerm val
+  let params := ci.levelParams
+  return ⟨name, val, ⟨params⟩⟩
 
 end Prep
 

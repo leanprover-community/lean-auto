@@ -22,7 +22,7 @@ def Lemma.subsumeQuick (lem₁ lem₂ : Lemma) : MetaM Bool := Meta.withNewMCtxD
   let type₁ := lem₁.type.instantiateLevelParamsArray lem₁.params paramInst₁
   -- Extremely important: Don't put the following line here
   --  `let (_, _, body₁) ← Meta.forallMetaTelescope type₁`
-  -- `mvars` can only depend on free variables  which are already
+  -- `mvars` can only depend on free variables which are already
   --   inside the lctx when they're creates. Therefore, the
   --   above line must follow `Meta.forallTelescope`
   let ret ← Meta.forallTelescope lem₂.type fun _ body₂ => do
@@ -34,6 +34,30 @@ def Lemma.equivQuick (lem₁ lem₂ : Lemma) : MetaM Bool := do
   let s₁₂ ← Lemma.subsumeQuick lem₁ lem₂
   let s₂₁ ← Lemma.subsumeQuick lem₂ lem₁
   return s₁₂ && s₂₁
+
+def Lemma.unfoldConst (lem : Lemma) (declName : Name) : MetaM Lemma := do
+  let result ← Meta.unfold lem.type declName
+  match result.proof? with
+  | .some eqProof =>
+    let tySort ← Expr.normalizeType (← Meta.inferType lem.type)
+    let Expr.sort lvl := tySort
+      | throwError "Lemma.unfoldConst :: {tySort} is not a sort"
+    let eq ← Meta.mkEq lem.type result.expr
+    let eqProof' ← Meta.mkExpectedTypeHint eqProof eq
+    let proof := mkAppN (Lean.mkConst ``Eq.mp [lvl]) #[lem.type, result.expr, eqProof', lem.proof]
+    -- **TODO**: Remove?
+    if !(← Meta.isTypeCorrect proof) then
+      throwError "Lemma.unfoldConst :: Proof {proof} is not type correct"
+    return ⟨proof, result.expr, lem.params⟩
+  | .none => return ⟨lem.proof, result.expr, lem.params⟩
+
+-- `declNames` must be topologically sorted, i.e., we do not allow
+--   the situation where
+--   · `n` and `m` are both in `declNames`
+--   · `n` is before `m`
+--   · The declaration body of `m` contains `n`
+def Lemma.unfoldConsts (lem : Lemma) (declNames : Array Name) : MetaM Lemma := do
+  declNames.foldlM (fun lem name => lem.unfoldConst name) lem
 
 /-
   An instance of a `Lemma`. If a lemma has proof `H`,
