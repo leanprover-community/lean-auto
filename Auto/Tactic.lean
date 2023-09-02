@@ -196,8 +196,11 @@ def runAuto (instrstx : TSyntax ``autoinstr) (hintstx : TSyntax ``hints)
     -- Testing. Skipping universe level instantiation and monomorphization
     let afterReify (ufacts : Array Reif.UMonoFact) : LamReif.ReifM Expr := (do
       let arr ← LamReif.reifFacts ufacts
-      let valids ← arr.mapM LamReif.lookupValidTable!
-      let exportFacts := valids.map (·.2)
+      let valids ← arr.mapM LamReif.lookupRTable!
+      let exportFacts ← valids.mapM (fun valid => do
+        let .valid [] t := valid
+          | throwError "runAuto :: Unexpected reif valid entry {repr valid}"
+        return t)
       LamReif.printValuation
       -- ! smt
       try

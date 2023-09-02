@@ -101,14 +101,11 @@ structure State where
   -- `Embedding/LamChecker/ChkSteps`
   -- If we have a `ChkStep` which is `validOfResolveImport n`, then
   --   `assertions.find! n` would be the corresponding external proof
-  chkSteps    : Array (ChkStep × Nat)                    := #[]
-  -- We insert entries into `wfTable` and `validTable` through two different ways
+  chkSteps    : Array (ChkStep × Nat)              := #[]
+  -- We insert entries into `rTable` through two different ways
   -- 1. Calling `newChkStepValid`
   -- 2. Validness facts from the ImportTable are treated in `newAssertions`
-  -- `Embedding/LamChecker/RTable.wf`
-  wfTable     : Array (List LamSort × LamSort × LamTerm) := #[]
-  -- `Embedding/LamChecker/RTable.valid`
-  validTable  : Array (List LamSort × LamTerm)           := #[]
+  rTable      : Array REntry                       := #[]
   -- `u` is the universe level that all constants will lift to
   -- Something about the universes level `u`
   -- Suppose `u ← getU`
@@ -160,17 +157,11 @@ def lookupAssertion! (wPos : Nat) : ReifM (Expr × LamTerm) := do
   else
     throwError "lookupAssertion! :: Unknown assertion position {wPos}"
 
-def lookupWfTable! (wPos : Nat) : ReifM (List LamSort × LamSort × LamTerm) := do
-  if let .some r := (← getWfTable).get? wPos then
+def lookupRTable! (pos : Nat) : ReifM REntry := do
+  if let .some r := (← getRTable).get? pos then
     return r
   else
-    throwError "lookupWfTable :: Unknown wfTable entry {wPos}"
-
-def lookupValidTable! (vPos : Nat) : ReifM (List LamSort × LamTerm) := do
-  if let .some r := (← getValidTable).get? vPos then
-    return r
-  else
-    throwError "lookupValidTable! :: Unknown validTable entry {vPos}"
+    throwError "lookupWfTable :: Unknown wfTable entry {pos}"
 
 def resolveLamBaseTermImport : LamBaseTerm → ReifM LamBaseTerm
 | .eqI n      => do return .eq (← lookupLamILTy! n)
@@ -212,22 +203,12 @@ def mkImportVersion : LamTerm → ReifM LamTerm
 | .app s t₁ t₂ => do
   return .app s (← mkImportVersion t₁) (← mkImportVersion t₂)
 
--- A new `ChkStep` that produces `LamThmWF` certificate
--- `res` is the result of the `ChkStep`
--- Returns the position of the result of this `ChkStep` in the `wfTable`
-def newWfChkStep (c : ChkStep) (res : List LamSort × LamSort × LamTerm) : ReifM Nat := do
-  setChkSteps ((← getChkSteps).push (c, (← getWfTable).size))
-  let wfsize := (← getWfTable).size
-  setWfTable ((← getWfTable).push res)
-  return wfsize
-
--- A new `ChkStep` that produces `LamThmValid` certificate
--- `res` is the result of the `ChkStep`
--- Returns the position of the result of this `ChkStep` in the `validTable`
-def newValidChkStep (c : ChkStep) (res : List LamSort × LamTerm) : ReifM Nat := do
-  setChkSteps ((← getChkSteps).push (c, (← getValidTable).size))
-  let vsize := (← getValidTable).size
-  setValidTable ((← getValidTable).push res)
+-- A new `ChkStep`. `res` is the result of the `ChkStep`
+-- Returns the position of the result of this `ChkStep` in the `RTable`
+def newValidChkStep (c : ChkStep) (res : REntry) : ReifM Nat := do
+  setChkSteps ((← getChkSteps).push (c, (← getRTable).size))
+  let vsize := (← getRTable).size
+  setRTable ((← getRTable).push res)
   return vsize
 
 -- `ty` is a reified assumption. `∀, ∃` and `=` in `ty` are supposed to
@@ -235,13 +216,13 @@ def newValidChkStep (c : ChkStep) (res : List LamSort × LamTerm) : ReifM Nat :=
 -- The type of `proof` is definitionally equal to `GLift.down (← mkImportVersion ty).interp`
 -- Returns the position of `ty` inside the `validTable` after inserting it
 def newAssertion (proof : Expr) (ty : LamTerm) : ReifM Nat := do
-  let validTable ← getValidTable
+  let rTable ← getRTable
   -- Position of external proof within the ImportTable
-  let wPos := validTable.size
-  setValidTable (validTable.push ([], ty))
+  let pos := rTable.size
+  setRTable (rTable.push (.valid [] ty))
   let tyi ← mkImportVersion ty
-  setAssertions ((← getAssertions).insert wPos (proof, tyi))
-  return wPos
+  setAssertions ((← getAssertions).insert pos (proof, tyi))
+  return pos
 
 /-
   Computes `upFunc` and `downFunc` between `s.interpAsUnlifted` and `s.interpAsLifted`
@@ -461,17 +442,19 @@ section Checker
   -- Returns the position of the new `t` in the valid table
   def impApps (imp : Nat) (hyps : Array Nat) : ReifM Nat := do
     let mut imp := imp
-    let mut impV ← lookupValidTable! imp
+    let mut impV ← lookupRTable! imp
     for hyp in hyps do
-      let (lctx, t) := impV
-      let (lctx', t') ← lookupValidTable! hyp
+      let .valid lctx t := impV
+        | throwError "impApps :: {repr impV} is not a `valid` entry"
+      let .valid lctx' t' ← lookupRTable! hyp
+        | throwError "impApps :: {repr (← lookupRTable! hyp)} is not a `valid` entry"
       if !(lctx'.beq lctx) then
         throwError "impApps :: LCtx mismatch, `{toString lctx'}` ≠ `{toString lctx}`"
       let .app (.base .prop) (.app (.base .prop) (.base .imp) hypT) conclT := t
         | throwError "imApps :: Error, `{toString t}` is not an implication"
       if !(hypT.beq t') then
         throwError "impApps :: Term mismatch, `{toString hypT}` ≠ `{toString t'}`"
-      impV := (lctx, conclT)
+      impV := .valid lctx conclT
       imp ← newValidChkStep (.validOfImp imp hyp) impV
     return imp
 
@@ -484,8 +467,7 @@ section Checker
     let ret := ret.push ("ilLamTy", (← getLamILTy).size)
     let ret := ret.push ("assertions", (← getAssertions).size)
     let ret := ret.push ("chkSteps", (← getChkSteps).size)
-    let ret := ret.push ("wfTable", (← getWfTable).size)
-    let ret := ret.push ("validTable", (← getValidTable).size)
+    let ret := ret.push ("RTable", (← getRTable).size)
     return ret
 
   def printCheckerStats : ReifM Unit := do
@@ -630,14 +612,15 @@ section Checker
     let checker ← Meta.withLetDecl `lval lvalTy lvalExpr fun lvalFVarExpr => do
       let itExpr ← buildImportTableExpr lvalFVarExpr
       let csExpr ← buildChkStepsExpr
-      let wholeChecker := Lean.mkApp3 (.const ``Checker [u]) lvalFVarExpr itExpr csExpr
-      let validInv ← Meta.mkAppM ``And.right #[wholeChecker]
-      let validExpr := Lean.toExpr (BinTree.ofListGet (← getValidTable).data)
-      let valExpr := Lean.toExpr (← lookupValidTable! entryIdx)
+      let rInv := Lean.mkApp3 (.const ``Checker [u]) lvalFVarExpr itExpr csExpr
+      let rExpr := Lean.toExpr (BinTree.ofListGet (← getRTable).data)
+      let valEntry ← lookupRTable! entryIdx
+      let .valid lctx t := valEntry
+        | throwError "buildCheckerExpr :: {repr valEntry} is not a `valid` entry"
       let nExpr := Lean.toExpr entryIdx
-      let eqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[valExpr]]
-      let getEntry := Lean.mkApp6 (.const ``RTable.validInv_get [u])
-        lvalExpr nExpr valExpr validExpr validInv eqExpr
+      let eqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr valEntry]]
+      let getEntry := Lean.mkApp7 (.const ``RTable.validInv_get [u])
+        lvalExpr nExpr (Lean.toExpr lctx) (Lean.toExpr t) rExpr rInv eqExpr
       let getEntry ← Meta.mkLetFVars #[lvalFVarExpr] getEntry
       -- debug
       -- let rt := Lean.mkApp3 (.const ``ChkSteps.runFromBeginning [u]) lvalExpr itExpr csExpr

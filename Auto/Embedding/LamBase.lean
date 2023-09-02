@@ -21,7 +21,7 @@ inductive LamBaseSort
   | int  : LamBaseSort             -- GLift `int`
   | real : LamBaseSort             -- GLift `real`
   | bv   : (n : Nat) → LamBaseSort -- GLift `bv n`
-deriving BEq, Hashable, Inhabited, Lean.ToExpr
+deriving Hashable, Inhabited, Lean.ToExpr
 
 def LamBaseSort.reprPrec (b : LamBaseSort) (n : Nat) :=
   let str :=
@@ -766,6 +766,9 @@ def LamTerm.beq : LamTerm → LamTerm → Bool
 | .lam s₁ t₁, .lam s₂ t₂ => s₁.beq s₂ && t₁.beq t₂
 | .app s₁ fn₁ arg₁, .app s₂ fn₂ arg₂ => s₁.beq s₂ && fn₁.beq fn₂ && arg₁.beq arg₂
 | _, _ => false
+
+instance : BEq LamTerm where
+  beq := LamTerm.beq
 
 theorem LamTerm.beq_refl (t : LamTerm) : (t.beq t = true) := by
   induction t <;> dsimp [beq] <;> try apply Nat.beq_refl
