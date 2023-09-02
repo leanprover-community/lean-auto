@@ -105,7 +105,7 @@ section NFA
     -- Returns a hashmap from symbol to HashSet of states
     def NFA.moves [ToString σ] (r : NFA σ) (ss : HashSet Nat) : HashMap σ (HashSet Nat) :=
       Id.run <| do
-        let mut ret : HashMap σ (HashSet Nat) := HashMap.empty
+        let mut ret : HashMap σ (HashSet Nat) := {}
         for i in ss do
           if i > r.tr.size then
             panic! s!"NFA.moves :: {i} from state set {ss.toList} is not a valid state of {r}"
@@ -434,7 +434,7 @@ section DFA
     let mut idxmap : HashMap (List Nat) Nat :=
       HashMap.empty.insert dstates[0]! 0
     -- `Unit` represents the `malformed input` state
-    let mut tr : Array (HashMap σ (Nat ⊕ Unit)) := #[HashMap.empty]
+    let mut tr : Array (HashMap σ (Nat ⊕ Unit)) := #[{}]
     -- Next state to process
     let mut cur := 0
     while h : cur < dstates.size do
@@ -450,7 +450,7 @@ section DFA
         if !idxmap.contains εst then
           dstates := dstates.push εst
           idxmap := idxmap.insert εst idxmap.size
-          tr := tr.push HashMap.empty
+          tr := tr.push {}
         -- Now `idxmap` contains `εst`
         let idx := idxmap.find! εst
         tr := tr.modify cur (fun hmap => hmap.insert c (.inl idx))

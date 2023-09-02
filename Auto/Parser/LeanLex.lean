@@ -319,7 +319,7 @@ def ERE.charGrouping (e : ERE) : CharGrouping Char := Id.run <| do
   -- Current number of groups
   let mut curidx := 1
   for hset in hsets do
-    let mut reloc : HashMap Nat Nat := HashMap.empty
+    let mut reloc : HashMap Nat Nat := {}
     for c in hset do
       let cidx := charMap.find! c
       match reloc.find? cidx with
@@ -328,7 +328,7 @@ def ERE.charGrouping (e : ERE) : CharGrouping Char := Id.run <| do
                  charMap := charMap.insert c curidx;
                  curidx := curidx + 1
   let mut ridx := 0
-  let mut reloc : HashMap Nat Nat := HashMap.empty
+  let mut reloc : HashMap Nat Nat := {}
   for (_, i) in charMap.toList do
     match reloc.find? i with
     | .some _ => continue

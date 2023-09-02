@@ -33,9 +33,9 @@ open Embedding.Lam
 --   these atoms to restore the requires expression.
 structure Context where
   -- Type atoms that are used in the expressions sent to external prover
-  typeAtomFVars   : HashMap Nat FVarId := HashMap.empty
+  typeAtomFVars   : HashMap Nat FVarId := {}
   -- Term atoms that are used in the expressions sent to external prover
-  termAtomFVars   : HashMap Nat FVarId := HashMap.empty
+  termAtomFVars   : HashMap Nat FVarId := {}
 
 abbrev ExternM := ReaderT Context ReifM
 

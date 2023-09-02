@@ -66,13 +66,13 @@ def computeMaxLevel (facts : Array Reif.UMonoFact) : MetaM Level := do
 --   essentially higher-order term that can be reified directly.
 structure State where
   -- Maps previously reified type to their type atom index
-  tyVarMap    : HashMap Expr Nat                := HashMap.empty
+  tyVarMap    : HashMap Expr Nat                := {}
   -- Maps previously reified expressions to their term atom index
   -- Whenever we encounter an atomic expression, we look up
   --   `varMap`. If it's already reified, then `varMap`
   --   tells us about its index. If it's not reified, insert
   --   it to `varMap`.
-  varMap      : HashMap Expr Nat                := HashMap.empty
+  varMap      : HashMap Expr Nat                := {}
   -- `tyVal` is the inverse of `tyVarMap`
   -- The `e : Expr` is the un-lifted valuation of the type atom
   -- The `lvl : level` is the sort level of `e`
@@ -87,19 +87,21 @@ structure State where
   -- lamILTy
   lamILTy     : Array LamSort                   := #[]
   -- Inverse of `lamILTy`
-  isomTyMap   : HashMap LamSort Nat             := HashMap.empty
-  -- This array contains assertions that have external (lean) proof
-  --   The first `e : Expr` is the proof of the assertion
-  --   The second `t : LamTerm` is the corresponding λ term,
-  --     where all `eq, ∀, ∃` are of import version
-  --   The third `Nat` is the position of this assertion within
-  --     the ImportTable
-  -- To be precise, we require that `e : GLift.down t.interp`
-  assertions  : Array (Expr × LamTerm × Nat)    := #[]
-  -- The `n`-th element of the ImportTable would be `assertions[importMap.get! n]!`
-  importMap   : HashMap Nat Nat                 := HashMap.empty
+  isomTyMap   : HashMap LamSort Nat             := {}
+  /-
+    This hashmap contains assertions that have external (lean) proof
+    · The first `e : Expr` is the proof of the assertion
+    · The second `t : LamTerm` is the corresponding λ term,
+      where all `eq, ∀, ∃` are of import version
+    · The third `Nat` is the position of this assertion within
+      the ImportTable
+    · To be precise, we require that `e : GLift.down t.interp`
+  -/
+  assertions  : HashMap Nat (Expr × LamTerm × Nat)       := {}
   -- `Embedding/LamChecker/ChkSteps`
-  chkSteps    : Array (ChkStep × Nat)           := #[]
+  -- If we have a `ChkStep` which is `validOfResolveImport n`, then
+  --   `assertions.find! n` would be the corresponding external proof
+  chkSteps    : Array (ChkStep × Nat)                    := #[]
   -- We insert entries into `wfTable` and `validTable` through two different ways
   -- 1. Calling `newChkStepValid`
   -- 2. Validness facts from the ImportTable are treated in `newAssertions`
@@ -152,17 +154,11 @@ def lookupLamILTy! (idx : Nat) : ReifM LamSort := do
   else
     throwError "lookupIsomTy! :: Unknown index {idx}"
 
-def lookupImportMap! (wPos : Nat) : ReifM Nat := do
-  if let .some idx := (← getImportMap).find? wPos then
-    return idx
-  else
-    throwError "lookupImportMap! :: Unknown import table entry {wPos}"
-
-def lookupImportTableEntry! (wPos : Nat) : ReifM (Expr × LamTerm × Nat) := do
-  if let .some r := (← getAssertions).get? (← lookupImportMap! wPos) then
+def lookupAssertion! (wPos : Nat) : ReifM (Expr × LamTerm × Nat) := do
+  if let .some r := (← getAssertions).find? wPos then
     return r
   else
-    throwError "lookupImportTableEntry! :: Unknown import table entry {wPos}"
+    throwError "lookupAssertion! :: Unknown assertion position {wPos}"
 
 def lookupWfTable! (wPos : Nat) : ReifM (List LamSort × LamSort × LamTerm) := do
   if let .some r := (← getWfTable).get? wPos then
@@ -248,11 +244,7 @@ def newAssertion (proof : Expr) (ty : LamTerm) : ReifM Nat := do
   --   then call `newChkStepValid` so that the `(← getValidTable).size` within
   --   it gives the desired result
   let ret ← newValidChkStep (.validOfResolveImport wPos) ([], ty)
-  let assertions ← getAssertions
-  -- `assertionIdx` is the index of the new (Expr × LamTerm) within `assertions`
-  let assertionIdx := assertions.size
-  setAssertions (assertions.push (proof, tyi, wPos))
-  setImportMap ((← getImportMap).insert wPos assertionIdx)
+  setAssertions ((← getAssertions).insert wPos (proof, tyi, wPos))
   return ret
 
 /-
@@ -494,7 +486,7 @@ section Checker
     let ret := ret.push ("tyVal", (← getTyVal).size)
     let ret := ret.push ("varVal", (← getVarVal).size)
     let ret := ret.push ("ilLamTy", (← getLamILTy).size)
-    let ret := ret.push ("importTable", (← getImportMap).size)
+    let ret := ret.push ("assertions", (← getAssertions).size)
     let ret := ret.push ("chkSteps", (← getChkSteps).size)
     let ret := ret.push ("wfTable", (← getWfTable).size)
     let ret := ret.push ("validTable", (← getValidTable).size)
@@ -604,7 +596,7 @@ section Checker
     let mut importTable : BinTree Expr := BinTree.leaf
     for (step, _) in (← getChkSteps) do
       if let .validOfResolveImport vPos := step then
-        let (e, t, _) ← lookupImportTableEntry! vPos
+        let (e, t, _) ← lookupAssertion! vPos
         let tExpr := Lean.toExpr t
         let itEntry := Lean.mkApp3 (.const ``importTablePSigmaMk [u]) lvalExpr tExpr e
         importTable := importTable.insert vPos itEntry

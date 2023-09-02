@@ -26,7 +26,7 @@ structure State where
   -- During monomorphization, polymorphic constants will be turned
   --   into free variables. This map records the original expression
   --   corresponding to these free variables.
-  polyVal         : HashMap FVarId Expr := HashMap.empty
+  polyVal         : HashMap FVarId Expr := {}
 
 abbrev ReifM := StateT State MetaM
 

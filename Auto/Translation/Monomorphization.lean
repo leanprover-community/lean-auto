@@ -400,12 +400,12 @@ def LemmaInsts.newInst? (lis : LemmaInsts) (li : LemmaInst) : MetaM Bool := do
 -/
 structure State where
   -- The `Expr` is the fingerprint of the `ConstInst`
-  ciMap    : HashMap Expr ConstInsts := HashMap.empty
+  ciMap    : HashMap Expr ConstInsts := {}
   -- The `Expr` is the fingerprint of the `ConstInst`
   activeCi : Std.Queue (Expr × Nat)  := Std.Queue.empty
   -- During initialization, we supply an array `lemmas` of lemmas
   --   `liArr[i]` are instances of `lemmas[i]`.
-  lisArr    : Array LemmaInsts        := #[]
+  lisArr    : Array LemmaInsts       := #[]
 
 abbrev MonoM := StateRefT State MetaM
 
