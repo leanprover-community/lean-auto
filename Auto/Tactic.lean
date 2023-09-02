@@ -114,9 +114,9 @@ instance : ToMessageData Result where
     (MessageData.array es (fun (id, e) => m!"{mkFVar id} := {e}"))
   | .unknown => m!"Result.unknown"
 
-def collectLctxLemmas (lctxhyps : Bool) (ngoal : FVarId) : TacticM (Array Lemma) :=
+def collectLctxLemmas (lctxhyps : Bool) (ngoalAndBinders : Array FVarId) : TacticM (Array Lemma) :=
   Meta.withNewMCtxDepth do
-    let fVarIds := (if lctxhyps then (← getLCtx).getFVarIds else #[ngoal])
+    let fVarIds := (if lctxhyps then (← getLCtx).getFVarIds else ngoalAndBinders)
     let mut lemmas := #[]
     for fVarId in fVarIds do
       let decl ← FVarId.getDecl fVarId
@@ -173,13 +173,13 @@ def checkDuplicatedFact (terms : Array Term) : TacticM Unit :=
 
 -- `ngoal` means `negated goal`
 def runAuto (instrstx : TSyntax ``autoinstr) (hintstx : TSyntax ``hints)
-  (unfolds : TSyntax `Auto.unfolds) (defeqs : TSyntax `Auto.defeqs) (ngoal : FVarId) : TacticM Result := do
+  (unfolds : TSyntax `Auto.unfolds) (defeqs : TSyntax `Auto.defeqs) (ngoalAndBinders : Array FVarId) : TacticM Result := do
   let instr ← parseInstr instrstx
   let inputHints ← parseHints hintstx
   let unfoldInfos ← parseUnfolds unfolds
   let defeqNames ← parseDefeqs defeqs
   let startTime ← IO.monoMsNow
-  let lctxLemmas ← collectLctxLemmas inputHints.lctxhyps ngoal
+  let lctxLemmas ← collectLctxLemmas inputHints.lctxhyps ngoalAndBinders
   let lctxLemmas ← lctxLemmas.mapM (unfoldConstAndPreprocessLemma unfoldInfos)
   traceLemmas "Lemmas collected from local context:" lctxLemmas
   checkDuplicatedFact inputHints.terms
@@ -200,12 +200,12 @@ def runAuto (instrstx : TSyntax ``autoinstr) (hintstx : TSyntax ``hints)
       let exportFacts := valids.map (·.2)
       LamReif.printValuation
       -- ! smt
-      -- try
-      --   let commands := (← (lamFOL2SMT (← LamReif.getVarVal) exportFacts).run {}).1
-      --   let _ ← liftM <| commands.mapM (fun c => IO.println s!"Command: {c}")
-      --   Solver.SMT.querySolver commands
-      -- catch e =>
-      --   trace[auto.tactic] "SMT invocation failed with {e.toMessageData}"
+      try
+        let commands := (← (lamFOL2SMT (← LamReif.getVarVal) exportFacts).run {}).1
+        let _ ← liftM <| commands.mapM (fun c => IO.println s!"Command: {c}")
+        Solver.SMT.querySolver commands
+      catch e =>
+        trace[auto.tactic] "SMT invocation failed with {e.toMessageData}"
       -- reconstruction
       let proof ← Lam2D.callDuper exportFacts
       let proofLamTerm := exportFacts.foldr (fun t' t => t'.mkImp t) (.base .falseE)
@@ -230,13 +230,13 @@ def evalAuto : Tactic
   -- Suppose the goal is `∀ (x₁ x₂ ⋯ xₙ), G`
   -- First, apply `intros` to put `x₁ x₂ ⋯ xₙ` into the local context,
   --   now the goal is just `G`
-  Elab.Tactic.evalTactic (← `(tactic| intros))
-  let [nngoal] ← (← getMainGoal).apply (.const ``Classical.byContradiction [])
+  let (goalBinders, newGoal) ← (← getMainGoal).intros
+  let [nngoal] ← newGoal.apply (.const ``Classical.byContradiction [])
     | throwError "evalAuto :: Unexpected result after applying Classical.byContradiction"
   let (ngoal, absurd) ← MVarId.intro1 nngoal
   replaceMainGoal [absurd]
   withMainContext do
-    let result ← runAuto instr hints unfolds defeqs ngoal
+    let result ← runAuto instr hints unfolds defeqs (goalBinders.push ngoal)
     match result with
     | Result.unsat e => do
       IO.println s!"Unsat. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"

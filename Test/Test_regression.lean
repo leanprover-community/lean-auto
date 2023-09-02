@@ -82,6 +82,10 @@ example (x y : Nat) (f₁ f₂ f₃ f₄ f₅ f₆ f₇ f₈ f₉ f₁₀ f₁�
   True := by
   auto [H]
 
+-- Binders in the goal
+
+example : 2 = 3 → 2 = 3 := by auto
+
 -- Higher Order
 
 example (H : (fun x : Nat => x) = (fun x => x)) : True := by

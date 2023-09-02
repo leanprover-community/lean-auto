@@ -52,24 +52,18 @@ set_option trace.auto.tactic true
 set_option auto.mono.saturationThreshold 500
 theorem short_five_mono (injh : Injective h) (injl : Injective l) :
     Injective k := by
-  rw [injective_iff_map_eq_zero]
-  intro b kb0
-  have : g₀ b = 0 := by
-    auto [injl, square₁, kb0, map_zero] u[Function.Injective]
-  rcases ker_in_im short_exact₀ _ this with ⟨a, f₀a⟩
-  -- Fix input issue : Should be able to input `short_exact₁.inj`
-  auto [injh, short_exact₁.inj, square₀, f₀a, kb0, map_zero] u[Function.Injective]
+  auto [injective_iff_map_eq_zero, injl, injh, short_exact₁.inj,
+       square₀, square₁, short_exact₀.ker_in_im, map_zero] u[Function.Injective]
 
 theorem short_five_epi (surjh : Surjective h) (surjl : Surjective l) :
     Surjective k := by
   intro b₁
   rcases surjl (g₁ b₁) with ⟨c₀, hlc₀⟩
   rcases short_exact₀.surj c₀ with ⟨b₀, hg₀b₀⟩
-  have : g₁ (k b₀ - b₁) = 0 := by rw [map_sub, ←square₁, hg₀b₀, hlc₀, sub_self]
+  have : g₁ (k b₀ - b₁) = 0 := by
+    auto [map_sub, square₁, hg₀b₀, hlc₀, sub_self]
   rcases short_exact₁.ker_in_im _ this with ⟨a₁, hf₁a₁⟩
-  rcases surjh a₁ with ⟨a₀, ha₀⟩
-  use b₀ - f₀ a₀
-  rw [map_sub, square₀, ha₀, hf₁a₁, sub_sub_cancel]
+  auto [map_sub, square₀, surjh a₁, hf₁a₁, sub_sub_cancel]
 
 end ShortFive
 
