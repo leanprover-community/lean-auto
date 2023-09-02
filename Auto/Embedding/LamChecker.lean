@@ -81,7 +81,7 @@ def ImportTable.importFacts (it : ImportTable lval) : BinTree (List LamSort × L
     match p.lamCheck? lval.toLamTyVal dfLCtxTy with
     | .some (.base .prop) =>
       match p.maxLooseBVarSucc with
-      | 0 => .some ([], p)
+      | 0 => .some ([], p.resolveImport lval.toLamTyVal)
       | _ + 1 => .none
     | _                   => .none)
 
@@ -98,6 +98,7 @@ theorem ImportTable.importFacts_correct (it : ImportTable lval) :
       dsimp
       cases h₂ : p.maxLooseBVarSucc <;> try exact True.intro
       dsimp [Option.allp]
+      apply LamThmValid.resolveImport
       apply LamThmValid.ofInterpAsProp _ _ h₁ validp h₂    
 
 inductive ChkStep where
@@ -107,7 +108,6 @@ inductive ChkStep where
   | wfOfAppend (ex : List LamSort) (wPos : Nat) : ChkStep
   | wfOfPrepend (ex : List LamSort) (wPos : Nat) : ChkStep
   | wfOfHeadBeta (wPos : Nat) : ChkStep
-  | validOfResolveImport (vPos : Nat) : ChkStep
   | validOfHeadBeta (vPos : Nat) : ChkStep
   -- `t₁ → t₂` and `t₁` implies `t₂`
   | validOfImp (p₁₂ : Nat) (p₁ : Nat) : ChkStep
@@ -133,10 +133,6 @@ def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → REntry
 | .wfOfHeadBeta wPos =>
   match r.wf.get? wPos with
   | .some ⟨lctx, s, t⟩ => .wf lctx s t.headBeta
-  | .none => .none
-| .validOfResolveImport vPos =>
-  match r.valid.get? vPos with
-  | .some ⟨lctx, t⟩ => .valid lctx (t.resolveImport ltv)
   | .none => .none
 | .validOfHeadBeta vPos =>
   match r.valid.get? vPos with
@@ -188,13 +184,6 @@ theorem ChkStep.eval_correct
     | (lctx, s, t) =>
       apply LamThmWFP.ofLamThmWF;
       apply LamThmWF.headBeta (RTable.wfInv_get inv.left h)
-| .validOfResolveImport vPos => by
-  dsimp [eval]
-  cases h : BinTree.get? r.valid vPos <;> try exact True.intro
-  case some lctxt =>
-    match lctxt with
-    | (lctx, t) =>
-      apply LamThmValid.resolveImport (RTable.validInv_get inv.right h)
 | .validOfHeadBeta vPos => by
   dsimp [eval]
   cases h : BinTree.get? r.valid vPos <;> try exact True.intro

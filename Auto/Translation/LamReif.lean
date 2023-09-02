@@ -93,11 +93,11 @@ structure State where
     · The first `e : Expr` is the proof of the assertion
     · The second `t : LamTerm` is the corresponding λ term,
       where all `eq, ∀, ∃` are of import version
-    · The third `Nat` is the position of this assertion within
-      the ImportTable
     · To be precise, we require that `e : GLift.down t.interp`
+
+    This field also corresponds to the `ImportTable` in `LamChecker.lean`
   -/
-  assertions  : HashMap Nat (Expr × LamTerm × Nat)       := {}
+  assertions  : HashMap Nat (Expr × LamTerm)       := {}
   -- `Embedding/LamChecker/ChkSteps`
   -- If we have a `ChkStep` which is `validOfResolveImport n`, then
   --   `assertions.find! n` would be the corresponding external proof
@@ -154,7 +154,7 @@ def lookupLamILTy! (idx : Nat) : ReifM LamSort := do
   else
     throwError "lookupIsomTy! :: Unknown index {idx}"
 
-def lookupAssertion! (wPos : Nat) : ReifM (Expr × LamTerm × Nat) := do
+def lookupAssertion! (wPos : Nat) : ReifM (Expr × LamTerm) := do
   if let .some r := (← getAssertions).find? wPos then
     return r
   else
@@ -238,14 +238,10 @@ def newAssertion (proof : Expr) (ty : LamTerm) : ReifM Nat := do
   let validTable ← getValidTable
   -- Position of external proof within the ImportTable
   let wPos := validTable.size
+  setValidTable (validTable.push ([], ty))
   let tyi ← mkImportVersion ty
-  setValidTable (validTable.push ([], tyi))
-  -- First push the term into `validTable` so that `validTable[wPos] = ty`,
-  --   then call `newChkStepValid` so that the `(← getValidTable).size` within
-  --   it gives the desired result
-  let ret ← newValidChkStep (.validOfResolveImport wPos) ([], ty)
-  setAssertions ((← getAssertions).insert wPos (proof, tyi, wPos))
-  return ret
+  setAssertions ((← getAssertions).insert wPos (proof, tyi))
+  return wPos
 
 /-
   Computes `upFunc` and `downFunc` between `s.interpAsUnlifted` and `s.interpAsLifted`
@@ -594,13 +590,11 @@ section Checker
     -- Record the entries in the importTable for debug purpose
     let mut entries : Array (Expr × Expr) := #[]
     let mut importTable : BinTree Expr := BinTree.leaf
-    for (step, _) in (← getChkSteps) do
-      if let .validOfResolveImport vPos := step then
-        let (e, t, _) ← lookupAssertion! vPos
-        let tExpr := Lean.toExpr t
-        let itEntry := Lean.mkApp3 (.const ``importTablePSigmaMk [u]) lvalExpr tExpr e
-        importTable := importTable.insert vPos itEntry
-        entries := entries.push (e, tExpr)
+    for (vPos, (e, t)) in (← getAssertions).toList do
+      let tExpr := Lean.toExpr t
+      let itEntry := Lean.mkApp3 (.const ``importTablePSigmaMk [u]) lvalExpr tExpr e
+      importTable := importTable.insert vPos itEntry
+      entries := entries.push (e, tExpr)
     let type := Lean.mkApp2 (.const ``PSigma [.succ .zero, .zero])
       lamTermExpr (.app (.const ``importTablePSigmaβ [u]) lvalExpr)
     let importTableExpr := (@instToExprBinTree Expr
