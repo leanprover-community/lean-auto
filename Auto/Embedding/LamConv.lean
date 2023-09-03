@@ -103,15 +103,15 @@ private def LamWF.subst.correct.{u}
 
 -- Note: `LamTerm.subst`, `LamWF.subst` and `LamWF.subst_correct` is the main API
 --   of syntactic operations on `λ` terms
-def LamTerm.headBetaAux (s : LamSort) (arg : LamTerm) : (fn : LamTerm) → LamTerm
+def LamTerm.topBetaAux (s : LamSort) (arg : LamTerm) : (fn : LamTerm) → LamTerm
 | .lam _ body => LamTerm.subst 0 arg body
 | t           => .app s t arg
 
-def LamWF.headBetaAux (ltv : LamTyVal)
+def LamWF.topBetaAux (ltv : LamTyVal)
   {arg : LamTerm} {argTy : LamSort} {fn : LamTerm} {resTy : LamSort}
   (lctx : Nat → LamSort) (wfArg : LamWF ltv ⟨lctx, arg, argTy⟩) 
   (wfFn : LamWF ltv ⟨lctx, fn, .func argTy resTy⟩) :
-  LamWF ltv ⟨lctx, LamTerm.headBetaAux argTy arg fn, resTy⟩ :=
+  LamWF ltv ⟨lctx, LamTerm.topBetaAux argTy arg fn, resTy⟩ :=
   match fn with
   | .atom _  => .ofApp _ wfFn wfArg
   | .base _  => .ofApp _ wfFn wfArg
@@ -126,12 +126,12 @@ def LamWF.headBetaAux (ltv : LamTyVal)
         (by rw [pushLCtxAt.zero]; exact wfBody)
   | .app _ _ _ => .ofApp _ wfFn wfArg
 
-def LamWF.headBetaAux.correct.{u} (lval : LamValuation.{u})
+def LamWF.topBetaAux.correct.{u} (lval : LamValuation.{u})
   {arg : LamTerm} {argTy : LamSort} {fn : LamTerm} {resTy : LamSort}
   (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal)
   (wfArg : LamWF lval.toLamTyVal ⟨lctxTy, arg, argTy⟩)
   (wfFn : LamWF lval.toLamTyVal ⟨lctxTy, fn, .func argTy resTy⟩) :
-  let wfHB := LamWF.headBetaAux _ lctxTy wfArg wfFn
+  let wfHB := LamWF.topBetaAux _ lctxTy wfArg wfFn
   (LamWF.interp lval lctxTy lctxTerm (.ofApp _ wfFn wfArg)
   = LamWF.interp lval lctxTy lctxTerm wfHB) :=
   match fn with
@@ -141,7 +141,7 @@ def LamWF.headBetaAux.correct.{u} (lval : LamValuation.{u})
   | .lam s body =>
     match argTy, wfFn with
     | _, .ofLam (argTy:=_) (body:=_) _ wfBody => by
-      dsimp [headBetaAux, LamWF.interp]
+      dsimp [topBetaAux, LamWF.interp]
       let b := LamWF.interp lval
         (pushLCtxAt s 0 lctxTy)
         (pushLCtxAtDep (LamWF.interp lval lctxTy lctxTerm wfArg) 0 lctxTerm)
@@ -159,13 +159,13 @@ def LamWF.headBetaAux.correct.{u} (lval : LamValuation.{u})
         dsimp [LamTerm.bvarLifts]; rw [LamTerm.bvarLiftsIdx.zero 0 arg]
   | .app _ _ _ => rfl
 
-def LamTerm.headBeta : LamTerm → LamTerm
-| .app s fn arg => LamTerm.headBetaAux s arg fn
+def LamTerm.topBeta : LamTerm → LamTerm
+| .app s fn arg => LamTerm.topBetaAux s arg fn
 | t => t
 
-def LamWF.headBeta
+def LamWF.topBeta
   (ltv : LamTyVal) {t : LamTerm} {ty : LamSort} (lctx : Nat → LamSort)
-  (wf : LamWF ltv ⟨lctx, t, ty⟩) : LamWF ltv ⟨lctx, LamTerm.headBeta t, ty⟩ :=
+  (wf : LamWF ltv ⟨lctx, t, ty⟩) : LamWF ltv ⟨lctx, LamTerm.topBeta t, ty⟩ :=
   match t with
   | .atom _ => wf
   | .base _ => wf
@@ -173,18 +173,18 @@ def LamWF.headBeta
   | .lam .. => wf
   | .app .. =>
     match wf with
-    | .ofApp _ wfFn wfArg => LamWF.headBetaAux _ lctx wfArg wfFn
+    | .ofApp _ wfFn wfArg => LamWF.topBetaAux _ lctx wfArg wfFn
 
-def LamThmWF.headBeta
+def LamThmWF.topBeta
   {lval : LamValuation} {lctx : List LamSort} {rty : LamSort} {t : LamTerm}
-  (wf : LamThmWF lval lctx rty t) : LamThmWF lval lctx rty t.headBeta := by
-  intro lctx; apply LamWF.headBeta _ _ (wf lctx)
+  (wf : LamThmWF lval lctx rty t) : LamThmWF lval lctx rty t.topBeta := by
+  intro lctx; apply LamWF.topBeta _ _ (wf lctx)
 
-theorem LamWF.headBeta.correct
+theorem LamWF.topBeta.correct
   {lval : LamValuation.{u}} {t : LamTerm} {ty : LamSort}
   (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal)
   (wfT : LamWF lval.toLamTyVal ⟨lctxTy, t, ty⟩) :
-  let wfHB := LamWF.headBeta lval.toLamTyVal lctxTy wfT
+  let wfHB := LamWF.topBeta lval.toLamTyVal lctxTy wfT
   LamWF.interp lval lctxTy lctxTerm wfT = LamWF.interp lval lctxTy lctxTerm wfHB :=
   match t with
   | .atom _ => rfl
@@ -193,12 +193,12 @@ theorem LamWF.headBeta.correct
   | .lam .. => rfl
   | .app .. =>
     match wfT with
-    | .ofApp _ wfFn wfArg => LamWF.headBetaAux.correct _ lctxTy lctxTerm wfArg wfFn
+    | .ofApp _ wfFn wfArg => LamWF.topBetaAux.correct _ lctxTy lctxTerm wfArg wfFn
 
-theorem LamThmValid.headBeta (H : LamThmValid lval lctx t) :
-  LamThmValid lval lctx t.headBeta := by
-  intros lctx; let ⟨wf, h⟩ := H lctx; exists (LamWF.headBeta _ _ wf);
-  intro lctxTerm; rw [← LamWF.headBeta.correct]; apply h
+theorem LamThmValid.topBeta (H : LamThmValid lval lctx t) :
+  LamThmValid lval lctx t.topBeta := by
+  intros lctx; let ⟨wf, h⟩ := H lctx; exists (LamWF.topBeta _ _ wf);
+  intro lctxTerm; rw [← LamWF.topBeta.correct]; apply h
 
 def LamBaseTerm.resolveImport (ltv : LamTyVal) : LamBaseTerm → LamBaseTerm
 | .eqI n      => .eq (ltv.lamILTy n)
@@ -402,11 +402,11 @@ theorem LamEquiv.congrArg (lval : LamValuation)
   LamEquiv lval lctx resTy (.app argTy fn arg₁) (.app argTy fn arg₂) :=
   LamEquiv.congr lval (LamEquiv.refl lval wfFn) eArg
 
-theorem LamEquiv.ofHeadBeta (wf : LamThmWF lval lctx s t) :
-  LamEquiv lval lctx s t t.headBeta := by
+theorem LamEquiv.ofTopBeta (wf : LamThmWF lval lctx s t) :
+  LamEquiv lval lctx s t t.topBeta := by
   dsimp [LamEquiv]; intros lctx'; let wf' := wf lctx'
-  exists wf'; exists LamWF.headBeta _ _ wf'
-  intros lctxTerm; apply LamWF.headBeta.correct
+  exists wf'; exists LamWF.topBeta _ _ wf'
+  intros lctxTerm; apply LamWF.topBeta.correct
 
 theorem LamEquiv.ofResolveImport
   (lval : LamValuation) (wfT : LamThmWF lval lctx s t) :

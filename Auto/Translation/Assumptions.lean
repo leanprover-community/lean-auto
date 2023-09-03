@@ -1,6 +1,7 @@
 import Lean
 import Auto.Lib.MessageData
 import Auto.Lib.ExprExtra
+import Auto.Lib.Containers
 import Auto.Lib.AbstractMVars
 open Lean
 
@@ -165,5 +166,52 @@ def LemmaInst.ofMLemmaInst (mi : MLemmaInst) : MetaM LemmaInst := do
   let type := s.lctx.mkForall s.fvars type
   let lem : Lemma := ⟨proof, type, s.paramNames⟩
   return ⟨lem, nbinders, nargs⟩
+
+partial def collectUniverseLevels : Expr → MetaM (HashSet Level)
+| .bvar _ => return HashSet.empty
+| e@(.fvar _) => do collectUniverseLevels (← instantiateMVars (← Meta.inferType e))
+| e@(.mvar _) => do collectUniverseLevels (← instantiateMVars (← Meta.inferType e))
+| .sort u => return HashSet.empty.insert u
+| e@(.const _ us) => do
+  let hus := HashSet.empty.insertMany us
+  let tys ← collectUniverseLevels (← instantiateMVars (← Meta.inferType e))
+  return mergeHashSet hus tys
+| .app fn arg => do
+  let fns ← collectUniverseLevels fn
+  let args ← collectUniverseLevels arg
+  return mergeHashSet fns args
+| .lam _ biTy body _ => do
+  let tys ← collectUniverseLevels biTy
+  let bodys ← collectUniverseLevels body
+  return mergeHashSet tys bodys
+| .forallE _ biTy body _ => do
+  let tys ← collectUniverseLevels biTy
+  let bodys ← collectUniverseLevels body
+  return mergeHashSet tys bodys
+| .letE _ ty v body _ => do
+  let tys ← collectUniverseLevels ty
+  let vs ← collectUniverseLevels v
+  let bodys ← collectUniverseLevels body
+  return mergeHashSet (mergeHashSet tys vs) bodys
+| .lit _ => return HashSet.empty.insert (.succ .zero)
+| .mdata _ e' => collectUniverseLevels e'
+| .proj .. => throwError "Please unfold projections before collecting universe levels"
+
+-- Universe monomprphic facts
+-- User-supplied facts should have their universe level parameters
+--   instantiated before being put into `Reif.State.facts`
+-- The first `Expr` is the proof, and the second `Expr` is the fact
+abbrev UMonoFact := Expr × Expr
+
+def computeMaxLevel (facts : Array UMonoFact) : MetaM Level := do
+  let levels ← facts.foldlM (fun hs (proof, ty) => do
+    let proofUs ← collectUniverseLevels proof
+    let tyUs ← collectUniverseLevels ty
+    return mergeHashSet (mergeHashSet proofUs tyUs) hs) HashSet.empty
+  -- Compute the universe level that we need to lift to
+  -- Use `.succ` two times to reveal bugs
+  let level := Level.succ (.succ (levels.fold (fun l l' => Level.max l l') Level.zero))
+  let normLevel := level.normalize
+  return normLevel
 
 end Auto

@@ -16,47 +16,6 @@ initialize
 namespace Auto.LamReif
 open Embedding.Lam
 
-partial def collectUniverseLevels : Expr → MetaM (HashSet Level)
-| .bvar _ => return HashSet.empty
-| e@(.fvar _) => do collectUniverseLevels (← instantiateMVars (← Meta.inferType e))
-| e@(.mvar _) => do collectUniverseLevels (← instantiateMVars (← Meta.inferType e))
-| .sort u => return HashSet.empty.insert u
-| e@(.const _ us) => do
-  let hus := HashSet.empty.insertMany us
-  let tys ← collectUniverseLevels (← instantiateMVars (← Meta.inferType e))
-  return mergeHashSet hus tys
-| .app fn arg => do
-  let fns ← collectUniverseLevels fn
-  let args ← collectUniverseLevels arg
-  return mergeHashSet fns args
-| .lam _ biTy body _ => do
-  let tys ← collectUniverseLevels biTy
-  let bodys ← collectUniverseLevels body
-  return mergeHashSet tys bodys
-| .forallE _ biTy body _ => do
-  let tys ← collectUniverseLevels biTy
-  let bodys ← collectUniverseLevels body
-  return mergeHashSet tys bodys
-| .letE _ ty v body _ => do
-  let tys ← collectUniverseLevels ty
-  let vs ← collectUniverseLevels v
-  let bodys ← collectUniverseLevels body
-  return mergeHashSet (mergeHashSet tys vs) bodys
-| .lit _ => return HashSet.empty.insert (.succ .zero)
-| .mdata _ e' => collectUniverseLevels e'
-| .proj .. => throwError "Please unfold projections before collecting universe levels"
-
-def computeMaxLevel (facts : Array Reif.UMonoFact) : MetaM Level := do
-  let levels ← facts.foldlM (fun hs (proof, ty) => do
-    let proofUs ← collectUniverseLevels proof
-    let tyUs ← collectUniverseLevels ty
-    return mergeHashSet (mergeHashSet proofUs tyUs) hs) HashSet.empty
-  -- Compute the universe level that we need to lift to
-  -- Use `.succ` two times to reveal bugs
-  let level := Level.succ (.succ (levels.fold (fun l l' => Level.max l l') Level.zero))
-  let normLevel := level.normalize
-  return normLevel
-
 -- We require that all instances of polymorphic constants,
 --   including `∀`, `∃`, `BitVec`, are turned into free variables
 --   before being sent to `LamReif.` Since propositional
@@ -104,9 +63,11 @@ structure State where
   --   `assertions.find! n` would be the corresponding external proof
   chkMap      : HashMap REntry (ChkStep × Nat)  := {}
   -- We insert entries into `rTable` through two different ways
-  -- 1. Calling `newChkStepValid`
+  -- 1. Calling `newChkStep`
   -- 2. Validness facts from the ImportTable are treated in `newAssertions`
   rTable      : Array REntry                    := #[]
+  -- This works as a cache for `BinTree.ofList rTable.data`
+  rTableTree  : BinTree REntry                  := BinTree.leaf
   -- `u` is the universe level that all constants will lift to
   -- Something about the universes level `u`
   -- Suppose `u ← getU`
@@ -158,13 +119,13 @@ def lookupAssertion! (t : LamTerm) : ReifM (Expr × LamTerm × Nat) := do
   else
     throwError "lookupAssertion! :: Unknown assertion {repr t}"
 
-private def lookupRTable! (pos : Nat) : ReifM REntry := do
+def lookupRTable! (pos : Nat) : ReifM REntry := do
   if let .some r := (← getRTable).get? pos then
     return r
   else
-    throwError "lookupRTable :: Unknown RTable entry {pos}"
+    throwError "lookupRTable! :: Unknown RTable entry {pos}"
 
-private def lookupREntryPos! (re : REntry) : ReifM Nat := do
+def lookupREntryPos! (re : REntry) : ReifM Nat := do
   match (← getChkMap).find? re with
   | .some (_, n) => return n
   | .none =>
@@ -172,8 +133,27 @@ private def lookupREntryPos! (re : REntry) : ReifM Nat := do
     | .valid [] t =>
       match (← getAssertions).find? t with
       | .some (_, _, n) => return n
-      | .none => throwError "lookupREntryPos :: Unknown REntry {repr re}"
-    | _ => throwError "lookupREntryPos :: Unknown REntry {repr re}"
+      | .none => throwError "lookupREntryPos! :: Unknown REntry {repr re}"
+    | _ => throwError "lookupREntryPos! :: Unknown REntry {repr re}"
+
+def lookupREntryProof! (re : REntry) : ReifM (ChkStep ⊕ (Expr × LamTerm)) := do
+  match (← getChkMap).find? re with
+  | .some (cs, _) => return .inl cs
+  | .none =>
+    match re with
+    | .valid [] t =>
+      match (← getAssertions).find? t with
+      | .some (e, t, _) => return .inr (e, t)
+      | .none => throwError "lookupREntryProof! :: Unknown REntry {repr re}"
+    | _ => throwError "lookupREntryProof! :: Unknown REntry {repr re}"
+
+-- This should only be used at the meta level, i.e. in code that will
+--   be evaluated during the execution of `auto`
+private def getLamTyValAtMeta : ReifM LamTyVal := do
+  let varVal ← getVarVal
+  let varTy := varVal.map Prod.snd
+  let lamILTy ← getLamILTy
+  return ⟨fun n => varTy[n]?.getD (.base .prop), fun n => lamILTy[n]?.getD (.base .prop)⟩
 
 def resolveLamBaseTermImport : LamBaseTerm → ReifM LamBaseTerm
 | .eqI n      => do return .eq (← lookupLamILTy! n)
@@ -217,9 +197,15 @@ def mkImportVersion : LamTerm → ReifM LamTerm
 
 -- A new `ChkStep`. `res` is the result of the `ChkStep`
 -- Returns the position of the result of this `ChkStep` in the `RTable`
-def newValidChkStep (c : ChkStep) (res : REntry) : ReifM Unit := do
-  setChkMap ((← getChkMap).insert res (c, (← getRTable).size))
-  let vsize := (← getRTable).size
+def newChkStep (c : ChkStep) (res? : Option REntry) : ReifM Unit := do
+  let .some res := c.eval (← getLamTyValAtMeta) (← getRTableTree)
+    | throwError "newChkStep :: ChkStep does not evaluate to an entry"
+  if let .some res' := res? then
+    if res' != res then
+      throwError "newChkStep :: Result {repr res} of ChkStep does not match with expected {repr res'}"
+  let rsize := (← getRTable).size
+  setChkMap ((← getChkMap).insert res (c, rsize))
+  setRTableTree ((← getRTableTree).insert rsize res)
   setRTable ((← getRTable).push res)
 
 -- `ty` is a reified assumption. `∀, ∃` and `=` in `ty` are supposed to
@@ -231,8 +217,10 @@ def newAssertion (proof : Expr) (ty : LamTerm) : ReifM Unit := do
   -- Position of external proof within the ImportTable
   let pos := rTable.size
   let re := REntry.valid [] ty
+  setRTableTree ((← getRTableTree).insert pos re)
   setRTable (rTable.push re)
   -- This `mkImportVersion` must be called before we build the lval expression
+  -- So it cannot be called on-the-fly in `buildImportTableExpr`
   let tyi ← mkImportVersion ty
   setAssertions ((← getAssertions).insert ty (proof, tyi, pos))
 
@@ -428,7 +416,7 @@ partial def reifTerm (lctx : HashMap FVarId Nat) : Expr → ReifM LamTerm
 
 -- Return the positions of the reified and `resolveImport`-ed facts
 --   within the `validTable`
-def reifFacts (facts : Array Reif.UMonoFact) : ReifM (Array LamTerm) :=
+def reifFacts (facts : Array UMonoFact) : ReifM (Array LamTerm) :=
   facts.mapM (fun (proof, ty) => do
     trace[auto.lamReif] "Reifying {proof} : {ty}"
     let lamty ← reifTerm .empty ty
@@ -469,7 +457,7 @@ section Checker
       let impPos ← lookupREntryPos! impV
       let hypPos ← lookupREntryPos! hypV
       impV := .valid lctx conclT
-      newValidChkStep (.validOfImp impPos hypPos) impV
+      newChkStep (.validOfImp impPos hypPos) impV
     return impV
 
   -- Functions that turns data structure in `ReifM.State` into `Expr`
@@ -590,7 +578,7 @@ section Checker
     -- Record the entries in the importTable for debug purpose
     let mut entries : Array (Expr × Expr) := #[]
     let mut importTable : BinTree Expr := BinTree.leaf
-    for (t, (e, ti, n)) in (← getAssertions).toList do
+    for (_, (e, ti, n)) in (← getAssertions).toList do
       let tExpr := Lean.toExpr ti
       let itEntry := Lean.mkApp3 (.const ``importTablePSigmaMk [u]) lvalExpr tExpr e
       importTable := importTable.insert n itEntry
@@ -706,5 +694,65 @@ section ExportUtils
     return (mergeHashSet typeHs₁ typeHs₂, mergeHashSet termHs₁ termHs₂)
 
 end ExportUtils
+
+section
+
+  -- Type of `type atoms` in the language that translates to `LamReif`
+  variable (ω : Type) [BEq ω] [Hashable ω]
+
+  -- Type of `term atoms` in the language that translates to `LamReif`
+  variable (μ : Type) [BEq μ] [Hashable μ]
+
+  structure TransState where
+    typeH2lMap : HashMap ω Nat := {}
+    -- This field should be in sync with `LamReif.State.tyVal`
+    typeL2hMap : Array ω       := #[]
+    termH2lMap : HashMap μ Nat := {}
+    -- This field should be in sync with `LamReif.State.varVal`
+    termL2hMap : Array μ       := #[]
+
+  abbrev TransM := StateRefT (TransState ω μ) ReifM
+
+  variable {ω : Type} [BEq ω] [Hashable ω]
+
+  variable {μ : Type} [BEq μ] [Hashable μ]
+
+  @[always_inline]
+  instance : Monad (TransM ω μ) :=
+    let i := inferInstanceAs (Monad (TransM ω μ));
+    { pure := i.pure, bind := i.bind }
+
+  instance : Inhabited (TransM ω μ α) where
+    default := fun _ => throw default
+
+  #genMonadState (TransM ω μ)
+
+  def transTypeAtom (a : ω) (val : Expr × Level) : TransM ω μ Nat := do
+    let typeH2lMap ← getTypeH2lMap
+    match typeH2lMap.find? a with
+    | .some n => return n
+    | .none =>
+      let idx := typeH2lMap.size
+      setTypeH2lMap (typeH2lMap.insert a idx)
+      setTypeL2hMap ((← getTypeL2hMap).push a)
+      setTyVal ((← getTyVal).push val)
+      setTyVarMap ((← getTyVarMap).insert val.fst idx)
+      return idx
+  
+  -- When translating `Lam` to `Lam` in `Lam2Lam`, make sure that
+  --   the `LamSort` in this `val` is already translated.
+  def transTermAtom (a : μ) (val : Expr × LamSort) : TransM ω μ Nat := do
+    let termH2lMap ← getTermH2lMap
+    match termH2lMap.find? a with
+    | .some n => return n
+    | .none =>
+      let idx := termH2lMap.size
+      setTermH2lMap (termH2lMap.insert a idx)
+      setTermL2hMap ((← getTermL2hMap).push a)
+      setVarVal ((← getVarVal).push val)
+      setVarMap ((← getVarMap).insert val.fst idx)
+      return idx
+
+end
 
 end Auto.LamReif

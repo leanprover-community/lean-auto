@@ -1,15 +1,9 @@
 import Lean
 import Auto.Lib.MonadUtils
-import Auto.Lib.Containers
+import Auto.Translation.Assumptions
 open Lean
 
 namespace Auto.Reif
-
--- Universe monomprphic facts
--- User-supplied facts should have their universe level parameters
---   instantiated before being put into `Reif.State.facts`
--- The first `Expr` is the proof, and the second `Expr` is the fact
-abbrev UMonoFact := Expr × Expr
 
 structure State where
   -- We will introduce let-binders during reification.

@@ -308,16 +308,16 @@ section
   --   and function identifiers
   structure State where
     -- Map from high-level construct to symbol
-    h2lMap : HashMap ω String    := {}
+    h2lMap   : HashMap ω String := {}
     -- Inverse of `h2lMap`
     -- Map from symbol to high-level construct
-    l2hMap : HashMap String ω    := {}
+    l2hMap   : HashMap String ω := {}
     -- State of low-level name generator
     --   To avoid collision with keywords, we only
     --   generate non-annotated identifiers `smti_<idx>`
-    idx       : Nat              := 0
+    idx      : Nat              := 0
     -- List of commands
-    commands  : Array Command    := #[]
+    commands : Array Command    := #[]
 
   abbrev TransM := StateRefT (State ω) MetaM
   

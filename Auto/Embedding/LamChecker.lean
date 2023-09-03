@@ -93,10 +93,10 @@ inductive ChkStep where
   -- Adds `⟨lctx, t, t.lamCheck!⟩` to `rtable.wf`
   | nop : ChkStep
   | wfOfCheck (lctx : List LamSort) (t : LamTerm) : ChkStep
-  | wfOfAppend (ex : List LamSort) (wPos : Nat) : ChkStep
-  | wfOfPrepend (ex : List LamSort) (wPos : Nat) : ChkStep
-  | wfOfHeadBeta (wPos : Nat) : ChkStep
-  | validOfHeadBeta (vPos : Nat) : ChkStep
+  | wfOfAppend (ex : List LamSort) (pos : Nat) : ChkStep
+  | wfOfPrepend (ex : List LamSort) (pos : Nat) : ChkStep
+  | wfOfTopBeta (pos : Nat) : ChkStep
+  | validOfTopBeta (pos : Nat) : ChkStep
   -- `t₁ → t₂` and `t₁` implies `t₂`
   | validOfImp (p₁₂ : Nat) (p₁ : Nat) : ChkStep
   deriving Lean.ToExpr
@@ -110,24 +110,24 @@ def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → Option REntr
     | true  => .some (.wf lctx rty t)
     | false => .none
   | .none => .none
-| .wfOfAppend ex wPos =>
-  match r.get? wPos with
+| .wfOfAppend ex pos =>
+  match r.get? pos with
   | .some (.wf lctx s t) => .some (.wf (lctx ++ ex) s t)
   | .some (.valid _ _) => .none
   | .none => .none
-| .wfOfPrepend ex wPos =>
-  match r.get? wPos with
+| .wfOfPrepend ex pos =>
+  match r.get? pos with
   | .some (.wf lctx s t) => .some (.wf (ex ++ lctx) s (t.bvarLifts ex.length))
   | .some (.valid _ _) => .none
   | .none => .none
-| .wfOfHeadBeta wPos =>
-  match r.get? wPos with
-  | .some (.wf lctx s t) => .some (.wf lctx s t.headBeta)
+| .wfOfTopBeta pos =>
+  match r.get? pos with
+  | .some (.wf lctx s t) => .some (.wf lctx s t.topBeta)
   | .some (.valid _ _) => .none
   | .none => .none
-| .validOfHeadBeta vPos =>
-  match r.get? vPos with
-  | .some (.valid lctx t) => .some (.valid lctx t.headBeta)
+| .validOfTopBeta pos =>
+  match r.get? pos with
+  | .some (.valid lctx t) => .some (.valid lctx t.topBeta)
   | .some (.wf _ _ _) => .none
   | .none => .none
 | .validOfImp p₁₂ p₁ =>
@@ -154,41 +154,41 @@ theorem ChkStep.eval_correct
     cases h₂ : Nat.ble (LamTerm.maxLooseBVarSucc t) (List.length lctx) <;> try exact True.intro
     dsimp [REntry.correct]; apply LamThmWFP.ofLamThmWF
     exact LamThmWF.ofLamCheck? h₁ (Nat.le_of_ble_eq_true h₂)
-| .wfOfAppend ex wPos => by
+| .wfOfAppend ex pos => by
   dsimp [eval]
-  cases h : BinTree.get? r wPos <;> try exact True.intro
+  cases h : BinTree.get? r pos <;> try exact True.intro
   case some lctxst =>
     match lctxst with
     | .wf lctx s t =>
       apply LamThmWFP.ofLamThmWF;
       apply LamThmWF.append (RTable.wfInv_get inv h)
     | .valid _ _ => exact True.intro
-| .wfOfPrepend ex wPos => by
+| .wfOfPrepend ex pos => by
   dsimp [eval]
-  cases h : BinTree.get? r wPos <;> try exact True.intro
+  cases h : BinTree.get? r pos <;> try exact True.intro
   case some lctxst =>
     match lctxst with
     | .wf lctx s t =>
       apply LamThmWFP.ofLamThmWF;
       apply LamThmWF.prepend (RTable.wfInv_get inv h)
     | .valid _ _ => exact True.intro
-| .wfOfHeadBeta wPos => by
+| .wfOfTopBeta pos => by
   dsimp [eval]
-  cases h : BinTree.get? r wPos <;> try exact True.intro
+  cases h : BinTree.get? r pos <;> try exact True.intro
   case some lctxst =>
     match lctxst with
     | .wf lctx s t =>
       apply LamThmWFP.ofLamThmWF;
-      apply LamThmWF.headBeta (RTable.wfInv_get inv h)
+      apply LamThmWF.topBeta (RTable.wfInv_get inv h)
     | .valid _ _ => exact True.intro
-| .validOfHeadBeta vPos => by
+| .validOfTopBeta pos => by
   dsimp [eval]
-  cases h : BinTree.get? r vPos <;> try exact True.intro
+  cases h : BinTree.get? r pos <;> try exact True.intro
   case some lctxt =>
     match lctxt with
     | .wf _ _ _ => exact True.intro
     | .valid lctx t =>
-      apply LamThmValid.headBeta (RTable.validInv_get inv h)
+      apply LamThmValid.topBeta (RTable.validInv_get inv h)
 | .validOfImp p₁₂ p₁ => by
   dsimp [eval]
   match h₁ : BinTree.get? r p₁₂ with
