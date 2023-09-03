@@ -22,6 +22,13 @@ def REntry.repr : REntry → String
 instance : Repr REntry where
   reprPrec := fun re _ => re.repr
 
+def REntry.toString : REntry → String
+| .wf ss s t => s!"wf {ss} {s} {t}"
+| .valid ss t => s!"valid {ss} {t}"
+
+instance : ToString REntry where
+  toString := REntry.toString
+
 -- Table of valid propositions and well-formed formulas
 -- Note that `Auto.BinTree α` is equivalent to `Nat → Option α`,
 --   which means that `.some` entries may be interspersed
@@ -100,6 +107,18 @@ inductive ChkStep where
   -- `t₁ → t₂` and `t₁` implies `t₂`
   | validOfImp (p₁₂ : Nat) (p₁ : Nat) : ChkStep
   deriving Lean.ToExpr
+
+def ChkStep.toString : ChkStep → String
+| .nop => s!"nop"
+| .wfOfCheck lctx t => s!"wfOfCheck {lctx} {t}"
+| .wfOfAppend ex pos => s!"wfOfAppend {ex} {pos}"
+| .wfOfPrepend ex pos => s!"wfOfPrepend {ex} {pos}"
+| .wfOfTopBeta pos => s!"wfOfTopBeta {pos}"
+| .validOfTopBeta pos => s!"validOfTopBeta {pos}"
+| .validOfImp p₁₂ p₁ => s!"validOfImp {p₁₂} {p₁}"
+
+instance : ToString ChkStep where
+  toString := ChkStep.toString
 
 def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → Option REntry
 | .nop => .none

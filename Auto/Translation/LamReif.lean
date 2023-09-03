@@ -117,7 +117,7 @@ def lookupAssertion! (t : LamTerm) : ReifM (Expr × LamTerm × Nat) := do
   if let .some r := (← getAssertions).find? t then
     return r
   else
-    throwError "lookupAssertion! :: Unknown assertion {repr t}"
+    throwError "lookupAssertion! :: Unknown assertion {t}"
 
 def lookupRTable! (pos : Nat) : ReifM REntry := do
   if let .some r := (← getRTable).get? pos then
@@ -133,8 +133,8 @@ def lookupREntryPos! (re : REntry) : ReifM Nat := do
     | .valid [] t =>
       match (← getAssertions).find? t with
       | .some (_, _, n) => return n
-      | .none => throwError "lookupREntryPos! :: Unknown REntry {repr re}"
-    | _ => throwError "lookupREntryPos! :: Unknown REntry {repr re}"
+      | .none => throwError "lookupREntryPos! :: Unknown REntry {re}"
+    | _ => throwError "lookupREntryPos! :: Unknown REntry {re}"
 
 def lookupREntryProof? (re : REntry) : ReifM (Option (ChkStep ⊕ (Expr × LamTerm))) := do
   match (← getChkMap).find? re with
@@ -150,7 +150,7 @@ def lookupREntryProof? (re : REntry) : ReifM (Option (ChkStep ⊕ (Expr × LamTe
 def lookupREntryProof! (re : REntry) : ReifM (ChkStep ⊕ (Expr × LamTerm)) := do
   match ← lookupREntryProof? re with
   | .some proof => return proof
-  | .none => throwError "lookupREntryProof! :: Unknown REntry {repr re}"
+  | .none => throwError "lookupREntryProof! :: Unknown REntry {re}"
 
 -- This should only be used at the meta level, i.e. in code that will
 --   be evaluated during the execution of `auto`
@@ -207,7 +207,7 @@ def newChkStep (c : ChkStep) (res? : Option REntry) : ReifM Unit := do
     | throwError "newChkStep :: ChkStep does not evaluate to an entry"
   if let .some res' := res? then
     if res' != res then
-      throwError "newChkStep :: Result {repr res} of ChkStep does not match with expected {repr res'}"
+      throwError "newChkStep :: Result {res} of ChkStep does not match with expected {res'}"
   -- If `res` is already provable, do nothing
   if let .some _ ← lookupREntryProof? res then
     return
@@ -295,7 +295,7 @@ section ILLifting
     let (upFunc, downFunc, ty, upTy) ← updownFunc s
     let sortOrig ← Expr.normalizeType (← Meta.inferType ty)
     let .sort uOrig := sortOrig
-      | throwError "mkImportAux :: Unexpected sort {sortOrig} when processing sort {repr s}"
+      | throwError "mkImportAux :: Unexpected sort {sortOrig} when processing sort {s}"
     return (upFunc, downFunc, ty, upTy, uOrig)
 
   set_option pp.universes true
@@ -431,7 +431,7 @@ def reifFacts (facts : Array UMonoFact) : ReifM (Array LamTerm) :=
   facts.mapM (fun (proof, ty) => do
     trace[auto.lamReif] "Reifying {proof} : {ty}"
     let lamty ← reifTerm .empty ty
-    trace[auto.lamReif.printResult] "Successfully reified proof of {← Meta.zetaReduce ty} to λterm `{toString lamty}`"
+    trace[auto.lamReif.printResult] "Successfully reified proof of {← Meta.zetaReduce ty} to λterm `{lamty}`"
     newAssertion proof lamty
     return lamty)
 
@@ -456,15 +456,15 @@ section Checker
     let mut impV := impV
     for hypV in hypVs do
       let .valid lctx t := impV
-        | throwError "impApps :: {repr impV} is not a `valid` entry"
+        | throwError "impApps :: {impV} is not a `valid` entry"
       let .valid lctx' t' := hypV
-        | throwError "impApps :: {repr hypV} is not a `valid` entry"
+        | throwError "impApps :: {hypV} is not a `valid` entry"
       if !(lctx'.beq lctx) then
-        throwError "impApps :: LCtx mismatch, `{toString lctx'}` ≠ `{toString lctx}`"
+        throwError "impApps :: LCtx mismatch, `{lctx'}` ≠ `{lctx}`"
       let .app (.base .prop) (.app (.base .prop) (.base .imp) hypT) conclT := t
-        | throwError "imApps :: Error, `{toString t}` is not an implication"
+        | throwError "imApps :: Error, `{t}` is not an implication"
       if !(hypT.beq t') then
-        throwError "impApps :: Term mismatch, `{toString hypT}` ≠ `{toString t'}`"
+        throwError "impApps :: Term mismatch, `{hypT}` ≠ `{t'}`"
       let impPos ← lookupREntryPos! impV
       let hypPos ← lookupREntryPos! hypV
       impV := .valid lctx conclT
@@ -632,7 +632,7 @@ section Checker
       let rInv := Lean.mkApp3 (.const ``Checker [u]) lvalFVarExpr itExpr csExpr
       let rExpr := Lean.toExpr (BinTree.ofListGet (← getRTable).data)
       let .valid lctx t := re
-        | throwError "buildCheckerExprFor :: {repr re} is not a `valid` entry"
+        | throwError "buildCheckerExprFor :: {re} is not a `valid` entry"
       let nExpr := Lean.toExpr (← lookupREntryPos! re)
       let eqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr re]]
       let getEntry := Lean.mkApp7 (.const ``RTable.validInv_get [u])
@@ -803,37 +803,45 @@ open Embedding.Lam LamReif
   | .lam s t => .lam <$> transLamSort ref s <*> transLamTerm ref t
   | .app s fn arg => .app <$> transLamSort ref s <*> transLamTerm ref fn <*> transLamTerm ref arg
   
+  def transREntry (ref : State) : REntry → TransM Nat Nat REntry
+  | .wf lctx s t => do
+    return .wf (← lctx.mapM (transLamSort ref)) (← transLamSort ref s) (← transLamTerm ref t)
+  | .valid lctx t => do
+    return .valid (← lctx.mapM (transLamSort ref)) (← transLamTerm ref t)
+
   -- Collect essential chksteps and assertions from the high-level `lam`
   --   into the low-level `lam` such that the low-level `lam` proves `re`
-  partial def collectProofFor (ref : State) (re : REntry) : TransM Nat Nat Unit := do
-    if let .some _ := (← getChkMap).find? re then
+  partial def collectProofFor (ref : State) (hre : REntry) : TransM Nat Nat Unit := do
+    if let .some _ := (← getChkMap).find? hre then
       return
-    let (highLvlProof, _) ← (lookupREntryProof! re).run ref
+    let (highLvlProof, _) ← (lookupREntryProof! hre).run ref
     match highLvlProof with
     | .inl cs =>
+      trace[auto.buildChecker] "Collecting for {hre} by ChkStep {cs}"
       let posCont (n : Nat) : TransM Nat Nat Nat := (do
-        let (re, _) ← (lookupRTable! n).run ref
-        collectProofFor ref re
-        lookupREntryPos! re)
+        let (hre, _) ← (lookupRTable! n).run ref
+        collectProofFor ref hre
+        lookupREntryPos! (← transREntry ref hre))
       let cs' : ChkStep ← (do
         match cs with
         | .nop => return .nop
-        | .wfOfCheck lctx t => return .wfOfCheck lctx (← transLamTerm ref t)
-        | .wfOfAppend ex pos => return .wfOfAppend ex (← posCont pos)
-        | .wfOfPrepend ex pos => return .wfOfPrepend ex (← posCont pos)
+        | .wfOfCheck lctx t => return .wfOfCheck (← lctx.mapM (transLamSort ref)) (← transLamTerm ref t)
+        | .wfOfAppend ex pos => return .wfOfAppend (← ex.mapM (transLamSort ref)) (← posCont pos)
+        | .wfOfPrepend ex pos => return .wfOfPrepend (← ex.mapM (transLamSort ref)) (← posCont pos)
         | .wfOfTopBeta pos => return .wfOfTopBeta (← posCont pos)
         | .validOfTopBeta pos => return .validOfTopBeta (← posCont pos)
         | .validOfImp p₁₂ p₁ => return .validOfImp (← posCont p₁₂) (← posCont p₁)
         )
-      newChkStep cs' re
-    | .inr (e, t) => newAssertion e (← transLamTerm ref t)
+      newChkStep cs' (← transREntry ref hre)
+    | .inr (e, t) =>
+      newAssertion e (← transLamTerm ref t)
   
   -- Delete irrelevant Valuations and ChkSteps, but make sure that
   --   entries in `res` are still provable
-  def optimizeStateFor (res : Array REntry) : LamReif.ReifM Unit := do
+  def optimizedStateFor (res : Array REntry) : LamReif.ReifM State := do
     let ref ← get
     let (_, s') ← ((res.foldlM (fun _ re => collectProofFor ref re) ()).run {}).run { u := ref.u }
-    set s'
+    return s'
 
 end Lam2Lam
 
@@ -841,7 +849,8 @@ namespace LamReif
 open Embedding.Lam
 
 def buildOptimizedCheckerExprFor (re : REntry) : ReifM Expr := do
-  Lam2Lam.optimizeStateFor #[re]
-  buildCheckerExprFor re
+  let s' ← Lam2Lam.optimizedStateFor #[re]
+  let (e, _) ← (buildCheckerExprFor re).run s'
+  return e
 
 end Auto.LamReif

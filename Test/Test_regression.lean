@@ -6,8 +6,8 @@ set_option trace.auto.lamReif.printValuation true
 
 -- Data Structure Robustness
 
--- Duplicate reified fact
-example (h₁ : False) (h₂ : False) : True := by auto [h₁, h₂]
+-- Duplicated reified fact
+example (h₁ : False) (h₂ : False) : False := by auto [h₁, h₂]
 example (h₁ : ¬ True) : True := by auto [h₁]
 
 -- Result of ChkStep coincides with input term
@@ -20,11 +20,19 @@ example : True := by auto u[]
 example : True := by auto [] u[] d[]
 example : True := by first | auto 👍 | exact True.intro
 
+  set_option auto.prep.redMode "instance" in
+  set_option trace.auto.buildChecker true in
+  example : (∀ (xs ys zs : List α), xs ++ ys ++ zs = xs ++ (ys ++ zs)) := by
+    intro xs; induction xs
+    case cons => sorry
+    case nil => auto d[List.append]
+
 -- Defeq Lemma collection
 
 section CollectLemma
 
   set_option auto.prep.redMode "instance" in
+  set_option trace.auto.buildChecker true in
   example : (∀ (xs ys zs : List α), xs ++ ys ++ zs = xs ++ (ys ++ zs)) := by
     intro xs; induction xs <;> auto [*] d[List.append]
 
@@ -33,7 +41,7 @@ section CollectLemma
     intros m n k; revert m n; induction k <;> auto [*] d[Nat.add]
 
 end CollectLemma
-
+/-
 -- Constant unfolding
 
 section UnfoldConst
