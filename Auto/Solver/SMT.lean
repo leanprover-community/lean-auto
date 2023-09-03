@@ -3,6 +3,10 @@ import Auto.IR.SMT
 import Auto.Parser.SMTSexp
 open Lean
 
+initialize
+  registerTraceClass `auto.smt.printCommands
+  registerTraceClass `auto.smt.result
+
 namespace Auto
 
 open IR.SMT
@@ -82,19 +86,16 @@ def querySolver (query : Array IR.SMT.Command) : MetaM Unit := do
   emitCommands solver query
   emitCommand solver .checkSat
   let checkSatResponse ← getSexp solver
-  let mut unsat := false
   match checkSatResponse with
-  | .atom (.symb "sat") => unsat := false
-  | .atom (.symb "unsat") => unsat := true
-  | _ => throwError "Unexpected check-sat response {checkSatResponse}"
-  if unsat then
-    emitCommand solver .getProof
-    let proof ← getSexp solver
-    IO.println s!"Unsat, proof: {proof}"
-  else
+  | .atom (.symb "sat") =>
     emitCommand solver .getModel
     let model ← getSexp solver
-    IO.println s!"Sat, model: {model}"
+    trace[auto.smt.result] "{name} says Sat, model:\n {model}"
+  | .atom (.symb "unsat") =>
+    emitCommand solver .getProof
+    let proof ← getSexp solver
+    trace[auto.smt.result] "{name} says Unsat, proof:\n {proof}"
+  | _ => trace[auto.smt.result] "{name} produces unexpected check-sat response\n {checkSatResponse}"
 
 end Solver.SMT
 

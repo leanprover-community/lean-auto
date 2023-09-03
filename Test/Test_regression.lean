@@ -4,6 +4,15 @@ set_option auto.prep.redMode "reducible"
 set_option trace.auto.lamReif.printResult true
 set_option trace.auto.lamReif.printValuation true
 
+-- Data Structure Robustness
+
+-- Duplicate reified fact
+example (h₁ : False) (h₂ : False) : True := by auto [h₁, h₂]
+example (h₁ : ¬ True) : True := by auto [h₁]
+
+-- Result of ChkStep coincides with input term
+example (h₁ : False → False) (h₂ : False) : True := by auto [h₁, h₂]
+
 -- Tactic elaboration
 
 example : True := by auto d[]

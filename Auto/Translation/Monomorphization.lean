@@ -648,7 +648,7 @@ def monomorphize (lemmas : Array Lemma) (k : Reif.State → MetaM α) : MetaM α
     postprocessSaturate
     trace[auto.mono] "Monomorphization took {(← IO.monoMsNow) - startTime}ms")
   let (_, monoSt) ← monoMAction.run {}
-  let fvarRepMAction : FVarRep.FVarRepM (Array Reif.UMonoFact) := (do
+  let fvarRepMAction : FVarRep.FVarRepM (Array UMonoFact) := (do
     let lis := monoSt.lisArr.concatMap id
     lis.mapM (fun li => do
       return ⟨li.proof, ← FVarRep.replacePolyWithFVar li.type⟩))

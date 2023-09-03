@@ -194,29 +194,30 @@ def runAuto (instrstx : TSyntax ``autoinstr) (hintstx : TSyntax ``hints)
   match instr with
   | .none =>
     -- Testing. Skipping universe level instantiation and monomorphization
-    let afterReify (ufacts : Array Reif.UMonoFact) : LamReif.ReifM Expr := (do
+    let afterReify (ufacts : Array UMonoFact) : LamReif.ReifM Expr := (do
       let exportFacts ← LamReif.reifFacts ufacts
       LamReif.printValuation
       -- ! smt
       try
         let commands := (← (lamFOL2SMT (← LamReif.getVarVal) exportFacts).run {}).1
-        let _ ← liftM <| commands.mapM (fun c => IO.println s!"Command: {c}")
+        for cmd in commands do
+          trace[auto.smt.printCommands] "Command: {cmd}"
         Solver.SMT.querySolver commands
       catch e =>
-        trace[auto.tactic] "SMT invocation failed with {e.toMessageData}"
+        trace[auto.smt.result] "SMT invocation failed with {e.toMessageData}"
       -- reconstruction
       let proof ← Lam2D.callDuper exportFacts
       let proofLamTerm := exportFacts.foldr (fun t' t => t'.mkImp t) (.base .falseE)
       trace[auto.printProof] "Duper found proof {← instantiateMVars proof}"
       LamReif.newAssertion proof proofLamTerm
       let contra ← LamReif.impApps (.valid [] proofLamTerm) (exportFacts.map (.valid []))
-      let checker ← LamReif.buildCheckerExpr contra
+      let checker ← LamReif.buildCheckerExprFor contra
       let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
       Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra
       )
     let (proof, _) ← Monomorphization.monomorphize lemmas (@id (Reif.ReifM Expr) do
       let ufacts ← liftM <| Reif.getFacts
-      let u ← LamReif.computeMaxLevel ufacts
+      let u ← computeMaxLevel ufacts
       (afterReify ufacts).run' {u := u})
     trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
     return .unsat proof
@@ -239,7 +240,7 @@ def evalAuto : Tactic
     | Result.unsat e => do
       IO.println s!"Unsat. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
       absurd.assign e
-    | Result.sat assig => throwError "Sat"
+    | Result.sat _ => throwError "Sat"
     | Result.unknown => throwError "Unknown"
 | _ => throwUnsupportedSyntax
 
