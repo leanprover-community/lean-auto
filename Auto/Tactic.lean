@@ -195,12 +195,7 @@ def runAuto (instrstx : TSyntax ``autoinstr) (hintstx : TSyntax ``hints)
   | .none =>
     -- Testing. Skipping universe level instantiation and monomorphization
     let afterReify (ufacts : Array Reif.UMonoFact) : LamReif.ReifM Expr := (do
-      let arr ← LamReif.reifFacts ufacts
-      let valids ← arr.mapM LamReif.lookupRTable!
-      let exportFacts ← valids.mapM (fun valid => do
-        let .valid [] t := valid
-          | throwError "runAuto :: Unexpected reif valid entry {repr valid}"
-        return t)
+      let exportFacts ← LamReif.reifFacts ufacts
       LamReif.printValuation
       -- ! smt
       try
@@ -213,8 +208,8 @@ def runAuto (instrstx : TSyntax ``autoinstr) (hintstx : TSyntax ``hints)
       let proof ← Lam2D.callDuper exportFacts
       let proofLamTerm := exportFacts.foldr (fun t' t => t'.mkImp t) (.base .falseE)
       trace[auto.printProof] "Duper found proof {← instantiateMVars proof}"
-      let imp ← LamReif.newAssertion proof proofLamTerm
-      let contra ← LamReif.impApps imp arr
+      LamReif.newAssertion proof proofLamTerm
+      let contra ← LamReif.impApps (.valid [] proofLamTerm) (exportFacts.map (.valid []))
       let checker ← LamReif.buildCheckerExpr contra
       let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
       Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra

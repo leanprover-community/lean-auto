@@ -90,22 +90,23 @@ structure State where
   isomTyMap   : HashMap LamSort Nat             := {}
   /-
     This hashmap contains assertions that have external (lean) proof
+    · The key `t : LamTerm` is the corresponding λ term,
+      where all `eq, ∀, ∃` are not of import version
     · The first `e : Expr` is the proof of the assertion
-    · The second `t : LamTerm` is the corresponding λ term,
-      where all `eq, ∀, ∃` are of import version
+    · The second `n : Nat` is the position of the assertion in the `ImportTable`
     · To be precise, we require that `e : GLift.down t.interp`
 
     This field also corresponds to the `ImportTable` in `LamChecker.lean`
   -/
-  assertions  : HashMap Nat (Expr × LamTerm)       := {}
-  -- `Embedding/LamChecker/ChkSteps`
+  assertions  : HashMap LamTerm (Expr × LamTerm × Nat) := {}
+  -- `Embedding/LamChecker/ChkMap`
   -- If we have a `ChkStep` which is `validOfResolveImport n`, then
   --   `assertions.find! n` would be the corresponding external proof
-  chkSteps    : Array (ChkStep × Nat)              := #[]
+  chkMap      : HashMap REntry (ChkStep × Nat)  := {}
   -- We insert entries into `rTable` through two different ways
   -- 1. Calling `newChkStepValid`
   -- 2. Validness facts from the ImportTable are treated in `newAssertions`
-  rTable      : Array REntry                       := #[]
+  rTable      : Array REntry                    := #[]
   -- `u` is the universe level that all constants will lift to
   -- Something about the universes level `u`
   -- Suppose `u ← getU`
@@ -149,19 +150,30 @@ def lookupLamILTy! (idx : Nat) : ReifM LamSort := do
   if let .some s := (← getLamILTy)[idx]? then
     return s
   else
-    throwError "lookupIsomTy! :: Unknown index {idx}"
+    throwError "lookupLamILTy! :: Unknown index {idx}"
 
-def lookupAssertion! (wPos : Nat) : ReifM (Expr × LamTerm) := do
-  if let .some r := (← getAssertions).find? wPos then
+def lookupAssertion! (t : LamTerm) : ReifM (Expr × LamTerm × Nat) := do
+  if let .some r := (← getAssertions).find? t then
     return r
   else
-    throwError "lookupAssertion! :: Unknown assertion position {wPos}"
+    throwError "lookupAssertion! :: Unknown assertion {repr t}"
 
-def lookupRTable! (pos : Nat) : ReifM REntry := do
+private def lookupRTable! (pos : Nat) : ReifM REntry := do
   if let .some r := (← getRTable).get? pos then
     return r
   else
-    throwError "lookupWfTable :: Unknown wfTable entry {pos}"
+    throwError "lookupRTable :: Unknown RTable entry {pos}"
+
+private def lookupREntryPos! (re : REntry) : ReifM Nat := do
+  match (← getChkMap).find? re with
+  | .some (_, n) => return n
+  | .none =>
+    match re with
+    | .valid [] t =>
+      match (← getAssertions).find? t with
+      | .some (_, _, n) => return n
+      | .none => throwError "lookupREntryPos :: Unknown REntry {repr re}"
+    | _ => throwError "lookupREntryPos :: Unknown REntry {repr re}"
 
 def resolveLamBaseTermImport : LamBaseTerm → ReifM LamBaseTerm
 | .eqI n      => do return .eq (← lookupLamILTy! n)
@@ -205,24 +217,24 @@ def mkImportVersion : LamTerm → ReifM LamTerm
 
 -- A new `ChkStep`. `res` is the result of the `ChkStep`
 -- Returns the position of the result of this `ChkStep` in the `RTable`
-def newValidChkStep (c : ChkStep) (res : REntry) : ReifM Nat := do
-  setChkSteps ((← getChkSteps).push (c, (← getRTable).size))
+def newValidChkStep (c : ChkStep) (res : REntry) : ReifM Unit := do
+  setChkMap ((← getChkMap).insert res (c, (← getRTable).size))
   let vsize := (← getRTable).size
   setRTable ((← getRTable).push res)
-  return vsize
 
 -- `ty` is a reified assumption. `∀, ∃` and `=` in `ty` are supposed to
 --   not be of the import version
 -- The type of `proof` is definitionally equal to `GLift.down (← mkImportVersion ty).interp`
 -- Returns the position of `ty` inside the `validTable` after inserting it
-def newAssertion (proof : Expr) (ty : LamTerm) : ReifM Nat := do
+def newAssertion (proof : Expr) (ty : LamTerm) : ReifM Unit := do
   let rTable ← getRTable
   -- Position of external proof within the ImportTable
   let pos := rTable.size
-  setRTable (rTable.push (.valid [] ty))
+  let re := REntry.valid [] ty
+  setRTable (rTable.push re)
+  -- This `mkImportVersion` must be called before we build the lval expression
   let tyi ← mkImportVersion ty
-  setAssertions ((← getAssertions).insert pos (proof, tyi))
-  return pos
+  setAssertions ((← getAssertions).insert ty (proof, tyi, pos))
 
 /-
   Computes `upFunc` and `downFunc` between `s.interpAsUnlifted` and `s.interpAsLifted`
@@ -416,12 +428,13 @@ partial def reifTerm (lctx : HashMap FVarId Nat) : Expr → ReifM LamTerm
 
 -- Return the positions of the reified and `resolveImport`-ed facts
 --   within the `validTable`
-def reifFacts (facts : Array Reif.UMonoFact) : ReifM (Array Nat) :=
+def reifFacts (facts : Array Reif.UMonoFact) : ReifM (Array LamTerm) :=
   facts.mapM (fun (proof, ty) => do
     trace[auto.lamReif] "Reifying {proof} : {ty}"
     let lamty ← reifTerm .empty ty
     trace[auto.lamReif.printResult] "Successfully reified proof of {← Meta.zetaReduce ty} to λterm `{toString lamty}`"
-    newAssertion proof lamty)
+    newAssertion proof lamty
+    return lamty)
 
 section Checker
 
@@ -440,23 +453,24 @@ section Checker
   -- `imp` is the position of `t₁ → t₂ → ⋯ → tₙ → t` in the `wfTable`
   -- `hyps` are the positions of `t₁`, `t₂`, ⋯, `tₙ` in the `validTable`
   -- Returns the position of the new `t` in the valid table
-  def impApps (imp : Nat) (hyps : Array Nat) : ReifM Nat := do
-    let mut imp := imp
-    let mut impV ← lookupRTable! imp
-    for hyp in hyps do
+  def impApps (impV : REntry) (hypVs : Array REntry) : ReifM REntry := do
+    let mut impV := impV
+    for hypV in hypVs do
       let .valid lctx t := impV
         | throwError "impApps :: {repr impV} is not a `valid` entry"
-      let .valid lctx' t' ← lookupRTable! hyp
-        | throwError "impApps :: {repr (← lookupRTable! hyp)} is not a `valid` entry"
+      let .valid lctx' t' := hypV
+        | throwError "impApps :: {repr hypV} is not a `valid` entry"
       if !(lctx'.beq lctx) then
         throwError "impApps :: LCtx mismatch, `{toString lctx'}` ≠ `{toString lctx}`"
       let .app (.base .prop) (.app (.base .prop) (.base .imp) hypT) conclT := t
         | throwError "imApps :: Error, `{toString t}` is not an implication"
       if !(hypT.beq t') then
         throwError "impApps :: Term mismatch, `{toString hypT}` ≠ `{toString t'}`"
+      let impPos ← lookupREntryPos! impV
+      let hypPos ← lookupREntryPos! hypV
       impV := .valid lctx conclT
-      imp ← newValidChkStep (.validOfImp imp hyp) impV
-    return imp
+      newValidChkStep (.validOfImp impPos hypPos) impV
+    return impV
 
   -- Functions that turns data structure in `ReifM.State` into `Expr`
 
@@ -466,7 +480,7 @@ section Checker
     let ret := ret.push ("varVal", (← getVarVal).size)
     let ret := ret.push ("ilLamTy", (← getLamILTy).size)
     let ret := ret.push ("assertions", (← getAssertions).size)
-    let ret := ret.push ("chkSteps", (← getChkSteps).size)
+    let ret := ret.push ("chkMap", (← getChkMap).size)
     let ret := ret.push ("RTable", (← getRTable).size)
     return ret
 
@@ -484,11 +498,15 @@ section Checker
       trace[auto.lamReif.printValuation] "Type Atom {idx} := {e} : {Expr.sort lvl}"
 
   def buildChkStepsExpr : ReifM Expr := do
-    let chkSteps ← getChkSteps
-    -- `ChkSteps` are run using `foldl`, so we use `BinTree.ofListFoldl`
+    let chkMap ← getChkMap
+    let mut chkSteps := #[]
+    for re in (← getRTable) do
+      if let .some (cs, n) := chkMap.find? re then
+        chkSteps := chkSteps.push (cs, n)
+    -- `ChkMap` are run using `foldl`, so we use `BinTree.ofListFoldl`
     let e := Lean.toExpr (BinTree.ofListFoldl chkSteps.data)
     -- if !(← Meta.isTypeCorrectCore e) then
-    --   throwError "buildChkSteps :: Malformed expression"
+    --   throwError "buildChkMap :: Malformed expression"
     return e
 
     -- Given a list of expression of type `ty`, construct the corresponding `lctx`
@@ -572,10 +590,10 @@ section Checker
     -- Record the entries in the importTable for debug purpose
     let mut entries : Array (Expr × Expr) := #[]
     let mut importTable : BinTree Expr := BinTree.leaf
-    for (vPos, (e, t)) in (← getAssertions).toList do
-      let tExpr := Lean.toExpr t
+    for (t, (e, ti, n)) in (← getAssertions).toList do
+      let tExpr := Lean.toExpr ti
       let itEntry := Lean.mkApp3 (.const ``importTablePSigmaMk [u]) lvalExpr tExpr e
-      importTable := importTable.insert vPos itEntry
+      importTable := importTable.insert n itEntry
       entries := entries.push (e, tExpr)
     let type := Lean.mkApp2 (.const ``PSigma [.succ .zero, .zero])
       lamTermExpr (.app (.const ``importTablePSigmaβ [u]) lvalExpr)
@@ -601,9 +619,9 @@ section Checker
     -- trace[auto.buildChecker] "ImportTable typechecked in time {(← IO.monoMsNow) - startTime}"
     return importTableExpr
 
-  -- `entryIdx` is the entry we want to retrieve from the `validTable`
+  -- `re` is the entry we want to retrieve from the `validTable`
   -- The `expr` returned is a proof of the `LamThmValid`-ness of the entry
-  def buildCheckerExpr (entryIdx : Nat) : ReifM Expr := do
+  def buildCheckerExpr (re : REntry) : ReifM Expr := do
     printCheckerStats
     let startTime ← IO.monoMsNow
     let u ← getU
@@ -614,16 +632,15 @@ section Checker
       let csExpr ← buildChkStepsExpr
       let rInv := Lean.mkApp3 (.const ``Checker [u]) lvalFVarExpr itExpr csExpr
       let rExpr := Lean.toExpr (BinTree.ofListGet (← getRTable).data)
-      let valEntry ← lookupRTable! entryIdx
-      let .valid lctx t := valEntry
-        | throwError "buildCheckerExpr :: {repr valEntry} is not a `valid` entry"
-      let nExpr := Lean.toExpr entryIdx
-      let eqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr valEntry]]
+      let .valid lctx t := re
+        | throwError "buildCheckerExpr :: {repr re} is not a `valid` entry"
+      let nExpr := Lean.toExpr (← lookupREntryPos! re)
+      let eqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr re]]
       let getEntry := Lean.mkApp7 (.const ``RTable.validInv_get [u])
         lvalExpr nExpr (Lean.toExpr lctx) (Lean.toExpr t) rExpr rInv eqExpr
       let getEntry ← Meta.mkLetFVars #[lvalFVarExpr] getEntry
       -- debug
-      -- let rt := Lean.mkApp3 (.const ``ChkSteps.runFromBeginning [u]) lvalExpr itExpr csExpr
+      -- let rt := Lean.mkApp3 (.const ``ChkMap.runFromBeginning [u]) lvalExpr itExpr csExpr
       -- let rt ← Meta.withTransparency .all <| Meta.reduceAll rt
       -- trace[auto.buildChecker] "Final RTable : {rt}, Expected valid : {validExpr}"
       trace[auto.buildChecker] "Checker expression built in time {(← IO.monoMsNow) - startTime}ms"
