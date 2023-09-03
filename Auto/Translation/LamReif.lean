@@ -52,7 +52,8 @@ structure State where
     · The key `t : LamTerm` is the corresponding λ term,
       where all `eq, ∀, ∃` are not of import version
     · The first `e : Expr` is the proof of the assertion
-    · The second `n : Nat` is the position of the assertion in the `ImportTable`
+    · The second `t' : LamTerm` is `← resolveImport t`
+    · The thrid `n : Nat` is the position of the assertion in the `ImportTable`
     · To be precise, we require that `e : GLift.down t.interp`
 
     This field also corresponds to the `ImportTable` in `LamChecker.lean`
@@ -495,6 +496,9 @@ section Checker
     let tyVal ← getTyVal
     for ((e, lvl), idx) in tyVal.zip ⟨List.range tyVal.size⟩ do
       trace[auto.lamReif.printValuation] "Type Atom {idx} := {e} : {Expr.sort lvl}"
+    let lamIl ← getLamILTy
+    for (s, idx) in lamIl.zip ⟨List.range lamIl.size⟩ do
+      trace[auto.lamReif.printValuation] "LamILTy {idx} := {s}"
 
   def buildChkStepsExpr : ReifM Expr := do
     let chkMap ← getChkMap
@@ -781,16 +785,15 @@ open Embedding.Lam LamReif
   | .base b => return .base b
   | .func arg res => .func <$> transLamSort ref arg <*> transLamSort ref res
   
+  private def transLamBaseTermILErr := "transLamBaseTerm :: Import versions of logical constants should not occur here"
+
   def transLamBaseTerm (ref : State) : LamBaseTerm → TransM Nat Nat LamBaseTerm
-  | .eqI n => do
-    let (sort, _) ← (lookupLamILTy! n).run ref
-    return .eqI (← sort2LamILTyIdx sort)
-  | .forallEI n => do
-    let (sort, _) ← (lookupLamILTy! n).run ref
-    return .forallEI (← sort2LamILTyIdx sort)
-  | .existEI n => do
-    let (sort, _) ← (lookupLamILTy! n).run ref
-    return .existEI (← sort2LamILTyIdx sort)
+  | .eqI _ => throwError transLamBaseTermILErr
+  | .forallEI _ => throwError transLamBaseTermILErr
+  | .existEI _ => throwError transLamBaseTermILErr
+  | .eq s => .eq <$> transLamSort ref s
+  | .forallE s => .forallE <$> transLamSort ref s
+  | .existE s => .existE <$> transLamSort ref s
   | b => return b
   
   def transLamTerm (ref : State) : LamTerm → TransM Nat Nat LamTerm
@@ -833,7 +836,9 @@ open Embedding.Lam LamReif
         | .validOfImp p₁₂ p₁ => return .validOfImp (← posCont p₁₂) (← posCont p₁)
         )
       newChkStep cs' (← transREntry ref hre)
-    | .inr (e, t) =>
+    | .inr (e, _) =>
+      let .valid [] t := hre
+        | throwError "collectProofFor :: Unexpected error"
       newAssertion e (← transLamTerm ref t)
   
   -- Delete irrelevant Valuations and ChkSteps, but make sure that

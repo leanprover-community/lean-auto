@@ -20,13 +20,6 @@ example : True := by auto u[]
 example : True := by auto [] u[] d[]
 example : True := by first | auto 👍 | exact True.intro
 
-  set_option auto.prep.redMode "instance" in
-  set_option trace.auto.buildChecker true in
-  example : (∀ (xs ys zs : List α), xs ++ ys ++ zs = xs ++ (ys ++ zs)) := by
-    intro xs; induction xs
-    case cons => sorry
-    case nil => auto d[List.append]
-
 -- Defeq Lemma collection
 
 section CollectLemma
@@ -41,7 +34,7 @@ section CollectLemma
     intros m n k; revert m n; induction k <;> auto [*] d[Nat.add]
 
 end CollectLemma
-/-
+
 -- Constant unfolding
 
 section UnfoldConst
