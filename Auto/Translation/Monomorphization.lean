@@ -555,12 +555,11 @@ namespace FVarRep
     match ciIdMap.find? ci with
     | .some fid => return fid
     | .none => do
-      let fvarId ← mkFreshFVarId
-      setCiIdMap ((← getCiIdMap).insert ci fvarId)
       let userName := (`cifvar).appendIndexAfter (← getCiIdMap).size
       let cie ← MetaState.runMetaM ci.toExpr
       let city ← instantiateMVars (← MetaState.inferType cie)
-      MetaState.mkLetDecl fvarId userName city cie
+      let fvarId ← MetaState.withLetDecl userName city cie .default
+      setCiIdMap ((← getCiIdMap).insert ci fvarId)
       setFfvars ((← getFfvars).push fvarId)
       return fvarId
   
@@ -568,11 +567,10 @@ namespace FVarRep
     for (e', fid) in (← getExprMap).toList do
       if ← MetaState.runMetaM (Meta.withNewMCtxDepth <| Meta.isDefEq e e') then
         return fid
-    let fvarId ← mkFreshFVarId
-    setExprMap ((← getExprMap).insert e fvarId)
     let userName := (`exfvar).appendIndexAfter (← getExprMap).size
     let ety ← instantiateMVars (← MetaState.inferType e)
-    MetaState.mkLetDecl fvarId userName ety e
+    let fvarId ← MetaState.withLetDecl userName ety e .default
+    setExprMap ((← getExprMap).insert e fvarId)
     setFfvars ((← getFfvars).push fvarId)
     return fvarId
 
@@ -580,8 +578,7 @@ namespace FVarRep
   --   bound level parameters
   partial def replacePolyWithFVar : Expr → FVarRepM Expr
   | .lam name ty body binfo => do
-    let fvarId ← mkFreshFVarId
-    MetaState.mkLocalDecl fvarId name ty binfo
+    let fvarId ← MetaState.withLocalDecl name binfo ty .default
     setBfvars ((← getBfvars).push fvarId)
     let b' ← replacePolyWithFVar (body.instantiate1 (.fvar fvarId))
     MetaState.runMetaM <| Meta.mkLambdaFVars #[.fvar fvarId] b'
@@ -590,8 +587,7 @@ namespace FVarRep
     let tysort ← MetaState.runMetaM (do Expr.normalizeType (← Meta.inferType ty))
     let .sort tylvl := tysort
       | throwError "replacePolyWithFVar :: {tysort} is not a sort"
-    let fvarId ← mkFreshFVarId
-    MetaState.mkLocalDecl fvarId name ty binfo
+    let fvarId ← MetaState.withLocalDecl name binfo ty .default
     setBfvars ((← getBfvars).push fvarId)
     let body' := body.instantiate1 (.fvar fvarId)
     let bodysort ← MetaState.runMetaM <| do Expr.normalizeType (← Meta.inferType body')

@@ -77,4 +77,28 @@ def mkLetDecl (fvarId : FVarId) (userName : Name) (type value : Expr)
   let lctx := ctx.lctx
   setToContext ({ctx with lctx := lctx.mkLetDecl fvarId userName type value nonDep kind})
 
+private def withNewLocalInstance (className : Name) (fvar : Expr) : MetaStateM Unit := do
+  let localDecl ← runMetaM <| Meta.getFVarLocalDecl fvar
+  if !localDecl.isImplementationDetail then
+    let ctx ← getToContext
+    setToContext ({ ctx with localInstances := ctx.localInstances.push { className := className, fvar := fvar } })
+
+private def withNewFVar (fvar fvarType : Expr) : MetaStateM Unit := do
+  if let some c ← runMetaM <| Meta.isClass? fvarType then
+    withNewLocalInstance c fvar
+
+def withLocalDecl (n : Name) (bi : BinderInfo) (type : Expr) (kind : LocalDeclKind) : MetaStateM FVarId := do
+  let fvarId ← mkFreshFVarId
+  mkLocalDecl fvarId n type bi kind
+  let fvar := mkFVar fvarId
+  withNewFVar fvar type
+  return fvarId
+
+def withLetDecl (n : Name) (type : Expr) (val : Expr) (kind : LocalDeclKind) : MetaStateM FVarId := do
+  let fvarId ← mkFreshFVarId
+  mkLetDecl fvarId n type val (nonDep := false) kind
+  let fvar := mkFVar fvarId
+  withNewFVar fvar type
+  return fvarId
+
 end Auto.MetaState
