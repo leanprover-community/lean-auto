@@ -210,6 +210,16 @@ section push
     {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) (n : Nat) : lctxty (pushLCtxAt xty pos rty n) :=
     restoreAtDep pos (pushLCtxDep x) lctx n
   
+  theorem pushLCtxAtDep.heq
+    {lctxty₁ : α₁ → Sort u} {ty₁ : α₁} (x₁ : lctxty₁ ty₁) (pos₁ : Nat)
+    (rty₁ : Nat → α₁) (lctx₁ : ∀ n, lctxty₁ (rty₁ n)) (n₁ : Nat)
+    {lctxty₂ : α₂ → Sort u} {ty₂ : α₂} (x₂ : lctxty₂ ty₂) (pos₂ : Nat)
+    (rty₂ : Nat → α₂) (lctx₂ : ∀ n, lctxty₂ (rty₂ n)) (n₂ : Nat)
+    (h₁ : α₁ = α₂) (h₂ : HEq lctxty₁ lctxty₂) (h₃ : HEq ty₁ ty₂) (h₄ : HEq x₁ x₂)
+    (h₅ : pos₁ = pos₂) (h₆ : HEq rty₁ rty₂) (h₇ : HEq lctx₁ lctx₂) (h₈ : n₁ = n₂):
+    HEq (pushLCtxAtDep x₁ pos₁ lctx₁ n₁) (pushLCtxAtDep x₂ pos₂ lctx₂ n₂) := by
+    cases h₁; cases h₂; cases h₃; cases h₄; cases h₅; cases h₆; cases h₇; cases h₈; apply HEq.refl
+
   theorem pushLCtxAtDep.zero {lctxty : α → Sort u} {xty : α} (x : lctxty xty)
     {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :
     HEq (pushLCtxAtDep x 0 lctx) (pushLCtxDep x lctx) := restoreAtDep.zero _ _
