@@ -486,7 +486,7 @@ section Checker
 
   def printCheckerStats : ReifM Unit := do
     let stats := (← checkerStats).map (fun (s, n) => "  " ++ s ++ s!": {n}")
-    let ss := #["Checker Statics :"] ++ stats
+    let ss := #["Checker Statistics:"] ++ stats
     trace[auto.buildChecker] (String.intercalate "\n" ss.data)
 
   def printValuation : ReifM Unit := do
@@ -624,7 +624,7 @@ section Checker
 
   -- `re` is the entry we want to retrieve from the `validTable`
   -- The `expr` returned is a proof of the `LamThmValid`-ness of the entry
-  def buildCheckerExprFor (re : REntry) : ReifM Expr := do
+  def buildFullCheckerExprFor (re : REntry) : ReifM Expr := do
     printCheckerStats
     let startTime ← IO.monoMsNow
     let u ← getU
@@ -636,7 +636,7 @@ section Checker
       let rInv := Lean.mkApp3 (.const ``Checker [u]) lvalFVarExpr itExpr csExpr
       let rExpr := Lean.toExpr (BinTree.ofListGet (← getRTable).data)
       let .valid lctx t := re
-        | throwError "buildCheckerExprFor :: {re} is not a `valid` entry"
+        | throwError "buildFullCheckerExprFor :: {re} is not a `valid` entry"
       let nExpr := Lean.toExpr (← lookupREntryPos! re)
       let eqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr re]]
       let getEntry := Lean.mkApp7 (.const ``RTable.validInv_get [u])
@@ -671,7 +671,7 @@ section ExportUtils
   | .func a b => (collectLamSortAtoms a).insertMany (collectLamSortAtoms b)
 
   -- Collect type atoms in a LamBaseTerm
-  def collectLamBaseTermAtoms (b : LamBaseTerm) : ReifM (HashSet Nat) := do
+  def collectLamBaseTermAtoms (b : LamBaseTerm) : MetaM (HashSet Nat) := do
     let s? : Option LamSort ← (do
       match b with
       | .eqI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
@@ -692,20 +692,21 @@ section ExportUtils
   --   from `λ` to external provers, e.g. Lean/Duper
   -- Therefore, we expect that `eqI, forallEI` and `existEI`
   --   does not occur in the `LamTerm`
-  def collectAtoms : LamTerm → ReifM (HashSet Nat × HashSet Nat)
+  def collectAtoms (varVal : Array (Expr × LamSort)) : LamTerm → MetaM (HashSet Nat × HashSet Nat)
   | .atom n => do
-    let (_, s) ← lookupVarVal! n
+    let .some (_, s) := varVal[n]?
+      | throwError "collectAtoms :: Unknown term atom {n}"
     return (collectLamSortAtoms s, HashSet.empty.insert n)
   | .base b => do
     return (← collectLamBaseTermAtoms b, HashSet.empty)
   | .bvar _ => pure (HashSet.empty, HashSet.empty)
   | .lam s t => do
-    let (typeHs, termHs) ← collectAtoms t
+    let (typeHs, termHs) ← collectAtoms varVal t
     let sHs := collectLamSortAtoms s
     return (mergeHashSet typeHs sHs, termHs)
   | .app _ t₁ t₂ => do
-    let (typeHs₁, termHs₁) ← collectAtoms t₁
-    let (typeHs₂, termHs₂) ← collectAtoms t₂
+    let (typeHs₁, termHs₁) ← collectAtoms varVal t₁
+    let (typeHs₂, termHs₂) ← collectAtoms varVal t₂
     return (mergeHashSet typeHs₁ typeHs₂, mergeHashSet termHs₁ termHs₂)
 
 end ExportUtils
@@ -853,9 +854,21 @@ end Lam2Lam
 namespace LamReif
 open Embedding.Lam
 
+-- Build optimized checker = Optimize state + Build full checker
 def buildOptimizedCheckerExprFor (re : REntry) : ReifM Expr := do
   let s' ← Lam2Lam.optimizedStateFor #[re]
-  let (e, _) ← (buildCheckerExprFor re).run s'
+  let (e, _) ← (buildFullCheckerExprFor re).run s'
   return e
+
+register_option auto.optimizeCheckerProof : Bool := {
+  defValue := true
+  descr := "Whether to optimize checker proof"
+}
+
+-- Decide whether to optimize based on option
+def buildCheckerExprFor (re : REntry) : ReifM Expr := do
+  match auto.optimizeCheckerProof.get (← getOptions) with
+  | true => buildOptimizedCheckerExprFor re
+  | false => buildFullCheckerExprFor re
 
 end Auto.LamReif

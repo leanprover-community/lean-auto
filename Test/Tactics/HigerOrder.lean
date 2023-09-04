@@ -2,9 +2,10 @@ import Auto.Tactic
 
 open Auto Embedding
 
+set_option auto.optimizeCheckerProof false
+
 set_option trace.auto.tactic true in
 set_option trace.auto.lamReif true in
-set_option trace.auto.mono true in
 example (H : (fun x : Nat => x) = (fun x => x)) : True := by
   auto [H]
 

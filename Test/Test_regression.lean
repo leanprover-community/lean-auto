@@ -4,14 +4,34 @@ set_option auto.prep.redMode "reducible"
 set_option trace.auto.lamReif.printResult true
 set_option trace.auto.lamReif.printValuation true
 
+-- Manual Check
+
+section ManualCheck
+
+  -- In `Checker Statistics`, check that the `assertions` field is `1`
+  set_option auto.optimizeCheckerProof true in
+  set_option trace.auto.buildChecker true in
+  example (h₁ : False) (h₂ : a = b) : False := by auto [h₁, h₂]
+
+  -- In `Checker Statistics`, check that the `assertions` field is `4`
+  set_option auto.optimizeCheckerProof false in
+  set_option trace.auto.buildChecker true in
+  example (h₁ : False) (h₂ : a = b) : False := by auto [h₁, h₂]
+
+end ManualCheck
+
 -- Data Structure Robustness
 
--- Duplicated reified fact
-example (h₁ : False) (h₂ : False) : False := by auto [h₁, h₂]
-example (h₁ : ¬ True) : True := by auto [h₁]
+section DSRobust
 
--- Result of ChkStep coincides with input term
-example (h₁ : False → False) (h₂ : False) : True := by auto [h₁, h₂]
+  -- Duplicated reified fact
+  example (h₁ : False) (h₂ : False) : False := by auto [h₁, h₂]
+  example (h₁ : ¬ True) : True := by auto [h₁]
+  
+  -- Result of ChkStep coincides with input term
+  example (h₁ : False → False) (h₂ : False) : True := by auto [h₁, h₂]
+
+end DSRobust
 
 -- Tactic elaboration
 

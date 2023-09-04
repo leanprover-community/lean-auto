@@ -9,15 +9,19 @@ open Lean
 initialize
   registerTraceClass `auto.lam2D
 
--- Lam2D : Simply-typed lambda calculus to Lean
--- The reason we need this file is that, sometimes we want external
---   provers (e.g. duper) to help us complete proofs. Note that
---   external provers does not work with things like `GLift.up Prop`.
---   Therefore, we must have a function to translate expressions
---   into `un-lifted` (original) `Lean expressions`.
--- Also, an important part of translating to un-lifted Lean
---   expressions is to deal with `=, ∀` and `∃`, namely assigning
---   the appropriate valuation so that the type matches.
+/-
+  Lam2D : Simply-typed lambda calculus to Lean
+  The reason we need this is that, sometimes we need external
+    provers (e.g. duper) to help us construct proofs.
+  Note that external provers does not work with things like
+    `GLift.up Prop`. Therefore, we must write functions to interpret
+    `λ` terms into `un-lifted` (original) `Lean` expressions.
+  Also, an important part of translating to un-lifted Lean
+    expressions is to deal with `=, ∀` and `∃`, namely assigning
+    the appropriate valuation so that `GLift.down t.interp` matches
+    with the type of the un-lifted expression. This is mostly done
+    in `LamReif.lean`.
+-/
 
 namespace Auto.Lam2D
 
@@ -32,12 +36,14 @@ open Embedding.Lam
 --   finished, and apply the abstracted expression to the value of
 --   these atoms to restore the requires expression.
 structure Context where
+  tyVal         : Array (Expr × Level)  
+  varVal        : Array (Expr × LamSort)
   -- Type atoms that are used in the expressions sent to external prover
-  typeAtomFVars   : HashMap Nat FVarId := {}
+  typeAtomFVars : HashMap Nat FVarId     := {}
   -- Term atoms that are used in the expressions sent to external prover
-  termAtomFVars   : HashMap Nat FVarId := {}
+  termAtomFVars : HashMap Nat FVarId     := {}
 
-abbrev ExternM := ReaderT Context ReifM
+abbrev ExternM := ReaderT Context MetaM
 
 #genMonadContext ExternM
 
@@ -45,7 +51,8 @@ def withTypeAtomAsFVar (atom : Nat) (cont : ExternM Expr) : ExternM Expr := do
   if (← getTypeAtomFVars).contains atom then
     return ← cont
   let freshId := (← mkFreshId).toString
-  let (e, lvl) ← lookupTyVal! atom
+  let .some (e, lvl) := (← getTyVal)[atom]?
+    | throwError "withTypeAtomAsFVar :: Unknown type atom {atom}"
   Meta.withLocalDeclD ("_exTypeAtom_" ++ freshId) (.sort lvl) (fun newFVar =>
     withReader (fun s => {s with typeAtomFVars := s.typeAtomFVars.insert atom newFVar.fvarId!}) (do
       let abst ← Meta.mkLambdaFVars #[newFVar] (← cont)
@@ -91,7 +98,8 @@ def withTermAtomAsFVar (atom : Nat) (cont : ExternM Expr) : ExternM Expr := do
   if (← getTermAtomFVars).contains atom then
     return ← cont
   let freshId := (← mkFreshId).toString
-  let (e, s) ← lookupVarVal! atom
+  let .some (e, s) := (← getVarVal)[atom]?
+    | throwError "withTermAtomAsFVar :: Unknown term atom {atom}"
   let sinterp ← interpLamSortAsUnlifted s
   Meta.withLocalDeclD ("_exTermAtom_" ++ freshId) sinterp (fun newFVar =>
     withReader (fun s => {s with termAtomFVars := s.termAtomFVars.insert atom newFVar.fvarId!}) (do
@@ -157,7 +165,7 @@ def interpLamTermAsUnlifted : LamTerm → ExternM Expr
 --   anything within `ExternM, LamReif.ReifM, ULiftM` or `Reif.ReifM`
 def withTranslatedLamTerms (ts : Array LamTerm) (externCont : Array Expr → MetaM Expr) : ReifM Expr :=
   let extern : ExternM Expr := do
-    let hss ← ts.mapM (fun t => liftM (collectAtoms t))
+    let hss ← ts.mapM (fun t => do collectAtoms (← getVarVal) t)
     let (typeHs, termHs) := hss.foldl
       (fun (typeHs, termHs) (typeHs', termHs') =>
         (mergeHashSet typeHs typeHs', mergeHashSet termHs termHs')) (HashSet.empty, HashSet.empty)
@@ -166,7 +174,7 @@ def withTranslatedLamTerms (ts : Array LamTerm) (externCont : Array Expr → Met
         externCont (← ts.mapM interpLamTermAsUnlifted)
       )
     )
-  extern.run {}
+  do extern.run { tyVal := ← LamReif.getTyVal, varVal := ← LamReif.getVarVal }
 
 -- Override the one in duper so that it works for `MetaM`
 def Duper.withoutModifyingCoreEnv (m : MetaM α) : MetaM α :=

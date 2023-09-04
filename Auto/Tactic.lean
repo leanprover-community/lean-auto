@@ -211,7 +211,7 @@ def runAuto (instrstx : TSyntax ``autoinstr) (hintstx : TSyntax ``hints)
       trace[auto.printProof] "Duper found proof {← instantiateMVars proof}"
       LamReif.newAssertion proof proofLamTerm
       let contra ← LamReif.impApps (.valid [] proofLamTerm) (exportFacts.map (.valid []))
-      let checker ← LamReif.buildOptimizedCheckerExprFor contra
+      let checker ← LamReif.buildCheckerExprFor contra
       let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
       Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra
       )

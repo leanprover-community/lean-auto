@@ -3,6 +3,7 @@ import Auto.Tactic
 open Auto Embedding
 
 set_option profiler true
+set_option auto.optimizeCheckerProof false
 
 set_option pp.universes true in
 set_option trace.auto.lamReif true in
