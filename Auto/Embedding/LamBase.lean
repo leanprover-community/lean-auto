@@ -1726,11 +1726,12 @@ def LamThmWF
 def LamThmWFP (lval : LamValuation) (lctx : List LamSort) (rty : LamSort) (t : LamTerm) :=
   ∀ (lctx' : Nat → LamSort), Nonempty (LamWF lval.toLamTyVal ⟨pushLCtxs lctx lctx', t, rty⟩)
 
+abbrev LamValid (lval : LamValuation) (lctx : Nat → LamSort) (t : LamTerm) :=
+  ∃ (wf : LamWF lval.toLamTyVal ⟨lctx, t, .base .prop⟩),
+    ∀ (lctxTerm : ∀ n, (lctx n).interp lval.tyVal), GLift.down (LamWF.interp lval lctx lctxTerm wf)
+
 def LamThmValid (lval : LamValuation) (lctx : List LamSort) (t : LamTerm) :=
-  ∀ (lctx' : Nat → LamSort),
-    ∃ (wf : LamWF lval.toLamTyVal ⟨pushLCtxs lctx lctx', t, .base .prop⟩),
-    ∀ (lctxTerm : ∀ n, (pushLCtxs lctx lctx' n).interp lval.tyVal),
-      GLift.down (LamWF.interp lval (pushLCtxs lctx lctx') lctxTerm wf)
+  ∀ (lctx' : Nat → LamSort), LamValid lval (pushLCtxs lctx lctx') t
 
 @[reducible] def dfLCtxTy : Nat → LamSort := fun _ => .base .prop
 

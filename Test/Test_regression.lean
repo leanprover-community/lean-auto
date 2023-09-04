@@ -57,7 +57,6 @@ example : True := by first | auto 👍 | exact True.intro
 section CollectLemma
 
   set_option auto.prep.redMode "instance" in
-  set_option trace.auto.buildChecker true in
   example : (∀ (xs ys zs : List α), xs ++ ys ++ zs = xs ++ (ys ++ zs)) := by
     intro xs; induction xs <;> auto [*] d[List.append]
 

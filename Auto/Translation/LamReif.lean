@@ -203,19 +203,20 @@ def mkImportVersion : LamTerm → ReifM LamTerm
 
 -- A new `ChkStep`. `res` is the result of the `ChkStep`
 -- Returns the position of the result of this `ChkStep` in the `RTable`
-def newChkStep (c : ChkStep) (res? : Option REntry) : ReifM Unit := do
+def newChkStep (c : ChkStep) (res? : Option REntry) : ReifM REntry := do
   let .some res := c.eval (← getLamTyValAtMeta) (← getRTableTree)
-    | throwError "newChkStep :: ChkStep does not evaluate to an entry"
+    | throwError "newChkStep :: ChkStep {c} does not evaluate to an entry"
   if let .some res' := res? then
     if res' != res then
-      throwError "newChkStep :: Result {res} of ChkStep does not match with expected {res'}"
+      throwError "newChkStep :: Result {res} of ChkStep {c} does not match with expected {res'}"
   -- If `res` is already provable, do nothing
   if let .some _ ← lookupREntryProof? res then
-    return
+    return res
   let rsize := (← getRTable).size
   setChkMap ((← getChkMap).insert res (c, rsize))
   setRTableTree ((← getRTableTree).insert rsize res)
   setRTable ((← getRTable).push res)
+  return res
 
 -- `ty` is a reified assumption. `∀, ∃` and `=` in `ty` are supposed to
 --   not be of the import version
@@ -449,28 +450,15 @@ section Checker
 
   -- Functions that operates on the checker table
 
-  -- `t₁ → t₂ → ⋯ → tₙ → t` , `t₁`, `t₂`, ⋯, `tₙ` implies `t`
-  -- `imp` is the position of `t₁ → t₂ → ⋯ → tₙ → t` in the `wfTable`
-  -- `hyps` are the positions of `t₁`, `t₂`, ⋯, `tₙ` in the `validTable`
-  -- Returns the position of the new `t` in the valid table
+  def impApp (v₁₂ : REntry) (v₁ : REntry) : ReifM REntry := do
+    let p₁₂ ← lookupREntryPos! v₁₂
+    let p₁ ← lookupREntryPos! v₁
+    newChkStep (.validOfImp p₁₂ p₁) .none
+
   def impApps (impV : REntry) (hypVs : Array REntry) : ReifM REntry := do
-    let mut impV := impV
-    for hypV in hypVs do
-      let .valid lctx t := impV
-        | throwError "impApps :: {impV} is not a `valid` entry"
-      let .valid lctx' t' := hypV
-        | throwError "impApps :: {hypV} is not a `valid` entry"
-      if !(lctx'.beq lctx) then
-        throwError "impApps :: LCtx mismatch, `{lctx'}` ≠ `{lctx}`"
-      let .app (.base .prop) (.app (.base .prop) (.base .imp) hypT) conclT := t
-        | throwError "imApps :: Error, `{t}` is not an implication"
-      if !(hypT.beq t') then
-        throwError "impApps :: Term mismatch, `{hypT}` ≠ `{t'}`"
-      let impPos ← lookupREntryPos! impV
-      let hypPos ← lookupREntryPos! hypV
-      impV := .valid lctx conclT
-      newChkStep (.validOfImp impPos hypPos) impV
-    return impV
+    let imp ← lookupREntryPos! impV
+    let ps ← hypVs.mapM lookupREntryPos!
+    newChkStep (.validOfImps imp ps.data) .none
 
   -- Functions that turns data structure in `ReifM.State` into `Expr`
 
@@ -835,8 +823,9 @@ open Embedding.Lam LamReif
         | .wfOfTopBeta pos => return .wfOfTopBeta (← posCont pos)
         | .validOfTopBeta pos => return .validOfTopBeta (← posCont pos)
         | .validOfImp p₁₂ p₁ => return .validOfImp (← posCont p₁₂) (← posCont p₁)
+        | .validOfImps imp ps => return .validOfImps (← posCont imp) (← ps.mapM posCont)
         )
-      newChkStep cs' (← transREntry ref hre)
+      let _ ← newChkStep cs' (← transREntry ref hre)
     | .inr (e, _) =>
       let .valid [] t := hre
         | throwError "collectProofFor :: Unexpected error"

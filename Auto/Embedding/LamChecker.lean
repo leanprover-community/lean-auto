@@ -106,6 +106,8 @@ inductive ChkStep where
   | validOfTopBeta (pos : Nat) : ChkStep
   -- `t₁ → t₂` and `t₁` implies `t₂`
   | validOfImp (p₁₂ : Nat) (p₁ : Nat) : ChkStep
+  -- `t₁ → t₂ → ⋯ → tₖ → s` and `t₁, t₂, ⋯, tₖ` implies `s`
+  | validOfImps (imp : Nat) (ps : List Nat) : ChkStep
   deriving Lean.ToExpr
 
 def ChkStep.toString : ChkStep → String
@@ -116,9 +118,25 @@ def ChkStep.toString : ChkStep → String
 | .wfOfTopBeta pos => s!"wfOfTopBeta {pos}"
 | .validOfTopBeta pos => s!"validOfTopBeta {pos}"
 | .validOfImp p₁₂ p₁ => s!"validOfImp {p₁₂} {p₁}"
+| .validOfImps imp ps => s!"validOfImps {imp} {ps}"
 
 instance : ToString ChkStep where
   toString := ChkStep.toString
+
+def ChkStep.evalValidOfImps (r : RTable) (lctx : List LamSort) (t : LamTerm)
+  : (ps : List Nat) → Option REntry
+  | .nil => .some (.valid lctx t)
+  | .cons p₁ ps' =>
+    match r.get? p₁ with
+    | .some (.valid lctx₂ t₁) =>
+      match lctx.beq lctx₂ with
+      | true =>
+        match LamTerm.impApp? t t₁ with
+        | .some t₂ => evalValidOfImps r lctx t₂ ps'
+        | .none => .none
+      | false => .none
+    | .some (.wf _ _ _) => .none
+    | .none => .none
 
 def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → Option REntry
 | .nop => .none
@@ -155,12 +173,43 @@ def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → Option REntr
     match r.get? p₁ with
     | .some (.valid lctx₂ t₁) =>
       match lctx₁.beq lctx₂ with
-      | true => .some (.valid lctx₁ (LamTerm.impApp t₁₂ t₁))
+      | true =>
+        match LamTerm.impApp? t₁₂ t₁ with
+        | .some t₂ => .some (.valid lctx₁ t₂)
+        | .none => .none
       | false => .none
     | .some (.wf _ _ _) => .none
     | .none => .none
   | .some (.wf _ _ _) => .none
   | .none => .none
+| .validOfImps imp ps =>
+  match r.get? imp with
+  | .some (.valid lctx t) => evalValidOfImps r lctx t ps
+  | .some (.wf _ _ _) => .none
+  | .none => .none
+
+def ChkStep.evalValidOfImps_correct (lval : LamValuation)
+  (impV : LamThmValid lval lctx t) (r : RTable) (inv : r.inv lval) :
+  Option.allp (REntry.correct lval) (evalValidOfImps r lctx t ps) := by
+  revert lctx t; induction ps <;> intros lctx t impV
+  case nil => exact impV
+  case cons p₁ ps' IH =>
+    dsimp [evalValidOfImps]
+    match h₁ : BinTree.get? r p₁ with
+    | .some (.valid lctx₂ t₁) =>
+      dsimp
+      match h₂ : List.beq lctx lctx₂ with
+      | true =>
+        dsimp
+        match h₃ : LamTerm.impApp? t t₁ with
+        | .some t₂ =>
+          cases (List.beq_eq LamSort.beq_eq _ _ h₂)
+          have h₁' := RTable.validInv_get inv h₁
+          apply IH; apply LamThmValid.impApp impV h₁' h₃
+        | .none => exact True.intro
+      | false => exact True.intro
+    | .some (.wf _ _ _) => exact True.intro
+    | .none => exact True.intro
 
 theorem ChkStep.eval_correct
   (lval : LamValuation.{u}) (r : RTable) (inv : r.inv lval) :
@@ -219,13 +268,25 @@ theorem ChkStep.eval_correct
       match h₃ : List.beq lctx₁ lctx₂ with
       | true =>
         dsimp
-        have lctxeq := List.beq_eq LamSort.beq_eq _ _ h₃; cases lctxeq
-        have h₁' := RTable.validInv_get inv h₁
-        have h₂' := RTable.validInv_get inv h₂
-        apply LamThmValid.impApp h₁' h₂'
+        match h₄ : LamTerm.impApp? t₁₂ t₁ with
+        | .some t₂ =>
+          cases (List.beq_eq LamSort.beq_eq _ _ h₃)
+          have h₁' := RTable.validInv_get inv h₁
+          have h₂' := RTable.validInv_get inv h₂
+          apply LamThmValid.impApp h₁' h₂' h₄
+        | .none => exact True.intro
       | false => exact True.intro
     | .some (.wf _ _ _) => exact True.intro 
     | .none => exact True.intro
+  | .some (.wf _ _ _) => exact True.intro
+  | .none => exact True.intro
+| .validOfImps imp ps => by
+  dsimp [eval]
+  match h : BinTree.get? r imp with
+  | .some (.valid lctx t) =>
+    dsimp
+    have h' := RTable.validInv_get inv h
+    apply ChkStep.evalValidOfImps_correct <;> assumption
   | .some (.wf _ _ _) => exact True.intro
   | .none => exact True.intro
 

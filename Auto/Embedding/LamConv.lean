@@ -114,6 +114,12 @@ def LamWF.instantiate1
     rw [pushLCtxAt.zero, LamTerm.bvarLiftsIdx.zero]
     rfl) (@LamWF.instantiateAt ltv 0 arg argTy body bodyTy)
 
+def LamThmWF.instantiate1
+  (wfArg : LamThmWF lval lctx argTy arg) (wfBody : LamThmWF lval (argTy :: lctx) bodyTy body) :
+  LamThmWF lval lctx bodyTy (LamTerm.instantiate1 arg body) := by
+  intro lctx'; have hArg := wfArg lctx'; have hBody := wfBody lctx'
+  rw [pushLCtxs.cons] at hBody; apply LamWF.instantiate1 _ _ hArg hBody
+
 theorem LamWF.instantiate1.correct.{u}
   (lval : LamValuation.{u}) {arg : LamTerm} {argTy : LamSort} {body : LamTerm} {bodyTy : LamSort}
   (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal)
@@ -138,6 +144,14 @@ theorem LamWF.instantiate1.correct.{u}
       dsimp [LamTerm.bvarLifts]; rw [LamTerm.bvarLiftsIdx.zero]
   case eqSmall =>
     apply eq_of_heq; apply LamWF.interp.heq <;> rfl
+
+theorem LamThmValid.instantiate1
+  (hw : LamThmWF lval lctx argTy arg) (hv : LamThmValid lval (argTy :: lctx) body) :
+  LamThmValid lval lctx (LamTerm.instantiate1 arg body) := by
+  intro lctx'; have hArg := hw lctx'; have hBody := hv lctx'
+  rw [pushLCtxs.cons] at hBody; have ⟨wfBody, vBody⟩ := hBody
+  exists (LamWF.instantiate1 _ _ hArg wfBody); intro lctxTerm;
+  rw [← LamWF.instantiate1.correct]; apply vBody
 
 def LamTerm.topBetaAux (s : LamSort) (arg : LamTerm) : (fn : LamTerm) → LamTerm
 | .lam _ body => LamTerm.instantiateAt 0 arg body
@@ -192,7 +206,6 @@ def LamWF.topBeta
     | .ofApp _ wfFn wfArg => LamWF.topBetaAux _ lctx wfArg wfFn
 
 def LamThmWF.topBeta
-  {lval : LamValuation} {lctx : List LamSort} {rty : LamSort} {t : LamTerm}
   (wf : LamThmWF lval lctx rty t) : LamThmWF lval lctx rty t.topBeta := by
   intro lctx; apply LamWF.topBeta _ _ (wf lctx)
 
@@ -504,7 +517,7 @@ theorem Eq.congr (lval : LamValuation) (lctx : List LamSort)
     exact Hf
   case eArg => exact LamEquiv.ofLamThmValid _ _ hEq
 
-def LamTerm.impApp (t₁₂ t₁ : LamTerm) :=
+def LamTerm.impApp? (t₁₂ t₁ : LamTerm) : Option LamTerm :=
   match t₁₂ with
   | .app _ fn concl =>
     match fn with
@@ -514,67 +527,42 @@ def LamTerm.impApp (t₁₂ t₁ : LamTerm) :=
         match imp with
         | .base b =>
           match b with
-          | .imp => concl
-          | _ => t₁₂
-        | _ => t₁₂
-      | false => t₁₂
-    | _ => t₁₂
-  | _ => t₁₂
+          | .imp => .some concl
+          | _ => .none
+        | _ => .none
+      | false => .none
+    | _ => .none
+  | _ => .none
 
--- `t₁ → t₂` and `t₁` implies `t₂`
-def LamWF.impApp
-  (ltv : LamTyVal) {t₁₂ t₁ : LamTerm} (lctx : Nat → LamSort)
-  (wf : LamWF ltv ⟨lctx, t₁₂, .base .prop⟩) :
-  LamWF ltv ⟨lctx, LamTerm.impApp t₁₂ t₁, .base .prop⟩ := by
-  cases t₁₂ <;> try exact wf
+theorem LamValid.impApp
+  (v₁₂ : LamValid lval lctx t₁₂) (v₁ : LamValid lval lctx t₁)
+  (heq : LamTerm.impApp? t₁₂ t₁ = .some t₂) : LamValid lval lctx t₂ := by
+  dsimp [LamTerm.impApp?] at heq
+  cases t₁₂ <;> try cases heq
   case app bp₁ hypimp concl =>
-    cases hypimp <;> try exact wf
+    cases hypimp <;> try cases heq
     case app bp₂ imp hyp =>
-      dsimp [LamTerm.impApp]; 
-      match LamTerm.beq hyp t₁ with
-      | true =>
-        cases imp <;> try exact wf
-        case base b =>
-          cases b <;> try exact wf
-          case imp =>
-            dsimp
-            match wf with
-            | .ofApp _ (.ofApp _ (.ofBase .ofImp) _) wfConcl => exact wfConcl
-      | false => exact wf
-
-theorem LamWF.impApp.correct {t₁₂ t₁ : LamTerm}
-  (wf₁₂ : LamWF lval.toLamTyVal ⟨lctx, t₁₂, .base .prop⟩)
-  (wf₁ : LamWF lval.toLamTyVal ⟨lctx, t₁, .base .prop⟩)
-  (valid₁₂ : GLift.down (LamWF.interp lval lctx lctxTerm wf₁₂))
-  (valid₁ : GLift.down (LamWF.interp lval lctx lctxTerm wf₁)) :
-  GLift.down (LamWF.interp lval lctx lctxTerm (LamWF.impApp (t₁:=t₁) _ _ wf₁₂)) := by
-  cases t₁₂ <;> try exact valid₁₂
-  case app bp₁ hypimp concl =>
-    cases hypimp <;> try exact valid₁₂
-    case app bp₂ imp hyp =>
-      dsimp [LamTerm.impApp, LamWF.impApp]
+      dsimp at heq
       match h : LamTerm.beq hyp t₁ with
       | true =>
-        dsimp; cases imp <;> try exact valid₁₂
+        rw [h] at heq
+        cases imp <;> try cases heq
         case base b =>
-          cases b <;> try exact valid₁₂
+          cases b <;> cases heq
           case imp =>
-            dsimp
+            have ⟨wf₁₂, h₁₂⟩ := v₁₂
             match wf₁₂ with
-            | .ofApp _ (.ofApp _ (.ofBase .ofImp) _) wfConcl =>
-              dsimp; apply valid₁₂; apply Eq.mp _ valid₁
-              apply congrArg; apply eq_of_heq;
-              apply LamWF.interp.heq <;> try rfl
-              exact _root_.Eq.symm (LamTerm.beq_eq _ _ h)
-      | false => exact valid₁₂
+            | .ofApp _ (.ofApp _ (.ofBase .ofImp) HArg) wfConcl =>
+              exists wfConcl; have ⟨wf₁, h₁⟩ := v₁;
+              intro lctxTerm; apply h₁₂; apply Eq.mp _ (h₁ lctxTerm);
+              apply congrArg; apply eq_of_heq; apply LamWF.interp.heq <;> try rfl
+              exact .symm (LamTerm.beq_eq _ _ h)
+      | false =>
+        rw [h] at heq; cases heq
 
 theorem LamThmValid.impApp
-  (H₁₂ : LamThmValid lval lctx t₁₂)
-  (H₁ : LamThmValid lval lctx t₁) : LamThmValid lval lctx (LamTerm.impApp t₁₂ t₁) := by
-  intro lctx'; let ⟨wf₁₂, H₁₂⟩ := H₁₂ lctx'; let ⟨wf₁, H₁⟩ := H₁ lctx'
-  exists (LamWF.impApp _ _ wf₁₂); intro lctxTerm;
-  apply LamWF.impApp.correct (t₁:=t₁)
-  case valid₁₂ => apply H₁₂
-  case valid₁ => apply H₁
+  (H₁₂ : LamThmValid lval lctx t₁₂) (H₁ : LamThmValid lval lctx t₁)
+  (heq : LamTerm.impApp? t₁₂ t₁ = .some res) : LamThmValid lval lctx res :=
+  fun lctx' => LamValid.impApp (H₁₂ lctx') (H₁ lctx') heq
 
 end Auto.Embedding.Lam

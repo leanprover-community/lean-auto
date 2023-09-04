@@ -1,5 +1,7 @@
 import Auto.Tactic
+
 set_option trace.auto.buildChecker true
+set_option auto.optimizeCheckerProof false
 -- Testing whether binders can cause quadratic complexity
 
 partial def chopList (s : List α) (n : Nat) : List (List α) :=
@@ -410,8 +412,6 @@ example
       x100 x101 x102 x103 x104 x105 x106 x107 x108 x109
       x110 x111 x112 x113 x114 x115 x116 x117 x118 x119
       x120 x121 x122 x123 x124 x125 x126 x127) : True := by auto
-
-#check 2
 
 set_option maxRecDepth 2000 in
 example
