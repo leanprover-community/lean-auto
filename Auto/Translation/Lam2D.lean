@@ -2,6 +2,7 @@ import Lean
 import Duper.Tactic
 import Auto.Lib.ExprExtra
 import Auto.Lib.MetaExtra
+import Auto.Lib.MetaState
 import Auto.Embedding.LamBase
 import Auto.Translation.LamReif
 open Lean
@@ -26,7 +27,7 @@ initialize
 namespace Auto.Lam2D
 
 open LamReif
-open Embedding.Lam
+open Embedding.Lam MetaState
 
 -- All the type atoms and term atoms are interpreted as fvars, which
 --   are let-declarations in the local context. We don't want the external
@@ -35,46 +36,35 @@ open Embedding.Lam
 --   abstract these free variables after the external prover has
 --   finished, and apply the abstracted expression to the value of
 --   these atoms to restore the requires expression.
-structure Context where
-  tyVal         : Array (Expr × Level)  
-  varVal        : Array (Expr × LamSort)
+structure State where
+  tyVal           : Array (Expr × Level)  
+  varVal          : Array (Expr × LamSort)
+  fvarsToAbstract : Array (FVarId × Expr)  := #[]
   -- Type atoms that are used in the expressions sent to external prover
-  typeAtomFVars : HashMap Nat FVarId     := {}
+  typeAtomFVars   : HashMap Nat FVarId     := {}
   -- Term atoms that are used in the expressions sent to external prover
-  termAtomFVars : HashMap Nat FVarId     := {}
+  termAtomFVars   : HashMap Nat FVarId     := {}
 
-abbrev ExternM := ReaderT Context MetaM
+abbrev ExternM := StateRefT State MetaStateM
 
-#genMonadContext ExternM
+def ExternM.run (m : ExternM α) (s : State) : MetaStateM (α × State) :=
+  StateRefT'.run m s
 
-def withTypeAtomAsFVar (atom : Nat) (cont : ExternM Expr) : ExternM Expr := do
-  if (← getTypeAtomFVars).contains atom then
-    return ← cont
-  let freshId := (← mkFreshId).toString
-  let .some (e, lvl) := (← getTyVal)[atom]?
-    | throwError "withTypeAtomAsFVar :: Unknown type atom {atom}"
-  Meta.withLocalDeclD ("_exTypeAtom_" ++ freshId) (.sort lvl) (fun newFVar =>
-    withReader (fun s => {s with typeAtomFVars := s.typeAtomFVars.insert atom newFVar.fvarId!}) (do
-      let abst ← Meta.mkLambdaFVars #[newFVar] (← cont)
-      -- We have to `headBeta` this `appExpr`, otherwise the term
-      --   might not be type correct
-      -- For example, suppose we have `x : α`, where `α` is type
-      --   atom 0, and `x` is term atom 0. Now we call the external
-      --   prover, which returns an expression `termAtom 0 = termAtom 0`.
-      --   After going up `with<Type/Term>AtomAsFVar`, it will
-      --   become `(fun (α' : Sort _) => (fun (x' : α') => x' = x') (x : α)) α`
-      --   and the application `(fun (x' : α') => x' = x') (x : α)` is not
-      --   type correct.
-      -- However, the above term will be type correct if we `headBeta1`
-      --   at each `withTypeAtomAsFVar
-      match abst with
-      | .lam _ _ body _ => return body.instantiate1 e
-      | _ => throwError "withTypeAtomAsFVar :: Unexpected expression {abst}"
-      )
-    )
+def ExternM.run' (m : ExternM α) (s : State) : MetaStateM α :=
+  StateRefT'.run' m s
 
-def withTypeAtomsAsFVar (atoms : Array Nat) (cont : ExternM Expr) : ExternM Expr :=
-  atoms.foldl (fun cont atom => withTypeAtomAsFVar atom cont) cont
+#genMonadState ExternM
+
+def withTypeAtomsAsFVar (atoms : Array Nat) : ExternM Unit :=
+  for atom in atoms do
+    if (← getTypeAtomFVars).contains atom then
+      return
+    let .some (e, lvl) := (← getTyVal)[atom]?
+      | throwError "withTypeAtomAsFVar :: Unknown type atom {atom}"
+    let name := "_exTypeAtom" ++ (← mkFreshId).toString
+    let newFVarId ← withLocalDecl name .default (.sort lvl) .default
+    setFvarsToAbstract ((← getFvarsToAbstract).push (newFVarId, e))
+    setTypeAtomFVars ((← getTypeAtomFVars).insert atom newFVarId)
 
 -- Takes a `s : LamSort` and produces the `un-lifted` version of `s.interp`
 --   (note that `s.interp` is lifted)
@@ -94,21 +84,17 @@ def interpLamSortAsUnlifted : LamSort → ExternM Expr
 | .func s₁ s₂ => do
   return .forallE `_ (← interpLamSortAsUnlifted s₁) (← interpLamSortAsUnlifted s₂) .default
 
-def withTermAtomAsFVar (atom : Nat) (cont : ExternM Expr) : ExternM Expr := do
-  if (← getTermAtomFVars).contains atom then
-    return ← cont
-  let freshId := (← mkFreshId).toString
-  let .some (e, s) := (← getVarVal)[atom]?
-    | throwError "withTermAtomAsFVar :: Unknown term atom {atom}"
-  let sinterp ← interpLamSortAsUnlifted s
-  Meta.withLocalDeclD ("_exTermAtom_" ++ freshId) sinterp (fun newFVar =>
-    withReader (fun s => {s with termAtomFVars := s.termAtomFVars.insert atom newFVar.fvarId!}) (do
-      let abst ← Meta.mkLambdaFVars #[newFVar] (← cont)
-      return mkApp abst e)
-    )
-
-def withTermAtomsAsFVar (atoms : Array Nat) (cont : ExternM Expr) : ExternM Expr :=
-  atoms.foldl (fun cont atom => withTermAtomAsFVar atom cont) cont
+def withTermAtomsAsFVar (atoms : Array Nat) : ExternM Unit :=
+  for atom in atoms do
+    if (← getTermAtomFVars).contains atom then
+      return
+    let .some (e, s) := (← getVarVal)[atom]?
+      | throwError "withTermAtomAsFVar :: Unknown term atom {atom}"
+    let sinterp ← interpLamSortAsUnlifted s
+    let name := "_exTermAtom" ++ (← mkFreshId).toString
+    let newFVarId ← withLocalDecl name .default sinterp .default
+    setFvarsToAbstract ((← getFvarsToAbstract).push (newFVarId, e))
+    setTermAtomFVars ((← getTermAtomFVars).insert atom newFVarId)
 
 def interpCstrRealAsUnlifted (c : CstrReal) : Expr :=
   let lvl₁ := Level.succ .zero
@@ -133,15 +119,15 @@ def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
 | .forallEI _ => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
 | .existEI _  => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
 | .eq s       => do
-  return ← Meta.mkAppOptM ``Eq #[← interpLamSortAsUnlifted s]
+  return ← runMetaM <| Meta.mkAppOptM ``Eq #[← interpLamSortAsUnlifted s]
 | .forallE s  => do
   let ty ← interpLamSortAsUnlifted s
-  let sort ← Expr.normalizeType (← Meta.inferType ty)
+  let sort ← runMetaM <| Expr.normalizeType (← MetaState.inferType ty)
   let Expr.sort lvl := sort
     | throwError "interpLamBaseTermAsUnlifted :: Unexpected sort {sort}"
   return mkAppN (.const ``forallF [lvl, .zero]) #[← interpLamSortAsUnlifted s]
 | .existE s  => do
-  return ← Meta.mkAppOptM ``Exists #[← interpLamSortAsUnlifted s]
+  return ← runMetaM <| Meta.mkAppOptM ``Exists #[← interpLamSortAsUnlifted s]
 
 -- Takes a `t : LamTerm` and produces the `un-lifted` version of `t.interp`.
 -- This function should be called after we've called
@@ -163,18 +149,26 @@ def interpLamTermAsUnlifted : LamTerm → ExternM Expr
 -- The external prover should only see the local context
 --   and an array of Lean expressions, and should not see
 --   anything within `ExternM, LamReif.ReifM, ULiftM` or `Reif.ReifM`
-def withTranslatedLamTerms (ts : Array LamTerm) (externCont : Array Expr → MetaM Expr) : ReifM Expr :=
-  let extern : ExternM Expr := do
-    let hss ← ts.mapM (fun t => do collectAtoms (← getVarVal) t)
-    let (typeHs, termHs) := hss.foldl
-      (fun (typeHs, termHs) (typeHs', termHs') =>
+def withTranslatedLamTerms (ts : Array LamTerm) : ExternM (Array Expr) := do
+  let varVal ← getVarVal
+  let hss ← runMetaM <| ts.mapM (fun t => do collectAtoms varVal t)
+  let (typeHs, termHs) := hss.foldl
+    (fun (typeHs, termHs) (typeHs', termHs') =>
         (mergeHashSet typeHs typeHs', mergeHashSet termHs termHs')) (HashSet.empty, HashSet.empty)
-    withTypeAtomsAsFVar typeHs.toArray (
-      withTermAtomsAsFVar termHs.toArray (do
-        externCont (← ts.mapM interpLamTermAsUnlifted)
-      )
-    )
-  do extern.run { tyVal := ← LamReif.getTyVal, varVal := ← LamReif.getVarVal }
+  withTypeAtomsAsFVar typeHs.toArray
+  withTermAtomsAsFVar termHs.toArray
+  ts.mapM interpLamTermAsUnlifted
+
+-- Given a list of non-dependent types `ty₁, ty₂, ⋯, tyₙ`, add
+--   free variables `x₁ : ty₁, x₂ : ty₂, ⋯, xₙ : tyₙ` into local context,
+--   and return `#[x₁, x₂, ⋯, xₙ]`
+def withHyps (hyps : Array Expr) : ExternM (Array FVarId) := do
+  let mut ret := #[]
+  for hyp in hyps do
+    let name := "_exHyp" ++ (← mkFreshId).toString
+    let newFVarId ← withLocalDecl name .default hyp .default
+    ret := ret.push newFVarId
+  return ret
 
 -- Override the one in duper so that it works for `MetaM`
 def Duper.withoutModifyingCoreEnv (m : MetaM α) : MetaM α :=
@@ -197,43 +191,64 @@ def Duper.rconsProof (state : Duper.ProverM.State) : MetaM Expr := do
   trace[ProofReconstruction] "rconsProof :: Reconstructed proof {proof}"
   return proof
 
+private def callDuperMetaMAction (lemmas : Array (Expr × Expr × Array Name)) : MetaM Expr := do
+  let startTime ← IO.monoMsNow
+  let state ← Duper.withoutModifyingCoreEnv <| do
+    let skSorryName ← Elab.Tactic.addSkolemSorry
+    let (_, state) ←
+      Duper.ProverM.ProverM.runWithExprs (ctx := {}) (s := {skolemSorryName := skSorryName})
+        Duper.ProverM.saturateNoPreprocessingClausification
+        lemmas.toList
+    return state
+  match state.result with
+  | .contradiction =>
+    IO.println s!"callDuper :: Contradiction found. Time: {(← IO.monoMsNow) - startTime}ms"
+    Duper.rconsProof state
+  | .saturated =>
+    throwError "callDuper :: Duper saturated"
+  | .unknown => throwError "callDuper :: Duper was terminated"
+
+--Meta.mkLambdaFVars (fvars.map (.fvar ·)) expr
+private def callDuperExternMAction (ts : Array LamTerm) : ExternM (Array LamTerm × Expr × LamTerm) := do
+  let hyps ← withTranslatedLamTerms ts
+  for hyp in hyps do
+    if !(← runMetaM <| Meta.isTypeCorrect hyp) then
+      throwError "callDuper :: Malformed hypothesis {hyp}"
+    if !(← runMetaM <| Meta.isProp hyp) then
+      throwError "callDuper :: Hypothesis {hyp} is not a proposition"
+  let hyps ← runMetaM <| Meta.withTransparency .reducible <| hyps.mapM (fun e => Meta.reduceAll e)
+  let hypFvars ← withHyps hyps
+  if hyps.size != hypFvars.size then
+    throwError "callDuper :: Unexpected error"
+  let lemmas : Array (Expr × Expr × Array Name) ← (hyps.zip hypFvars).mapM
+    (fun (ty, proof) => do return (ty, ← runMetaM <| Meta.mkAppM ``eq_true #[.fvar proof], #[]))
+  -- Note that we're not introducing bound variables into local context
+  --   in the above action, so it's reasonable to use `runMetaM`
+  let fvarsToAbstract ← getFvarsToAbstract
+  runMetaM (do
+    let mut expr ← callDuperMetaMAction lemmas
+    let mut usedHyps := []
+    for (fvar, t) in (hypFvars.zip ts).reverse do
+      if expr.hasAnyFVar (· == fvar) then
+        expr ← Meta.mkLambdaFVars #[.fvar fvar] expr
+        usedHyps := t :: usedHyps
+    let mut usedVals := []
+    for (fvar, val) in fvarsToAbstract.reverse do
+      if expr.hasAnyFVar (· == fvar) then
+        expr ← Meta.mkLambdaFVars #[.fvar fvar] expr
+        usedVals := val :: usedVals
+    return (⟨usedHyps⟩, mkAppN expr ⟨usedVals⟩, (Array.mk usedHyps).foldr (fun t' t => t'.mkImp t) (.base .falseE)))
+
 -- Given `ts = #[t₀, t₁, ⋯, kₖ₋₁]`, invoke Duper to get a proof 
---   `t₀ → t₁ → ⋯ → tₖ₋1 → ⊥`
+--   `proof : (s₀ → s₁ → ⋯ → sₗ₋₁ → ⊥).interp`, and returns
+--       `([s₀, s₁, ⋯, sₗ₋₁], proof, s₀ → s₁ → ⋯ → sₗ₋₁ → ⊥)`
+--   Here `[s₀, s₁, ⋯, sₗ₋₁]` is a subsequence of `[t₀, t₁, ⋯, kₖ₋₁]`
 -- It is important to add `Meta.withNewMCtxDepth`, otherwise exprmvars
 --   or levelmvars of the current level will be assigned, and we'll
 --   get weird proof reconstruction error
-def callDuper (ts : Array LamTerm) : ReifM Expr := Meta.withNewMCtxDepth <|
-  withTranslatedLamTerms ts (fun exprs => do
-    let startTime ← IO.monoMsNow
-    for expr in exprs do
-      if !(← Meta.isTypeCorrect expr) then
-        throwError "callDuper :: Malformed hypothesis {expr}"
-      if !(← Meta.isProp expr) then
-        throwError "callDuper :: Hypothesis {expr} is not a proposition"
-    -- Reduce `forallF` and `impF`
-    let exprs ← Meta.withTransparency .reducible <| exprs.mapM (fun e => liftM <| Meta.reduceAll e)
-    Meta.withHyps exprs (fun fvars => do
-      if exprs.size != fvars.size then
-        throwError "callDuper :: Unexpected error"
-      let lemmas : Array (Expr × Expr × Array Name) ←
-        (exprs.zip fvars).mapM (fun (ty, proof) => do
-          return (ty, ← Meta.mkAppM ``eq_true #[.fvar proof], #[]))
-      let state ← Duper.withoutModifyingCoreEnv <| do
-        let skSorryName ← Elab.Tactic.addSkolemSorry
-        let (_, state) ←
-          Duper.ProverM.ProverM.runWithExprs (ctx := {}) (s := {skolemSorryName := skSorryName})
-            Duper.ProverM.saturateNoPreprocessingClausification
-            lemmas.toList
-        return state
-      match state.result with
-      | .contradiction =>
-        IO.println s!"callDuper :: Contradiction found. Time: {(← IO.monoMsNow) - startTime}ms"
-        let expr ← Duper.rconsProof state
-        Meta.mkLambdaFVars (fvars.map (.fvar ·)) expr
-      | .saturated =>
-        throwError "callDuper :: Duper saturated"
-      | .unknown => throwError "callDuper :: Duper was terminated"
-    )
-  )
+def callDuper (ts : Array LamTerm) : ReifM (Array LamTerm × Expr × LamTerm) := Meta.withNewMCtxDepth <| do
+  let tyVal ← LamReif.getTyVal
+  let varVal ← LamReif.getVarVal
+  runAtMetaM' <| (callDuperExternMAction ts).run' { tyVal := tyVal, varVal := varVal }
 
 end Auto.Lam2D

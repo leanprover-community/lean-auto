@@ -18,6 +18,18 @@ section ManualCheck
   set_option trace.auto.buildChecker true in
   example (h₁ : False) (h₂ : a = b) : False := by auto [h₁, h₂]
 
+  -- In `Checker Statistics`, check that the `assertions` field is `4`
+  set_option auto.optimizeCheckerProof true in
+  set_option trace.auto.buildChecker true in
+  example (h₁ : a = b) (h₂ : b = c) (h₃ : c = d) : a = c := by
+    auto [h₁, h₂, h₃]
+
+  -- In `Checker Statistics`, check that the `assertions` field is `5`
+  set_option auto.optimizeCheckerProof false in
+  set_option trace.auto.buildChecker true in
+  example (h₁ : a = b) (h₂ : b = c) (h₃ : c = d) : a = c := by
+    auto [h₁, h₂, h₃]
+
 end ManualCheck
 
 -- Data Structure Robustness

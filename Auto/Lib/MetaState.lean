@@ -49,12 +49,51 @@ def runMetaM (n : MetaM α) : MetaStateM α := do
   setToState s'
   return ret
 
-def runWithIntroducedFVarsImp (m : MetaStateM (Array FVarId × α)) (k : α → MetaM β) : MetaM β := do
+def runAtMetaM (n : MetaStateM α) : MetaM (α × Meta.Context) := do
+  let s ← get
+  let ctx ← read
+  let (ret, sc) ← n.run ⟨s, ctx⟩
+  set sc.toState
+  return (ret, sc.toContext)
+
+-- Run `n`, set State and discard context
+def runAtMetaM' (n : MetaStateM α) : MetaM α := do
+  let s ← get
+  let ctx ← read
+  let (ret, sc) ← n.run ⟨s, ctx⟩
+  set sc.toState
+  return ret
+
+private def runWithFVars (lctx : LocalContext) (fvarids : Array FVarId) (k : MetaM α) : MetaM α := do
+  let mut newlctx := (← read).lctx
+  for fid in fvarids do
+    match lctx.findFVar? (.fvar fid) with
+    | .some decl =>
+      match decl with
+      | .cdecl _ fvarId userName type bi kind =>
+        newlctx := newlctx.mkLocalDecl fvarId userName type bi kind
+      | .ldecl _ fvarId userName type value nonDep kind =>
+        newlctx := newlctx.mkLetDecl fvarId userName type value nonDep kind
+    | .none => throwError "runWithFVars :: Unknown free variable {Expr.fvar fid}"
+  withReader (fun ctx => {ctx with lctx := newlctx}) k
+
+private def runWithIntroducedFVarsImp (m : MetaStateM (Array FVarId × α)) (k : α → MetaM β) : MetaM β := do
   let s ← get
   let ctx ← read
   let ((fvars, a), sc') ← m.run ⟨s, ctx⟩
-  Meta.runWithFVars sc'.lctx fvars (k a)
+  runWithFVars sc'.lctx fvars (k a)
 
+/-
+  This function is the safe version of `runAtMetaM`
+  Rationale:
+  · Although we mainly use `MetaStateM` to build a context for another
+    `MetaM` action `n`, we sometimes have to destruct `Expr.lam` and introduce
+    bound variables as free variables during the process. However, in
+    `MetaStateM`, these bound variables does not go away when we finish
+    inspecting the `Expr.lam`.
+  · To deal with this issue, we can record all the free variables that
+    are meant to be in the context of `n`, and use the following function
+-/
 def runWithIntroducedFVars [MonadControlT MetaM n] [Monad n]
   (m : MetaStateM (Array FVarId × α)) (k : α → n β) : n β :=
   Meta.map1MetaM (fun k => runWithIntroducedFVarsImp m k) k

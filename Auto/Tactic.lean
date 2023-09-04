@@ -206,11 +206,10 @@ def runAuto (instrstx : TSyntax ``autoinstr) (hintstx : TSyntax ``hints)
       catch e =>
         trace[auto.smt.result] "SMT invocation failed with {e.toMessageData}"
       -- reconstruction
-      let proof ← Lam2D.callDuper exportFacts
-      let proofLamTerm := exportFacts.foldr (fun t' t => t'.mkImp t) (.base .falseE)
-      trace[auto.printProof] "Duper found proof {← instantiateMVars proof}"
+      let (unsatCore, proof, proofLamTerm) ← Lam2D.callDuper exportFacts
+      trace[auto.printProof] "Duper found proof {← Meta.inferType proof}"
       LamReif.newAssertion proof proofLamTerm
-      let contra ← LamReif.impApps (.valid [] proofLamTerm) (exportFacts.map (.valid []))
+      let contra ← LamReif.impApps (.valid [] proofLamTerm) (unsatCore.map (.valid []))
       let checker ← LamReif.buildCheckerExprFor contra
       let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
       Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra
