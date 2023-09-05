@@ -1781,17 +1781,32 @@ def LamThmWF.prepend (H : LamThmWF lval lctx rty t) (ex : List LamSort) :
   rw [pushLCtxs.append]; rw [← pushLCtxsAt.zero ex]
   apply LamWF.ofBVarLiftsIdx (idx:=0); rfl; apply H
 
-theorem LamThmWF.ofLamCheck?
+def LamTerm.lamThmWFCheck? (ltv : LamTyVal) (lctx : List LamSort) (t : LamTerm) : Option LamSort :=
+  match LamTerm.lamCheck? ltv (pushLCtxs lctx dfLCtxTy) t with
+  | .some s =>
+    match Nat.ble (t.maxLooseBVarSucc) lctx.length with
+    | true => .some s
+    | false => .none
+  | .none => .none
+
+theorem LamThmWF.ofLamThmWFCheck?
   {lval : LamValuation} {lctx : List LamSort} {rty : LamSort} {t : LamTerm}
-  (h₁ : LamTerm.lamCheck? lval.toLamTyVal (pushLCtxs lctx dfLCtxTy) t = .some rty)
-  (h₂ : t.maxLooseBVarSucc ≤ lctx.length) : LamThmWF lval lctx rty t := by
-  intros lctx'; apply LamWF.ofLamCheck?; apply Eq.trans _ h₁
-  apply LamTerm.lamCheck?_irrelevence; intro n hlt; dsimp [pushLCtxs]
-  have hlt' : n < List.length lctx := Nat.le_trans hlt h₂
-  have htrue : Nat.blt n (List.length lctx) = true := by
-    rw [Nat.blt_eq]; exact hlt'
-  rw [htrue]; dsimp;
-  rw [List.getD_eq_get _ _ hlt']; rw [List.getD_eq_get _ _ hlt']
+  (h : LamTerm.lamThmWFCheck? lval.toLamTyVal lctx t = .some rty) : LamThmWF lval lctx rty t := by
+  revert h; dsimp [LamTerm.lamThmWFCheck?]
+  match h₁ : LamTerm.lamCheck? lval.toLamTyVal (pushLCtxs lctx dfLCtxTy) t with
+  | .some s =>
+    dsimp
+    match h₂ : Nat.ble (LamTerm.maxLooseBVarSucc t) (List.length lctx) with
+    | true =>
+      intros h lctx'; cases h; apply LamWF.ofLamCheck?; apply Eq.trans _ h₁
+      apply LamTerm.lamCheck?_irrelevence; intro n hlt; dsimp [pushLCtxs]
+      have hlt' : n < List.length lctx := Nat.le_trans hlt (Nat.ble_eq ▸ h₂)
+      have htrue : Nat.blt n (List.length lctx) = true := by
+        rw [Nat.blt_eq]; exact hlt'
+      rw [htrue]; dsimp;
+      rw [List.getD_eq_get _ _ hlt']; rw [List.getD_eq_get _ _ hlt']
+    | false => intro h; cases h
+  | .none => intro h; cases h
 
 theorem LamThmWF.ofLamThmValid (H : LamThmValid lval lctx t) :
   LamThmWF lval lctx (.base .prop) t :=

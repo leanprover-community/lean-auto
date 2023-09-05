@@ -76,5 +76,3 @@ theorem short_five_epi (surjh : Surjective h) (surjl : Surjective l) :
   auto [map_sub, square₀, surjh a₁, hf₁a₁, sub_sub_cancel]
 
 end ShortFive
-
-

@@ -644,4 +644,32 @@ theorem LamThmValid.intro1H (H : LamThmValid lval lctx t)
   (heq : LamTerm.intro1H? t = .some (s, p)) : LamThmValid lval (s :: lctx) p :=
   fun lctx' => by rw [pushLCtxs.cons]; apply LamValid.intro1H (H lctx') heq
 
+def LamTerm.intro1? (t : LamTerm) : Option (LamSort × LamTerm) :=
+  match t with
+  | .app _ fn p =>
+    match fn with
+    | .base (.forallE s) =>
+      match p with
+      | .lam _ t => .some (s, t)
+      | _ => .some (s, .app s p.bvarLift (.bvar 0))
+    | _ => .none
+  | _ => .none
+
+theorem LamValid.intro1 (H : LamValid lval lctx t)
+  (heq : LamTerm.intro1? t = .some (s, p)) : LamValid lval (pushLCtx s lctx) p := by
+  dsimp [LamTerm.intro1?] at heq
+  cases t <;> try cases heq
+  case app _ fn p =>
+    cases fn <;> try cases heq
+    case base b =>
+      cases b <;> try cases heq
+      case forallE s =>
+        dsimp at heq
+        cases p <;> try apply LamValid.intro1H H heq
+        apply LamValid.intro1F H heq
+
+theorem LamThmValid.intro1 (H : LamThmValid lval lctx t)
+  (heq : LamTerm.intro1? t = .some (s, p)) : LamThmValid lval (s :: lctx) p :=
+  fun lctx' => by rw [pushLCtxs.cons]; apply LamValid.intro1 (H lctx') heq
+
 end Auto.Embedding.Lam

@@ -823,9 +823,13 @@ open Embedding.Lam LamReif
         | .wfOfTopBeta pos => return .wfOfTopBeta (← posCont pos)
         | .validOfIntro1F pos => return .validOfIntro1F (← posCont pos)
         | .validOfIntro1H pos => return .validOfIntro1H (← posCont pos)
+        | .validOfIntros pos idx => return .validOfIntros (← posCont pos) idx
         | .validOfTopBeta pos => return .validOfTopBeta (← posCont pos)
         | .validOfImp p₁₂ p₁ => return .validOfImp (← posCont p₁₂) (← posCont p₁)
         | .validOfImps imp ps => return .validOfImps (← posCont imp) (← ps.mapM posCont)
+        | .validOfInstantiate1 pos arg => return .validOfInstantiate1 (← posCont pos) (← transLamTerm ref arg)
+        | .validOfInstantiate pos args => return .validOfInstantiate (← posCont pos) (← args.mapM (transLamTerm ref))
+        | .validOfInstantiateRev pos args => return .validOfInstantiateRev (← posCont pos) (← args.mapM (transLamTerm ref))
         )
       let _ ← newChkStep cs' (← transREntry ref hre)
     | .inr (e, _) =>

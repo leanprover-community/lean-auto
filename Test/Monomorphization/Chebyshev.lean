@@ -65,8 +65,8 @@ variable (θ : ℂ)
 value `cos (n * θ)`. -/
 @[simp]
 theorem T_complex_cos : ∀ n, (T ℂ n).eval (cos θ) = cos (n * θ)
-  | 0 => by simp only [T_zero, eval_one, Nat.cast_zero, zero_mul, cos_zero]
-  | 1 => by simp only [eval_X, one_mul, T_one, Nat.cast_one]
+  | 0 => by auto [T_zero, eval_one, Nat.cast_zero, zero_mul, cos_zero]
+  | 1 => by auto [eval_X, one_mul, T_one, Nat.cast_one]
   | n + 2 => by
     -- Porting note: partially rewrote proof for lean4 numerals.
     have : (2 : ℂ[X]) = (2 : ℕ) := by norm_num
@@ -90,7 +90,7 @@ theorem U_complex_cos (n : ℕ) : (U ℂ n).eval (cos θ) * sin θ = sin ((n + 1
     swap
     · conv_rhs => rw [sin_add, mul_comm]
     push_cast
-    simp only [add_mul, one_mul]
+    auto [add_mul, one_mul]
 
 end Complex
 
