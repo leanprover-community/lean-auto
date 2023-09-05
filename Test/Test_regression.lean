@@ -56,11 +56,12 @@ example : True := by first | auto 👍 | exact True.intro
 
 section CollectLemma
 
-  set_option auto.prep.redMode "instance" in
+  set_option trace.auto.printLemmas true
+  set_option auto.prep.redMode "instances"
   example : (∀ (xs ys zs : List α), xs ++ ys ++ zs = xs ++ (ys ++ zs)) := by
     intro xs; induction xs <;> auto [*] d[List.append]
 
-  set_option auto.prep.redMode "instance" in
+  set_option auto.prep.redMode "instances" in
   example : (∀ (m n k : Nat), m + n + k = m + (n + k)) := by
     intros m n k; revert m n; induction k <;> auto [*] d[Nat.add]
 
@@ -88,7 +89,7 @@ section UnfoldConst
 
   -- Brute force example
   -- This must be fixed
-  set_option auto.prep.redMode "instance" in
+  set_option auto.prep.redMode "instances" in
   set_option trace.auto.lamReif.printResult true in
   set_option trace.auto.lamReif.printValuation true in
   example : (∀ (m n k : Nat), m + n + k = m + (n + k)) := by
