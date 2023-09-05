@@ -476,14 +476,14 @@ theorem LamThmValid.mpLamEquiv
   have wfeq : wfp₁ = wfp₁' := eq_of_heq (LamWF.unique wfp₁ wfp₁').right
   cases wfeq; apply hp₁
 
-theorem Eq.symm (lval : LamValuation) (lctx : List LamSort)
+theorem LamEq.symm (lval : LamValuation) (lctx : List LamSort)
   (H : LamThmValid lval lctx (.mkEq s a b)) :
   LamThmValid lval lctx (.mkEq s b a) := by
   apply LamThmValid.ofLamEquiv
   apply LamEquiv.symm;
   apply LamEquiv.ofLamThmValid _ _ H
 
-theorem Eq.trans (lval : LamValuation) (lctx : List LamSort)
+theorem LamEq.trans (lval : LamValuation) (lctx : List LamSort)
   (H₁ : LamThmValid lval lctx (.mkEq s a b))
   (H₂ : LamThmValid lval lctx (.mkEq s b c)) :
   LamThmValid lval lctx (.mkEq s a c) := by
@@ -492,7 +492,7 @@ theorem Eq.trans (lval : LamValuation) (lctx : List LamSort)
   case e₁ => apply LamEquiv.ofLamThmValid _ _ H₁
   case e₂ => apply LamEquiv.ofLamThmValid _ _ H₂
 
-theorem Eq.subst (lval : LamValuation) (lctx : List LamSort)
+theorem LamEq.subst (lval : LamValuation) (lctx : List LamSort)
   (hEq : LamThmValid lval lctx (.mkEq s a b))
   (hPa : LamThmValid lval lctx (.app s p a)) :
   LamThmValid lval lctx (.app s p b) := by
@@ -505,7 +505,7 @@ theorem Eq.subst (lval : LamValuation) (lctx : List LamSort)
   case eArg =>
     apply LamEquiv.ofLamThmValid _ _ hEq
 
-theorem Eq.congr (lval : LamValuation) (lctx : List LamSort)
+theorem LamEq.congr (lval : LamValuation) (lctx : List LamSort)
   (hEq : LamThmValid lval lctx (.mkEq s' a b))
   (wfT : LamThmWF lval lctx s (.app s' f a))
   : LamThmValid lval lctx (.mkEq s (.app s' f a) (.app s' f b)) := by
@@ -564,5 +564,84 @@ theorem LamThmValid.impApp
   (H₁₂ : LamThmValid lval lctx t₁₂) (H₁ : LamThmValid lval lctx t₁)
   (heq : LamTerm.impApp? t₁₂ t₁ = .some res) : LamThmValid lval lctx res :=
   fun lctx' => LamValid.impApp (H₁₂ lctx') (H₁ lctx') heq
+
+def LamTerm.intro1F? (t : LamTerm) : Option (LamSort × LamTerm) :=
+  match t with
+  | .app _ fn lm =>
+    match fn with
+    | .base (.forallE s) =>
+      match lm with
+      | .lam _ t => .some (s, t)
+      | _ => .none 
+    | _ => .none
+  | _ => .none
+
+theorem LamValid.intro1F (H : LamValid lval lctx t)
+  (heq : LamTerm.intro1F? t = .some (s, p)) : LamValid lval (pushLCtx s lctx) p := by
+  dsimp [LamTerm.intro1F?] at heq
+  cases t <;> try cases heq
+  case app _ fn lm =>
+    cases fn <;> try cases heq
+    case base b =>
+      cases b <;> try cases heq
+      case forallE s =>
+        cases lm <;> try cases heq
+        case lam s' t =>
+          have ⟨wfl, vl⟩ := H
+          match wfl with
+          | .ofApp _ (.ofBase (.ofForallE _)) (.ofLam _ Hp) =>
+            exists Hp; intro lctxTerm
+            have vl' := vl (fun n => lctxTerm (.succ n)) (lctxTerm 0)
+            dsimp [LamWF.interp, LamBaseTerm.LamWF.interp] at vl';
+            apply Eq.mp _ vl'; apply congrArg;
+            apply eq_of_heq; apply LamWF.interp.heq <;> try rfl
+            apply HEq.funext; intro n; cases n <;> rfl
+
+-- First-order logic style intro1
+theorem LamThmValid.intro1F (H : LamThmValid lval lctx t)
+  (heq : LamTerm.intro1F? t = .some (s, p)) : LamThmValid lval (s :: lctx) p :=
+  fun lctx' => by rw [pushLCtxs.cons]; apply LamValid.intro1F (H lctx') heq
+
+def LamTerm.intro1H? (t : LamTerm) : Option (LamSort × LamTerm) :=
+  match t with
+  | .app _ fn p =>
+    match fn with
+    | .base (.forallE s) =>
+      .some (s, .app s p.bvarLift (.bvar 0))
+    | _ => .none
+  | _ => .none
+
+theorem LamValid.intro1HAux (H : LamValid lval lctx (.app s' (.base (.forallE s)) t)) :
+  LamValid lval (pushLCtx s lctx) (.app s t.bvarLift (.bvar 0)) :=
+  have ⟨wfl, vl⟩ := H
+  match wfl with
+  | .ofApp _ (.ofBase (.ofForallE _)) Hp => by
+    let Hp' := LamWF.ofBVarLiftIdx (s:=s) 0 _ Hp
+    let HApp := LamWF.ofApp s Hp' (.ofBVar 0)
+    rw [← pushLCtxAt.zero]; exists HApp; intro lctxTerm
+    dsimp [LamWF.interp]
+    have vl' := vl (fun n => lctxTerm (.succ n)) (lctxTerm 0)
+    apply Eq.mp _ vl'; apply congrArg; apply congrFun;
+    apply Eq.trans (LamWF.ofBVarLiftIdx.correct lval (idx:=0) lctx
+      (fun n => lctxTerm (Nat.succ n)) (lctxTerm 0) _ Hp) ?req
+    apply eq_of_heq; apply LamWF.interp.heq <;> try rfl
+    case HLCtxTermEq =>
+      apply HEq.funext; intro n; cases n <;> rfl
+
+theorem LamValid.intro1H (H : LamValid lval lctx t)
+  (heq : LamTerm.intro1H? t = .some (s, p)) : LamValid lval (pushLCtx s lctx) p := by
+  dsimp [LamTerm.intro1H?] at heq
+  cases t <;> try cases heq
+  case app _ fn p =>
+    cases fn <;> try cases heq
+    case base b =>
+      cases b <;> try cases heq
+      case forallE s =>
+        apply LamValid.intro1HAux H
+
+-- Higher-order logic style intro1
+theorem LamThmValid.intro1H (H : LamThmValid lval lctx t)
+  (heq : LamTerm.intro1H? t = .some (s, p)) : LamThmValid lval (s :: lctx) p :=
+  fun lctx' => by rw [pushLCtxs.cons]; apply LamValid.intro1H (H lctx') heq
 
 end Auto.Embedding.Lam

@@ -53,7 +53,17 @@ set_option auto.mono.saturationThreshold 500
 theorem short_five_mono (injh : Injective h) (injl : Injective l) :
     Injective k := by
   auto [injective_iff_map_eq_zero, injl, injh, short_exact₁.inj,
-       square₀, square₁, short_exact₀.ker_in_im, map_zero] u[Function.Injective]
+       square₀, square₁, short_exact₀.ker_in_im, map_zero] u[Injective]
+
+/- Duper fails violently
+theorem short_five_mono' (injh : Injective h) (injl : Injective l) :
+    Injective k := by
+  rw [injective_iff_map_eq_zero]
+  let injs := short_exact₁.inj
+  dsimp [Injective] at injh injl injs
+  duper [injl, injh, injs, square₀, square₁,
+         is_short_exact.ker_in_im short_exact₀, map_zero]
+-/
 
 theorem short_five_epi (surjh : Surjective h) (surjl : Surjective l) :
     Surjective k := by
@@ -64,6 +74,13 @@ theorem short_five_epi (surjh : Surjective h) (surjl : Surjective l) :
     auto [map_sub, square₁, hg₀b₀, hlc₀, sub_self]
   rcases short_exact₁.ker_in_im _ this with ⟨a₁, hf₁a₁⟩
   auto [map_sub, square₀, surjh a₁, hf₁a₁, sub_sub_cancel]
+
+-- What?
+set_option auto.prep.redMode "instance"
+theorem short_five_mono (injh : Injective h) (injl : Injective l) :
+    Injective k := by
+  auto [injective_iff_map_eq_zero, injl, injh, short_exact₁.inj,
+       square₀, square₁, short_exact₀.ker_in_im, map_zero] u[Injective]
 
 end ShortFive
 

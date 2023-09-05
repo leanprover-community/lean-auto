@@ -103,6 +103,8 @@ inductive ChkStep where
   | wfOfAppend (ex : List LamSort) (pos : Nat) : ChkStep
   | wfOfPrepend (ex : List LamSort) (pos : Nat) : ChkStep
   | wfOfTopBeta (pos : Nat) : ChkStep
+  | validOfIntro1F (pos : Nat) : ChkStep
+  | validOfIntro1H (pos : Nat) : ChkStep
   | validOfTopBeta (pos : Nat) : ChkStep
   -- `t₁ → t₂` and `t₁` implies `t₂`
   | validOfImp (p₁₂ : Nat) (p₁ : Nat) : ChkStep
@@ -116,6 +118,8 @@ def ChkStep.toString : ChkStep → String
 | .wfOfAppend ex pos => s!"wfOfAppend {ex} {pos}"
 | .wfOfPrepend ex pos => s!"wfOfPrepend {ex} {pos}"
 | .wfOfTopBeta pos => s!"wfOfTopBeta {pos}"
+| .validOfIntro1F pos => s!"validOfIntro1F {pos}"
+| .validOfIntro1H pos => s!"validOfIntro1H {pos}"
 | .validOfTopBeta pos => s!"validOfTopBeta {pos}"
 | .validOfImp p₁₂ p₁ => s!"validOfImp {p₁₂} {p₁}"
 | .validOfImps imp ps => s!"validOfImps {imp} {ps}"
@@ -161,6 +165,22 @@ def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → Option REntr
   match r.get? pos with
   | .some (.wf lctx s t) => .some (.wf lctx s t.topBeta)
   | .some (.valid _ _) => .none
+  | .none => .none
+| .validOfIntro1F pos =>
+  match r.get? pos with
+  | .some (.valid lctx t) =>
+    match t.intro1F? with
+    | .some (s, p) => .some (.valid (s :: lctx) p)
+    | .none => .none
+  | .some (.wf _ _ _) => .none
+  | .none => .none
+| .validOfIntro1H pos =>
+  match r.get? pos with
+  | .some (.valid lctx t) =>
+    match t.intro1H? with
+    | .some (s, p) => .some (.valid (s :: lctx) p)
+    | .none => .none
+  | .some (.wf _ _ _) => .none
   | .none => .none
 | .validOfTopBeta pos =>
   match r.get? pos with
@@ -249,6 +269,30 @@ theorem ChkStep.eval_correct
       apply LamThmWFP.ofLamThmWF;
       apply LamThmWF.topBeta (RTable.wfInv_get inv h)
     | .valid _ _ => exact True.intro
+| .validOfIntro1F pos => by
+  dsimp [eval]
+  cases h₁ : BinTree.get? r pos <;> try exact True.intro
+  case some lctxt =>
+    match lctxt with
+    | .wf _ _ _ => exact True.intro
+    | .valid lctx t =>
+      dsimp
+      match h₂ : t.intro1F? with
+      | .some (s, p) =>
+        apply LamThmValid.intro1F (RTable.validInv_get inv h₁) h₂
+      | .none => exact True.intro
+| .validOfIntro1H pos => by
+  dsimp [eval]
+  cases h₁ : BinTree.get? r pos <;> try exact True.intro
+  case some lctxt =>
+    match lctxt with
+    | .wf _ _ _ => exact True.intro
+    | .valid lctx t =>
+      dsimp
+      match h₂ : t.intro1H? with
+      | .some (s, p) =>
+        apply LamThmValid.intro1H (RTable.validInv_get inv h₁) h₂
+      | .none => exact True.intro
 | .validOfTopBeta pos => by
   dsimp [eval]
   cases h : BinTree.get? r pos <;> try exact True.intro

@@ -1630,6 +1630,8 @@ def LamTerm.bvarLiftsIdx (idx lvl : Nat) := LamTerm.mapBVarAt idx (fun x => Nat.
 -- Changing all `.bvar ?n` in `t` (where `?n >= idx`) to `.bvar (Nat.succ ?n)`
 def LamTerm.bvarLiftIdx (idx : Nat) (t : LamTerm) := LamTerm.bvarLiftsIdx idx 1 t
 
+@[reducible] def LamTerm.bvarLift := LamTerm.bvarLiftIdx 0
+
 def LamTerm.bvarLiftsIdx.zero (idx : Nat) : (t : LamTerm) → LamTerm.bvarLiftsIdx idx 0 t = t
 | .atom n => rfl
 | .base b => rfl
@@ -1797,51 +1799,40 @@ theorem LamThmWF.ofLamThmValid (H : LamThmValid lval lctx t) :
 
 theorem LamThmValid.append (H : LamThmValid lval lctx t)
   (ex : List LamSort) : LamThmValid lval (lctx ++ ex) t := by
-  dsimp [LamThmValid]; intros lctx'; let ⟨wft, Ht⟩ := H (pushLCtxs ex lctx')
-  exists (pushLCtxs.append _ _ _ ▸ wft); intros lctxTerm
-  let Ht' := Ht (pushLCtxs.append _ _ _ ▸ lctxTerm)
-  apply Eq.mp _ Ht'; apply congrArg (f:=GLift.down)
+  dsimp [LamThmValid]; intros lctx'; rw [pushLCtxs.append]; exact H (pushLCtxs ex lctx')
+
+theorem LamValid.prepend (H : LamValid lval lctx t)
+  (ex : List LamSort) : LamValid lval (pushLCtxs ex lctx) (t.bvarLifts ex.length) := by
+  have ⟨wft, ht⟩ := H
+  rw [← pushLCtxsAt.zero ex]; exists (LamWF.ofBVarLiftsIdx rfl _ wft)
+  intro lctxTerm;
+  let lctxTerm₁ : (n : Nat) → LamSort.interp lval.tyVal (lctx n) := fun n => by
+    apply Eq.mp _ (lctxTerm (n + ex.length)); rw [pushLCtxsAt.zero];
+    have h' : pushLCtxs ex = pushLCtxs (ex ++ []) := by rw [List.append_nil]
+    rw [h', pushLCtxs.append_add ex .nil]; rfl; rfl
+  have ht' := ht lctxTerm₁; apply Eq.mp _ ht'; apply congrArg
+  let hl' : HList (LamSort.interp lval.tyVal) ex := by
+    apply Eq.mp _ (HList.ofFun lctxTerm ex.length)
+    rw [pushLCtxsAt.zero, List.ofFun.ofPushLCtx]; rfl
+  apply Eq.trans (@LamWF.ofBVarLiftsIdx.correct
+    _ _ 0 _ ex hl' rfl _ lctxTerm₁ _ wft) _
   apply eq_of_heq; apply LamWF.interp.heq <;> try rfl
-  case h.HLCtxTyEq => apply Eq.symm; apply pushLCtxs.append
-  case h.HLCtxTermEq => apply eqRec_heq'
+  case h.HLCtxTermEq =>
+    apply HEq.trans (HEq.trans (pushLCtxsAtDep.zero _ _) ?eq') (pushsDep_popsDep_eq (lvl:=ex.length) _)
+    apply HEq.funext; intro n
+    apply pushLCtxsDep.heq <;> try rfl
+    case h₃ => rw [pushLCtxsAt.zero]; rw [List.ofFun.ofPushLCtx]; rfl
+    case h₄ => apply cast_heq
+    case h₅ =>
+      apply HEq.funext; intro n; rw [pushLCtxsAt.zero]
+      have h' : pushLCtxs ex = pushLCtxs (ex ++ []) := by rw [List.append_nil]
+      rw [h', pushLCtxs.append_add]; rfl; rfl
+    case h₆ =>
+      apply HEq.funext; intro n; apply eqRec_heq'
 
 theorem LamThmValid.prepend (H : LamThmValid lval lctx t)
-  (ex : List LamSort) : LamThmValid lval (ex ++ lctx) (t.bvarLifts ex.length) := by
-  dsimp [LamThmValid]; intros lctx'; let ⟨wft, Ht⟩ := H lctx'
-  let wft' := @LamWF.ofBVarLiftsIdx _ _ _ 0 _ ex rfl _ wft
-  rw [pushLCtxsAt.zero, ← pushLCtxs.append] at wft'; exists wft'
-  intros lctxTerm;
-  let lctxTerm₁ : (n : Nat) → LamSort.interp lval.tyVal (pushLCtxs lctx lctx' n) :=
-    fun n => pushLCtxs.append_add _ _ _ _  rfl _ ▸ lctxTerm (n + ex.length)
-  let Ht' := Ht lctxTerm₁
-  apply Eq.mp _ Ht'; apply congrArg (f:=GLift.down)
-  let Hl := HList.ofFun lctxTerm ex.length
-  let Hl' : HList (LamSort.interp lval.tyVal) ex := by
-    rw [pushLCtxs.append] at Hl; rw [List.ofFun.ofPushLCtx] at Hl;
-    exact Hl; rfl
-  apply Eq.trans _ (Eq.trans (@LamWF.ofBVarLiftsIdx.correct
-    _ _ 0 _ ex Hl' rfl _ lctxTerm₁ _ wft) _)
-  case _ => rfl
-  case _ =>
-    apply eq_of_heq; apply LamWF.interp.heq <;> try rfl
-    case h.HLCtxTyEq =>
-      rw [pushLCtxsAt.zero]; rw [pushLCtxs.append]
-    case h.HLCtxTermEq =>
-      apply HEq.trans _ (pushsDep_popsDep_eq (lvl:=ex.length) _)
-      apply HEq.trans (pushLCtxsAtDep.zero _ _)
-      apply HEq.funext; intro n;
-      apply pushLCtxsDep.heq <;> try rfl
-      case H.h₃ =>
-        rw [pushLCtxs.append]; rw [List.ofFun.ofPushLCtx]; rfl
-      case H.h₄ =>
-        dsimp;
-        apply HEq.trans (cast_heq _ _) _
-        apply cast_heq
-      case H.h₅ =>
-        apply HEq.funext; intro n;
-        rw [pushLCtxs.append]; rw [covPair.ofPushsPops]; rfl
-      case H.h₆ =>
-        apply HEq.funext; intro n; apply eqRec_heq'
+  (ex : List LamSort) : LamThmValid lval (ex ++ lctx) (t.bvarLifts ex.length) :=
+  fun lctx' => pushLCtxs.append _ _ _ ▸ LamValid.prepend (H lctx') ex
 
 -- Only accepts propositions `p` without loose bound variables
 theorem LamThmValid.ofInterpAsProp

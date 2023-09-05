@@ -123,6 +123,16 @@ example (x y : Nat) (f₁ f₂ f₃ f₄ f₅ f₆ f₇ f₈ f₉ f₁₀ f₁�
   True := by
   auto [H]
 
+-- Basic examples
+
+example (a b c d : Nat) :
+  a + b + d + c = (d + a) + (c + b) := by
+  auto [Nat.add_comm, Nat.add_assoc]
+
+example (a b c : Nat) :
+  a * (b + c) = b * a + a * c := by
+  auto [Nat.add_comm, Nat.mul_comm, Nat.add_mul]
+
 -- Binders in the goal
 
 example : 2 = 3 → 2 = 3 := by auto
@@ -156,7 +166,8 @@ example (as bs cs : List α) (f : α → β) :
   ((as ++ bs) ++ cs).map f = as.map f ++ (bs.map f ++ cs.map f) := by
   auto [List.append_assoc, List.map_append]
 
-example (as bs cs ds : List β) : (as ++ bs) ++ (cs ++ ds) = as ++ (bs ++ (cs ++ ds)) := by
+example (as bs cs ds : List β) :
+  (as ++ bs) ++ (cs ++ ds) = as ++ (bs ++ (cs ++ ds)) := by
   auto [List.append_assoc]
 
 example (as bs cs : List α) (f : α → β) :

@@ -821,6 +821,8 @@ open Embedding.Lam LamReif
         | .wfOfAppend ex pos => return .wfOfAppend (← ex.mapM (transLamSort ref)) (← posCont pos)
         | .wfOfPrepend ex pos => return .wfOfPrepend (← ex.mapM (transLamSort ref)) (← posCont pos)
         | .wfOfTopBeta pos => return .wfOfTopBeta (← posCont pos)
+        | .validOfIntro1F pos => return .validOfIntro1F (← posCont pos)
+        | .validOfIntro1H pos => return .validOfIntro1H (← posCont pos)
         | .validOfTopBeta pos => return .validOfTopBeta (← posCont pos)
         | .validOfImp p₁₂ p₁ => return .validOfImp (← posCont p₁₂) (← posCont p₁)
         | .validOfImps imp ps => return .validOfImps (← posCont imp) (← ps.mapM posCont)

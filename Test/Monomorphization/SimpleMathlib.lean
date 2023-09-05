@@ -14,13 +14,29 @@ set_option trace.auto.lamReif.printValuation true
 example (a b : ℝ) (h1 : a < b) : (∃ c, a < c ∧ c < b) := by
   auto [DenselyOrdered.dense, h1]
 
+example (a b c d : ℝ) (h1 : a < b) :
+  Set.Icc a b ⊆ Set.Ico c d ↔ c ≤ a ∧ b < d := by
+  rw [Set.subset_def]; apply Iff.intro <;>
+    auto [Set.mem_Icc, Set.mem_Ico, @le_trans, @le_total,
+          @lt_iff_not_le, DenselyOrdered.dense a b, h1]
+
 set_option maxHeartbeats 20000 in
+set_option trace.auto.smt.result true in
 example (a b c d : ℝ) (h1 : a < b) : Set.Icc a b ⊆ Set.Ico c d ↔ c ≤ a ∧ b < d := by
   auto [Set.subset_def, Set.mem_Icc, Set.mem_Ico,
         @le_trans, @le_total, @lt_iff_not_le, DenselyOrdered.dense a b, h1]
 
+set_option maxHeartbeats 400000 in
+set_option trace.auto.smt.result true in
+example (a b c d : ℝ) (h1 : a < b) : Set.Icc a b ⊆ Set.Ico c d ↔ c ≤ a ∧ b < d := by
+  rw [Set.subset_def]
+  auto [Set.mem_Icc, Set.mem_Ico, @le_trans, @le_total,
+        @lt_iff_not_le, DenselyOrdered.dense a b, h1]
+
 example : f '' s ⊆ v ↔ s ⊆ f ⁻¹' v := by
-  auto [Set.subset_def, Set.mem_image, Set.mem_preimage]
+  rw [Set.subset_def]; rw [Set.subset_def]
+  apply Iff.intro
+  case mpr => auto [Set.mem_image f, Set.mem_preimage (f:=f)]
 
 example (h : Function.Injective f) : f ⁻¹' (f '' s) ⊆ s := by
   auto [Set.subset_def, Set.mem_preimage, Function.Injective.mem_set_image]

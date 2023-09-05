@@ -24,7 +24,7 @@ private instance : Lean.KVMap.Value TransparencyMode where
   | _           => none
 
 register_option auto.prep.redMode : TransparencyMode := {
-  defValue := .instances
+  defValue := .reducible
   descr := "TransparencyMode used when reducing collected facts"
 }
 
