@@ -102,7 +102,11 @@ def inferType (e : Expr) : MetaStateM Expr := runMetaM (Meta.inferType e)
 
 def isDefEq (t s : Expr) : MetaStateM Bool := runMetaM (Meta.isDefEq t s)
 
+def isDefEqRigid (t s : Expr) : MetaStateM Bool := runMetaM (Meta.withNewMCtxDepth (Meta.isDefEq s t))
+
 def isLevelDefEq (u v : Level) : MetaStateM Bool := runMetaM (Meta.isLevelDefEq u v)
+
+def isLevelDefEqRigid (u v : Level) : MetaStateM Bool := runMetaM (Meta.withNewMCtxDepth (Meta.isLevelDefEq u v))
 
 def mkLocalDecl (fvarId : FVarId) (userName : Name) (type : Expr)
   (bi : BinderInfo := BinderInfo.default) (kind : LocalDeclKind := LocalDeclKind.default) : MetaStateM Unit := do

@@ -75,13 +75,6 @@ theorem short_five_epi (surjh : Surjective h) (surjl : Surjective l) :
   rcases short_exact₁.ker_in_im _ this with ⟨a₁, hf₁a₁⟩
   auto [map_sub, square₀, surjh a₁, hf₁a₁, sub_sub_cancel]
 
--- What?
-set_option auto.prep.redMode "instances" in
-theorem short_five_mono' (injh : Injective h) (injl : Injective l) :
-    Injective k := by
-  auto [injective_iff_map_eq_zero, injl, injh, short_exact₁.inj,
-       square₀, square₁, short_exact₀.ker_in_im, map_zero] u[Injective]
-
 end ShortFive
 
 

@@ -1,5 +1,4 @@
 import Lean
-import Auto.Preprocessing
 import Auto.Translation
 import Auto.Solver.SMT
 import Auto.HintDB

@@ -527,11 +527,13 @@ def postprocessSaturate : MonoM Unit := do
 namespace FVarRep
   
   structure State where
-    bfvars  : Array FVarId             := #[]
-    ffvars  : Array FVarId             := #[]
-    exprMap : HashMap Expr FVarId      := {}
-    ciMap   : HashMap Expr ConstInsts  
-    ciIdMap : HashMap ConstInst FVarId := {}
+    bfvars   : Array FVarId             := #[]
+    ffvars   : Array FVarId             := #[]
+    exprMap  : HashMap Expr FVarId      := {}
+    ciMap    : HashMap Expr ConstInsts
+    ciIdMap  : HashMap ConstInst FVarId := {}
+    -- Canonicalization map for types
+    tyCanMap : HashMap Expr Expr        := {}
   
   abbrev FVarRepM := StateRefT State MetaState.MetaStateM
   
@@ -544,6 +546,21 @@ namespace FVarRep
       return
     trace[auto.mono.printConstInst] "New {ci}"
     setCiMap ((← getCiMap).insert ci.fingerPrint (insts.push ci))
+
+  def processType : Expr → FVarRepM Unit
+  | .forallE _ ty body _ => do
+    if body.hasLooseBVar 0 then
+      return
+    processType ty
+    processType body
+  | e => do
+    if (← getTyCanMap).contains e then
+      return
+    for (e', ec) in (← getTyCanMap).toList do
+      if ← MetaState.isDefEqRigid e e' then
+        setTyCanMap ((← getTyCanMap).insert e ec)
+        return
+    setTyCanMap ((← getTyCanMap).insert e e)
 
   def ConstInst2FVarId (ci : ConstInst) : FVarRepM FVarId := do
     let ciMap ← FVarRep.getCiMap
@@ -558,6 +575,7 @@ namespace FVarRep
       let userName := (`cifvar).appendIndexAfter (← getCiIdMap).size
       let cie ← MetaState.runMetaM ci.toExpr
       let city ← instantiateMVars (← MetaState.inferType cie)
+      processType city
       let fvarId ← MetaState.withLetDecl userName city cie .default
       setCiIdMap ((← getCiIdMap).insert ci fvarId)
       setFfvars ((← getFfvars).push fvarId)
@@ -565,10 +583,11 @@ namespace FVarRep
   
   def UnknownExpr2FVarId (e : Expr) : FVarRepM FVarId := do
     for (e', fid) in (← getExprMap).toList do
-      if ← MetaState.runMetaM (Meta.withNewMCtxDepth <| Meta.isDefEq e e') then
+      if ← MetaState.isDefEqRigid e e' then
         return fid
     let userName := (`exfvar).appendIndexAfter (← getExprMap).size
     let ety ← instantiateMVars (← MetaState.inferType e)
+    processType ety
     let fvarId ← MetaState.withLetDecl userName ety e .default
     setExprMap ((← getExprMap).insert e fvarId)
     setFfvars ((← getFfvars).push fvarId)
@@ -578,6 +597,7 @@ namespace FVarRep
   --   bound level parameters
   partial def replacePolyWithFVar : Expr → FVarRepM Expr
   | .lam name ty body binfo => do
+    processType ty
     let fvarId ← MetaState.withLocalDecl name binfo ty .default
     setBfvars ((← getBfvars).push fvarId)
     let b' ← replacePolyWithFVar (body.instantiate1 (.fvar fvarId))
@@ -587,6 +607,7 @@ namespace FVarRep
     let tysort ← MetaState.runMetaM (do Expr.normalizeType (← Meta.inferType ty))
     let .sort tylvl := tysort
       | throwError "replacePolyWithFVar :: {tysort} is not a sort"
+    processType ty
     let fvarId ← MetaState.withLocalDecl name binfo ty .default
     setBfvars ((← getBfvars).push fvarId)
     let body' := body.instantiate1 (.fvar fvarId)
@@ -594,7 +615,9 @@ namespace FVarRep
     let .sort bodylvl := bodysort
       | throwError "replacePolyWithFVars :: Unexpected error"
     let bodyrep ← replacePolyWithFVar body'
-    if body.hasLooseBVar 0 ∨ !(← MetaState.isLevelDefEq tylvl .zero) ∨ !(← MetaState.isLevelDefEq bodylvl .zero) then
+    if body.hasLooseBVar 0 ∨
+        !(← MetaState.isLevelDefEqRigid tylvl .zero) ∨
+        !(← MetaState.isLevelDefEqRigid bodylvl .zero) then
       let forallFun := Expr.app (.const ``forallF [tylvl, bodylvl]) ty
       addForallImpFInst forallFun
       let forallFunId ← replacePolyWithFVar forallFun
@@ -655,7 +678,7 @@ def monomorphize (lemmas : Array Lemma) (k : Reif.State → MetaM α) : MetaM α
     let exlis := s.exprMap.toList.map (fun (e, id) => (id, e))
     let cilis ← s.ciIdMap.toList.mapM (fun (ci, id) => do return (id, ← MetaState.runMetaM ci.toExpr))
     let polyVal := HashMap.ofList (exlis ++ cilis)
-    return (s.ffvars, Reif.State.mk s.ffvars ufacts polyVal))
+    return (s.ffvars, Reif.State.mk s.ffvars ufacts polyVal s.tyCanMap))
   MetaState.runWithIntroducedFVars metaStateMAction k
 
 end Auto.Monomorphization

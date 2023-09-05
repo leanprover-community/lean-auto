@@ -17,10 +17,12 @@ structure State where
   --   will be removed from `facts` and the instantiated
   --   versions will be added to `facts`.
   facts           : Array UMonoFact     := #[]
-  -- During monomorphization, polymorphic constants will be turned
+  -- During monomorphization, constants will be turned
   --   into free variables. This map records the original expression
   --   corresponding to these free variables.
-  polyVal         : HashMap FVarId Expr := {}
+  exprFVarVal     : HashMap FVarId Expr := {}
+  -- Canonicalization map for types
+  tyCanMap        : HashMap Expr Expr   := {}  
 
 abbrev ReifM := StateT State MetaM
 
@@ -34,7 +36,12 @@ abbrev ReifM := StateT State MetaM
 --   return its value recorded in `polyVal`. Otherwise return `e`
 @[inline] def resolveVal (e : Expr) : ReifM Expr :=
   match e with
-  | .fvar id => do return ((← getPolyVal).find? id).getD e
+  | .fvar id => do return ((← getExprFVarVal).find? id).getD e
   | _ => return e
+
+@[inline] def resolveTy (e : Expr) : ReifM Expr := do
+  match (← getTyCanMap).find? e with
+  | .some id => return id
+  | .none => throwError "resolveTy :: Unable to resolve {e}"
 
 end Auto.Reif

@@ -48,7 +48,7 @@ def unfoldProj (e : Expr) : MetaM Expr :=
     Meta.mkAppOptM sfi.projFn ((Array.mk nones).push struct)
   | _ => return e
 
-/-- This function is expensive and should only be used in preprocessing -/
+/-- This function is expensive -/
 partial def preprocessTerm (term : Expr) : MetaM Expr := do
   let red (e : Expr) : MetaM TransformStep := do
     let e := e.consumeMData

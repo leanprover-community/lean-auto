@@ -221,3 +221,21 @@ section FluidDep
     auto [h]
 
 end FluidDep
+
+-- Defeq Problem in Types
+
+section TypeDefeq
+
+  class Foo where
+    foo : Nat
+
+  def inst₁ : Foo := ⟨2⟩
+
+  def inst₂ : Foo := ⟨2⟩
+
+  variable (fun₁ : [Foo] → Type)
+
+  example (f : @fun₁ inst₁ → Nat) (g : @fun₁ inst₂ → Nat) (H : f = g) : g = f := by
+    auto [H]
+
+end TypeDefeq

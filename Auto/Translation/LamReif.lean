@@ -345,7 +345,7 @@ def newTypeExpr (e : Expr) : ReifM LamSort := do
 
 def processTypeExpr (e : Expr) : ReifM LamSort := do
   let tyVarMap ← getTyVarMap
-  let e ← Reif.resolveVal e
+  let e ← Reif.resolveTy e
   if let .some idx := tyVarMap.find? e then
     return .atom idx
   match e with
@@ -364,7 +364,7 @@ def reifType : Expr → ReifM LamSort
 | .mdata _ e => reifType e
 | e@(.forallE _ ty body _) => do
   if body.hasLooseBVar 0 then
-    throwError "reifType :: The type {e} has dependent ∀"
+    throwError "reifType :: Type {e} has dependent ∀"
   else
     return .func (← reifType ty) (← reifType body)
 | e => processTypeExpr e
