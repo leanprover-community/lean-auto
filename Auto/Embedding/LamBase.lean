@@ -673,6 +673,10 @@ def LamTerm.mkForallE (s : LamSort) (p : LamTerm) : LamTerm :=
 def LamTerm.mkExistE (s : LamSort) (p : LamTerm) : LamTerm :=
   .app (.func s (.base .prop)) (.base (.existE s)) p
 
+def LamTerm.mkAppN (t : LamTerm) : List (LamSort × LamTerm) → LamTerm
+| .nil => t
+| .cons (s, arg) args => (LamTerm.app s t arg).mkAppN args
+
 def LamTerm.getAppFn : LamTerm → LamTerm
 | .app _ fn _ => getAppFn fn
 | t           => t

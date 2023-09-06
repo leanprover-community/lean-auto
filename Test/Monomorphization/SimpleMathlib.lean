@@ -14,6 +14,10 @@ set_option trace.auto.lamReif.printValuation true
 example (a b : ℝ) (h1 : a < b) : (∃ c, a < c ∧ c < b) := by
   auto [DenselyOrdered.dense, h1]
 
+example (a e : ℝ) (h1 : a < e) : (∃ b c d, a < b ∧ b < c ∧ c < d ∧ d < e) := by
+  auto [DenselyOrdered.dense, h1]
+
+set_option trace.auto.printLemmas true in
 example (a b c d : ℝ) (h1 : a < b) :
   Set.Icc a b ⊆ Set.Ico c d ↔ c ≤ a ∧ b < d := by
   rw [Set.subset_def]; apply Iff.intro <;>

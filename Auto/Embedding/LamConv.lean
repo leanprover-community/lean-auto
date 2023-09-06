@@ -229,6 +229,14 @@ theorem LamThmValid.topBeta (H : LamThmValid lval lctx t) :
   intros lctx; let ⟨wf, h⟩ := H lctx; exists (LamWF.topBeta _ _ wf);
   intro lctxTerm; rw [← LamWF.topBeta.correct]; apply h
 
+-- **TODO**
+def LamTerm.beta (t : LamTerm) : List (LamSort × LamTerm) → LamTerm
+| .nil => t
+| arg :: args =>
+  match t with
+  | .lam _ t' => (t'.instantiate1 arg.snd).beta args
+  | t => t.mkAppN (arg :: args)
+
 def LamBaseTerm.resolveImport (ltv : LamTyVal) : LamBaseTerm → LamBaseTerm
 | .eqI n      => .eq (ltv.lamILTy n)
 | .forallEI n => .forallE (ltv.lamILTy n)
