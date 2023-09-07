@@ -19,6 +19,7 @@ syntax unfolds := ("u[" ident,* "]")?
 syntax defeqs := ("d[" ident,* "]")?
 syntax autoinstr := ("👍")?
 syntax (name := auto) "auto" autoinstr hints unfolds defeqs : tactic
+syntax (name := intromono) "intromono" hints unfolds defeqs : tactic
 
 inductive Instruction where
   | none
@@ -170,10 +171,8 @@ def checkDuplicatedFact (terms : Array Term) : TacticM Unit :=
       if terms[i]? == terms[j]? then
         throwError "Auto does not accept duplicated input terms"
 
--- `ngoal` means `negated goal`
-def runAuto (instrstx : TSyntax ``autoinstr) (hintstx : TSyntax ``hints)
-  (unfolds : TSyntax `Auto.unfolds) (defeqs : TSyntax `Auto.defeqs) (ngoalAndBinders : Array FVarId) : TacticM Result := do
-  let instr ← parseInstr instrstx
+def collectAllLemmas (hintstx : TSyntax ``hints) (unfolds : TSyntax `Auto.unfolds)
+  (defeqs : TSyntax `Auto.defeqs) (ngoalAndBinders : Array FVarId) : TacticM (Array Lemma) := do
   let inputHints ← parseHints hintstx
   let unfoldInfos ← parseUnfolds unfolds
   let defeqNames ← parseDefeqs defeqs
@@ -189,7 +188,11 @@ def runAuto (instrstx : TSyntax ``autoinstr) (hintstx : TSyntax ``hints)
   let defeqLemmas ← defeqLemmas.mapM (unfoldConstAndPreprocessLemma unfoldInfos)
   traceLemmas "Lemmas collected from user-provided defeq hints:" defeqLemmas
   trace[auto.tactic] "Preprocessing took {(← IO.monoMsNow) - startTime}ms"
-  let lemmas := lctxLemmas ++ userLemmas ++ defeqLemmas
+  return lctxLemmas ++ userLemmas ++ defeqLemmas
+
+-- `ngoal` means `negated goal`
+def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) : TacticM Result := do
+  let instr ← parseInstr instrstx
   match instr with
   | .none =>
     -- Testing. Skipping universe level instantiation and monomorphization
@@ -233,13 +236,28 @@ def evalAuto : Tactic
   let (ngoal, absurd) ← MVarId.intro1 nngoal
   replaceMainGoal [absurd]
   withMainContext do
-    let result ← runAuto instr hints unfolds defeqs (goalBinders.push ngoal)
+    let lemmas ← collectAllLemmas hints unfolds defeqs (goalBinders.push ngoal)
+    let result ← runAuto instr lemmas
     match result with
     | Result.unsat e => do
       IO.println s!"Unsat. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
       absurd.assign e
     | Result.sat _ => throwError "Sat"
     | Result.unknown => throwError "Unknown"
+| _ => throwUnsupportedSyntax
+
+@[tactic intromono]
+def evalIntromono : Tactic
+| `(intromono | intromono $hints $unfolds $defeqs) => withMainContext do
+  let (goalBinders, newGoal) ← (← getMainGoal).intros
+  let [nngoal] ← newGoal.apply (.const ``Classical.byContradiction [])
+    | throwError "evalAuto :: Unexpected result after applying Classical.byContradiction"
+  let (ngoal, absurd) ← MVarId.intro1 nngoal
+  replaceMainGoal [absurd]
+  withMainContext do
+    let lemmas ← collectAllLemmas hints unfolds defeqs (goalBinders.push ngoal)
+    let newMid ← Monomorphization.intromono lemmas absurd
+    replaceMainGoal [newMid]
 | _ => throwUnsupportedSyntax
 
 end Auto

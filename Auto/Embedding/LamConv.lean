@@ -583,35 +583,54 @@ def LamTerm.betaBounded (n : Nat) (t : LamTerm) :=
   match n with
   | 0 => t
   | .succ n' =>
-    let tb := t.headBetaBounded n'
-    match tb.isApp with
-    | true =>
+    match t with
+    | .atom _ => t
+    | .base _ => t
+    | .bvar _ => t
+    | .lam s t => .lam s (t.betaBounded n')
+    | .app .. =>
+      let tb := t.headBetaBounded n'
       let fn := tb.getAppFn
       let args := tb.getAppArgs
       let argsb := args.map (fun ((s, arg) : LamSort × _) => (s, betaBounded n' arg))
       LamTerm.mkAppN fn argsb
-    | false => tb
+
+def LamTerm.betaReduced (t : LamTerm) :=
+  match t with
+  | .atom _ => true
+  | .base _ => true
+  | .bvar _ => true
+  | .app _ fn arg =>
+    !(fn.isLam) && fn.betaReduced && arg.betaReduced
+  | .lam _ body => body.betaReduced
 
 theorem LamEquiv.ofBetaBounded (lval : LamValuation.{u})
   (wf : LamWF lval.toLamTyVal ⟨lctx, t, rty⟩) : LamEquiv _ (t.betaBounded n) wf := by
-  revert rty t; induction n <;> intro t rty wf
+  revert rty t lctx; induction n <;> intro lctx t rty wf
   case zero => apply LamEquiv.refl
   case succ n IH =>
     dsimp [LamTerm.betaBounded]
-    match (LamTerm.headBetaBounded n t).isApp with
-    | true =>
+    match t with
+    | .atom _ => apply LamEquiv.refl
+    | .base _ => apply LamEquiv.refl
+    | .bvar _ => apply LamEquiv.refl
+    | .lam s t =>
+      dsimp
+      match wf with
+      | .ofLam _ wf => apply LamEquiv.ofLam; apply IH wf
+    | .app s fn arg =>
       dsimp;
       let ⟨wfhbb, _⟩ := LamEquiv.ofHeadBetaBounded (n:=n) lval wf
       apply LamEquiv.trans _ _ wfhbb (LamEquiv.ofHeadBetaBounded _ wf)
       let ⟨wftap, eqtap⟩ := LamEquiv.eq _ wfhbb (LamTerm.appFn_appArg_eq _)
       apply LamEquiv.trans _ _ wftap ⟨wftap, eqtap⟩
-      let masterArr := (LamTerm.getAppArgs (LamTerm.headBetaBounded n t)).map (fun (s, arg) => (s, arg, arg.betaBounded n))
-      have eq₁ : (LamTerm.getAppArgs (LamTerm.headBetaBounded n t)) = masterArr.map (fun (s, arg₁, _) => (s, arg₁)) := by
+      let masterArr := (LamTerm.getAppArgs (LamTerm.headBetaBounded n (.app s fn arg))).map (fun (s, arg) => (s, arg, arg.betaBounded n))
+      have eq₁ : (LamTerm.getAppArgs (LamTerm.headBetaBounded n (.app s fn arg))) = masterArr.map (fun (s, arg₁, _) => (s, arg₁)) := by
         dsimp; rw [List.map_map]; rw [List.map_equiv _ id, List.map_id]
         intro x; cases x; rfl
       have eq₂ : List.map
         (fun x => (x.fst, LamTerm.betaBounded n x.snd))
-        (LamTerm.getAppArgs (LamTerm.headBetaBounded n t)) = masterArr.map (fun (s, _, arg₂) => (s, arg₂)) := by
+        (LamTerm.getAppArgs (LamTerm.headBetaBounded n (.app s fn arg))) = masterArr.map (fun (s, _, arg₂) => (s, arg₂)) := by
         dsimp; rw [List.map_map]; apply List.map_equiv;
         intro x; cases x; rfl
       rw [eq₂]; revert wftap; rw [eq₁]; intro wftap _;
@@ -624,18 +643,20 @@ theorem LamEquiv.ofBetaBounded (lval : LamValuation.{u})
         match x with
         | (s, t) =>
           intro argTy wfArg; dsimp; apply IH
-    | false => apply LamEquiv.ofHeadBetaBounded
 
-partial def LamTerm.betaReduceHacky (t : LamTerm) : LamTerm := Id.run <| do
+partial def LamTerm.betaReduceHackyAux (t : LamTerm) : LamTerm × Nat := Id.run <| do
   let mut cur := t
-  let mut n := t.size + 1
+  let mut n := 1
   while true do
-    let new := t.betaBounded n
-    if new == cur then
-      return cur
+    cur := t.betaBounded n
+    if cur.betaReduced then
+      return (cur, n)
     n := n * 2
-    cur := new
-  return cur
+  return (cur, n)
+
+def LamTerm.betaReduceHacky (t : LamTerm) := (betaReduceHackyAux t).fst
+
+def LamTerm.betaReduceHackyIdx (t : LamTerm) := (betaReduceHackyAux t).snd
 
 -- #eval LamTerm.betaBounded 7 (.app (.atom 0)
 --   (.lam (.atom 0) (.app (.atom 0) (.bvar 0) (.bvar 0)))

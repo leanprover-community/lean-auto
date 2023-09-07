@@ -58,11 +58,12 @@ def Meta.exprAddAndCompile (value : Expr) (declName : Name) : MetaM Unit := do
     hints       := ReducibilityHints.opaque
     safety      := DefinitionSafety.unsafe
   }
-  addAndCompile decl
+  addDecl decl
 
 def Meta.coreCheck (e : Expr) : MetaM Unit := do
   let startTime ← IO.monoMsNow
   let mut curr := e
+  -- **TODO: Fix**
   while true do
     let next ← instantiateMVars (← zetaReduce curr)
     if next == curr then
@@ -72,12 +73,14 @@ def Meta.coreCheck (e : Expr) : MetaM Unit := do
   -- Now `(e == (← instantiateMVars) e) && (e == (← zetaReduce e))`
   let res ← Meta.abstractMVars e
   -- Now metavariables in `e` are abstracted
-  let e := res.expr
-  let (_, collectFVarsState) ← e.collectFVars.run {}
-  -- Now free variables in `e` are abstracted
-  let e ← mkLambdaFVars (collectFVarsState.fvarIds.map Expr.fvar) e
-  if e.hasFVar then
-    throwError "Meta.coreCheck :: Unexpected error, {e} contains free variable after abstractFVar"
+  let mut e := res.expr
+  -- **TODO: Fix**
+  while true do
+    let (_, collectFVarsState) ← e.collectFVars.run {}
+    -- Now free variables in `e` are abstracted
+    e ← mkLambdaFVars (collectFVarsState.fvarIds.map Expr.fvar) e
+    if !e.hasFVar then
+      break
   -- Use `Core.addAndCompile` to typecheck `e`
   let coreChkStart ← IO.monoMsNow
   trace[auto.metaExtra] "Meta.coreCheck :: Preprocessing done in {coreChkStart - startTime}"

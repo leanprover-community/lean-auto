@@ -32,6 +32,15 @@ section ManualCheck
 
 end ManualCheck
 
+-- Monomorphization
+
+set_option auto.prep.redMode "instances" in
+example (as bs cs : List α) (f : α → β) :
+  ((as ++ bs) ++ cs).map f = as.map f ++ (bs.map f ++ cs.map f) := by
+  intromono [List.append_assoc, List.map_append];
+  apply monoLem_0
+  rw [monoLem_1]; rw [monoLem_3]; rw [monoLem_3]
+
 -- Data Structure Robustness
 
 section DSRobust
@@ -153,7 +162,7 @@ example
   (mul : ((α → α) → (α → α)) → ((α → α) → (α → α)) → ((α → α) → (α → α)))
   (Hmul : ∀ x y f, mul x y f = x (y f))
   (w₁ w₂ : ((α → α) → (α → α)) → ((α → α) → (α → α)) → ((α → α) → (α → α)))
-  (Hw₁₂ : (w₁ = w₂) = (w₂ = w₁)) : True := by 
+  (Hw₁₂ : (w₁ = w₂) = (w₂ = w₁)) : True := by
   auto [Hadd, Hmul, Hw₁₂]
 
 -- Polymorphic Constant
