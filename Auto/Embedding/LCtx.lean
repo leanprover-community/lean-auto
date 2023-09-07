@@ -73,14 +73,14 @@ section generic
     (fun n => restoreAt (.succ pos) restore lctx (.succ n)) = restoreAt pos restore (fun n => lctx (.succ n)) :=
     funext (fun n => restoreAt.succ_succ pos restore lctx n)
 
-  def covPair {α} (f : Nat → Nat) (restore : (Nat → α) → (Nat → α)) :=
+  def coPair {α} (f : Nat → Nat) (restore : (Nat → α) → (Nat → α)) :=
     ∀ (lctx : Nat → α) (n : Nat), (restore lctx) (f n) = lctx n
   
-  def covPairAt {α} (f : Nat → Nat) (restore : (Nat → α) → (Nat → α)) :=
+  def coPairAt {α} (f : Nat → Nat) (restore : (Nat → α) → (Nat → α)) :=
     ∀ (pos : Nat) (lctx : Nat → α) (n : Nat),
       (restoreAt pos restore lctx) (mapAt pos f n) = lctx n
   
-  theorem covPairAt.ofCovPair (cp : covPair f restore) : covPairAt f restore := by
+  theorem coPairAt.ofcoPair (cp : coPair f restore) : coPairAt f restore := by
     intros pos lctx n;
     dsimp [restoreAt, mapAt]
     match h : pos.ble n with
@@ -94,6 +94,30 @@ section generic
       rw [cp]; rw [Nat.sub_add_cancel (Nat.le_of_ble_eq_true h)]
       constructor
     | false => dsimp; rw [h]
+
+  def contraPair {α} (f : Nat → Nat) (cstr : (Nat → α) → Prop) (restore : (Nat → α) → (Nat → α)) :=
+    ∀ (lctx : Nat → α), cstr lctx → restore (lctx ∘ f) = lctx
+
+  def contraPairAt {α} (f : Nat → Nat) (cstr : (Nat → α) → Prop) (restore : (Nat → α) → (Nat → α)) :=
+    ∀ (pos : Nat) (lctx : Nat → α), cstr (fun n => lctx (n + pos)) → restoreAt pos restore (lctx ∘ (mapAt pos f)) = lctx
+
+  theorem contraPairAt.ofContraPair (cp : contraPair f cstr restore) : contraPairAt f cstr restore := by
+    intros pos lctx hcstr; apply funext; intro n
+    dsimp [restoreAt, mapAt]
+    match h : pos.ble n with
+    | true =>
+      dsimp;
+      have hle : pos ≤ n := Nat.ble_eq ▸ h
+      apply Eq.trans ?left (Eq.trans (congrFun (cp (fun n => lctx (n + pos)) hcstr) (n - pos)) ?right)
+      case left =>
+        apply congrFun; apply congrArg; apply funext; intro n
+        have heq : Nat.ble pos (n + pos) = true := by
+          apply Nat.ble_eq_true_of_le;
+          apply Nat.le_add_left
+        rw [heq]; dsimp; rw [Nat.add_sub_cancel]
+      case right =>
+        rw [Nat.sub_add_cancel hle]
+    | false => rfl
 
   def restoreAtDep {α} {lctxty : α → Sort u}
     (pos : Nat) {restore : (Nat → α) → (Nat → α)}
@@ -125,24 +149,24 @@ section generic
     HEq (fun n => restoreAtDep (.succ pos) restoreDep lctx (.succ n)) (restoreAtDep pos restoreDep (fun n => lctx (.succ n))) :=
     HEq.funext _ _ (fun n => restoreAtDep.succ_succ pos restoreDep lctx n)
 
-  def covPairDep {α} (lctxty : α → Sort u)
+  def coPairDep {α} (lctxty : α → Sort u)
     (f : Nat → Nat) (restore : (Nat → α) → (Nat → α))
     (restoreDep : ∀ {rty : Nat → α}, (∀ n, lctxty (rty n)) → ∀ n, lctxty ((restore rty) n)) :=
-    covPair f restore ∧
+    coPair f restore ∧
       ∀ {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) (n : Nat),
         HEq (@restoreDep rty lctx (f n)) (lctx n)
 
-  def covPairDepAt {α} (lctxty : α → Sort u)
+  def coPairDepAt {α} (lctxty : α → Sort u)
     (f : Nat → Nat) (restore : (Nat → α) → (Nat → α))
     (restoreDep : ∀ {rty : Nat → α}, (∀ n, lctxty (rty n)) → ∀ n, lctxty ((restore rty) n)) :=
-    covPairAt f restore ∧
+    coPairAt f restore ∧
       ∀ (pos : Nat) {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) (n : Nat),
         HEq (restoreAtDep pos restoreDep (rty:=rty) lctx (mapAt pos f n)) (lctx n)
 
-  theorem covPairDepAt.ofCovPairDep (cpd : covPairDep lctxty f restore restoreDep) :
-    covPairDepAt lctxty f restore restoreDep := by
+  theorem coPairDepAt.ofCoPairDep (cpd : coPairDep lctxty f restore restoreDep) :
+    coPairDepAt lctxty f restore restoreDep := by
     apply And.intro
-    case left => exact covPairAt.ofCovPair cpd.left
+    case left => exact coPairAt.ofcoPair cpd.left
     case right =>
       intros pos rty lctx n
       dsimp [restoreAt, restoreAtDep, mapAt]
@@ -159,6 +183,55 @@ section generic
         case h₁ => apply cpd.right
         case h₂ => rw [Nat.sub_add_cancel hle]
       | false => dsimp; rw [h]
+
+  def contraPairDep {α} (lctxty : α → Sort u)
+    (f : Nat → Nat) (cstr : (Nat → α) → Prop) (restore : (Nat → α) → (Nat → α))
+    (cstrDep : ∀ {rty : Nat → α}, (∀ n, lctxty (rty n)) → Prop)
+    (restoreDep : ∀ {rty : Nat → α}, (∀ n, lctxty (rty n)) → ∀ n, lctxty ((restore rty) n)) :=
+    contraPair f cstr restore ∧
+      ∀ {rty : Nat → α}, cstr rty → ∀ (lctx : ∀ n, lctxty (rty n)), cstrDep lctx → HEq (@restoreDep (rty ∘ f) (fun n => lctx (f n))) lctx
+
+  def contraPairDepAt {α} (lctxty : α → Sort u)
+  (f : Nat → Nat) (cstr : (Nat → α) → Prop) (restore : (Nat → α) → (Nat → α))
+  (cstrDep : ∀ {rty : Nat → α}, (∀ n, lctxty (rty n)) → Prop)
+  (restoreDep : ∀ {rty : Nat → α}, (∀ n, lctxty (rty n)) → ∀ n, lctxty ((restore rty) n)) :=
+    contraPairAt f cstr restore ∧
+      ∀ (pos : Nat) {rty : Nat → α}, cstr (fun n => rty (n + pos)) → ∀ (lctx : ∀ n, lctxty (rty n)),
+        cstrDep (fun n => lctx (n + pos)) → HEq (restoreAtDep pos restoreDep (rty:=rty ∘ (mapAt pos f)) (fun n => lctx (mapAt pos f n))) lctx
+
+  theorem contraPairDep.ofContraPairDep (cpd : contraPairDep lctxty f cstr restore cstrDep restoreDep) :
+    contraPairDepAt lctxty f cstr restore cstrDep restoreDep := by
+    apply And.intro
+    case left => exact contraPairAt.ofContraPair cpd.left
+    case right =>
+      intros pos rty hcstr lctx hcstrDep; apply HEq.funext; intro n
+      dsimp [restoreAt, restoreAtDep, mapAt]
+      match h : pos.ble n with
+      | true =>
+        dsimp;
+        have hle : pos ≤ n := Nat.ble_eq ▸ h
+        have hheq := cpd.right hcstr (fun n => lctx (n + pos)) hcstrDep
+        have hheq := congr_fun_heq (x₁:=n-pos) (x₂:=n-pos) (by rw [cpd.left _ hcstr]) hheq rfl
+        apply HEq.trans ?left (HEq.trans hheq ?right)
+        case left =>
+          have bleEq : ∀ n, Nat.ble pos (n + pos) = true := by
+            intro n; apply Nat.ble_eq_true_of_le;
+            apply Nat.le_add_left
+          apply congr_hd_heq;
+          case Hβ =>
+            apply HEq.funext; intro n; apply heq_of_eq
+            apply congrArg; apply congrFun; apply congrArg;
+            apply funext; intro n; rw [bleEq]; dsimp; rw [Nat.add_sub_cancel]
+          case h₁ =>
+            apply congr_arg₂_heq (f:=@restoreDep);
+            case H₁ =>
+              apply funext; intro n; rw [bleEq]; dsimp; rw [Nat.add_sub_cancel]
+            case H₂ =>
+              apply HEq.funext; intro n; rw [bleEq]; dsimp; rw [Nat.add_sub_cancel]
+          case h₂ => apply HEq.rfl
+        case right =>
+          rw [Nat.sub_add_cancel hle]
+      | false => rfl
 
 end generic
 
@@ -709,17 +782,32 @@ end generic
 
 section genericInst
 
-  theorem covPair.ofPushPop (x : α) :
-    covPair Nat.succ (pushLCtx x) := fun _ _ => rfl
+  theorem coPair.ofPushPop (x : α) :
+    coPair Nat.succ (pushLCtx x) := fun _ _ => rfl
 
-  theorem covPairDep.ofPushDepPopDep
+  theorem contraPair.ofPushPop (x : α) :
+    contraPair Nat.succ (fun lctx => lctx 0 = x) (pushLCtx x) := by
+    intro lctx hcstr; rw [← hcstr]; apply funext; intro n
+    cases n <;> rfl
+
+  theorem coPairDep.ofPushDepPopDep
     {lctxty : α → Sort u} {xty : α} (x : lctxty xty) :
-    covPairDep lctxty Nat.succ (pushLCtx xty) (pushLCtxDep x) :=
-    And.intro (covPair.ofPushPop xty) (fun {_} _ _ => HEq.rfl)
+    coPairDep lctxty Nat.succ (pushLCtx xty) (pushLCtxDep x) :=
+    And.intro (coPair.ofPushPop xty) (fun {_} _ _ => HEq.rfl)
 
-  theorem covPair.ofPushsPops
+  theorem contraPairDep.ofPushDepPopDep
+    {lctxty : α → Sort u} {xty : α} (x : lctxty xty) :
+    contraPairDep lctxty Nat.succ (fun lctxty => lctxty 0 = xty) (pushLCtx xty)
+      (fun lctx => HEq (lctx 0) x) (pushLCtxDep x) := by
+    apply And.intro
+    case left => apply contraPair.ofPushPop
+    case right =>
+      intro rty hcstr lctx hcstrDep; apply HEq.funext; intro n
+      cases hcstr; cases hcstrDep; cases n <;> rfl
+
+  theorem coPair.ofPushsPops
     (lvl : Nat) (xs : List α) (heq : xs.length = lvl) :
-    covPair (fun x => x + lvl) (pushLCtxs xs) := by
+    coPair (fun x => x + lvl) (pushLCtxs xs) := by
     revert xs heq; induction lvl <;> intros xs heq lctx n
     case zero =>
       dsimp [pushLCtxs]; cases xs;
@@ -731,14 +819,18 @@ section genericInst
       case cons x xs =>
         simp at heq
         rw [← IH xs heq lctx n]
-        dsimp [pushLCtxs, Nat.blt, Nat.ble, Nat.add_succ];
-        rw [Nat.succ_sub_succ];
-
-  theorem covPairDep.ofPushsDepPopsDep
+        dsimp [pushLCtxs, Nat.blt, Nat.ble, Nat.add_succ]
+        rw [Nat.succ_sub_succ]
+  
+  theorem contraPair.ofPushsPops (lvl : Nat) (xs : List α) (heq : xs.length = lvl) :
+    contraPair (fun n => n + lvl) (fun lctx => List.ofFun lctx lvl = xs) (pushLCtxs xs) := by
+    intro lctx hcstr; cases hcstr; apply pushs_pops_eq
+  
+  theorem coPairDep.ofPushsDepPopsDep
     {lctxty : α → Sort u} (lvl : Nat) {tys : List α}
     (xs : HList lctxty tys) (heq : tys.length = lvl) :
-    covPairDep lctxty (fun x => x + lvl) (pushLCtxs tys) (pushLCtxsDep xs) :=
-    And.intro (covPair.ofPushsPops lvl tys heq) (fun {rty} lctx n => by
+    coPairDep lctxty (fun x => x + lvl) (pushLCtxs tys) (pushLCtxsDep xs) :=
+    And.intro (coPair.ofPushsPops lvl tys heq) (fun {rty} lctx n => by
       dsimp [pushLCtxsDep, pushLCtxs]; revert tys lctxty n;
       induction lvl <;> intros lctxty tys xs heq lctx n
       case zero =>
@@ -753,5 +845,13 @@ section genericInst
           apply HEq.trans _ (IH xs heq lctx n)
           dsimp [Nat.blt, Nat.ble, Nat.add_succ]
           rw [Nat.succ_sub_succ]; rfl)
+
+  theorem contraPairDep.ofPushsDepPopsDep
+    {lctxty : α → Sort u} (lvl : Nat) {tys : List α}
+    (xs : HList lctxty tys) (heq : tys.length = lvl) :
+    contraPairDep lctxty (fun n => n + lvl) (fun lctxty => List.ofFun lctxty lvl = tys)
+      (pushLCtxs tys) (fun lctx => HEq (HList.ofFun lctx lvl) xs) (pushLCtxsDep xs) :=
+    And.intro (contraPair.ofPushsPops lvl tys heq) (fun {rty} hcstr lctx hcstrDep => by
+      cases hcstr; cases hcstrDep; apply pushsDep_popsDep_eq)
 
 end genericInst

@@ -41,6 +41,10 @@ theorem congr_arg_heq {α} {β : α → Sort _} (f : ∀ a, β a) :
     ∀ {a₁ a₂ : α}, a₁ = a₂ → HEq (f a₁) (f a₂)
   | _, _, rfl => HEq.rfl
 
+theorem congr_fun_heq {α} {β₁ β₂ : α → Sort _} {f₁ : ∀ a, β₁ a} {f₂ : ∀ a, β₂ a}
+  {x₁ x₂ : α} (hβ : β₁ = β₂) (h₁ : HEq f₁ f₂) (h₂ : x₁ = x₂) : HEq (f₁ x₁) (f₂ x₂) := by
+  cases hβ; cases h₁; cases h₂; apply HEq.rfl
+
 theorem heq_of_eqRec_eq' {motive : γ → Sort u} {α β : γ} (h₁ : α = β)
   (a : motive α) : HEq a (@Eq.rec γ α (fun α _ => motive α) a β h₁) := by
   subst h₁

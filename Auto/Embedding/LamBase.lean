@@ -1574,20 +1574,20 @@ def LamTerm.mapBVarAt (idx : Nat) (f : Nat → Nat) (t : LamTerm) : LamTerm :=
 
 def LamTerm.mapBVar := LamTerm.mapBVarAt 0
 
-def LamWF.ofMapBVarAt (covP : covPair f restore) (idx : Nat)
+def LamWF.ofMapBVarAt (covP : coPair f restore) (idx : Nat)
   {lamVarTy lctx} (rterm : LamTerm) :
   (HWF : LamWF lamVarTy ⟨lctx, rterm, rty⟩) →
   LamWF lamVarTy ⟨restoreAt idx restore lctx, rterm.mapBVarAt idx f, rty⟩
 | .ofAtom n => .ofAtom n
 | .ofBase b => .ofBase b
-| .ofBVar n => covPairAt.ofCovPair covP idx lctx n ▸ .ofBVar (mapAt idx f n)
+| .ofBVar n => coPairAt.ofcoPair covP idx lctx n ▸ .ofBVar (mapAt idx f n)
 | .ofLam (body:=body) bodyTy wfBody =>
   .ofLam bodyTy (restoreAt.succ_pushLCtx_Fn restore _ _ _ ▸ LamWF.ofMapBVarAt covP (.succ idx) _ wfBody)
 | .ofApp argTy' HFn HArg =>
   .ofApp argTy' (LamWF.ofMapBVarAt covP idx _ HFn) (LamWF.ofMapBVarAt covP idx _ HArg)
 
 theorem LamWF.ofMapBVarAt.correct (lval : LamValuation.{u}) {restoreDep : _}
-  (covPD : covPairDep (LamSort.interp lval.tyVal) f restore restoreDep) (idx : Nat)
+  (covPD : coPairDep (LamSort.interp lval.tyVal) f restore restoreDep) (idx : Nat)
   {lctxTy : Nat → LamSort} (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal) :
   (rterm : LamTerm) → (HWF : LamWF lval.toLamTyVal ⟨lctxTy, rterm, rTy⟩) →
   LamWF.interp lval lctxTy lctxTerm HWF = LamWF.interp lval
@@ -1604,7 +1604,7 @@ theorem LamWF.ofMapBVarAt.correct (lval : LamValuation.{u}) {restoreDep : _}
     (ofBVar (mapAt idx f n)))
   case h.h₁ =>
     dsimp [LamWF.interp]
-    apply HEq.symm; apply (covPairDepAt.ofCovPairDep covPD).right
+    apply HEq.symm; apply (coPairDepAt.ofCoPairDep covPD).right
   case h.h₂ =>
     apply LamWF.interp.heq <;> rfl
 | .lam argTy body, .ofLam bodyTy wfBody => by
@@ -1698,7 +1698,7 @@ def LamWF.ofBVarLiftsIdx
   {xs : List LamSort} (heq : xs.length = lvl)
   (rterm : LamTerm) (HWF : LamWF lamVarTy ⟨lctx, rterm, rTy⟩) :
   LamWF lamVarTy ⟨pushLCtxsAt xs idx lctx, rterm.bvarLiftsIdx idx lvl, rTy⟩ :=
-  LamWF.ofMapBVarAt (covPair.ofPushsPops _ _ heq) idx rterm HWF
+  LamWF.ofMapBVarAt (coPair.ofPushsPops _ _ heq) idx rterm HWF
 
 theorem LamWF.ofBVarLiftsIdx.correct
   (lval : LamValuation.{u}) {idx lvl : Nat}
@@ -1708,12 +1708,12 @@ theorem LamWF.ofBVarLiftsIdx.correct
   LamWF.interp lval lctxTy lctxTerm HWF = LamWF.interp lval
     (pushLCtxsAt tys idx lctxTy) (pushLCtxsAtDep xs idx lctxTerm)
     (ofBVarLiftsIdx heq rterm HWF) :=
-  LamWF.ofMapBVarAt.correct lval (covPairDep.ofPushsDepPopsDep _ _ heq) idx lctxTerm rterm HWF
+  LamWF.ofMapBVarAt.correct lval (coPairDep.ofPushsDepPopsDep _ _ heq) idx lctxTerm rterm HWF
 
 def LamWF.ofBVarLiftIdx {lamVarTy lctx} (idx : Nat)
   (rterm : LamTerm) (HWF : LamWF lamVarTy ⟨lctx, rterm, rTy⟩) :
   LamWF lamVarTy ⟨pushLCtxAt s idx lctx, rterm.bvarLiftIdx idx, rTy⟩ :=
-  LamWF.ofMapBVarAt (covPair.ofPushPop _) idx rterm HWF
+  LamWF.ofMapBVarAt (coPair.ofPushPop _) idx rterm HWF
 
 theorem LamWF.ofBVarLiftIdx.correct
   (lval : LamValuation.{u}) {idx : Nat}
@@ -1723,7 +1723,7 @@ theorem LamWF.ofBVarLiftIdx.correct
   LamWF.interp lval lctxTy lctxTerm HWF = LamWF.interp lval
     (pushLCtxAt xty idx lctxTy) (pushLCtxAtDep x idx lctxTerm)
     (ofBVarLiftIdx idx rterm HWF) :=
-  LamWF.ofMapBVarAt.correct lval (covPairDep.ofPushDepPopDep _) idx lctxTerm rterm HWF
+  LamWF.ofMapBVarAt.correct lval (coPairDep.ofPushDepPopDep _) idx lctxTerm rterm HWF
 
 def LamThmWF
   (lval : LamValuation) (lctx : List LamSort) (rty : LamSort) (t : LamTerm) :=
