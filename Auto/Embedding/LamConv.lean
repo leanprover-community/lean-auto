@@ -32,6 +32,12 @@ theorem LamEquiv.refl (lval : LamValuation) (wf : LamWF lval.toLamTyVal ⟨lctx,
 theorem LamThmEquiv.refl (lval : LamValuation) (wf : LamThmWF lval lctx s t) :
   LamThmEquiv lval lctx s t t := fun lctx => ⟨wf lctx, LamEquiv.refl _ _⟩
 
+theorem LamEquiv.eq (lval : LamValuation) (wf : LamWF lval.toLamTyVal ⟨lctx, t₁, s⟩)
+  (heq : t₁ = t₂) : LamEquiv t₁ t₂ wf := heq ▸ LamEquiv.refl lval wf
+
+theorem LamThmEquiv.eq (lval : LamValuation) (wf : LamThmWF lval lctx s t₁)
+  (heq : t₁ = t₂) : LamThmEquiv lval lctx s t₁ t₂ := fun lctx => ⟨wf lctx, LamEquiv.eq _ (wf lctx) heq⟩
+
 theorem LamEquiv.symm (lval : LamValuation) (wfa : LamWF lval.toLamTyVal ⟨lctx, a, rty⟩)
   (e : LamEquiv a b wfa) : ∃ (wfb : LamWF lval.toLamTyVal ⟨lctx, b, rty⟩), LamEquiv b a wfb :=
   let ⟨wfb, eq⟩ := e; ⟨wfb, ⟨wfa, fun lctxTerm => Eq.symm (eq lctxTerm)⟩⟩
@@ -546,6 +552,94 @@ theorem LamEquiv.ofHeadBeta (lval : LamValuation.{u})
 theorem LamThmEquiv.ofHeadBeta (wf : LamThmWF lval lctx s t) :
   LamThmEquiv lval lctx s t t.headBeta :=
   fun lctx => ⟨wf lctx, LamEquiv.ofHeadBeta _ (wf lctx)⟩
+
+def LamTerm.headBetaBounded (n : Nat) (t : LamTerm) :=
+  match n with
+  | 0 => t
+  | .succ n' =>
+    match t.isHeadbetaTarget with
+    | true => headBetaBounded n' t.headBeta
+    | false => t
+
+theorem LamEquiv.ofHeadBetaBounded (lval : LamValuation.{u})
+  (wf : LamWF lval.toLamTyVal ⟨lctx, t, rty⟩) : LamEquiv _ (t.headBetaBounded n) wf := by
+  revert t; induction n <;> intro t wf
+  case zero => apply LamEquiv.refl
+  case succ n IH =>
+    dsimp [LamTerm.headBetaBounded]
+    match t.isHeadbetaTarget with
+    | true =>
+      dsimp
+      let ⟨wfBeta, eqBeta⟩ := LamEquiv.ofHeadBeta _ wf
+      apply LamEquiv.trans _ wf wfBeta ⟨wfBeta, eqBeta⟩
+      apply IH
+    | false => apply LamEquiv.refl
+
+theorem LamThmEquiv.ofHeadBetaBounded (wf : LamThmWF lval lctx s t) :
+  LamThmEquiv lval lctx s t (t.headBetaBounded n) :=
+  fun lctx => ⟨wf lctx, LamEquiv.ofHeadBetaBounded _ (wf lctx)⟩
+
+def LamTerm.betaBounded (n : Nat) (t : LamTerm) :=
+  match n with
+  | 0 => t
+  | .succ n' =>
+    let tb := t.headBetaBounded n'
+    match tb.isApp with
+    | true =>
+      let fn := tb.getAppFn
+      let args := tb.getAppArgs
+      let argsb := args.map (fun ((s, arg) : LamSort × _) => (s, betaBounded n' arg))
+      LamTerm.mkAppN fn argsb
+    | false => tb
+
+theorem LamEquiv.ofBetaBounded (lval : LamValuation.{u})
+  (wf : LamWF lval.toLamTyVal ⟨lctx, t, rty⟩) : LamEquiv _ (t.betaBounded n) wf := by
+  revert rty t; induction n <;> intro t rty wf
+  case zero => apply LamEquiv.refl
+  case succ n IH =>
+    dsimp [LamTerm.betaBounded]
+    match (LamTerm.headBetaBounded n t).isApp with
+    | true =>
+      dsimp;
+      let ⟨wfhbb, _⟩ := LamEquiv.ofHeadBetaBounded (n:=n) lval wf
+      apply LamEquiv.trans _ _ wfhbb (LamEquiv.ofHeadBetaBounded _ wf)
+      let ⟨wftap, eqtap⟩ := LamEquiv.eq _ wfhbb (LamTerm.appFn_appArg_eq _)
+      apply LamEquiv.trans _ _ wftap ⟨wftap, eqtap⟩
+      let masterArr := (LamTerm.getAppArgs (LamTerm.headBetaBounded n t)).map (fun (s, arg) => (s, arg, arg.betaBounded n))
+      have eq₁ : (LamTerm.getAppArgs (LamTerm.headBetaBounded n t)) = masterArr.map (fun (s, arg₁, _) => (s, arg₁)) := by
+        dsimp; rw [List.map_map]; rw [List.map_equiv _ id, List.map_id]
+        intro x; cases x; rfl
+      have eq₂ : List.map
+        (fun x => (x.fst, LamTerm.betaBounded n x.snd))
+        (LamTerm.getAppArgs (LamTerm.headBetaBounded n t)) = masterArr.map (fun (s, _, arg₂) => (s, arg₂)) := by
+        dsimp; rw [List.map_map]; apply List.map_equiv;
+        intro x; cases x; rfl
+      rw [eq₂]; revert wftap; rw [eq₁]; intro wftap _;
+      apply LamEquiv.congrN
+      case hFn => intro fnTy wfFn; apply LamEquiv.refl
+      case hArgs =>
+        dsimp;
+        apply HList.toMapTy; dsimp [Function.comp]
+        apply HList.ofMapList; intro x;
+        match x with
+        | (s, t) =>
+          intro argTy wfArg; dsimp; apply IH
+    | false => apply LamEquiv.ofHeadBetaBounded
+
+partial def LamTerm.betaReduceHacky (t : LamTerm) : LamTerm := Id.run <| do
+  let mut cur := t
+  let mut n := t.size + 1
+  while true do
+    let new := t.betaBounded n
+    if new == cur then
+      return cur
+    n := n * 2
+    cur := new
+  return cur
+
+-- #eval LamTerm.betaBounded 7 (.app (.atom 0)
+--   (.lam (.atom 0) (.app (.atom 0) (.bvar 0) (.bvar 0)))
+--   (.lam (.atom 0) (.app (.atom 0) (.bvar 0) (.app (.atom 0) (.bvar 0) (.bvar 0)))))
 
 -- LamTerm.instantiate1 t' arg.snd
 -- .app arg.fst (LamTerm.lam s' t') arg.snd

@@ -661,6 +661,13 @@ inductive LamTerm
   | app     : LamSort → LamTerm → LamTerm → LamTerm
 deriving Inhabited, Hashable, Lean.ToExpr
 
+def LamTerm.size : LamTerm → Nat
+| .atom _ => 1
+| .base _ => 1
+| .bvar _ => 1
+| .lam _ t => t.size +1
+| .app _ t₁ t₂ => t₁.size + t₂.size
+
 def LamTerm.mkImp (t₁ t₂ : LamTerm) : LamTerm :=
   .app (.base .prop) (.app (.base .prop) (.base .imp) t₁) t₂
 
@@ -681,9 +688,34 @@ def LamTerm.getAppFn : LamTerm → LamTerm
 | .app _ fn _ => getAppFn fn
 | t           => t
 
-def LamTerm.getAppArgsArray : LamTerm → Array LamTerm
-| .app _ fn arg => (getAppArgsArray fn).push arg
-| _             => #[]
+def LamTerm.getAppArgsAux (args : List (LamSort × LamTerm)) : LamTerm → List (LamSort × LamTerm)
+| .app s fn arg => getAppArgsAux ((s, arg) :: args) fn
+| _             => args
+
+def LamTerm.getAppArgs := getAppArgsAux []
+
+def LamTerm.isAtom : LamTerm → Bool
+| .atom _ => true
+| _ => false
+
+def LamTerm.isBase : LamTerm → Bool
+| .base _ => true
+| _ => false
+
+def LamTerm.isbvar : LamTerm → Bool
+| .bvar _ => true
+| _ => false
+
+def LamTerm.isLam : LamTerm → Bool
+| .lam _ _ => true
+| _ => false
+
+def LamTerm.isApp : LamTerm → Bool
+| .app _ _ _ => true
+| _ => false
+
+def LamTerm.isHeadbetaTarget (t : LamTerm) :=
+  t.isApp && t.getAppFn.isLam
 
 -- Check whether the term contains loose bound variables `idx` levels
 --   above local context root
@@ -712,6 +744,13 @@ def LamTerm.maxLooseBVarSucc : LamTerm → Nat
 | .bvar n => .succ n
 | .lam _ t => .pred t.maxLooseBVarSucc
 | .app _ t₁ t₂ => Nat.max t₁.maxLooseBVarSucc t₂.maxLooseBVarSucc
+
+theorem LamTerm.appFn_appArg_eqAux (args : List (LamSort × LamTerm)) (t : LamTerm) :
+  LamTerm.mkAppN t args = LamTerm.mkAppN t.getAppFn (t.getAppArgsAux args) := by
+  revert args; induction t <;> intro args <;> try rfl
+  case app s _ arg IHFn _ => apply IHFn ((s, arg) :: args)
+
+theorem LamTerm.appFn_appArg_eq (t : LamTerm) : t = LamTerm.mkAppN t.getAppFn t.getAppArgs := appFn_appArg_eqAux [] t
 
 theorem LamTerm.maxLooseBVarSucc.spec (m : Nat) :
   (t : LamTerm) → t.hasLooseBVarGe m = true ↔ t.maxLooseBVarSucc > m
@@ -1899,26 +1938,26 @@ partial def LamTerm.toStringLCtx (lctx : Nat) : LamTerm → String
 | .lam s t => s!"(λx{lctx} : {s}, {toStringLCtx (.succ lctx) t})"
 | t@(.app ..) =>
   let fn := t.getAppFn
-  let args := t.getAppArgsArray
+  let args := t.getAppArgs
   match fn with
   | .base b =>
     match b.beq .not with
     | true =>
       match args with
-      | #[arg] => s!"(¬ {toStringLCtx lctx arg})"
+      | [(_, arg)] => s!"(¬ {toStringLCtx lctx arg})"
       | _ => "❌"
     | false =>
       match b.beq .and || b.beq .or || b.beq .imp || b.beq .iff || b.isEq || b.isEqI with
       | true =>
         match args with
-        | #[arg] => s!"({toStringLCtx lctx arg} {b})"
-        | #[arg₁, arg₂] => s!"({toStringLCtx lctx arg₁} {b} {toStringLCtx lctx arg₂})"
+        | [(_, arg)] => s!"({toStringLCtx lctx arg} {b})"
+        | [(_, arg₁), (_, arg₂)] => s!"({toStringLCtx lctx arg₁} {b} {toStringLCtx lctx arg₂})"
         | _ => "❌"
       | false =>
         match b.isForallE || b.isForallEI || b.isExistE || b.isExistEI with
         | true =>
           match args with
-          | #[arg] =>
+          | [(_, arg)] =>
             match arg with
             | .lam s t => s!"({b} x{lctx} : {s}, {toStringLCtx (.succ lctx) t})"
             | arg =>
@@ -1926,7 +1965,7 @@ partial def LamTerm.toStringLCtx (lctx : Nat) : LamTerm → String
               s!"({b}x{lctx} : {getILSortString b}, {arg's} x{lctx})"
           | _ => "❌"
         | false => "❌"
-  | fn => "(" ++ toStringLCtx lctx fn ++ " " ++ String.intercalate " " (args.map (toStringLCtx lctx)).data ++ ")"
+  | fn => "(" ++ toStringLCtx lctx fn ++ " " ++ String.intercalate " " (args.map (fun x => toStringLCtx lctx x.snd)) ++ ")"
 
 def LamTerm.toString := LamTerm.toStringLCtx 0
 

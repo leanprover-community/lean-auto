@@ -117,4 +117,10 @@ def List.mergeSort (r : α → α → Prop) [DecidableRel r]  : List α → List
     exact merge r (mergeSort r ls.1) (mergeSort r ls.2)
   termination_by mergeSort r l => List.length l
 
+theorem List.map_equiv (f₁ f₂ : α → β) (hequiv : ∀ x, f₁ x = f₂ x) : List.map f₁ xs = List.map f₂ xs := by
+  induction xs
+  case nil => rfl
+  case cons head tail IH =>
+    dsimp [List.map]; rw [hequiv, IH]
+
 end Auto

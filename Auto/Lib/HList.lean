@@ -10,4 +10,18 @@ def HList.getD {β : α → Sort _} {ty : α} (default : β ty) :
   | .(_), .cons a _,  0       => a
   | .(_), .cons _ as, .succ n => HList.getD default as n
 
+def HList.ofMapTy {γ : β → Sort _} (f : α → β) :
+  {tys : List α} → HList γ (List.map f tys) → HList (γ ∘ f) tys
+  | .nil,      .nil       => .nil
+  | .cons _ _, .cons x xs => .cons x (ofMapTy f xs)
+
+def HList.toMapTy {γ : β → Sort _} (f : α → β) :
+  {tys : List α} → HList (γ ∘ f) tys → HList γ (List.map f tys)
+  | .nil,      .nil       => .nil
+  | .cons _ _, .cons x xs => .cons x (toMapTy f xs)
+
+def HList.ofMapList {β : α → Sort _} (f : ∀ (x : α), β x) : (xs : List α) →  HList β xs
+  | .nil => .nil
+  | .cons x xs => .cons (f x) (ofMapList f xs)
+
 end Auto
