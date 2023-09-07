@@ -914,6 +914,14 @@ def LamWF.ofBVar' {ltv : LamTyVal} {lctx : Nat → LamSort} (n : Nat)
   (s : LamSort) (heq : lctx n = s) : LamWF ltv ⟨lctx, .bvar n, s⟩ := by
   rw [← heq]; apply LamWF.ofBVar
 
+def LamWF.getAppFn (wfAppN : LamWF ltv ⟨lctx, .mkAppN fn args, rty⟩) :
+  (fnTy : LamSort) × LamWF ltv ⟨lctx, fn, fnTy⟩ :=
+  match args with
+  | .nil => ⟨rty, wfAppN⟩
+  | .cons _ args =>
+    let ⟨_, .ofApp _ HFn _⟩ := getAppFn (args:=args) wfAppN
+    ⟨_, HFn⟩
+
 def LamWF.reprPrec (wf : LamWF f judge) (n : Nat) (lctxDep : Nat) :=
   let rec formatLCtxAux prec : (lctx : List LamSort) → Lean.Format
     | .nil => f!""
