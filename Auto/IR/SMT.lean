@@ -9,7 +9,7 @@ namespace Auto
 namespace IR.SMT
 
 -- <index>      ::= <numeral> | <symbol>
--- <identifier> ::= <symbol> | (_ <symbol> <index>+)
+-- <identifier> ::= <symbol>  | (_ <symbol> <index>+)
 
 private instance : Hashable (String ⊕ Nat) where
   hash : String ⊕ Nat → UInt64
