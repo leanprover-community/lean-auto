@@ -211,7 +211,7 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) : TacticM Re
       let (unsatCore, proof, proofLamTerm) ← Lam2D.callDuper exportFacts
       trace[auto.printProof] "Duper found proof {← Meta.inferType proof}"
       LamReif.newAssertion proof proofLamTerm
-      let contra ← LamReif.impApps (.valid [] proofLamTerm) (unsatCore.map (.valid []))
+      let contra ← LamReif.validOfImps (.valid [] proofLamTerm) (unsatCore.map (.valid []))
       let checker ← LamReif.buildCheckerExprFor contra
       let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
       Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra

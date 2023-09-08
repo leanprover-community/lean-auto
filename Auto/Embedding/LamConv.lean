@@ -26,6 +26,14 @@ def LamThmEquiv (lval : LamValuation) (lctx : List LamSort) (rty : LamSort)
     ∃ (wf₁ : LamWF lval.toLamTyVal ⟨pushLCtxs lctx lctx', t₁, rty⟩),
     LamEquiv t₁ t₂ wf₁
 
+theorem LamThmWF.ofLamThmEquiv_l (teq : LamThmEquiv lval lctx rty t₁ t₂) :
+  LamThmWF lval lctx rty t₁ := LamThmWF.ofLamThmWFP (fun lctx' =>
+    (let ⟨wf, _⟩ := teq lctx'; ⟨wf⟩))
+
+theorem LamThmWF.ofLamThmEquiv_r (teq : LamThmEquiv lval lctx rty t₁ t₂) :
+  LamThmWF lval lctx rty t₂ := LamThmWF.ofLamThmWFP (fun lctx' =>
+    (let ⟨_, ⟨wf, _⟩⟩ := teq lctx'; ⟨wf⟩))
+
 theorem LamEquiv.refl (lval : LamValuation) (wf : LamWF lval.toLamTyVal ⟨lctx, t, s⟩) :
   LamEquiv t t wf := ⟨wf, fun _ => rfl⟩
 
@@ -643,6 +651,9 @@ theorem LamEquiv.ofBetaBounded (lval : LamValuation.{u})
         match x with
         | (s, t) =>
           intro argTy wfArg; dsimp; apply IH
+
+theorem LamThmEquiv.ofBetaBounded (wf : LamThmWF lval lctx rty t) :
+  LamThmEquiv lval lctx rty t (t.betaBounded n) := fun lctx => ⟨wf lctx, LamEquiv.ofBetaBounded _ _⟩
 
 partial def LamTerm.betaReduceHackyAux (t : LamTerm) : LamTerm × Nat := Id.run <| do
   let mut cur := t

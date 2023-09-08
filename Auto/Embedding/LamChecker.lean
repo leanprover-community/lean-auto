@@ -102,11 +102,13 @@ inductive ChkStep where
   | wfOfCheck (lctx : List LamSort) (t : LamTerm) : ChkStep
   | wfOfAppend (ex : List LamSort) (pos : Nat) : ChkStep
   | wfOfPrepend (ex : List LamSort) (pos : Nat) : ChkStep
-  | wfOfTopBeta (pos : Nat) : ChkStep
+  | wfOfHeadBeta (pos : Nat) : ChkStep
+  | wfOfBetaBounded (pos : Nat) (bound : Nat) : ChkStep
   | validOfIntro1F (pos : Nat) : ChkStep
   | validOfIntro1H (pos : Nat) : ChkStep
   | validOfIntros (pos idx : Nat) : ChkStep
-  | validOfTopBeta (pos : Nat) : ChkStep
+  | validOfHeadBeta (pos : Nat) : ChkStep
+  | validOfBetaBounded (pos : Nat) (bound : Nat) : ChkStep
   -- `t₁ → t₂` and `t₁` implies `t₂`
   | validOfImp (p₁₂ : Nat) (p₁ : Nat) : ChkStep
   -- `t₁ → t₂ → ⋯ → tₖ → s` and `t₁, t₂, ⋯, tₖ` implies `s`
@@ -121,11 +123,13 @@ def ChkStep.toString : ChkStep → String
 | .wfOfCheck lctx t => s!"wfOfCheck {lctx} {t}"
 | .wfOfAppend ex pos => s!"wfOfAppend {ex} {pos}"
 | .wfOfPrepend ex pos => s!"wfOfPrepend {ex} {pos}"
-| .wfOfTopBeta pos => s!"wfOfTopBeta {pos}"
+| .wfOfHeadBeta pos => s!"wfOfHeadBeta {pos}"
+| .wfOfBetaBounded pos bound => s!"wfOfBetaBounded {pos} {bound}"
 | .validOfIntro1F pos => s!"validOfIntro1F {pos}"
 | .validOfIntro1H pos => s!"validOfIntro1H {pos}"
 | .validOfIntros pos idx => s!"validOfIntros {pos} {idx}"
-| .validOfTopBeta pos => s!"validOfTopBeta {pos}"
+| .validOfHeadBeta pos => s!"validOfHeadBeta {pos}"
+| .validOfBetaBounded pos bound => s!"validOfBetaBounded {pos} {bound}"
 | .validOfImp p₁₂ p₁ => s!"validOfImp {p₁₂} {p₁}"
 | .validOfImps imp ps => s!"validOfImps {imp} {ps}"
 | .validOfInstantiate1 pos arg => s!"validOfInstantiate1 {pos} {arg}"
@@ -188,9 +192,14 @@ def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → Option REntr
   | .some (.wf lctx s t) => .some (.wf (ex ++ lctx) s (t.bvarLifts ex.length))
   | .some (.valid _ _) => .none
   | .none => .none
-| .wfOfTopBeta pos =>
+| .wfOfHeadBeta pos =>
   match r.get? pos with
-  | .some (.wf lctx s t) => .some (.wf lctx s t.topBeta)
+  | .some (.wf lctx s t) => .some (.wf lctx s t.headBeta)
+  | .some (.valid _ _) => .none
+  | .none => .none
+| .wfOfBetaBounded pos bound =>
+  match r.get? pos with
+  | .some (.wf lctx s t) => .some (.wf lctx s (t.betaBounded bound))
   | .some (.valid _ _) => .none
   | .none => .none
 | .validOfIntro1F pos =>
@@ -214,9 +223,14 @@ def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → Option REntr
   | .some (.valid lctx t) => evalValidOfIntros lctx t idx
   | .some (.wf _ _ _) => .none
   | .none => .none
-| .validOfTopBeta pos =>
+| .validOfHeadBeta pos =>
   match r.get? pos with
-  | .some (.valid lctx t) => .some (.valid lctx t.topBeta)
+  | .some (.valid lctx t) => .some (.valid lctx t.headBeta)
+  | .some (.wf _ _ _) => .none
+  | .none => .none
+| .validOfBetaBounded pos bound =>
+  match r.get? pos with
+  | .some (.valid lctx t) => .some (.valid lctx (t.betaBounded bound))
   | .some (.wf _ _ _) => .none
   | .none => .none
 | .validOfImp p₁₂ p₁ =>
@@ -351,14 +365,25 @@ theorem ChkStep.eval_correct
       apply LamThmWFP.ofLamThmWF;
       apply LamThmWF.prepend (RTable.wfInv_get inv h)
     | .valid _ _ => exact True.intro
-| .wfOfTopBeta pos => by
+| .wfOfHeadBeta pos => by
   dsimp [eval]
   cases h : BinTree.get? r pos <;> try exact True.intro
   case some lctxst =>
     match lctxst with
     | .wf lctx s t =>
       apply LamThmWFP.ofLamThmWF;
-      apply LamThmWF.topBeta (RTable.wfInv_get inv h)
+      apply LamThmWF.ofLamThmEquiv_r;
+      apply LamThmEquiv.ofHeadBeta (RTable.wfInv_get inv h)
+    | .valid _ _ => exact True.intro
+| .wfOfBetaBounded pos bound => by
+  dsimp [eval]
+  cases h : BinTree.get? r pos <;> try exact True.intro
+  case some lctxst =>
+    match lctxst with
+    | .wf lctx s t =>
+      apply LamThmWFP.ofLamThmWF;
+      apply LamThmWF.ofLamThmEquiv_r;
+      apply LamThmEquiv.ofBetaBounded (RTable.wfInv_get inv h)
     | .valid _ _ => exact True.intro
 | .validOfIntro1F pos => by
   dsimp [eval]
@@ -393,14 +418,26 @@ theorem ChkStep.eval_correct
     | .valid lctx t =>
       have h' := RTable.validInv_get inv h
       apply ChkStep.evalValidOfIntros_correct _ h'
-| .validOfTopBeta pos => by
+| .validOfHeadBeta pos => by
   dsimp [eval]
   cases h : BinTree.get? r pos <;> try exact True.intro
   case some lctxt =>
     match lctxt with
     | .wf _ _ _ => exact True.intro
     | .valid lctx t =>
-      apply LamThmValid.topBeta (RTable.validInv_get inv h)
+      have h' := RTable.validInv_get inv h
+      apply LamThmValid.mpLamThmEquiv _ _ _ h'
+      apply LamThmEquiv.ofHeadBeta (LamThmWF.ofLamThmValid h')
+| .validOfBetaBounded pos bound => by
+  dsimp [eval]
+  cases h : BinTree.get? r pos <;> try exact True.intro
+  case some lctxt =>
+    match lctxt with
+    | .wf _ _ _ => exact True.intro
+    | .valid lctx t =>
+      have h' := RTable.validInv_get inv h
+      apply LamThmValid.mpLamThmEquiv _ _ _ h'
+      apply LamThmEquiv.ofBetaBounded (LamThmWF.ofLamThmValid h')
 | .validOfImp p₁₂ p₁ => by
   dsimp [eval]
   match h₁ : BinTree.get? r p₁₂ with

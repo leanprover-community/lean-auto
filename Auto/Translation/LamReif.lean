@@ -450,12 +450,12 @@ section Checker
 
   -- Functions that operates on the checker table
 
-  def impApp (v₁₂ : REntry) (v₁ : REntry) : ReifM REntry := do
+  def validOfImp (v₁₂ : REntry) (v₁ : REntry) : ReifM REntry := do
     let p₁₂ ← lookupREntryPos! v₁₂
     let p₁ ← lookupREntryPos! v₁
     newChkStep (.validOfImp p₁₂ p₁) .none
 
-  def impApps (impV : REntry) (hypVs : Array REntry) : ReifM REntry := do
+  def validOfImps (impV : REntry) (hypVs : Array REntry) : ReifM REntry := do
     let imp ← lookupREntryPos! impV
     let ps ← hypVs.mapM lookupREntryPos!
     newChkStep (.validOfImps imp ps.data) .none
@@ -820,11 +820,13 @@ open Embedding.Lam LamReif
         | .wfOfCheck lctx t => return .wfOfCheck (← lctx.mapM (transLamSort ref)) (← transLamTerm ref t)
         | .wfOfAppend ex pos => return .wfOfAppend (← ex.mapM (transLamSort ref)) (← posCont pos)
         | .wfOfPrepend ex pos => return .wfOfPrepend (← ex.mapM (transLamSort ref)) (← posCont pos)
-        | .wfOfTopBeta pos => return .wfOfTopBeta (← posCont pos)
+        | .wfOfHeadBeta pos => return .wfOfHeadBeta (← posCont pos)
+        | .wfOfBetaBounded pos bound => return .wfOfBetaBounded (← posCont pos) bound
         | .validOfIntro1F pos => return .validOfIntro1F (← posCont pos)
         | .validOfIntro1H pos => return .validOfIntro1H (← posCont pos)
         | .validOfIntros pos idx => return .validOfIntros (← posCont pos) idx
-        | .validOfTopBeta pos => return .validOfTopBeta (← posCont pos)
+        | .validOfHeadBeta pos => return .validOfHeadBeta (← posCont pos)
+        | .validOfBetaBounded pos bound => return .validOfBetaBounded (← posCont pos) bound
         | .validOfImp p₁₂ p₁ => return .validOfImp (← posCont p₁₂) (← posCont p₁)
         | .validOfImps imp ps => return .validOfImps (← posCont imp) (← ps.mapM posCont)
         | .validOfInstantiate1 pos arg => return .validOfInstantiate1 (← posCont pos) (← transLamTerm ref arg)
