@@ -937,6 +937,11 @@ def LamWF.mkEq {ltv : LamTyVal}
   LamWF ltv ⟨lctx, .mkEq s t₁ t₂, .base .prop⟩ :=
   LamWF.ofApp _ (LamWF.ofApp _ (.ofBase (.ofEq _)) wft₁) wft₂
 
+theorem LamWF.mkEq_sortEq (hwf : LamWF ltv ⟨lctx, .app s' (.app s'' (.base (.eq s)) t₁) t₂, rty⟩) :
+  s' = s ∧ s'' = s ∧ rty = .base .prop :=
+  match hwf with
+  | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) _) _ => And.intro rfl (And.intro rfl rfl)
+
 def LamWF.mkForallE {ltv : LamTyVal}
   (wfp : LamWF ltv ⟨lctx, p, .func s (.base .prop)⟩) :
   LamWF ltv ⟨lctx, .mkForallE s p, .base .prop⟩ := LamWF.ofApp _ (.ofBase (.ofForallE _)) wfp

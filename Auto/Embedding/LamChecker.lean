@@ -116,6 +116,7 @@ inductive ChkStep where
   | validOfInstantiate1 (pos : Nat) (arg : LamTerm) : ChkStep
   | validOfInstantiate (pos : Nat) (args : List LamTerm) : ChkStep
   | validOfInstantiateRev (pos : Nat) (args : List LamTerm) : ChkStep
+  | validOfCongrFun (pos rw : Nat) : ChkStep
   deriving Lean.ToExpr
 
 def ChkStep.toString : ChkStep → String
@@ -135,6 +136,7 @@ def ChkStep.toString : ChkStep → String
 | .validOfInstantiate1 pos arg => s!"validOfInstantiate1 {pos} {arg}"
 | .validOfInstantiate pos args => s!"validOfInstantiate {pos} {args}"
 | .validOfInstantiateRev pos args => s!"validOfInstantiateRev {pos} {args}"
+| .validOfCongrFun pos rw => s!"validOfCongrFun {pos} {rw}"
 
 instance : ToString ChkStep where
   toString := ChkStep.toString
