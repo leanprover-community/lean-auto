@@ -24,4 +24,9 @@ def HList.ofMapList {β : α → Sort _} (f : ∀ (x : α), β x) : (xs : List �
   | .nil => .nil
   | .cons x xs => .cons (f x) (ofMapList f xs)
 
+def HList.map {β : α → Sort _} {γ : α → Sort _} (f : ∀ (a : α), β a → γ a) :
+  {tys : List α} → (xs : HList β tys) → HList γ tys
+  | .nil,      .nil       => .nil
+  | .cons _ _, .cons x xs => .cons (f _ x) (map f xs)
+
 end Auto

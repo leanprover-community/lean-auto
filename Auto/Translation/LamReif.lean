@@ -832,6 +832,12 @@ open Embedding.Lam LamReif
         | .validOfInstantiate1 pos arg => return .validOfInstantiate1 (← posCont pos) (← transLamTerm ref arg)
         | .validOfInstantiate pos args => return .validOfInstantiate (← posCont pos) (← args.mapM (transLamTerm ref))
         | .validOfInstantiateRev pos args => return .validOfInstantiateRev (← posCont pos) (← args.mapM (transLamTerm ref))
+        | .validOfCongrArg pos rw => return .validOfCongrArg (← posCont pos) (← posCont rw)
+        | .validOfCongrFun pos rw => return .validOfCongrFun (← posCont pos) (← posCont rw)
+        | .validOfCongr pos rwFn rwArg => return .validOfCongr (← posCont pos) (← posCont rwFn) (← posCont rwArg)
+        | .validOfCongrArgs pos rws => return .validOfCongrArgs (← posCont pos) (← rws.mapM posCont)
+        | .validOfCongrFunN pos rwFn n => return .validOfCongrFunN (← posCont pos) (← posCont rwFn) n
+        | .validOfCongrs pos rwFn rwArgs => return .validOfCongrs (← posCont pos) (← posCont rwFn) (← rwArgs.mapM posCont)
         )
       let _ ← newChkStep cs' (← transREntry ref hre)
     | .inr (e, _) =>
