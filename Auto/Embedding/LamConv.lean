@@ -685,8 +685,6 @@ def LamTerm.betaReduceHackyIdx (t : LamTerm) := (betaReduceHackyAux t).snd
 --   (.lam (.atom 0) (.app (.atom 0) (.bvar 0) (.bvar 0)))
 --   (.lam (.atom 0) (.app (.atom 0) (.bvar 0) (.app (.atom 0) (.bvar 0) (.bvar 0)))))
 
--- LamTerm.instantiate1 t' arg.snd
--- .app arg.fst (LamTerm.lam s' t') arg.snd
 theorem LamThmEquiv.ofResolveImport
   (lval : LamValuation) (wfT : LamThmWF lval lctx s t) :
   LamThmEquiv lval lctx s t (t.resolveImport lval.toLamTyVal) := by
@@ -759,31 +757,6 @@ theorem LamEq.trans (lval : LamValuation) (lctx : List LamSort)
   apply LamThmEquiv.trans (b:=b)
   case e₁ => apply LamThmEquiv.ofLamThmValid _ _ H₁
   case e₂ => apply LamThmEquiv.ofLamThmValid _ _ H₂
-
-theorem LamEq.subst (lval : LamValuation) (lctx : List LamSort)
-  (hEq : LamThmValid lval lctx (.mkEq s a b))
-  (hPa : LamThmValid lval lctx (.app s p a)) :
-  LamThmValid lval lctx (.app s p b) := by
-  apply LamThmValid.mpLamThmEquiv _ _ _ hPa
-  apply LamThmEquiv.congrArg
-  case wfFn =>
-    intros lctx'
-    let .ofApp _ Hp _ := LamThmWF.ofLamThmValid hPa lctx'
-    exact Hp
-  case eArg =>
-    apply LamThmEquiv.ofLamThmValid _ _ hEq
-
-theorem LamEq.congr (lval : LamValuation) (lctx : List LamSort)
-  (hEq : LamThmValid lval lctx (.mkEq s' a b))
-  (wfT : LamThmWF lval lctx s (.app s' f a))
-  : LamThmValid lval lctx (.mkEq s (.app s' f a) (.app s' f b)) := by
-  apply LamThmValid.ofLamThmEquiv
-  apply LamThmEquiv.congrArg
-  case wfFn =>
-    intros lctx'
-    let .ofApp _ Hf _ := wfT lctx'
-    exact Hf
-  case eArg => exact LamThmEquiv.ofLamThmValid _ _ hEq
 
 def LamTerm.impApp? (t₁₂ t₁ : LamTerm) : Option LamTerm :=
   match t₁₂ with

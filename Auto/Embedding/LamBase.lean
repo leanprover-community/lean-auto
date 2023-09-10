@@ -1791,6 +1791,8 @@ abbrev LamValid (lval : LamValuation) (lctx : Nat → LamSort) (t : LamTerm) :=
 def LamThmValid (lval : LamValuation) (lctx : List LamSort) (t : LamTerm) :=
   ∀ (lctx' : Nat → LamSort), LamValid lval (pushLCtxs lctx lctx') t
 
+def LamNonempty (tyVal : Nat → Type u) (s : LamSort) := Nonempty (s.interp tyVal)
+
 @[reducible] def dfLCtxTy : Nat → LamSort := fun _ => .base .prop
 
 @[reducible] def dfLCtxTerm (val : Nat → Type u) : ∀ n, LamSort.interp val (dfLCtxTy n) :=

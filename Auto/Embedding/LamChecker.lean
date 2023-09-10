@@ -8,16 +8,18 @@ inductive REntry where
   -- Well-formed formulas, with types
   -- We do not import well-formedness facts because
   --   we have `LamWF.ofLamCheck?`
-  | wf      : List LamSort → LamSort → LamTerm → REntry
+  | wf        : List LamSort → LamSort → LamTerm → REntry
   -- Valid propositions
   -- The initial formulas in the `valid` table will be
   --   imported from `ImportTable`
-  | valid   : List LamSort → LamTerm → REntry
+  | valid     : List LamSort → LamTerm → REntry
+  | nonempty : LamSort → REntry
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
 def REntry.repr : REntry → String
 | .wf ss s t => s!"Auto.Embedding.Lam.REntry.wf {reprPrec ss 1} {reprPrec s 1} {reprPrec t 1}"
 | .valid ss t => s!"Auto.Embedding.Lam.REntry.valid {reprPrec ss 1} {reprPrec t 1}"
+| .nonempty s => s!"Audo.Embedding.Lam.REntry.nonempty {reprPrec s 1}"
 
 instance : Repr REntry where
   reprPrec := fun re _ => re.repr
@@ -25,6 +27,7 @@ instance : Repr REntry where
 def REntry.toString : REntry → String
 | .wf ss s t => s!"wf {ss} {s} {t}"
 | .valid ss t => s!"valid {ss} {t}"
+| .nonempty s => s!"nonempty {s}"
 
 instance : ToString REntry where
   toString := REntry.toString
@@ -38,6 +41,7 @@ abbrev RTable := Auto.BinTree REntry
 def REntry.correct (lval : LamValuation.{u}) : REntry → Prop
 | .wf lctx s t => LamThmWFP lval lctx s t
 | .valid lctx t => LamThmValid lval lctx t
+| .nonempty s => LamNonempty lval.tyVal s
 
 def RTable.addEntry (r : RTable) (n : Nat) (re : REntry) : RTable :=
   r.insert n re
@@ -56,10 +60,33 @@ theorem RTable.validInv_get
   LamThmValid lval lctx t := by
   have inv' := inv n; rw [h] at inv'; exact inv'
 
+theorem RTable.nonemptyInv_get
+  {r : RTable} (inv : RTable.inv lval r) (h : BinTree.get? r n = Option.some (.nonempty s)) :
+  LamNonempty lval.tyVal s := by
+  have inv' := inv n; rw [h] at inv'; exact inv'
+
+def RTable.getWF (r : RTable) (v : Nat) : Option (List LamSort × LamSort × LamTerm) :=
+  match r.get? v with
+  | .some (.valid _ _ ) => .none
+  | .some (.wf lctx s t) => .some (lctx, s, t)
+  | .some (.nonempty _) => .none
+  | .none => .none
+
+theorem RTable.getWF_correct
+  (inv : RTable.inv lval r) (heq : getWF r v = .some (lctx, s, t)) :
+  LamThmWF lval lctx s t := by
+  revert heq; dsimp [getWF]
+  match h : BinTree.get? r v with
+  | .some (.valid lctx t) => intro heq; cases heq
+  | .some (.wf _ _ _) => intro heq; cases heq; apply RTable.wfInv_get inv h
+  | .some (.nonempty _) => intro heq; cases heq
+  | .none => intro heq; cases heq
+
 def RTable.getValid (r : RTable) (v : Nat) : Option (List LamSort × LamTerm) :=
   match r.get? v with
   | .some (.valid lctx t) => .some (lctx, t)
   | .some (.wf _ _ _) => .none
+  | .some (.nonempty _) => .none
   | .none => .none
 
 theorem RTable.getValid_correct
@@ -69,6 +96,7 @@ theorem RTable.getValid_correct
   match h : BinTree.get? r v with
   | .some (.valid lctx t) => intro heq; cases heq; apply RTable.validInv_get inv h
   | .some (.wf _ _ _) => intro heq; cases heq
+  | .some (.nonempty _) => intro heq; cases heq
   | .none => intro heq; cases heq
 
 def RTable.getValidEnsureLCtx (r : RTable) (lctx : List LamSort) (v : Nat) : Option LamTerm :=
@@ -78,6 +106,7 @@ def RTable.getValidEnsureLCtx (r : RTable) (lctx : List LamSort) (v : Nat) : Opt
     | true => .some t
     | false => .none
   | .some (.wf _ _ _) => .none
+  | .some (.nonempty _) => .none
   | .none => .none
 
 theorem RTable.getValidEnsureLCtx_correct
@@ -93,6 +122,7 @@ theorem RTable.getValidEnsureLCtx_correct
       apply RTable.validInv_get inv hv
     | false => intro heq; cases heq
   | .some (.wf _ _ _) => intro heq; cases heq
+  | .some (.nonempty _) => intro heq; cases heq
   | .none => intro heq; cases heq
 
 def RTable.getValidsEnsureLCtx (r : RTable) (lctx : List LamSort) (vs : List Nat) : Option (List LamTerm) :=
@@ -105,6 +135,7 @@ def RTable.getValidsEnsureLCtx (r : RTable) (lctx : List LamSort) (vs : List Nat
       | true => List.cons t <$> getValidsEnsureLCtx r lctx vs
       | false => .none
     | .some (.wf _ _ _) => .none
+    | .some (.nonempty _) => .none
     | .none => .none
 
 theorem RTable.getValidsEnsureLCtx_correct
@@ -129,6 +160,7 @@ theorem RTable.getValidsEnsureLCtx_correct
         | .none => intro heq; cases heq
       | false => intro heq; cases heq
     | .some (.wf _ _ _) => intro heq; cases heq
+    | .some (.nonempty _) => intro heq; cases heq
     | .none => intro heq; cases heq
 
 -- The meta code of the checker will prepare this `ImportTable`
@@ -255,78 +287,67 @@ def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → Option REntr
   | .some rty => .some (.wf lctx rty t)
   | .none => .none
 | .wfOfAppend ex pos =>
-  match r.get? pos with
-  | .some (.wf lctx s t) => .some (.wf (lctx ++ ex) s t)
-  | .some (.valid _ _) => .none
+  match r.getWF pos with
+  | .some (lctx, s, t) => .some (.wf (lctx ++ ex) s t)
   | .none => .none
 | .wfOfPrepend ex pos =>
-  match r.get? pos with
-  | .some (.wf lctx s t) => .some (.wf (ex ++ lctx) s (t.bvarLifts ex.length))
-  | .some (.valid _ _) => .none
+  match r.getWF pos with
+  | .some (lctx, s, t) => .some (.wf (ex ++ lctx) s (t.bvarLifts ex.length))
   | .none => .none
 | .wfOfHeadBeta pos =>
-  match r.get? pos with
-  | .some (.wf lctx s t) => .some (.wf lctx s t.headBeta)
-  | .some (.valid _ _) => .none
+  match r.getWF pos with
+  | .some (lctx, s, t) => .some (.wf lctx s t.headBeta)
   | .none => .none
 | .wfOfBetaBounded pos bound =>
-  match r.get? pos with
-  | .some (.wf lctx s t) => .some (.wf lctx s (t.betaBounded bound))
-  | .some (.valid _ _) => .none
+  match r.getWF pos with
+  | .some (lctx, s, t) => .some (.wf lctx s (t.betaBounded bound))
   | .none => .none
 | .validOfIntro1F pos =>
-  match r.get? pos with
-  | .some (.valid lctx t) =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
     match t.intro1F? with
     | .some (s, p) => .some (.valid (s :: lctx) p)
     | .none => .none
-  | .some (.wf _ _ _) => .none
   | .none => .none
 | .validOfIntro1H pos =>
-  match r.get? pos with
-  | .some (.valid lctx t) =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
     match t.intro1H? with
     | .some (s, p) => .some (.valid (s :: lctx) p)
     | .none => .none
-  | .some (.wf _ _ _) => .none
   | .none => .none
 | .validOfIntros pos idx =>
-  match r.get? pos with
-  | .some (.valid lctx t) => evalValidOfIntros lctx t idx
-  | .some (.wf _ _ _) => .none
+  match r.getValid pos with
+  | .some (lctx, t) => evalValidOfIntros lctx t idx
   | .none => .none
 | .validOfHeadBeta pos =>
-  match r.get? pos with
-  | .some (.valid lctx t) => .some (.valid lctx t.headBeta)
-  | .some (.wf _ _ _) => .none
+  match r.getValid pos with
+  | .some (lctx, t) => .some (.valid lctx t.headBeta)
   | .none => .none
 | .validOfBetaBounded pos bound =>
-  match r.get? pos with
-  | .some (.valid lctx t) => .some (.valid lctx (t.betaBounded bound))
-  | .some (.wf _ _ _) => .none
+  match r.getValid pos with
+  | .some (lctx, t) => .some (.valid lctx (t.betaBounded bound))
   | .none => .none
 | .validOfImp p₁₂ p₁ =>
-  match r.get? p₁₂ with
-  | .some (.valid lctx t₁₂) =>
+  match r.getValid p₁₂ with
+  | .some (lctx, t₁₂) =>
     match r.getValidEnsureLCtx lctx p₁ with
     | .some t₁ =>
       match LamTerm.impApp? t₁₂ t₁ with
       | .some t₂ => .some (.valid lctx t₂)
       | .none => .none
     | .none => .none
-  | .some (.wf _ _ _) => .none
   | .none => .none
 | .validOfImps imp ps =>
-  match r.get? imp with
-  | .some (.valid lctx t) =>
+  match r.getValid imp with
+  | .some (lctx, t) =>
     match r.getValidsEnsureLCtx lctx ps with
     | .some ts => REntry.valid lctx <$> t.impApps? ts
     | .none => .none
-  | .some (.wf _ _ _) => .none
   | .none => .none
 | .validOfInstantiate1 pos arg =>
-  match r.get? pos with
-  | .some (.valid lctx t) =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
     match lctx with
     | .nil => .none
     | .cons argTy lctx =>
@@ -336,75 +357,62 @@ def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → Option REntr
         | true => .some (.valid lctx (LamTerm.instantiate1 arg t))
         | false => .none
       | .none => .none
-  | .some (.wf _ _ _) => .none
   | .none => .none
 | .validOfInstantiate pos args =>
-  match r.get? pos with
-  | .some (.valid lctx t) => evalValidOfInstantiate ltv lctx t args
-  | .some (.wf _ _ _) => .none
+  match r.getValid pos with
+  | .some (lctx, t) => evalValidOfInstantiate ltv lctx t args
   | .none => .none
 | .validOfInstantiateRev pos args =>
-  match r.get? pos with
-  | .some (.valid lctx t) => evalValidOfInstantiate ltv lctx t args.reverse
-  | .some (.wf _ _ _) => .none
+  match r.getValid pos with
+  | .some (lctx, t) => evalValidOfInstantiate ltv lctx t args.reverse
   | .none => .none
 | .validOfCongrArg pos rw =>
-  match r.get? pos with
-  | .some (.valid lctx t) =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
     match r.getValidEnsureLCtx lctx rw with
     | .some rwt => REntry.valid lctx <$> t.congrArg? rwt
     | .none => .none
-  | .some (.wf _ _ _) => .none
   | .none => .none
 | .validOfCongrFun pos rw =>
-  match r.get? pos with
-  | .some (.valid lctx t) =>
-    match r.get? rw with
-    | .some (.valid lctx' rwt) =>
-      match lctx.beq lctx' with
-      | true => REntry.valid lctx <$> t.congrFun? rwt
-      | false => .none
-    | .some (.wf _ _ _) => .none
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    match r.getValidEnsureLCtx lctx rw with
+    | .some rwt => REntry.valid lctx <$> t.congrFun? rwt
     | .none => .none
-  | .some (.wf _ _ _) => .none
   | .none => .none
 | .validOfCongr pos rwFn rwArg =>
-  match r.get? pos with
-  | .some (.valid lctx t) =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
     match r.getValidEnsureLCtx lctx rwFn with
     | .some rwFnt =>
       match r.getValidEnsureLCtx lctx rwArg with
       | .some rwArgt => REntry.valid lctx <$> t.congr? rwFnt rwArgt
       | .none => .none
     | .none => .none
-  | .some (.wf _ _ _) => .none
   | .none => .none
 | .validOfCongrArgs pos rws =>
-  match r.get? pos with
-  | .some (.valid lctx t) =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
     match r.getValidsEnsureLCtx lctx rws with
     | .some ts => REntry.valid lctx <$> t.congrArgs? ts
     | .none => .none
-  | .some (.wf _ _ _) => .none
   | .none => .none
 | .validOfCongrFunN pos rwFn n =>
-  match r.get? pos with
-  | .some (.valid lctx t) => 
+  match r.getValid pos with
+  | .some (lctx, t) => 
     match r.getValidEnsureLCtx lctx rwFn with
     | .some rwFnt => REntry.valid lctx <$> t.congrFunN? rwFnt n
     | _ => .none
-  | .some (.wf _ _ _) => .none
   | .none => .none
 | .validOfCongrs pos rwFn rwArgs =>
-  match r.get? pos with
-  | .some (.valid lctx t) =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
     match r.getValidEnsureLCtx lctx rwFn with
     | .some rwFnt =>
       match r.getValidsEnsureLCtx lctx rwArgs with
       | .some rwArgt => REntry.valid lctx <$> t.congrs? rwFnt rwArgt
       | .none => .none
     | .none => .none
-  | .some (.wf _ _ _) => .none
   | .none => .none
 
 theorem ChkStep.evalValidOfIntros_correct (lval : LamValuation)
@@ -455,133 +463,122 @@ theorem ChkStep.eval_correct
     exact LamThmWF.ofLamThmWFCheck? h
 | .wfOfAppend ex pos => by
   dsimp [eval]
-  cases h : BinTree.get? r pos <;> try exact True.intro
+  cases h : r.getWF pos <;> try exact True.intro
   case some lctxst =>
     match lctxst with
-    | .wf lctx s t =>
+    | (lctx, s, t) =>
       apply LamThmWFP.ofLamThmWF;
-      apply LamThmWF.append (RTable.wfInv_get inv h)
-    | .valid _ _ => exact True.intro
+      apply LamThmWF.append (RTable.getWF_correct inv h)
 | .wfOfPrepend ex pos => by
   dsimp [eval]
-  cases h : BinTree.get? r pos <;> try exact True.intro
+  cases h : r.getWF pos <;> try exact True.intro
   case some lctxst =>
     match lctxst with
-    | .wf lctx s t =>
+    | (lctx, s, t) =>
       apply LamThmWFP.ofLamThmWF;
-      apply LamThmWF.prepend (RTable.wfInv_get inv h)
-    | .valid _ _ => exact True.intro
+      apply LamThmWF.prepend (RTable.getWF_correct inv h)
 | .wfOfHeadBeta pos => by
   dsimp [eval]
-  cases h : BinTree.get? r pos <;> try exact True.intro
+  cases h : r.getWF pos <;> try exact True.intro
   case some lctxst =>
     match lctxst with
-    | .wf lctx s t =>
+    | (lctx, s, t) =>
       apply LamThmWFP.ofLamThmWF;
       apply LamThmWF.ofLamThmEquiv_r;
-      apply LamThmEquiv.ofHeadBeta (RTable.wfInv_get inv h)
-    | .valid _ _ => exact True.intro
+      apply LamThmEquiv.ofHeadBeta (RTable.getWF_correct inv h)
 | .wfOfBetaBounded pos bound => by
   dsimp [eval]
-  cases h : BinTree.get? r pos <;> try exact True.intro
+  cases h : r.getWF pos <;> try exact True.intro
   case some lctxst =>
     match lctxst with
-    | .wf lctx s t =>
+    | (lctx, s, t) =>
       apply LamThmWFP.ofLamThmWF;
       apply LamThmWF.ofLamThmEquiv_r;
-      apply LamThmEquiv.ofBetaBounded (RTable.wfInv_get inv h)
-    | .valid _ _ => exact True.intro
+      apply LamThmEquiv.ofBetaBounded (RTable.getWF_correct inv h)
 | .validOfIntro1F pos => by
   dsimp [eval]
-  cases h₁ : BinTree.get? r pos <;> try exact True.intro
+  cases h₁ : r.getValid pos <;> try exact True.intro
   case some lctxt =>
     match lctxt with
-    | .wf _ _ _ => exact True.intro
-    | .valid lctx t =>
+    | (lctx, t) =>
       dsimp
       match h₂ : t.intro1F? with
       | .some (s, p) =>
-        apply LamThmValid.intro1F (RTable.validInv_get inv h₁) h₂
+        apply LamThmValid.intro1F (RTable.getValid_correct inv h₁) h₂
       | .none => exact True.intro
 | .validOfIntro1H pos => by
   dsimp [eval]
-  cases h₁ : BinTree.get? r pos <;> try exact True.intro
+  cases h₁ : r.getValid pos <;> try exact True.intro
   case some lctxt =>
     match lctxt with
-    | .wf _ _ _ => exact True.intro
-    | .valid lctx t =>
+    | (lctx, t) =>
       dsimp
       match h₂ : t.intro1H? with
       | .some (s, p) =>
-        apply LamThmValid.intro1H (RTable.validInv_get inv h₁) h₂
+        apply LamThmValid.intro1H (RTable.getValid_correct inv h₁) h₂
       | .none => exact True.intro
 | .validOfIntros pos idx => by
   dsimp [eval]
-  cases h : BinTree.get? r pos <;> try exact True.intro
+  cases h : r.getValid pos <;> try exact True.intro
   case some lctxt =>
     match lctxt with
-    | .wf _ _ _ => exact True.intro
-    | .valid lctx t =>
-      have h' := RTable.validInv_get inv h
+    | (lctx, t) =>
+      have h' := RTable.getValid_correct inv h
       apply ChkStep.evalValidOfIntros_correct _ h'
 | .validOfHeadBeta pos => by
   dsimp [eval]
-  cases h : BinTree.get? r pos <;> try exact True.intro
+  cases h : r.getValid pos <;> try exact True.intro
   case some lctxt =>
     match lctxt with
-    | .wf _ _ _ => exact True.intro
-    | .valid lctx t =>
-      have h' := RTable.validInv_get inv h
+    | (lctx, t) =>
+      have h' := RTable.getValid_correct inv h
       apply LamThmValid.mpLamThmEquiv _ _ _ h'
       apply LamThmEquiv.ofHeadBeta (LamThmWF.ofLamThmValid h')
 | .validOfBetaBounded pos bound => by
   dsimp [eval]
-  cases h : BinTree.get? r pos <;> try exact True.intro
+  cases h : r.getValid pos <;> try exact True.intro
   case some lctxt =>
     match lctxt with
-    | .wf _ _ _ => exact True.intro
-    | .valid lctx t =>
-      have h' := RTable.validInv_get inv h
+    | (lctx, t) =>
+      have h' := RTable.getValid_correct inv h
       apply LamThmValid.mpLamThmEquiv _ _ _ h'
       apply LamThmEquiv.ofBetaBounded (LamThmWF.ofLamThmValid h')
 | .validOfImp p₁₂ p₁ => by
   dsimp [eval]
-  match h₁ : BinTree.get? r p₁₂ with
-  | .some (.valid lctx t₁₂) =>
+  match h₁ : r.getValid p₁₂ with
+  | .some (lctx, t₁₂) =>
     dsimp
     match h₂ : r.getValidEnsureLCtx lctx p₁ with
     | .some t₁ =>
       dsimp
       match h₃ : LamTerm.impApp? t₁₂ t₁ with
       | .some t₂ =>
-        have h₁' := RTable.validInv_get inv h₁
+        have h₁' := RTable.getValid_correct inv h₁
         have h₂' := RTable.getValidEnsureLCtx_correct inv h₂
         apply LamThmValid.impApp h₁' h₂' h₃
       | .none => exact True.intro
     | .none => exact True.intro
-  | .some (.wf _ _ _) => exact True.intro
   | .none => exact True.intro
 | .validOfImps imp ps => by
   dsimp [eval]
-  match himp : BinTree.get? r imp with
-  | .some (.valid lctx t) =>
+  match himp : r.getValid imp with
+  | .some (lctx, t) =>
     dsimp
     match hps : RTable.getValidsEnsureLCtx r lctx ps with
     | .some ts =>
       dsimp
       match hap : LamTerm.impApps? t ts with
       | .some t' =>
-        have himp := RTable.validInv_get inv himp
+        have himp := RTable.getValid_correct inv himp
         have hps := RTable.getValidsEnsureLCtx_correct inv hps
         apply LamThmValid.impApps himp hps hap
       | .none => exact True.intro
     | .none => exact True.intro
-  | .some (.wf _ _ _) => exact True.intro
   | .none => exact True.intro
 | .validOfInstantiate1 pos arg => by
   dsimp [eval]
-  match h₁ : r.get? pos with
-  | .some (.valid lctx t) =>
+  match h₁ : r.getValid pos with
+  | .some (lctx, t) =>
     dsimp
     match lctx with
     | .nil => exact True.intro
@@ -595,32 +592,29 @@ theorem ChkStep.eval_correct
           dsimp [Option.allp, REntry.correct]
           cases (LamSort.beq_eq _ _ h₃)
           have h₁' := LamThmWF.ofLamThmWFCheck? h₂
-          have h₂' := RTable.validInv_get inv h₁
+          have h₂' := RTable.getValid_correct inv h₁
           apply LamThmValid.instantiate1 h₁' h₂'
         | false => exact True.intro
       | .none => exact True.intro
-  | .some (.wf _ _ _) => exact True.intro
   | .none => exact True.intro
 | .validOfInstantiate pos args => by
   dsimp [eval]
-  match h : r.get? pos with
-  | .some (.valid lctx t) =>
-    let h' := RTable.validInv_get inv h
+  match h : r.getValid pos with
+  | .some (lctx, t) =>
+    let h' := RTable.getValid_correct inv h
     apply ChkStep.evalValidOfInstantiate_coorect _ h'
-  | .some (.wf _ _ _) => exact True.intro
   | .none => exact True.intro
 | .validOfInstantiateRev pos args => by
   dsimp [eval]
-  match h : r.get? pos with
-  | .some (.valid lctx t) =>
-    let h' := RTable.validInv_get inv h
+  match h : r.getValid pos with
+  | .some (lctx, t) =>
+    let h' := RTable.getValid_correct inv h
     apply ChkStep.evalValidOfInstantiate_coorect _ h'
-  | .some (.wf _ _ _) => exact True.intro
   | .none => exact True.intro
 | .validOfCongrArg pos rw => by
   dsimp [eval]
-  match hpos : r.get? pos with
-  | .some (.valid lctx t) =>
+  match hpos : r.getValid pos with
+  | .some (lctx, t) =>
     dsimp
     match hrw : r.getValidEnsureLCtx lctx rw with
     | .some rwt =>
@@ -628,41 +622,35 @@ theorem ChkStep.eval_correct
       match hcongr : t.congrArg? rwt with
       | .some t' =>
         dsimp [Option.allp, REntry.correct]
-        let ht := RTable.validInv_get inv hpos
+        let ht := RTable.getValid_correct inv hpos
         let hrw := RTable.getValidEnsureLCtx_correct inv hrw
         apply LamThmValid.mpLamThmEquiv _ _ _ ht
         apply LamThmEquiv.congrArg? (LamThmWF.ofLamThmValid ht) hrw hcongr
       | .none => exact True.intro
     | .none => exact True.intro
-  | .some (.wf _ _ _) => exact True.intro
   | .none => exact True.intro
 | .validOfCongrFun pos rw => by
   dsimp [eval]
-  match hpos : r.get? pos with
-  | .some (.valid lctx t) =>
-    match hrw : r.get? rw with
-    | .some (.valid lctx' rwt) =>
+  match hpos : r.getValid pos with
+  | .some (lctx, t) =>
+    dsimp
+    match hrw : r.getValidEnsureLCtx lctx rw with
+    | .some rwt =>
       dsimp
-      match hlctx : lctx.beq lctx' with
-      | true =>
-        cases List.beq_eq LamSort.beq_eq _ _ hlctx
-        match hcongr : t.congrFun? rwt with
-        | .some t' =>
-          dsimp [Option.allp, REntry.correct]
-          let ht := RTable.validInv_get inv hpos
-          let hrw := RTable.validInv_get inv hrw
-          apply LamThmValid.mpLamThmEquiv _ _ _ ht
-          apply LamThmEquiv.congrFun? (LamThmWF.ofLamThmValid ht) hrw hcongr
-        | .none => exact True.intro
-      | false => exact True.intro
-    | .some (.wf _ _ _) => exact True.intro
+      match hcongr : t.congrFun? rwt with
+      | .some t' =>
+        dsimp [Option.allp, REntry.correct]
+        let ht := RTable.getValid_correct inv hpos
+        let hrw := RTable.getValidEnsureLCtx_correct inv hrw
+        apply LamThmValid.mpLamThmEquiv _ _ _ ht
+        apply LamThmEquiv.congrFun? (LamThmWF.ofLamThmValid ht) hrw hcongr
+      | .none => exact True.intro
     | .none => exact True.intro
-  | .some (.wf _ _ _) => exact True.intro
   | .none => exact True.intro
 | .validOfCongr pos rwFn rwArg => by
   dsimp [eval]
-  match hpos : r.get? pos with
-  | .some (.valid lctx t) =>
+  match hpos : r.getValid pos with
+  | .some (lctx, t) =>
     dsimp
     match hrwFn : r.getValidEnsureLCtx lctx rwFn with
     | .some rwFnt =>
@@ -673,7 +661,7 @@ theorem ChkStep.eval_correct
         match hcongr : t.congr? rwFnt rwArgt with
         | .some t' =>
           dsimp [Option.allp, REntry.correct]
-          let ht := RTable.validInv_get inv hpos
+          let ht := RTable.getValid_correct inv hpos
           let hrwFn := RTable.getValidEnsureLCtx_correct inv hrwFn
           let hrwArg := RTable.getValidEnsureLCtx_correct inv hrwArg
           apply LamThmValid.mpLamThmEquiv _ _ _ ht
@@ -681,30 +669,28 @@ theorem ChkStep.eval_correct
         | .none => exact True.intro
       | .none => exact True.intro
     | .none => exact True.intro
-  | .some (.wf _ _ _) => exact True.intro
   | .none => exact True.intro
 | .validOfCongrArgs pos rws => by
   dsimp [eval]
-  match hpos : r.get? pos with
-  | .some (.valid lctx t) =>
+  match hpos : r.getValid pos with
+  | .some (lctx, t) =>
     dsimp
     match hrws : r.getValidsEnsureLCtx lctx rws with
     | .some rws' =>
       dsimp
       match hcongr : t.congrArgs? rws' with
       | .some t' =>
-        let ht := RTable.validInv_get inv hpos
+        let ht := RTable.getValid_correct inv hpos
         let hrws := RTable.getValidsEnsureLCtx_correct inv hrws
         apply LamThmValid.mpLamThmEquiv _ _ _ ht
         apply LamThmEquiv.congrArgs? (LamThmWF.ofLamThmValid ht) hrws hcongr
       | .none => exact True.intro
     | .none => exact True.intro
-  | .some (.wf _ _ _) => exact True.intro
   | .none => exact True.intro
 | .validOfCongrFunN pos rwFn n => by
   dsimp [eval]
-  match hpos : r.get? pos with
-  | .some (.valid lctx t) =>
+  match hpos : r.getValid pos with
+  | .some (lctx, t) =>
     dsimp
     match hrwFn : RTable.getValidEnsureLCtx r lctx rwFn with
     | .some rwFnt =>
@@ -712,18 +698,17 @@ theorem ChkStep.eval_correct
       match hcongr : t.congrFunN? rwFnt n with
       | .some t' =>
         dsimp [Option.allp, REntry.correct]
-        let ht := RTable.validInv_get inv hpos
+        let ht := RTable.getValid_correct inv hpos
         let hrwFn := RTable.getValidEnsureLCtx_correct inv hrwFn
         apply LamThmValid.mpLamThmEquiv _ _ _ ht
         apply LamThmEquiv.congrFunN? (LamThmWF.ofLamThmValid ht) hrwFn hcongr
       | .none => exact True.intro
     | .none => exact True.intro
-  | .some (.wf _ _ _) => exact True.intro
   | .none => exact True.intro
 | .validOfCongrs pos rwFn rwArgs => by
   dsimp [eval]
-  match hpos : r.get? pos with
-  | .some (.valid lctx t) =>
+  match hpos : r.getValid pos with
+  | .some (lctx, t) =>
     dsimp
     match hrwFn : r.getValidEnsureLCtx lctx rwFn with
     | .some rwFnt =>
@@ -734,7 +719,7 @@ theorem ChkStep.eval_correct
         match hcongr : t.congrs? rwFnt rwArgt with
         | .some t' =>
           dsimp [Option.allp, REntry.correct]
-          let ht := RTable.validInv_get inv hpos
+          let ht := RTable.getValid_correct inv hpos
           let hrwFn := RTable.getValidEnsureLCtx_correct inv hrwFn
           let hrwArgs := RTable.getValidsEnsureLCtx_correct inv hrwArgs
           apply LamThmValid.mpLamThmEquiv _ _ _ ht
@@ -742,7 +727,6 @@ theorem ChkStep.eval_correct
         | .none => exact True.intro
       | .none => exact True.intro
     | .none => exact True.intro
-  | .some (.wf _ _ _) => exact True.intro
   | .none => exact True.intro
 
 -- The first `ChkStep` specifies the checker step
@@ -769,14 +753,16 @@ theorem ChkStep.run_correct
   cases h : eval lval.toLamTyVal r c <;> intro eval_correct
   case none => exact inv
   case some re =>
-    cases re
+    cases re <;> dsimp [RTable.inv] <;> rw [BinTree.allp_insert] <;> dsimp
     case wf lctx s t =>
-      dsimp [RTable.inv]; rw [BinTree.allp_insert]; dsimp
       apply And.intro
       case left => exact eval_correct
       case right => intros; apply inv
     case valid lctx t =>
-      dsimp [RTable.inv]; rw [BinTree.allp_insert]; dsimp
+      apply And.intro
+      case left => exact eval_correct
+      case right => intros; apply inv
+    case nonempty s =>
       apply And.intro
       case left => exact eval_correct
       case right => intros; apply inv

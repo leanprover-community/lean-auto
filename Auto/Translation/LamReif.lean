@@ -800,6 +800,7 @@ open Embedding.Lam LamReif
     return .wf (← lctx.mapM (transLamSort ref)) (← transLamSort ref s) (← transLamTerm ref t)
   | .valid lctx t => do
     return .valid (← lctx.mapM (transLamSort ref)) (← transLamTerm ref t)
+  | .nonempty s => .nonempty <$> transLamSort ref s
 
   -- Collect essential chksteps and assertions from the high-level `lam`
   --   into the low-level `lam` such that the low-level `lam` proves `re`
