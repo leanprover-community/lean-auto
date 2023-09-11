@@ -20,3 +20,8 @@ def casting (f g : Nat → Type) (x : ∀ n, f n) (H : ∀ n, f n = g n) : (∀ 
 
 #eval casting (fun n => Nat) (fun n => match n with | 0 => Nat | _ => Nat) (fun n => n)
   (fun n => by cases n <;> rfl) 21
+
+def tst1₁ (x : α) : True :=
+  let a := inferInstanceAs (Inhabited Nat);
+  let b := a.default
+  True.intro

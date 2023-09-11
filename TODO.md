@@ -1,2 +1,1 @@
-* Automatically synthesize instance if not instantiated. Refer to the "Set.Icc" example.
 * HOL to FOL. Do this in the verified checker. Introduce new term atoms into varVal to represent instances of higher-order functions.
