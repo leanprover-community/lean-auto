@@ -500,6 +500,10 @@ section Checker
     --   throwError "buildChkMap :: Malformed expression"
     return e
 
+    -- Given a list of expression of type `ty`, construct the corresponding `BinTree`
+  private def exprListToBinTree (l : List Expr) (lvl : Level) (ty : Expr) :=
+    (@instToExprBinTree Expr (instExprToExprId ty) ⟨lvl, Prop⟩).toExpr (BinTree.ofListGet l)
+
     -- Given a list of expression of type `ty`, construct the corresponding `lctx`
   private def exprListToLCtx (l : List Expr) (lvl : Level) (ty : Expr) :=
     @BinTree.toLCtx Expr ⟨lvl, Prop⟩ (instExprToExprId ty) (BinTree.ofListGet l)
@@ -516,27 +520,19 @@ section Checker
     return tyValExpr
 
   -- **Build `LamVarTy` and `varVal`**
-  def buildVarValExpr (tyValExpr : Expr) : ReifM (Expr × Expr) := do
+  def buildVarExpr (tyValExpr : Expr) : ReifM Expr := do
     let u ← getU
     let lamSortExpr := Expr.const ``LamSort []
     let varValPair := (← getVarVal).data
     let vars ← varValPair.mapM (fun (e, s) => do
       let sExpr := toExpr s
-      return Lean.mkApp3 (.const ``varValSigmaMk [u]) tyValExpr sExpr (← varValInterp e s))
-    let varBundleExpr := exprListToLCtx vars u (Lean.mkApp2
+      return Lean.mkApp3 (.const ``varSigmaMk [u]) tyValExpr sExpr (← varValInterp e s))
+    return exprListToBinTree vars u (Lean.mkApp2
       (.const ``Sigma [.zero, u]) lamSortExpr
       (.app (.const ``LamSort.interp [u]) tyValExpr))
-      (.app (.const ``varValSigmaDefault [u]) tyValExpr)
-    let lamVarTyExpr := Expr.lam `n (.const ``Nat []) (
-        Lean.mkApp2 (.const ``varValSigmaFst [u]) tyValExpr (.app varBundleExpr (.bvar 0))
-      ) .default
-    let varValExpr := Expr.lam `n (.const ``Nat []) (
-        Lean.mkApp2 (.const ``varValSigmaSnd [u]) tyValExpr (.app varBundleExpr (.bvar 0))
-      ) .default
-    return (lamVarTyExpr, varValExpr)
 
   -- **Build `lamILTy` and `ilVal`**
-  def buildILValExpr (tyValExpr : Expr) : ReifM (Expr × Expr) := do
+  def buildILExpr (tyValExpr : Expr) : ReifM Expr := do
     let u ← getU
     let lamSortExpr := Expr.const ``LamSort []
     let lamILTy := (← getLamILTy).data
@@ -544,37 +540,28 @@ section Checker
     let ils ← lamILTy.mapM (fun s => do
       let sExpr := toExpr s
       let ilVal ← mkImportingILLift s
-      return Lean.mkApp3 (.const ``ilValSigmaMk [u]) tyValExpr sExpr ilVal)
-    let ilBundleExpr := exprListToLCtx ils u (Lean.mkApp2
+      return Lean.mkApp3 (.const ``ilSigmaMk [u]) tyValExpr sExpr ilVal)
+    return exprListToBinTree ils u (Lean.mkApp2
       (.const ``Sigma [.zero, u]) lamSortExpr
-      (.app (.const ``ilValSigmaβ [u]) tyValExpr))
-      (.app (.const ``ilValSigmaDefault [u]) tyValExpr)
-    let lamILTyExpr := Expr.lam `n (.const ``Nat []) (
-        Lean.mkApp2 (.const ``ilValSigmaFst [u]) tyValExpr (.app ilBundleExpr (.bvar 0))
-      ) .default
-    let ilValExpr := Expr.lam `n (.const ``Nat []) (
-        Lean.mkApp2 (.const ``ilValSigmaSnd [u]) tyValExpr (.app ilBundleExpr (.bvar 0))
-      ) .default
-    return (lamILTyExpr, ilValExpr)
+      (.app (.const ``ilSigmaβ [u]) tyValExpr))
 
-  def buildLamValuationExpr : ReifM Expr := do
+  def buildCheckerValuationExpr : ReifM Expr := do
     -- let startTime ← IO.monoMsNow
     let u ← getU
     let tyValExpr ← buildTyVal
     let tyValTy := Expr.forallE `_ (.const ``Nat []) (.sort (.succ u)) .default
     let lamValuationExpr ← Meta.withLetDecl `tyVal tyValTy tyValExpr fun tyValFVarExpr => do
-      let (lamVarTyExpr, varValExpr) ← buildVarValExpr tyValFVarExpr
-      let (lamILTyExpr, ilValExpr) ← buildILValExpr tyValFVarExpr
-      let lamTyValExpr := Lean.mkApp2 (.const ``LamTyVal.mk []) lamVarTyExpr lamILTyExpr
-      let lamValuationExpr := Lean.mkApp4 (.const ``LamValuation.mk [u]) lamTyValExpr tyValExpr varValExpr ilValExpr
-      Meta.mkLetFVars #[tyValFVarExpr] lamValuationExpr
+      let varExpr ← buildVarExpr tyValFVarExpr
+      let ilExpr ← buildILExpr tyValFVarExpr
+      let checkerValuationExpr := Lean.mkApp3 (.const ``CheckerValuation.mk [u]) tyValExpr varExpr ilExpr
+      Meta.mkLetFVars #[tyValFVarExpr] checkerValuationExpr
     -- if !(← Meta.isTypeCorrectCore lamValuationExpr) then
     --   throwError "buildLamValuation :: Malformed LamValuation"
     -- trace[auto.buildChecker] "LamValuation typechecked in time {(← IO.monoMsNow) - startTime}"
     return lamValuationExpr
 
   -- `lvalExpr` is the `LamValuation`
-  def buildImportTableExpr (lvalExpr : Expr) : ReifM Expr := do
+  def buildImportTableExpr (chkValExpr : Expr) : ReifM Expr := do
     -- let startTime ← IO.monoMsNow
     let u ← getU
     let lamTermExpr := Expr.const ``LamTerm []
@@ -583,11 +570,11 @@ section Checker
     let mut importTable : BinTree Expr := BinTree.leaf
     for (_, (e, ti, n)) in (← getAssertions).toList do
       let tExpr := Lean.toExpr ti
-      let itEntry := Lean.mkApp3 (.const ``importTablePSigmaMk [u]) lvalExpr tExpr e
+      let itEntry := Lean.mkApp3 (.const ``importTablePSigmaMk [u]) chkValExpr tExpr e
       importTable := importTable.insert n itEntry
       entries := entries.push (e, tExpr)
     let type := Lean.mkApp2 (.const ``PSigma [.succ .zero, .zero])
-      lamTermExpr (.app (.const ``importTablePSigmaβ [u]) lvalExpr)
+      lamTermExpr (.app (.const ``importTablePSigmaβ [u]) chkValExpr)
     let importTableExpr := (@instToExprBinTree Expr
       (instExprToExprId type) ⟨.zero, Prop⟩).toExpr importTable
     -- if !(← Meta.isTypeCorrectCore importTableExpr) then
@@ -616,20 +603,20 @@ section Checker
     printCheckerStats
     let startTime ← IO.monoMsNow
     let u ← getU
-    let lvalExpr ← buildLamValuationExpr
-    let lvalTy := Expr.const ``LamValuation [u]
-    let checker ← Meta.withLetDecl `lval lvalTy lvalExpr fun lvalFVarExpr => do
-      let itExpr ← buildImportTableExpr lvalFVarExpr
+    let chkValExpr ← buildCheckerValuationExpr
+    let chkValTy := Expr.const ``CheckerValuation [u]
+    let checker ← Meta.withLetDecl `lval chkValTy chkValExpr fun chkValFVarExpr => do
+      let itExpr ← buildImportTableExpr chkValFVarExpr
       let csExpr ← buildChkStepsExpr
-      let rInv := Lean.mkApp3 (.const ``Checker [u]) lvalFVarExpr itExpr csExpr
+      let rInv := Lean.mkApp3 (.const ``Checker [u]) chkValFVarExpr itExpr csExpr
       let rExpr := Lean.toExpr (BinTree.ofListGet (← getRTable).data)
       let .valid lctx t := re
         | throwError "buildFullCheckerExprFor :: {re} is not a `valid` entry"
       let nExpr := Lean.toExpr (← lookupREntryPos! re)
       let eqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr re]]
       let getEntry := Lean.mkApp7 (.const ``RTable.validInv_get [u])
-        lvalExpr nExpr (Lean.toExpr lctx) (Lean.toExpr t) rExpr rInv eqExpr
-      let getEntry ← Meta.mkLetFVars #[lvalFVarExpr] getEntry
+        chkValExpr nExpr (Lean.toExpr lctx) (Lean.toExpr t) rExpr rInv eqExpr
+      let getEntry ← Meta.mkLetFVars #[chkValFVarExpr] getEntry
       -- debug
       -- let rt := Lean.mkApp3 (.const ``ChkMap.runFromBeginning [u]) lvalExpr itExpr csExpr
       -- let rt ← Meta.withTransparency .all <| Meta.reduceAll rt

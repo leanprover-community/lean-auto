@@ -464,50 +464,8 @@ def ILLift.default (β : Type u) : ILLift β :=
 
 structure LamValuation extends LamTyVal where
   tyVal     : Nat → Type u
-  -- In the checker metacode, we'll first construct 
-  --   `varValBundle : Nat → (s : LamSort) × (s.interp tyVal)`
-  -- and assign
-  --   `lamVarTy := fun n => (varValBundle n).fst`
-  --   `varVal   := fun n => (varValBundle n).snd`
-  -- Note that `(s : LamSort) × (s.interp ilVal.tyVal) : Type u`
   varVal    : ∀ (n : Nat), (lamVarTy n).interp tyVal
-  -- In the checker metacode, we'll first construct
-  --   `ilValBundle : Nat → (s : LamSort) × (ILLift.{u} (s.interp tyVal))`
-  -- and assign
-  --   `lamILTy := fun n => (ilValBundle n).fst`
-  --   `ilVal   := fun n => (ilValBundle n).snd`
-  -- Note that `(s : LamSort) × (ILLift.{u} (s.interp tyVal)) : Type u`
   ilVal     : ∀ (n : Nat), ILLift.{u} ((lamILTy n).interp tyVal)
-
--- Used in checker metacode to construct `ilValBundle`
-abbrev ilValSigmaβ.{u} (tyVal : Nat → Type u) (s : LamSort) : Type u :=
-  ILLift.{u} (s.interp tyVal)
-
-abbrev ilValSigmaMk.{u} (tyVal : Nat → Type u) :=
-  @Sigma.mk LamSort (ilValSigmaβ.{u} tyVal)
-
-abbrev ilValSigmaFst.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (ilValSigmaβ.{u} tyVal)) : LamSort := sig.fst
-
-abbrev ilValSigmaSnd.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (ilValSigmaβ.{u} tyVal)) : ilValSigmaβ.{u} tyVal sig.fst := sig.snd
-
-abbrev ilValSigmaDefault.{u} (tyVal : Nat → Type u) : @Sigma LamSort (ilValSigmaβ.{u} tyVal) :=
-  ⟨.base .prop, ILLift.default _⟩
-
-def ilVal.default (lamILTy : Nat → LamSort) (tyVal : Nat → Type u) :
-  ∀ (n : Nat), ILLift.{u} ((lamILTy n).interp tyVal) :=
-  fun n => ILLift.default ((lamILTy n).interp tyVal)
-
--- Used in checker metacode to construct `varValBundle`
--- We don't need `varValSigmaβ` because that's exactly `LamSort.interp`
-abbrev varValSigmaMk.{u} (tyVal : Nat → Type u) :=
-  @Sigma.mk LamSort (LamSort.interp tyVal)
-
-abbrev varValSigmaFst.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (LamSort.interp tyVal)) : LamSort := sig.fst
-
-abbrev varValSigmaSnd.{u} (tyVal : Nat → Type u) (sig : @Sigma LamSort (LamSort.interp tyVal)) : LamSort.interp tyVal sig.fst := sig.snd
-
-abbrev varValSigmaDefault.{u} (tyVal : Nat → Type u) : @Sigma LamSort (LamSort.interp tyVal) :=
-  ⟨.base .prop, GLift.up False⟩
 
 def LamBaseTerm.interp (lval : LamValuation.{u}) : (b : LamBaseTerm) → (b.lamCheck lval.toLamTyVal).interp lval.tyVal
 | .trueE      => GLift.up True
