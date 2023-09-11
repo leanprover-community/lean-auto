@@ -38,13 +38,27 @@ instance : ToString REntry where
 --   with `.none` entries
 abbrev RTable := Auto.BinTree REntry
 
+def RTable.addEntry (r : RTable) (n : Nat) (re : REntry) : RTable :=
+  r.insert n re
+
+structure CheckerValuation where
+  tyVal : Nat → Type u
+  il    : BinTree ((s : LamSort) × (ILLift.{u} (s.interp tyVal)))
+  var   : BinTree ((s : LamSort) × (s.interp tyVal))
+
+def LamTyVal.ofCheckerValuation (cv : CheckerValuation.{u}) : LamTyVal :=
+  ⟨fun n => ((cv.var.get? n).getD ⟨.base .prop, GLift.up False⟩).fst,
+   fun n => ((cv.il.get? n).getD ⟨.base .prop, ILLift.default _⟩).fst⟩
+
+def LamValuation.ofCheckerValuation (cv : CheckerValuation.{u}) : LamValuation :=
+  ⟨LamTyVal.ofCheckerValuation cv, cv.tyVal,
+   fun n => ((cv.var.get? n).getD ⟨.base .prop, GLift.up False⟩).snd,
+   fun n => ((cv.il.get? n).getD ⟨.base .prop, ILLift.default _⟩).snd⟩
+
 def REntry.correct (lval : LamValuation.{u}) : REntry → Prop
 | .wf lctx s t => LamThmWFP lval lctx s t
 | .valid lctx t => LamThmValid lval lctx t
 | .nonempty s => LamNonempty lval.tyVal s
-
-def RTable.addEntry (r : RTable) (n : Nat) (re : REntry) : RTable :=
-  r.insert n re
 
 -- Invariant of `RTable`
 def RTable.inv (lval : LamValuation.{u}) (r : RTable) :=

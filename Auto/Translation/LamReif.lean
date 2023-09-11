@@ -566,7 +566,7 @@ section Checker
       let (lamVarTyExpr, varValExpr) ← buildVarValExpr tyValFVarExpr
       let (lamILTyExpr, ilValExpr) ← buildILValExpr tyValFVarExpr
       let lamTyValExpr := Lean.mkApp2 (.const ``LamTyVal.mk []) lamVarTyExpr lamILTyExpr
-      let lamValuationExpr := Lean.mkApp4 (.const ``LamValuation.mk [u]) lamTyValExpr tyValExpr ilValExpr varValExpr
+      let lamValuationExpr := Lean.mkApp4 (.const ``LamValuation.mk [u]) lamTyValExpr tyValExpr varValExpr ilValExpr
       Meta.mkLetFVars #[tyValFVarExpr] lamValuationExpr
     -- if !(← Meta.isTypeCorrectCore lamValuationExpr) then
     --   throwError "buildLamValuation :: Malformed LamValuation"
