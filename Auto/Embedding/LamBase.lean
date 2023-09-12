@@ -609,7 +609,7 @@ def LamTerm.isApp : LamTerm → Bool
 | .app _ _ _ => true
 | _ => false
 
-def LamTerm.isHeadbetaTarget (t : LamTerm) :=
+def LamTerm.isHeadBetaTarget (t : LamTerm) :=
   t.isApp && t.getAppFn.isLam
 
 theorem LamTerm.appFn_appArg_eqAux (args : List (LamSort × LamTerm)) (t : LamTerm) :
@@ -695,6 +695,32 @@ def LamTerm.maxEVarSucc : LamTerm → Nat
 | .bvar _ => 0
 | .lam _ t => t.maxEVarSucc
 | .app _ t₁ t₂ => Nat.max t₁.maxEVarSucc t₂.maxEVarSucc
+
+theorem LamTerm.maxEVarSucc_getAppArgsAux
+  (hs : HList (fun (_, arg) => arg.maxEVarSucc ≤ n) args) (ht : t.maxEVarSucc ≤ n) :
+  HList (fun (_, arg) => arg.maxEVarSucc ≤ n) (LamTerm.getAppArgsAux args t) := by
+  revert args; induction t <;> intro args hs <;> try exact hs
+  case app s fn arg IHFn IHArg =>
+    dsimp [maxEVarSucc] at ht; rw [Nat.max_le] at ht
+    exact IHFn ht.left (.cons ht.right hs)
+
+theorem LamTerm.maxEVarSucc_getAppArgs :
+  HList (fun (_, arg) => arg.maxEVarSucc ≤ t.maxEVarSucc) (LamTerm.getAppArgs t) :=
+  LamTerm.maxEVarSucc_getAppArgsAux .nil (Nat.le_refl _)
+
+theorem LamTerm.maxEVarSucc_getAppFn : (LamTerm.getAppFn t).maxEVarSucc ≤ t.maxEVarSucc := by
+  induction t <;> try apply Nat.le_refl
+  case app s fn arg IHFn _ =>
+    dsimp [getAppFn]; apply Nat.le_trans IHFn; apply Nat.le_max_left
+
+theorem LamTerm.maxEVarSucc_mkAppN
+  (hs : HList (fun (_, arg) => arg.maxEVarSucc ≤ n) args) (ht : t.maxEVarSucc ≤ n) :
+  (LamTerm.mkAppN t args).maxEVarSucc ≤ n := by
+  revert t; induction hs <;> intro t ht
+  case nil => exact ht
+  case cons head tail IH =>
+    dsimp [mkAppN]; apply IH; dsimp [maxEVarSucc]
+    rw [Nat.max_le]; exact And.intro ht head
 
 def LamTerm.reprPrec (t : LamTerm) (n : Nat) :=
   let s :=
