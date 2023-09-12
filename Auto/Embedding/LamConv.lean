@@ -208,10 +208,46 @@ theorem LamEquiv.congrFunN (lval : LamValuation) {args : List (LamSort × LamTer
 --   resides in is `fun n => lctx (n + idx + 1)` and the type of `arg` is `lctx idx`
 def LamTerm.instantiateAt (idx : Nat) (arg : LamTerm) : (body : LamTerm) → LamTerm
 | .atom n        => .atom n
+| .etom n        => .etom n
 | .base b        => .base b
 | .bvar n        => pushLCtxAt (arg.bvarLifts idx) idx LamTerm.bvar n
 | .lam s body    => .lam s (LamTerm.instantiateAt (.succ idx) arg body)
 | .app s fn arg' => .app s (LamTerm.instantiateAt idx arg fn) (LamTerm.instantiateAt idx arg arg')
+
+theorem LamTerm.instantiateAt_maxEVarSucc :
+  (LamTerm.instantiateAt idx arg body).maxEVarSucc ≤ Nat.max arg.maxEVarSucc body.maxEVarSucc := by
+  revert idx; induction body <;> intro idx <;> try apply Nat.le_max_right
+  case bvar n =>
+    dsimp [instantiateAt, pushLCtxAt, restoreAt]
+    match Nat.ble idx n with
+    | true =>
+      dsimp [pushLCtx]
+      match n - idx with
+      | 0 =>
+        apply Nat.le_trans _ (Nat.le_max_left _ _)
+        dsimp [bvarLifts, bvarLiftsIdx]
+        rw [LamTerm.maxEVarSucc_mapBVarAt]; apply Nat.le_refl
+      | _ + 1 => apply Nat.le_max_right
+    | false => apply Nat.le_max_right
+  case lam s body IH =>
+    dsimp [instantiateAt, maxEVarSucc]; apply IH
+  case app s fn arg' IHFn IHArg' =>
+    dsimp [instantiateAt, maxEVarSucc]
+    rw [Nat.max_le]; apply And.intro
+    case left =>
+      apply Nat.le_trans IHFn
+      rw [Nat.max_le]; apply And.intro
+      case left => apply Nat.le_max_left
+      case right =>
+        apply Nat.le_trans _ (Nat.le_max_right _ _)
+        apply Nat.le_max_left
+    case right =>
+      apply Nat.le_trans IHArg'
+      rw [Nat.max_le]; apply And.intro
+      case left => apply Nat.le_max_left
+      case right =>
+        apply Nat.le_trans _ (Nat.le_max_right _ _)
+        apply Nat.le_max_right
 
 def LamWF.instantiateAt
   (ltv : LamTyVal) (idx : Nat)
@@ -222,6 +258,7 @@ def LamWF.instantiateAt
   (wfBody : LamWF ltv ⟨pushLCtxAt argTy idx lctx, body, bodyTy⟩) →
   LamWF ltv ⟨lctx, LamTerm.instantiateAt idx arg body, bodyTy⟩
 | lctx, _,     .ofAtom n => .ofAtom _
+| lctx, _,     .ofEtom n => .ofEtom _
 | lctx, _,     .ofBase (b:=b) H => .ofBase H
 | lctx, wfArg, .ofBVar n => by
   dsimp [LamTerm.instantiateAt, pushLCtxAt, restoreAt, pushLCtx]
@@ -260,6 +297,7 @@ theorem LamWF.instantiateAt.correct.{u}
     (pushLCtxAtDep (LamWF.interp lval lctxTy lctxTerm wfArg) idx lctxTerm) wfBody
   = LamWF.interp lval lctxTy lctxTerm wfInstantiateAt')
 | lctxTy, lctxTerm, wfArg, .ofAtom n => rfl
+| lctxTy, lctxTerm, wfArg, .ofEtom n => rfl
 | lctxTy, lctxTerm, wfArg, .ofBase b => rfl
 | lctxTy, lctxTerm, wfArg, .ofBVar n => by
   dsimp [LamWF.interp, LamWF.instantiateAt, LamTerm.instantiateAt]
@@ -392,10 +430,23 @@ theorem LamBaseTerm.LamWF.resolveImport.correct
 
 def LamTerm.resolveImport (ltv : LamTyVal) : LamTerm → LamTerm
 | .atom n       => .atom n
+| .etom n       => .etom n
 | .base b       => .base (b.resolveImport ltv)
 | .bvar n       => .bvar n
 | .lam s t      => .lam s (t.resolveImport ltv)
 | .app s fn arg => .app s (fn.resolveImport ltv) (arg.resolveImport ltv)
+
+theorem LamTerm.resolveImport_maxEVarSucc {t : LamTerm} :
+  (t.resolveImport ltv).maxEVarSucc = t.maxEVarSucc :=
+  match t with
+  | .atom n => rfl
+  | .etom n => rfl
+  | .base b => rfl
+  | .bvar n => rfl
+  | .lam _ t => LamTerm.resolveImport_maxEVarSucc (t:=t)
+  | .app s fn arg => by
+    dsimp [resolveImport, maxEVarSucc]
+    rw [resolveImport_maxEVarSucc (t:=fn), resolveImport_maxEVarSucc (t:=arg)]
 
 def LamWF.resolveImport
   {ltv : LamTyVal} {t : LamTerm} {ty : LamSort}
@@ -403,6 +454,7 @@ def LamWF.resolveImport
   LamWF ltv ⟨lctx, LamTerm.resolveImport ltv t, ty⟩ :=
   match wfT with
   | .ofAtom n => .ofAtom n
+  | .ofEtom n => .ofEtom n
   | .ofBase b => .ofBase (LamBaseTerm.LamWF.resolveImport b)
   | .ofBVar n => .ofBVar n
   | .ofLam s hwf => .ofLam s hwf.resolveImport
@@ -421,6 +473,7 @@ theorem LamWF.resolveImport.correct
   LamWF.interp lval lctxTy lctxTerm wfT = LamWF.interp lval lctxTy lctxTerm wfRB :=
   match wfT with
   | .ofAtom _ => rfl
+  | .ofEtom _ => rfl
   | .ofBase b => LamBaseTerm.LamWF.resolveImport.correct lval b
   | .ofBVar n => rfl
   | .ofLam s hwf => by
@@ -448,6 +501,7 @@ def LamWF.topBetaAux (ltv : LamTyVal)
   LamWF ltv ⟨lctx, LamTerm.topBetaAux argTy arg fn, resTy⟩ :=
   match fn with
   | .atom _  => .ofApp _ wfFn wfArg
+  | .etom _  => .ofApp _ wfFn wfArg
   | .base _  => .ofApp _ wfFn wfArg
   | .bvar _  => .ofApp _ wfFn wfArg
   | .lam _ body =>
@@ -466,6 +520,7 @@ def LamWF.topBetaAux.correct.{u} (lval : LamValuation.{u})
   = LamWF.interp lval lctxTy lctxTerm wfHB) :=
   match fn with
   | .atom _  => rfl
+  | .etom _  => rfl
   | .base _  => rfl
   | .bvar _  => rfl
   | .lam _ _ =>
@@ -482,6 +537,7 @@ def LamWF.topBeta
   (wf : LamWF ltv ⟨lctx, t, ty⟩) : LamWF ltv ⟨lctx, LamTerm.topBeta t, ty⟩ :=
   match t with
   | .atom _ => wf
+  | .etom _ => wf
   | .base _ => wf
   | .bvar _ => wf
   | .lam .. => wf
@@ -501,6 +557,7 @@ theorem LamWF.topBeta.correct
   LamWF.interp lval lctxTy lctxTerm wfT = LamWF.interp lval lctxTy lctxTerm wfHB :=
   match t with
   | .atom _ => rfl
+  | .etom _ => rfl
   | .base _ => rfl
   | .bvar _ => rfl
   | .lam .. => rfl
@@ -537,6 +594,7 @@ theorem LamEquiv.ofBeta (lval : LamValuation.{u})
   | arg :: args =>
     match fn with
     | .atom _ => ⟨wf, fun _ => rfl⟩
+    | .etom _ => ⟨wf, fun _ => rfl⟩
     | .base _ => ⟨wf, fun _ => rfl⟩
     | .bvar _ => ⟨wf, fun _ => rfl⟩
     | .lam s' t' => by
@@ -605,6 +663,7 @@ def LamTerm.betaBounded (n : Nat) (t : LamTerm) :=
   | .succ n' =>
     match t with
     | .atom _ => t
+    | .etom _ => t
     | .base _ => t
     | .bvar _ => t
     | .lam s t => .lam s (t.betaBounded n')
@@ -618,6 +677,7 @@ def LamTerm.betaBounded (n : Nat) (t : LamTerm) :=
 def LamTerm.betaReduced (t : LamTerm) :=
   match t with
   | .atom _ => true
+  | .etom _ => true
   | .base _ => true
   | .bvar _ => true
   | .app _ fn arg =>
@@ -632,6 +692,7 @@ theorem LamEquiv.ofBetaBounded (lval : LamValuation.{u})
     dsimp [LamTerm.betaBounded]
     match t with
     | .atom _ => apply LamEquiv.refl
+    | .etom _ => apply LamEquiv.refl
     | .base _ => apply LamEquiv.refl
     | .bvar _ => apply LamEquiv.refl
     | .lam s t =>

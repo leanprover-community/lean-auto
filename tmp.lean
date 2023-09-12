@@ -5,15 +5,15 @@ namespace Auto.Embedding.Lam
 
 -- An entry of RTable
 inductive REntry where
-  | imported  : LamTerm → REntry
+  | imported : LamTerm → REntry
   -- Well-formed formulas, with types
   -- We do not import well-formedness facts because
   --   we have `LamWF.ofLamCheck?`
-  | wf        : List LamSort → LamSort → LamTerm → REntry
+  | wf       : List LamSort → LamSort → LamTerm → REntry
   -- Valid propositions
   -- The initial formulas in the `valid` table will be
   --   imported from `ImportTable`
-  | valid     : List LamSort → LamTerm → REntry
+  | valid    : List LamSort → LamTerm → REntry
   | nonempty : LamSort → REntry
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
@@ -39,137 +39,104 @@ instance : ToString REntry where
 -- Note that `Auto.BinTree α` is equivalent to `Nat → Option α`,
 --   which means that `.some` entries may be interspersed
 --   with `.none` entries
-structure RTable where
-  entries     : BinTree REntry
-  maxEVarSucc : Nat
-  lamEVarTy   : BinTree LamSort
+abbrev RTable := Auto.BinTree REntry
 
-def RTable.get? (r : RTable) := r.entries.get?
+def RTable.addEntry (r : RTable) (n : Nat) (re : REntry) : RTable :=
+  r.insert n re
 
-def RTable.addEntry (r : RTable) (e : REntry) (n : Nat) :=
-  {r with entries := r.entries.insert n e}
+section CheckerValuation
 
-def RTable.toLamEVarTy (r : RTable) := fun n => (r.lamEVarTy.get? n).getD (.base .prop)
-
-section CVal
-
-  -- Checker Partial Valuation
-  structure CPVal where
+  structure CheckerValuation where
     tyVal     : Nat → Type u
     var       : BinTree ((s : LamSort) × (s.interp tyVal))
     il        : BinTree ((s : LamSort) × (ILLift.{u} (s.interp tyVal)))
-
-  structure CVal (lamEVarTy : BinTree LamSort) extends CPVal where
-    eVarVal   : ∀ (n : Nat), ((lamEVarTy.get? n).getD (.base .prop)).interp tyVal
-
-  abbrev eVarTy (tyVal : Nat → Type u) (lamEVarTy : BinTree LamSort) :=
-    ∀ (n : Nat), ((lamEVarTy.get? n).getD (.base .prop)).interp tyVal
-
+    lamEVarTy : List LamSort
+  
   -- Used in checker metacode to construct `var`
   abbrev varSigmaMk.{u} (tyVal : Nat → Type u) :=
     @Sigma.mk LamSort (LamSort.interp tyVal)
   
   -- Used in checker metacode to construct `il`
-  abbrev ilβ.{u} (tyVal : Nat → Type u) (s : LamSort) : Type u :=
+  abbrev ilSigmaβ.{u} (tyVal : Nat → Type u) (s : LamSort) : Type u :=
     ILLift.{u} (s.interp tyVal)
   
   -- Used in checker metacode to construct `il`
   abbrev ilSigmaMk.{u} (tyVal : Nat → Type u) :=
-    @Sigma.mk LamSort (ilβ.{u} tyVal)
+    @Sigma.mk LamSort (ilSigmaβ.{u} tyVal)
   
   def ilVal.default (lamILTy : Nat → LamSort) (tyVal : Nat → Type u) :
     ∀ (n : Nat), ILLift.{u} ((lamILTy n).interp tyVal) :=
     fun n => ILLift.default ((lamILTy n).interp tyVal)
 
-  def CVal.toLamTyVal (cv : CVal.{u} levt) : LamTyVal :=
+  def CheckerValuation.toLamTyVal (cv : CheckerValuation.{u}) : LamTyVal :=
     ⟨fun n => ((cv.var.get? n).getD ⟨.base .prop, GLift.up False⟩).fst,
      fun n => ((cv.il.get? n).getD ⟨.base .prop, ILLift.default _⟩).fst,
-     fun n => (levt.get? n).getD (.base .prop)⟩
+     fun n => List.getD cv.lamEVarTy n (.base .prop)⟩
   
-  def CVal.toLamValuation (cv : CVal.{u} levt) : LamValuation :=
+  def CheckerValuation.toLamValuation
+    (cv : CheckerValuation.{u}) (eVarVal : HList (LamSort.interp cv.tyVal) cv.lamEVarTy) : LamValuation :=
     ⟨cv.toLamTyVal, cv.tyVal,
      fun n => ((cv.var.get? n).getD ⟨.base .prop, GLift.up False⟩).snd,
      fun n => ((cv.il.get? n).getD ⟨.base .prop, ILLift.default _⟩).snd,
-     cv.eVarVal⟩
-
-  def CPVal.toLamVarTy (cpv : CPVal.{u}) : Nat → LamSort :=
-    fun n => ((cpv.var.get? n).getD ⟨.base .prop, GLift.up False⟩).fst
-
-  def CPVal.toLamILTy (cpv : CPVal.{u}) : Nat → LamSort :=
-    fun n => ((cpv.il.get? n).getD ⟨.base .prop, ILLift.default _⟩).fst
-
-  def CPVal.toLamTyVal (cpv : CPVal.{u}) (levt : BinTree LamSort) : LamTyVal :=
-    ⟨fun n => ((cpv.var.get? n).getD ⟨.base .prop, GLift.up False⟩).fst,
-     fun n => ((cpv.il.get? n).getD ⟨.base .prop, ILLift.default _⟩).fst,
-     fun n => (levt.get? n).getD (.base .prop)⟩
-
-  def CPVal.toLamTyValEraseEtom (cv : CPVal.{u}) : LamTyVal :=
+     fun n => eVarVal.getD (β:=LamSort.interp cv.tyVal) (GLift.up False) n⟩
+  
+  def CheckerValuation.toLamTyValEraseEtom (cv : CheckerValuation.{u}) : LamTyVal :=
     ⟨fun n => ((cv.var.get? n).getD ⟨.base .prop, GLift.up False⟩).fst,
      fun n => ((cv.il.get? n).getD ⟨.base .prop, ILLift.default _⟩).fst,
      fun _ => .base .prop⟩
   
-  def CPVal.toLamValuationEraseEtom (cv : CPVal.{u}) : LamValuation :=
+  def CheckerValuation.toLamValuationEraseEtom (cv : CheckerValuation.{u}) : LamValuation :=
     ⟨cv.toLamTyValEraseEtom, cv.tyVal,
      fun n => ((cv.var.get? n).getD ⟨.base .prop, GLift.up False⟩).snd,
      fun n => ((cv.il.get? n).getD ⟨.base .prop, ILLift.default _⟩).snd,
      fun _ => GLift.up False⟩
 
-end CVal
+end CheckerValuation
 
-def REntry.correct (lval : CVal.{u} levt) (maxEVarSucc : Nat) : REntry → Prop
+def REntry.correct
+  (lval : CheckerValuation.{u})
+  (eVarVal : HList (LamSort.interp lval.tyVal) lval.lamEVarTy)
+  (maxEVarSucc : Nat) :
+  REntry → Prop
 | .imported t => LamThmValid lval.toLamValuationEraseEtom [] t ∧ t.maxEVarSucc = 0
-| .wf lctx s t => LamThmWFP lval.toLamValuation lctx s t ∧ t.maxEVarSucc ≤ maxEVarSucc
-| .valid lctx t => LamThmValid lval.toLamValuation lctx t ∧ t.maxEVarSucc ≤ maxEVarSucc
+| .wf lctx s t => LamThmWFP (lval.toLamValuation eVarVal) lctx s t ∧ t.maxEVarSucc ≤ maxEVarSucc
+| .valid lctx t => LamThmValid (lval.toLamValuation eVarVal) lctx t ∧ t.maxEVarSucc ≤ maxEVarSucc
 | .nonempty s => LamNonempty lval.tyVal s
 
 -- Invariant of `RTable`
-def RTable.inv (r : RTable) (lval : CVal.{u} r.lamEVarTy) :=
-  r.entries.allp (fun re => re.correct lval r.maxEVarSucc)
+def RTable.inv (lval : CheckerValuation.{u}) (r : RTable) :=
+  ∃ eVarVal, r.allp (fun re => re.correct lval eVarVal lval.lamEVarTy.length)
 
-theorem RTable.importInv_get
-  {r : RTable} {lval : CVal.{u} r.lamEVarTy}
-  (inv : RTable.inv r lval) (h : get? r n = Option.some (.imported t)) :
-  LamThmValid lval.toLamValuationEraseEtom [] t ∧ t.maxEVarSucc = 0 := by
-  have inv' := inv n; dsimp [get?] at h; rw [h] at inv'; exact inv'
+theorem RTable.wfInv_get
+  {r : RTable} (inv : RTable.inv lval r) (h : BinTree.get? r n = Option.some (.wf lctx s t)) :
+  ∃ eVarVal, LamThmWFP (lval.toLamValuation eVarVal) lctx s t ∧ t.maxEVarSucc ≤ lval.lamEVarTy.length := by
+  have ⟨eVarVal, inv⟩ := inv; have inv' := inv n; rw [h] at inv'; exists eVarVal
 
-theorem RTable.wfInv_get {r : RTable} {lval : CVal.{u} r.lamEVarTy}
-  (inv : RTable.inv r lval) (h : get? r n = Option.some (.wf lctx s t)) :
-  LamThmWFP lval.toLamValuation lctx s t ∧ t.maxEVarSucc ≤ r.maxEVarSucc := by
-  have inv' := inv n; dsimp [get?] at h; rw [h] at inv'; exact inv'
+theorem RTable.validInv_get
+  {r : RTable} (inv : RTable.inv lval r) (h : BinTree.get? r n = Option.some (.valid lctx t)) :
+  ∃ eVarVal, LamThmValid (lval.toLamValuation eVarVal) lctx t ∧ t.maxEVarSucc ≤ lval.lamEVarTy.length := by
+  have ⟨eVarVal, inv⟩ := inv; have inv' := inv n; rw [h] at inv'; exists eVarVal
 
-theorem RTable.validInv_get {r : RTable} {lval : CVal.{u} r.lamEVarTy}
-  (inv : RTable.inv r lval) (h : get? r n = Option.some (.valid lctx t)) :
-  LamThmValid lval.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc := by
-  have inv' := inv n; dsimp [get?] at h; rw [h] at inv'; exact inv'
-
-theorem RTable.nonemptyInv_get {r : RTable} {lval : CVal.{u} r.lamEVarTy}
-  (inv : RTable.inv r lval) (h : get? r n = Option.some (.nonempty s)) :
+theorem RTable.nonemptyInv_get
+  {r : RTable} (inv : RTable.inv lval r) (h : BinTree.get? r n = Option.some (.nonempty s)) :
   LamNonempty lval.tyVal s := by
-  have inv' := inv n; dsimp [get?] at h; rw [h] at inv'; exact inv'
-
-def RTable.getImport (r : RTable) (v : Nat) : Option LamTerm :=
-  match r.get? v with
-  | .some (.imported t) => .some t
-  | .some (.valid _ _) => .none
-  | .some (.wf _ _ _) => .none
-  | .some (.nonempty _) => .none
-  | .none => .none
+  have ⟨eVarVal, inv⟩ := inv; have inv' := inv n; rw [h] at inv'; exact inv'
 
 def RTable.getWF (r : RTable) (v : Nat) : Option (List LamSort × LamSort × LamTerm) :=
   match r.get? v with
+  | .some (.valid _ _ ) => .none
   | .some (.imported _) => .none
-  | .some (.valid _ _) => .none
   | .some (.wf lctx s t) => .some (lctx, s, t)
   | .some (.nonempty _) => .none
   | .none => .none
 
 theorem RTable.getWF_correct
-  (inv : RTable.inv r lval) (heq : getWF r v = .some (lctx, s, t)) :
-  LamThmWFP lval.toLamValuation lctx s t ∧ t.maxEVarSucc ≤ r.maxEVarSucc := by
+  (inv : RTable.inv lval r) (heq : getWF r v = .some (lctx, s, t)) :
+  ∃ eVarVal, LamThmWFP (lval.toLamValuation eVarVal) lctx s t := by
   revert heq; dsimp [getWF]
-  match h : r.get? v with
-  | .some (.imported _) => intro heq; cases heq
+  match h : BinTree.get? r v with
   | .some (.valid lctx t) => intro heq; cases heq
+  | .some (.imported _) => intro heq; cases heq
   | .some (.wf _ _ _) => intro heq; cases heq; apply RTable.wfInv_get inv h
   | .some (.nonempty _) => intro heq; cases heq
   | .none => intro heq; cases heq
@@ -183,10 +150,10 @@ def RTable.getValid (r : RTable) (v : Nat) : Option (List LamSort × LamTerm) :=
   | .none => .none
 
 theorem RTable.getValid_correct
-  (inv : RTable.inv r lval) (heq : getValid r v = .some (lctx, t)) :
-  LamThmValid lval.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc := by
+  (inv : RTable.inv lval r) (heq : getValid r v = .some (lctx, t)) :
+  ∃ eVarVal, LamThmValid (lval.toLamValuation eVarVal) lctx t := by
   revert heq; dsimp [getValid]
-  match h : r.get? v with
+  match h : BinTree.get? r v with
   | .some (.valid lctx t) => intro heq; cases heq; apply RTable.validInv_get inv h
   | .some (.imported _) => intro heq; cases heq
   | .some (.wf _ _ _) => intro heq; cases heq
@@ -205,10 +172,10 @@ def RTable.getValidEnsureLCtx (r : RTable) (lctx : List LamSort) (v : Nat) : Opt
   | .none => .none
 
 theorem RTable.getValidEnsureLCtx_correct
-  (inv : RTable.inv r lval) (heq : getValidEnsureLCtx r lctx v = .some t) :
-  LamThmValid lval.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc := by
+  (inv : RTable.inv lval r) (heq : getValidEnsureLCtx r lctx v = .some t) :
+  ∃ eVarVal, LamThmValid (lval.toLamValuation eVarVal) lctx t := by
   revert heq; dsimp [getValidEnsureLCtx]
-  match hv : r.get? v with
+  match hv : BinTree.get? r v with
   | .some (.valid lctx' t) =>
     dsimp
     match hlctx : lctx.beq lctx' with
@@ -236,14 +203,14 @@ def RTable.getValidsEnsureLCtx (r : RTable) (lctx : List LamSort) (vs : List Nat
     | .none => .none
 
 theorem RTable.getValidsEnsureLCtx_correct
-  (inv : RTable.inv r lval) (heq : getValidsEnsureLCtx r lctx vs = .some ts) :
-  HList (fun t => LamThmValid lval.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc) ts := by
+  (inv : RTable.inv lval r) (heq : getValidsEnsureLCtx r lctx vs = .some ts) :
+  HList (fun t => ∃ eVarVal, LamThmValid (lval.toLamValuation eVarVal) lctx t) ts := by
   revert ts; induction vs <;> intro ts heq
   case nil =>
     cases heq; apply HList.nil
   case cons v vs IH =>
     dsimp [getValidsEnsureLCtx] at heq; revert heq
-    match hv : r.get? v with
+    match hv : BinTree.get? r v with
     | .some (.valid lctx' t) =>
       dsimp
       match hlctx : lctx.beq lctx' with
@@ -252,7 +219,7 @@ theorem RTable.getValidsEnsureLCtx_correct
         match hvs : getValidsEnsureLCtx r lctx vs with
         | .some ts' =>
           intro heq; cases heq
-          exact HList.cons (RTable.validInv_get inv hv) (IH hvs);
+          exact HList.cons (RTable.validInv_get inv hv) (IH hvs)
         | .none => intro heq; cases heq
       | false => intro heq; cases heq
     | .some (.imported _) => intro heq; cases heq
@@ -260,39 +227,41 @@ theorem RTable.getValidsEnsureLCtx_correct
     | .some (.nonempty _) => intro heq; cases heq
     | .none => intro heq; cases heq
 
+-- !!!!!! Idea: Add a new type of entry to `RTable` to represent
+--   imported facts??
 -- The meta code of the checker will prepare this `ImportTable`
-abbrev ImportTable (cpv : CPVal.{u}) :=
-  Auto.BinTree (@PSigma LamTerm (fun p => (LamTerm.interpAsProp cpv.toLamValuationEraseEtom dfLCtxTy (dfLCtxTerm _) p).down))
+abbrev ImportTable (lval : CheckerValuation.{u}) :=
+  Auto.BinTree (@PSigma LamTerm (fun p => (LamTerm.interpAsProp lval.toLamValuationEraseEtom dfLCtxTy (dfLCtxTerm _) p).down))
 
 -- Used by the meta code of the checker to build `ImportTable`
-abbrev importTablePSigmaβ (cpv : CPVal.{u}) (p : LamTerm) :=
-  (LamTerm.interpAsProp cpv.toLamValuationEraseEtom dfLCtxTy (dfLCtxTerm _) p).down
+abbrev importTablePSigmaβ (lval : CheckerValuation.{u}) (p : LamTerm) :=
+  (LamTerm.interpAsProp lval.toLamValuationEraseEtom dfLCtxTy (dfLCtxTerm _) p).down
 
-abbrev importTablePSigmaMk (cpv : CPVal.{u}) :=
-  @PSigma.mk LamTerm (importTablePSigmaβ cpv)
+abbrev importTablePSigmaMk (lval : CheckerValuation.{u}) :=
+  @PSigma.mk LamTerm (importTablePSigmaβ lval)
 
-abbrev importTablePSigmaDefault (cpv : CPVal.{u}) :
-  @PSigma LamTerm (fun p => (LamTerm.interpAsProp cpv.toLamValuationEraseEtom dfLCtxTy (dfLCtxTerm _) p).down) :=
+abbrev importTablePSigmaDefault (lval : CheckerValuation.{u}) :
+  @PSigma LamTerm (fun p => (LamTerm.interpAsProp lval.toLamValuationEraseEtom dfLCtxTy (dfLCtxTerm _) p).down) :=
   ⟨.base .trueE, True.intro⟩
 
-def ImportTable.importFacts (it : ImportTable cpv) : BinTree REntry :=
+def ImportTable.importFacts (it : ImportTable lval) : RTable :=
   it.mapOpt (fun ⟨p, _⟩ =>
-    match p.lamCheck? cpv.toLamTyValEraseEtom dfLCtxTy with
+    match p.lamCheck? lval.toLamTyValEraseEtom dfLCtxTy with
     | .some (.base .prop) =>
       match p.maxLooseBVarSucc with
       | 0 =>
         match p.maxEVarSucc with
-        | 0 => .some (.imported (p.resolveImport cpv.toLamTyValEraseEtom))
+        | 0 => .some (.imported (p.resolveImport lval.toLamTyValEraseEtom))
         | _ + 1 => .none
       | _ + 1 => .none
     | _                   => .none)
 
-theorem ImportTable.importFacts_correct (it : ImportTable cpv) (n : Nat) :
-  it.importFacts.allp (@REntry.correct levt ⟨cpv, eVarVal⟩ n) := by
+theorem ImportTable.importFacts_correct (it : ImportTable lval) :
+  RTable.inv lval (importFacts it) := by
   dsimp [RTable.inv, importFacts]; rw [BinTree.mapOpt_allp]
   intro n; apply Option.allp_uniform;
   intro ⟨p, validp⟩; dsimp
-  cases h₁ : LamTerm.lamCheck? cpv.toLamTyValEraseEtom dfLCtxTy p <;> try exact True.intro
+  cases h₁ : LamTerm.lamCheck? lval.toLamTyValEraseEtom dfLCtxTy p <;> try exact True.intro
   case a.some s =>
     cases s <;> try exact True.intro
     case base b =>
@@ -303,12 +272,14 @@ theorem ImportTable.importFacts_correct (it : ImportTable cpv) (n : Nat) :
       dsimp [Option.allp, REntry.correct]
       apply And.intro
       case left =>
-        apply LamThmValid.resolveImport (lval:=cpv.toLamValuationEraseEtom)
-        apply LamThmValid.ofInterpAsProp cpv.toLamValuationEraseEtom _ h₁ validp h₂    
+        apply LamThmValid.resolveImport (lval:=lval.toLamValuationEraseEtom)
+        apply LamThmValid.ofInterpAsProp lval.toLamValuationEraseEtom _ h₁ validp h₂    
       case right =>
-        rw [LamTerm.resolveImport_maxEVarSucc]; exact h₃    
+        rw [LamTerm.resolveImport_maxEVarSucc]; exact h₃
 
 inductive ChkStep where
+  -- Adds `⟨lctx, t, t.lamCheck!⟩` to `rtable.wf`
+  | nop : ChkStep
   | wfOfCheck (lctx : List LamSort) (t : LamTerm) : ChkStep
   | wfOfAppend (ex : List LamSort) (pos : Nat) : ChkStep
   | wfOfPrepend (ex : List LamSort) (pos : Nat) : ChkStep
@@ -329,12 +300,13 @@ inductive ChkStep where
   | validOfCongrArg (pos rw : Nat) : ChkStep
   | validOfCongrFun (pos rw : Nat) : ChkStep
   | validOfCongr (pos rwFn rwArg : Nat) : ChkStep
-  | validOfCongrArgs (pos : Nat) (rws : List Nat) : ChkStep
+  | validOfCongrArgs (pos : Nat) (rws : List Nat)
   | validOfCongrFunN (pos rwFn n : Nat) : ChkStep
   | validOfCongrs (pos rwFn : Nat) (rwArgs : List Nat) : ChkStep
   deriving Lean.ToExpr
 
 def ChkStep.toString : ChkStep → String
+| .nop => s!"nop"
 | .wfOfCheck lctx t => s!"wfOfCheck {lctx} {t}"
 | .wfOfAppend ex pos => s!"wfOfAppend {ex} {pos}"
 | .wfOfPrepend ex pos => s!"wfOfPrepend {ex} {pos}"
@@ -382,190 +354,158 @@ def ChkStep.evalValidOfInstantiate (ltv : LamTyVal) (lctx : List LamSort) (t : L
         | false => .none
       | .none => .none
 
-inductive EvalResult where
-  | fail
-  | addEntry (e : REntry)
-
-def ChkStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : ChkStep) → EvalResult
+def ChkStep.eval (ltv : LamTyVal) (r : RTable) : (cs : ChkStep) → Option REntry
+| .nop => .none
 | .wfOfCheck lctx t =>
-  match LamTerm.lamThmWFCheck? ⟨lvt, lit, r.toLamEVarTy⟩ lctx t with
-  | .some rty => .addEntry (.wf lctx rty t)
-  | .none => .fail
+  match LamTerm.lamThmWFCheck? ltv lctx t with
+  | .some rty => .some (.wf lctx rty t)
+  | .none => .none
 | .wfOfAppend ex pos =>
   match r.getWF pos with
-  | .some (lctx, s, t) => .addEntry (.wf (lctx ++ ex) s t)
-  | .none => .fail
+  | .some (lctx, s, t) => .some (.wf (lctx ++ ex) s t)
+  | .none => .none
 | .wfOfPrepend ex pos =>
   match r.getWF pos with
-  | .some (lctx, s, t) => .addEntry (.wf (ex ++ lctx) s (t.bvarLifts ex.length))
-  | .none => .fail
+  | .some (lctx, s, t) => .some (.wf (ex ++ lctx) s (t.bvarLifts ex.length))
+  | .none => .none
 | .wfOfHeadBeta pos =>
   match r.getWF pos with
-  | .some (lctx, s, t) => .addEntry (.wf lctx s t.headBeta)
-  | .none => .fail
+  | .some (lctx, s, t) => .some (.wf lctx s t.headBeta)
+  | .none => .none
 | .wfOfBetaBounded pos bound =>
   match r.getWF pos with
-  | .some (lctx, s, t) => .addEntry (.wf lctx s (t.betaBounded bound))
-  | .none => .fail
+  | .some (lctx, s, t) => .some (.wf lctx s (t.betaBounded bound))
+  | .none => .none
 | .validOfIntro1F pos =>
   match r.getValid pos with
   | .some (lctx, t) =>
     match t.intro1F? with
-    | .some (s, p) => .addEntry (.valid (s :: lctx) p)
-    | .none => .fail
-  | .none => .fail
+    | .some (s, p) => .some (.valid (s :: lctx) p)
+    | .none => .none
+  | .none => .none
 | .validOfIntro1H pos =>
   match r.getValid pos with
   | .some (lctx, t) =>
     match t.intro1H? with
-    | .some (s, p) => .addEntry (.valid (s :: lctx) p)
-    | .none => .fail
-  | .none => .fail
+    | .some (s, p) => .some (.valid (s :: lctx) p)
+    | .none => .none
+  | .none => .none
 | .validOfIntros pos idx =>
   match r.getValid pos with
-  | .some (lctx, t) =>
-    match evalValidOfIntros lctx t idx with
-    | .some re => .addEntry re
-    | .none => .fail
-  | .none => .fail
+  | .some (lctx, t) => evalValidOfIntros lctx t idx
+  | .none => .none
 | .validOfHeadBeta pos =>
   match r.getValid pos with
-  | .some (lctx, t) => .addEntry (.valid lctx t.headBeta)
-  | .none => .fail
+  | .some (lctx, t) => .some (.valid lctx t.headBeta)
+  | .none => .none
 | .validOfBetaBounded pos bound =>
   match r.getValid pos with
-  | .some (lctx, t) => .addEntry (.valid lctx (t.betaBounded bound))
-  | .none => .fail
+  | .some (lctx, t) => .some (.valid lctx (t.betaBounded bound))
+  | .none => .none
 | .validOfImp p₁₂ p₁ =>
   match r.getValid p₁₂ with
   | .some (lctx, t₁₂) =>
     match r.getValidEnsureLCtx lctx p₁ with
     | .some t₁ =>
       match LamTerm.impApp? t₁₂ t₁ with
-      | .some t₂ => .addEntry (.valid lctx t₂)
-      | .none => .fail
-    | .none => .fail
-  | .none => .fail
+      | .some t₂ => .some (.valid lctx t₂)
+      | .none => .none
+    | .none => .none
+  | .none => .none
 | .validOfImps imp ps =>
   match r.getValid imp with
   | .some (lctx, t) =>
     match r.getValidsEnsureLCtx lctx ps with
-    | .some ts =>
-      match t.impApps? ts with
-      | .some res => .addEntry (REntry.valid lctx res)
-      | .none => .fail
-    | .none => .fail
-  | .none => .fail
+    | .some ts => REntry.valid lctx <$> t.impApps? ts
+    | .none => .none
+  | .none => .none
 | .validOfInstantiate1 pos arg =>
   match r.getValid pos with
   | .some (lctx, t) =>
     match lctx with
-    | .nil => .fail
+    | .nil => .none
     | .cons argTy lctx =>
-      match arg.lamThmWFCheck? ⟨lvt, lit, r.toLamEVarTy⟩ lctx with
+      match arg.lamThmWFCheck? ltv lctx with
       | .some s =>
         match s.beq argTy with
-        | true => .addEntry (.valid lctx (LamTerm.instantiate1 arg t))
-        | false => .fail
-      | .none => .fail
-  | .none => .fail
+        | true => .some (.valid lctx (LamTerm.instantiate1 arg t))
+        | false => .none
+      | .none => .none
+  | .none => .none
 | .validOfInstantiate pos args =>
   match r.getValid pos with
-  | .some (lctx, t) =>
-    match evalValidOfInstantiate ⟨lvt, lit, r.toLamEVarTy⟩ lctx t args with
-    | .some re => .addEntry re
-    | .none => .fail
-  | .none => .fail
+  | .some (lctx, t) => evalValidOfInstantiate ltv lctx t args
+  | .none => .none
 | .validOfInstantiateRev pos args =>
   match r.getValid pos with
-  | .some (lctx, t) =>
-    match evalValidOfInstantiate ⟨lvt, lit, r.toLamEVarTy⟩ lctx t args.reverse with
-    | .some re => .addEntry re
-    | .none => .fail
-  | .none => .fail
+  | .some (lctx, t) => evalValidOfInstantiate ltv lctx t args.reverse
+  | .none => .none
 | .validOfCongrArg pos rw =>
   match r.getValid pos with
   | .some (lctx, t) =>
     match r.getValidEnsureLCtx lctx rw with
-    | .some rwt =>
-      match t.congrArg? rwt with
-      | .some res => .addEntry (REntry.valid lctx res)
-      | .none => .fail
-    | .none => .fail
-  | .none => .fail
+    | .some rwt => REntry.valid lctx <$> t.congrArg? rwt
+    | .none => .none
+  | .none => .none
 | .validOfCongrFun pos rw =>
   match r.getValid pos with
   | .some (lctx, t) =>
     match r.getValidEnsureLCtx lctx rw with
-    | .some rwt =>
-      match t.congrFun? rwt with
-      | .some res => .addEntry (REntry.valid lctx res)
-      | .none => .fail
-    | .none => .fail
-  | .none => .fail
+    | .some rwt => REntry.valid lctx <$> t.congrFun? rwt
+    | .none => .none
+  | .none => .none
 | .validOfCongr pos rwFn rwArg =>
   match r.getValid pos with
   | .some (lctx, t) =>
     match r.getValidEnsureLCtx lctx rwFn with
     | .some rwFnt =>
       match r.getValidEnsureLCtx lctx rwArg with
-      | .some rwArgt =>
-        match t.congr? rwFnt rwArgt with
-        | .some res => .addEntry (REntry.valid lctx res)
-        | .none => .fail
-      | .none => .fail
-    | .none => .fail
-  | .none => .fail
+      | .some rwArgt => REntry.valid lctx <$> t.congr? rwFnt rwArgt
+      | .none => .none
+    | .none => .none
+  | .none => .none
 | .validOfCongrArgs pos rws =>
   match r.getValid pos with
   | .some (lctx, t) =>
     match r.getValidsEnsureLCtx lctx rws with
-    | .some ts =>
-      match t.congrArgs? ts with
-      | .some res => .addEntry (REntry.valid lctx res)
-      | .none => .fail
-    | .none => .fail
-  | .none => .fail
+    | .some ts => REntry.valid lctx <$> t.congrArgs? ts
+    | .none => .none
+  | .none => .none
 | .validOfCongrFunN pos rwFn n =>
   match r.getValid pos with
   | .some (lctx, t) => 
     match r.getValidEnsureLCtx lctx rwFn with
-    | .some rwFnt =>
-      match t.congrFunN? rwFnt n with
-      | .some res => .addEntry (REntry.valid lctx res)
-      | .none => .fail
-    | _ => .fail
-  | .none => .fail
+    | .some rwFnt => REntry.valid lctx <$> t.congrFunN? rwFnt n
+    | _ => .none
+  | .none => .none
 | .validOfCongrs pos rwFn rwArgs =>
   match r.getValid pos with
   | .some (lctx, t) =>
     match r.getValidEnsureLCtx lctx rwFn with
     | .some rwFnt =>
       match r.getValidsEnsureLCtx lctx rwArgs with
-      | .some rwArgt =>
-        match t.congrs? rwFnt rwArgt with
-        | .some res => .addEntry (REntry.valid lctx res)
-        | .none => .fail
-      | .none => .fail
-    | .none => .fail
-  | .none => .fail
+      | .some rwArgt => REntry.valid lctx <$> t.congrs? rwFnt rwArgt
+      | .none => .none
+    | .none => .none
+  | .none => .none
 
-theorem ChkStep.evalValidOfIntros_correct (lval : CVal.{u} levt)
-  (tV : LamThmValid lval.toLamValuation lctx t ∧ t.maxEVarSucc ≤ n) :
-  Option.allp (REntry.correct lval n) (evalValidOfIntros lctx t idx) := by
+theorem ChkStep.evalValidOfIntros_correct (lval : CheckerValuation)
+  (tV : ∃ eVarVal, LamThmValid (lval.toLamValuation eVarVal) lctx t) :
+  Option.allp (REntry.correct lval) (evalValidOfIntros lctx t idx) := by
   revert lctx t; induction idx <;> intros lctx t tV
   case zero => exact tV
   case succ idx IH =>
     dsimp [evalValidOfIntros]
     match h : t.intro1? with
     | .some (s, t') =>
-      have ⟨tV, eS⟩ := tV
-      apply IH; apply And.intro (LamThmValid.intro1 tV h); sorry
+      apply IH;
+      have ⟨eVarVal, tV'⟩ := tV; exists eVarVal
+      apply LamThmValid.intro1 tV' h
     | .none => exact True.intro
 
-theorem ChkStep.evalValidOfInstantiate_correct (lval : CVal.{u} levt)
-  (tV : LamThmValid lval.toLamValuation lctx t ∧ t.maxEVarSucc ≤ n) :
-  Option.allp (REntry.correct lval n) (evalValidOfInstantiate lval.toLamTyVal lctx t args) := by
+theorem ChkStep.evalValidOfInstantiate_correct (lval : CheckerValuation)
+  (tV : ∃ eVarVal, LamThmValid (lval.toLamValuation eVarVal) lctx t) :
+  Option.allp (REntry.correct lval) (evalValidOfInstantiate lval.toLamTyVal lctx t args) := by
   revert lctx t; induction args <;> intros lctx t tV
   case nil =>
     unfold evalValidOfInstantiate; exact tV
@@ -582,30 +522,21 @@ theorem ChkStep.evalValidOfInstantiate_correct (lval : CVal.{u} levt)
         | true =>
           dsimp; apply IH
           cases (LamSort.beq_eq _ _ h₂)
-          have h₁' := LamThmWF.ofLamThmWFCheck? (lval:=lval.toLamValuation) h₁
-          have ⟨tV, eS⟩ := tV
-          apply And.intro (LamThmValid.instantiate1 h₁' tV)
-          apply Nat.le_trans (LamTerm.instantiateAt_maxEVarSucc)
-          rw [Nat.max_le]; apply And.intro _ eS; sorry
+          have ⟨eVarVal, tV'⟩ := tV; exists eVarVal
+          have h₁' := LamThmWF.ofLamThmWFCheck? (lval:=lval.toLamValuation eVarVal) h₁
+          apply LamThmValid.instantiate1 h₁' tV'
         | false => exact True.intro
       | .none => exact True.intro
 
-def EvalResult.correct (r : RTable) (cv : CVal.{u} r.lamEVarTy)
-  (res : EvalResult) :=
-  match res with
-  | .fail => True
-  | .addEntry re => REntry.correct cv r.maxEVarSucc re
-
 theorem ChkStep.eval_correct
-  (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
-  (cs : ChkStep) → EvalResult.correct r cv (cs.eval cv.toLamVarTy cv.toLamILTy r) := sorry
-/-
+  (lval : CheckerValuation.{u}) (r : RTable) (inv : r.inv lval) :
+  (cs : ChkStep) → Option.allp (REntry.correct lval) (cs.eval lval.toLamTyVal r)
 | .nop => True.intro
 | .wfOfCheck lctx t => by
   dsimp [eval]
   cases h : LamTerm.lamThmWFCheck? lval.toLamTyVal lctx t <;> try exact True.intro
   case some s =>
-    dsimp [REntry.correct]; apply LamThmWFP.ofLamThmWF
+    dsimp [Option.allp, REntry.correct]; apply LamThmWFP.ofLamThmWF
     exact LamThmWF.ofLamThmWFCheck? h
 | .wfOfAppend ex pos => by
   dsimp [eval]
@@ -874,11 +805,6 @@ theorem ChkStep.eval_correct
       | .none => exact True.intro
     | .none => exact True.intro
   | .none => exact True.intro
--/
-
-def RTable.runEvalResult (r : RTable) (n : Nat) : EvalResult → RTable
-| .fail => r
-| .addEntry e => { r with entries := r.entries.insert n e }
 
 -- The first `ChkStep` specifies the checker step
 -- The second `Nat` specifies the position to insert the resulting term
@@ -891,39 +817,48 @@ def RTable.runEvalResult (r : RTable) (n : Nat) : EvalResult → RTable
 --   term by looking at `(c : ChkStep).eval`
 abbrev ChkSteps := BinTree (ChkStep × Nat)
 
-def ChkStep.run (lvt lit : Nat → LamSort) (r : RTable) (c : ChkStep) (n : Nat) : RTable :=
-  r.runEvalResult n (ChkStep.eval lvt lit r c)
+def ChkStep.run (ltv : LamTyVal) (r : RTable) (c : ChkStep) (n : Nat) : RTable :=
+  match ChkStep.eval ltv r c with
+  | .none => r
+  | .some re => r.insert n re
 
 theorem ChkStep.run_correct
-  (r : RTable) (cpv : CPVal.{u}) (inv : ∃ eV, r.inv ⟨cpv, eV⟩) (c : ChkStep) (n : Nat) :
-  ∃ eV', (ChkStep.run cpv.toLamVarTy cpv.toLamILTy r c n).inv ⟨cpv, eV'⟩ := by
-  have ⟨eV, inv⟩ := inv
+  (lval : CheckerValuation.{u}) (r : RTable) (inv : r.inv lval) (c : ChkStep) (n : Nat) :
+  (ChkStep.run lval.toLamTyVal r c n).inv lval := by
   dsimp [ChkStep.run]
-  have eval_correct := ChkStep.eval_correct r ⟨cpv, eV⟩ inv c; revert eval_correct
-  cases h : eval cpv.toLamVarTy cpv.toLamILTy r c <;> intro eval_correct
-  case fail => exact ⟨eV, inv⟩
-  case addEntry re =>
-    exists eV
-    cases re <;> dsimp [RTable.inv, RTable.runEvalResult] <;> rw [BinTree.allp_insert]
-      <;> dsimp <;> apply And.intro eval_correct (fun _ _ => inv _)
+  have eval_correct := ChkStep.eval_correct lval r inv c; revert eval_correct
+  cases h : eval lval.toLamTyVal r c <;> intro eval_correct
+  case none => exact inv
+  case some re =>
+    cases re <;> dsimp [RTable.inv] <;> rw [BinTree.allp_insert] <;> dsimp
+    case wf lctx s t =>
+      apply And.intro
+      case left => exact eval_correct
+      case right => intros; apply inv
+    case valid lctx t =>
+      apply And.intro
+      case left => exact eval_correct
+      case right => intros; apply inv
+    case nonempty s =>
+      apply And.intro
+      case left => exact eval_correct
+      case right => intros; apply inv
 
-def ChkSteps.run (lvt lit : Nat → LamSort) (r : RTable) (cs : ChkSteps) : RTable :=
-  BinTree.foldl (fun r (c, n) => ChkStep.run lvt lit r c n) r cs
+def ChkSteps.run (ltv : LamTyVal) (r : RTable) (cs : ChkSteps) : RTable :=
+  BinTree.foldl (fun r (c, n) => ChkStep.run ltv r c n) r cs
 
 theorem ChkSteps.run_correct
-  (r : RTable) (cpv : CPVal.{u}) (inv : ∃ eV, r.inv ⟨cpv, eV⟩) (cs : ChkSteps) :
-  ∃ eV', (ChkSteps.run cpv.toLamVarTy cpv.toLamILTy r cs).inv ⟨cpv, eV'⟩ := by
-  dsimp [ChkSteps.run]; apply BinTree.foldl_inv (fun (r : RTable) => ∃ eV', RTable.inv r ⟨cpv, eV'⟩) inv
-  intro r' (c, n) inv'; exact ChkStep.run_correct r' cpv inv' c n
+  (lval : CheckerValuation.{u}) (r : RTable) (inv : r.inv lval) (cs : ChkSteps) :
+  (ChkSteps.run lval.toLamTyVal r cs).inv lval := by
+  dsimp [ChkSteps.run]; apply BinTree.foldl_inv (RTable.inv lval) inv
+  intro r (c, n) inv'; exact ChkStep.run_correct lval r inv' c n
 
-def ChkSteps.runFromBeginning (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) :=
-  ChkSteps.run cpv.toLamVarTy cpv.toLamILTy ⟨it.importFacts, 0, .leaf⟩ cs
+def ChkSteps.runFromBeginning (lval : CheckerValuation.{u}) (it : ImportTable lval) (cs : ChkSteps) :=
+  ChkSteps.run lval.toLamTyVal it.importFacts cs
 
 theorem Checker
-  (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) :
-  ∃ eV, (ChkSteps.runFromBeginning cpv it cs).inv ⟨cpv, eV⟩ := by
-  apply ChkSteps.run_correct; dsimp [RTable.inv, BinTree.get?]
-  exists fun _ => BinTree.get?'_leaf _ ▸ GLift.up False;
-  apply ImportTable.importFacts_correct
+  (lval : CheckerValuation.{u}) (it : ImportTable lval) (cs : ChkSteps) :
+  (ChkSteps.runFromBeginning lval it cs).inv lval := by
+  apply ChkSteps.run_correct; apply ImportTable.importFacts_correct
 
 end Auto.Embedding.Lam
