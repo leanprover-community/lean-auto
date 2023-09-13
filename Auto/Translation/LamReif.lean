@@ -52,7 +52,7 @@ structure State where
     · The key `t : LamTerm` is the corresponding λ term,
       where all `eq, ∀, ∃` are not of import version
     · The first `e : Expr` is the proof of the assertion
-    · The second `t' : LamTerm` is `← resolveImport t`
+    · The second `t' : LamTerm` is `← mkImportVersion t`
     · The thrid `n : Nat` is the position of the assertion in the `ImportTable`
     · To be precise, we require that `e : GLift.down t.interp`
 
@@ -60,7 +60,7 @@ structure State where
   -/
   assertions  : HashMap LamTerm (Expr × LamTerm × Nat) := {}
   -- `Embedding/LamChecker/ChkMap`
-  -- If we have a `ChkStep` which is `validOfResolveImport n`, then
+  -- If we have a `ChkStep` which is `transferImport n`, then
   --   `assertions.find! n` would be the corresponding external proof
   chkMap      : HashMap REntry (ChkStep × Nat)  := {}
   -- We insert entries into `rTable` through two different ways
@@ -69,6 +69,10 @@ structure State where
   rTable      : Array REntry                    := #[]
   -- This works as a cache for `BinTree.ofList rTable.data`
   rTableTree  : BinTree REntry                  := BinTree.leaf
+  -- maxEVarSucc
+  maxEVarSucc : Nat                             := 0
+  -- lamEVarTy
+  lamEVarTy   : BinTree LamSort                 := .leaf
   -- `u` is the universe level that all constants will lift to
   -- Something about the universes level `u`
   -- Suppose `u ← getU`
@@ -159,7 +163,10 @@ private def getLamTyValAtMeta : ReifM LamTyVal := do
   let varVal ← getVarVal
   let varTy := varVal.map Prod.snd
   let lamILTy ← getLamILTy
-  return ⟨fun n => varTy[n]?.getD (.base .prop), fun n => lamILTy[n]?.getD (.base .prop)⟩
+  let lamEVarTy ← getLamEVarTy
+  return ⟨fun n => varTy[n]?.getD (.base .prop),
+          fun n => lamILTy[n]?.getD (.base .prop),
+          fun n => (lamEVarTy.get? n).getD (.base .prop)⟩
 
 def resolveLamBaseTermImport : LamBaseTerm → ReifM LamBaseTerm
 | .eqI n      => do return .eq (← lookupLamILTy! n)
@@ -170,6 +177,7 @@ def resolveLamBaseTermImport : LamBaseTerm → ReifM LamBaseTerm
 -- Models `resolveImport` on the `meta` level
 def resolveImport : LamTerm → ReifM LamTerm
 | .atom n       => return .atom n
+| .etom _       => throwError "resolveImport :: etom should not occur here"
 | .base b       => return .base (← resolveLamBaseTermImport b)
 | .bvar n       => return .bvar n
 | .lam s t      => return .lam s (← resolveImport t)
@@ -189,6 +197,7 @@ def resolveImport : LamTerm → ReifM LamTerm
 --   such that `GLift.down t'.interp` is definitionally equal to `α`   
 def mkImportVersion : LamTerm → ReifM LamTerm
 | .atom n => return (.atom n)
+| .etom _ => throwError "mkImportVersion :: etom should not occur here"
 | .base b =>
   match b with
   | .eq s      => return .base (.eqI (← sort2LamILTyIdx s))
@@ -203,21 +212,33 @@ def mkImportVersion : LamTerm → ReifM LamTerm
 
 -- A new `ChkStep`. `res` is the result of the `ChkStep`
 -- Returns the position of the result of this `ChkStep` in the `RTable`
-def newChkStep (c : ChkStep) (res? : Option REntry) : ReifM REntry := do
-  let .some res := c.eval (← getLamTyValAtMeta) (← getRTableTree)
-    | throwError "newChkStep :: ChkStep {c} does not evaluate to an entry"
+def newChkStep (c : ChkStep) (res? : Option EvalResult) : ReifM EvalResult := do
+  let ltv ← getLamTyValAtMeta
+  let res := c.eval ltv.lamVarTy ltv.lamILTy ⟨← getRTableTree, ← getMaxEVarSucc, ← getLamEVarTy⟩
   if let .some res' := res? then
     if res' != res then
       throwError "newChkStep :: Result {res} of ChkStep {c} does not match with expected {res'}"
-  -- If `res` is already provable, do nothing
-  if let .some _ ← lookupREntryProof? res then
-    return res
-  let rsize := (← getRTable).size
-  setChkMap ((← getChkMap).insert res (c, rsize))
-  setRTableTree ((← getRTableTree).insert rsize res)
-  setRTable ((← getRTable).push res)
+  match res with
+  | .fail => throwError "newChkStep :: Evaluation of ChkStep {c} produces `fail`"
+  | .addEntry re =>
+    -- If `re` is already provable, do nothing
+    if let .some _ ← lookupREntryProof? re then
+      return res
+    let rsize := (← getRTable).size
+    setChkMap ((← getChkMap).insert re (c, rsize))
+    setRTableTree ((← getRTableTree).insert rsize re)
+    setRTable ((← getRTable).push re)
   return res
 
+-- Returns the position of the entry inside the `RTable`
+def addREntryToRTable (re : REntry) : ReifM Nat := do
+  let rTable ← getRTable
+  let pos := rTable.size
+  setRTableTree ((← getRTableTree).insert pos re)
+  setRTable (rTable.push re)
+  return pos
+
+-- **TODO**
 -- `ty` is a reified assumption. `∀, ∃` and `=` in `ty` are supposed to
 --   not be of the import version
 -- The type of `proof` is definitionally equal to `GLift.down (← mkImportVersion ty).interp`
@@ -226,12 +247,7 @@ def newAssertion (proof : Expr) (ty : LamTerm) : ReifM Unit := do
   -- Because of the way we `buildImportTableExpr`, we need to deduplicate facts
   if (← getAssertions).contains ty then
     return
-  let rTable ← getRTable
-  -- Position of external proof within the ImportTable
-  let pos := rTable.size
-  let re := REntry.valid [] ty
-  setRTableTree ((← getRTableTree).insert pos re)
-  setRTable (rTable.push re)
+  let pos ← addREntryToRTable (.imported ty)
   -- This `mkImportVersion` must be called before we build the lval expression
   -- So it cannot be called on-the-fly in `buildImportTableExpr`
   let tyi ← mkImportVersion ty
@@ -543,9 +559,9 @@ section Checker
       return Lean.mkApp3 (.const ``ilSigmaMk [u]) tyValExpr sExpr ilVal)
     return exprListToBinTree ils u (Lean.mkApp2
       (.const ``Sigma [.zero, u]) lamSortExpr
-      (.app (.const ``ilSigmaβ [u]) tyValExpr))
+      (.app (.const ``ilβ [u]) tyValExpr))
 
-  def buildCheckerValuationExpr : ReifM Expr := do
+  def buildCPValExpr : ReifM Expr := do
     -- let startTime ← IO.monoMsNow
     let u ← getU
     let tyValExpr ← buildTyVal
@@ -553,7 +569,7 @@ section Checker
     let lamValuationExpr ← Meta.withLetDecl `tyVal tyValTy tyValExpr fun tyValFVarExpr => do
       let varExpr ← buildVarExpr tyValFVarExpr
       let ilExpr ← buildILExpr tyValFVarExpr
-      let checkerValuationExpr := Lean.mkApp3 (.const ``CheckerValuation.mk [u]) tyValExpr varExpr ilExpr
+      let checkerValuationExpr := Lean.mkApp3 (.const ``CPVal.mk [u]) tyValExpr varExpr ilExpr
       Meta.mkLetFVars #[tyValFVarExpr] checkerValuationExpr
     -- if !(← Meta.isTypeCorrectCore lamValuationExpr) then
     --   throwError "buildLamValuation :: Malformed LamValuation"
@@ -603,8 +619,8 @@ section Checker
     printCheckerStats
     let startTime ← IO.monoMsNow
     let u ← getU
-    let chkValExpr ← buildCheckerValuationExpr
-    let chkValTy := Expr.const ``CheckerValuation [u]
+    let chkValExpr ← buildCPValExpr
+    let chkValTy := Expr.const ``CPVal [u]
     let checker ← Meta.withLetDecl `lval chkValTy chkValExpr fun chkValFVarExpr => do
       let itExpr ← buildImportTableExpr chkValFVarExpr
       let csExpr ← buildChkStepsExpr

@@ -401,6 +401,13 @@ def LamBaseTerm.LamWF.unique {ltv : LamTyVal} {b : LamBaseTerm} {s₁ s₂ : Lam
   (lbwf₁ : LamWF ltv b s₁) (lbwf₂ : LamWF ltv b s₂) : s₁ = s₂ ∧ HEq lbwf₁ lbwf₂ := by
   cases lbwf₁ <;> cases lbwf₂ <;> trivial
 
+def LamBaseTerm.LamWF.eVarIrrelevance
+  (hLamVarTy : ltv₁.lamVarTy = ltv₂.lamVarTy)
+  (hLamILTy : ltv₁.lamILTy = ltv₂.lamILTy)
+  (lbwf : LamWF ltv₁ b s) : LamWF ltv₂ b s := by
+  cases b <;> cases lbwf <;> (try constructor) <;> cases ltv₁ <;> cases ltv₂ <;>
+    cases hLamVarTy <;> cases hLamILTy <;> constructor
+
 def LamBaseTerm.LamWF.reprPrec (wf : LamWF ltv s t) (n : Nat) :=
   let s :=
     match wf with
@@ -443,7 +450,7 @@ def LamBaseTerm.LamWF.ofLamBaseTerm (ltv : LamTyVal) : (b : LamBaseTerm) → (s 
 | .forallE s  => ⟨.func (.func _ (.base .prop)) (.base .prop), .ofForallE s⟩
 | .existE s   => ⟨.func (.func _ (.base .prop)) (.base .prop), .ofExistE s⟩
 
-def LamBaseTerm.wf_complete (wf : LamWF ltv b s) : LamWF.ofLamBaseTerm ltv b = ⟨s, wf⟩ := by
+def LamBaseTerm.lamWF_complete (wf : LamWF ltv b s) : LamWF.ofLamBaseTerm ltv b = ⟨s, wf⟩ := by
   cases wf <;> rfl
 
 def LamBaseTerm.lamCheck_of_LamWF (H : LamWF ltv b s) : b.lamCheck ltv = s := by
@@ -876,6 +883,20 @@ def LamWF.unique {ltv : LamTyVal} :
       cases argLeft; cases argRight
       apply And.intro; rfl; rfl
 
+def LamWF.eVarIrrelevance
+  (hLamVarTy : ltv₁.lamVarTy = ltv₂.lamVarTy)
+  (hLamILTy : ltv₁.lamILTy = ltv₂.lamILTy)
+  (hirr : ∀ n, n < t.maxEVarSucc → ltv₁.lamEVarTy n = ltv₂.lamEVarTy n) :
+  (lwf : LamWF ltv₁ ⟨lctx, t, s⟩) → LamWF ltv₂ ⟨lctx, t, s⟩
+| .ofAtom _ => hLamVarTy ▸ .ofAtom _
+| .ofEtom _ => hirr _ (Nat.le_refl _) ▸ .ofEtom _
+| .ofBase H => .ofBase (LamBaseTerm.LamWF.eVarIrrelevance hLamVarTy hLamILTy H)
+| .ofBVar _ => .ofBVar _
+| .ofLam bodyTy H => .ofLam bodyTy (eVarIrrelevance hLamVarTy hLamILTy hirr H)
+| .ofApp argTy HFn HArg => .ofApp argTy
+  (eVarIrrelevance hLamVarTy hLamILTy (fun n H => hirr _ (Nat.le_trans H (Nat.le_max_left _ _))) HFn)
+  (eVarIrrelevance hLamVarTy hLamILTy (fun n H => hirr _ (Nat.le_trans H (Nat.le_max_right _ _))) HArg)
+
 def LamWF.mkEq {ltv : LamTyVal}
   (wft₁ : LamWF ltv ⟨lctx, t₁, s⟩) (wft₂ : LamWF ltv ⟨lctx, t₂, s⟩) :
   LamWF ltv ⟨lctx, .mkEq s t₁ t₂, .base .prop⟩ :=
@@ -1017,7 +1038,7 @@ def LamWF.complete {ltv : LamTyVal} :
 | .(_), @LamWF.ofAtom _ lctx n => rfl
 | .(_), @LamWF.ofEtom _ lctx n => rfl
 | .(_), @LamWF.ofBase _ lctx b s h => by
-  unfold ofLamTerm; rw [LamBaseTerm.wf_complete]
+  unfold ofLamTerm; rw [LamBaseTerm.lamWF_complete]
 | .(_), @LamWF.ofBVar _ lctx n => rfl
 | .(_), @LamWF.ofLam _ lctx argTy bodyTy body H => by
   unfold ofLamTerm;

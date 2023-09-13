@@ -53,12 +53,13 @@ def RTable.toLamEVarTy (r : RTable) := fun n => (r.lamEVarTy.get? n).getD (.base
 
 section CVal
 
-  -- Checker Partial Valuation
+  -- Checker Partial Valuation (Valuation without `lamEVarTy` and `eVarVal`)
   structure CPVal where
     tyVal     : Nat → Type u
     var       : BinTree ((s : LamSort) × (s.interp tyVal))
     il        : BinTree ((s : LamSort) × (ILLift.{u} (s.interp tyVal)))
 
+  -- Checker Valuation
   structure CVal (lamEVarTy : BinTree LamSort) extends CPVal where
     eVarVal   : ∀ (n : Nat), ((lamEVarTy.get? n).getD (.base .prop)).interp tyVal
 
@@ -98,11 +99,6 @@ section CVal
   def CPVal.toLamILTy (cpv : CPVal.{u}) : Nat → LamSort :=
     fun n => ((cpv.il.get? n).getD ⟨.base .prop, ILLift.default _⟩).fst
 
-  def CPVal.toLamTyVal (cpv : CPVal.{u}) (levt : BinTree LamSort) : LamTyVal :=
-    ⟨fun n => ((cpv.var.get? n).getD ⟨.base .prop, GLift.up False⟩).fst,
-     fun n => ((cpv.il.get? n).getD ⟨.base .prop, ILLift.default _⟩).fst,
-     fun n => (levt.get? n).getD (.base .prop)⟩
-
   def CPVal.toLamTyValEraseEtom (cv : CPVal.{u}) : LamTyVal :=
     ⟨fun n => ((cv.var.get? n).getD ⟨.base .prop, GLift.up False⟩).fst,
      fun n => ((cv.il.get? n).getD ⟨.base .prop, ILLift.default _⟩).fst,
@@ -116,35 +112,35 @@ section CVal
 
 end CVal
 
-def REntry.correct (lval : CVal.{u} levt) (maxEVarSucc : Nat) : REntry → Prop
-| .imported t => LamThmValid lval.toLamValuationEraseEtom [] t ∧ t.maxEVarSucc = 0
-| .wf lctx s t => LamThmWFP lval.toLamValuation lctx s t ∧ t.maxEVarSucc ≤ maxEVarSucc
-| .valid lctx t => LamThmValid lval.toLamValuation lctx t ∧ t.maxEVarSucc ≤ maxEVarSucc
-| .nonempty s => LamNonempty lval.tyVal s
+def REntry.correct (cv : CVal.{u} levt) (maxEVarSucc : Nat) : REntry → Prop
+| .imported t => LamThmValid cv.toLamValuationEraseEtom [] t ∧ t.maxEVarSucc = 0
+| .wf lctx s t => LamThmWFP cv.toLamValuation lctx s t ∧ t.maxEVarSucc ≤ maxEVarSucc
+| .valid lctx t => LamThmValid cv.toLamValuation lctx t ∧ t.maxEVarSucc ≤ maxEVarSucc
+| .nonempty s => LamNonempty cv.tyVal s
 
 -- Invariant of `RTable`
-def RTable.inv (r : RTable) (lval : CVal.{u} r.lamEVarTy) :=
-  r.entries.allp (fun re => re.correct lval r.maxEVarSucc)
+def RTable.inv (r : RTable) (cv : CVal.{u} r.lamEVarTy) :=
+  r.entries.allp (fun re => re.correct cv r.maxEVarSucc)
 
 theorem RTable.importInv_get
-  {r : RTable} {lval : CVal.{u} r.lamEVarTy}
-  (inv : RTable.inv r lval) (h : get? r n = Option.some (.imported t)) :
-  LamThmValid lval.toLamValuationEraseEtom [] t ∧ t.maxEVarSucc = 0 := by
+  {r : RTable} {cv : CVal.{u} r.lamEVarTy}
+  (inv : RTable.inv r cv) (h : get? r n = Option.some (.imported t)) :
+  LamThmValid cv.toLamValuationEraseEtom [] t ∧ t.maxEVarSucc = 0 := by
   have inv' := inv n; dsimp [get?] at h; rw [h] at inv'; exact inv'
 
-theorem RTable.wfInv_get {r : RTable} {lval : CVal.{u} r.lamEVarTy}
-  (inv : RTable.inv r lval) (h : get? r n = Option.some (.wf lctx s t)) :
-  LamThmWFP lval.toLamValuation lctx s t ∧ t.maxEVarSucc ≤ r.maxEVarSucc := by
+theorem RTable.wfInv_get {r : RTable} {cv : CVal.{u} r.lamEVarTy}
+  (inv : RTable.inv r cv) (h : get? r n = Option.some (.wf lctx s t)) :
+  LamThmWFP cv.toLamValuation lctx s t ∧ t.maxEVarSucc ≤ r.maxEVarSucc := by
   have inv' := inv n; dsimp [get?] at h; rw [h] at inv'; exact inv'
 
-theorem RTable.validInv_get {r : RTable} {lval : CVal.{u} r.lamEVarTy}
-  (inv : RTable.inv r lval) (h : get? r n = Option.some (.valid lctx t)) :
-  LamThmValid lval.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc := by
+theorem RTable.validInv_get {r : RTable} {cv : CVal.{u} r.lamEVarTy}
+  (inv : RTable.inv r cv) (h : get? r n = Option.some (.valid lctx t)) :
+  LamThmValid cv.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc := by
   have inv' := inv n; dsimp [get?] at h; rw [h] at inv'; exact inv'
 
-theorem RTable.nonemptyInv_get {r : RTable} {lval : CVal.{u} r.lamEVarTy}
-  (inv : RTable.inv r lval) (h : get? r n = Option.some (.nonempty s)) :
-  LamNonempty lval.tyVal s := by
+theorem RTable.nonemptyInv_get {r : RTable} {cv : CVal.{u} r.lamEVarTy}
+  (inv : RTable.inv r cv) (h : get? r n = Option.some (.nonempty s)) :
+  LamNonempty cv.tyVal s := by
   have inv' := inv n; dsimp [get?] at h; rw [h] at inv'; exact inv'
 
 def RTable.getImport (r : RTable) (v : Nat) : Option LamTerm :=
@@ -155,6 +151,28 @@ def RTable.getImport (r : RTable) (v : Nat) : Option LamTerm :=
   | .some (.nonempty _) => .none
   | .none => .none
 
+theorem RTable.getImport_correct
+  (inv : RTable.inv r cv) (heq : getImport r v = .some t) :
+  LamThmValid cv.toLamValuation [] t ∧ t.maxEVarSucc = 0 := by
+  revert heq; dsimp [getImport]
+  match h : r.get? v with
+  | .some (.imported _) =>
+    intro heq; cases heq;
+    have h' := RTable.importInv_get inv h
+    apply And.intro _ h'.right
+    intro lctx'; have ⟨wft, ht⟩ := h'.left lctx'
+    exists LamWF.eVarIrrelevance
+      (by cases cv; rfl) (by cases cv; rfl)
+      (fun n H => by rw [h'.right] at H; cases H) wft
+    intro lctxTerm; apply Eq.mp _ (ht lctxTerm); apply congrArg
+    apply eq_of_heq; apply LamWF.interp_eVarIrrelevance <;> try rfl
+    case h.h.hirr =>
+      intro n H; rw [h'.right] at H; cases H
+  | .some (.valid lctx t) => intro heq; cases heq
+  | .some (.wf _ _ _) => intro heq; cases heq;
+  | .some (.nonempty _) => intro heq; cases heq
+  | .none => intro heq; cases heq
+
 def RTable.getWF (r : RTable) (v : Nat) : Option (List LamSort × LamSort × LamTerm) :=
   match r.get? v with
   | .some (.imported _) => .none
@@ -164,8 +182,8 @@ def RTable.getWF (r : RTable) (v : Nat) : Option (List LamSort × LamSort × Lam
   | .none => .none
 
 theorem RTable.getWF_correct
-  (inv : RTable.inv r lval) (heq : getWF r v = .some (lctx, s, t)) :
-  LamThmWFP lval.toLamValuation lctx s t ∧ t.maxEVarSucc ≤ r.maxEVarSucc := by
+  (inv : RTable.inv r cv) (heq : getWF r v = .some (lctx, s, t)) :
+  LamThmWFP cv.toLamValuation lctx s t ∧ t.maxEVarSucc ≤ r.maxEVarSucc := by
   revert heq; dsimp [getWF]
   match h : r.get? v with
   | .some (.imported _) => intro heq; cases heq
@@ -183,8 +201,8 @@ def RTable.getValid (r : RTable) (v : Nat) : Option (List LamSort × LamTerm) :=
   | .none => .none
 
 theorem RTable.getValid_correct
-  (inv : RTable.inv r lval) (heq : getValid r v = .some (lctx, t)) :
-  LamThmValid lval.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc := by
+  (inv : RTable.inv r cv) (heq : getValid r v = .some (lctx, t)) :
+  LamThmValid cv.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc := by
   revert heq; dsimp [getValid]
   match h : r.get? v with
   | .some (.valid lctx t) => intro heq; cases heq; apply RTable.validInv_get inv h
@@ -205,8 +223,8 @@ def RTable.getValidEnsureLCtx (r : RTable) (lctx : List LamSort) (v : Nat) : Opt
   | .none => .none
 
 theorem RTable.getValidEnsureLCtx_correct
-  (inv : RTable.inv r lval) (heq : getValidEnsureLCtx r lctx v = .some t) :
-  LamThmValid lval.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc := by
+  (inv : RTable.inv r cv) (heq : getValidEnsureLCtx r lctx v = .some t) :
+  LamThmValid cv.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc := by
   revert heq; dsimp [getValidEnsureLCtx]
   match hv : r.get? v with
   | .some (.valid lctx' t) =>
@@ -236,8 +254,8 @@ def RTable.getValidsEnsureLCtx (r : RTable) (lctx : List LamSort) (vs : List Nat
     | .none => .none
 
 theorem RTable.getValidsEnsureLCtx_correct
-  (inv : RTable.inv r lval) (heq : getValidsEnsureLCtx r lctx vs = .some ts) :
-  HList (fun t => LamThmValid lval.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc) ts := by
+  (inv : RTable.inv r cv) (heq : getValidsEnsureLCtx r lctx vs = .some ts) :
+  HList (fun t => LamThmValid cv.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc) ts := by
   revert ts; induction vs <;> intro ts heq
   case nil =>
     cases heq; apply HList.nil
@@ -309,6 +327,7 @@ theorem ImportTable.importFacts_correct (it : ImportTable cpv) (n : Nat) :
         rw [LamTerm.maxEVarSucc_resolveImport]; exact h₃    
 
 inductive ChkStep where
+  | transferImport (pos : Nat) : ChkStep
   | wfOfCheck (lctx : List LamSort) (t : LamTerm) : ChkStep
   | wfOfAppend (ex : List LamSort) (pos : Nat) : ChkStep
   | wfOfPrepend (ex : List LamSort) (pos : Nat) : ChkStep
@@ -335,6 +354,7 @@ inductive ChkStep where
   deriving Lean.ToExpr
 
 def ChkStep.toString : ChkStep → String
+| .transferImport pos => s!"transferImport {pos}"
 | .wfOfCheck lctx t => s!"wfOfCheck {lctx} {t}"
 | .wfOfAppend ex pos => s!"wfOfAppend {ex} {pos}"
 | .wfOfPrepend ex pos => s!"wfOfPrepend {ex} {pos}"
@@ -363,6 +383,14 @@ instance : ToString ChkStep where
 inductive EvalResult where
   | fail
   | addEntry (e : REntry)
+deriving Inhabited, Hashable, BEq
+
+def EvalResult.toString : EvalResult → String
+| .fail => "fail"
+| .addEntry e => s!"addEntry ({e})"
+
+instance : ToString EvalResult where
+  toString := EvalResult.toString
 
 def EvalResult.correct (r : RTable) (cv : CVal.{u} r.lamEVarTy)
   (res : EvalResult) :=
@@ -396,6 +424,10 @@ def ChkStep.evalValidOfInstantiate (n : Nat) (ltv : LamTyVal) (lctx : List LamSo
       | .none => .fail
 
 def ChkStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : ChkStep) → EvalResult
+| .transferImport pos =>
+  match r.getImport pos with
+  | .some t => .addEntry (.valid [] t)
+  | .none => .fail
 | .wfOfCheck lctx t =>
   match LamTerm.lamThmWFCheck? ⟨lvt, lit, r.toLamEVarTy⟩ lctx t with
   | .some rty =>
@@ -622,6 +654,13 @@ theorem ChkStep.evalValidOfInstantiate_correct
 theorem ChkStep.eval_correct
   (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
   (cs : ChkStep) → EvalResult.correct r cv (cs.eval cv.toLamVarTy cv.toLamILTy r)
+| .transferImport pos => by
+  dsimp [eval]
+  cases h : r.getImport pos <;> try exact True.intro
+  case some s =>
+    have h' := RTable.getImport_correct inv h
+    dsimp [EvalResult.correct, REntry.correct]
+    apply And.intro h'.left; rw [h'.right]; apply Nat.zero_le
 | .wfOfCheck lctx t => by
   dsimp [eval]
   cases h₁ : LamTerm.lamThmWFCheck? ⟨cv.toLamVarTy, cv.toLamILTy, r.toLamEVarTy⟩ lctx t <;> try exact True.intro
