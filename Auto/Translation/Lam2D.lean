@@ -137,6 +137,7 @@ def interpLamTermAsUnlifted : LamTerm → ExternM Expr
   let .some fid := (← getTermAtomFVars).find? n
     | throwError "interpLamTermAsUnlifted :: Cannot find fvarId assigned to term atom {n}"
   return .fvar fid
+| .etom _ => throwError "interpLamTermAsUnlifted :: etom is not supported"
 | .base b => interpLamBaseTermAsUnlifted b
 | .bvar n => return .bvar n
 | .lam s t => do

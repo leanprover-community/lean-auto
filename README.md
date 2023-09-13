@@ -56,4 +56,4 @@ Type **"auto 👍"** to see whether auto is set up.
 
 ## Checker
 * The checker is based on a deep embedding of simply-typed lambda calculus into dependent type theory.
-* The checker is slow on large input assumptions. For example, it takes ``0.7s`` to typecheck the final example in ```Test/Tactics/FirstOrder.lean```, and ```4s``` to typecheck the final example in ```BinderComplexity.lean```. However, this is probably acceptable for mathlib usages, because e.g ```Mathlib/Analysis/BoxIntegral/DivergenceTheorem.lean``` has two theorems that take ```4s``` to compile (but a large portion of the ```4s``` are spent on typeclass inference)
+* The checker is slow on large input assumptions. For example, it takes ``1s`` to typecheck the final example in ```Test/Tactics/FirstOrder.lean```, and ```4s``` to typecheck the final example in ```BinderComplexity.lean```. However, this is probably acceptable for mathlib usages, because e.g ```Mathlib/Analysis/BoxIntegral/DivergenceTheorem.lean``` has two theorems that take ```4s``` to compile (but a large portion of the ```4s``` are spent on typeclass inference)

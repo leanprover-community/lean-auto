@@ -60,14 +60,13 @@ structure State where
   -/
   assertions  : HashMap LamTerm (Expr × LamTerm × Nat) := {}
   -- `Embedding/LamChecker/ChkMap`
-  -- If we have a `ChkStep` which is `transferImport n`, then
-  --   `assertions.find! n` would be the corresponding external proof
+  -- `chkMap.find?[re]` returns the checkstep which proves `re`
   chkMap      : HashMap REntry (ChkStep × Nat)  := {}
   -- We insert entries into `rTable` through two different ways
   -- 1. Calling `newChkStep`
   -- 2. Validness facts from the ImportTable are treated in `newAssertions`
   rTable      : Array REntry                    := #[]
-  -- This works as a cache for `BinTree.ofList rTable.data`
+  -- This works as a cache for `BinTree.ofListGet rTable.data`
   rTableTree  : BinTree REntry                  := BinTree.leaf
   -- maxEVarSucc
   maxEVarSucc : Nat                             := 0
@@ -247,12 +246,11 @@ def newAssertion (proof : Expr) (ty : LamTerm) : ReifM Unit := do
   -- Because of the way we `buildImportTableExpr`, we need to deduplicate facts
   if (← getAssertions).contains ty then
     return
-  let pos ← addREntryToRTable (.imported ty)
+  let pos ← addREntryToRTable (.validEVar0 [] ty)
   -- This `mkImportVersion` must be called before we build the lval expression
   -- So it cannot be called on-the-fly in `buildImportTableExpr`
   let tyi ← mkImportVersion ty
   setAssertions ((← getAssertions).insert ty (proof, tyi, pos))
-
 /-
   Computes `upFunc` and `downFunc` between `s.interpAsUnlifted` and `s.interpAsLifted`
   · `upFunc` is such that `upFunc binder` is equivalent to `binder↑`
@@ -469,12 +467,16 @@ section Checker
   def validOfImp (v₁₂ : REntry) (v₁ : REntry) : ReifM REntry := do
     let p₁₂ ← lookupREntryPos! v₁₂
     let p₁ ← lookupREntryPos! v₁
-    newChkStep (.validOfImp p₁₂ p₁) .none
+    let .addEntry re ← newChkStep (.validOfImp p₁₂ p₁) .none
+      | throwError "validOfImp :: Unexpected evaluation result"
+    return re
 
   def validOfImps (impV : REntry) (hypVs : Array REntry) : ReifM REntry := do
     let imp ← lookupREntryPos! impV
     let ps ← hypVs.mapM lookupREntryPos!
-    newChkStep (.validOfImps imp ps.data) .none
+    let .addEntry re ← newChkStep (.validOfImps imp ps.data) .none
+      | throwError "validOfImps :: Unexpected evaluation result"
+    return re
 
   -- Functions that turns data structure in `ReifM.State` into `Expr`
 
@@ -619,20 +621,22 @@ section Checker
     printCheckerStats
     let startTime ← IO.monoMsNow
     let u ← getU
-    let chkValExpr ← buildCPValExpr
-    let chkValTy := Expr.const ``CPVal [u]
-    let checker ← Meta.withLetDecl `lval chkValTy chkValExpr fun chkValFVarExpr => do
-      let itExpr ← buildImportTableExpr chkValFVarExpr
+    let cpvExpr ← buildCPValExpr
+    let cpvTy := Expr.const ``CPVal [u]
+    let checker ← Meta.withLetDecl `cpval cpvTy cpvExpr fun cpvFVarExpr => do
+      let itExpr ← buildImportTableExpr cpvFVarExpr
       let csExpr ← buildChkStepsExpr
-      let rInv := Lean.mkApp3 (.const ``Checker [u]) chkValFVarExpr itExpr csExpr
-      let rExpr := Lean.toExpr (BinTree.ofListGet (← getRTable).data)
+      let rInv := Lean.mkApp3 (.const ``Checker [u]) cpvFVarExpr itExpr csExpr
+      let rExpr := Lean.mkApp3 (.const ``RTable.mk [])
+        (Lean.toExpr (← getRTableTree)) (Lean.toExpr (← getMaxEVarSucc))
+        (Lean.toExpr (← getLamEVarTy))
       let .valid lctx t := re
         | throwError "buildFullCheckerExprFor :: {re} is not a `valid` entry"
-      let nExpr := Lean.toExpr (← lookupREntryPos! re)
-      let eqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr re]]
-      let getEntry := Lean.mkApp7 (.const ``RTable.validInv_get [u])
-        chkValExpr nExpr (Lean.toExpr lctx) (Lean.toExpr t) rExpr rInv eqExpr
-      let getEntry ← Meta.mkLetFVars #[chkValFVarExpr] getEntry
+      let vExpr := Lean.toExpr (← lookupREntryPos! re)
+      let eqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr (lctx, t)]]
+      let getEntry := Lean.mkApp7 (.const ``RTable.getValidExport_correct [u])
+        rExpr cpvExpr vExpr (Lean.toExpr lctx) (Lean.toExpr t) rInv eqExpr
+      let getEntry ← Meta.mkLetFVars #[cpvFVarExpr] getEntry
       -- debug
       -- let rt := Lean.mkApp3 (.const ``ChkMap.runFromBeginning [u]) lvalExpr itExpr csExpr
       -- let rt ← Meta.withTransparency .all <| Meta.reduceAll rt
@@ -683,11 +687,13 @@ section ExportUtils
   --   from `λ` to external provers, e.g. Lean/Duper
   -- Therefore, we expect that `eqI, forallEI` and `existEI`
   --   does not occur in the `LamTerm`
-  def collectAtoms (varVal : Array (Expr × LamSort)) : LamTerm → MetaM (HashSet Nat × HashSet Nat)
+  def collectAtoms (varVal : Array (Expr × LamSort)) :
+    LamTerm → MetaM (HashSet Nat × HashSet Nat)
   | .atom n => do
     let .some (_, s) := varVal[n]?
       | throwError "collectAtoms :: Unknown term atom {n}"
     return (collectLamSortAtoms s, HashSet.empty.insert n)
+  | .etom _ => throwError "collectAtoms :: Exporting etom is not supported"
   | .base b => do
     return (← collectLamBaseTermAtoms b, HashSet.empty)
   | .bvar _ => pure (HashSet.empty, HashSet.empty)
@@ -764,6 +770,7 @@ end
 
 end LamReif
 
+/-
 namespace Lam2Lam
 open Embedding.Lam LamReif
 
@@ -820,7 +827,6 @@ open Embedding.Lam LamReif
         lookupREntryPos! (← transREntry ref hre))
       let cs' : ChkStep ← (do
         match cs with
-        | .nop => return .nop
         | .wfOfCheck lctx t => return .wfOfCheck (← lctx.mapM (transLamSort ref)) (← transLamTerm ref t)
         | .wfOfAppend ex pos => return .wfOfAppend (← ex.mapM (transLamSort ref)) (← posCont pos)
         | .wfOfPrepend ex pos => return .wfOfPrepend (← ex.mapM (transLamSort ref)) (← posCont pos)
@@ -857,15 +863,16 @@ open Embedding.Lam LamReif
     return s'
 
 end Lam2Lam
-
+-/
 namespace LamReif
 open Embedding.Lam
 
 -- Build optimized checker = Optimize state + Build full checker
 def buildOptimizedCheckerExprFor (re : REntry) : ReifM Expr := do
-  let s' ← Lam2Lam.optimizedStateFor #[re]
-  let (e, _) ← (buildFullCheckerExprFor re).run s'
-  return e
+  -- let s' ← Lam2Lam.optimizedStateFor #[re]
+  -- let (e, _) ← (buildFullCheckerExprFor re).run s'
+  -- return e
+  buildFullCheckerExprFor re
 
 register_option auto.optimizeCheckerProof : Bool := {
   defValue := true

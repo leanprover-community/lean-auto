@@ -50,7 +50,6 @@ example (x y : Nat) (f₁ f₂ f₃ f₄ f₅ f₆ f₇ f₈ f₉ f₁₀ f₁�
 --   sorry
 
 -- Multiple formulas
--- Checker typechecked in time 1017
 set_option trace.auto.buildChecker true in
 example
   (f₁ f₂ f₃ g₁ g₂ g₃ : Nat → Nat → Nat)

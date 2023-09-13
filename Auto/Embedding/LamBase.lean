@@ -1234,21 +1234,22 @@ theorem LamWF.interp.heq (lval : LamValuation.{u})
 
 theorem LamWF.interp_eVarIrrelevance
   (lval₁ : LamValuation.{u}) (lval₂ : LamValuation.{u})
-  {lctxTy : Nat → LamSort}
-  {lctxTerm₁ : ∀ n, (lctxTy n).interp lval₁.tyVal}
-  {lctxTerm₂ : ∀ n, (lctxTy n).interp lval₂.tyVal}
+  {lctxTy₁ lctxTy₂ : Nat → LamSort}
+  {lctxTerm₁ : ∀ n, (lctxTy₁ n).interp lval₁.tyVal}
+  {lctxTerm₂ : ∀ n, (lctxTy₂ n).interp lval₂.tyVal}
   {t : LamTerm} {rty : LamSort}
-  (lwf₁ : LamWF lval₁.toLamTyVal ⟨lctxTy, t, rty⟩)
-  (lwf₂ : LamWF lval₂.toLamTyVal ⟨lctxTy, t, rty⟩)
+  (lwf₁ : LamWF lval₁.toLamTyVal ⟨lctxTy₁, t, rty⟩)
+  (lwf₂ : LamWF lval₂.toLamTyVal ⟨lctxTy₂, t, rty⟩)
   (hLamVarTy : lval₁.lamVarTy = lval₂.lamVarTy)
   (hLamILTy : lval₁.lamILTy = lval₂.lamILTy)
   (hTyVal : HEq lval₁.tyVal lval₂.tyVal)
   (hVarVal : HEq lval₁.varVal lval₂.varVal)
   (hILVal : HEq lval₁.ilVal lval₂.ilVal)
+  (hLCtxTy : lctxTy₁ = lctxTy₂)
   (hLCtxTerm : HEq lctxTerm₁ lctxTerm₂)
   (hirr : ∀ n, n < t.maxEVarSucc →
     lval₁.lamEVarTy n = lval₂.lamEVarTy n ∧ HEq (lval₁.eVarVal n) (lval₂.eVarVal n)) :
-  HEq (LamWF.interp lval₁ lctxTy lctxTerm₁ lwf₁) (LamWF.interp lval₂ lctxTy lctxTerm₂ lwf₂) := by
+  HEq (LamWF.interp lval₁ lctxTy₁ lctxTerm₁ lwf₁) (LamWF.interp lval₂ lctxTy₂ lctxTerm₂ lwf₂) := by
   cases lval₁
   case mk toLamTyVal₁ tyVal₁ varVal₁ ilVal₁ eVarVal₁ =>
     cases toLamTyVal₁
@@ -1259,10 +1260,10 @@ theorem LamWF.interp_eVarIrrelevance
         case mk lamVarTy₂ lamILTy₂ lamEVarTy₂ =>
           dsimp at hLamVarTy hLamILTy hTyVal hVarVal hILVal hirr
           cases hLamVarTy; cases hLamILTy; cases hTyVal
-          cases hVarVal; cases hILVal; cases hLCtxTerm
+          cases hVarVal; cases hILVal; cases hLCtxTy; cases hLCtxTerm
           case refl.refl.refl.refl.refl.refl =>
             dsimp; dsimp at varVal₁ ilVal₁ eVarVal₁ lctxTerm₁ lwf₁ eVarVal₂ lwf₂
-            revert lctxTy rty
+            revert lctxTy₁ rty
             induction t <;> intros lctxTy rTy lctxTerm lwf₁ lwf₂
             case atom n =>
               cases lwf₁; cases lwf₂; rfl
@@ -1717,6 +1718,53 @@ theorem LamThmValid.ofInterpAsProp
   apply congrArg; apply eq_of_heq;
   apply LamWF.interp_lctxIrrelevance (lctxTy₁:=dfLCtxTy) (lctxTerm₁:=dfLCtxTerm _) _ _
   intros n h; rw [h₃] at h; cases h
+
+theorem LamValid.eVarIrrelevance
+  (lval₁ : LamValuation.{u}) (lval₂ : LamValuation.{u})
+  {lctxTy₁ lctxTy₂ : Nat → LamSort} {t : LamTerm}
+  (hLamVarTy : lval₁.lamVarTy = lval₂.lamVarTy)
+  (hLamILTy : lval₁.lamILTy = lval₂.lamILTy)
+  (hTyVal : HEq lval₁.tyVal lval₂.tyVal)
+  (hVarVal : HEq lval₁.varVal lval₂.varVal)
+  (hILVal : HEq lval₁.ilVal lval₂.ilVal)
+  (hLCtxTy : lctxTy₁ = lctxTy₂)
+  (hirr : ∀ n, n < t.maxEVarSucc →
+    lval₁.lamEVarTy n = lval₂.lamEVarTy n ∧ HEq (lval₁.eVarVal n) (lval₂.eVarVal n)) :
+  LamValid lval₁ lctxTy₁ t → LamValid lval₂ lctxTy₂ t := by
+  intro ⟨wfv, hv⟩
+  have irr := fun eq₁ eq₂ => LamWF.eVarIrrelevance eq₁ eq₂ (fun n H => (hirr n H).left) wfv
+  cases lval₁
+  case mk toLamTyVal₁ tyVal₁ varVal₁ ilVal₁ eVarVal₁ =>
+    cases toLamTyVal₁
+    case mk lamVarTy₁ lamILTy₁ lamEVarTy₁ =>
+      cases lval₂
+      case mk toLamTyVal₂ tyVal₂ varVal₂ ilVal₂ eVarVal₂ =>
+        cases toLamTyVal₂
+        case mk lamVarTy₂ lamILTy₂ lamEVarTy₂ =>
+          dsimp at hLamVarTy hLamILTy hTyVal hVarVal hILVal hirr irr
+          cases hLamVarTy; cases hLamILTy; cases hTyVal
+          cases hVarVal; cases hILVal; cases hLCtxTy;
+          exists (irr rfl rfl); intro lctxTerm;
+          apply Eq.mp _ (hv lctxTerm); apply congrArg
+          apply eq_of_heq; apply LamWF.interp_eVarIrrelevance <;> try rfl
+          apply hirr
+
+theorem LamThmValid.eVarIrrelevance
+  (lval₁ : LamValuation.{u}) (lval₂ : LamValuation.{u})
+  {lctx₁ lctx₂ : List LamSort} {t : LamTerm}
+  (hLamVarTy : lval₁.lamVarTy = lval₂.lamVarTy)
+  (hLamILTy : lval₁.lamILTy = lval₂.lamILTy)
+  (hTyVal : HEq lval₁.tyVal lval₂.tyVal)
+  (hVarVal : HEq lval₁.varVal lval₂.varVal)
+  (hILVal : HEq lval₁.ilVal lval₂.ilVal)
+  (hLCtxTy : lctx₁ = lctx₂)
+  (hirr : ∀ n, n < t.maxEVarSucc →
+    lval₁.lamEVarTy n = lval₂.lamEVarTy n ∧ HEq (lval₁.eVarVal n) (lval₂.eVarVal n)) :
+  LamThmValid lval₁ lctx₁ t → LamThmValid lval₂ lctx₂ t :=
+  fun h lctx' => LamValid.eVarIrrelevance lval₁ lval₂
+    (lctxTy₁:=pushLCtxs lctx₁ lctx') (lctxTy₂:=pushLCtxs lctx₂ lctx')
+    hLamVarTy hLamILTy hTyVal hVarVal hILVal
+    (by rw [hLCtxTy]) hirr (h lctx')
 
 private def getILSortString : LamBaseTerm → String
 | .eq s => s!"{s}"
