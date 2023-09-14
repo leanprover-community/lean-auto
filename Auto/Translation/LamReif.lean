@@ -227,6 +227,15 @@ def newChkStep (c : ChkStep) (res? : Option EvalResult) : ReifM EvalResult := do
     setChkMap ((← getChkMap).insert re (c, rsize))
     setRTableTree ((← getRTableTree).insert rsize re)
     setRTable ((← getRTable).push re)
+  | .newEtomWithValid s lctx t =>
+    let re : REntry := .valid lctx t
+    let rsize := (← getRTable).size
+    setChkMap ((← getChkMap).insert re (c, rsize))
+    setRTableTree ((← getRTableTree).insert rsize re)
+    setRTable ((← getRTable).push re)
+    let eidx ← getMaxEVarSucc
+    setLamEVarTy ((← getLamEVarTy).insert eidx s)
+    setMaxEVarSucc (eidx + 1)
   return res
 
 -- Returns the position of the entry inside the `RTable`
