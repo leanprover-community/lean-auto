@@ -775,13 +775,13 @@ def LamTerm.bvarApps (t : LamTerm) (lctx : List LamSort) (idx : Nat) :=
   | .nil => t
   | s :: lctx => .app s (bvarApps t lctx (.succ idx)) (.bvar idx)
 
-theorem LamTerm.bvarApps_maxEVarSucc : (LamTerm.bvarApps t lctx idx).maxEVarSucc = t.maxEVarSucc := by
+theorem LamTerm.maxEVarSucc_bvarApps : (LamTerm.bvarApps t lctx idx).maxEVarSucc = t.maxEVarSucc := by
   revert idx; induction lctx <;> intro idx
   case nil => rfl
   case cons ty tys IH =>
     dsimp [bvarApps, maxEVarSucc]; rw [IH]; rw [Nat.max, Nat.max_comm, Nat.max_def]; simp
 
-theorem LamTerm.bvarApps_maxLooseBVarSucc : (LamTerm.bvarApps t lctx idx).maxLooseBVarSucc ≤ max t.maxLooseBVarSucc (lctx.length + idx) := by
+theorem LamTerm.maxLooseBVarSucc_bvarApps : (LamTerm.bvarApps t lctx idx).maxLooseBVarSucc ≤ max t.maxLooseBVarSucc (lctx.length + idx) := by
   revert idx; induction lctx <;> intro idx
   case nil => apply Nat.le_max_left
   case cons ty tys IH =>
@@ -1382,9 +1382,17 @@ theorem LamTerm.interp.equiv
         cases fnTyEq; cases argTyEq; cases fnInterpEq; cases argInterpEq
         dsimp; rw [LamSort.beq_refl]
 
+theorem LamWF.interp_bvar
+  {lval : LamValuation.{u}}
+  (wft : LamWF lval.toLamTyVal ⟨lctxTy, .bvar n, s⟩) {lctxTerm} :
+  HEq (wft.interp lval lctxTy lctxTerm) (lctxTerm n) :=
+  match wft with
+  | .ofBVar _ => HEq.rfl
+
 theorem LamWF.interp_bvarApps
   {lval : LamValuation.{u}}
   (wft : LamWF lval.toLamTyVal ⟨pushLCtxs (List.reverseAux tyex lctx) lctx', t, LamSort.mkFuncsRev s lctx⟩)
+  (wfAp : LamWF lval.toLamTyVal ⟨pushLCtxs (List.reverseAux tyex lctx) lctx', LamTerm.bvarApps t lctx (List.length tyex), s⟩)
   {valPre : HList (LamSort.interp lval.tyVal) lctx → LamSort.interp lval.tyVal s}
   {termex : HList (LamSort.interp lval.tyVal) tyex}
   {lctxTerm : HList (LamSort.interp lval.tyVal) lctx}
@@ -1394,13 +1402,41 @@ theorem LamWF.interp_bvarApps
     (LamWF.interp lval
       (pushLCtxs (List.reverseAux tyex lctx) lctx')
       (pushLCtxsDep (lctxty:=LamSort.interp lval.tyVal) (HList.reverseAux termex lctxTerm) lctxTerm')
-      (LamWF.bvarApps wft))
+      wfAp)
     (valPre lctxTerm) := by
-  induction lctx generalizing tyex
+  induction lctx generalizing s tyex
   case nil =>
-    cases lctxTerm; exact ht
+    cases lctxTerm; apply HEq.trans _ ht; apply LamWF.interp.heq <;> rfl
   case cons lty lctx IH =>
-    sorry
+    cases lctxTerm;
+    case cons lx lctxTerm =>
+      dsimp [LamSort.mkFuncsRev] at wft
+      dsimp [LamTerm.bvarApps] at wfAp; cases wfAp; case ofApp HArg HFn =>
+        dsimp [interp]; apply congr_hd_heq (f₂:=fun lx =>valPre (HList.cons lx lctxTerm)) (x₂:=lx) <;> try rfl
+        case h₁ =>
+          apply @IH (lty::tyex) (.func lty s) wft _ (fun lctxTerm lx => valPre (.cons lx lctxTerm)) (.cons lx termex) _ ht
+        case h₂ =>
+          apply HEq.trans (LamWF.interp_bvar _);
+          clear s t wft valPre ht HFn HArg IH
+          dsimp [pushLCtxs, pushLCtxsDep]
+          have hlt : tyex.length < (tyex.reverseAux (lty :: lctx)).length := by
+            rw [List.reverseAux_eq, List.length_append, List.length_reverse];
+            dsimp [List.length]; rw [Nat.add_succ]; apply Nat.succ_le_succ_iff.mpr
+            apply Nat.le_add_right
+          rw [Eq.mp (Eq.symm Nat.blt_eq) hlt]; dsimp
+          apply HEq.trans (b:=HList.getD (lctxTerm' 0) (HList.append (termex.reverseAux .nil) (.cons lx lctxTerm)) tyex.length)
+          case h₁ =>
+            apply HList.getD_heq <;> try rfl
+            case htys => rw [List.reverseAux_eq_append]
+            case hhl => apply HList.reverseAux_eq_append
+          case h₂ =>
+            apply HEq.trans (HList.getD_append_right _ _ ?left) ?right
+            case left =>
+              rw [List.reverseAux_eq, List.append_nil, List.length_reverse]
+              apply Nat.le_refl
+            case right =>
+              rw [List.reverseAux_eq, List.append_nil, List.length_reverse, Nat.sub_self]
+              rfl
 
 theorem LamWF.interp_insertEVarAt_eIdx
   {lval : LamValuation.{u}} {val : LamSort.interp lval.tyVal ty}
@@ -1919,9 +1955,9 @@ theorem LamValid.eVarIrrelevance
   (hILVal : HEq lval₁.ilVal lval₂.ilVal)
   (hLCtxTy : lctxTy₁ = lctxTy₂)
   (hirr : ∀ n, n < t.maxEVarSucc →
-    lval₁.lamEVarTy n = lval₂.lamEVarTy n ∧ HEq (lval₁.eVarVal n) (lval₂.eVarVal n)) :
-  LamValid lval₁ lctxTy₁ t → LamValid lval₂ lctxTy₂ t := by
-  intro ⟨wfv, hv⟩
+    lval₁.lamEVarTy n = lval₂.lamEVarTy n ∧ HEq (lval₁.eVarVal n) (lval₂.eVarVal n))
+  (hValid : LamValid lval₁ lctxTy₁ t) : LamValid lval₂ lctxTy₂ t := by
+  have ⟨wfv, hv⟩ := hValid
   have irr := fun eq₁ eq₂ => LamWF.eVarIrrelevance eq₁ eq₂ (fun n H => (hirr n H).left) wfv
   cases lval₁
   case mk toLamTyVal₁ tyVal₁ varVal₁ ilVal₁ eVarVal₁ =>

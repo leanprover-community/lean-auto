@@ -71,4 +71,10 @@ theorem Nat.max_lt {a b c : Nat} : max a b < c ↔ a < c ∧ b < c := by
   rw [← Nat.lt_eq]; dsimp [Nat.lt]; rw [← Nat.add_one]; rw [Nat.max_add]
   rw [Nat.max_le]; apply Iff.intro id id
 
+theorem Nat.max_zero_left {a : Nat} : max 0 a = a := by
+  rw [Nat.max_def]; simp
+
+theorem Nat.max_zero_right {a : Nat} : max a 0 = a := by
+  rw [Nat.max_comm]; apply Nat.max_zero_left
+
 end Auto

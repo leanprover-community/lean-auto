@@ -1546,6 +1546,17 @@ section Skolemization
     match t with
     | .app _ (.base (.existE s)) p => .some (s, .app s p (LamTerm.bvarApps (.etom eidx) lctx 0))
     | _ => .none
+
+  theorem LamTerm.maxEVarSucc_skolemize? (heq : LamTerm.skolemize? t eidx lctx = .some (s, t')) :
+    t'.maxEVarSucc ≤ max t.maxEVarSucc (.succ eidx) := by
+    cases t <;> try cases heq
+    case app s fn arg =>
+      cases fn <;> try cases heq
+      case base b =>
+        cases b <;> try cases heq
+        case existE s =>
+          dsimp [maxEVarSucc]; rw [LamTerm.maxEVarSucc_bvarApps]; simp [Nat.max]
+          rw [Nat.max_zero_left]; apply Nat.le_refl
   
   theorem choose_spec' {p : α → β → Prop} (h : ∀ q, ∃ x, p x q) : ∃ (y : _ → _), ∀ q, p (y q) q :=
     ⟨fun q => Classical.choose (h q), fun q => Classical.choose_spec (h q)⟩
@@ -1560,7 +1571,7 @@ section Skolemization
       exists LamSort.curry valPre; apply LamThmValid.ofLamThmValidD; apply And.intro;
       case left =>
         dsimp [LamTerm.maxLooseBVarSucc]; rw [Nat.max_le]; apply And.intro (Nat.max_le.mp hSucc).right
-        apply Nat.le_trans LamTerm.bvarApps_maxLooseBVarSucc; rw [Nat.max_le]
+        apply Nat.le_trans LamTerm.maxLooseBVarSucc_bvarApps; rw [Nat.max_le]
         apply And.intro (Nat.zero_le _) .refl
       case right =>
         let ltv₁ := lval.toLamTyVal
@@ -1577,7 +1588,7 @@ section Skolemization
           apply Nat.le_trans H heVar
         case h₂ =>
           apply HEq.symm
-          apply LamWF.interp_bvarApps (tyex:=[]) (termex:=.nil)
+          apply LamWF.interp_bvarApps (tyex:=[]) (termex:=.nil) LamWF.insertEVarAt_eIdx
           apply LamWF.interp_insertEVarAt_eIdx
 
   theorem LamThmValid.skolemize?

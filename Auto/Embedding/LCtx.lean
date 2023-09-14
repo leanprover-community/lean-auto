@@ -3,6 +3,7 @@ import Auto.Lib.HEqExtra
 import Auto.Lib.NatExtra
 import Auto.Lib.ListExtra
 import Auto.Lib.HList
+import Auto.Lib.BinTree
 import Std.Data.List.Lemmas
 
 namespace Auto.Embedding
@@ -679,6 +680,20 @@ section replace
     match n.beq pos with
     | true => exact x
     | false => exact lctx n
+
+  theorem BinTree.get?_insert_eq_replaceAt_get? {bt : BinTree α} :
+    (BinTree.get? (BinTree.insert bt m x) n).getD d = replaceAt x m (fun n => (bt.get? n).getD d) n := by
+    dsimp [replaceAt]
+    match h : Nat.beq n m with
+    | true =>
+      dsimp; cases (Nat.eq_of_beq_eq_true h); rw [BinTree.insert.correct₁]; rfl
+    | false =>
+      dsimp; rw [BinTree.insert.correct₂];
+      have hne := Nat.ne_of_beq_eq_false h; intro h; cases h; apply hne rfl
+
+  theorem BinTree.get?_insert_eq_replaceAt_get?_Fn {bt : BinTree α} :
+    (fun n => (BinTree.get? (BinTree.insert bt m x) n).getD d) = replaceAt x m (fun n => (bt.get? n).getD d) :=
+    funext (fun _ => get?_insert_eq_replaceAt_get?)
 
 end replace
 
