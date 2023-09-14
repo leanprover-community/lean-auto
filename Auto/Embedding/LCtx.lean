@@ -409,6 +409,9 @@ section push
     | true  => xs.getD n (lctx 0)
     | false => lctx (n - xs.length)
 
+  theorem pushLCtxs.lt (h : n < xs.length) : pushLCtxs xs lctx n = xs.getD n (lctx 0) := by
+    dsimp [pushLCtxs]; rw [@id (Nat.blt n (List.length xs) = true) (Nat.ble_eq_true_of_le h)]
+
   theorem pushLCtxs.nil (lctx : Nat → α) :
     pushLCtxs .nil lctx = lctx := rfl
 
@@ -484,6 +487,12 @@ section push
     match Nat.blt n tys.length with
     | true  => exact (xs.getD (α:=α) (lctx 0) n)
     | false => exact (lctx (n - tys.length))
+
+  theorem pushLCtxsDep.lt
+    {lctxty : α → Sort u} {tys : List α} {xs : HList lctxty tys}
+    {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) {n : Nat}
+    (h : n < tys.length) : HEq (pushLCtxsDep xs lctx n) (xs.getD (lctx 0) n) := by
+    dsimp [pushLCtxs]; rw [@id (Nat.blt n (List.length tys) = true) (Nat.ble_eq_true_of_le h)]
 
   theorem pushLCtxsDep.heq
     {lctxty₁ : α₁ → Sort u} {tys₁ : List α₁} (xs₁ : HList lctxty₁ tys₁)
@@ -657,6 +666,23 @@ section push
 end push
 
 
+section replace
+
+  def replaceAt (x : α) (pos : Nat) (lctx : Nat → α) (n : Nat) : α :=
+    match n.beq pos with
+    | true => x
+    | false => lctx n
+
+  def replaceAtDep {lctxty : α → Sort u} {xty : α} (x : lctxty xty) (pos : Nat)
+    {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) (n : Nat) : lctxty (replaceAt xty pos rty n) := by
+    dsimp [replaceAt]
+    match n.beq pos with
+    | true => exact x
+    | false => exact lctx n
+
+end replace
+
+
 section pushs_pops
 
   theorem push_pop_eq (lctx : Nat → α) :
@@ -678,6 +704,13 @@ section pushs_pops
       dsimp [Nat.blt] at h;
       let h' := Nat.lt_of_ble_eq_false h
       exact Nat.le_of_succ_le_succ h'
+  
+  theorem ofFun_pushs (heq : xs.length = n) :
+    List.ofFun (pushLCtxs xs lctx) n = xs := by
+    cases heq; revert lctx; induction xs <;> intro lctx
+    case nil => rfl
+    case cons x xs IH =>
+      rw [pushLCtxs.cons]; dsimp [List.ofFun]; rw [IH]
 
   theorem pushDep_popDep_eq
     {lctxty : α → Sort u} {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :

@@ -57,4 +57,18 @@ theorem Nat.le_pred_of_succ_le {n m : Nat} : m ≠ 0 → Nat.succ n ≤ m → n 
   | 0 => fun h _ => by contradiction
   | _+1 => fun _ h => Nat.le_of_succ_le_succ h
 
+theorem Nat.max_add {a b c : Nat} : max a b + c = max (a + c) (b + c) := by
+  rw [Nat.max_def, Nat.max_def];
+  cases Nat.decLe a b
+  case isTrue h =>
+    have aclebc : a + c ≤ b + c := Nat.add_le_add h .refl; simp [h, aclebc]
+  case isFalse h =>
+    have naleb : ¬ a + c ≤ b + c := by
+      intro h'; apply h; apply Nat.le_of_add_le_add_right h'
+    simp [h, naleb]
+
+theorem Nat.max_lt {a b c : Nat} : max a b < c ↔ a < c ∧ b < c := by
+  rw [← Nat.lt_eq]; dsimp [Nat.lt]; rw [← Nat.add_one]; rw [Nat.max_add]
+  rw [Nat.max_le]; apply Iff.intro id id
+
 end Auto
