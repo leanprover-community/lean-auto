@@ -483,7 +483,7 @@ def EvalResult.correct (r : RTable) (cv : CVal.{u} r.lamEVarTy)
       (∀ n, n < r.maxEVarSucc → HEq (eVarVal' n) (cv.eVarVal n)) ∧
       REntry.correct ⟨cv.toCPVal, eVarVal'⟩ r.maxEVarSucc.succ (.valid lctx t)
 
-theorem EvalResult.correct_newEtomWithValid_alternative
+theorem EvalResult.correct_newEtomWithValid_mpLamEVarTy
   {r : RTable} {cv : CVal.{u} r.lamEVarTy}
   (H : ∃ (levt : Nat → LamSort),
     (∀ n, levt n = ((r.lamEVarTy.insert r.maxEVarSucc s).get? n).getD (.base .prop)) ∧
@@ -1122,7 +1122,7 @@ theorem ChkStep.eval_correct
     dsimp
     match h₂ : LamTerm.skolemize? t r.maxEVarSucc lctx with
     | .some (s, t') =>
-      dsimp; apply EvalResult.correct_newEtomWithValid_alternative
+      dsimp; apply EvalResult.correct_newEtomWithValid_mpLamEVarTy
       have ⟨h₁', hle⟩ := RTable.getValid_correct inv h₁
       have ⟨eVarVal', hsk⟩ := LamThmValid.skolemize? h₁' h₂ hle
       cases cv; case mk cpv eV =>
@@ -1137,12 +1137,8 @@ theorem ChkStep.eval_correct
           apply And.intro ?left (And.intro hsk ?right)
           case left =>
             intro n hlt; dsimp [replaceAt, replaceAtDep]
-            have nbeq : n.beq r.maxEVarSucc = false := by
-              cases h : Nat.beq n r.maxEVarSucc
-              case true =>
-                cases (Nat.eq_of_beq_eq_true h)
-                apply False.elim (Nat.not_lt_of_le .refl hlt)
-              case false => rfl
+            have nbeq : n.beq r.maxEVarSucc = false :=
+              Nat.beq_eq_false_of_ne (Nat.ne_of_lt hlt)
             rw [nbeq]
           case right =>
             apply Nat.le_trans (LamTerm.maxEVarSucc_skolemize? h₂)

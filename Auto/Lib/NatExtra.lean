@@ -20,6 +20,14 @@ theorem Nat.ble_eq_false_eq_lt (n : Nat) : (pos < n) = (Nat.ble n pos = false) :
   case a.mp => apply Nat.ble_eq_false_of_lt
   case a.mpr => apply Nat.lt_of_ble_eq_false
 
+theorem Nat.beq_eq_false_of_ne {m n : Nat} (H : m ≠ n) : Nat.beq m n = false := by
+  cases h : Nat.beq m n
+  case true => apply False.elim (H _); apply Nat.eq_of_beq_eq_true h
+  case false => rfl
+
+theorem Nat.ne_of_beq_eq_false {m n : Nat} (H : Nat.beq m n = false) : m ≠ n := by
+  intro h; rw [h] at H; rw [Nat.beq_refl] at H; cases H
+
 theorem Nat.ble_add (a b e : Nat) : Nat.ble a b = Nat.ble (a + e) (b + e) := by
   induction e
   case zero => rfl
