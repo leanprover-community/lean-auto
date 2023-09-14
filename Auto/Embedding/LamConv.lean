@@ -158,7 +158,7 @@ theorem LamEquiv.congrs (lval : LamValuation) {args : List (LamSort × LamTerm �
     (LamTerm.mkAppN fn₁ (args.map (fun (s, t₁, _) => (s, t₁))))
     (LamTerm.mkAppN fn₂ (args.map (fun (s, _, t₂) => (s, t₂))))
     wfApp := by
-  revert fn₁ fn₂ hArgs; induction args <;> intro fn₁ fn₂ wfApp hFn hArgs
+  induction args generalizing fn₁ fn₂
   case nil => apply hFn
   case cons head tail IH =>
     match head with
@@ -216,7 +216,7 @@ def LamTerm.instantiateAt (idx : Nat) (arg : LamTerm) : (body : LamTerm) → Lam
 
 theorem LamTerm.maxEVarSucc_instantiateAt :
   (LamTerm.instantiateAt idx arg body).maxEVarSucc ≤ Nat.max arg.maxEVarSucc body.maxEVarSucc := by
-  revert idx; induction body <;> intro idx <;> try apply Nat.le_max_right
+  induction body generalizing idx <;> try apply Nat.le_max_right
   case bvar n =>
     dsimp [instantiateAt, pushLCtxAt, restoreAt]
     match Nat.ble idx n with
@@ -601,7 +601,7 @@ def LamTerm.beta (t : LamTerm) : List (LamSort × LamTerm) → LamTerm
 theorem LamTerm.maxEVarSucc_beta
   (hs : HList (fun (_, arg) => arg.maxEVarSucc ≤ n) args) (ht : t.maxEVarSucc ≤ n) :
   (LamTerm.beta t args).maxEVarSucc ≤ n := by
-  revert t; induction hs <;> intro t ht
+  induction hs generalizing t
   case nil => exact ht
   case cons argty argtys harg hargs IH =>
     cases t <;> try apply LamTerm.maxEVarSucc_mkAppN (.cons harg hargs) ht
@@ -641,15 +641,15 @@ def LamTerm.headBetaAux : List (LamSort × LamTerm) → LamTerm → LamTerm
 theorem LamTerm.maxEVarSucc_headBetaAux
   (hs : HList (fun (_, arg) => arg.maxEVarSucc ≤ n) args) (ht : t.maxEVarSucc ≤ n) :
   (LamTerm.headBetaAux args t).maxEVarSucc ≤ n := by
-  revert args; induction t <;> intro args hs <;> try apply LamTerm.maxEVarSucc_beta hs ht
+  induction t generalizing args <;> try apply LamTerm.maxEVarSucc_beta hs ht
   case app s fn arg IHFn IHArg =>
     dsimp [maxEVarSucc] at ht; rw [Nat.max_le] at ht
-    exact IHFn ht.left (.cons ht.right hs)
+    exact IHFn (.cons ht.right hs) ht.left
 
 theorem LamEquiv.ofHeadBetaAux (lval : LamValuation.{u})
   (wf : LamWF lval.toLamTyVal ⟨lctx, LamTerm.mkAppN t args, rty⟩) :
   LamEquiv _ (t.headBetaAux args) wf := by
-  revert args wf; induction t <;> intro args wf <;>
+  induction t generalizing args <;>
     try (cases args <;> apply LamEquiv.refl)
   case lam s body _ => apply LamEquiv.ofBeta
   case app s fn arg IHFn _ => dsimp [LamTerm.headBetaAux]; apply IHFn
@@ -678,7 +678,7 @@ def LamTerm.headBetaBounded (n : Nat) (t : LamTerm) :=
 
 theorem LamTerm.maxEVarSucc_headBetaBounded :
   (LamTerm.headBetaBounded n t).maxEVarSucc ≤ t.maxEVarSucc := by
-  revert t; induction n <;> intro t
+  induction n generalizing t
   case zero => apply Nat.le_refl
   case succ n IH =>
     dsimp [headBetaBounded]
@@ -687,7 +687,7 @@ theorem LamTerm.maxEVarSucc_headBetaBounded :
 
 theorem LamEquiv.ofHeadBetaBounded (lval : LamValuation.{u})
   (wf : LamWF lval.toLamTyVal ⟨lctx, t, rty⟩) : LamEquiv _ (t.headBetaBounded n) wf := by
-  revert t; induction n <;> intro t wf
+  induction n generalizing t
   case zero => apply LamEquiv.refl
   case succ n IH =>
     dsimp [LamTerm.headBetaBounded]
@@ -722,7 +722,7 @@ def LamTerm.betaBounded (n : Nat) (t : LamTerm) :=
 
 theorem LamTerm.maxEVarSucc_betaBounded :
   (LamTerm.betaBounded n t).maxEVarSucc ≤ t.maxEVarSucc := by
-  revert t; induction n <;> intro t
+  induction n generalizing t
   case zero => apply Nat.le_refl
   case succ n IH =>
     cases t <;> try apply Nat.le_refl
@@ -752,7 +752,7 @@ def LamTerm.betaReduced (t : LamTerm) :=
 
 theorem LamEquiv.ofBetaBounded (lval : LamValuation.{u})
   (wf : LamWF lval.toLamTyVal ⟨lctx, t, rty⟩) : LamEquiv _ (t.betaBounded n) wf := by
-  revert rty t lctx; induction n <;> intro lctx t rty wf
+  induction n generalizing lctx t rty
   case zero => apply LamEquiv.refl
   case succ n IH =>
     dsimp [LamTerm.betaBounded]
@@ -904,7 +904,7 @@ def LamTerm.impApp? (t₁₂ t₁ : LamTerm) : Option LamTerm :=
 
 theorem LamTerm.maxEVarSucc_impApp?
   (heq : LamTerm.impApp? t₁₂ t₁ = .some t') : t'.maxEVarSucc ≤ t₁₂.maxEVarSucc := by
-  revert t₁ t'; induction t₁₂ <;> intro t₁ t' heq <;> try cases heq
+  induction t₁₂ generalizing t₁ t' <;> try cases heq
   case app s fn arg IHFn _ =>
     cases fn <;> try cases heq
     case app s' imp hyp =>
@@ -960,7 +960,7 @@ def LamTerm.impApps? (t : LamTerm) (ps : List LamTerm) : Option LamTerm :=
 
 theorem LamTerm.maxEVarSucc_impApps?
   (heq : LamTerm.impApps? t ps = .some t') : t'.maxEVarSucc ≤ t.maxEVarSucc := by
-  revert t t'; induction ps <;> intro t t' heq
+  induction ps generalizing t t'
   case nil => cases heq; apply Nat.le_refl
   case cons p ps IH =>
     dsimp [impApps?] at heq
@@ -973,7 +973,7 @@ theorem LamTerm.maxEVarSucc_impApps?
 theorem LamValid.impApps
   (vt : LamValid lval lctx t) (vps : HList (LamValid lval lctx) ps)
   (heq : LamTerm.impApps? t ps = .some t') : LamValid lval lctx t' := by
-  revert t; induction ps <;> intros t vt heq
+  induction ps generalizing t
   case nil => cases heq; exact vt
   case cons head tail IH =>
     match vps with
@@ -982,7 +982,7 @@ theorem LamValid.impApps
       match hap : LamTerm.impApp? t head with
       | .some t'' =>
         rw [hap] at heq; dsimp at heq
-        apply IH vTail _ heq
+        apply IH _ vTail heq
         apply LamValid.impApp vt vHead hap
       | .none => rw [hap] at heq; cases heq
 
@@ -1004,7 +1004,7 @@ def LamTerm.intro1F? (t : LamTerm) : Option (LamSort × LamTerm) :=
 
 theorem LamTerm.maxEVarSucc_intro1F?
   (heq : LamTerm.intro1F? t = .some (s, t')) : t'.maxEVarSucc = t.maxEVarSucc := by
-  revert s t'; induction t <;> intros s t' heq <;> try cases heq
+  induction t generalizing s t' <;> try cases heq
   case app s fn arg IHFn IHArg =>
     cases fn <;> try cases heq
     case base b =>
@@ -1051,15 +1051,14 @@ def LamTerm.intro1H? (t : LamTerm) : Option (LamSort × LamTerm) :=
 
 theorem LamTerm.maxEVarSucc_intro1H?
   (heq : LamTerm.intro1H? t = .some (s, t')) : t'.maxEVarSucc = t.maxEVarSucc := by
-  revert s t'; induction t <;> intros s t' heq <;> try cases heq
+  induction t generalizing s t' <;> try cases heq
   case app s fn arg IHFn _ =>
     cases fn <;> try cases heq
     case base b =>
       cases b <;> try cases heq
-      case forallE s' =>
+      case forallE _ =>
         dsimp [maxEVarSucc, bvarLift, bvarLiftIdx, bvarLiftsIdx];
         rw [LamTerm.maxEVarSucc_mapBVarAt]; apply Nat.max_comm
-
 
 theorem LamValid.intro1HAux (H : LamValid lval lctx (.app s' (.base (.forallE s)) t)) :
   LamValid lval (pushLCtx s lctx) (.app s t.bvarLift (.bvar 0)) :=
@@ -1377,7 +1376,7 @@ def LamTerm.congrArgs? (t : LamTerm) (rwArgs : List LamTerm) : Option LamTerm :=
 theorem LamTerm.maxEVarSucc_congrArgs?
   (ht : t.maxEVarSucc ≤ n) (hrwArgs : HList (fun rw => rw.maxEVarSucc ≤ n) rwArgs)
   (heq : LamTerm.congrArgs? t rwArgs = .some t') : t'.maxEVarSucc ≤ n := by
-  revert t t'; induction rwArgs <;> intro t t' ht heq
+  induction rwArgs generalizing t t'
   case nil => unfold congrArgs? at heq; cases heq; exact ht
   case cons head tail IH =>
     cases hrwArgs
@@ -1392,14 +1391,14 @@ theorem LamTerm.maxEVarSucc_congrArgs?
           dsimp [maxEVarSucc]; rw [Nat.max_le]
           dsimp [maxEVarSucc] at ht; rw [Nat.max_le] at ht
           apply And.intro _ ht.right
-          apply IH hTail ht.left h
+          apply IH ht.left hTail h
         case none =>
           rw [h] at heq; cases heq
 
 theorem LamEquiv.congrArgs?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, rty⟩) (HrwArgs : HList (LamValid lval lctx) rwArgs)
   (heq : t.congrArgs? rwArgs = .some t') : LamEquiv t t' wft := by
-  revert rty t t'; induction rwArgs <;> intros t rty t' wft heq
+  induction rwArgs generalizing t t' rty
   case nil =>
     unfold LamTerm.congrArgs? at heq; cases heq; apply LamEquiv.refl
   case cons head tail IH =>
@@ -1412,7 +1411,7 @@ theorem LamEquiv.congrArgs?
         cases HrwArgs
         case cons HrwHead HrwTail =>
           have .ofApp _ wfFn wfArg := wft
-          have fneq := IH HrwTail wfFn h₁
+          have fneq := IH wfFn HrwTail h₁
           have ⟨wfap, eqap⟩ := LamEquiv.congrFun _ wfFn fneq wfArg
           apply LamEquiv.trans _ _ wfap ⟨wfap, eqap⟩
           apply LamEquiv.toForall
@@ -1435,7 +1434,7 @@ def LamTerm.congrFunN? (t : LamTerm) (rwFn : LamTerm) (idx : Nat) : Option LamTe
 theorem LamTerm.maxEVarSucc_congrFunN?
   (ht : t.maxEVarSucc ≤ n) (hrwFn : rwFn.maxEVarSucc ≤ n)
   (heq : LamTerm.congrFunN? t rwFn idx = .some t') : t'.maxEVarSucc ≤ n := by
-  revert t t'; induction idx <;> intro t t' ht heq
+  induction idx generalizing t t'
   case zero =>
     cases t <;> try cases heq
     case app s fn arg =>
@@ -1457,7 +1456,7 @@ theorem LamTerm.maxEVarSucc_congrFunN?
 theorem LamEquiv.congrFunN?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, rty⟩) (HrwFn : LamValid lval lctx rwFn)
   (heq : t.congrFunN? rwFn n = .some t') : LamEquiv t t' wft := by
-  revert rty t t'; induction n <;> intros t rty t' wft heq
+  induction n generalizing t t' rty
   case zero =>
     cases t <;> try cases heq
     case app s fn arg =>
@@ -1491,7 +1490,7 @@ def LamTerm.congrs? (t : LamTerm) (rwFn : LamTerm) (rwArgs : List LamTerm) : Opt
 theorem LamTerm.maxEVarSucc_congrs?
   (ht : t.maxEVarSucc ≤ n) (hrwFn : rwFn.maxEVarSucc ≤ n) (hrwArgs : HList (fun rw => rw.maxEVarSucc ≤ n) rwArgs)
   (heq : LamTerm.congrs? t rwFn rwArgs = .some t') : t'.maxEVarSucc ≤ n := by
-  revert t t'; induction rwArgs <;> intro t t' ht heq
+  induction rwArgs generalizing t t'
   case nil => unfold congrs? at heq; apply Nat.le_trans (maxEVarSucc_mp? heq) hrwFn
   case cons head tail IH =>
     cases hrwArgs
@@ -1506,7 +1505,7 @@ theorem LamTerm.maxEVarSucc_congrs?
           dsimp [maxEVarSucc]; rw [Nat.max_le]
           dsimp [maxEVarSucc] at ht; rw [Nat.max_le] at ht
           apply And.intro _ ht.right
-          apply IH hTail ht.left h
+          apply IH ht.left hTail h
         case none =>
           rw [h] at heq; cases heq
 
@@ -1514,7 +1513,7 @@ theorem LamEquiv.congrs?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, rty⟩)
   (HrwFn : LamValid lval lctx rwFn) (HrwArgs : HList (LamValid lval lctx) rwArgs)
   (heq : t.congrs? rwFn rwArgs = .some t') : LamEquiv t t' wft := by
-  revert rty t t'; induction rwArgs <;> intros t rty t' wft heq
+  induction rwArgs generalizing rty t t'
   case nil =>
     unfold LamTerm.congrs? at heq; apply LamEquiv.mp? wft HrwFn heq
   case cons head tail IH =>
@@ -1527,7 +1526,7 @@ theorem LamEquiv.congrs?
         cases HrwArgs
         case cons HrwHead HrwTail =>
           have .ofApp _ wfFn wfArg := wft
-          have fneq := IH HrwTail wfFn h₁
+          have fneq := IH wfFn HrwTail h₁
           have ⟨wfap, eqap⟩ := LamEquiv.congrFun _ wfFn fneq wfArg
           apply LamEquiv.trans _ _ wfap ⟨wfap, eqap⟩
           apply LamEquiv.toForall

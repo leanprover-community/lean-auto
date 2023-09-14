@@ -320,7 +320,7 @@ def RTable.getValidsEnsureLCtx (r : RTable) (lctx : List LamSort) (vs : List Nat
 theorem RTable.getValidsEnsureLCtx_correct
   (inv : RTable.inv r cv) (heq : getValidsEnsureLCtx r lctx vs = .some ts) :
   HList (fun t => LamThmValid cv.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc) ts := by
-  revert ts; induction vs <;> intro ts heq
+  induction vs generalizing ts
   case nil =>
     cases heq; apply HList.nil
   case cons v vs IH =>
@@ -708,7 +708,7 @@ theorem ChkStep.evalValidOfIntros_correct
   {r : RTable} (cv : CVal.{u} r.lamEVarTy)
   (tV : LamThmValid cv.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc) :
   (evalValidOfIntros lctx t idx).correct r cv := by
-  revert lctx t; induction idx <;> intros lctx t tV
+  induction idx generalizing lctx t
   case zero => exact tV
   case succ idx IH =>
     dsimp [evalValidOfIntros]
@@ -723,7 +723,7 @@ theorem ChkStep.evalValidOfInstantiate_correct
   {r : RTable} (cv : CVal.{u} r.lamEVarTy)
   (tV : LamThmValid cv.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc) :
   (evalValidOfInstantiate r.maxEVarSucc cv.toLamTyVal lctx t args).correct r cv := by
-  revert lctx t; induction args <;> intros lctx t tV
+  induction args generalizing lctx t
   case nil =>
     unfold evalValidOfInstantiate; exact tV
   case cons arg args IH =>

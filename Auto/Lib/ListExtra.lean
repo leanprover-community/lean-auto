@@ -11,13 +11,13 @@ def List.ofFun (f : Nat → α) (n : Nat) : List α :=
 
 theorem List.ofFun_length (f : Nat → α) (n : Nat) :
   (List.ofFun f n).length = n := by
-  revert f; induction n <;> intros f
+  induction n generalizing f
   case zero => rfl
   case succ n IH => dsimp [ofFun]; rw [IH]
 
 theorem List.ofFun_get?_eq_some (f : Nat → α) (n m : Nat) (h : n > m) :
   (List.ofFun f n).get? m = .some (f m) := by
-  revert f n; induction m <;> intros f n h
+  induction m generalizing f n
   case zero =>
     cases n
     case zero => cases h
@@ -59,10 +59,10 @@ section
     rfl
   
   theorem List.getD_eq_get {n : Nat} (hn : n < l.length) : l.getD n d = l.get ⟨n, hn⟩ := by
-    revert n; induction l <;> intros n
-    case nil => intro hn; cases hn
+    induction l generalizing n
+    case nil => cases hn
     case cons head tail IH =>
-      intro hn; cases n
+      cases n
       case zero => rfl
       case succ n => apply IH
 

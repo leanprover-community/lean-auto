@@ -200,13 +200,13 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) : TacticM Re
       let exportFacts ← LamReif.reifFacts ufacts
       LamReif.printValuation
       -- ! smt
-      try
-        let commands := (← (lamFOL2SMT (← LamReif.getVarVal) exportFacts).run {}).1
-        for cmd in commands do
-          trace[auto.smt.printCommands] "Command: {cmd}"
-        Solver.SMT.querySolver commands
-      catch e =>
-        trace[auto.smt.result] "SMT invocation failed with {e.toMessageData}"
+      -- try
+      --   let commands := (← (lamFOL2SMT (← LamReif.getVarVal) exportFacts).run {}).1
+      --   for cmd in commands do
+      --     trace[auto.smt.printCommands] "Command: {cmd}"
+      --   Solver.SMT.querySolver commands
+      -- catch e =>
+      --   trace[auto.smt.result] "SMT invocation failed with {e.toMessageData}"
       -- reconstruction
       let (unsatCore, proof, proofLamTerm) ← Lam2D.callDuper exportFacts
       trace[auto.printProof] "Duper found proof {← Meta.inferType proof}"

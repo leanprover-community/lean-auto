@@ -576,7 +576,7 @@ section push
 
   theorem List.ofFun_get?_eq_none (f : Nat → α) (n m : Nat) (h : n ≤ m) :
     (List.ofFun f n).get? m = .none := by
-    revert f n; induction m <;> intros f n h
+    induction m generalizing f n
     case zero =>
       cases n
       case zero => rfl
@@ -636,7 +636,7 @@ section push
     {tyf : Nat → α} {β : α → Sort _} (f : ∀ n, β (tyf n)) (n m : Nat)
     (h : n > m) {ty : α} (default : β ty) :
     HEq ((HList.ofFun f n).getD default m) (f m) := by
-    revert tyf n; induction m <;> intros tyf f n h
+    induction m generalizing tyf n
     case zero =>
       cases n
       case zero => cases h
@@ -652,7 +652,7 @@ section push
     {tyf : Nat → α} {β : α → Sort _} (f : ∀ n, β (tyf n)) (n m : Nat)
     (h : n ≤ m) {ty : α} (default : β ty) :
     HEq ((HList.ofFun f n).getD default m) default := by
-    revert tyf n; induction m <;> intros tyf f n h
+    induction m generalizing tyf n
     case zero =>
       cases n
       case zero => rfl
@@ -722,7 +722,7 @@ section pushs_pops
   
   theorem ofFun_pushs (heq : xs.length = n) :
     List.ofFun (pushLCtxs xs lctx) n = xs := by
-    cases heq; revert lctx; induction xs <;> intro lctx
+    cases heq; induction xs generalizing lctx
     case nil => rfl
     case cons x xs IH =>
       rw [pushLCtxs.cons]; dsimp [List.ofFun]; rw [IH]
@@ -856,7 +856,7 @@ section genericInst
   theorem coPair.ofPushsPops
     (lvl : Nat) (xs : List α) (heq : xs.length = lvl) :
     coPair (fun x => x + lvl) (pushLCtxs xs) := by
-    revert xs heq; induction lvl <;> intros xs heq lctx n
+    induction lvl generalizing xs <;> intro lctx n
     case zero =>
       dsimp [pushLCtxs]; cases xs;
       case nil => rfl
@@ -879,8 +879,8 @@ section genericInst
     (xs : HList lctxty tys) (heq : tys.length = lvl) :
     coPairDep lctxty (fun x => x + lvl) (pushLCtxs tys) (pushLCtxsDep xs) :=
     And.intro (coPair.ofPushsPops lvl tys heq) (fun {rty} lctx n => by
-      dsimp [pushLCtxsDep, pushLCtxs]; revert tys lctxty n;
-      induction lvl <;> intros lctxty tys xs heq lctx n
+      dsimp [pushLCtxsDep, pushLCtxs]; 
+      induction lvl generalizing tys lctx n
       case zero =>
         cases xs;
         case nil => rfl

@@ -473,6 +473,28 @@ section Checker
 
   -- Functions that operates on the checker table
 
+  def validOfIntros (v : REntry) (idx : Nat) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let .addEntry re ← newChkStep (.validOfIntros p idx) .none
+      | throwError "validOfIntros :: Unexpected evaluation result"
+    return re
+
+  def validOfIntroMost (v : REntry) : ReifM REntry := do
+    let .valid _ t := v
+      | throwError "validOfIntroMost :: Unexpected entry {v}"
+    let mut idx := 0
+    let mut t := t
+    while true do
+      match t.intro1? with
+      | .some (_, t') =>
+        idx := idx + 1
+        t := t'
+      | .none => break
+    if idx == 0 then
+      return v
+    else
+      validOfIntros v idx
+
   def validOfImp (v₁₂ : REntry) (v₁ : REntry) : ReifM REntry := do
     let p₁₂ ← lookupREntryPos! v₁₂
     let p₁ ← lookupREntryPos! v₁
@@ -486,6 +508,25 @@ section Checker
     let .addEntry re ← newChkStep (.validOfImps imp ps.data) .none
       | throwError "validOfImps :: Unexpected evaluation result"
     return re
+
+  def skolemize (exV : REntry) : ReifM REntry := do
+    let ex ← lookupREntryPos! exV
+    let .addEntry re ← newChkStep (.skolemize ex) .none
+      | throwError "skolemize :: Unexpected evaluation result"
+    return re
+
+  def skolemizeMostIntoForall (exV : REntry) : ReifM REntry := do
+    let mut exV := exV
+    while true do
+      let .valid _ t := exV
+        | throwError "skolemizeAllForall :: Unexpected entry {exV}"
+      if t.isMkForallE then
+        exV ← validOfIntroMost exV
+      if t.isMkExistE then
+        exV ← skolemize exV
+      else
+        break
+    return exV
 
   -- Functions that turns data structure in `ReifM.State` into `Expr`
 

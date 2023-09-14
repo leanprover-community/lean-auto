@@ -104,7 +104,7 @@ def get?'Aux (bt : BinTree α) (n rd : Nat) : Option α :=
 
 theorem get?'Aux.equiv (bt : BinTree α) (n rd : Nat) :
   rd ≥ n → get?'Aux bt n rd = get?'WF bt n := by
-  revert n bt; induction rd <;> intros bt n H
+  induction rd generalizing bt n <;> intro H
   case zero =>
     have hzero : n = 0 := Nat.eq_zero_of_le_zero H
     rw [hzero]; rfl
@@ -208,7 +208,7 @@ def insert'Aux (bt : BinTree α) (n : Nat) (x : α) (rd : Nat) : BinTree α :=
 
 theorem insert'Aux.equiv (bt : BinTree α) (n : Nat) (x : α) (rd : Nat) :
   rd ≥ n → insert'Aux bt n x rd = insert'WF bt n x := by
-  revert n bt; induction rd <;> intros bt n H
+  induction rd generalizing bt n <;> intro H
   case zero =>
     have hzero : n = 0 := Nat.eq_zero_of_le_zero H
     rw [hzero]; rfl
@@ -593,7 +593,7 @@ def insertPos (bt : BinTree α) (p : Pos) (x : α) : BinTree α :=
     | .node l v r => .node l v (insertPos r p' x)
 
 theorem insertPos.correct₁ (bt : BinTree β) (p : Pos) (x : β) : get?Pos (insertPos bt p x) p = .some x := by
-  revert bt; induction p <;> intro bt
+  induction p generalizing bt
   case xH =>
     cases bt <;> rfl
   case xO p' IH =>
@@ -602,7 +602,7 @@ theorem insertPos.correct₁ (bt : BinTree β) (p : Pos) (x : β) : get?Pos (ins
     cases bt <;> apply IH
 
 theorem insertPos.correct₂ (bt : BinTree β) (p₁ p₂ : Pos) (x : β) : p₁ ≠ p₂ → get?Pos (insertPos bt p₁ x) p₂ = get?Pos bt p₂ := by
-  revert bt p₂; induction p₁ <;> intro bt p₂ hne
+  induction p₁ generalizing bt p₂ <;> intro hne
   case xH =>
     cases p₂ <;> cases bt <;> first | rfl | exact (False.elim (hne rfl))
   case xO p₁' IH =>

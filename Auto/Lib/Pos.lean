@@ -160,7 +160,7 @@ def ofNat'RD (rd : Nat) (n : Nat) :=
       | _ => .xI (ofNat'RD rd' (Nat.div n 2))
 
 theorem ofNat'.equivAux (rd n : Nat) : rd ≥ n → ofNat'WF n = ofNat'RD rd n := by
-  revert n; induction rd <;> intros n H
+  induction rd generalizing n  <;> intro H
   case zero =>
     have hzero : n = 0 := Nat.eq_zero_of_le_zero H
     rw [hzero]; rfl

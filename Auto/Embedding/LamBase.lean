@@ -623,6 +623,18 @@ def LamTerm.isApp : LamTerm → Bool
 | .app _ _ _ => true
 | _ => false
 
+def LamTerm.isMkForallE : LamTerm → Bool
+| .app _ (.base (.forallE _)) _ => true
+| _ => false
+
+def LamTerm.isMkExistE : LamTerm → Bool
+| .app _ (.base (.existE _)) _ => true
+| _ => false
+
+def LamTerm.isMkEq : LamTerm → Bool
+| .app _ (.app _ (.base (.eq _)) _) _ => true
+| _ => false
+
 def LamTerm.size : LamTerm → Nat
 | .atom _ => 1
 | .etom _ => 1
@@ -727,7 +739,7 @@ def LamTerm.mkAppN (t : LamTerm) : List (LamSort × LamTerm) → LamTerm
 theorem LamTerm.maxEVarSucc_mkAppN
   (hs : HList (fun (_, arg) => arg.maxEVarSucc ≤ n) args) (ht : t.maxEVarSucc ≤ n) :
   (LamTerm.mkAppN t args).maxEVarSucc ≤ n := by
-  revert t; induction hs <;> intro t ht
+  induction hs generalizing t
   case nil => exact ht
   case cons head tail IH =>
     dsimp [mkAppN]; apply IH; dsimp [maxEVarSucc]
@@ -752,10 +764,10 @@ def LamTerm.getAppArgsAux (args : List (LamSort × LamTerm)) : LamTerm → List 
 theorem LamTerm.maxEVarSucc_getAppArgsAux
   (hs : HList (fun (_, arg) => arg.maxEVarSucc ≤ n) args) (ht : t.maxEVarSucc ≤ n) :
   HList (fun (_, arg) => arg.maxEVarSucc ≤ n) (LamTerm.getAppArgsAux args t) := by
-  revert args; induction t <;> intro args hs <;> try exact hs
+  induction t generalizing args <;> try exact hs
   case app s fn arg IHFn IHArg =>
     dsimp [maxEVarSucc] at ht; rw [Nat.max_le] at ht
-    exact IHFn ht.left (.cons ht.right hs)
+    exact IHFn (.cons ht.right hs) ht.left
 
 def LamTerm.getAppArgs := getAppArgsAux []
 
@@ -765,7 +777,7 @@ theorem LamTerm.maxEVarSucc_getAppArgs :
 
 theorem LamTerm.appFn_appArg_eqAux (args : List (LamSort × LamTerm)) (t : LamTerm) :
   LamTerm.mkAppN t args = LamTerm.mkAppN t.getAppFn (t.getAppArgsAux args) := by
-  revert args; induction t <;> intro args <;> try rfl
+  induction t generalizing args <;> try rfl
   case app s _ arg IHFn _ => apply IHFn ((s, arg) :: args)
 
 theorem LamTerm.appFn_appArg_eq (t : LamTerm) : t = LamTerm.mkAppN t.getAppFn t.getAppArgs := appFn_appArg_eqAux [] t
@@ -776,13 +788,13 @@ def LamTerm.bvarApps (t : LamTerm) (lctx : List LamSort) (idx : Nat) :=
   | s :: lctx => .app s (bvarApps t lctx (.succ idx)) (.bvar idx)
 
 theorem LamTerm.maxEVarSucc_bvarApps : (LamTerm.bvarApps t lctx idx).maxEVarSucc = t.maxEVarSucc := by
-  revert idx; induction lctx <;> intro idx
+  induction lctx generalizing idx
   case nil => rfl
   case cons ty tys IH =>
     dsimp [bvarApps, maxEVarSucc]; rw [IH]; rw [Nat.max, Nat.max_comm, Nat.max_def]; simp
 
 theorem LamTerm.maxLooseBVarSucc_bvarApps : (LamTerm.bvarApps t lctx idx).maxLooseBVarSucc ≤ max t.maxLooseBVarSucc (lctx.length + idx) := by
-  revert idx; induction lctx <;> intro idx
+  induction lctx generalizing idx
   case nil => apply Nat.le_max_left
   case cons ty tys IH =>
     dsimp [bvarApps, maxLooseBVarSucc]; rw [Nat.max, Nat.max_le]; apply And.intro
@@ -830,7 +842,7 @@ theorem LamTerm.beq_refl (t : LamTerm) : (t.beq t = true) := by
     rw [LamSort.beq_refl, IHFn, IHArg]; rfl
 
 theorem LamTerm.beq_eq (t₁ t₂ : LamTerm) : (t₁.beq t₂ = true) → t₁ = t₂ := by
-  revert t₂; induction t₁ <;> intro t₂ H <;> cases t₂ <;> try cases H
+  induction t₁ generalizing t₂ <;> intro H <;> cases t₂ <;> try cases H
   case atom.atom n₁ n₂ => apply congrArg _ (Nat.eq_of_beq_eq_true H)
   case etom.etom n₁ n₂ => apply congrArg _ (Nat.eq_of_beq_eq_true H)
   case base.base b₁ b₂ => apply congrArg _ (LamBaseTerm.beq_eq _ _ H)
@@ -872,8 +884,7 @@ theorem LamTerm.lamCheck?_irrelevence
   {ltv : LamTyVal} {lctx₁ lctx₂ : Nat → LamSort} {t : LamTerm}
   (hirr : ∀ n, n < t.maxLooseBVarSucc → lctx₁ n = lctx₂ n) :
   LamTerm.lamCheck? ltv lctx₁ t = LamTerm.lamCheck? ltv lctx₂ t := by
-  revert lctx₁ lctx₂; induction t <;> intros lctx₁ lctx₂ hirr <;>
-    dsimp [LamTerm.lamCheck?]
+  induction t generalizing lctx₁ lctx₂ <;> dsimp [LamTerm.lamCheck?]
   case bvar n =>
     apply congrArg; apply hirr; exact .refl
   case lam s t IHt =>
@@ -1165,32 +1176,18 @@ def LamTerm.lamCheck?_of_lamWF
   {ltv : LamTyVal} {lctx : Nat → LamSort} {t : LamTerm} {ty : LamSort} :
   LamWF ltv ⟨lctx, t, ty⟩ → t.lamCheck? ltv lctx = .some ty := by
   generalize JudgeEq : { lctx := lctx, rterm := t, rty := ty : LamJudge} = Judge 
-  intro HWf; revert lctx t ty JudgeEq; induction HWf
-  case ofAtom lctx' n =>
-    intros lctx t ty JudgeEq
-    injection JudgeEq with lctx_eq rterm_eq rty_eq;
-    rw [rterm_eq, rty_eq]; rfl
-  case ofEtom lctx' n =>
-    intros lctx t ty JudgeEq
-    injection JudgeEq with lctx_eq rterm_eq rty_eq;
-    rw [rterm_eq, rty_eq]; rfl
+  intro HWf; induction HWf generalizing lctx t ty <;>
+    injection JudgeEq with lctx_eq rterm_eq rty_eq <;>
+    rw [rterm_eq, rty_eq] <;> try rfl
   case ofBase lctx' b s H =>
-    intros lctx t ty JudgeEq
-    injection JudgeEq with lctx_eq rterm_eq rty_eq;
-    rw [rterm_eq, rty_eq, lamCheck?]; rw [LamBaseTerm.lamCheck_of_LamWF H]
+    rw [lamCheck?]; rw [LamBaseTerm.lamCheck_of_LamWF H]
   case ofBVar lctx' n =>
-    intros lctx t ty JudgeEq
-    injection JudgeEq with lctx_eq rterm_eq rty_eq;
-    rw [lctx_eq, rterm_eq, rty_eq]; rfl
-  case ofLam lctx' argTy bodyTy body H H_ih =>
-    intros lctx t ty JudgeEq
-    injection JudgeEq with lctx_eq rterm_eq rty_eq;
-    rw [lctx_eq, rterm_eq, rty_eq];
+    rw [lctx_eq]; rfl
+  case ofLam lctx' argTy bodyTy body _ H_ih =>
+    rw [lctx_eq];
     simp [lamCheck?]; rw [H_ih]; rfl
-  case ofApp lctx' argTy resTy fn arg HFn HArg HFn_ih HArg_ih =>
-    intros lctx t ty JudgeEq
-    injection JudgeEq with lctx_eq rterm_eq rty_eq;
-    rw [lctx_eq, rterm_eq, rty_eq]
+  case ofApp lctx' argTy resTy fn arg _ _ HFn_ih HArg_ih =>
+    rw [lctx_eq]
     simp [lamCheck?];
     rw [@HFn_ih lctx' fn (LamSort.func argTy resTy)] <;> try rfl;
     rw [@HArg_ih lctx' arg argTy] <;> try rfl;
@@ -1346,7 +1343,7 @@ theorem LamWF.interp.heq (lval : LamValuation.{u})
 theorem LamTerm.interp.equiv
   (lval : LamValuation.{u}) (lctxTy : Nat → LamSort) (lwf : LamWF lval.toLamTyVal ⟨lctxTy, t, rty⟩) :
   ⟨rty, fun lctxTerm => LamWF.interp lval lctxTy lctxTerm lwf⟩ = LamTerm.interp lval lctxTy t := by
-  revert lctxTy rty; induction t <;> intros rty lctxTy lwf
+  induction t generalizing lctxTy rty
   case atom n =>
     cases lwf; rfl
   case etom n =>
@@ -1479,8 +1476,7 @@ theorem LamWF.interp_eVarIrrelevance
           cases hVarVal; cases hILVal; cases hLCtxTy; cases hLCtxTerm
           case refl.refl.refl.refl.refl.refl =>
             dsimp; dsimp at varVal₁ ilVal₁ eVarVal₁ lctxTerm₁ lwf₁ eVarVal₂ lwf₂
-            revert lctxTy₁ rty
-            induction t <;> intros lctxTy rTy lctxTerm lwf₁ lwf₂
+            induction t generalizing lctxTy₁ rty
             case atom n =>
               cases lwf₁; cases lwf₂; rfl
             case etom n =>
@@ -1527,8 +1523,7 @@ theorem LamWF.interp_lctxIrrelevance
   (hirr : ∀ n, n < t.maxLooseBVarSucc → 
     lctxTy₁ n = lctxTy₂ n ∧ HEq (lctxTerm₁ n) (lctxTerm₂ n)) :
   HEq (LamWF.interp lval lctxTy₁ lctxTerm₁ lwf₁) (LamWF.interp lval lctxTy₂ lctxTerm₂ lwf₂) := by
-  revert lctxTy₁ lctxTy₂ rty;
-  induction t <;> intros lctxTy₁ lctxTy₂ lctxTerm₁ lctxTerm₂ rty lwf₁ lwf₂ hirr
+  induction t generalizing lctxTy₁ lctxTy₂ rty
   case atom n =>
     cases lwf₁; cases lwf₂; rfl
   case etom n =>
@@ -1678,8 +1673,7 @@ def LamTerm.bvarLiftsIdx.zero (idx : Nat) : (t : LamTerm) → LamTerm.bvarLiftsI
 
 def LamTerm.bvarLiftsIdx.succ_l (idx lvl : Nat) (t : LamTerm) :
   LamTerm.bvarLiftsIdx idx (.succ lvl) t = LamTerm.bvarLiftsIdx idx lvl (LamTerm.bvarLiftIdx idx t) := by
-  revert idx lvl
-  induction t <;> intros idx lvl
+  induction t generalizing idx lvl
   case atom n => rfl
   case etom n => rfl
   case base b => rfl
@@ -1698,8 +1692,7 @@ def LamTerm.bvarLiftsIdx.succ_l (idx lvl : Nat) (t : LamTerm) :
 
 def LamTerm.bvarLiftsIdx.succ_r (idx lvl : Nat) (t : LamTerm) :
   LamTerm.bvarLiftsIdx idx (.succ lvl) t = LamTerm.bvarLiftIdx idx (LamTerm.bvarLiftsIdx idx lvl t) := by
-  revert idx lvl
-  induction t <;> intros idx lvl
+  induction t generalizing idx lvl
   case atom n => rfl
   case etom n => rfl
   case base b => rfl
@@ -1898,7 +1891,7 @@ theorem LamThmValid.ofInterpAsProp
 
 theorem LamThmWF.maxLooseBVarSucc (H : LamThmWF lval lctx rty t) :
   t.maxLooseBVarSucc ≤ lctx.length := by
-  revert rty lctx; induction t <;> intro lctx rty H <;> try apply Nat.zero_le
+  induction t generalizing lctx rty <;> try apply Nat.zero_le
   case bvar n =>
     dsimp [LamTerm.maxLooseBVarSucc]
     have H₁ := H (fun _ => .base .prop)
