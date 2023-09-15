@@ -39,11 +39,15 @@ open Embedding.Lam MetaState
 structure State where
   tyVal           : Array (Expr × Level)  
   varVal          : Array (Expr × LamSort)
+  lamEVarTy       : Array LamSort
   fvarsToAbstract : Array (FVarId × Expr)  := #[]
+  etomsToAbstract : Array (FVarId × Nat)   := #[]
   -- Type atoms that are used in the expressions sent to external prover
   typeAtomFVars   : HashMap Nat FVarId     := {}
   -- Term atoms that are used in the expressions sent to external prover
   termAtomFVars   : HashMap Nat FVarId     := {}
+  -- Etoms that are used in the expression sent to external prover
+  etomFVars       : HashMap Nat FVarId     := {}
 
 abbrev ExternM := StateRefT State MetaStateM
 
@@ -96,6 +100,18 @@ def withTermAtomsAsFVar (atoms : Array Nat) : ExternM Unit :=
     setFvarsToAbstract ((← getFvarsToAbstract).push (newFVarId, e))
     setTermAtomFVars ((← getTermAtomFVars).insert atom newFVarId)
 
+def withEtomsAsFVar (etoms : Array Nat) : ExternM Unit :=
+  for etom in etoms do
+    if (← getEtomFVars).contains etom then
+      return
+    let .some s := (← getLamEVarTy)[etom]?
+      | throwError "withEtomAsFVar :: Unknown etom {etom}"
+    let sinterp ← interpLamSortAsUnlifted s
+    let name := "_exEtom" ++ (← mkFreshId).toString
+    let newFVarId ← withLocalDecl name .default sinterp .default
+    setEtomsToAbstract ((← getEtomsToAbstract).push (newFVarId, etom))
+    setEtomFVars ((← getEtomFVars).insert etom newFVarId)
+
 def interpCstrRealAsUnlifted (c : CstrReal) : Expr :=
   let lvl₁ := Level.succ .zero
   let real := Expr.const ``Real []
@@ -137,7 +153,10 @@ def interpLamTermAsUnlifted : LamTerm → ExternM Expr
   let .some fid := (← getTermAtomFVars).find? n
     | throwError "interpLamTermAsUnlifted :: Cannot find fvarId assigned to term atom {n}"
   return .fvar fid
-| .etom _ => throwError "interpLamTermAsUnlifted :: etom is not supported"
+| .etom n => do
+  let .some fid := (← getEtomFVars).find? n
+    | throwError "interpLamSortAsUnlifted :: Cannot find fvarId assigned to etom {n}"
+  return .fvar fid
 | .base b => interpLamBaseTermAsUnlifted b
 | .bvar n => return .bvar n
 | .lam s t => do
@@ -152,12 +171,15 @@ def interpLamTermAsUnlifted : LamTerm → ExternM Expr
 --   anything within `ExternM, LamReif.ReifM, ULiftM` or `Reif.ReifM`
 def withTranslatedLamTerms (ts : Array LamTerm) : ExternM (Array Expr) := do
   let varVal ← getVarVal
-  let hss ← runMetaM <| ts.mapM (fun t => do collectAtoms varVal t)
-  let (typeHs, termHs) := hss.foldl
-    (fun (typeHs, termHs) (typeHs', termHs') =>
-        (mergeHashSet typeHs typeHs', mergeHashSet termHs termHs')) (HashSet.empty, HashSet.empty)
+  let lamEVarTy ← getLamEVarTy
+  let hss ← runMetaM <| ts.mapM (fun t => do collectAtoms varVal lamEVarTy t)
+  let (typeHs, termHs, etomHs) := hss.foldl
+    (fun (typeHs, termHs, etomHs) (typeHs', termHs', etomHs') =>
+        (mergeHashSet typeHs typeHs', mergeHashSet termHs termHs', mergeHashSet etomHs etomHs'))
+        (HashSet.empty, HashSet.empty, HashSet.empty)
   withTypeAtomsAsFVar typeHs.toArray
   withTermAtomsAsFVar termHs.toArray
+  withEtomsAsFVar etomHs.toArray
   ts.mapM interpLamTermAsUnlifted
 
 -- Given a list of non-dependent types `ty₁, ty₂, ⋯, tyₙ`, add
@@ -210,7 +232,8 @@ private def callDuperMetaMAction (lemmas : Array (Expr × Expr × Array Name)) :
   | .unknown => throwError "callDuper :: Duper was terminated"
 
 --Meta.mkLambdaFVars (fvars.map (.fvar ·)) expr
-private def callDuperExternMAction (ts : Array LamTerm) : ExternM (Array LamTerm × Expr × LamTerm) := do
+private def callDuperExternMAction (ts : Array LamTerm) :
+  ExternM (Expr × LamTerm × Array Nat × Array LamTerm) := do
   let hyps ← withTranslatedLamTerms ts
   for hyp in hyps do
     if !(← runMetaM <| Meta.isTypeCorrect hyp) then
@@ -226,6 +249,8 @@ private def callDuperExternMAction (ts : Array LamTerm) : ExternM (Array LamTerm
   -- Note that we're not introducing bound variables into local context
   --   in the above action, so it's reasonable to use `runMetaM`
   let fvarsToAbstract ← getFvarsToAbstract
+  let etomsToAbstract ← getEtomsToAbstract
+  let lamEVarTy ← getLamEVarTy
   runMetaM (do
     let mut expr ← callDuperMetaMAction lemmas
     let mut usedHyps := []
@@ -233,23 +258,39 @@ private def callDuperExternMAction (ts : Array LamTerm) : ExternM (Array LamTerm
       if expr.hasAnyFVar (· == fvar) then
         expr ← Meta.mkLambdaFVars #[.fvar fvar] expr
         usedHyps := t :: usedHyps
+    let mut usedEtoms := []
+    for (fvar, eidx) in etomsToAbstract do
+      if expr.hasAnyFVar (· == fvar) then
+        expr ← Meta.mkLambdaFVars #[.fvar fvar] expr
+        usedEtoms := eidx :: usedEtoms
     let mut usedVals := []
     for (fvar, val) in fvarsToAbstract.reverse do
       if expr.hasAnyFVar (· == fvar) then
         expr ← Meta.mkLambdaFVars #[.fvar fvar] expr
         usedVals := val :: usedVals
-    return (⟨usedHyps⟩, mkAppN expr ⟨usedVals⟩, (Array.mk usedHyps).foldr (fun t' t => t'.mkImp t) (.base .falseE)))
+    let proofLamTermPre := (Array.mk usedHyps).foldr (fun t' t => t'.mkImp t) (.base .falseE)
+    let proofLamTermPre := proofLamTermPre.abstractsRevImp ((Array.mk usedEtoms).map LamTerm.etom)
+    let usedEtomTys ← usedEtoms.mapM (fun etom => do
+      let .some ty := lamEVarTy[etom]?
+        | throwError "callDuper :: Unexpected error"
+      return ty)
+    let proofLamTerm := usedEtomTys.foldr (fun s cur => LamTerm.mkForallE' s cur) proofLamTermPre
+    return (mkAppN expr ⟨usedVals⟩, proofLamTerm, ⟨usedEtoms⟩, ⟨usedHyps⟩))
 
 -- Given `ts = #[t₀, t₁, ⋯, kₖ₋₁]`, invoke Duper to get a proof 
 --   `proof : (s₀ → s₁ → ⋯ → sₗ₋₁ → ⊥).interp`, and returns
---       `([s₀, s₁, ⋯, sₗ₋₁], proof, s₀ → s₁ → ⋯ → sₗ₋₁ → ⊥)`
---   Here `[s₀, s₁, ⋯, sₗ₋₁]` is a subsequence of `[t₀, t₁, ⋯, kₖ₋₁]`
+--       `((fun etoms => proof), (∀ etoms, s₀ → s₁ → ⋯ → sₗ₋₁ → ⊥), etoms, [s₀, s₁, ⋯, sₗ₋₁])`
+-- Here `[s₀, s₁, ⋯, sₗ₋₁]` is a subsequence of `[t₀, t₁, ⋯, kₖ₋₁]`, and
+--   `etoms` are all the etoms present in `s₀ → s₁ → ⋯ → sₗ₋₁ → ⊥`
 -- It is important to add `Meta.withNewMCtxDepth`, otherwise exprmvars
 --   or levelmvars of the current level will be assigned, and we'll
 --   get weird proof reconstruction error
-def callDuper (ts : Array LamTerm) : ReifM (Array LamTerm × Expr × LamTerm) := Meta.withNewMCtxDepth <| do
+def callDuper (ts : Array LamTerm) :
+  ReifM (Expr × LamTerm × Array Nat × Array LamTerm) := Meta.withNewMCtxDepth <| do
   let tyVal ← LamReif.getTyVal
   let varVal ← LamReif.getVarVal
-  runAtMetaM' <| (callDuperExternMAction ts).run' { tyVal := tyVal, varVal := varVal }
+  let lamEVarTy ← LamReif.getLamEVarTy
+  runAtMetaM' <| (callDuperExternMAction ts).run'
+    { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
 
 end Auto.Lam2D

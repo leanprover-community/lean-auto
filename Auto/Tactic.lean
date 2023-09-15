@@ -198,7 +198,12 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) : TacticM Re
     -- Testing. Skipping universe level instantiation and monomorphization
     let afterReify (ufacts : Array UMonoFact) : LamReif.ReifM Expr := (do
       let exportFacts ← LamReif.reifFacts ufacts
+      let exportFacts ← exportFacts.mapM (fun t => LamReif.skolemizeMostIntoForall (.valid [] t))
+      let exportFacts ← exportFacts.mapM LamReif.validOfRevertAll
       LamReif.printValuation
+      -- debug
+      for fact in exportFacts do
+        trace[auto.tactic] "Skolemized {fact}"
       -- ! smt
       -- try
       --   let commands := (← (lamFOL2SMT (← LamReif.getVarVal) exportFacts).run {}).1
@@ -208,10 +213,11 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) : TacticM Re
       -- catch e =>
       --   trace[auto.smt.result] "SMT invocation failed with {e.toMessageData}"
       -- reconstruction
-      let (unsatCore, proof, proofLamTerm) ← Lam2D.callDuper exportFacts
-      trace[auto.printProof] "Duper found proof {← Meta.inferType proof}"
+      let (proof, proofLamTerm, usedEtoms, unsatCore) ← Lam2D.callDuper exportFacts
+      trace[auto.printProof] "Duper found proof of {← Meta.inferType proof}"
       LamReif.newAssertion proof proofLamTerm
-      let contra ← LamReif.validOfImps (.valid [] proofLamTerm) (unsatCore.map (.valid []))
+      let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
+      let contra ← LamReif.validOfImps etomInstantiated (unsatCore.map (.valid []))
       let checker ← LamReif.buildCheckerExprFor contra
       let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
       Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra

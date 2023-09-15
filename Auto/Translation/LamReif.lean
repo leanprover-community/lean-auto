@@ -25,28 +25,28 @@ open Embedding.Lam
 --   essentially higher-order term that can be reified directly.
 structure State where
   -- Maps previously reified type to their type atom index
-  tyVarMap    : HashMap Expr Nat                := {}
+  tyVarMap      : HashMap Expr Nat                := {}
   -- Maps previously reified expressions to their term atom index
   -- Whenever we encounter an atomic expression, we look up
   --   `varMap`. If it's already reified, then `varMap`
   --   tells us about its index. If it's not reified, insert
   --   it to `varMap`.
-  varMap      : HashMap Expr Nat                := {}
+  varMap        : HashMap Expr Nat                := {}
   -- `tyVal` is the inverse of `tyVarMap`
   -- The `e : Expr` is the un-lifted valuation of the type atom
   -- The `lvl : level` is the sort level of `e`
   -- Let `u ← getU`. The interpretation of the sort atom would be
   --   `GLift.{lvl, u} e`
-  tyVal       : Array (Expr × Level)            := #[]
+  tyVal         : Array (Expr × Level)            := #[]
   -- The `e : Expr` is the un-lifted counterpart of the interpretation of
   --   the term atom
   -- The `s : LamSort` is the λ sort of the atom
   -- The interpretation of the sort atom would be `s.upfunc e`
-  varVal      : Array (Expr × LamSort)          := #[]
+  varVal        : Array (Expr × LamSort)          := #[]
   -- lamILTy
-  lamILTy     : Array LamSort                   := #[]
+  lamILTy       : Array LamSort                   := #[]
   -- Inverse of `lamILTy`
-  isomTyMap   : HashMap LamSort Nat             := {}
+  isomTyMap     : HashMap LamSort Nat             := {}
   /-
     This hashmap contains assertions that have external (lean) proof
     · The key `t : LamTerm` is the corresponding λ term,
@@ -58,27 +58,29 @@ structure State where
 
     This field also corresponds to the `ImportTable` in `LamChecker.lean`
   -/
-  assertions  : HashMap LamTerm (Expr × LamTerm × Nat) := {}
+  assertions    : HashMap LamTerm (Expr × LamTerm × Nat) := {}
   -- `Embedding/LamChecker/ChkMap`
   -- `chkMap.find?[re]` returns the checkstep which proves `re`
-  chkMap      : HashMap REntry (ChkStep × Nat)  := {}
+  chkMap        : HashMap REntry (ChkStep × Nat)  := {}
   -- We insert entries into `rTable` through two different ways
   -- 1. Calling `newChkStep`
   -- 2. Validness facts from the ImportTable are treated in `newAssertions`
-  rTable      : Array REntry                    := #[]
+  rTable        : Array REntry                    := #[]
   -- This works as a cache for `BinTree.ofListGet rTable.data`
-  rTableTree  : BinTree REntry                  := BinTree.leaf
+  rTableTree    : BinTree REntry                  := BinTree.leaf
   -- maxEVarSucc
-  maxEVarSucc : Nat                             := 0
+  maxEVarSucc   : Nat                             := 0
   -- lamEVarTy
-  lamEVarTy   : BinTree LamSort                 := .leaf
+  lamEVarTy     : Array LamSort                   := #[]
+  -- This works as a cache for `BinTree.ofListGet lamEVarTy.data`
+  lamEVarTyTree : BinTree LamSort                 := .leaf
   -- `u` is the universe level that all constants will lift to
   -- Something about the universes level `u`
   -- Suppose `u ← getU`
   -- · `tyVal : Nat → Type u`
   -- · `LamValuation.{u}`
   -- · All the `GLift/GLift.up/GLift.down` has level parameter list `[?, u]`
-  u           : Level
+  u             : Level
 deriving Inhabited
 
 abbrev ReifM := StateRefT State Reif.ReifM
@@ -213,7 +215,7 @@ def mkImportVersion : LamTerm → ReifM LamTerm
 -- Returns the position of the result of this `ChkStep` in the `RTable`
 def newChkStep (c : ChkStep) (res? : Option EvalResult) : ReifM EvalResult := do
   let ltv ← getLamTyValAtMeta
-  let res := c.eval ltv.lamVarTy ltv.lamILTy ⟨← getRTableTree, ← getMaxEVarSucc, ← getLamEVarTy⟩
+  let res := c.eval ltv.lamVarTy ltv.lamILTy ⟨← getRTableTree, ← getMaxEVarSucc, ← getLamEVarTyTree⟩
   if let .some res' := res? then
     if res' != res then
       throwError "newChkStep :: Result {res} of ChkStep {c} does not match with expected {res'}"
@@ -234,7 +236,8 @@ def newChkStep (c : ChkStep) (res? : Option EvalResult) : ReifM EvalResult := do
     setRTableTree ((← getRTableTree).insert rsize re)
     setRTable ((← getRTable).push re)
     let eidx ← getMaxEVarSucc
-    setLamEVarTy ((← getLamEVarTy).insert eidx s)
+    setLamEVarTyTree ((← getLamEVarTyTree).insert eidx s)
+    setLamEVarTy ((← getLamEVarTy).push s)
     setMaxEVarSucc (eidx + 1)
   return res
 
@@ -260,6 +263,7 @@ def newAssertion (proof : Expr) (ty : LamTerm) : ReifM Unit := do
   -- So it cannot be called on-the-fly in `buildImportTableExpr`
   let tyi ← mkImportVersion ty
   setAssertions ((← getAssertions).insert ty (proof, tyi, pos))
+
 /-
   Computes `upFunc` and `downFunc` between `s.interpAsUnlifted` and `s.interpAsLifted`
   · `upFunc` is such that `upFunc binder` is equivalent to `binder↑`
@@ -495,6 +499,27 @@ section Checker
     else
       validOfIntros v idx
 
+  def validOfReverts (v : REntry) (idx : Nat) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let .addEntry re ← newChkStep (.validOfReverts p idx) .none
+      | throwError "validOfReverts :: Unexpected evaluation result"
+    return re
+
+  def validOfRevertAll (v : REntry) : ReifM LamTerm := do
+    let .valid lctx t := v
+      | throwError "validOfRevertAll :: Unexpected entry {v}"
+    if lctx.length == 0 then
+      return t
+    let .valid [] t ← validOfReverts v lctx.length
+      | throwError "validOfRevertAll :: Unexpected evaluation result"
+    return t
+
+  def validOfHeadBeta (v : REntry) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let .addEntry re ← newChkStep (.validOfHeadBeta p) .none
+      | throwError "validOfHeadBeta :: Unexpected evaluation result"
+    return re
+
   def validOfImp (v₁₂ : REntry) (v₁ : REntry) : ReifM REntry := do
     let p₁₂ ← lookupREntryPos! v₁₂
     let p₁ ← lookupREntryPos! v₁
@@ -509,11 +534,29 @@ section Checker
       | throwError "validOfImps :: Unexpected evaluation result"
     return re
 
+  def validOfInstantiate (v : REntry) (args : Array LamTerm) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let .addEntry re ← newChkStep (.validOfInstantiate p args.data) .none
+      | throwError "validOfInstantiate :: Unexpected evaluation result"
+    return re
+
+  def validOfInstantiateRev (v : REntry) (args : Array LamTerm) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let .addEntry re ← newChkStep (.validOfInstantiateRev p args.data) .none
+      | throwError "validOfInstantiateRev :: Unexpected evaluation result"
+    return re
+
+  -- Given `∀ x₀ x₁ ⋯ xₖ₋₁, p` and `arg₀, arg₁, ⋯, argₖ₋₁`, return
+  --   `p[x₀/arg₀, x₁/arg₁, ⋯, xₖ₋₁/argₖ₋₁]`
+  def validOfInstantiateForall (v : REntry) (args : Array LamTerm) : ReifM REntry := do
+    let v ← validOfIntros v args.size
+    validOfInstantiateRev v args
+
   def skolemize (exV : REntry) : ReifM REntry := do
     let ex ← lookupREntryPos! exV
-    let .addEntry re ← newChkStep (.skolemize ex) .none
+    let .newEtomWithValid _ lctx t ← newChkStep (.skolemize ex) .none
       | throwError "skolemize :: Unexpected evaluation result"
-    return re
+    return .valid lctx t
 
   def skolemizeMostIntoForall (exV : REntry) : ReifM REntry := do
     let mut exV := exV
@@ -522,8 +565,14 @@ section Checker
         | throwError "skolemizeAllForall :: Unexpected entry {exV}"
       if t.isMkForallE then
         exV ← validOfIntroMost exV
+      let .valid _ t := exV
+        | throwError "skolemizeAllForall :: Unexpected entry {exV}"
       if t.isMkExistE then
         exV ← skolemize exV
+        let .valid _ t := exV
+          | throwError "skolemizeAllForall :: Unexpected entry {exV}"
+        if t.isHeadBetaTarget then
+          exV ← validOfHeadBeta exV
       else
         break
     return exV
@@ -546,12 +595,15 @@ section Checker
     trace[auto.buildChecker] (String.intercalate "\n" ss.data)
 
   def printValuation : ReifM Unit := do
-    let varVal ← getVarVal
-    for ((e, s), idx) in varVal.zip ⟨List.range varVal.size⟩ do
-      trace[auto.lamReif.printValuation] "Term Atom {idx} : {toString s} := {e}"
     let tyVal ← getTyVal
     for ((e, lvl), idx) in tyVal.zip ⟨List.range tyVal.size⟩ do
       trace[auto.lamReif.printValuation] "Type Atom {idx} := {e} : {Expr.sort lvl}"
+    let varVal ← getVarVal
+    for ((e, s), idx) in varVal.zip ⟨List.range varVal.size⟩ do
+      trace[auto.lamReif.printValuation] "Term Atom {idx} : {toString s} := {e}"
+    let lamEVarTy ← getLamEVarTy
+    for (s, idx) in lamEVarTy.zip ⟨List.range lamEVarTy.size⟩ do
+      trace[auto.lamReif.printValuation] "Etom {idx} : {toString s}"
     let lamIl ← getLamILTy
     for (s, idx) in lamIl.zip ⟨List.range lamIl.size⟩ do
       trace[auto.lamReif.printValuation] "LamILTy {idx} := {s}"
@@ -679,7 +731,7 @@ section Checker
       let rInv := Lean.mkApp3 (.const ``Checker [u]) cpvFVarExpr itExpr csExpr
       let rExpr := Lean.mkApp3 (.const ``RTable.mk [])
         (Lean.toExpr (← getRTableTree)) (Lean.toExpr (← getMaxEVarSucc))
-        (Lean.toExpr (← getLamEVarTy))
+        (Lean.toExpr (← getLamEVarTyTree))
       let .valid lctx t := re
         | throwError "buildFullCheckerExprFor :: {re} is not a `valid` entry"
       let vExpr := Lean.toExpr (← lookupREntryPos! re)
@@ -737,24 +789,29 @@ section ExportUtils
   --   from `λ` to external provers, e.g. Lean/Duper
   -- Therefore, we expect that `eqI, forallEI` and `existEI`
   --   does not occur in the `LamTerm`
-  def collectAtoms (varVal : Array (Expr × LamSort)) :
-    LamTerm → MetaM (HashSet Nat × HashSet Nat)
+  def collectAtoms (varVal : Array (Expr × LamSort)) (lamEVarTy : Array LamSort) :
+    LamTerm → MetaM (HashSet Nat × HashSet Nat × HashSet Nat)
   | .atom n => do
     let .some (_, s) := varVal[n]?
       | throwError "collectAtoms :: Unknown term atom {n}"
-    return (collectLamSortAtoms s, HashSet.empty.insert n)
-  | .etom _ => throwError "collectAtoms :: Exporting etom is not supported"
+    return (collectLamSortAtoms s, HashSet.empty.insert n, HashSet.empty)
+  | .etom n => do
+    let .some s := lamEVarTy[n]?
+      | throwError "collectAtoms :: Unknown etom {n}"
+    return (collectLamSortAtoms s, HashSet.empty, HashSet.empty.insert n)
   | .base b => do
-    return (← collectLamBaseTermAtoms b, HashSet.empty)
-  | .bvar _ => pure (HashSet.empty, HashSet.empty)
+    return (← collectLamBaseTermAtoms b, HashSet.empty, HashSet.empty)
+  | .bvar _ => pure (HashSet.empty, HashSet.empty, HashSet.empty)
   | .lam s t => do
-    let (typeHs, termHs) ← collectAtoms varVal t
+    let (typeHs, termHs, etomHs) ← collectAtoms varVal lamEVarTy t
     let sHs := collectLamSortAtoms s
-    return (mergeHashSet typeHs sHs, termHs)
+    return (mergeHashSet typeHs sHs, termHs, etomHs)
   | .app _ t₁ t₂ => do
-    let (typeHs₁, termHs₁) ← collectAtoms varVal t₁
-    let (typeHs₂, termHs₂) ← collectAtoms varVal t₂
-    return (mergeHashSet typeHs₁ typeHs₂, mergeHashSet termHs₁ termHs₂)
+    let (typeHs₁, termHs₁, etomHs₁) ← collectAtoms varVal lamEVarTy t₁
+    let (typeHs₂, termHs₂, etomHs₂) ← collectAtoms varVal lamEVarTy t₂
+    return (mergeHashSet typeHs₁ typeHs₂,
+            mergeHashSet termHs₁ termHs₂,
+            mergeHashSet etomHs₁ etomHs₂)
 
 end ExportUtils
 

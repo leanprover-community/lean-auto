@@ -106,7 +106,7 @@ instance : Repr LamSort where
   reprPrec s n := s.reprPrec n 
 
 def LamSort.toString : LamSort → String
-| .atom n => s!"?{n}"
+| .atom n => s!"#{n}"
 | .base b => s!"{b}"
 | .func s1 s2 => s!"({LamSort.toString s1} → {LamSort.toString s2})"
 

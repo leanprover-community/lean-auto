@@ -423,7 +423,9 @@ inductive ChkStep where
   -- `t₁ → t₂ → ⋯ → tₖ → s` and `t₁, t₂, ⋯, tₖ` implies `s`
   | validOfImps (imp : Nat) (ps : List Nat) : ChkStep
   | validOfInstantiate1 (pos : Nat) (arg : LamTerm) : ChkStep
+  -- `.bvar i` replaced with `args[i]`
   | validOfInstantiate (pos : Nat) (args : List LamTerm) : ChkStep
+  -- `.bvar i` replaced with `args.reverse[i]`
   | validOfInstantiateRev (pos : Nat) (args : List LamTerm) : ChkStep
   | validOfCongrArg (pos rw : Nat) : ChkStep
   | validOfCongrFun (pos rw : Nat) : ChkStep

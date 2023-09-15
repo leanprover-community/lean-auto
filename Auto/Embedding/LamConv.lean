@@ -1597,5 +1597,42 @@ section Skolemization
               apply LamThmValid.skolemize vt heVar.right
 
 end Skolemization
+  
+section UnsafeOps
+  
+  def LamTerm.replace (t : LamTerm) (f : LamTerm → Option LamTerm) (lvl : Nat) :=
+    match f (t.bvarLifts lvl) with
+    | .some t' => t'.bvarLifts lvl
+    | .none =>
+      match t with
+      | .app s fn arg => .app s (replace fn f lvl) (replace arg f lvl)
+      | .lam s body => .lam s (replace body f (.succ lvl))
+      | _ => t
+  
+  -- Turn `ts[i]` into `.bvar i`
+  def LamTerm.abstractsImp (t : LamTerm) (ts : Array LamTerm) :=
+    let ts := ts.mapIdx (fun i x => (x, LamTerm.bvar i.val))
+    let tmap := @Lean.HashMap.ofList _ _ inferInstance inferInstance ts.data
+    t.replace (fun x => tmap.find? x) 0
+  
+  def LamTerm.abstractsRevImp (t : LamTerm) (ts : Array LamTerm) := t.abstractsImp ts.reverse
+  
+  def LamTerm.instantiatesAtImp (idx : Nat) (args : Array LamTerm) : (body : LamTerm) → LamTerm
+  | .atom n        => .atom n
+  | .etom n        => .etom n
+  | .base b        => .base b
+  | .bvar n        =>
+    match idx.ble n with
+    | true =>
+      match (n - idx).blt args.size with
+      | true => (args[n - idx]?.getD (.base .trueE)).bvarLifts idx
+      | false => LamTerm.bvar (n - args.size)
+    | false => LamTerm.bvar n
+  | .lam s body    => .lam s (LamTerm.instantiatesAtImp (.succ idx) args body)
+  | .app s fn arg' => .app s (LamTerm.instantiatesAtImp idx args fn) (LamTerm.instantiatesAtImp idx args arg')
+  
+  def LamTerm.instantiatesImp := LamTerm.instantiatesAtImp 0
+
+end UnsafeOps
 
 end Auto.Embedding.Lam

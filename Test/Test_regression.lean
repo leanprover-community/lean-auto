@@ -91,6 +91,7 @@ section DSRobust
 
   -- Duplicated reified fact
   example (h₁ : False) (h₂ : False) : False := by auto [h₁, h₂]
+  example (α : Prop) (h₁ : α) (h₂ : α) (h₃ : α) : α := by auto
   example (h₁ : ¬ True) : True := by auto [h₁]
   
   -- Result of ChkStep coincides with input term
@@ -119,6 +120,32 @@ section CollectLemma
     intros m n k; revert m n; induction k <;> auto [*] d[Nat.add]
 
 end CollectLemma
+
+-- Skolemization
+
+section Skolemization
+
+  example (p q : (α → β) → Prop) (h₁ : ∃ (f : _) (g : α), p f) (h₂ : ∀ f, p f → q f) : ∃ f, q f :=
+    by auto
+  
+  example (p : α → Prop) (q : (β → γ) → Prop) (h₁ : ∃ f, p f) (h₂ : ∃ f, q f) : ∃ f g, p f ∧ q g :=
+    by auto
+  
+  example (p : α → β → Prop) (h : ∀ (x : α), ∃ y, p x y) : ∃ (f : α → β), ∀ x, p x (f x) :=
+    by auto
+  
+  example (p : α → β → γ → Prop) (h : ∀ (x : α) (y : β), ∃ z, p x y z) :
+    ∃ (f : α → β → γ), ∀ x y, p x y (f x y) :=
+    by auto
+  
+  example (p : α → β → γ → δ → Prop) (h : ∀ (x : α), ∃ (y : β), ∀ (z : γ), ∃ (t : δ), p x y z t) :
+    ∃ (f : α → β) (g : α → γ → δ), ∀ x z, p x (f x) z (g x z) :=
+    by auto
+  
+  example (p : α → (β → γ) → Prop) (h : ∀ x, ∃ y, p x y) : ∃ (f : _ → _), ∀ x, p x (f x) :=
+    by auto
+
+end Skolemization
 
 -- Constant unfolding
 
