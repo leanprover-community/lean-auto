@@ -414,6 +414,8 @@ inductive ChkStep where
   | validOfIntro1F (pos : Nat) : ChkStep
   | validOfIntro1H (pos : Nat) : ChkStep
   | validOfIntros (pos idx : Nat) : ChkStep
+  | validOfRevert (pos : Nat) : ChkStep
+  | validOfReverts (pos : Nat) (idx : Nat) : ChkStep
   | validOfHeadBeta (pos : Nat) : ChkStep
   | validOfBetaBounded (pos : Nat) (bound : Nat) : ChkStep
   -- `t₁ → t₂` and `t₁` implies `t₂`
@@ -441,6 +443,8 @@ def ChkStep.toString : ChkStep → String
 | .validOfIntro1F pos => s!"validOfIntro1F {pos}"
 | .validOfIntro1H pos => s!"validOfIntro1H {pos}"
 | .validOfIntros pos idx => s!"validOfIntros {pos} {idx}"
+| .validOfRevert pos => s!"validOfRevert {pos}"
+| .validOfReverts pos idx => s!"validOfReverts {pos} {idx}"
 | .validOfHeadBeta pos => s!"validOfHeadBeta {pos}"
 | .validOfBetaBounded pos bound => s!"validOfBetaBounded {pos} {bound}"
 | .validOfImp p₁₂ p₁ => s!"validOfImp {p₁₂} {p₁}"
@@ -485,14 +489,14 @@ def EvalResult.correct (r : RTable) (cv : CVal.{u} r.lamEVarTy)
 
 theorem EvalResult.correct_newEtomWithValid_mpLamEVarTy
   {r : RTable} {cv : CVal.{u} r.lamEVarTy}
-  (H : ∃ (levt : Nat → LamSort),
-    (∀ n, levt n = ((r.lamEVarTy.insert r.maxEVarSucc s).get? n).getD (.base .prop)) ∧
-    ∃ (eVarVal' : ∀ (n : Nat), (levt n).interp cv.tyVal),
+  (levt : Nat → LamSort)
+  (heq : (∀ n, levt n = ((r.lamEVarTy.insert r.maxEVarSucc s).get? n).getD (.base .prop)))
+  (H : ∃ (eVarVal' : ∀ (n : Nat), (levt n).interp cv.tyVal),
       (∀ n, n < r.maxEVarSucc → HEq (eVarVal' n) (cv.eVarVal n)) ∧
       LamThmValid (cv.toCPVal.toLamValuationWithEVar levt eVarVal') lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc.succ) :
   EvalResult.correct r cv (.newEtomWithValid s lctx t) := by
-  dsimp [correct, REntry.correct]; have ⟨levt, hteq, eVarVal', hirr, H⟩ := H
-  have levteq : levt = (fun n => ((r.lamEVarTy.insert r.maxEVarSucc s).get? n).getD (.base .prop)) := funext (fun x => hteq x)
+  dsimp [correct, REntry.correct]; have ⟨eVarVal', hirr, H⟩ := H
+  have levteq : levt = (fun n => ((r.lamEVarTy.insert r.maxEVarSucc s).get? n).getD (.base .prop)) := funext heq
   cases levteq; exists eVarVal'
 
 def ChkStep.evalValidOfIntros (lctx : List LamSort) (t : LamTerm)
@@ -502,6 +506,14 @@ def ChkStep.evalValidOfIntros (lctx : List LamSort) (t : LamTerm)
     match t.intro1? with
     | .some (s, t') => evalValidOfIntros (s :: lctx) t' idx
     | .none => .fail
+
+def ChkStep.evalValidOfReverts (lctx : List LamSort) (t : LamTerm)
+  : (idx : Nat) → EvalResult
+  | 0 => .addEntry (.valid lctx t)
+  | .succ idx =>
+    match lctx with
+    | .nil => .fail
+    | .cons s lctx => evalValidOfReverts lctx (.mkForallE' s t) idx
 
 def ChkStep.evalValidOfInstantiate (n : Nat) (ltv : LamTyVal) (lctx : List LamSort) (t : LamTerm)
   : (args : List LamTerm) → EvalResult
@@ -561,6 +573,17 @@ def ChkStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : ChkStep) → E
 | .validOfIntros pos idx =>
   match r.getValid pos with
   | .some (lctx, t) => evalValidOfIntros lctx t idx
+  | .none => .fail
+| .validOfRevert pos =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    match lctx with
+    | .nil => .fail
+    | .cons ty lctx => .addEntry (.valid lctx (.mkForallE' ty t))
+  | .none => .fail
+| .validOfReverts pos idx =>
+  match r.getValid pos with
+  | .some (lctx, t) => evalValidOfReverts lctx t idx
   | .none => .fail
 | .validOfHeadBeta pos =>
   match r.getValid pos with
@@ -719,6 +742,21 @@ theorem ChkStep.evalValidOfIntros_correct
       rw [LamTerm.maxEVarSucc_intro1? h]; exact eS
     | .none => exact True.intro
 
+theorem ChkStep.evalValidOfReverts_correct
+  {r : RTable} (cv : CVal.{u} r.lamEVarTy)
+  (tV : LamThmValid cv.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc) :
+  (evalValidOfReverts lctx t idx).correct r cv := by
+  induction idx generalizing lctx t
+  case zero => unfold evalValidOfReverts; exact tV
+  case succ idx IH =>
+    unfold evalValidOfReverts
+    match lctx with
+    | .nil => exact True.intro
+    | .cons s lctx =>
+      apply IH; apply And.intro tV.left.revert
+      dsimp [LamTerm.mkForallE', LamTerm.maxEVarSucc]
+      rw [Nat.max, Nat.max_zero_left]; apply tV.right
+
 theorem ChkStep.evalValidOfInstantiate_correct
   {r : RTable} (cv : CVal.{u} r.lamEVarTy)
   (tV : LamThmValid cv.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc) :
@@ -859,6 +897,29 @@ theorem ChkStep.eval_correct
       have hcorrect := ChkStep.evalValidOfIntros_correct (idx:=idx) _ h'
       dsimp; revert hcorrect
       cases (evalValidOfIntros lctx t idx) <;> exact id
+| .validOfRevert pos => by
+  dsimp [eval]
+  cases h : r.getValid pos <;> try exact True.intro
+  case some lctxt =>
+    match lctxt with
+    | (lctx, t) =>
+      match lctx with
+      | .nil => exact True.intro
+      | .cons ty lctx =>
+        have h' := RTable.getValid_correct inv h
+        apply And.intro
+        case left => intro lctx'; apply h'.left.revert
+        case right =>
+          dsimp [LamTerm.mkForallE', LamTerm.maxEVarSucc]
+          rw [Nat.max, Nat.max_zero_left]; apply h'.right
+| .validOfReverts pos idx => by
+  dsimp [eval]
+  cases h : r.getValid pos <;> try exact True.intro
+  case some lctxt =>
+    match lctxt with
+    | (lctx, t) =>
+      have h' := RTable.getValid_correct inv h
+      apply ChkStep.evalValidOfReverts_correct _ h'
 | .validOfHeadBeta pos => by
   dsimp [eval]
   cases h : r.getValid pos <;> try exact True.intro
@@ -1122,28 +1183,23 @@ theorem ChkStep.eval_correct
     dsimp
     match h₂ : LamTerm.skolemize? t r.maxEVarSucc lctx with
     | .some (s, t') =>
-      dsimp; apply EvalResult.correct_newEtomWithValid_mpLamEVarTy
+      dsimp
+      let levt' := replaceAt (LamSort.mkFuncsRev s lctx) r.maxEVarSucc
+        (fun n => (r.lamEVarTy.get? n).getD (.base .prop))
+      apply EvalResult.correct_newEtomWithValid_mpLamEVarTy levt' (fun n => by
+        rw [BinTree.get?_insert_eq_replaceAt_get?])
       have ⟨h₁', hle⟩ := RTable.getValid_correct inv h₁
       have ⟨eVarVal', hsk⟩ := LamThmValid.skolemize? h₁' h₂ hle
       cases cv; case mk cpv eV =>
-        dsimp [REntry.correct]; dsimp [CVal.toLamValuation] at eVarVal'
-        exists (replaceAt (LamSort.mkFuncsRev s lctx) r.maxEVarSucc
-             (fun n => Option.getD (BinTree.get? r.lamEVarTy n) (LamSort.base LamBaseSort.prop)))
-        apply And.intro
+        exists replaceAtDep eVarVal' r.maxEVarSucc eV
+        apply And.intro ?left (And.intro hsk ?right)
         case left =>
-          intro n; rw [BinTree.get?_insert_eq_replaceAt_get?]
+          intro n hlt; dsimp [replaceAt, replaceAtDep]
+          rw [Nat.beq_eq_false_of_ne (Nat.ne_of_lt hlt)]
         case right =>
-          exists replaceAtDep eVarVal' r.maxEVarSucc eV
-          apply And.intro ?left (And.intro hsk ?right)
-          case left =>
-            intro n hlt; dsimp [replaceAt, replaceAtDep]
-            have nbeq : n.beq r.maxEVarSucc = false :=
-              Nat.beq_eq_false_of_ne (Nat.ne_of_lt hlt)
-            rw [nbeq]
-          case right =>
-            apply Nat.le_trans (LamTerm.maxEVarSucc_skolemize? h₂)
-            rw [Nat.max_le]; apply And.intro _ (Nat.le_refl _)
-            apply Nat.le_trans hle (Nat.le_succ _)
+          apply Nat.le_trans (LamTerm.maxEVarSucc_skolemize? h₂)
+          rw [Nat.max_le]; apply And.intro _ (Nat.le_refl _)
+          apply Nat.le_trans hle (Nat.le_succ _)
     | .none => exact True.intro
   | .none => exact True.intro
 

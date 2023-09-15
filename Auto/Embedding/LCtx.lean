@@ -413,6 +413,12 @@ section push
   theorem pushLCtxs.lt (h : n < xs.length) : pushLCtxs xs lctx n = xs.getD n (lctx 0) := by
     dsimp [pushLCtxs]; rw [@id (Nat.blt n (List.length xs) = true) (Nat.ble_eq_true_of_le h)]
 
+  theorem pushLCtxs.ge (h : n ≥ xs.length) : pushLCtxs xs lctx n = lctx (n - xs.length) := by
+    dsimp [pushLCtxs];
+    have h : Nat.blt n (List.length xs) = false :=
+      Nat.ble_eq_false_of_lt _ (Nat.succ_le_succ h)
+    rw [h]
+
   theorem pushLCtxs.nil (lctx : Nat → α) :
     pushLCtxs .nil lctx = lctx := rfl
 
@@ -445,23 +451,6 @@ section push
   theorem pushLCtxs.cons_succ_Fn (xs : List α) (lctx : Nat → α) :
     (fun n => pushLCtxs (x :: xs) lctx (.succ n)) = pushLCtxs xs lctx :=
     funext (fun n => pushLCtxs.cons_succ xs lctx n)
-
-  theorem pushLCtxs.append_add
-    (xs ys : List α) (lctx : Nat → α)
-    (val : Nat) (heq : xs.length = val) (n : Nat) :
-    pushLCtxs (xs ++ ys) lctx (n + val) = pushLCtxs ys lctx n := by
-    dsimp [pushLCtxs]; rw [List.length_append]
-    have heq₁ : Nat.blt (n + val) (List.length xs + List.length ys) = Nat.blt n (List.length ys) := by
-      dsimp [Nat.blt]; rw [heq];
-      rw [Nat.add_comm val]; rw [← Nat.succ_add]
-      exact Eq.symm (Nat.ble_add _ _ _)
-    rw [heq₁]
-    have heq₂ : n + val - (List.length xs + List.length ys) = n - List.length ys := by
-      rw [heq]; rw [Nat.add_comm val]; rw [Nat.add_sub_add_right]
-    rw [heq₂]
-    dsimp [List.getD]; rw [List.get?_append_right]
-    case _ => rw [heq]; rw [Nat.add_sub_cancel]
-    case _ => rw [heq]; apply Nat.le_add_left
 
   @[reducible] def pushLCtxsAt (xs : List α) (pos : Nat) :=
     restoreAt pos (pushLCtxs xs)
