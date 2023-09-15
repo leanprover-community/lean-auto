@@ -11,6 +11,7 @@ initialize
   registerTraceClass `auto.lamReif
   registerTraceClass `auto.buildChecker
   registerTraceClass `auto.lamReif.printValuation
+  registerTraceClass `auto.lamReif.printProofs
   registerTraceClass `auto.lamReif.printResult
 
 namespace Auto.LamReif
@@ -74,6 +75,8 @@ structure State where
   lamEVarTy     : Array LamSort                   := #[]
   -- This works as a cache for `BinTree.ofListGet lamEVarTy.data`
   lamEVarTyTree : BinTree LamSort                 := .leaf
+  -- Existential variable produced by a check step
+  chkStepEtom   : HashMap ChkStep (Array Nat)     := {}
   -- `u` is the universe level that all constants will lift to
   -- Something about the universes level `u`
   -- Suppose `u ← getU`
@@ -88,6 +91,42 @@ abbrev ReifM := StateRefT State Reif.ReifM
 @[inline] def ReifM.run' (x : ReifM α) (s : State) := Prod.fst <$> x.run s
 
 #genMonadState ReifM
+
+def checkerStats : ReifM (Array (String × Nat)) := do
+  return #[("tyVal", (← getTyVal).size), ("varVal", (← getVarVal).size),
+           ("ilLamTy", (← getLamILTy).size), ("assertions", (← getAssertions).size),
+           ("chkMap", (← getChkMap).size), ("RTable", (← getRTable).size)]
+
+def printCheckerStats : ReifM Unit := do
+  let stats := (← checkerStats).map (fun (s, n) => "  " ++ s ++ s!": {n}")
+  let ss := #["Checker Statistics:"] ++ stats
+  trace[auto.buildChecker] (String.intercalate "\n" ss.data)
+
+def printValuation : ReifM Unit := do
+  let tyVal ← getTyVal
+  for ((e, lvl), idx) in tyVal.zip ⟨List.range tyVal.size⟩ do
+    trace[auto.lamReif.printValuation] "Type Atom {idx} := {e} : {Expr.sort lvl}"
+  let varVal ← getVarVal
+  for ((e, s), idx) in varVal.zip ⟨List.range varVal.size⟩ do
+    trace[auto.lamReif.printValuation] "Term Atom {idx} : {toString s} := {e}"
+  let lamEVarTy ← getLamEVarTy
+  for (s, idx) in lamEVarTy.zip ⟨List.range lamEVarTy.size⟩ do
+    trace[auto.lamReif.printValuation] "Etom {idx} : {toString s}"
+  let lamIl ← getLamILTy
+  for (s, idx) in lamIl.zip ⟨List.range lamIl.size⟩ do
+    trace[auto.lamReif.printValuation] "LamILTy {idx} := {s}"
+
+def printProofs : ReifM Unit := do
+  let chkMap ← getChkMap
+  for re in (← getRTable) do
+    if let .some (cs, n) := chkMap.find? re then
+      trace[auto.lamReif.printProofs] "{n} : ChkStep ⦗⦗{cs}⦘⦘ proves ⦗⦗{re}⦘⦘"
+    else
+      let .some ([], t) := re.getValid?
+        | throwError "printProofs :: Unexpected entry {re}"
+      let .some (expr, _, n) := (← getAssertions).find? t
+        | throwError "printProofs :: Unable to find assertion associated with {t}"
+      trace[auto.lamReif.printProofs] "{n} : External fact ⦗⦗{← Meta.inferType expr}⦘⦘ proves ⦗⦗{re}⦘⦘"
 
 def sort2LamILTyIdx (s : LamSort) : ReifM Nat := do
   let isomTyMap ← getIsomTyMap
@@ -129,14 +168,14 @@ def lookupRTable! (pos : Nat) : ReifM REntry := do
   if let .some r := (← getRTable).get? pos then
     return r
   else
-    throwError "lookupRTable! :: Unknown RTable entry {pos}"
+    throwError "lookupRTable! :: Unknown REntry {pos}"
 
 def lookupREntryPos! (re : REntry) : ReifM Nat := do
   match (← getChkMap).find? re with
   | .some (_, n) => return n
   | .none =>
     match re with
-    | .valid [] t =>
+    | .validEVar0 [] t =>
       match (← getAssertions).find? t with
       | .some (_, _, n) => return n
       | .none => throwError "lookupREntryPos! :: Unknown REntry {re}"
@@ -147,7 +186,7 @@ def lookupREntryProof? (re : REntry) : ReifM (Option (ChkStep ⊕ (Expr × LamTe
   | .some (cs, _) => return .some (.inl cs)
   | .none =>
     match re with
-    | .valid [] t =>
+    | .validEVar0 [] t =>
       match (← getAssertions).find? t with
       | .some (e, t, _) => return .some (.inr (e, t))
       | .none => return .none
@@ -157,6 +196,18 @@ def lookupREntryProof! (re : REntry) : ReifM (ChkStep ⊕ (Expr × LamTerm)) := 
   match ← lookupREntryProof? re with
   | .some proof => return proof
   | .none => throwError "lookupREntryProof! :: Unknown REntry {re}"
+
+def lookupLamEVarTy! (idx : Nat) : ReifM LamSort := do
+  if let .some s := (← getLamEVarTy)[idx]? then
+    return s
+  else
+    throwError "lookupLamEVarTy! :: Unknown etom {idx}"
+
+def lookupChkStepEtom! (cs : ChkStep) : ReifM (Array Nat) := do
+  if let .some arr := (← getChkStepEtom).find? cs then
+    return arr
+  else
+    throwError "lookupChkStepEtom! :: ChkStep {cs} did not produce new etom"
 
 -- This should only be used at the meta level, i.e. in code that will
 --   be evaluated during the execution of `auto`
@@ -238,6 +289,7 @@ def newChkStep (c : ChkStep) (res? : Option EvalResult) : ReifM EvalResult := do
     let eidx ← getMaxEVarSucc
     setLamEVarTyTree ((← getLamEVarTyTree).insert eidx s)
     setLamEVarTy ((← getLamEVarTy).push s)
+    setChkStepEtom ((← getChkStepEtom).insert c #[eidx])
     setMaxEVarSucc (eidx + 1)
   return res
 
@@ -340,9 +392,6 @@ section ILLifting
     let (upFunc, downFunc, ty, upTy, uOrig) ← mkImportAux s
     let isomTy ← mkIsomType upFunc downFunc ty upTy uOrig
     let ilLift := mkAppN (.const ``ILLift.ofIsomTy [uOrig, (← getU)]) #[ty, upTy, isomTy]
-    -- debug
-    -- if !(← Meta.isTypeCorrectCore ilLift) then
-    --   throwError "mkImportingEqLift :: Malformed eqLift {ilLift}"
     return ilLift
 
 end ILLifting
@@ -484,7 +533,7 @@ section Checker
     return re
 
   def validOfIntroMost (v : REntry) : ReifM REntry := do
-    let .valid _ t := v
+    let .some (_, t) := v.getValid?
       | throwError "validOfIntroMost :: Unexpected entry {v}"
     let mut idx := 0
     let mut t := t
@@ -505,20 +554,28 @@ section Checker
       | throwError "validOfReverts :: Unexpected evaluation result"
     return re
 
-  def validOfRevertAll (v : REntry) : ReifM LamTerm := do
-    let .valid lctx t := v
+  def validOfRevertAll (v : REntry) : ReifM REntry := do
+    let .some (lctx, t) := v.getValid?
       | throwError "validOfRevertAll :: Unexpected entry {v}"
     if lctx.length == 0 then
-      return t
-    let .valid [] t ← validOfReverts v lctx.length
-      | throwError "validOfRevertAll :: Unexpected evaluation result"
-    return t
+      return v
+    validOfReverts v lctx.length
 
   def validOfHeadBeta (v : REntry) : ReifM REntry := do
     let p ← lookupREntryPos! v
     let .addEntry re ← newChkStep (.validOfHeadBeta p) .none
       | throwError "validOfHeadBeta :: Unexpected evaluation result"
     return re
+  
+  def validOfHnf (v : REntry) : ReifM REntry := do
+    let mut v := v
+    while true do
+      let .some (_, t) := v.getValid?
+        | throwError "validOfHnf :: Unexpected entry {v}"
+      if !t.isHeadBetaTarget then
+        break
+      v ← validOfHeadBeta v
+    return v
 
   def validOfImp (v₁₂ : REntry) (v₁ : REntry) : ReifM REntry := do
     let p₁₂ ← lookupREntryPos! v₁₂
@@ -561,52 +618,23 @@ section Checker
   def skolemizeMostIntoForall (exV : REntry) : ReifM REntry := do
     let mut exV := exV
     while true do
-      let .valid _ t := exV
+      let .some (_, t) := exV.getValid?
         | throwError "skolemizeAllForall :: Unexpected entry {exV}"
       if t.isMkForallE then
         exV ← validOfIntroMost exV
-      let .valid _ t := exV
+      let .some (_, t) := exV.getValid?
         | throwError "skolemizeAllForall :: Unexpected entry {exV}"
       if t.isMkExistE then
         exV ← skolemize exV
-        let .valid _ t := exV
+        let .some (_, t) := exV.getValid?
           | throwError "skolemizeAllForall :: Unexpected entry {exV}"
         if t.isHeadBetaTarget then
-          exV ← validOfHeadBeta exV
+          exV ← validOfHnf exV
       else
         break
     return exV
 
   -- Functions that turns data structure in `ReifM.State` into `Expr`
-
-  def checkerStats : ReifM (Array (String × Nat)) := do
-    let ret : Array (String × Nat) := #[]
-    let ret := ret.push ("tyVal", (← getTyVal).size)
-    let ret := ret.push ("varVal", (← getVarVal).size)
-    let ret := ret.push ("ilLamTy", (← getLamILTy).size)
-    let ret := ret.push ("assertions", (← getAssertions).size)
-    let ret := ret.push ("chkMap", (← getChkMap).size)
-    let ret := ret.push ("RTable", (← getRTable).size)
-    return ret
-
-  def printCheckerStats : ReifM Unit := do
-    let stats := (← checkerStats).map (fun (s, n) => "  " ++ s ++ s!": {n}")
-    let ss := #["Checker Statistics:"] ++ stats
-    trace[auto.buildChecker] (String.intercalate "\n" ss.data)
-
-  def printValuation : ReifM Unit := do
-    let tyVal ← getTyVal
-    for ((e, lvl), idx) in tyVal.zip ⟨List.range tyVal.size⟩ do
-      trace[auto.lamReif.printValuation] "Type Atom {idx} := {e} : {Expr.sort lvl}"
-    let varVal ← getVarVal
-    for ((e, s), idx) in varVal.zip ⟨List.range varVal.size⟩ do
-      trace[auto.lamReif.printValuation] "Term Atom {idx} : {toString s} := {e}"
-    let lamEVarTy ← getLamEVarTy
-    for (s, idx) in lamEVarTy.zip ⟨List.range lamEVarTy.size⟩ do
-      trace[auto.lamReif.printValuation] "Etom {idx} : {toString s}"
-    let lamIl ← getLamILTy
-    for (s, idx) in lamIl.zip ⟨List.range lamIl.size⟩ do
-      trace[auto.lamReif.printValuation] "LamILTy {idx} := {s}"
 
   def buildChkStepsExpr : ReifM Expr := do
     let chkMap ← getChkMap
@@ -697,24 +725,6 @@ section Checker
       lamTermExpr (.app (.const ``importTablePSigmaβ [u]) chkValExpr)
     let importTableExpr := (@instToExprBinTree Expr
       (instExprToExprId type) ⟨.zero, Prop⟩).toExpr importTable
-    -- if !(← Meta.isTypeCorrectCore importTableExpr) then
-    --   let tyValExpr ← buildTyVal
-    --   for (e, tExpr) in entries do
-    --     let tInterp := Lean.mkApp4 (.const ``LamTerm.interpAsProp [u])
-    --       lvalExpr (.const ``dfLCtxTy []) (.app (.const ``dfLCtxTerm [u]) tyValExpr) tExpr
-    --     let tInterp ← Meta.zetaReduce tInterp
-    --     let ofTypeExpr := Lean.mkApp2 (.const ``id [.succ u])
-    --       (.app (.const ``Embedding.LiftTyConv [.zero, u]) tInterp)
-    --       (Lean.mkApp2 (.const ``Embedding.GLift.up [.zero, u]) (← Meta.inferType e) e)
-    --     if !(← Meta.isTypeCorrect e) then
-    --       trace[auto.buildChecker] "buildImportTable :: Proof {e} is not type correct"
-    --       Meta.check e
-    --     if !(← Meta.isTypeCorrect ofTypeExpr) then
-    --       throwError "buildImportTable :: Malformed ImportTable Entry, proof : {e}, interp : {tInterp}"
-    --     else
-    --       trace[auto.buildChecker] "Well-formed ImportTable Entry"
-    --   throwError "buildImportTable :: Malformed ImportTable, but all entries are well-formed"
-    -- trace[auto.buildChecker] "ImportTable typechecked in time {(← IO.monoMsNow) - startTime}"
     return importTableExpr
 
   -- `re` is the entry we want to retrieve from the `validTable`
@@ -732,25 +742,15 @@ section Checker
       let rExpr := Lean.mkApp3 (.const ``RTable.mk [])
         (Lean.toExpr (← getRTableTree)) (Lean.toExpr (← getMaxEVarSucc))
         (Lean.toExpr (← getLamEVarTyTree))
-      let .valid lctx t := re
+      let .some (lctx, t) := re.getValid?
         | throwError "buildFullCheckerExprFor :: {re} is not a `valid` entry"
       let vExpr := Lean.toExpr (← lookupREntryPos! re)
       let eqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr (lctx, t)]]
       let getEntry := Lean.mkApp7 (.const ``RTable.getValidExport_correct [u])
         rExpr cpvExpr vExpr (Lean.toExpr lctx) (Lean.toExpr t) rInv eqExpr
       let getEntry ← Meta.mkLetFVars #[cpvFVarExpr] getEntry
-      -- debug
-      -- let rt := Lean.mkApp3 (.const ``ChkMap.runFromBeginning [u]) lvalExpr itExpr csExpr
-      -- let rt ← Meta.withTransparency .all <| Meta.reduceAll rt
-      -- trace[auto.buildChecker] "Final RTable : {rt}, Expected valid : {validExpr}"
       trace[auto.buildChecker] "Checker expression built in time {(← IO.monoMsNow) - startTime}ms"
       return getEntry
-    -- debug
-    -- let startTime ← IO.monoMsNow
-    -- if !(← Meta.isTypeCorrectCore checker) then
-    --   trace[auto.buildChecker] "buildCheckerExpr :: Malformed checker {checker}"
-    --   Meta.check checker
-    -- trace[auto.buildChecker] "Checker typechecked in time {(← IO.monoMsNow) - startTime}"
     return checker
 
 end Checker
@@ -815,39 +815,39 @@ section ExportUtils
 
 end ExportUtils
 
-section
+end LamReif
 
-  -- Type of `type atoms` in the language that translates to `LamReif`
-  variable (ω : Type) [BEq ω] [Hashable ω]
 
-  -- Type of `term atoms` in the language that translates to `LamReif`
-  variable (μ : Type) [BEq μ] [Hashable μ]
+namespace Lam2Lam
+open Embedding.Lam LamReif
 
-  structure TransState where
-    typeH2lMap : HashMap ω Nat := {}
+  structure TState where
+    typeH2lMap : HashMap Nat Nat := {}
     -- This field should be in sync with `LamReif.State.tyVal`
-    typeL2hMap : Array ω       := #[]
-    termH2lMap : HashMap μ Nat := {}
+    typeL2hMap : Array Nat       := #[]
+    termH2lMap : HashMap Nat Nat := {}
     -- This field should be in sync with `LamReif.State.varVal`
-    termL2hMap : Array μ       := #[]
+    termL2hMap : Array Nat       := #[]
+    etomH2lMap : HashMap Nat Nat := {}
+    etomL2hMap : HashMap Nat Nat := {}
 
-  abbrev TransM := StateRefT (TransState ω μ) ReifM
+  abbrev TransM := StateRefT TState ReifM
 
   variable {ω : Type} [BEq ω] [Hashable ω]
 
   variable {μ : Type} [BEq μ] [Hashable μ]
 
   @[always_inline]
-  instance : Monad (TransM ω μ) :=
-    let i := inferInstanceAs (Monad (TransM ω μ));
+  instance : Monad TransM :=
+    let i := inferInstanceAs (Monad TransM);
     { pure := i.pure, bind := i.bind }
 
-  instance : Inhabited (TransM ω μ α) where
+  instance : Inhabited (TransM α) where
     default := fun _ => throw default
 
-  #genMonadState (TransM ω μ)
+  #genMonadState TransM
 
-  def transTypeAtom (a : ω) (val : Expr × Level) : TransM ω μ Nat := do
+  def transTypeAtom (a : Nat) (val : Expr × Level) : TransM Nat := do
     let typeH2lMap ← getTypeH2lMap
     match typeH2lMap.find? a with
     | .some n => return n
@@ -861,7 +861,7 @@ section
   
   -- When translating `Lam` to `Lam` in `Lam2Lam`, make sure that
   --   the `LamSort` in this `val` is already translated.
-  def transTermAtom (a : μ) (val : Expr × LamSort) : TransM ω μ Nat := do
+  def transTermAtom (a : Nat) (val : Expr × LamSort) : TransM Nat := do
     let termH2lMap ← getTermH2lMap
     match termH2lMap.find? a with
     | .some n => return n
@@ -873,18 +873,20 @@ section
       setVarMap ((← getVarMap).insert val.fst idx)
       return idx
 
-end
+  def transEtom (e : Nat) : TransM Nat := do
+    let etomH2lMap ← getEtomH2lMap
+    let .some n := etomH2lMap.find? e
+      | throwError "transEtom :: Cannot find translation of etom {e}"
+    return n
 
-end LamReif
-
-/-
-namespace Lam2Lam
-open Embedding.Lam LamReif
+  def addEtomTranslation (eH : Nat) (eL : Nat) : TransM Unit := do
+    setEtomH2lMap ((← getEtomH2lMap).insert eH eL)
+    setEtomL2hMap ((← getEtomL2hMap).insert eL eH)
 
   -- We're translating `Lam` to `Lam`. We call the first `Lam`
   --   the `high-level` one, and the second `Lam` the `low-level` one.
   
-  def transLamSort (ref : State) : LamSort → TransM Nat Nat LamSort
+  def transLamSort (ref : State) : LamSort → TransM LamSort
   | .atom n => do
     let (val, _) ← (lookupTyVal! n).run ref
     return .atom (← transTypeAtom n val)
@@ -893,7 +895,7 @@ open Embedding.Lam LamReif
   
   private def transLamBaseTermILErr := "transLamBaseTerm :: Import versions of logical constants should not occur here"
 
-  def transLamBaseTerm (ref : State) : LamBaseTerm → TransM Nat Nat LamBaseTerm
+  def transLamBaseTerm (ref : State) : LamBaseTerm → TransM LamBaseTerm
   | .eqI _ => throwError transLamBaseTermILErr
   | .forallEI _ => throwError transLamBaseTermILErr
   | .existEI _ => throwError transLamBaseTermILErr
@@ -902,63 +904,126 @@ open Embedding.Lam LamReif
   | .existE s => .existE <$> transLamSort ref s
   | b => return b
   
-  def transLamTerm (ref : State) : LamTerm → TransM Nat Nat LamTerm
+  def transLamTerm (ref : State) : LamTerm → TransM LamTerm
   | .atom n => do
     let ((e, s), _) ← (lookupVarVal! n).run ref
     let s' ← transLamSort ref s
     return .atom (← transTermAtom n (e, s'))
+  | .etom n => return .etom (← transEtom n)
   | .base b => .base <$> transLamBaseTerm ref b
   | .bvar n => return .bvar n
   | .lam s t => .lam <$> transLamSort ref s <*> transLamTerm ref t
   | .app s fn arg => .app <$> transLamSort ref s <*> transLamTerm ref fn <*> transLamTerm ref arg
   
-  def transREntry (ref : State) : REntry → TransM Nat Nat REntry
+  def transREntry (ref : State) : REntry → TransM REntry
   | .wf lctx s t => do
     return .wf (← lctx.mapM (transLamSort ref)) (← transLamSort ref s) (← transLamTerm ref t)
   | .valid lctx t => do
     return .valid (← lctx.mapM (transLamSort ref)) (← transLamTerm ref t)
+  | .validEVar0 lctx t => do
+    return .validEVar0 (← lctx.mapM (transLamSort ref)) (← transLamTerm ref t)
   | .nonempty s => .nonempty <$> transLamSort ref s
+
+  private def transChkStep_EnsureOrder (posCont : Nat → TransM Nat) (poss : Array Nat) : TransM (Array Nat) := do
+    have : DecidableRel Nat.le := fun m n => Nat.decLe m n
+    let sorted := List.mergeSort Nat.le poss.data
+    let mut trans : HashMap Nat Nat := {}
+    for pos in sorted do
+      let pos' ← posCont pos
+      trans := trans.insert pos pos'
+    poss.mapM (fun pos => do
+      match trans.find? pos with
+      | .some pos' => return pos'
+      | .none => throwError "transChkStep :: Unexpected error")
+
+  def transChkStep (ref : State) (posCont : Nat → TransM Nat) : ChkStep → TransM ChkStep
+  | .wfOfCheck lctx t => return .wfOfCheck (← lctx.mapM (transLamSort ref)) (← transLamTerm ref t)
+  | .wfOfAppend ex pos => return .wfOfAppend (← ex.mapM (transLamSort ref)) (← posCont pos)
+  | .wfOfPrepend ex pos => return .wfOfPrepend (← ex.mapM (transLamSort ref)) (← posCont pos)
+  | .wfOfHeadBeta pos => return .wfOfHeadBeta (← posCont pos)
+  | .wfOfBetaBounded pos bound => return .wfOfBetaBounded (← posCont pos) bound
+  | .validOfIntro1F pos => return .validOfIntro1F (← posCont pos)
+  | .validOfIntro1H pos => return .validOfIntro1H (← posCont pos)
+  | .validOfIntros pos idx => return .validOfIntros (← posCont pos) idx
+  | .validOfRevert pos => return .validOfRevert (← posCont pos)
+  | .validOfReverts pos idx => return .validOfReverts (← posCont pos) idx
+  | .validOfHeadBeta pos => return .validOfHeadBeta (← posCont pos)
+  | .validOfBetaBounded pos bound => return .validOfBetaBounded (← posCont pos) bound
+  | .validOfImp p₁₂ p₁ => do
+    let #[p₁₂', p₁'] ← transChkStep_EnsureOrder posCont #[p₁₂, p₁]
+      | throwError "transChkStep :: Unexpected error"
+    return .validOfImp p₁₂' p₁'
+  | .validOfImps imp ps => do
+    let ⟨imp' :: ps'⟩ ← transChkStep_EnsureOrder posCont ⟨imp :: ps⟩
+      | throwError "transChkStep :: Unexpected error"
+    return .validOfImps imp' ps'
+  | .validOfInstantiate1 pos arg => do
+    -- Manual control of evaluation order
+    let pos' ← posCont pos
+    return .validOfInstantiate1 pos' (← transLamTerm ref arg)
+  | .validOfInstantiate pos args => do
+    -- Manual control of evaluation order
+    let pos' ← posCont pos
+    return .validOfInstantiate pos' (← args.mapM (transLamTerm ref))
+  | .validOfInstantiateRev pos args => do
+    -- Manual control of evaluation order
+    let pos' ← posCont pos
+    return .validOfInstantiateRev pos' (← args.mapM (transLamTerm ref))
+  | .validOfCongrArg pos rw => do
+    let #[pos', rw'] ← transChkStep_EnsureOrder posCont #[pos, rw]
+      | throwError "transChkStep :: Unexpected error"
+    return .validOfCongrArg pos' rw'
+  | .validOfCongrFun pos rw => do
+    let #[pos', rw'] ← transChkStep_EnsureOrder posCont #[pos, rw]
+      | throwError "transChkStep :: Unexpected error"
+    return .validOfCongrFun pos' rw'
+  | .validOfCongr pos rwFn rwArg => do
+    let #[pos', rwFn', rwArg'] ← transChkStep_EnsureOrder posCont #[pos, rwFn, rwArg]
+      | throwError "transChkStep :: Unexpected error"
+    return .validOfCongr pos' rwFn' rwArg'
+  | .validOfCongrArgs pos rws => do
+    let ⟨pos' :: rws'⟩ ← transChkStep_EnsureOrder posCont ⟨pos :: rws⟩
+      | throwError "transChkStep :: Unexpected error"
+    return .validOfCongrArgs pos' rws'
+  | .validOfCongrFunN pos rw n => do
+    let #[pos', rw'] ← transChkStep_EnsureOrder posCont #[pos, rw]
+      | throwError "transChkStep :: Unexpected error"
+    return .validOfCongrFunN pos' rw' n
+  | .validOfCongrs pos rwFn rwArgs => do
+    let ⟨pos' :: rwFn' :: rwArgs'⟩ ← transChkStep_EnsureOrder posCont ⟨pos :: rwFn :: rwArgs⟩
+      | throwError "transChkStep :: Unexpected error"
+    return .validOfCongrs pos' rwFn' rwArgs'
+  | .skolemize pos => return .skolemize (← posCont pos)
 
   -- Collect essential chksteps and assertions from the high-level `lam`
   --   into the low-level `lam` such that the low-level `lam` proves `re`
-  partial def collectProofFor (ref : State) (hre : REntry) : TransM Nat Nat Unit := do
+  partial def collectProofFor (ref : State) (hre : REntry) : TransM Unit := do
     if let .some _ := (← getChkMap).find? hre then
       return
     let (highLvlProof, _) ← (lookupREntryProof! hre).run ref
     match highLvlProof with
     | .inl cs =>
       trace[auto.buildChecker] "Collecting for {hre} by ChkStep {cs}"
-      let posCont (n : Nat) : TransM Nat Nat Nat := (do
+      let cs' ← transChkStep ref (fun n => do
         let (hre, _) ← (lookupRTable! n).run ref
         collectProofFor ref hre
-        lookupREntryPos! (← transREntry ref hre))
-      let cs' : ChkStep ← (do
-        match cs with
-        | .wfOfCheck lctx t => return .wfOfCheck (← lctx.mapM (transLamSort ref)) (← transLamTerm ref t)
-        | .wfOfAppend ex pos => return .wfOfAppend (← ex.mapM (transLamSort ref)) (← posCont pos)
-        | .wfOfPrepend ex pos => return .wfOfPrepend (← ex.mapM (transLamSort ref)) (← posCont pos)
-        | .wfOfHeadBeta pos => return .wfOfHeadBeta (← posCont pos)
-        | .wfOfBetaBounded pos bound => return .wfOfBetaBounded (← posCont pos) bound
-        | .validOfIntro1F pos => return .validOfIntro1F (← posCont pos)
-        | .validOfIntro1H pos => return .validOfIntro1H (← posCont pos)
-        | .validOfIntros pos idx => return .validOfIntros (← posCont pos) idx
-        | .validOfHeadBeta pos => return .validOfHeadBeta (← posCont pos)
-        | .validOfBetaBounded pos bound => return .validOfBetaBounded (← posCont pos) bound
-        | .validOfImp p₁₂ p₁ => return .validOfImp (← posCont p₁₂) (← posCont p₁)
-        | .validOfImps imp ps => return .validOfImps (← posCont imp) (← ps.mapM posCont)
-        | .validOfInstantiate1 pos arg => return .validOfInstantiate1 (← posCont pos) (← transLamTerm ref arg)
-        | .validOfInstantiate pos args => return .validOfInstantiate (← posCont pos) (← args.mapM (transLamTerm ref))
-        | .validOfInstantiateRev pos args => return .validOfInstantiateRev (← posCont pos) (← args.mapM (transLamTerm ref))
-        | .validOfCongrArg pos rw => return .validOfCongrArg (← posCont pos) (← posCont rw)
-        | .validOfCongrFun pos rw => return .validOfCongrFun (← posCont pos) (← posCont rw)
-        | .validOfCongr pos rwFn rwArg => return .validOfCongr (← posCont pos) (← posCont rwFn) (← posCont rwArg)
-        | .validOfCongrArgs pos rws => return .validOfCongrArgs (← posCont pos) (← rws.mapM posCont)
-        | .validOfCongrFunN pos rwFn n => return .validOfCongrFunN (← posCont pos) (← posCont rwFn) n
-        | .validOfCongrs pos rwFn rwArgs => return .validOfCongrs (← posCont pos) (← posCont rwFn) (← rwArgs.mapM posCont)
-        )
-      let _ ← newChkStep cs' (← transREntry ref hre)
+        lookupREntryPos! (← transREntry ref hre)) cs
+      let er ← newChkStep cs' .none
+      match er with
+      | .fail => throwError "collectProofFor :: Unexpected evaluation result"
+      | .addEntry reNew => do
+        let expectedEntry ← transREntry ref hre
+        if expectedEntry != reNew then throwError "collectProofFor :: Entry mismatch"
+      | .newEtomWithValid _ lctx t => do
+        let newEtoms ← LamReif.lookupChkStepEtom! cs'
+        let oldEtoms ← (LamReif.lookupChkStepEtom! cs).run' ref
+        for (new, old) in newEtoms.zip oldEtoms do
+          addEtomTranslation new old
+        let expectedEntry ← transREntry ref hre
+        if expectedEntry != .valid lctx t then throwError "collectProofFor :: Entry mismatch"
     | .inr (e, _) =>
-      let .valid [] t := hre
+      trace[auto.buildChecker] "Collecting for {hre} by external proof"
+      let .validEVar0 [] t := hre
         | throwError "collectProofFor :: Unexpected error"
       newAssertion e (← transLamTerm ref t)
   
@@ -970,16 +1035,15 @@ open Embedding.Lam LamReif
     return s'
 
 end Lam2Lam
--/
+
 namespace LamReif
 open Embedding.Lam
 
 -- Build optimized checker = Optimize state + Build full checker
 def buildOptimizedCheckerExprFor (re : REntry) : ReifM Expr := do
-  -- let s' ← Lam2Lam.optimizedStateFor #[re]
-  -- let (e, _) ← (buildFullCheckerExprFor re).run s'
-  -- return e
-  buildFullCheckerExprFor re
+  let s' ← Lam2Lam.optimizedStateFor #[re]
+  let (e, _) ← (buildFullCheckerExprFor re).run s'
+  return e
 
 register_option auto.optimizeCheckerProof : Bool := {
   defValue := true

@@ -2011,7 +2011,7 @@ partial def LamTerm.toStringLCtx (lctx : Nat) : LamTerm → String
   if m < lctx then
     s!"x{lctx - m - 1}"
   else
-    "❌"
+    s!"⟨{m - lctx}⟩"
 | .lam s t => s!"(λx{lctx} : {s}, {toStringLCtx (.succ lctx) t})"
 | t@(.app ..) =>
   let fn := t.getAppFn

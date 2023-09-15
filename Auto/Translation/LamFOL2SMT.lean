@@ -20,6 +20,7 @@ open IR.SMT
 private inductive LamAtom where
   | sort : Nat → LamAtom
   | term : Nat → LamAtom
+  | etom : Nat → LamAtom
 deriving Inhabited, Hashable, BEq
 
 private def lamBaseSort2SSort : LamBaseSort → SSort
@@ -35,7 +36,7 @@ private def lamSort2SSortAux : LamSort → TransM LamAtom SSort
     addCommand (.declSort name 0)
   return .app (.symb (← h2Symb (.sort n))) #[]
 | .base b => return lamBaseSort2SSort b
-| .func _ _ => throwError "lamSort2STermAux :: Unexpected error. Higher-order input?"
+| .func _ _ => throwError "lamSort2STermAux :: Unexpected error. Higher order input?"
 
 -- Only translates first-order types
 private def lamSort2SSort : LamSort → TransM LamAtom (List SSort × SSort)
@@ -74,7 +75,7 @@ private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtom STerm
 | .bvVal bv  => return Bitvec2STerm bv
 | t          => throwError "lamTerm2STerm :: The arity of {repr t} is not 0"
 
-private def lamTerm2STermAux (lamVarTy : Array LamSort) (args : Array STerm) :
+private def lamTerm2STermAux (lamVarTy lamEVarTy : Array LamSort) (args : Array STerm) :
   LamTerm → TransM LamAtom STerm
 | .atom n => do
   if !(← hIn (.term n)) then
@@ -86,6 +87,16 @@ private def lamTerm2STermAux (lamVarTy : Array LamSort) (args : Array STerm) :
       throwError "lamTerm2STerm :: Argument number mismatch. Higher order input?"
     addCommand (.declFun name ⟨argSorts⟩ resSort)
   return .qIdApp (QualIdent.ofString (← h2Symb (.term n))) args
+| .etom n => do
+  if !(← hIn (.etom n)) then
+    let name ← h2Symb (.etom n)
+    let .some s := lamEVarTy[n]?
+      | throwError "lamTerm2STerm :: Unexpected etom {repr (LamTerm.etom n)}"
+    let (argSorts, resSort) ← lamSort2SSort s
+    if args.size != argSorts.length then
+      throwError "lamTerm2STerm :: Argument number mismatch. Higher order input?"
+    addCommand (.declFun name ⟨argSorts⟩ resSort)
+  return .qIdApp (QualIdent.ofString (← h2Symb (.etom n))) args
 | .base b =>
   match args with
   | #[]       => lamBaseTerm2STerm_Arity0 b
@@ -94,7 +105,7 @@ private def lamTerm2STermAux (lamVarTy : Array LamSort) (args : Array STerm) :
   | _         => throwError "lamTerm2STerm :: Argument number mismatch. Higher order input?"
 | t => throwError "lamTerm2STerm :: Unexpected head term {repr t}"
 
-private partial def lamTerm2STerm (lamVarTy : Array LamSort) :
+private partial def lamTerm2STerm (lamVarTy lamEVarTy : Array LamSort) :
   LamTerm → TransM LamAtom STerm
 | .base b => lamBaseTerm2STerm_Arity0 b
 | .bvar n => return .bvar n
@@ -105,23 +116,23 @@ private partial def lamTerm2STerm (lamVarTy : Array LamSort) :
 | .app _ (.base (.existEI _)) (.lam _ _) =>
   throwError ("lamTerm2STerm :: " ++ LamReif.exportError.ImpPolyLog)
 | .app _ (.app _ (.base (.eq _)) arg₁) arg₂ => do
-  let arg₁' ← lamTerm2STerm lamVarTy arg₁
-  let arg₂' ← lamTerm2STerm lamVarTy arg₂
+  let arg₁' ← lamTerm2STerm lamVarTy lamEVarTy arg₁
+  let arg₂' ← lamTerm2STerm lamVarTy lamEVarTy arg₂
   return .qIdApp (QualIdent.ofString "=") #[arg₁', arg₂']
 | .app _ (.base (.forallE _)) (.lam s body) => do
   let s' ← lamSort2SSortAux s
   let dname ← disposableName
-  let body' ← lamTerm2STerm lamVarTy body
+  let body' ← lamTerm2STerm lamVarTy lamEVarTy body
   return .forallE dname s' body'
 | .app _ (.base (.existE _)) (.lam s body) => do
   let s' ← lamSort2SSortAux s
   let dname ← disposableName
-  let body' ← lamTerm2STerm lamVarTy body
+  let body' ← lamTerm2STerm lamVarTy lamEVarTy body
   return .existE dname s' body'
 | t => do
   let (ts, t) := splitApp t
-  let ts' ← ts.mapM (lamTerm2STerm lamVarTy)
-  lamTerm2STermAux lamVarTy ts' t
+  let ts' ← ts.mapM (lamTerm2STerm lamVarTy lamEVarTy)
+  lamTerm2STermAux lamVarTy lamEVarTy ts' t
 where
   splitApp : LamTerm → Array LamTerm × LamTerm
   | .app _ fn arg =>
@@ -129,14 +140,11 @@ where
     (ts.push arg, t)
   | t => (#[], t)
 
-def lamFOL2SMT
-  -- This should be retrieved from the corresponding field of `LamReif.State`
-  (varVal : Array (Expr × Embedding.Lam.LamSort))
+def lamFOL2SMT (lamVarTy lamEVarTy : Array LamSort)
   -- `facts` should not contain import versions of `eq, ∀` or `∃`
   (facts : Array LamTerm) : TransM LamAtom (Array IR.SMT.Command) := do
-  let lamVarTy := varVal.map (·.2)
   for t in facts do
-    let sterm ← lamTerm2STerm lamVarTy t
+    let sterm ← lamTerm2STerm lamVarTy lamEVarTy t
     trace[auto.lamFOL2SMT] "λ term {repr t} translated to SMT term {sterm}"
     addCommand (.assert sterm)
   getCommands

@@ -198,26 +198,29 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) : TacticM Re
     -- Testing. Skipping universe level instantiation and monomorphization
     let afterReify (ufacts : Array UMonoFact) : LamReif.ReifM Expr := (do
       let exportFacts ← LamReif.reifFacts ufacts
-      let exportFacts ← exportFacts.mapM (fun t => LamReif.skolemizeMostIntoForall (.valid [] t))
+      let exportFacts ← exportFacts.mapM (fun t => LamReif.skolemizeMostIntoForall (.validEVar0 [] t))
       let exportFacts ← exportFacts.mapM LamReif.validOfRevertAll
-      LamReif.printValuation
-      -- debug
-      for fact in exportFacts do
-        trace[auto.tactic] "Skolemized {fact}"
       -- ! smt
-      -- try
-      --   let commands := (← (lamFOL2SMT (← LamReif.getVarVal) exportFacts).run {}).1
-      --   for cmd in commands do
-      --     trace[auto.smt.printCommands] "Command: {cmd}"
-      --   Solver.SMT.querySolver commands
-      -- catch e =>
-      --   trace[auto.smt.result] "SMT invocation failed with {e.toMessageData}"
+      try
+        let lamVarTy := (← LamReif.getVarVal).map Prod.snd
+        let lamEVarTy ← LamReif.getLamEVarTy
+        let exportLamTerms ← exportFacts.mapM (fun re => do
+          match re.getValid? with
+          | .some ([], t) => return t | _ => throwError "runAuto :: Unexpected error")
+        let commands ← (lamFOL2SMT lamVarTy lamEVarTy exportLamTerms).run'
+        for cmd in commands do
+          trace[auto.smt.printCommands] "Command: {cmd}"
+        Solver.SMT.querySolver commands
+      catch e =>
+        trace[auto.smt.result] "SMT invocation failed with {e.toMessageData}"
       -- reconstruction
       let (proof, proofLamTerm, usedEtoms, unsatCore) ← Lam2D.callDuper exportFacts
       trace[auto.printProof] "Duper found proof of {← Meta.inferType proof}"
       LamReif.newAssertion proof proofLamTerm
-      let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
-      let contra ← LamReif.validOfImps etomInstantiated (unsatCore.map (.valid []))
+      let etomInstantiated ← LamReif.validOfInstantiateForall (.validEVar0 [] proofLamTerm) (usedEtoms.map .etom)
+      let contra ← LamReif.validOfImps etomInstantiated unsatCore
+      LamReif.printValuation
+      LamReif.printProofs
       let checker ← LamReif.buildCheckerExprFor contra
       let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
       Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra

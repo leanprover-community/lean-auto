@@ -125,6 +125,11 @@ end CollectLemma
 
 section Skolemization
 
+  set_option trace.auto.smt.result true in
+  set_option trace.auto.smt.printCommands true in
+  example (p : α → Prop) (h₁ : ∃ x, p x) : ∃ x, p x :=
+    by auto
+
   example (p q : (α → β) → Prop) (h₁ : ∃ (f : _) (g : α), p f) (h₂ : ∀ f, p f → q f) : ∃ f, q f :=
     by auto
   

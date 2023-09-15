@@ -320,7 +320,7 @@ section
     commands : Array Command    := #[]
 
   abbrev TransM := StateRefT (State ω) MetaM
-  
+
   variable {ω : Type} [BEq ω] [Hashable ω]
 
   @[always_inline]
@@ -332,6 +332,12 @@ section
     default := fun _ => throw default
   
   variable {ω : Type} [BEq ω] [Hashable ω]
+
+  @[inline] def TransM.run (x : TransM ω α) (s : State ω := {}) : MetaM (α × State ω) :=
+    StateRefT'.run x s
+
+  @[inline] def TransM.run' (x : TransM ω α) (s : State ω := {}) : MetaM α :=
+    Prod.fst <$> StateRefT'.run x s
 
   #genMonadState (TransM ω)
 
