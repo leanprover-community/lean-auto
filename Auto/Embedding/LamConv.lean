@@ -742,30 +742,22 @@ theorem LamTerm.maxEVarSucc_betaBounded :
 
 def LamTerm.betaReduced (t : LamTerm) :=
   match t with
-  | .atom _ => true
-  | .etom _ => true
-  | .base _ => true
-  | .bvar _ => true
   | .app _ fn arg =>
     !(fn.isLam) && fn.betaReduced && arg.betaReduced
   | .lam _ body => body.betaReduced
+  | _ => true
 
 theorem LamEquiv.ofBetaBounded (lval : LamValuation.{u})
   (wf : LamWF lval.toLamTyVal ⟨lctx, t, rty⟩) : LamEquiv _ (t.betaBounded n) wf := by
   induction n generalizing lctx t rty
   case zero => apply LamEquiv.refl
   case succ n IH =>
-    dsimp [LamTerm.betaBounded]
-    match t with
-    | .atom _ => apply LamEquiv.refl
-    | .etom _ => apply LamEquiv.refl
-    | .base _ => apply LamEquiv.refl
-    | .bvar _ => apply LamEquiv.refl
-    | .lam s t =>
+    dsimp [LamTerm.betaBounded]; cases t <;> try apply LamEquiv.refl
+    case lam s t =>
       dsimp
       match wf with
       | .ofLam _ wf => apply LamEquiv.ofLam; apply IH wf
-    | .app s fn arg =>
+    case app s fn arg =>
       dsimp;
       let ⟨wfhbb, _⟩ := LamEquiv.ofHeadBetaBounded (n:=n) lval wf
       apply LamEquiv.trans _ _ wfhbb (LamEquiv.ofHeadBetaBounded _ wf)
@@ -887,19 +879,16 @@ theorem LamEq.trans (lval : LamValuation) (lctx : List LamSort)
 
 def LamTerm.impApp? (t₁₂ t₁ : LamTerm) : Option LamTerm :=
   match t₁₂ with
-  | .app _ fn concl =>
-    match fn with
-    | .app _ imp hyp =>
-      match hyp.beq t₁ with
-      | true =>
-        match imp with
-        | .base b =>
-          match b with
-          | .imp => .some concl
-          | _ => .none
+  | .app _ (.app _ imp hyp) concl =>
+    match hyp.beq t₁ with
+    | true =>
+      match imp with
+      | .base b =>
+        match b with
+        | .imp => .some concl
         | _ => .none
-      | false => .none
-    | _ => .none
+      | _ => .none
+    | false => .none
   | _ => .none
 
 theorem LamTerm.maxEVarSucc_impApp?
