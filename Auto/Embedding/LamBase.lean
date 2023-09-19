@@ -159,24 +159,10 @@ def LamSort.mkFuncs (a : LamSort) (tys : List LamSort) : LamSort :=
 def LamSort.mkFuncsRev (a : LamSort) (tys : List LamSort) : LamSort :=
   tys.foldl (fun cur s => .func s cur) a
 
-def LamSort.getArgTysAux (lctx : List LamSort) : LamSort → List LamSort
-| .atom _ => lctx
-| .base _ => lctx
-| .func argTy resTy =>
-  getArgTysAux (argTy :: lctx) resTy
-
-theorem LamSort.getArgTysAux_eq :
-  getArgTysAux lctx s = getArgTysAux .nil s ++ lctx := by
-  induction s generalizing lctx <;> try rfl
-  case func argTy resTy _ IHRes =>
-    dsimp [getArgTysAux]; rw [@IHRes (argTy :: lctx), @IHRes [argTy]]
-    rw [List.append_assoc]; rfl
-
-def LamSort.getArgTys := getArgTysAux []
-
-theorem LamSort.getArgTys_func :
-  getArgTys (.func argTy resTy) = getArgTys resTy ++ [argTy] := by
-  dsimp [getArgTys, getArgTysAux]; rw [getArgTysAux_eq]
+def LamSort.getArgTys : LamSort → List LamSort
+| .atom _ => .nil
+| .base _ => .nil
+| .func argTy resTy => argTy :: getArgTys resTy
 
 def LamSort.getResTy : LamSort → LamSort
 | .atom n => .atom n
@@ -834,6 +820,11 @@ theorem LamTerm.maxLooseBVarSucc_bvarApps : (LamTerm.bvarApps t lctx idx).maxLoo
     case right =>
       apply Nat.le_trans _ (Nat.le_max_right _ _); rw [Nat.succ_add]
       rw [Nat.succ_le_succ_iff]; apply Nat.le_add_left
+
+def LamTerm.bvarAppsRev (t : LamTerm) (lctx : List LamSort) :=
+  match lctx with
+  | .nil => t
+  | s :: lctx => bvarAppsRev (.app s t (.bvar lctx.length)) lctx
 
 def LamTerm.reprPrec (t : LamTerm) (n : Nat) :=
   let s :=
@@ -1592,6 +1583,48 @@ def LamWF.ofMapBVarAt (covP : coPair f restore) (idx : Nat)
 | .ofApp argTy' HFn HArg =>
   .ofApp argTy' (LamWF.ofMapBVarAt covP idx _ HFn) (LamWF.ofMapBVarAt covP idx _ HArg)
 
+def LamWF.fromMapBVarAtAux
+  (covP : coPair f restore) (idx : Nat) {lamVarTy lctx} (rterm : LamTerm)
+  (hLCtx : lctx' = restoreAt idx restore lctx)
+  (hRTerm : rterm' = rterm.mapBVarAt idx f)
+  (HWF : LamWF lamVarTy ⟨lctx', rterm', rty⟩) : LamWF lamVarTy ⟨lctx, rterm, rty⟩ :=
+  match rterm with
+  | .atom n =>
+    match HWF with
+    | .ofAtom _ => by rw [LamTerm.atom.inj hRTerm]; apply ofAtom
+  | .etom n =>
+    match HWF with
+    | .ofEtom _ => by rw [LamTerm.etom.inj hRTerm]; apply ofEtom
+  | .base b =>
+    match HWF with
+    | .ofBase H => by rw [← LamTerm.base.inj hRTerm]; apply ofBase H
+  | .bvar n =>
+    match HWF with
+    | .ofBVar _ => by
+      rw [LamTerm.bvar.inj hRTerm, hLCtx]
+      rw [coPairAt.ofcoPair covP idx lctx n]
+      apply ofBVar
+  | .lam argTy body =>
+    match HWF with
+    | .ofLam bodyTy wfBody => by
+      have ⟨argTyEq, bodyEq⟩ := LamTerm.lam.inj hRTerm
+      rw [argTyEq, bodyEq, hLCtx] at wfBody
+      rw [← restoreAt_succ_pushLCtx_Fn restore _ _ _] at wfBody
+      rw [argTyEq]; apply LamWF.ofLam bodyTy
+      apply LamWF.fromMapBVarAtAux covP (.succ idx) _ rfl rfl wfBody
+  | .app argTy' fn arg =>
+    match HWF with
+    | .ofApp _ HFn HArg =>
+      have ⟨sEq, fnEq, argEq⟩ := LamTerm.app.inj hRTerm
+      LamWF.ofApp argTy'
+        (LamWF.fromMapBVarAtAux covP idx _ hLCtx fnEq (sEq ▸ HFn))
+        (LamWF.fromMapBVarAtAux covP idx _ hLCtx argEq (sEq ▸ HArg))
+
+def LamWF.fromMapBVarAt
+  (covP : coPair f restore) (idx : Nat) {lamVarTy lctx} (rterm : LamTerm)
+  (HWF : LamWF lamVarTy ⟨restoreAt idx restore lctx, rterm.mapBVarAt idx f, rty⟩) :
+  LamWF lamVarTy ⟨lctx, rterm, rty⟩ := LamWF.fromMapBVarAtAux covP idx rterm rfl rfl HWF
+
 theorem LamWF.ofMapBVarAt.correct (lval : LamValuation.{u}) {restoreDep : _}
   (covPD : coPairDep (LamSort.interp lval.tyVal) f restore restoreDep) (idx : Nat)
   {lctxTy : Nat → LamSort} (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal) :
@@ -1759,6 +1792,13 @@ def LamWF.ofBVarLiftsIdx
   LamWF lamVarTy ⟨pushLCtxsAt xs idx lctx, rterm.bvarLiftsIdx idx lvl, rTy⟩ :=
   LamWF.ofMapBVarAt (coPair.ofPushsPops _ _ heq) idx rterm HWF
 
+def LamWF.fromBVarLiftsIdx
+  {lamVarTy lctx} {idx lvl : Nat}
+  {xs : List LamSort} (heq : xs.length = lvl)
+  (rterm : LamTerm) (HWF : LamWF lamVarTy ⟨pushLCtxsAt xs idx lctx, rterm.bvarLiftsIdx idx lvl, rTy⟩) :
+  LamWF lamVarTy ⟨lctx, rterm, rTy⟩ :=
+  LamWF.fromMapBVarAt (coPair.ofPushsPops _ _ heq) idx rterm HWF  
+
 theorem LamWF.ofBVarLiftsIdx.correct
   (lval : LamValuation.{u}) {idx lvl : Nat}
   {tys : List LamSort} (xs : HList (LamSort.interp lval.tyVal) tys) (heq : tys.length = lvl)
@@ -1774,6 +1814,11 @@ def LamWF.ofBVarLiftIdx {lamVarTy lctx} (idx : Nat)
   LamWF lamVarTy ⟨pushLCtxAt s idx lctx, rterm.bvarLiftIdx idx, rTy⟩ :=
   LamWF.ofMapBVarAt (coPair.ofPushPop _) idx rterm HWF
 
+def LamWF.fromBVarLiftIdx {lamVarTy lctx} (idx : Nat)
+  (rterm : LamTerm) (HWF : LamWF lamVarTy ⟨pushLCtxAt s idx lctx, rterm.bvarLiftIdx idx, rTy⟩) :
+  LamWF lamVarTy ⟨lctx, rterm, rTy⟩ :=
+  LamWF.fromMapBVarAt (coPair.ofPushPop _) idx rterm HWF
+
 theorem LamWF.ofBVarLiftIdx.correct
   (lval : LamValuation.{u}) {idx : Nat}
   (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal)
@@ -1783,6 +1828,40 @@ theorem LamWF.ofBVarLiftIdx.correct
     (pushLCtxAt xty idx lctxTy) (pushLCtxAtDep x idx lctxTerm)
     (ofBVarLiftIdx idx rterm HWF) :=
   LamWF.ofMapBVarAt.correct lval (coPairDep.ofPushDepPopDep _) idx lctxTerm rterm HWF
+
+def LamWF.ofBVarLift {lamVarTy lctx}
+  (rterm : LamTerm) (HWF : LamWF lamVarTy ⟨lctx, rterm, rTy⟩) :
+  LamWF lamVarTy ⟨pushLCtx s lctx, rterm.bvarLift, rTy⟩ :=
+  Eq.mp (by rw [pushLCtxAt_zero]) (LamWF.ofBVarLiftIdx (s:=s) 0 _ HWF)
+
+def LamWF.fromBVarLift {lamVarTy lctx}
+  (rterm : LamTerm) (HWF : LamWF lamVarTy ⟨pushLCtx s lctx, rterm.bvarLift, rTy⟩) :
+  LamWF lamVarTy ⟨lctx, rterm, rTy⟩ :=
+  LamWF.fromBVarLiftIdx (s:=s) 0 _ (Eq.mp (by rw [pushLCtxAt_zero]) HWF)
+
+theorem LamWF.ofBVarLift.correct
+  (lval : LamValuation.{u})
+  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal)
+  {xty : LamSort} (x : LamSort.interp lval.tyVal xty)
+  (rterm : LamTerm) (HWF : LamWF lval.toLamTyVal ⟨lctxTy, rterm, rTy⟩) :
+  LamWF.interp lval lctxTy lctxTerm HWF = LamWF.interp lval
+    (pushLCtx xty lctxTy) (pushLCtxDep x lctxTerm) (ofBVarLift rterm HWF) := by
+  apply Eq.trans (b:=LamWF.interp lval
+    (pushLCtxAt xty 0 lctxTy) (pushLCtxAtDep x 0 lctxTerm) (ofBVarLiftIdx 0 rterm HWF))
+  case h₁ => apply LamWF.ofBVarLiftIdx.correct
+  case h₂ =>
+    apply eq_of_heq; apply interp_heq <;> try rfl
+    case HLCtxTyEq => rw [pushLCtxAt_zero]
+    case HLCtxTermEq => apply pushLCtxAtDep_zero
+
+def LamWF.pushLCtxAt_ofBVar :
+  LamWF lamVarTy ⟨pushLCtxAt s idx lctx, .bvar idx, s⟩ :=
+  Eq.mp (by rw [pushLCtxAt_eq]) (@LamWF.ofBVar lamVarTy (pushLCtxAt s idx lctx) idx)
+
+def LamWF.pushLCtx_ofBVar :
+  LamWF lamVarTy ⟨pushLCtx s lctx, .bvar 0, s⟩ :=
+  Eq.mp (by rw [pushLCtx_zero]) (@LamWF.ofBVar lamVarTy (pushLCtx s lctx) 0)
+
 
 def LamThmWF
   (lval : LamValuation) (lctx : List LamSort) (rty : LamSort) (t : LamTerm) :=
@@ -1846,12 +1925,12 @@ theorem LamThmWF.ofLamThmWFP (H : LamThmWFP lval lctx s t) :
 
 def LamThmWF.append (H : LamThmWF lval lctx rty t) (ex : List LamSort) :
   LamThmWF lval (lctx ++ ex) rty t := by
-  dsimp [LamThmWF]; intros lctx'; rw [pushLCtxs.append]; apply H
+  dsimp [LamThmWF]; intros lctx'; rw [pushLCtxs_append]; apply H
 
 def LamThmWF.prepend (H : LamThmWF lval lctx rty t) (ex : List LamSort) :
   LamThmWF lval (ex ++ lctx) rty (t.bvarLifts ex.length) := by
   dsimp [LamThmWF]; intros lctx';
-  rw [pushLCtxs.append]; rw [← pushLCtxsAt_zero ex]
+  rw [pushLCtxs_append]; rw [← pushLCtxsAt_zero ex]
   apply LamWF.ofBVarLiftsIdx (idx:=0); rfl; apply H
 
 def LamTerm.lamThmWFCheck? (ltv : LamTyVal) (lctx : List LamSort) (t : LamTerm) : Option LamSort :=
@@ -1894,7 +1973,7 @@ theorem LamThmValid.revert (H : LamThmValid lval (s :: lctx) t) : LamThmValid lv
 
 theorem LamThmValid.append (H : LamThmValid lval lctx t)
   (ex : List LamSort) : LamThmValid lval (lctx ++ ex) t := by
-  dsimp [LamThmValid]; intros lctx'; rw [pushLCtxs.append]; exact H (pushLCtxs ex lctx')
+  dsimp [LamThmValid]; intros lctx'; rw [pushLCtxs_append]; exact H (pushLCtxs ex lctx')
 
 theorem LamValid.prepend (H : LamValid lval lctx t)
   (ex : List LamSort) : LamValid lval (pushLCtxs ex lctx) (t.bvarLifts ex.length) := by
@@ -1903,7 +1982,7 @@ theorem LamValid.prepend (H : LamValid lval lctx t)
   intro lctxTerm;
   let lctxTerm₁ := fun n => lctxTerm (n + ex.length)
   have lctxeq : ∀ (n : Nat), pushLCtxsAt ex 0 lctx (n + List.length ex) = lctx n := by
-    intro n; rw [pushLCtxsAt_zero, pushLCtxs.ge, Nat.add_sub_cancel]; apply Nat.le_add_left
+    intro n; rw [pushLCtxsAt_zero, pushLCtxs_ge, Nat.add_sub_cancel]; apply Nat.le_add_left
   have ht' := (LamValid.mpLCtxRecWF _ lctxeq).mp ht lctxTerm₁
   apply Eq.mp _ ht'; apply congrArg
   let hl' : HList (LamSort.interp lval.tyVal) ex := by
@@ -1922,7 +2001,7 @@ theorem LamValid.prepend (H : LamValid lval lctx t)
 
 theorem LamThmValid.prepend (H : LamThmValid lval lctx t)
   (ex : List LamSort) : LamThmValid lval (ex ++ lctx) (t.bvarLifts ex.length) :=
-  fun lctx' => pushLCtxs.append _ _ _ ▸ LamValid.prepend (H lctx') ex
+  fun lctx' => pushLCtxs_append _ _ _ ▸ LamValid.prepend (H lctx') ex
 
 -- Only accepts propositions `p` without loose bound variables
 theorem LamThmValid.ofInterpAsProp
