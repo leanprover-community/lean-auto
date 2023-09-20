@@ -285,19 +285,29 @@ section push
     | 0 => exact x
     | n' + 1 => exact (lctx n')
 
+  theorem pushLCtxDep_heq
+    {lctxty₁ : α₁ → Sort u} {ty₁ : α₁} (x₁ : lctxty₁ ty₁)
+    (rty₁ : Nat → α₁) (lctx₁ : ∀ n, lctxty₁ (rty₁ n))
+    {lctxty₂ : α₂ → Sort u} {ty₂ : α₂} (x₂ : lctxty₂ ty₂)
+    (rty₂ : Nat → α₂) (lctx₂ : ∀ n, lctxty₂ (rty₂ n))
+    (h₁ : α₁ = α₂) (h₂ : HEq lctxty₁ lctxty₂) (h₃ : HEq ty₁ ty₂)
+    (h₄ : HEq x₁ x₂) (h₅ : HEq rty₁ rty₂) (h₆ : HEq lctx₁ lctx₂) :
+    HEq (pushLCtxDep x₁ lctx₁) (pushLCtxDep x₂ lctx₂) := by
+    cases h₁; cases h₂; cases h₃; cases h₄; cases h₅; cases h₆; apply HEq.refl
+
   def pushLCtxAtDep {lctxty : α → Sort u} {xty : α} (x : lctxty xty) (pos : Nat)
     {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) (n : Nat) : lctxty (pushLCtxAt xty pos rty n) :=
     restoreAtDep pos (pushLCtxDep x) lctx n
   
   theorem pushLCtxAtDep_heq
     {lctxty₁ : α₁ → Sort u} {ty₁ : α₁} (x₁ : lctxty₁ ty₁) (pos₁ : Nat)
-    (rty₁ : Nat → α₁) (lctx₁ : ∀ n, lctxty₁ (rty₁ n)) (n₁ : Nat)
+    (rty₁ : Nat → α₁) (lctx₁ : ∀ n, lctxty₁ (rty₁ n))
     {lctxty₂ : α₂ → Sort u} {ty₂ : α₂} (x₂ : lctxty₂ ty₂) (pos₂ : Nat)
-    (rty₂ : Nat → α₂) (lctx₂ : ∀ n, lctxty₂ (rty₂ n)) (n₂ : Nat)
+    (rty₂ : Nat → α₂) (lctx₂ : ∀ n, lctxty₂ (rty₂ n))
     (h₁ : α₁ = α₂) (h₂ : HEq lctxty₁ lctxty₂) (h₃ : HEq ty₁ ty₂) (h₄ : HEq x₁ x₂)
-    (h₅ : pos₁ = pos₂) (h₆ : HEq rty₁ rty₂) (h₇ : HEq lctx₁ lctx₂) (h₈ : n₁ = n₂):
-    HEq (pushLCtxAtDep x₁ pos₁ lctx₁ n₁) (pushLCtxAtDep x₂ pos₂ lctx₂ n₂) := by
-    cases h₁; cases h₂; cases h₃; cases h₄; cases h₅; cases h₆; cases h₇; cases h₈; apply HEq.refl
+    (h₅ : pos₁ = pos₂) (h₆ : HEq rty₁ rty₂) (h₇ : HEq lctx₁ lctx₂) :
+    HEq (pushLCtxAtDep x₁ pos₁ lctx₁) (pushLCtxAtDep x₂ pos₂ lctx₂) := by
+    cases h₁; cases h₂; cases h₃; cases h₄; cases h₅; cases h₆; cases h₇; apply HEq.refl
 
   theorem pushLCtxAtDep_zero {lctxty : α → Sort u} {xty : α} (x : lctxty xty)
     {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :
@@ -491,13 +501,13 @@ section push
 
   theorem pushLCtxsDep_heq
     {lctxty₁ : α₁ → Sort u} {tys₁ : List α₁} (xs₁ : HList lctxty₁ tys₁)
-    (rty₁ : Nat → α₁) (lctx₁ : ∀ n, lctxty₁ (rty₁ n)) (n₁ : Nat)
+    (rty₁ : Nat → α₁) (lctx₁ : ∀ n, lctxty₁ (rty₁ n))
     {lctxty₂ : α₂ → Sort u} {tys₂ : List α₂} (xs₂ : HList lctxty₂ tys₂)
-    (rty₂ : Nat → α₂) (lctx₂ : ∀ n, lctxty₂ (rty₂ n)) (n₂ : Nat)
+    (rty₂ : Nat → α₂) (lctx₂ : ∀ n, lctxty₂ (rty₂ n))
     (h₁ : α₁ = α₂) (h₂ : HEq lctxty₁ lctxty₂) (h₃ : HEq tys₁ tys₂)
-    (h₄ : HEq xs₁ xs₂) (h₅ : HEq rty₁ rty₂) (h₆ : HEq lctx₁ lctx₂) (h₇ : n₁ = n₂):
-    HEq (pushLCtxsDep xs₁ lctx₁ n₁) (pushLCtxsDep xs₂ lctx₂ n₂) := by
-    cases h₁; cases h₂; cases h₃; cases h₄; cases h₅; cases h₆; cases h₇; apply HEq.rfl
+    (h₄ : HEq xs₁ xs₂) (h₅ : HEq rty₁ rty₂) (h₆ : HEq lctx₁ lctx₂) :
+    HEq (pushLCtxsDep xs₁ lctx₁) (pushLCtxsDep xs₂ lctx₂) := by
+    cases h₁; cases h₂; cases h₃; cases h₄; cases h₅; cases h₆; apply HEq.rfl
 
   theorem pushLCtxsDep_nil
     {lctxty : α → Sort u} {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :
@@ -540,6 +550,22 @@ section push
     (xs : HList lctxty tys) {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :
     HEq (fun n => pushLCtxsDep (.cons x xs) lctx (.succ n)) (pushLCtxsDep xs lctx) :=
     HEq.funext _ _ (fun n => pushLCtxsDep_cons_succ x xs lctx n)
+  
+  theorem pushLCtxsDep_append {lctxty : α → Sort u}
+    {as bs : List α} (xs : HList lctxty as) (ys : HList lctxty bs)
+    {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :
+    HEq (pushLCtxsDep (xs.append ys) lctx) (pushLCtxsDep xs (pushLCtxsDep ys lctx)) := by
+    induction xs
+    case nil => rfl
+    case cons a as x xs IH =>
+      dsimp [HList.append];
+      apply HEq.trans (pushLCtxsDep_cons _ _ _)
+      apply HEq.trans _ (HEq.symm (pushLCtxsDep_cons _ _ _))
+      apply pushLCtxDep_heq <;> try rfl
+      case h₅ =>
+        apply heq_of_eq; apply pushLCtxs_append
+      case h₆ =>
+        apply IH
 
   @[reducible] def pushLCtxsAtDep
     {lctxty : α → Sort u} {tys : List α} (xs : HList lctxty tys) (pos : Nat)

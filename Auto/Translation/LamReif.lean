@@ -384,7 +384,7 @@ section ILLifting
     let u ← getU
     let eq₁ : Expr := mkLambda `_ .default ty (mkAppN (.const ``Eq.refl [uOrig]) #[ty, .bvar 0])
     let eq₂ : Expr := mkLambda `_ .default upTy (mkAppN (.const ``Eq.refl [.succ u]) #[upTy, .bvar 0])
-    let isomTy : Expr := mkAppN (.const ``Embedding.IsomType.mk [uOrig, .succ u]) #[ty, upTy, upFunc, downFunc, eq₁, eq₂]
+    let isomTy : Expr := mkAppN (.const ``IsomType.mk [uOrig, .succ u]) #[ty, upTy, upFunc, downFunc, eq₁, eq₂]
     return isomTy
 
   -- Suppose `u ← getU`, this function returns a term of type `ILLift.{u} s.interpAsLifted`

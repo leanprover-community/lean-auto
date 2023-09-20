@@ -1,10 +1,26 @@
 import Auto.Lib.HEqExtra
+import Auto.Lib.IsomType
 
 namespace Auto
 
 inductive HList (β : α → Sort _) : List α → Sort _
   | nil  : HList β .nil
   | cons : (x : β ty) → HList β tys → HList β (ty :: tys)
+
+theorem HList.nil_IsomType : IsomType (HList β .nil) PUnit :=
+  ⟨fun _ => .unit, fun _ => .nil,
+   fun x => match x with | .nil => rfl, fun _ => rfl⟩
+
+theorem HList.cons_IsomType : IsomType (HList β (a :: as)) (β a × HList β as) :=
+  ⟨fun xs => match xs with | .cons x xs => (x, xs), fun (x, xs) => .cons x xs, 
+   fun xs => match xs with | .cons _ _ => rfl,
+   fun (_, _) => rfl⟩
+
+theorem HList.singleton_IsomType : IsomType (HList β [a]) (β a) :=
+  ⟨fun xs => match xs with | .cons x .nil => x,
+   fun x => .cons x .nil,
+   fun xs => match xs with | .cons _ .nil => rfl,
+   fun _ => rfl⟩
 
 def HList.getD {β : α → Sort _} {ty : α} (default : β ty) :
   {tys : List α} → HList β tys → (n : Nat) → β (tys.getD n ty)
@@ -80,6 +96,45 @@ theorem HList.getD_append_right (xs : HList β as) (ys : HList β bs) (h : i ≥
     case succ i =>
       dsimp [getD]; rw [Nat.succ_sub_succ];
       apply IH; apply Nat.le_of_succ_le_succ h
+
+def HList.append_get_left (xs : HList β (as ++ bs)) : HList β as :=
+  match as, xs with
+  | .nil, _ => .nil
+  | .cons _ _, .cons x xs => .cons x xs.append_get_left
+
+def HList.append_get_right (xs : HList β (as ++ bs)) : HList β bs :=
+  match as, xs with
+  | .nil, xs => xs
+  | .cons _ _, .cons _ xs => xs.append_get_right
+
+theorem HList.append_get_left_eq (xs : HList β as) (ys : HList β bs) :
+  HList.append_get_left (xs.append ys) = xs := by
+  induction xs
+  case nil => rfl
+  case cons x xs IH =>
+    dsimp [append, append_get_left]; rw [IH]
+
+theorem HList.append_get_right_eq (xs : HList β as) (ys : HList β bs) :
+  HList.append_get_right (xs.append ys) = ys := by
+  induction xs
+  case nil => rfl
+  case cons x xs IH =>
+    dsimp [append, append_get_right]; rw [IH]
+
+theorem HList.append_get_append_eq (xs : HList β (as ++ bs)) :
+  HList.append xs.append_get_left xs.append_get_right = xs := by
+  induction as
+  case nil => rfl
+  case cons a as IH =>
+    cases xs; case cons x xs =>
+      dsimp [append_get_left, append_get_right, append]; rw [IH]
+
+theorem HList.append_IsomType {α : Type u} {β : α → Sort v} {xs ys : List α} :
+  IsomType (HList β (xs ++ ys)) (PProd (HList β xs) (HList β ys)) :=
+  ⟨fun l => ⟨l.append_get_left, l.append_get_right⟩,
+   fun ⟨l₁, l₂⟩ => HList.append l₁ l₂,
+   HList.append_get_append_eq,
+   fun ⟨l₁, l₂⟩ => by dsimp; congr; rw [append_get_left_eq]; rw [append_get_right_eq]⟩
 
 def HList.reverseAux : {as : _} → (xs : HList β as) → (ys : HList β bs) → HList β (List.reverseAux as bs)
   | .nil,       .nil,       r => r

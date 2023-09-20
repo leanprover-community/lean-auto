@@ -280,7 +280,7 @@ private def callDuperExternMAction (res : Array REntry) :
       let .some ty := lamEVarTy[etom]?
         | throwError "callDuper :: Unexpected error"
       return ty)
-    let proofLamTerm := usedEtomTys.foldr (fun s cur => LamTerm.mkForallE' s cur) proofLamTermPre
+    let proofLamTerm := usedEtomTys.foldr (fun s cur => LamTerm.mkForallEF s cur) proofLamTermPre
     return (mkAppN expr ⟨usedVals⟩, proofLamTerm, ⟨usedEtoms⟩, ⟨usedHyps.map Prod.fst⟩))
 
 -- Given `ts = #[t₀, t₁, ⋯, kₖ₋₁]`, invoke Duper to get a proof 

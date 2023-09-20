@@ -521,7 +521,7 @@ def ChkStep.evalValidOfReverts (lctx : List LamSort) (t : LamTerm)
   | .succ idx =>
     match lctx with
     | .nil => .fail
-    | .cons s lctx => evalValidOfReverts lctx (.mkForallE' s t) idx
+    | .cons s lctx => evalValidOfReverts lctx (.mkForallEF s t) idx
 
 def ChkStep.evalValidOfInstantiate (n : Nat) (ltv : LamTyVal) (lctx : List LamSort) (t : LamTerm)
   : (args : List LamTerm) → EvalResult
@@ -587,7 +587,7 @@ def ChkStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : ChkStep) → E
   | .some (lctx, t) =>
     match lctx with
     | .nil => .fail
-    | .cons ty lctx => .addEntry (.valid lctx (.mkForallE' ty t))
+    | .cons ty lctx => .addEntry (.valid lctx (.mkForallEF ty t))
   | .none => .fail
 | .validOfReverts pos idx =>
   match r.getValid pos with
@@ -746,7 +746,7 @@ theorem ChkStep.evalValidOfIntros_correct
     match h : t.intro1? with
     | .some (s, t') =>
       have ⟨tV, eS⟩ := tV
-      apply IH; apply And.intro (LamThmValid.intro1 tV h)
+      apply IH; apply And.intro (LamThmValid.intro1? tV h)
       rw [LamTerm.maxEVarSucc_intro1? h]; exact eS
     | .none => exact True.intro
 
@@ -761,8 +761,8 @@ theorem ChkStep.evalValidOfReverts_correct
     match lctx with
     | .nil => exact True.intro
     | .cons s lctx =>
-      apply IH; apply And.intro tV.left.revert
-      dsimp [LamTerm.mkForallE', LamTerm.maxEVarSucc]
+      apply IH; apply And.intro tV.left.revert1F
+      dsimp [LamTerm.mkForallEF, LamTerm.maxEVarSucc]
       rw [Nat.max, Nat.max_zero_left]; apply tV.right
 
 theorem ChkStep.evalValidOfInstantiate_correct
@@ -875,7 +875,7 @@ theorem ChkStep.eval_correct
         have h' := RTable.getValid_correct inv h₁
         apply ChkStep.eval_correct_validAux h'
         case vimp =>
-          intro hv; apply LamThmValid.intro1F hv h₂
+          intro hv; apply LamThmValid.intro1F? hv h₂
         case condimp =>
           intro hcond; rw [LamTerm.maxEVarSucc_intro1F? h₂]; exact hcond
       | .none => exact True.intro
@@ -891,7 +891,7 @@ theorem ChkStep.eval_correct
         have h' := RTable.getValid_correct inv h₁
         apply ChkStep.eval_correct_validAux h'
         case vimp =>
-          intro hv; apply LamThmValid.intro1H hv h₂
+          intro hv; apply LamThmValid.intro1H? hv h₂
         case condimp =>
           intro hcond; rw [LamTerm.maxEVarSucc_intro1H? h₂]; exact hcond
       | .none => exact True.intro
@@ -916,9 +916,9 @@ theorem ChkStep.eval_correct
       | .cons ty lctx =>
         have h' := RTable.getValid_correct inv h
         apply And.intro
-        case left => intro lctx'; apply h'.left.revert
+        case left => intro lctx'; apply h'.left.revert1F
         case right =>
-          dsimp [LamTerm.mkForallE', LamTerm.maxEVarSucc]
+          dsimp [LamTerm.mkForallEF, LamTerm.maxEVarSucc]
           rw [Nat.max, Nat.max_zero_left]; apply h'.right
 | .validOfReverts pos idx => by
   dsimp [eval]

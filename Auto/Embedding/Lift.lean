@@ -1,3 +1,5 @@
+import Auto.Lib.IsomType
+
 namespace Auto.Embedding
 
 structure GLift.{u, v} (α : Sort u) : Sort (max u (v + 1)) where
@@ -28,12 +30,6 @@ def impLift.{u}
 
 def LiftTyConv.{u, v} (tyUp : GLift.{u + 1, v} (Sort u)) :=
   GLift.{u, v} (GLift.down.{u + 1, v} tyUp)
-
-structure IsomType (α : Sort u) (β : Sort v) where
-  f : α → β
-  g : β → α
-  eq₁ : ∀ (x : α), g (f x) = x
-  eq₂ : ∀ (x : β), f (g x) = x
 
 -- Isomorphic domain, β is the lifted one
 def eqLift.{u, v, w} {α : Sort u} {β : Sort v} (I : IsomType α β) (x y : β) :=
