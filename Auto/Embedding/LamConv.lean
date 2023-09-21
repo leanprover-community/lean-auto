@@ -130,16 +130,16 @@ theorem LamEquiv.symm (lval : LamValuation) (wfa : LamWF lval.toLamTyVal ⟨lctx
 theorem LamThmEquiv.symm (lval : LamValuation) (e : LamThmEquiv lval lctx rty a b) :
   LamThmEquiv lval lctx rty b a := fun lctx => let ⟨wfa, h⟩ := e lctx; LamEquiv.symm _ wfa h
 
-theorem LamEquiv.trans (lval : LamValuation)
+theorem LamEquiv.trans {lval : LamValuation}
   (wfa : LamWF lval.toLamTyVal ⟨lctx, a, rty⟩) (wfb : LamWF lval.toLamTyVal ⟨lctx, b, rty⟩)
   (eab : LamEquiv a b wfa) (ebc : LamEquiv b c wfb) : LamEquiv a c wfa :=
   let ⟨wfb, eqab⟩ := eab; let ⟨wfc, eqbc⟩ := ebc; ⟨wfc, fun lctxTerm =>
     by rw [eqab, ←eqbc]; apply eq_of_heq; apply LamWF.interp_heq <;> rfl⟩
 
-theorem LamThmEquiv.trans (lval : LamValuation)
+theorem LamThmEquiv.trans {lval : LamValuation}
   (e₁ : LamThmEquiv lval lctx rty a b) (e₂ : LamThmEquiv lval lctx rty b c) :
   LamThmEquiv lval lctx rty a c :=
-  fun lctx' => let ⟨wfa, eqab⟩ := e₁ lctx'; let ⟨wfb, eqbc⟩ := e₂ lctx'; ⟨wfa, LamEquiv.trans lval wfa wfb eqab eqbc⟩
+  fun lctx' => let ⟨wfa, eqab⟩ := e₁ lctx'; let ⟨wfb, eqbc⟩ := e₂ lctx'; ⟨wfa, LamEquiv.trans wfa wfb eqab eqbc⟩
 
 theorem LamEquiv.ofLam (lval : LamValuation)
   (wfa : LamWF lval.toLamTyVal ⟨pushLCtx w lctx, a, s⟩) (e : LamEquiv a b wfa) :
@@ -336,7 +336,7 @@ theorem LamWF.interp_app_bvarLift_bvar0
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, .func argTy resTy⟩) :
   LamWF.interp lval (pushLCtx argTy lctx) (pushLCtxDep x lctxTerm) wft.app_bvarLift_bvar0 =
     LamWF.interp (rty:=.func _ _) lval lctx lctxTerm wft x := by
-  dsimp [LamWF.interp]; rw [← LamWF.ofBVarLift.correct]
+  dsimp [LamWF.interp]; rw [← LamWF.interp_ofBVarLift]
 
 def LamTerm.etaExpand1 (s : LamSort) (t : LamTerm) : LamTerm :=
   .lam s (.app s t.bvarLift (.bvar 0))
@@ -354,6 +354,10 @@ theorem LamEquiv.etaExpand1
 -- This is meant to eta-expand a term `t` which has type `argTys₀ → ⋯ → argTysᵢ₋₁ → resTy`
 def LamTerm.etaExpandAux (argTys : List LamSort) (t : LamTerm) : LamTerm :=
   LamTerm.bvarAppsRev (t.bvarLifts argTys.length) argTys
+
+theorem LamTerm.maxEVarSucc_etaExpandAux :
+  (LamTerm.etaExpandAux argTys t).maxEVarSucc = t.maxEVarSucc := by
+  dsimp [etaExpandAux]; rw [maxEVarSucc_bvarAppsRev, maxEVarSucc_bvarLifts]
 
 theorem LamTerm.etaExpandAux_nil : etaExpandAux .nil t = t := by
   dsimp [etaExpandAux, bvarAppsRev]; rw [bvarLifts_zero]
@@ -384,12 +388,19 @@ def LamWF.etaExpandAux
 def LamTerm.etaExpandWith (l : List LamSort) (t : LamTerm) :=
   LamTerm.mkLamFN (t.etaExpandAux l) l.reverse
 
+theorem LamTerm.maxEVarSucc_etaExpandWith {t : LamTerm} :
+  (t.etaExpandWith l).maxEVarSucc = t.maxEVarSucc := by
+  dsimp [etaExpandWith]; rw [maxEVarSucc_mkLamFN, maxEVarSucc_etaExpandAux]
+
 def LamWF.etaExpandWith (wft : LamWF ltv ⟨lctx, t, .mkFuncs s l⟩) :
   LamWF ltv ⟨lctx, t.etaExpandWith l, .mkFuncs s l⟩ := by
   rw [LamSort.mkFuncs_eq]; apply LamWF.mkLamFN;
   apply LamWF.etaExpandAux; exact wft
 
 def LamTerm.etaExpand (s : LamSort) (t : LamTerm) := etaExpandWith s.getArgTys t
+
+theorem LamTerm.maxEVarSucc_etaExpand {t : LamTerm} :
+  (t.etaExpand s).maxEVarSucc = t.maxEVarSucc := maxEVarSucc_etaExpandWith
 
 def LamWF.etaExpand (wft : LamWF ltv ⟨lctx, t, s⟩) :
   LamWF ltv ⟨lctx, t.etaExpand s, s⟩ := by
@@ -412,7 +423,7 @@ theorem LamEquiv.etaExpandWithAux
     rw [List.reverse_append, List.reverse_cons, List.reverse_nil]
     rw [List.nil_append, List.singleton_append, LamTerm.etaExpandAux_append_singleton]
     have ⟨wfi, _⟩ := IH wft
-    apply LamEquiv.trans _ _ wfi (IH wft); dsimp [LamTerm.mkLamFN]
+    apply LamEquiv.trans _ wfi (IH wft); dsimp [LamTerm.mkLamFN]
     apply LamEquiv.toForall _ ((LamEquiv.congr_mkLamFN (LamWF.etaExpandAux wft)).mp _)
     apply LamEquiv.etaExpand1
 
@@ -460,10 +471,10 @@ theorem LamWF.interp_funext
       rcases LamWF.unique HRhs' HRhs.ofBVarLift with ⟨⟨⟩, ⟨⟩⟩
       apply propext (Iff.intro ?mp ?mpr)
       case mp =>
-        intro h x; rw [← LamWF.ofBVarLift.correct, ← LamWF.ofBVarLift.correct, h]
+        intro h x; rw [← LamWF.interp_ofBVarLift, ← LamWF.interp_ofBVarLift, h]
       case mpr =>
         intro h; apply _root_.funext; intro x; have h' := h x
-        rw [← LamWF.ofBVarLift.correct, ← LamWF.ofBVarLift.correct] at h'; exact h'
+        rw [← LamWF.interp_ofBVarLift, ← LamWF.interp_ofBVarLift] at h'; exact h'
 
 theorem LamEquiv.eqFunext (lval : LamValuation)
   (wfEq : LamWF lval.toLamTyVal ⟨lctx, .mkEq (.func argTy resTy) fn₁ fn₂, s⟩) :
@@ -481,11 +492,11 @@ theorem LamEquiv.eqFunext (lval : LamValuation)
     dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, eqLiftFn, forallLiftFn]
     apply _root_.congrArg; apply propext (Iff.intro ?mp ?mpr)
     case mp =>
-      intro hinterp h; rw [← LamWF.ofBVarLift.correct, ← LamWF.ofBVarLift.correct, hinterp]
+      intro hinterp h; rw [← LamWF.interp_ofBVarLift, ← LamWF.interp_ofBVarLift, hinterp]
     case mpr =>
       intro hinterp; apply funext; intro x; apply Eq.trans ?left (Eq.trans (hinterp x) ?right)
-      case left => rw [← LamWF.ofBVarLift.correct]
-      case right => rw [← LamWF.ofBVarLift.correct]
+      case left => rw [← LamWF.interp_ofBVarLift]
+      case right => rw [← LamWF.interp_ofBVarLift]
 
 theorem LamEquiv.funext (lval : LamValuation)
   (wfFn : LamWF lval.toLamTyVal ⟨lctx, fn₁, .func argTy resTy⟩)
@@ -503,6 +514,11 @@ theorem LamEquiv.funext (lval : LamValuation)
 def LamTerm.extensionalizeEqFWith (argTys : List LamSort) (resTy : LamSort) (lhs rhs : LamTerm) :=
   let extFn := fun x => etaExpandAux argTys x
   LamTerm.mkForallEFN (LamTerm.mkEq resTy (extFn lhs) (extFn rhs)) argTys.reverse
+
+theorem LamTerm.maxEVarSucc_extensionalizeEqFWith :
+  (extensionalizeEqFWith argTys resTy lhs rhs).maxEVarSucc = max lhs.maxEVarSucc rhs.maxEVarSucc := by
+  dsimp [extensionalizeEqFWith]; rw [maxEVarSucc_mkForallEFN, maxEVarSucc_mkEq]
+  rw [maxEVarSucc_etaExpandAux, maxEVarSucc_etaExpandAux]
 
 def LamWF.extensionalizeEqFWith
   (wfl : LamWF ltv ⟨lctx, lhs, .mkFuncs s l⟩) (wfr : LamWF ltv ⟨lctx, rhs, .mkFuncs s l⟩) :
@@ -527,7 +543,7 @@ theorem LamEquiv.ofExtensionalizeEqFWithAux
     rw [List.nil_append, List.singleton_append]
     rw [LamTerm.etaExpandAux_append_singleton, LamTerm.etaExpandAux_append_singleton]
     have ⟨wfi, _⟩ := IH wfl wfr
-    apply LamEquiv.trans _ _ wfi (IH wfl wfr); dsimp [LamTerm.mkForallEFN]
+    apply LamEquiv.trans _ wfi (IH wfl wfr); dsimp [LamTerm.mkForallEFN]
     apply LamEquiv.toForall (LamWF.extensionalizeEqFWith wfl wfr) (LamEquiv.congr_mkForallEFN _ _)
     apply LamEquiv.eqFunext
 
@@ -542,6 +558,10 @@ theorem LamEquiv.ofExtensionalizeEqFWith
 def LamTerm.extensionalizeEqF (s : LamSort) (lhs rhs : LamTerm) :=
   extensionalizeEqFWith s.getArgTys s.getResTy lhs rhs
 
+theorem LamTerm.maxEVarSucc_extensionalizeEqF :
+  (extensionalizeEqF s lhs rhs).maxEVarSucc = max lhs.maxEVarSucc rhs.maxEVarSucc :=
+  maxEVarSucc_extensionalizeEqFWith
+
 def LamWF.extensionalizeEqF
   (wfl : LamWF ltv ⟨lctx, lhs, s⟩)
   (wfr : LamWF ltv ⟨lctx, rhs, s⟩) :
@@ -550,7 +570,7 @@ def LamWF.extensionalizeEqF
   exact LamWF.extensionalizeEqFWith wfl wfr
 
 theorem LamEquiv.ofExtensionalizeEqF
-  {lval : LamValuation.{u}} {wf : LamWF lval.toLamTyVal ⟨lctx, .mkEq s lhs rhs, s'⟩} :
+  {lval : LamValuation.{u}} (wf : LamWF lval.toLamTyVal ⟨lctx, .mkEq s lhs rhs, s'⟩) :
   LamEquiv (.mkEq s lhs rhs) (LamTerm.extensionalizeEqF s lhs rhs) wf :=
   match wf with
   | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) wfl) wfr => by
@@ -566,6 +586,29 @@ def LamTerm.extensionalizeEq (t : LamTerm) : LamTerm :=
   | .app _ (.base (.eq s)) lhs => .lam s (.extensionalizeEqF s lhs.bvarLift (.bvar 0))
   | .app _ (.app _ (.base (.eq s)) lhs) rhs => .extensionalizeEqF s lhs rhs
   | _ => t
+
+theorem LamTerm.maxEVarSucc_extensionalizeEq :
+  (extensionalizeEq t).maxEVarSucc = t.maxEVarSucc := by
+  cases t <;> try rfl
+  case base b =>
+    cases b <;> try rfl
+    case eq s =>
+      dsimp [maxEVarSucc]; rw [maxEVarSucc_extensionalizeEqF]; rfl
+  case app s fn arg =>
+    cases fn <;> try rfl
+    case base b =>
+      cases b <;> try rfl
+      case eq s =>
+        dsimp [maxEVarSucc]; rw [maxEVarSucc_extensionalizeEqF]
+        rw [maxEVarSucc_bvarLift]; apply Nat.max_comm
+    case app _ fn' arg' =>
+      cases fn' <;> try rfl
+      case base b =>
+        cases b <;> try rfl
+        case eq s =>
+          dsimp [extensionalizeEq, maxEVarSucc]
+          rw [maxEVarSucc_extensionalizeEqF]
+          rw [Nat.max, Nat.max, Nat.max_zero_left]
 
 def LamWF.extensionalizeEq (wf : LamWF ltv ⟨lctx, t, s⟩) :
   LamWF ltv ⟨lctx, t.extensionalizeEq, s⟩ := by
@@ -593,14 +636,14 @@ def LamWF.extensionalizeEq (wf : LamWF ltv ⟨lctx, t, s⟩) :
           apply LamWF.extensionalizeEqF wf.getFn.getArg wf.getArg
 
 theorem LamEquiv.ofExtensionalizeEq
-  {lval : LamValuation.{u}} {wf : LamWF lval.toLamTyVal ⟨lctx, t, s⟩} :
+  {lval : LamValuation.{u}} (wf : LamWF lval.toLamTyVal ⟨lctx, t, s⟩) :
   LamEquiv t t.extensionalizeEq wf := by
   cases t <;> try apply LamEquiv.refl
   case base b =>
     cases b <;> try apply LamEquiv.refl
     case eq s' =>
       cases wf.getBase
-      apply LamEquiv.trans _ _ (LamWF.etaExpandWith wf) (LamEquiv.etaExpandWith (l:=[s', s']) wf)
+      apply LamEquiv.trans _ (LamWF.etaExpandWith wf) (LamEquiv.etaExpandWith (l:=[s', s']) wf)
       apply LamEquiv.ofLam; apply LamEquiv.ofLam'
       rw [LamEquiv.substWF _ (.ofApp _ (.ofApp _ (.ofBase (.ofEq _)) (.ofBVar 1)) (.ofBVar 0))]
       apply LamEquiv.ofExtensionalizeEqF
@@ -610,7 +653,7 @@ theorem LamEquiv.ofExtensionalizeEq
       cases b <;> try apply LamEquiv.refl
       case eq _ =>
         cases wf.getFn.getBase
-        apply LamEquiv.trans _ _ (LamWF.etaExpandWith wf) (LamEquiv.etaExpandWith (l:=[s']) wf)
+        apply LamEquiv.trans _ (LamWF.etaExpandWith wf) (LamEquiv.etaExpandWith (l:=[s']) wf)
         apply LamEquiv.ofLam; rw [LamEquiv.substWF _ (.ofApp _ wf.ofBVarLift (.ofBVar 0))]
         apply LamEquiv.ofExtensionalizeEqF
     case app _ fn' arg' =>
@@ -619,6 +662,89 @@ theorem LamEquiv.ofExtensionalizeEq
         cases b <;> try apply LamEquiv.refl
         case eq _ =>
           cases wf.getFn.getFn.getBase; apply LamEquiv.ofExtensionalizeEqF
+
+theorem LamThmEquiv.ofExtensionalizeEq (wf : LamThmWF lval lctx s t) :
+  LamThmEquiv lval lctx s t t.extensionalizeEq :=
+  fun lctx' => ⟨wf lctx', LamEquiv.ofExtensionalizeEq (wf lctx')⟩
+
+def LamTerm.extensionalizeAux (isAppFn : Bool) (t : LamTerm) : LamTerm :=
+  let cont (r : LamTerm) : LamTerm :=
+    match isAppFn with
+    | true => r
+    | false => r.extensionalizeEq
+  match t with
+  | .atom n => .atom n
+  | .etom n => .etom n
+  | .base _ => cont t
+  | .bvar n => .bvar n
+  | .lam s body => .lam s (body.extensionalizeAux false)
+  | .app s fn arg => cont (.app s (fn.extensionalizeAux true) (arg.extensionalizeAux false))
+
+theorem LamTerm.maxEVarSucc_extensionalizeAux :
+  (extensionalizeAux isAppFn t).maxEVarSucc = t.maxEVarSucc := by
+  induction t generalizing isAppFn <;> (try rfl) <;> dsimp [extensionalizeAux]
+  case base b =>
+    match isAppFn with
+    | true => rfl
+    | false => dsimp; rw [maxEVarSucc_extensionalizeEq]
+  case lam s body IH =>
+    dsimp [maxEVarSucc]; rw [IH]
+  case app s fn arg IHFn IHArg =>
+    match isAppFn with
+    | true => 
+      dsimp [maxEVarSucc]; rw [IHFn, IHArg]
+    | false =>
+      dsimp; rw [maxEVarSucc_extensionalizeEq]
+      dsimp [maxEVarSucc]; rw [IHFn, IHArg]
+
+abbrev LamTerm.extensionalize := LamTerm.extensionalizeAux false
+
+def LamWF.extensionalizeAux :
+  (wft : LamWF ltv ⟨lctx, t, s⟩) → LamWF ltv ⟨lctx, t.extensionalizeAux isAppFn, s⟩
+| .ofAtom n => .ofAtom n
+| .ofEtom n => .ofEtom n
+| .ofBase b => by
+  dsimp [LamTerm.extensionalizeAux]
+  match isAppFn with
+  | true => exact .ofBase b
+  | false => exact .extensionalizeEq (.ofBase b)
+| .ofBVar n => .ofBVar n
+| .ofLam _ wfBody => .ofLam _ wfBody.extensionalizeAux
+| .ofApp _ wfFn wfArg => by
+  dsimp [LamTerm.extensionalizeAux]
+  have wfAp := LamWF.ofApp _
+    (wfFn.extensionalizeAux (isAppFn:=true))
+    (wfArg.extensionalizeAux (isAppFn:=false))
+  match isAppFn with
+  | true => exact wfAp
+  | false => exact wfAp.extensionalizeEq
+
+theorem LamEquiv.ofExtensionalize
+  {lval : LamValuation.{u}} (wf : LamWF lval.toLamTyVal ⟨lctx, t, s⟩) :
+  LamEquiv t (t.extensionalizeAux isAppFn) wf := by
+  induction t generalizing s lctx isAppFn <;> try apply LamEquiv.refl
+  case base b => cases wf; case ofBase H =>
+    dsimp [LamTerm.extensionalizeAux]
+    match isAppFn with
+    | true => apply LamEquiv.refl
+    | false => apply LamEquiv.ofExtensionalizeEq
+  case lam s body IH => cases wf; case ofLam _ wfBody =>
+    dsimp [LamTerm.extensionalizeAux]; apply LamEquiv.ofLam; apply IH
+  case app s' fn arg IHFn IHArg => cases wf; case ofApp HArg HFn =>
+    dsimp [LamTerm.extensionalizeAux];
+    match isAppFn with
+    | true =>
+      dsimp; apply LamEquiv.congr; apply IHFn; apply IHArg
+    | false =>
+      dsimp; apply LamEquiv.trans _
+        (.ofApp _ HFn.extensionalizeAux HArg.extensionalizeAux)
+        _ (LamEquiv.ofExtensionalizeEq _)
+      apply LamEquiv.congr; apply IHFn; apply IHArg
+
+theorem LamThmEquiv.ofExtensionalize
+  (wf : LamThmWF lval lctx s t) :
+  LamThmEquiv lval lctx s t (t.extensionalizeAux isAppFn) :=
+  fun lctx' => ⟨wf lctx', LamEquiv.ofExtensionalize (wf lctx')⟩
 
 -- Suppose we have `(λ x. func[body]) arg`
 --   and `body` is a subterm of `func` under `idx` levels of binders in `func`.
@@ -704,7 +830,7 @@ def LamWF.instantiateAt
   let IHArg := LamWF.instantiateAt ltv idx _ wfArg HArg
   .ofApp argTy' IHFn IHArg
 
-theorem LamWF.instantiateAt.correct.{u}
+theorem LamWF.interp_instantiateAt.{u}
   (lval : LamValuation.{u}) (idx : Nat)
   {arg : LamTerm} {argTy : LamSort} {body : LamTerm} {bodyTy : LamSort} :
   (lctxTy : Nat → LamSort) → (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal) →
@@ -732,7 +858,7 @@ theorem LamWF.instantiateAt.correct.{u}
     have wfArg' := LamWF.ofBVarLift (s:=argTy') (lctx:=lctxTy) _ wfArg
     rw [← LamTerm.bvarLifts_succ_r] at wfArg'
     rw [pushLCtx_pushLCtxAt] at H
-    have IH := LamWF.instantiateAt.correct lval (.succ idx)
+    have IH := LamWF.interp_instantiateAt lval (.succ idx)
       (pushLCtx argTy' lctxTy) (pushLCtxDep x lctxTerm) wfArg' H
     apply Eq.trans ?eqLarge (Eq.trans IH ?eqSmall)
     case eqLarge =>
@@ -741,14 +867,14 @@ theorem LamWF.instantiateAt.correct.{u}
       case HLCtxTermEq =>
         apply HEq.trans (pushLCtxDep_pushLCtxAtDep _ _ _ _)
         apply pushLCtxAtDep_substx <;> try rfl
-        rw [LamWF.ofBVarLift.correct lval _ lctxTerm x _ wfArg]
+        rw [LamWF.interp_ofBVarLift lval _ lctxTerm x _ wfArg]
         apply interp_heq <;> try rfl
         rw [LamTerm.bvarLifts_succ_r]
     case eqSmall =>
       dsimp [interp]; apply interp_substLCtxTerm <;> rfl)
 | lctxTy, lctxTerm, wfArg, .ofApp argTy' HFn HArg =>
-  let IHFn := LamWF.instantiateAt.correct lval idx lctxTy lctxTerm wfArg HFn
-  let IHArg := LamWF.instantiateAt.correct lval idx lctxTy lctxTerm wfArg HArg
+  let IHFn := LamWF.interp_instantiateAt lval idx lctxTy lctxTerm wfArg HFn
+  let IHArg := LamWF.interp_instantiateAt lval idx lctxTy lctxTerm wfArg HArg
   by dsimp [LamWF.interp]; dsimp at IHFn; dsimp at IHArg; simp [IHFn, IHArg]
 
 def LamTerm.instantiate1 := LamTerm.instantiateAt 0
@@ -775,7 +901,7 @@ def LamThmWF.instantiate1
   intro lctx'; have hArg := wfArg lctx'; have hBody := wfBody lctx'
   rw [pushLCtxs_cons] at hBody; apply LamWF.instantiate1 _ _ hArg hBody
 
-theorem LamWF.instantiate1.correct.{u}
+theorem LamWF.interp_instantiate1.{u}
   (lval : LamValuation.{u}) {arg : LamTerm} {argTy : LamSort} {body : LamTerm} {bodyTy : LamSort}
   (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal)
   (wfArg : LamWF lval.toLamTyVal ⟨lctxTy, arg, argTy⟩)
@@ -784,7 +910,7 @@ theorem LamWF.instantiate1.correct.{u}
   (LamWF.interp lval (pushLCtx argTy lctxTy)
     (pushLCtxDep (LamWF.interp lval lctxTy lctxTerm wfArg) lctxTerm) wfBody
   = LamWF.interp lval lctxTy lctxTerm wfInstantiate1') := by
-  apply Eq.trans ?eqLarge (Eq.trans (@LamWF.instantiateAt.correct lval 0
+  apply Eq.trans ?eqLarge (Eq.trans (@LamWF.interp_instantiateAt lval 0
     arg argTy body bodyTy lctxTy lctxTerm (Eq.mp ?eqArg wfArg) (Eq.mp ?eqBody wfBody)) ?eqSmall)
   case eqArg => dsimp [LamTerm.bvarLifts]; rw [LamTerm.bvarLiftsIdx_zero]
   case eqBody => rw [pushLCtxAt_zero]
@@ -805,7 +931,7 @@ theorem LamThmValid.instantiate1
   intro lctx'; have hArg := hw lctx'; have hBody := hv lctx'
   rw [pushLCtxs_cons] at hBody; have ⟨wfBody, vBody⟩ := hBody
   exists (LamWF.instantiate1 _ _ hArg wfBody); intro lctxTerm;
-  rw [← LamWF.instantiate1.correct]; apply vBody
+  rw [← LamWF.interp_instantiate1]; apply vBody
 
 def LamBaseTerm.resolveImport (ltv : LamTyVal) : LamBaseTerm → LamBaseTerm
 | .eqI n      => .eq (ltv.lamILTy n)
@@ -817,7 +943,7 @@ def LamBaseTerm.LamWF.resolveImport {ltv : LamTyVal} {b : LamBaseTerm} {ty : Lam
   (wfB : LamBaseTerm.LamWF ltv b ty) : LamBaseTerm.LamWF ltv (b.resolveImport ltv) ty := by
   cases wfB <;> constructor
 
-theorem LamBaseTerm.LamWF.resolveImport.correct
+theorem LamBaseTerm.LamWF.interp_resolveImport
   (lval : LamValuation.{u}) {b : LamBaseTerm} {ty : LamSort}
   (wfB : LamBaseTerm.LamWF lval.toLamTyVal b ty) :
   let wfRB := LamBaseTerm.LamWF.resolveImport wfB
@@ -882,7 +1008,7 @@ def LamThmWF.resolveImport
   (wf : LamThmWF lval lctx rty t) : LamThmWF lval lctx rty (t.resolveImport lval.toLamTyVal) :=
   fun lctx => LamWF.resolveImport (wf lctx)
 
-theorem LamWF.resolveImport.correct
+theorem LamWF.interp_resolveImport
   {lval : LamValuation.{u}} {t : LamTerm} {ty : LamSort}
   (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal)
   (wfT : LamWF lval.toLamTyVal ⟨lctxTy, t, ty⟩) :
@@ -891,21 +1017,21 @@ theorem LamWF.resolveImport.correct
   match wfT with
   | .ofAtom _ => rfl
   | .ofEtom _ => rfl
-  | .ofBase b => LamBaseTerm.LamWF.resolveImport.correct lval b
+  | .ofBase b => LamBaseTerm.LamWF.interp_resolveImport lval b
   | .ofBVar n => rfl
   | .ofLam s hwf => by
     apply _root_.funext; intros x; dsimp [interp]
-    rw [LamWF.resolveImport.correct _ _ hwf]
+    rw [LamWF.interp_resolveImport _ _ hwf]
   | .ofApp s wfFn wfArg => by
     dsimp [interp];
-    rw [LamWF.resolveImport.correct _ _ wfFn]
-    rw [LamWF.resolveImport.correct _ _ wfArg]
+    rw [LamWF.interp_resolveImport _ _ wfFn]
+    rw [LamWF.interp_resolveImport _ _ wfArg]
 
 theorem LamThmValid.resolveImport (H : LamThmValid lval lctx t) :
   LamThmValid lval lctx (t.resolveImport lval.toLamTyVal) := by
   intro lctx; let ⟨wf, h⟩ := H lctx;
   exists (LamWF.resolveImport wf); intro lctxTerm
-  rw [← LamWF.resolveImport.correct]; apply h
+  rw [← LamWF.interp_resolveImport]; apply h
 
 def LamTerm.topBetaAux (s : LamSort) (arg : LamTerm) : (fn : LamTerm) → LamTerm
 | .lam _ body => LamTerm.instantiate1 arg body
@@ -927,7 +1053,7 @@ def LamWF.topBetaAux (ltv : LamTyVal)
       LamWF.instantiate1 ltv lctx (argTy:=argTy') wfArg wfBody
   | .app _ _ _ => .ofApp _ wfFn wfArg
 
-def LamWF.topBetaAux.correct.{u} (lval : LamValuation.{u})
+def LamWF.interp_topBetaAux.{u} (lval : LamValuation.{u})
   {arg : LamTerm} {argTy : LamSort} {fn : LamTerm} {resTy : LamSort}
   (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal)
   (wfArg : LamWF lval.toLamTyVal ⟨lctxTy, arg, argTy⟩)
@@ -942,7 +1068,7 @@ def LamWF.topBetaAux.correct.{u} (lval : LamValuation.{u})
   | .bvar _  => rfl
   | .lam _ _ =>
     match argTy, wfFn with
-    | _, .ofLam (argTy:=_) (body:=_) _ _ => LamWF.instantiate1.correct _ _ _ _ _
+    | _, .ofLam (argTy:=_) (body:=_) _ _ => LamWF.interp_instantiate1 _ _ _ _ _
   | .app _ _ _ => rfl
 
 def LamTerm.topBeta : LamTerm → LamTerm
@@ -975,7 +1101,7 @@ def LamThmWF.topBeta
   (wf : LamThmWF lval lctx rty t) : LamThmWF lval lctx rty t.topBeta := by
   intro lctx; apply LamWF.topBeta _ _ (wf lctx)
 
-theorem LamWF.topBeta.correct
+theorem LamWF.interp_topBeta
   {lval : LamValuation.{u}} {t : LamTerm} {ty : LamSort}
   (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal)
   (wfT : LamWF lval.toLamTyVal ⟨lctxTy, t, ty⟩) :
@@ -989,16 +1115,16 @@ theorem LamWF.topBeta.correct
   | .lam .. => rfl
   | .app .. =>
     match wfT with
-    | .ofApp _ wfFn wfArg => LamWF.topBetaAux.correct _ lctxTy lctxTerm wfArg wfFn
+    | .ofApp _ wfFn wfArg => LamWF.interp_topBetaAux _ lctxTy lctxTerm wfArg wfFn
 
 theorem LamThmValid.topBeta (H : LamThmValid lval lctx t) :
   LamThmValid lval lctx t.topBeta := by
   intros lctx; let ⟨wf, h⟩ := H lctx; exists (LamWF.topBeta _ _ wf);
-  intro lctxTerm; rw [← LamWF.topBeta.correct]; apply h
+  intro lctxTerm; rw [← LamWF.interp_topBeta]; apply h
 
 theorem LamEquiv.ofTopBeta {lval : LamValuation}
   (wf : LamWF lval.toLamTyVal ⟨lctx, t, s⟩) : LamEquiv t t.topBeta wf :=
-  ⟨LamWF.topBeta _ _ wf, fun _ => LamWF.topBeta.correct _ _ _⟩
+  ⟨LamWF.topBeta _ _ wf, fun _ => LamWF.interp_topBeta _ _ _⟩
 
 theorem LamThmEquiv.ofTopBeta (wf : LamThmWF lval lctx s t) :
   LamThmEquiv lval lctx s t t.topBeta :=
@@ -1043,7 +1169,7 @@ theorem LamEquiv.ofBeta (lval : LamValuation.{u})
       dsimp only [LamTerm.topBeta, LamTerm.topBetaAux] at hTop
       have hCongr := LamEquiv.congrFunN _ (args:=args) wf hTop.toForall
       let ⟨hCongrWF, CongrEq⟩ := hCongr
-      apply LamEquiv.trans _ _ hCongrWF ⟨hCongrWF, CongrEq⟩
+      apply LamEquiv.trans _ hCongrWF ⟨hCongrWF, CongrEq⟩
       apply LamEquiv.ofBeta lval _ args
     | .app _ _ _ => ⟨wf, fun _ => rfl⟩
 
@@ -1073,13 +1199,13 @@ theorem LamTerm.maxEVarSucc_headBeta :
   (LamTerm.headBeta t).maxEVarSucc ≤ t.maxEVarSucc :=
   LamTerm.maxEVarSucc_headBetaAux .nil (Nat.le_refl _)
 
-theorem LamEquiv.ofHeadBeta (lval : LamValuation.{u})
+theorem LamEquiv.ofHeadBeta {lval : LamValuation.{u}}
   (wf : LamWF lval.toLamTyVal ⟨lctx, t, rty⟩) :
   LamEquiv _ t.headBeta wf := by cases t <;> apply LamEquiv.ofHeadBetaAux (args:=[]) lval wf
 
 theorem LamThmEquiv.ofHeadBeta (wf : LamThmWF lval lctx s t) :
   LamThmEquiv lval lctx s t t.headBeta :=
-  fun lctx => ⟨wf lctx, LamEquiv.ofHeadBeta _ (wf lctx)⟩
+  fun lctx' => ⟨wf lctx', LamEquiv.ofHeadBeta (wf lctx')⟩
 
 def LamTerm.headBetaBounded (n : Nat) (t : LamTerm) :=
   match n with
@@ -1107,8 +1233,8 @@ theorem LamEquiv.ofHeadBetaBounded (lval : LamValuation.{u})
     match t.isHeadBetaTarget with
     | true =>
       dsimp
-      let ⟨wfBeta, eqBeta⟩ := LamEquiv.ofHeadBeta _ wf
-      apply LamEquiv.trans _ wf wfBeta ⟨wfBeta, eqBeta⟩
+      let ⟨wfBeta, eqBeta⟩ := LamEquiv.ofHeadBeta wf
+      apply LamEquiv.trans wf wfBeta ⟨wfBeta, eqBeta⟩
       apply IH
     | false => apply LamEquiv.refl
 
@@ -1173,9 +1299,9 @@ theorem LamEquiv.ofBetaBounded (lval : LamValuation.{u})
     case app s fn arg =>
       dsimp;
       let ⟨wfhbb, _⟩ := LamEquiv.ofHeadBetaBounded (n:=n) lval wf
-      apply LamEquiv.trans _ _ wfhbb (LamEquiv.ofHeadBetaBounded _ wf)
+      apply LamEquiv.trans _ wfhbb (LamEquiv.ofHeadBetaBounded _ wf)
       let ⟨wftap, eqtap⟩ := LamEquiv.eq _ wfhbb (LamTerm.appFn_appArg_eq _)
-      apply LamEquiv.trans _ _ wftap ⟨wftap, eqtap⟩
+      apply LamEquiv.trans _ wftap ⟨wftap, eqtap⟩
       let masterArr := (LamTerm.getAppArgs (LamTerm.headBetaBounded n (.app s fn arg))).map (fun (s, arg) => (s, arg, arg.betaBounded n))
       have eq₁ : (LamTerm.getAppArgs (LamTerm.headBetaBounded n (.app s fn arg))) = masterArr.map (fun (s, arg₁, _) => (s, arg₁)) := by
         dsimp; rw [List.map_map]; rw [List.map_equiv _ id, List.map_id]
@@ -1222,7 +1348,7 @@ theorem LamThmEquiv.ofResolveImport
   LamThmEquiv lval lctx s t (t.resolveImport lval.toLamTyVal) := by
   dsimp [LamThmEquiv]; intros lctx';
   let wfT' := wfT lctx'; exists wfT'; exists (LamWF.resolveImport wfT')
-  intros lctxTerm; apply LamWF.resolveImport.correct
+  intros lctxTerm; apply LamWF.interp_resolveImport
 
 theorem LamValid.eq_refl {lval : LamValuation}
   (wfA : LamWF lval.toLamTyVal ⟨lctx, a, s⟩) : LamValid lval lctx (.mkEq s a a) := by
@@ -1245,7 +1371,7 @@ theorem LamValid.eq_trans
   LamValid lval lctx (.mkEq s a c) := by
   have ⟨wfa, heqab⟩ := LamEquiv.ofLamValid H₁
   have ⟨wfb, heqbc⟩ := LamEquiv.ofLamValid H₂
-  apply LamValid.ofLamEquiv _ (LamEquiv.trans _ _ _ heqab heqbc)
+  apply LamValid.ofLamEquiv _ (LamEquiv.trans _ _ heqab heqbc)
 
 theorem LamValid.eq_congr
   (HFn : LamValid lval lctx (.mkEq (.func argTy resTy) fn₁ fn₂))
@@ -1456,7 +1582,7 @@ theorem LamValid.intro1HAux (H : LamValid lval lctx (.app s' (.base (.forallE s)
     dsimp [LamWF.interp]
     have vl' := vl (fun n => lctxTerm (.succ n)) (lctxTerm 0)
     apply Eq.mp _ vl'; apply congrArg; apply congrFun;
-    apply Eq.trans (LamWF.ofBVarLiftIdx.correct lval (idx:=0) lctx
+    apply Eq.trans (LamWF.interp_ofBVarLiftIdx lval (idx:=0) lctx
       (fun n => lctxTerm (Nat.succ n)) (lctxTerm 0) _ Hp) ?req
     apply eq_of_heq; apply LamWF.interp_heq <;> try rfl
     case HLCtxTermEq =>
@@ -1728,7 +1854,7 @@ theorem LamEquiv.congr?
   | .some t'' =>
     rw [hFn] at heq; dsimp [Option.bind] at heq
     have ⟨wfFn, eqFn⟩ := LamEquiv.congrFun? wft HrwFn hFn
-    apply LamEquiv.trans _ _ wfFn ⟨wfFn, eqFn⟩
+    apply LamEquiv.trans _ wfFn ⟨wfFn, eqFn⟩
     apply LamEquiv.congrArg? _ HrwArg heq
   | .none => rw [hFn] at heq; cases heq
 
@@ -1798,7 +1924,7 @@ theorem LamEquiv.congrArgs?
           have .ofApp _ wfFn wfArg := wft
           have fneq := IH wfFn HrwTail h₁
           have ⟨wfap, eqap⟩ := LamEquiv.congrFun _ wfFn fneq wfArg
-          apply LamEquiv.trans _ _ wfap ⟨wfap, eqap⟩
+          apply LamEquiv.trans _ wfap ⟨wfap, eqap⟩
           apply LamEquiv.toForall
           apply LamEquiv.congrArg? wfap HrwHead heq
       | .none => rw [h₁] at heq; cases heq
@@ -1913,7 +2039,7 @@ theorem LamEquiv.congrs?
           have .ofApp _ wfFn wfArg := wft
           have fneq := IH wfFn HrwTail h₁
           have ⟨wfap, eqap⟩ := LamEquiv.congrFun _ wfFn fneq wfArg
-          apply LamEquiv.trans _ _ wfap ⟨wfap, eqap⟩
+          apply LamEquiv.trans _ wfap ⟨wfap, eqap⟩
           apply LamEquiv.toForall
           apply LamEquiv.congrArg? wfap HrwHead heq
       | .none => rw [h₁] at heq; cases heq

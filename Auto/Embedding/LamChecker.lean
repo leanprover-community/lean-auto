@@ -424,6 +424,7 @@ inductive ChkStep where
   | validOfReverts (pos : Nat) (idx : Nat) : ChkStep
   | validOfHeadBeta (pos : Nat) : ChkStep
   | validOfBetaBounded (pos : Nat) (bound : Nat) : ChkStep
+  | validOfExtensionalize (pos : Nat) : ChkStep
   -- `t₁ → t₂` and `t₁` implies `t₂`
   | validOfImp (p₁₂ : Nat) (p₁ : Nat) : ChkStep
   -- `t₁ → t₂ → ⋯ → tₖ → s` and `t₁, t₂, ⋯, tₖ` implies `s`
@@ -440,6 +441,7 @@ inductive ChkStep where
   | validOfCongrFunN (pos rwFn n : Nat) : ChkStep
   | validOfCongrs (pos rwFn : Nat) (rwArgs : List Nat) : ChkStep
   | skolemize (pos : Nat) : ChkStep
+  | define (t : LamTerm) : ChkStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
 def ChkStep.toString : ChkStep → String
@@ -455,6 +457,7 @@ def ChkStep.toString : ChkStep → String
 | .validOfReverts pos idx => s!"validOfReverts {pos} {idx}"
 | .validOfHeadBeta pos => s!"validOfHeadBeta {pos}"
 | .validOfBetaBounded pos bound => s!"validOfBetaBounded {pos} {bound}"
+| .validOfExtensionalize pos => s!"validOfExtensionalize {pos}"
 | .validOfImp p₁₂ p₁ => s!"validOfImp {p₁₂} {p₁}"
 | .validOfImps imp ps => s!"validOfImps {imp} {ps}"
 | .validOfInstantiate1 pos arg => s!"validOfInstantiate1 {pos} {arg}"
@@ -467,6 +470,7 @@ def ChkStep.toString : ChkStep → String
 | .validOfCongrFunN pos rwFn n => s!"validOfCongrFunN {pos} {rwFn} {n}"
 | .validOfCongrs pos rwFn rwArgs => s!"validOfCongrs {pos} {rwFn} {rwArgs}"
 | .skolemize pos => s!"skolemize {pos}"
+| .define t => s!"define {t}"
 
 instance : ToString ChkStep where
   toString := ChkStep.toString
@@ -601,6 +605,10 @@ def ChkStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : ChkStep) → E
   match r.getValid pos with
   | .some (lctx, t) => .addEntry (.valid lctx (t.betaBounded bound))
   | .none => .fail
+| .validOfExtensionalize pos =>
+  match r.getValid pos with
+  | .some (lctx, t) => .addEntry (.valid lctx t.extensionalize)
+  | .none => .fail
 | .validOfImp p₁₂ p₁ =>
   match r.getValid p₁₂ with
   | .some (lctx, t₁₂) =>
@@ -719,6 +727,10 @@ def ChkStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : ChkStep) → E
     match t.skolemize? r.maxEVarSucc lctx with
     | .some (s, t) => .newEtomWithValid (s.mkFuncsRev lctx) lctx t
     | .none => .fail
+  | .none => .fail
+| .define t =>
+  match LamTerm.lamThmWFCheck? ⟨lvt, lit, r.toLamEVarTy⟩ [] t with
+  | .some s => .newEtomWithValid s [] (.mkEq s (.etom r.maxEVarSucc) t)
   | .none => .fail
 
 private theorem ChkStep.eval_correct_wfAux
@@ -954,6 +966,19 @@ theorem ChkStep.eval_correct
         apply LamThmEquiv.ofBetaBounded (LamThmWF.ofLamThmValid hv)
       case condimp =>
         intro hcond; apply Nat.le_trans LamTerm.maxEVarSucc_betaBounded hcond
+| .validOfExtensionalize pos => by
+  dsimp [eval]
+  cases h : r.getValid pos <;> try exact True.intro
+  case some lctxt =>
+    match lctxt with
+    | (lctx, t) =>
+      have h' := RTable.getValid_correct inv h
+      apply ChkStep.eval_correct_validAux h'
+      case vimp =>
+        intro hv; apply LamThmValid.mpLamThmEquiv _ _ _ hv
+        apply LamThmEquiv.ofExtensionalize (LamThmWF.ofLamThmValid hv)
+      case condimp =>
+        intro hcond; rw [LamTerm.maxEVarSucc_extensionalizeAux]; exact hcond
 | .validOfImp p₁₂ p₁ => by
   dsimp [eval]
   match h₁ : r.getValid p₁₂ with
@@ -1209,6 +1234,12 @@ theorem ChkStep.eval_correct
           rw [Nat.max_le]; apply And.intro _ (Nat.le_refl _)
           apply Nat.le_trans hle (Nat.le_succ _)
     | .none => exact True.intro
+  | .none => exact True.intro
+| .define t => by
+  dsimp [eval]
+  match h : LamTerm.lamThmWFCheck? ⟨cv.toLamVarTy, cv.toLamILTy, r.toLamEVarTy⟩ [] t with
+  | .some s =>
+    dsimp; sorry
   | .none => exact True.intro
 
 def RTable.runEvalResult (r : RTable) (n : Nat) : EvalResult → RTable
