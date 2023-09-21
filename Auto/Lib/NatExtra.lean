@@ -85,4 +85,26 @@ theorem Nat.max_zero_left {a : Nat} : max 0 a = a := by
 theorem Nat.max_zero_right {a : Nat} : max a 0 = a := by
   rw [Nat.max_comm]; apply Nat.max_zero_left
 
+theorem Nat.max_assoc {a : Nat} : max a (max b c) = max (max a b) c := by
+  cases Nat.decLe a b
+  case isFalse h =>
+    rw [Nat.max_def (m:=b)]; simp [h]
+    cases Nat.decLe b c
+    case isFalse h' =>
+      rw [Nat.max_def (m:=c)]; simp [h']
+      rw [Nat.max_def (m:=b)]; simp [h]
+      have clta := Nat.lt_trans (Nat.lt_of_not_le h') (Nat.lt_of_not_le h)
+      rw [Nat.max_def]; simp [Nat.not_le_of_lt clta]
+    case isTrue h' =>
+      rw [Nat.max_def (m:=c)]; simp [h']
+  case isTrue h =>
+    rw [Nat.max_def (m:=b)]; simp [h]
+    cases Nat.decLe b c
+    case isFalse h' =>
+      rw [Nat.max_def (m:=c)]; simp [h']
+      rw [Nat.max_def]; simp [h]
+    case isTrue h' =>
+      rw [Nat.max_def (m:=c)]; simp [h']
+      rw [Nat.max_def]; simp [Nat.le_trans h h']
+
 end Auto

@@ -509,6 +509,22 @@ section push
     HEq (pushLCtxsDep xs₁ lctx₁) (pushLCtxsDep xs₂ lctx₂) := by
     cases h₁; cases h₂; cases h₃; cases h₄; cases h₅; cases h₆; apply HEq.rfl
 
+  theorem pushLCtxsDep.substLCtx
+    {tys : List α} {lctxty : _} (xs : HList lctxty tys) 
+    {rty₁ : Nat → α} (lctx₁ : ∀ n, lctxty (rty₁ n))
+    {rty₂ : Nat → α} (lctx₂ : ∀ n, lctxty (rty₂ n))
+    (h₁ : rty₁ = rty₂) (h₂ : HEq lctx₁ lctx₂) :
+    HEq (pushLCtxsDep xs lctx₁) (pushLCtxsDep xs lctx₂) := by
+    cases h₁; cases h₂; rfl
+
+  theorem pushLCtxsDep.substxs {lctxty : _}
+    {tys₁ : List α} (xs₁ : HList lctxty tys₁)
+    {tys₂ : List α} (xs₂ : HList lctxty tys₂)
+    {rty : Nat → α} (lctx : ∀ n, lctxty (rty n))
+    (h₁ : tys₁ = tys₂) (h₂ : HEq xs₁ xs₂) :
+    HEq (pushLCtxsDep xs₁ lctx) (pushLCtxsDep xs₂ lctx) := by
+    cases h₁; cases h₂; rfl
+
   theorem pushLCtxsDep_nil
     {lctxty : α → Sort u} {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :
     pushLCtxsDep .nil lctx = lctx := rfl
