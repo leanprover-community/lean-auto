@@ -142,6 +142,8 @@ def HList.reverseAux : {as : _} → (xs : HList β as) → (ys : HList β bs) �
 
 def HList.reverse (xs : HList β as) : HList β (List.reverse as) := HList.reverseAux xs .nil
 
+theorem HList.reverse_nil : reverse (β:=β) .nil = .nil := rfl
+
 theorem HList.reverseAux_eq_append {xs : HList β as} {ys : HList β bs} :
   HEq (reverseAux xs ys) (append (reverseAux xs .nil) ys) := by
   induction xs generalizing bs ys
@@ -158,5 +160,9 @@ theorem HList.reverseAux_eq_append {xs : HList β as} {ys : HList β bs} :
         dsimp [List.reverseAux]; rw [List.reverseAux_eq_append _ [a]]
       case e_5 =>
         apply HEq.symm; apply IH
+
+theorem HList.reverse_cons {x : β a} {xs : HList β as} :
+  HEq ((HList.cons x xs).reverse) (xs.reverse.append (.cons x .nil)) :=
+  reverseAux_eq_append (xs:=xs) (ys:=.cons x .nil)
 
 end Auto
