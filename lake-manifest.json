@@ -12,7 +12,7 @@
   {"git":
    {"url": "https://github.com/leanprover-community/duper.git",
     "subDir?": null,
-    "rev": "7742bd1beda94345f11a8a645ee234d80d2fcc8a",
+    "rev": "3281ea4f41eb819468be45b55c4df550489de35c",
     "opts": {},
     "name": "Duper",
     "inputRev?": null,

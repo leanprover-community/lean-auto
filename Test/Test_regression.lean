@@ -125,8 +125,8 @@ end CollectLemma
 
 section Skolemization
 
-  set_option trace.auto.smt.result true in
-  set_option trace.auto.smt.printCommands true in
+  set_option trace.auto.lamReif.printProofs true
+
   example (p : α → Prop) (h₁ : ∃ x, p x) : ∃ x, p x :=
     by auto
 
@@ -151,6 +151,26 @@ section Skolemization
     by auto
 
 end Skolemization
+
+-- Extensionalization
+
+section Extensionalization
+
+  set_option trace.auto.lamReif.printProofs true
+
+  example (f g : Nat → Nat) (H : ∀ x, f x = g x) : f = g := by
+    auto
+
+  example (f g : (α → α) → β → α) (H : ∀ x, f x = g x) : f = g := by
+    auto
+
+  example (f g : α → α → α → α → α → α → α → α → α → α → α → α → α → α → α → α → α) :
+    (f = g) = (g = f) := by auto
+
+  example : (fun f g => @Eq (α → α → α) f g) = (fun f g => ∀ x, f x = g x) :=
+    by auto
+
+end Extensionalization
 
 -- Constant unfolding
 

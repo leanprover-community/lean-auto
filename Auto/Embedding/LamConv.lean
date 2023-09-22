@@ -1325,15 +1325,14 @@ theorem LamEquiv.ofBetaBounded (lval : LamValuation.{u})
 theorem LamThmEquiv.ofBetaBounded (wf : LamThmWF lval lctx rty t) :
   LamThmEquiv lval lctx rty t (t.betaBounded n) := fun lctx => ⟨wf lctx, LamEquiv.ofBetaBounded _ _⟩
 
-partial def LamTerm.betaReduceHackyAux (t : LamTerm) : LamTerm × Nat := Id.run <| do
-  let mut cur := t
+opaque LamTerm.betaReduceHackyAux (t : LamTerm) : LamTerm × Nat := Id.run <| do
   let mut n := 1
   while true do
-    cur := t.betaBounded n
-    if cur.betaReduced then
+    let cur := t.betaBounded n
+    if (t.betaBounded n).betaReduced then
       return (cur, n)
     n := n * 2
-  return (cur, n)
+  return (t, n)
 
 def LamTerm.betaReduceHacky (t : LamTerm) := (betaReduceHackyAux t).fst
 
@@ -2049,6 +2048,27 @@ theorem LamThmEquiv.congrs?
   (HrwFn : LamThmValid lval lctx rwFn) (HrwArgs : HList (LamThmValid lval lctx) rwArgs)
   (heq : t.congrs? rwFn rwArgs = .some t') : LamThmEquiv lval lctx rty t t' :=
   fun lctx' => ⟨wft lctx', LamEquiv.congrs? _ (HrwFn lctx') (HrwArgs.map (fun _ twf => twf lctx')) heq⟩
+
+theorem LamThmValid.define {lval : LamValuation.{u}}
+  (wft : LamThmWF lval [] s t) (heVar : t.maxEVarSucc ≤ eidx) :
+  ∃ val, LamThmValid (lval.insertEVarAt s val eidx) [] (.mkEq s (.etom eidx) t) := by
+  exists LamWF.interp lval dfLCtxTy (dfLCtxTerm _) (wft dfLCtxTy)
+  apply LamThmValid.ofLamThmValidD
+  let ltv₁ := lval.toLamTyVal
+  let ltv₂ := { lval.toLamTyVal with lamEVarTy := replaceAt s eidx lval.lamEVarTy}
+  have wft' := LamWF.eVarIrrelevance (ltv₁:=ltv₁) (ltv₂:=ltv₂) rfl rfl
+    (fun n H => LamTyVal.insertEVarAt_eVarIrrelevance (Nat.le_trans H heVar)) (wft dfLCtxTy)
+  apply And.intro
+  case left =>
+    rw [LamTerm.maxLooseBVarSucc_mkEq]; dsimp [LamTerm.maxLooseBVarSucc]
+    rw [Nat.max_zero_left]; have ⟨_, hlb⟩ := LamThmWFD.ofLamThmWF wft; apply hlb
+  case right =>
+    exists LamWF.mkEq LamWF.insertEVarAt_eIdx wft'
+    intro lctxTerm; dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, eqLiftFn]
+    apply eq_of_heq; apply HEq.trans (LamWF.interp_insertEVarAt_eIdx _)
+    apply LamWF.interp_eVarIrrelevance <;> try rfl
+    intro n hn; apply LamValuation.insertEVarAt_eVarIrrelevance
+    apply Nat.le_trans hn heVar
 
 section Skolemization
 

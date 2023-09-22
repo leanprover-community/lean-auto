@@ -783,12 +783,20 @@ theorem LamTerm.maxEVarSucc_mkImp :
 def LamTerm.mkEq (s : LamSort) (t₁ t₂ : LamTerm) : LamTerm :=
   .app s (.app s (.base (.eq s)) t₁) t₂
 
+theorem LamTerm.maxLooseBVarSucc_mkEq :
+  (mkEq s t₁ t₂).maxLooseBVarSucc = max t₁.maxLooseBVarSucc t₂.maxLooseBVarSucc := by
+  dsimp [maxLooseBVarSucc, Nat.max]; rw [Nat.max_zero_left]
+
 theorem LamTerm.maxEVarSucc_mkEq :
   (mkEq s t₁ t₂).maxEVarSucc = max t₁.maxEVarSucc t₂.maxEVarSucc := by
-  dsimp [maxEVarSucc]; rw [Nat.max, Nat.max, Nat.max_zero_left]
+  dsimp [maxEVarSucc, Nat.max]; rw[Nat.max_zero_left]
 
 def LamTerm.mkForallE (s : LamSort) (p : LamTerm) : LamTerm :=
   .app (.func s (.base .prop)) (.base (.forallE s)) p
+
+theorem LamTerm.maxLooseBVarSucc_mkForallE :
+  (mkForallE s p).maxLooseBVarSucc = p.maxLooseBVarSucc := by
+  dsimp [maxLooseBVarSucc, Nat.max]; rw [Nat.max_zero_left]
 
 theorem LamTerm.maxEVarSucc_mkForallE :
   (mkForallE s p).maxEVarSucc = p.maxEVarSucc := by
@@ -797,6 +805,10 @@ theorem LamTerm.maxEVarSucc_mkForallE :
 def LamTerm.mkForallEF (s : LamSort) (p : LamTerm) : LamTerm :=
   .app (.func s (.base .prop)) (.base (.forallE s)) (.lam s p)
 
+theorem LamTerm.maxLooseBVarSucc_mkForallEF :
+  (mkForallEF s p).maxLooseBVarSucc = p.maxLooseBVarSucc.pred := by
+  dsimp [maxLooseBVarSucc, Nat.max]; rw [Nat.max_zero_left]
+
 theorem LamTerm.maxEVarSucc_mkForallEF :
   (mkForallEF s p).maxEVarSucc = p.maxEVarSucc := by
   dsimp [maxEVarSucc]; apply Nat.max_zero_left
@@ -804,12 +816,20 @@ theorem LamTerm.maxEVarSucc_mkForallEF :
 def LamTerm.mkExistE (s : LamSort) (p : LamTerm) : LamTerm :=
   .app (.func s (.base .prop)) (.base (.existE s)) p
 
+theorem LamTerm.maxLooseBVarSucc_mkExistE :
+  (mkExistE s p).maxLooseBVarSucc = p.maxLooseBVarSucc := by
+  dsimp [maxLooseBVarSucc, Nat.max]; rw [Nat.max_zero_left]
+
 theorem LamTerm.maxEVarSucc_mkExistE :
   (mkExistE s p).maxEVarSucc = p.maxEVarSucc := by
   dsimp [maxEVarSucc]; apply Nat.max_zero_left
 
 def LamTerm.mkExistEF (s : LamSort) (p : LamTerm) : LamTerm :=
   .app (.func s (.base .prop)) (.base (.existE s)) (.lam s p)
+
+theorem LamTerm.maxLooseBVarSucc_mkExistEF :
+  (mkExistEF s p).maxLooseBVarSucc = p.maxLooseBVarSucc.pred := by
+  dsimp [maxLooseBVarSucc, Nat.max]; rw [Nat.max_zero_left]
 
 theorem LamTerm.maxEVarSucc_mkExistEF :
   (mkExistEF s p).maxEVarSucc = p.maxEVarSucc := by

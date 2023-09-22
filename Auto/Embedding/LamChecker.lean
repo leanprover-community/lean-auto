@@ -730,7 +730,10 @@ def ChkStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : ChkStep) → E
   | .none => .fail
 | .define t =>
   match LamTerm.lamThmWFCheck? ⟨lvt, lit, r.toLamEVarTy⟩ [] t with
-  | .some s => .newEtomWithValid s [] (.mkEq s (.etom r.maxEVarSucc) t)
+  | .some s =>
+    match Nat.ble t.maxEVarSucc r.maxEVarSucc with
+    | true => .newEtomWithValid s [] (.mkEq s (.etom r.maxEVarSucc) t)
+    | false => .fail
   | .none => .fail
 
 private theorem ChkStep.eval_correct_wfAux
@@ -1237,9 +1240,29 @@ theorem ChkStep.eval_correct
   | .none => exact True.intro
 | .define t => by
   dsimp [eval]
-  match h : LamTerm.lamThmWFCheck? ⟨cv.toLamVarTy, cv.toLamILTy, r.toLamEVarTy⟩ [] t with
+  match h₁ : LamTerm.lamThmWFCheck? ⟨cv.toLamVarTy, cv.toLamILTy, r.toLamEVarTy⟩ [] t with
   | .some s =>
-    dsimp; sorry
+    dsimp
+    match h₂ : Nat.ble t.maxEVarSucc r.maxEVarSucc with
+    | true =>
+      dsimp
+      have h₁' := LamThmWF.ofLamThmWFCheck? (lval:=cv.toLamValuation) h₁
+      have h₂' := Nat.le_of_ble_eq_true h₂
+      let levt' := replaceAt s r.maxEVarSucc
+        (fun n => (r.lamEVarTy.get? n).getD (.base .prop))
+      apply EvalResult.correct_newEtomWithValid_mpLamEVarTy levt' (fun n => by
+        rw [BinTree.get?_insert_eq_replaceAt_get?])
+      have ⟨eVarVal', hdef⟩ := LamThmValid.define h₁' h₂'
+      cases cv; case mk cpv eV =>
+        exists replaceAtDep eVarVal' r.maxEVarSucc eV
+        apply And.intro ?left (And.intro hdef ?right)
+        case left =>
+          intro n hlt; dsimp [replaceAt, replaceAtDep]
+          rw [Nat.beq_eq_false_of_ne (Nat.ne_of_lt hlt)]
+        case right =>
+          rw [LamTerm.maxEVarSucc_mkEq]; dsimp [LamTerm.maxEVarSucc]
+          rw [Nat.max_le]; apply And.intro (Nat.le_refl _) (Nat.le_step h₂')
+    | false => exact True.intro
   | .none => exact True.intro
 
 def RTable.runEvalResult (r : RTable) (n : Nat) : EvalResult → RTable

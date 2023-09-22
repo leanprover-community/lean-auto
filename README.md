@@ -1,7 +1,12 @@
-![Logo](Logo.bmp)
+![Logo](Doc/pics/Logo.bmp)
 
-Experiments in automation for Lean  
 Type **"auto 👍"** to see whether auto is set up.
+
+## Introduction
+Lean-auto is an interface between Lean and automated theorem provers based on a monomorphization procedure from dependent type theory to higher-order logic and a deep embedding of higher-order logic into dependent type theory. It is capable of handling dependently-typed and/or universe-polymorphic input terms.  
+Currently, lean-auto is still under development, but it's already able to solve nontrivial problems. For example the first part of the "snake lemma" in category theory can be solved by a direct invocation to ``auto`` (and the second part can also be partly automated):
+
+<img src="Doc/pics/shortfive.png" alt="drawing" width="500"/>
 
 ## Coding Style
 * ``Array``/``List``: In computational code, we only use ``Array``, functions whose signature contains ``List`` should be declared as ``private``. In verification code, we only use ```List```?

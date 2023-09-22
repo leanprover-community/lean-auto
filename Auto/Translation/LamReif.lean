@@ -503,12 +503,21 @@ partial def reifTerm (lctx : HashMap FVarId Nat) : Expr → ReifM LamTerm
   return .lam lamTy body
 | e => processTermExpr lctx e
 
+def reifTermCheckType (e : Expr) : ReifM (LamSort × LamTerm) := do
+  let t ← reifTerm .empty e
+  let ltv ← getLamTyValAtMeta
+  let .some s := t.lamCheck? ltv Embedding.Lam.dfLCtxTy
+    | throwError "reifTermCheckType :: LamTerm {t} is not type correct"
+  return (s, t)
+
 -- Return the positions of the reified and `resolveImport`-ed facts
 --   within the `validTable`
 def reifFacts (facts : Array UMonoFact) : ReifM (Array LamTerm) :=
   facts.mapM (fun (proof, ty) => do
     trace[auto.lamReif] "Reifying {proof} : {ty}"
-    let lamty ← reifTerm .empty ty
+    let (s, lamty) ← reifTermCheckType ty
+    if s != .base .prop then
+      throwError "reifFacts :: Fact {lamty} is not of type `prop`"
     trace[auto.lamReif.printResult] "Successfully reified proof of {← Meta.zetaReduce ty} to λterm `{lamty}`"
     newAssertion proof lamty
     return lamty)
@@ -555,7 +564,7 @@ section Checker
     return re
 
   def validOfRevertAll (v : REntry) : ReifM REntry := do
-    let .some (lctx, t) := v.getValid?
+    let .some (lctx, _) := v.getValid?
       | throwError "validOfRevertAll :: Unexpected entry {v}"
     if lctx.length == 0 then
       return v
@@ -566,7 +575,7 @@ section Checker
     let .addEntry re ← newChkStep (.validOfHeadBeta p) .none
       | throwError "validOfHeadBeta :: Unexpected evaluation result"
     return re
-  
+
   def validOfHnf (v : REntry) : ReifM REntry := do
     let mut v := v
     while true do
@@ -576,6 +585,23 @@ section Checker
         break
       v ← validOfHeadBeta v
     return v
+
+  def validOfBetaBounded (v : REntry) (bound : Nat) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let .addEntry re ← newChkStep (.validOfBetaBounded p bound) .none
+      | throwError "validOfBetaBounded :: Unexpected evaluation result"
+    return re
+
+  def validOfBetaReduce (v : REntry) : ReifM REntry := do
+    let .some (_, t) := v.getValid?
+      | throwError "validOfBetaReduce :: Unexpected entry {v}"
+    validOfBetaBounded v t.betaReduceHackyIdx
+
+  def validOfExtensionalize (v : REntry) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let .addEntry re ← newChkStep (.validOfExtensionalize p) .none
+      | throwError "validOfExtensionalize :: Unexpected evaluation result"
+    return re
 
   def validOfImp (v₁₂ : REntry) (v₁ : REntry) : ReifM REntry := do
     let p₁₂ ← lookupREntryPos! v₁₂
@@ -626,13 +652,15 @@ section Checker
         | throwError "skolemizeAllForall :: Unexpected entry {exV}"
       if t.isMkExistE then
         exV ← skolemize exV
-        let .some (_, t) := exV.getValid?
-          | throwError "skolemizeAllForall :: Unexpected entry {exV}"
-        if t.isHeadBetaTarget then
-          exV ← validOfHnf exV
+        exV ← validOfHnf exV
       else
         break
     return exV
+
+  def define (t : LamTerm) : ReifM REntry := do
+    let .newEtomWithValid _ [] t ← newChkStep (.define t) .none
+      | throwError "define :: Unexpected evaluation result"
+    return .valid [] t
 
   -- Functions that turns data structure in `ReifM.State` into `Expr`
 
@@ -949,6 +977,7 @@ open Embedding.Lam LamReif
   | .validOfReverts pos idx => return .validOfReverts (← posCont pos) idx
   | .validOfHeadBeta pos => return .validOfHeadBeta (← posCont pos)
   | .validOfBetaBounded pos bound => return .validOfBetaBounded (← posCont pos) bound
+  | .validOfExtensionalize pos => return .validOfExtensionalize (← posCont pos)
   | .validOfImp p₁₂ p₁ => do
     let #[p₁₂', p₁'] ← transChkStep_EnsureOrder posCont #[p₁₂, p₁]
       | throwError "transChkStep :: Unexpected error"
@@ -994,6 +1023,7 @@ open Embedding.Lam LamReif
       | throwError "transChkStep :: Unexpected error"
     return .validOfCongrs pos' rwFn' rwArgs'
   | .skolemize pos => return .skolemize (← posCont pos)
+  | .define t => return .define (← transLamTerm ref t)
 
   -- Collect essential chksteps and assertions from the high-level `lam`
   --   into the low-level `lam` such that the low-level `lam` proves `re`
