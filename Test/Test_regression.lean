@@ -105,6 +105,7 @@ example : True := by auto d[]
 example : True := by auto u[]
 example : True := by auto [] u[] d[]
 example : True := by first | auto 👍| exact True.intro
+example : True := by auto 👎
 
 -- Defeq Lemma collection
 

@@ -17,16 +17,20 @@ syntax hints := ("[" hintelem,* "]")?
 -- **TODO**: Automatically topological sort
 syntax unfolds := ("u[" ident,* "]")?
 syntax defeqs := ("d[" ident,* "]")?
-syntax autoinstr := ("👍")?
+syntax autoinstr := ("👍" <|> "👎")?
 syntax (name := auto) "auto" autoinstr hints unfolds defeqs : tactic
 syntax (name := intromono) "intromono" hints unfolds defeqs : tactic
 
 inductive Instruction where
   | none
+  | useSorry
 
 def parseInstr : TSyntax ``Auto.autoinstr → TacticM Instruction
 | `(autoinstr|) => return .none
 | `(autoinstr|👍) => throwError "Your flattery is appreciated 😎"
+| `(autoinstr|👎) => do
+  logInfo "I'm terribly sorry. A 'sorry' is sent to you as compensation."
+  return .useSorry
 | _ => throwUnsupportedSyntax
 
 inductive HintElem where
@@ -195,7 +199,6 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) : TacticM Re
   let instr ← parseInstr instrstx
   match instr with
   | .none =>
-    -- Testing. Skipping universe level instantiation and monomorphization
     let afterReify (ufacts : Array UMonoFact) : LamReif.ReifM Expr := (do
       let exportFacts ← LamReif.reifFacts ufacts
       let exportFacts ← exportFacts.mapM (fun t => LamReif.skolemizeMostIntoForall (.validEVar0 [] t))
@@ -233,6 +236,7 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) : TacticM Re
       (afterReify ufacts).run' {u := u})
     trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
     return .unsat proof
+  | .useSorry => return .unsat (← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []])
 
 @[tactic auto]
 def evalAuto : Tactic
