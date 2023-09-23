@@ -952,7 +952,7 @@ theorem ChkStep.eval_correct
       have h' := RTable.getValid_correct inv h
       apply ChkStep.eval_correct_validAux h'
       case vimp =>
-        intro hv; apply LamThmValid.mpLamThmEquiv _ _ _ hv
+        intro hv; apply LamThmValid.mpLamThmEquiv _ _ hv
         apply LamThmEquiv.ofHeadBeta (LamThmWF.ofLamThmValid hv)
       case condimp =>
         intro hcond; apply Nat.le_trans LamTerm.maxEVarSucc_headBeta hcond
@@ -965,7 +965,7 @@ theorem ChkStep.eval_correct
       have h' := RTable.getValid_correct inv h
       apply ChkStep.eval_correct_validAux h'
       case vimp =>
-        intro hv; apply LamThmValid.mpLamThmEquiv _ _ _ hv
+        intro hv; apply LamThmValid.mpLamThmEquiv _ _ hv
         apply LamThmEquiv.ofBetaBounded (LamThmWF.ofLamThmValid hv)
       case condimp =>
         intro hcond; apply Nat.le_trans LamTerm.maxEVarSucc_betaBounded hcond
@@ -978,7 +978,7 @@ theorem ChkStep.eval_correct
       have h' := RTable.getValid_correct inv h
       apply ChkStep.eval_correct_validAux h'
       case vimp =>
-        intro hv; apply LamThmValid.mpLamThmEquiv _ _ _ hv
+        intro hv; apply LamThmValid.mpLamThmEquiv _ _ hv
         apply LamThmEquiv.ofExtensionalize (LamThmWF.ofLamThmValid hv)
       case condimp =>
         intro hcond; rw [LamTerm.maxEVarSucc_extensionalizeAux]; exact hcond
@@ -1082,7 +1082,7 @@ theorem ChkStep.eval_correct
         let hrw := RTable.getValidEnsureLCtx_correct inv hrw
         apply ChkStep.eval_correct_validAux ht
         case vimp =>
-          intro hv; apply LamThmValid.mpLamThmEquiv _ _ _ hv
+          intro hv; apply LamThmValid.mpLamThmEquiv _ _ hv
           apply LamThmEquiv.congrArg? (LamThmWF.ofLamThmValid hv) hrw.left hcongr
         case condimp =>
           intro cond; apply LamTerm.maxEVarSucc_congrArg? cond hrw.right hcongr
@@ -1104,7 +1104,7 @@ theorem ChkStep.eval_correct
         let hrw := RTable.getValidEnsureLCtx_correct inv hrw
         apply ChkStep.eval_correct_validAux ht
         case vimp =>
-          intro hv; apply LamThmValid.mpLamThmEquiv _ _ _ hv
+          intro hv; apply LamThmValid.mpLamThmEquiv _ _ hv
           apply LamThmEquiv.congrFun? (LamThmWF.ofLamThmValid hv) hrw.left hcongr
         case condimp =>
           intro cond; apply LamTerm.maxEVarSucc_congrFun? cond hrw.right hcongr
@@ -1130,7 +1130,7 @@ theorem ChkStep.eval_correct
           let hrwArg := RTable.getValidEnsureLCtx_correct inv hrwArg
           apply ChkStep.eval_correct_validAux ht
           case vimp =>
-            intro hv; apply LamThmValid.mpLamThmEquiv _ _ _ hv
+            intro hv; apply LamThmValid.mpLamThmEquiv _ _ hv
             apply LamThmEquiv.congr? (LamThmWF.ofLamThmValid hv) hrwFn.left hrwArg.left hcongr
           case condimp =>
             intro cond; apply LamTerm.maxEVarSucc_congr? cond hrwFn.right hrwArg.right hcongr
@@ -1152,7 +1152,7 @@ theorem ChkStep.eval_correct
         let hrws := RTable.getValidsEnsureLCtx_correct inv hrws
         apply ChkStep.eval_correct_validAux ht
         case vimp =>
-          intro hv; apply LamThmValid.mpLamThmEquiv _ _ _ hv
+          intro hv; apply LamThmValid.mpLamThmEquiv _ _ hv
           have hrws' := HList.map (fun _ h => And.left h) hrws
           apply LamThmEquiv.congrArgs? (LamThmWF.ofLamThmValid hv) hrws' hcongr
         case condimp =>
@@ -1176,7 +1176,7 @@ theorem ChkStep.eval_correct
         let hrwFn := RTable.getValidEnsureLCtx_correct inv hrwFn
         apply ChkStep.eval_correct_validAux ht
         case vimp =>
-          intro hv; apply LamThmValid.mpLamThmEquiv _ _ _ hv
+          intro hv; apply LamThmValid.mpLamThmEquiv _ _ hv
           apply LamThmEquiv.congrFunN? (LamThmWF.ofLamThmValid hv) hrwFn.left hcongr
         case condimp =>
           intro cond; apply LamTerm.maxEVarSucc_congrFunN? cond hrwFn.right hcongr
@@ -1202,7 +1202,7 @@ theorem ChkStep.eval_correct
           let hrwArgs := RTable.getValidsEnsureLCtx_correct inv hrwArgs
           apply ChkStep.eval_correct_validAux ht
           case vimp =>
-            intro hv; apply LamThmValid.mpLamThmEquiv _ _ _ hv
+            intro hv; apply LamThmValid.mpLamThmEquiv _ _ hv
             have hrwArgs' := HList.map (fun _ h => And.left h) hrwArgs
             apply LamThmEquiv.congrs? (LamThmWF.ofLamThmValid hv) hrwFn.left hrwArgs' hcongr
           case condimp =>

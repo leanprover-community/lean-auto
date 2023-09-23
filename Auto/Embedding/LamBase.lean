@@ -909,6 +909,12 @@ def LamTerm.getAppArgsAux (args : List (LamSort × LamTerm)) : LamTerm → List 
 | .app s fn arg => getAppArgsAux ((s, arg) :: args) fn
 | _             => args
 
+theorem LamTerm.getAppArgsAux_eq : getAppArgsAux args t = getAppArgsAux [] t ++ args := by
+  induction t generalizing args <;> try rfl
+  case app s fn arg IHFn _ =>
+    dsimp [getAppArgsAux]; rw [IHFn (args:=(s, arg) :: args), IHFn (args:=[(s, arg)])]
+    rw [List.append_assoc]; rfl
+
 theorem LamTerm.maxEVarSucc_getAppArgsAux
   (hs : HList (fun (_, arg) => arg.maxEVarSucc ≤ n) args) (ht : t.maxEVarSucc ≤ n) :
   HList (fun (_, arg) => arg.maxEVarSucc ≤ n) (LamTerm.getAppArgsAux args t) := by
@@ -918,6 +924,9 @@ theorem LamTerm.maxEVarSucc_getAppArgsAux
     exact IHFn (.cons ht.right hs) ht.left
 
 def LamTerm.getAppArgs := getAppArgsAux []
+
+theorem LamTerm.getAppArgs_app : getAppArgs (.app s fn arg) = getAppArgs fn ++ [(s, arg)] := by
+  dsimp [getAppArgs, getAppArgsAux]; rw [getAppArgsAux_eq]
 
 theorem LamTerm.maxEVarSucc_getAppArgs :
   HList (fun (_, arg) => arg.maxEVarSucc ≤ t.maxEVarSucc) (LamTerm.getAppArgs t) :=
@@ -1159,16 +1168,6 @@ def LamWF.eVarIrrelevance
   (eVarIrrelevance hLamVarTy hLamILTy (fun n H => hirr _ (Nat.le_trans H (Nat.le_max_left _ _))) HFn)
   (eVarIrrelevance hLamVarTy hLamILTy (fun n H => hirr _ (Nat.le_trans H (Nat.le_max_right _ _))) HArg)
 
-def LamWF.mkEq {ltv : LamTyVal}
-  (wft₁ : LamWF ltv ⟨lctx, t₁, s⟩) (wft₂ : LamWF ltv ⟨lctx, t₂, s⟩) :
-  LamWF ltv ⟨lctx, .mkEq s t₁ t₂, .base .prop⟩ :=
-  LamWF.ofApp _ (LamWF.ofApp _ (.ofBase (.ofEq _)) wft₁) wft₂
-
-theorem LamWF.mkEq_sortEq (hwf : LamWF ltv ⟨lctx, .app s' (.app s'' (.base (.eq s)) t₁) t₂, rty⟩) :
-  s' = s ∧ s'' = s ∧ rty = .base .prop :=
-  match hwf with
-  | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) _) _ => And.intro rfl (And.intro rfl rfl)
-
 def LamWF.getAtom {ltv : LamTyVal}
   (wft : LamWF ltv ⟨lctx, .atom n, s⟩) : ltv.lamVarTy n = s :=
   match wft with
@@ -1204,6 +1203,16 @@ def LamWF.getArg {ltv : LamTyVal}
   match wft with
   | .ofApp _ _ HArg => HArg
 
+def LamWF.mkEq {ltv : LamTyVal}
+  (wft₁ : LamWF ltv ⟨lctx, t₁, s⟩) (wft₂ : LamWF ltv ⟨lctx, t₂, s⟩) :
+  LamWF ltv ⟨lctx, .mkEq s t₁ t₂, .base .prop⟩ :=
+  LamWF.ofApp _ (LamWF.ofApp _ (.ofBase (.ofEq _)) wft₁) wft₂
+
+theorem LamWF.mkEq_sortEq (hwf : LamWF ltv ⟨lctx, .app s' (.app s'' (.base (.eq s)) t₁) t₂, rty⟩) :
+  s' = s ∧ s'' = s ∧ rty = .base .prop :=
+  match hwf with
+  | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) _) _ => And.intro rfl (And.intro rfl rfl)
+
 def LamWF.mkForallE {ltv : LamTyVal}
   (wfp : LamWF ltv ⟨lctx, p, .func s (.base .prop)⟩) :
   LamWF ltv ⟨lctx, .mkForallE s p, .base .prop⟩ := LamWF.ofApp _ (.ofBase (.ofForallE _)) wfp
@@ -1211,6 +1220,59 @@ def LamWF.mkForallE {ltv : LamTyVal}
 def LamWF.mkForallEF {ltv : LamTyVal}
   (wfp : LamWF ltv ⟨pushLCtx s lctx, p, .base .prop⟩) :
   LamWF ltv ⟨lctx, .mkForallEF s p, .base .prop⟩ := LamWF.ofApp _ (.ofBase (.ofForallE _)) (.ofLam _ wfp)
+
+def LamWF.mkAppN {s : LamSort}
+  (wfFn : LamWF ltv ⟨lctx, f, s.mkFuncs (args.map Prod.fst)⟩)
+  (wfArgs : HList (fun (s, t) => LamWF ltv ⟨lctx, t, s⟩) args) :
+  LamWF ltv ⟨lctx, f.mkAppN args, s⟩ :=
+  match wfArgs with
+  | .nil => wfFn
+  | .cons (tys:=args) HArg HArgs =>
+    LamWF.mkAppN (args:=args) (.ofApp _ wfFn HArg) HArgs
+
+def LamWF.fnWFOfMkAppN
+  (wfApp : LamWF ltv ⟨lctx, f.mkAppN args, s⟩) :
+  LamWF ltv ⟨lctx, f, s.mkFuncs (args.map Prod.fst)⟩ :=
+  match args with
+  | .nil => wfApp
+  | .cons (argTy, arg) args =>
+    (LamWF.fnWFOfMkAppN (args:=args) wfApp).getFn
+
+def LamWF.argsWFOfMkAppN {f : LamTerm}
+  (wfApp : LamWF ltv ⟨lctx, f.mkAppN args, s⟩) :
+  HList (fun (s, t) => LamWF ltv ⟨lctx, t, s⟩) args :=
+  match args with
+  | .nil => .nil
+  | .cons _ args =>
+    have HFn := LamWF.fnWFOfMkAppN (args:=args) wfApp
+    have HArgs := LamWF.argsWFOfMkAppN (args:=args) wfApp
+    .cons HFn.getArg HArgs
+
+def LamWF.getAppFn (wft : LamWF ltv ⟨lctx, t, rty⟩) :
+  (fnTy : LamSort) × LamWF ltv ⟨lctx, t.getAppFn, fnTy⟩ :=
+  match wft with
+  | .ofAtom n => ⟨_, .ofAtom n⟩
+  | .ofEtom n => ⟨_, .ofEtom n⟩
+  | .ofBase H => ⟨_, .ofBase H⟩
+  | .ofBVar n => ⟨_, .ofBVar n⟩
+  | .ofLam s body => ⟨_, .ofLam s body⟩
+  | .ofApp argTy wfFn wfArg => by
+    dsimp [LamTerm.getAppFn]
+    exact LamWF.getAppFn wfFn
+
+def LamWF.getAppArgs
+  (wfApp : LamWF ltv ⟨lctx, f, s⟩) :
+  HList (fun (s, t) => LamWF ltv ⟨lctx, t, s⟩) f.getAppArgs :=
+  match wfApp with
+  | .ofAtom n => .nil
+  | .ofEtom n => .nil
+  | .ofBase H => .nil
+  | .ofBVar n => .nil
+  | .ofLam _ body => .nil
+  | .ofApp argTy wfFn wfArg => by
+    rw [LamTerm.getAppArgs_app]; apply HList.append
+    case xs => exact wfFn.getAppArgs
+    case ys => apply HList.cons _ .nil; exact wfArg
 
 def LamWF.mkLamFN {ltv : LamTyVal}
   (wfp : LamWF ltv ⟨pushLCtxs ls lctx, p, s⟩) :
@@ -1245,14 +1307,6 @@ def LamWF.ofAtom' {ltv : LamTyVal} {lctx : Nat → LamSort} (n : Nat)
 def LamWF.ofBVar' {ltv : LamTyVal} {lctx : Nat → LamSort} (n : Nat)
   (s : LamSort) (heq : lctx n = s) : LamWF ltv ⟨lctx, .bvar n, s⟩ := by
   rw [← heq]; apply LamWF.ofBVar
-
-def LamWF.getAppFn (wfAppN : LamWF ltv ⟨lctx, .mkAppN fn args, rty⟩) :
-  (fnTy : LamSort) × LamWF ltv ⟨lctx, fn, fnTy⟩ :=
-  match args with
-  | .nil => ⟨rty, wfAppN⟩
-  | .cons _ args =>
-    let ⟨_, .ofApp _ HFn _⟩ := getAppFn (args:=args) wfAppN
-    ⟨_, HFn⟩
 
 def LamWF.bvarApps
   (wft : LamWF ltv ⟨pushLCtxs (List.reverseAux ex lctx) lctx', t, LamSort.mkFuncsRev s lctx⟩) :
