@@ -51,16 +51,16 @@ def LamBaseSort.beq : LamBaseSort → LamBaseSort → Bool
 | .prop, .prop => true
 | .int,  .int  => true
 | .real, .real => true
-| .bv n, .bv m => n == m
+| .bv n, .bv m => n.beq m
 | _,     _     => false
 
-def LamBaseSort.beq_refl : (b : LamBaseSort) → (b.beq b) = true
+theorem LamBaseSort.beq_refl : (b : LamBaseSort) → (b.beq b) = true
 | .prop => rfl
 | .int  => rfl
 | .real => rfl
 | .bv n => Nat.beq_refl' n
 
-def LamBaseSort.beq_eq (b₁ b₂ : LamBaseSort) : b₁.beq b₂ → b₁ = b₂ :=
+theorem LamBaseSort.beq_eq (b₁ b₂ : LamBaseSort) : b₁.beq b₂ → b₁ = b₂ :=
   match b₁, b₂ with
   | .prop, .prop => fun _ => rfl
   | .int,  .int  => fun _ => rfl
@@ -114,7 +114,7 @@ instance : ToString LamSort where
   toString := LamSort.toString
 
 def LamSort.beq : LamSort → LamSort → Bool
-| .atom m,     .atom n     => m == n
+| .atom m,     .atom n     => m.beq n
 | .base m,     .base n     => m.beq n
 | .func m₁ n₁, .func m₂ n₂ => LamSort.beq m₁ m₂ && LamSort.beq n₁ n₂
 | _,           _           => false
@@ -122,12 +122,12 @@ def LamSort.beq : LamSort → LamSort → Bool
 instance : BEq LamSort where
   beq := LamSort.beq
 
-def LamSort.beq_refl : (a : LamSort) → (a.beq a) = true
+theorem LamSort.beq_refl : (a : LamSort) → (a.beq a) = true
 | .atom m => Nat.beq_refl' m
 | .base b => LamBaseSort.beq_refl b
 | .func m₁ n₁ => by rw [beq]; rw [LamSort.beq_refl m₁]; rw [LamSort.beq_refl n₁]; rfl
 
-def LamSort.beq_eq (a b : LamSort) : (a.beq b = true) → a = b :=
+theorem LamSort.beq_eq (a b : LamSort) : (a.beq b = true) → a = b :=
   match a, b with
   | .atom m,     .atom n     => fun H => Nat.eq_of_beq_eq_true H ▸ rfl
   | .base m,     .base n     => fun H => LamBaseSort.beq_eq _ _ H ▸ rfl
