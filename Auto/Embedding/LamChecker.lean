@@ -1431,6 +1431,14 @@ theorem Checker.getValidExport_smallStep
   exists fun _ => BinTree.get?'_leaf _ ▸ GLift.up False
   cases hImport; apply ImportTable.importFacts_correct
 
+def Checker.getValidExport_smallStep_reflection_runEq
+  (lvt lit : BinTree LamSort) (importFacts : BinTree REntry)
+  (cs : ChkSteps) (runResult : RTable) :=
+  ChkSteps.run
+    (fun n => (lvt.get? n).getD (.base .prop))
+    (fun n => (lit.get? n).getD (.base .prop))
+    ⟨importFacts, 0, .leaf⟩ cs == runResult
+
 theorem Checker.getValidExport_smallStep_reflection
   (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) (v : Nat)
   (importFacts : BinTree REntry) (hImport : it.importFacts = importFacts)
@@ -1438,10 +1446,8 @@ theorem Checker.getValidExport_smallStep_reflection
   (hlvt : lvt = cpv.var.mapOpt (fun x => .some x.fst))
   (hlit : lit = cpv.il.mapOpt (fun x => .some x.fst))
   (runResult : RTable)
-  (runEq : ChkSteps.run
-    (fun n => (lvt.get? n).getD (.base .prop))
-    (fun n => (lit.get? n).getD (.base .prop))
-    ⟨importFacts, 0, .leaf⟩ cs == runResult)
+  (runEq : Checker.getValidExport_smallStep_reflection_runEq
+    lvt lit importFacts cs runResult)
   (lctx : List LamSort) (t : LamTerm)
   (heq : RTable.getValidExport runResult v = some (lctx, t)) :
   LamThmValid cpv.toLamValuationEraseEtom lctx t :=

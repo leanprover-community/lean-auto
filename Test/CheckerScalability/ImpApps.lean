@@ -23,6 +23,7 @@ def test₁ (n : Nat) : String :=
 
 #eval IO.println (test₁ 60)
 
+-- 1s
 set_option maxRecDepth 2000 in
 example
   (α0 : Prop) (α1 : Prop) (α2 : Prop) (α3 : Prop) (α4 : Prop)

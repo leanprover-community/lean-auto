@@ -3,6 +3,7 @@ import Auto.Tactic
 set_option profiler true
 set_option trace.auto.buildChecker true
 set_option auto.optimizeCheckerProof false
+
 -- Testing whether binders can cause quadratic complexity
 
 partial def chopList (s : List α) (n : Nat) : List (List α) :=
