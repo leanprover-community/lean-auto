@@ -54,6 +54,11 @@ def LamBaseSort.beq : LamBaseSort → LamBaseSort → Bool
 | .bv n, .bv m => n.beq m
 | _,     _     => false
 
+instance : BEq LamBaseSort where
+  beq := LamBaseSort.beq
+
+theorem LamBaseSort.beq_def {a b : LamBaseSort} : (a == b) = a.beq b := rfl
+
 theorem LamBaseSort.beq_refl : {b : LamBaseSort} → (b.beq b) = true
 | .prop => rfl
 | .int  => rfl
@@ -78,6 +83,10 @@ theorem LamBaseSort.eq_of_beq_eq_true {b₁ b₂ : LamBaseSort} : b₁.beq b₂ 
   | .bv n, .prop => fun H => by cases H
   | .bv n, .int  => fun H => by cases H
   | .bv n, .real => fun H => by cases H
+
+instance : LawfulBEq LamBaseSort where
+  eq_of_beq := LamBaseSort.eq_of_beq_eq_true
+  rfl := LamBaseSort.beq_refl
 
 @[reducible] def LamBaseSort.interp.{u} : LamBaseSort → Type u
 | .prop   => GLift Prop
@@ -149,6 +158,10 @@ theorem LamSort.eq_of_beq_eq_true {a b : LamSort} : (a.beq b = true) → a = b :
   | .base m,     .func m₁ n₁ => fun H => by cases H
   | .func m₁ n₁, .atom n     => fun H => by cases H
   | .func m₁ n₁, .base n     => fun H => by cases H
+
+instance : LawfulBEq LamSort where
+  eq_of_beq := LamSort.eq_of_beq_eq_true
+  rfl := LamSort.beq_refl
 
 theorem LamSort.beq_eq_true_eq (a b : LamSort) : (a.beq b = true) = (a = b) :=
   propext <| Iff.intro eq_of_beq_eq_true (fun h => by subst h; apply beq_refl)
@@ -249,12 +262,21 @@ def CstrReal.beq : CstrReal → CstrReal → Bool
 | .one,  .one  => true
 | _,     _     => false
 
+instance : BEq CstrReal where
+  beq := CstrReal.beq
+
+theorem CstrReal.beq_def {x y : CstrReal} : (x == y) = x.beq y := rfl
+
 theorem CstrReal.beq_refl : {c : CstrReal} → (c.beq c) = true
 | .zero => rfl
 | .one  => rfl
 
 theorem CstrReal.eq_of_beq_eq_true {c₁ c₂ : CstrReal} : c₁.beq c₂ → c₁ = c₂ := by
   intro h; cases c₁ <;> cases c₂ <;> try cases h <;> rfl
+
+instance : LawfulBEq CstrReal where
+  eq_of_beq := CstrReal.eq_of_beq_eq_true
+  rfl := CstrReal.beq_refl
 
 def CstrReal.interp : (c : CstrReal) → Real
 | zero => 0
@@ -403,18 +425,21 @@ def LamBaseTerm.beq : LamBaseTerm → LamBaseTerm → Bool
 | .existE s₁,   .existE s₂   => s₁.beq s₂
 | _,            _            => false
 
+instance : BEq LamBaseTerm where
+  beq := LamBaseTerm.beq
+
 def LamBaseTerm.beq_refl {b : LamBaseTerm} : (b.beq b) = true := by
   cases b <;> first | rfl | apply LamSort.beq_refl | apply Nat.beq_refl | skip
-  case intVal i => apply Int.beq_refl
+  case intVal i => apply LawfulBEq.rfl (α := Int)
   case realVal c => apply CstrReal.beq_refl
-  case bvVal s => apply List.beq_refl @Bool.beq_refl
+  case bvVal s => apply LawfulBEq.rfl (α := List Bool)
 
 def LamBaseTerm.eq_of_beq_eq_true {b₁ b₂ : LamBaseTerm} (H : b₁.beq b₂) : b₁ = b₂ := by
   cases b₁ <;> cases b₂ <;> (first | contradiction | rfl | apply congrArg) <;>
     (try apply LamSort.eq_of_beq_eq_true H) <;> (try apply Nat.eq_of_beq_eq_true H)
   case intVal.intVal.h n₁ n₂ => apply Int.eq_of_beq_eq_true H
   case realVal.realVal.h c₁ c₂ => apply CstrReal.eq_of_beq_eq_true H
-  case bvVal.bvVal.h v₁ v₂ => apply List.eq_of_beq_eq_true @Bool.eq_of_beq_eq_true H
+  case bvVal.bvVal.h v₁ v₂ => apply LawfulBEq.eq_of_beq (α := List Bool) H
 
 structure LamTyVal where
   lamVarTy     : Nat → LamSort
@@ -1039,6 +1064,10 @@ theorem LamTerm.eq_of_beq_eq_true {t₁ t₂ : LamTerm} : (t₁.beq t₂ = true)
     let fneq := IHFn H.left.right
     let argeq := IHArg H.right
     rw [seq, fneq, argeq]
+
+instance : LawfulBEq LamTerm where
+  eq_of_beq := LamTerm.eq_of_beq_eq_true
+  rfl := LamTerm.beq_refl
 
 -- Typecheck. `ltv, lctx ⊢ term : type?`
 -- `ltv`          : LamTyVal

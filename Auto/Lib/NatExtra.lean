@@ -2,6 +2,11 @@ import Std.Data.Nat.Lemmas
 
 namespace Auto
 
+-- A version of `Nat.beq_refl` that reduces to `Eq.refl`
+def Nat.beq_refl' : (a : Nat) → (a.beq a) = true
+| 0 => rfl
+| n + 1 => Nat.beq_refl' n
+
 theorem Nat.lt_of_ble_eq_false {n : Nat} : Nat.ble n pos = false → pos < n := by
   intro H; apply Nat.lt_of_not_le;
   intro hle; rw [Nat.ble_eq_true_of_le hle] at H; cases H

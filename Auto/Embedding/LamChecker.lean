@@ -49,28 +49,28 @@ theorem REntry.beq_def {l r : REntry} : (l == r) = l.beq r := rfl
 
 theorem REntry.beq_refl {r : REntry} : (r == r) = true := by
   cases r <;> rw [REntry.beq_def] <;> dsimp [beq] <;>
-    (try rw [List.beq_refl @LamSort.beq_refl]) <;>
-    (try rw [LamSort.beq_def, LamSort.beq_refl]) <;>
-    (try rw [LamTerm.beq_def, LamTerm.beq_refl]) <;> rfl
+    (try rw [LawfulBEq.rfl]) <;>
+    (try rw [LawfulBEq.rfl]) <;>
+    (try rw [LawfulBEq.rfl]) <;> rfl
 
 theorem REntry.eq_of_beq_eq_true {l r : REntry} (H : (l == r) = true) : l = r := by
   cases l <;> cases r <;> (try cases H) <;> rw [beq_def] at H <;> dsimp [beq] at H
     <;> (try rw [Bool.and_eq_true] at H)
   case wf =>
     rw [Bool.and_eq_true] at H; have ⟨⟨sseq, seq⟩, teq⟩ := H
-    rw [List.eq_of_beq_eq_true @LamSort.eq_of_beq_eq_true sseq]
-    rw [LamSort.eq_of_beq_eq_true seq]
-    rw [LamTerm.eq_of_beq_eq_true teq]
+    rw [LawfulBEq.eq_of_beq sseq, LawfulBEq.eq_of_beq seq, LawfulBEq.eq_of_beq teq]
   case valid =>
     have ⟨sseq, teq⟩ := H
-    rw [List.eq_of_beq_eq_true @LamSort.eq_of_beq_eq_true sseq]
-    rw [LamTerm.eq_of_beq_eq_true teq]
+    rw [LawfulBEq.eq_of_beq sseq, LawfulBEq.eq_of_beq teq]
   case validEVar0 =>
     have ⟨sseq, teq⟩ := H
-    rw [List.eq_of_beq_eq_true @LamSort.eq_of_beq_eq_true sseq]
-    rw [LamTerm.eq_of_beq_eq_true teq]
+    rw [LawfulBEq.eq_of_beq sseq, LawfulBEq.eq_of_beq teq]
   case nonempty =>
-    rw [LamSort.eq_of_beq_eq_true H]
+    rw [LawfulBEq.eq_of_beq H]
+
+instance : LawfulBEq REntry where
+  eq_of_beq := REntry.eq_of_beq_eq_true
+  rfl := REntry.beq_refl
 
 def REntry.getValid? : REntry → Option (List LamSort × LamTerm)
 | .wf _ _ _ => .none
@@ -97,17 +97,19 @@ theorem RTable.beq_def {l r : RTable} : (l == r) = l.beq r := rfl
 
 theorem RTable.beq_refl {r : RTable} : (r == r) = true := by
   rw [beq_def]; cases r; dsimp [beq]
-  rw [BinTree.beq_refl @LamSort.beq_refl]
-  rw [BinTree.beq_refl @REntry.beq_refl]
-  rw [LawfulBEq.rfl (α := Nat)]; rfl
+  rw [LawfulBEq.rfl, LawfulBEq.rfl, LawfulBEq.rfl]; rfl
 
 theorem RTable.eq_of_beq_eq_true {l r : RTable} (H : (l == r) = true) : l = r := by
   rw [RTable.beq_def] at H; cases l; cases r; dsimp [beq] at H
   rw [Bool.and_eq_true, Bool.and_eq_true] at H
   have ⟨⟨hentries, hme⟩, hle⟩ := H
-  rw [BinTree.eq_of_beq_eq_true @REntry.eq_of_beq_eq_true hentries]
+  rw [LawfulBEq.eq_of_beq hentries]
   rw [LawfulBEq.eq_of_beq hme]
-  rw [BinTree.eq_of_beq_eq_true @LamSort.eq_of_beq_eq_true hle]
+  rw [LawfulBEq.eq_of_beq hle]
+
+instance : LawfulBEq RTable where
+  eq_of_beq := RTable.eq_of_beq_eq_true
+  rfl := RTable.beq_refl
 
 def RTable.get? (r : RTable) := r.entries.get?
 
@@ -334,7 +336,7 @@ theorem RTable.getValidEnsureLCtx_correct
     dsimp
     match hlctx : lctx.beq lctx' with
     | true =>
-      intro heq; cases heq; cases (List.eq_of_beq_eq_true @LamSort.eq_of_beq_eq_true hlctx)
+      intro heq; cases heq; cases (LawfulBEq.eq_of_beq (α:=List LamSort) hlctx)
       apply RTable.getValid_correct inv hv
     | false => intro heq; cases heq
   | .none => intro heq; cases heq
@@ -395,7 +397,7 @@ theorem RTable.getValidsEnsureLCtx_correct
       dsimp
       match hlctx : lctx.beq lctx' with
       | true =>
-        dsimp; cases (List.eq_of_beq_eq_true @LamSort.eq_of_beq_eq_true hlctx)
+        dsimp; cases (LawfulBEq.eq_of_beq (α:=List LamSort) hlctx)
         match hvs : getValidsEnsureLCtx r lctx vs with
         | .some ts' =>
           intro heq; cases heq
@@ -406,7 +408,7 @@ theorem RTable.getValidsEnsureLCtx_correct
       dsimp
       match hlctx : lctx.beq lctx' with
       | true =>
-        dsimp; cases (List.eq_of_beq_eq_true @LamSort.eq_of_beq_eq_true hlctx)
+        dsimp; cases (LawfulBEq.eq_of_beq (α:=List LamSort) hlctx)
         match hvs : getValidsEnsureLCtx r lctx vs with
         | .some ts' =>
           intro heq; cases heq; apply HList.cons _ (IH hvs)
@@ -1428,5 +1430,22 @@ theorem Checker.getValidExport_smallStep
   dsimp [RTable.inv, BinTree.get?]
   exists fun _ => BinTree.get?'_leaf _ ▸ GLift.up False
   cases hImport; apply ImportTable.importFacts_correct
+
+theorem Checker.getValidExport_smallStep_reflection
+  (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) (v : Nat)
+  (importFacts : BinTree REntry) (hImport : it.importFacts = importFacts)
+  (lvt lit : BinTree LamSort)
+  (hlvt : lvt = cpv.var.mapOpt (fun x => .some x.fst))
+  (hlit : lit = cpv.il.mapOpt (fun x => .some x.fst))
+  (runResult : RTable)
+  (runEq : ChkSteps.run
+    (fun n => (lvt.get? n).getD (.base .prop))
+    (fun n => (lit.get? n).getD (.base .prop))
+    ⟨importFacts, 0, .leaf⟩ cs == runResult)
+  (lctx : List LamSort) (t : LamTerm)
+  (heq : RTable.getValidExport runResult v = some (lctx, t)) :
+  LamThmValid cpv.toLamValuationEraseEtom lctx t :=
+  Checker.getValidExport_smallStep cpv it cs v importFacts hImport lvt
+    lit hlvt hlit runResult (LawfulBEq.eq_of_beq runEq) lctx t heq
 
 end Auto.Embedding.Lam
