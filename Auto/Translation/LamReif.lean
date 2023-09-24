@@ -536,6 +536,8 @@ section Checker
   -- Functions that operates on the checker table
 
   def validOfIntros (v : REntry) (idx : Nat) : ReifM REntry := do
+    if idx == 0 then
+      return v
     let p ← lookupREntryPos! v
     let .addEntry re ← newChkStep (.validOfIntros p idx) .none
       | throwError "validOfIntros :: Unexpected evaluation result"
@@ -552,10 +554,7 @@ section Checker
         idx := idx + 1
         t := t'
       | .none => break
-    if idx == 0 then
-      return v
-    else
-      validOfIntros v idx
+    validOfIntros v idx
 
   def validOfReverts (v : REntry) (idx : Nat) : ReifM REntry := do
     let p ← lookupREntryPos! v
@@ -632,6 +631,8 @@ section Checker
   -- Given `∀ x₀ x₁ ⋯ xₖ₋₁, p` and `arg₀, arg₁, ⋯, argₖ₋₁`, return
   --   `p[x₀/arg₀, x₁/arg₁, ⋯, xₖ₋₁/argₖ₋₁]`
   def validOfInstantiateForall (v : REntry) (args : Array LamTerm) : ReifM REntry := do
+    if args.size == 0 then
+      return v
     let v ← validOfIntros v args.size
     validOfInstantiateRev v args
 
@@ -672,8 +673,6 @@ section Checker
         chkSteps := chkSteps.push (cs, n)
     -- `ChkMap` are run using `foldl`, so we use `BinTree.ofListFoldl`
     let e := Lean.toExpr (BinTree.ofListFoldl chkSteps.data)
-    -- if !(← Meta.isTypeCorrectCore e) then
-    --   throwError "buildChkMap :: Malformed expression"
     return e
 
     -- Given a list of expression of type `ty`, construct the corresponding `BinTree`
@@ -737,23 +736,26 @@ section Checker
     return lamValuationExpr
 
   -- `lvalExpr` is the `LamValuation`
-  def buildImportTableExpr (chkValExpr : Expr) : ReifM Expr := do
+  def buildImportTableExpr (chkValExpr : Expr) : ReifM (Expr × Expr) := do
     -- let startTime ← IO.monoMsNow
     let u ← getU
     let lamTermExpr := Expr.const ``LamTerm []
-    -- Record the entries in the importTable for debug purpose
-    let mut entries : Array (Expr × Expr) := #[]
     let mut importTable : BinTree Expr := BinTree.leaf
-    for (_, (e, ti, n)) in (← getAssertions).toList do
+    let mut importedFactsTree : BinTree REntry := BinTree.leaf
+    for (t, (e, ti, n)) in (← getAssertions).toList do
       let tExpr := Lean.toExpr ti
       let itEntry := Lean.mkApp3 (.const ``importTablePSigmaMk [u]) chkValExpr tExpr e
       importTable := importTable.insert n itEntry
-      entries := entries.push (e, tExpr)
+      if t.maxLooseBVarSucc != 0 || t.maxEVarSucc != 0 then
+        throwError "buildImportTableExpr :: Invalid imported fact {t}"
+      let veEntry := REntry.validEVar0 [] t
+      importedFactsTree := importedFactsTree.insert n veEntry
     let type := Lean.mkApp2 (.const ``PSigma [.succ .zero, .zero])
       lamTermExpr (.app (.const ``importTablePSigmaβ [u]) chkValExpr)
     let importTableExpr := (@instToExprBinTree Expr
       (instExprToExprId type) ⟨.zero, Prop⟩).toExpr importTable
-    return importTableExpr
+    let importedFacts := Lean.toExpr importedFactsTree
+    return (importTableExpr, importedFacts)
 
   -- `re` is the entry we want to retrieve from the `validTable`
   -- The `expr` returned is a proof of the `LamThmValid`-ness of the entry
@@ -761,21 +763,28 @@ section Checker
     printCheckerStats
     let startTime ← IO.monoMsNow
     let u ← getU
+    let lvtExpr := Lean.toExpr (BinTree.ofListGet ((← getVarVal).map Prod.snd).data)
+    let litExpr := Lean.toExpr (BinTree.ofListGet (← getLamILTy).data)
     let cpvExpr ← buildCPValExpr
     let cpvTy := Expr.const ``CPVal [u]
     let checker ← Meta.withLetDecl `cpval cpvTy cpvExpr fun cpvFVarExpr => do
-      let itExpr ← buildImportTableExpr cpvFVarExpr
+      let (itExpr, ifExpr) ← buildImportTableExpr cpvFVarExpr
       let csExpr ← buildChkStepsExpr
-      let rInv := Lean.mkApp3 (.const ``Checker [u]) cpvFVarExpr itExpr csExpr
-      let rExpr := Lean.mkApp3 (.const ``RTable.mk [])
-        (Lean.toExpr (← getRTableTree)) (Lean.toExpr (← getMaxEVarSucc))
-        (Lean.toExpr (← getLamEVarTyTree))
       let .some (lctx, t) := re.getValid?
         | throwError "buildFullCheckerExprFor :: {re} is not a `valid` entry"
       let vExpr := Lean.toExpr (← lookupREntryPos! re)
-      let eqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr (lctx, t)]]
-      let getEntry := Lean.mkApp7 (.const ``RTable.getValidExport_correct [u])
-        rExpr cpvExpr vExpr (Lean.toExpr lctx) (Lean.toExpr t) rInv eqExpr
+      let hImportExpr ← Meta.mkAppM ``Eq.refl #[ifExpr]
+      let hLvtExpr ← Meta.mkAppM ``Eq.refl #[lvtExpr]
+      let hLitExpr ← Meta.mkAppM ``Eq.refl #[litExpr]
+      let runResultExpr := Lean.mkApp3 (.const ``RTable.mk [])
+        (Lean.toExpr (← getRTableTree)) (Lean.toExpr (← getMaxEVarSucc))
+        (Lean.toExpr (← getLamEVarTyTree))
+      let runEqExpr ← Meta.mkAppM ``Eq.refl #[runResultExpr]
+      let heqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr (lctx, t)]]
+      let getEntry := Lean.mkAppN (.const ``Checker.getValidExport_smallStep [u])
+        #[cpvExpr, itExpr, csExpr, vExpr, ifExpr, hImportExpr,
+          lvtExpr, litExpr, hLvtExpr, hLitExpr, runResultExpr, runEqExpr,
+          Lean.toExpr lctx, Lean.toExpr t, heqExpr]
       let getEntry ← Meta.mkLetFVars #[cpvFVarExpr] getEntry
       trace[auto.buildChecker] "Checker expression built in time {(← IO.monoMsNow) - startTime}ms"
       return getEntry

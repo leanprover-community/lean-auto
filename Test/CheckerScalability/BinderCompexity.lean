@@ -1,5 +1,6 @@
 import Auto.Tactic
 
+set_option profiler true
 set_option trace.auto.buildChecker true
 set_option auto.optimizeCheckerProof false
 -- Testing whether binders can cause quadratic complexity
@@ -36,7 +37,6 @@ def test₁ (n : Nat) : String :=
 
 #eval IO.println (test₁ 256)
 
-set_option profiler true
 example
   (β : Type)
   (α0 : Type 0)

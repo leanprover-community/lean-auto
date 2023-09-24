@@ -1327,11 +1327,47 @@ theorem ChkSteps.run_correct
 def ChkSteps.runFromBeginning (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) :=
   ChkSteps.run cpv.toLamVarTy cpv.toLamILTy ⟨it.importFacts, 0, .leaf⟩ cs
 
-theorem Checker
+theorem CheckerAux
   (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) :
   ∃ eV, (ChkSteps.runFromBeginning cpv it cs).inv ⟨cpv, eV⟩ := by
   apply ChkSteps.run_correct; dsimp [RTable.inv, BinTree.get?]
   exists fun _ => BinTree.get?'_leaf _ ▸ GLift.up False;
   apply ImportTable.importFacts_correct
+
+theorem Checker.getValidExport_bigStep
+  (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) (v : Nat)
+  (heq : RTable.getValidExport (ChkSteps.runFromBeginning cpv it cs) v = some (lctx, t)) :
+  LamThmValid cpv.toLamValuationEraseEtom lctx t :=
+  RTable.getValidExport_correct (CheckerAux _ _ _) heq
+
+theorem Checker.getValidExport_smallStep
+  (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) (v : Nat)
+  (importFacts : BinTree REntry) (hImport : it.importFacts = importFacts)
+  (lvt lit : BinTree LamSort)
+  (hlvt : lvt = cpv.var.mapOpt (fun x => .some x.fst))
+  (hlit : lit = cpv.il.mapOpt (fun x => .some x.fst))
+  (runResult : RTable)
+  (runEq : ChkSteps.run
+    (fun n => (lvt.get? n).getD (.base .prop))
+    (fun n => (lit.get? n).getD (.base .prop))
+    ⟨importFacts, 0, .leaf⟩ cs = runResult)
+  (lctx : List LamSort) (t : LamTerm)
+  (heq : RTable.getValidExport runResult v = some (lctx, t)) :
+  LamThmValid cpv.toLamValuationEraseEtom lctx t := by
+  apply RTable.getValidExport_correct _ heq
+  have lvtEq : (fun n => (lvt.get? n).getD (.base .prop)) = cpv.toLamVarTy := by
+    cases cpv; dsimp [CPVal.toLamVarTy]; apply funext; intro n
+    rw [← Option.getD_map (f:=@Sigma.fst LamSort _)]; dsimp
+    apply congrFun; apply congrArg; rw [hlvt, BinTree.get?_mapOpt]
+    apply Eq.symm; apply Option.map_eq_bind
+  have litEq : (fun n => (lit.get? n).getD (.base .prop)) = cpv.toLamILTy := by
+    cases cpv; dsimp [CPVal.toLamILTy]; apply funext; intro n
+    rw [← Option.getD_map (f:=@Sigma.fst LamSort _)]; dsimp
+    apply congrFun; apply congrArg; rw [hlit, BinTree.get?_mapOpt]
+    apply Eq.symm; apply Option.map_eq_bind
+  rw [lvtEq, litEq] at runEq; cases runEq; apply ChkSteps.run_correct
+  dsimp [RTable.inv, BinTree.get?]
+  exists fun _ => BinTree.get?'_leaf _ ▸ GLift.up False
+  cases hImport; apply ImportTable.importFacts_correct
 
 end Auto.Embedding.Lam

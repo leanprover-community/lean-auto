@@ -520,6 +520,25 @@ theorem mapOpt_allp (f : α → Option β) (p : β → Prop) (bt : BinTree α) :
   (bt.mapOpt f).allp p ↔ bt.allp (fun x => Option.allp p (f x)) := by
   rw [← allp_equiv]; rw [← allp_equiv]; apply mapOpt_allp'
 
+theorem get?'_mapOpt (f : α → Option β) (bt : BinTree α) :
+  (bt.mapOpt f).get?' n = (bt.get?' n).bind f := by
+  induction bt generalizing n
+  case leaf =>
+    dsimp [mapOpt]; rw [get?'_leaf, get?'_leaf]; rfl
+  case node l x r IHl IHr =>
+    dsimp [mapOpt]
+    match n with
+    | 0 => rfl
+    | 1 => rfl
+    | n' + 2 =>
+      rw [get?'_succSucc, get?'_succSucc]
+      match (n' + 2) % 2 with
+      | 0 => dsimp [left!]; rw [IHl]
+      | .succ _ => dsimp [right!]; rw [IHr]
+
+theorem get?_mapOpt (f : α → Option β) (bt : BinTree α) :
+  (bt.mapOpt f).get? n = (bt.get? n).bind f := get?'_mapOpt f bt
+
 -- **TODO**: Prove properties
 -- Property : `xs.get? n = (ofListGet xs).get? n`
 def ofListGet (xs : List α) : BinTree α :=
