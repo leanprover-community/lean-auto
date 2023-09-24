@@ -1416,7 +1416,7 @@ theorem LamTerm.maxEVarSucc_impApp?
         rw [h] at heq; cases imp <;> try cases heq
         case base b =>
           cases b <;> try cases heq
-          dsimp [maxEVarSucc]; cases (LamTerm.beq_eq _ _ h)
+          dsimp [maxEVarSucc]; cases (LamTerm.eq_of_beq_eq_true h)
           apply Nat.le_max_right
       case false =>
         rw [h] at heq; cases heq
@@ -1443,7 +1443,7 @@ theorem LamValid.impApp
               exists wfConcl; have ⟨wf₁, h₁⟩ := v₁;
               intro lctxTerm; apply h₁₂; apply Eq.mp _ (h₁ lctxTerm);
               apply congrArg; apply eq_of_heq; apply LamWF.interp_heq <;> try rfl
-              exact .symm (LamTerm.beq_eq _ _ h)
+              exact .symm (LamTerm.eq_of_beq_eq_true h)
       | false =>
         rw [h] at heq; cases heq
 
@@ -1673,7 +1673,7 @@ theorem LamEquiv.mp?
           match h : t.beq arg' with
           | true =>
             rw [h] at heq; dsimp at heq; cases heq
-            cases (LamTerm.beq_eq _ _ h)
+            cases (LamTerm.eq_of_beq_eq_true h)
             have ⟨wfrw, _⟩ := Hrw
             have ⟨seq₁, seq₂, _⟩ := LamWF.mkEq_sortEq wfrw
             cases seq₁; cases seq₂
@@ -1741,7 +1741,7 @@ theorem LamEquiv.congrArg?
             match h : arg.beq arg' with
             | true =>
               rw [h] at heq; dsimp at heq
-              cases (LamTerm.beq_eq _ _ h)
+              cases (LamTerm.eq_of_beq_eq_true h)
               cases heq; cases wft;
               case ofApp s heqAp hres =>
                 apply LamEquiv.congrArg hres
@@ -1813,7 +1813,7 @@ theorem LamEquiv.congrFun?
             match h : fn.beq fn' with
             | true =>
               rw [h] at heq; dsimp at heq
-              cases (LamTerm.beq_eq _ _ h)
+              cases (LamTerm.eq_of_beq_eq_true h)
               cases heq; cases wft
               case ofApp heqAp hres =>
                 apply LamEquiv.congrFun _ heqAp

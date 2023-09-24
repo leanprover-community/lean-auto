@@ -55,6 +55,39 @@ namespace BinTree
 instance : Inhabited (BinTree α) where
   default := .leaf
 
+def beq [BEq α] (a b : BinTree α) :=
+  match a, b with
+  | .leaf, .leaf => true
+  | .node la xa ra, .node lb xb rb => la.beq lb && xa == xb && ra.beq rb
+  | _, _ => false
+
+instance [BEq α] : BEq (BinTree α) where
+  beq := beq
+
+theorem beq_leaf_leaf [BEq α] : (leaf (α:=α) == .leaf) = true := rfl
+
+theorem beq_leaf_node [BEq α] : (leaf (α:=α) ==  (node l x r)) = false := rfl
+
+theorem beq_node_leaf [BEq α] : (node (α:=α) l x r == .leaf) = false := rfl
+
+theorem beq_node_node [BEq α] : (node (α:=α) la xa ra == .node lb xb rb) =
+  ((la == lb && xa == xb && ra == rb) = true) := rfl
+
+theorem beq_refl [BEq α] (α_beq_refl : ∀ (x : α), (x == x) = true)
+  {a : BinTree α} : (a == a) = true := by
+  induction a <;> try rfl
+  case node l x r IHl IHr =>
+    dsimp [beq]; rw [beq_node_node]; rw [IHl, IHr]
+    rw [Option.beq_refl α_beq_refl]; rfl
+
+theorem eq_of_beq_eq_true [BEq α] (α_eq_of_beq_eq_true : ∀ (x y : α), (x == y) = true → x = y)
+  {a b : BinTree α} (H : (a == b) = true) : a = b := by
+  induction a generalizing b <;> cases b <;> try cases H <;> try rfl
+  case node.node la xa ra IHla IHra lb xb rb =>
+    rw [beq_node_node] at H; rw [Bool.and_eq_true, Bool.and_eq_true] at H
+    have ⟨⟨leq, xeq⟩, req⟩ := H
+    rw [IHla leq, IHra req, Option.eq_of_beq_eq_true α_eq_of_beq_eq_true xeq]
+
 def val? (bt : BinTree α) : Option α :=
   match bt with
   | .leaf => .none

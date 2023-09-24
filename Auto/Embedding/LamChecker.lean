@@ -35,6 +35,43 @@ def REntry.toString : REntry → String
 instance : ToString REntry where
   toString := REntry.toString
 
+def REntry.beq : REntry → REntry → Bool
+| .wf ss s t, .wf ss' s' t' => ss == ss' && s == s' && t == t'
+| .valid ss t, .valid ss' t' => ss == ss' && t == t'
+| .validEVar0 ss t, .validEVar0 ss' t' => ss == ss' && t == t'
+| .nonempty s, .nonempty s' => s == s'
+| _, _ => false
+
+instance : BEq REntry where
+  beq := REntry.beq
+
+theorem REntry.beq_def {l r : REntry} : (l == r) = l.beq r := rfl
+
+theorem REntry.beq_refl {r : REntry} : (r == r) = true := by
+  cases r <;> rw [REntry.beq_def] <;> dsimp [beq] <;>
+    (try rw [List.beq_refl @LamSort.beq_refl]) <;>
+    (try rw [LamSort.beq_def, LamSort.beq_refl]) <;>
+    (try rw [LamTerm.beq_def, LamTerm.beq_refl]) <;> rfl
+
+theorem REntry.eq_of_beq_eq_true {l r : REntry} (H : (l == r) = true) : l = r := by
+  cases l <;> cases r <;> (try cases H) <;> rw [beq_def] at H <;> dsimp [beq] at H
+    <;> (try rw [Bool.and_eq_true] at H)
+  case wf =>
+    rw [Bool.and_eq_true] at H; have ⟨⟨sseq, seq⟩, teq⟩ := H
+    rw [List.eq_of_beq_eq_true @LamSort.eq_of_beq_eq_true sseq]
+    rw [LamSort.eq_of_beq_eq_true seq]
+    rw [LamTerm.eq_of_beq_eq_true teq]
+  case valid =>
+    have ⟨sseq, teq⟩ := H
+    rw [List.eq_of_beq_eq_true @LamSort.eq_of_beq_eq_true sseq]
+    rw [LamTerm.eq_of_beq_eq_true teq]
+  case validEVar0 =>
+    have ⟨sseq, teq⟩ := H
+    rw [List.eq_of_beq_eq_true @LamSort.eq_of_beq_eq_true sseq]
+    rw [LamTerm.eq_of_beq_eq_true teq]
+  case nonempty =>
+    rw [LamSort.eq_of_beq_eq_true H]
+
 def REntry.getValid? : REntry → Option (List LamSort × LamTerm)
 | .wf _ _ _ => .none
 | .valid ss t => .some (ss, t)
@@ -49,6 +86,28 @@ structure RTable where
   entries     : BinTree REntry
   maxEVarSucc : Nat
   lamEVarTy   : BinTree LamSort
+
+def RTable.beq : RTable → RTable → Bool
+| ⟨le, lmax, llam⟩, ⟨re, rmax, rlam⟩ => le == re && lmax == rmax && llam == rlam
+
+instance : BEq RTable where
+  beq := RTable.beq
+
+theorem RTable.beq_def {l r : RTable} : (l == r) = l.beq r := rfl
+
+theorem RTable.beq_refl {r : RTable} : (r == r) = true := by
+  rw [beq_def]; cases r; dsimp [beq]
+  rw [BinTree.beq_refl @LamSort.beq_refl]
+  rw [BinTree.beq_refl @REntry.beq_refl]
+  rw [LawfulBEq.rfl (α := Nat)]; rfl
+
+theorem RTable.eq_of_beq_eq_true {l r : RTable} (H : (l == r) = true) : l = r := by
+  rw [RTable.beq_def] at H; cases l; cases r; dsimp [beq] at H
+  rw [Bool.and_eq_true, Bool.and_eq_true] at H
+  have ⟨⟨hentries, hme⟩, hle⟩ := H
+  rw [BinTree.eq_of_beq_eq_true @REntry.eq_of_beq_eq_true hentries]
+  rw [LawfulBEq.eq_of_beq hme]
+  rw [BinTree.eq_of_beq_eq_true @LamSort.eq_of_beq_eq_true hle]
 
 def RTable.get? (r : RTable) := r.entries.get?
 
@@ -275,7 +334,7 @@ theorem RTable.getValidEnsureLCtx_correct
     dsimp
     match hlctx : lctx.beq lctx' with
     | true =>
-      intro heq; cases heq; cases (List.beq_eq LamSort.beq_eq _ _ hlctx)
+      intro heq; cases heq; cases (List.eq_of_beq_eq_true @LamSort.eq_of_beq_eq_true hlctx)
       apply RTable.getValid_correct inv hv
     | false => intro heq; cases heq
   | .none => intro heq; cases heq
@@ -336,7 +395,7 @@ theorem RTable.getValidsEnsureLCtx_correct
       dsimp
       match hlctx : lctx.beq lctx' with
       | true =>
-        dsimp; cases (List.beq_eq LamSort.beq_eq _ _ hlctx)
+        dsimp; cases (List.eq_of_beq_eq_true @LamSort.eq_of_beq_eq_true hlctx)
         match hvs : getValidsEnsureLCtx r lctx vs with
         | .some ts' =>
           intro heq; cases heq
@@ -347,7 +406,7 @@ theorem RTable.getValidsEnsureLCtx_correct
       dsimp
       match hlctx : lctx.beq lctx' with
       | true =>
-        dsimp; cases (List.beq_eq LamSort.beq_eq _ _ hlctx)
+        dsimp; cases (List.eq_of_beq_eq_true @LamSort.eq_of_beq_eq_true hlctx)
         match hvs : getValidsEnsureLCtx r lctx vs with
         | .some ts' =>
           intro heq; cases heq; apply HList.cons _ (IH hvs)
@@ -802,7 +861,7 @@ theorem ChkStep.evalValidOfInstantiate_correct
           match h₃ : Nat.ble (LamTerm.maxEVarSucc arg) r.maxEVarSucc with
           | true =>
             apply IH
-            cases (LamSort.beq_eq _ _ h₂)
+            cases (LamSort.eq_of_beq_eq_true h₂)
             have h₁' := LamThmWF.ofLamThmWFCheck? (lval:=cv.toLamValuation) h₁
             have ⟨tV, eS⟩ := tV
             apply And.intro (LamThmValid.instantiate1 h₁' tV)
@@ -1040,7 +1099,7 @@ theorem ChkStep.eval_correct
           match h₄ : Nat.ble (LamTerm.maxEVarSucc arg) r.maxEVarSucc with
           | true =>
             dsimp [Option.allp, REntry.correct]
-            cases (LamSort.beq_eq _ _ h₃)
+            cases (LamSort.eq_of_beq_eq_true h₃)
             have h₁' := LamThmWF.ofLamThmWFCheck? (lval:=cv.toLamValuation) h₂
             have h₂' := RTable.getValid_correct inv h₁
             apply ChkStep.eval_correct_validAux h₂'
