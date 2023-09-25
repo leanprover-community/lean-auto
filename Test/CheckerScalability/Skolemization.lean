@@ -3,7 +3,7 @@ import Auto.Tactic
 set_option profiler true
 set_option auto.optimizeCheckerProof false
 set_option compiler.enableNew false
-set_option auto.checker.buildMode "smallstep_reflection"
+set_option auto.checker.buildMode "indirectReduce_reflection"
 
 theorem test₁ (f₁ f₂ f₃ f₄ f₅ f₆ f₇ f₈ f₉ f₁₀ f₁₁ : Nat → Nat → Nat)
   (H₁ : ∀ x₁, ∃ x₂, ∀ x₃, ∃ x₄, ∀ x₅, ∃ x₆, ∀ x₇, ∃ x₈,
@@ -345,3 +345,5 @@ theorem test₃ (f₁ f₂ f₃ f₄ f₅ f₆ f₇ f₈ f₉ f₁₀ f₁₁ : 
     (f₄ (f₅ (f₆ x₉ x₁₀) (f₇ x₁₁ x₁₂)) (f₈ (f₉ x₁₃ x₁₄) (f₁₀ x₁₅ x₁₆)) =
       f₁₁ (f₁ (f₂ x₁₆ x₁₅) (f₃ x₁₄ x₁₃)) (f₄ (f₅ x₁₂ x₁₁) (f₆ x₁₀ x₉)))) :
   True := by auto
+
+#check 2

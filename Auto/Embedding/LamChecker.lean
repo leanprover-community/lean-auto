@@ -1,4 +1,5 @@
 import Auto.Embedding.LamConv
+import Auto.Embedding.LamTermInterp
 import Auto.Lib.BinTree
 
 namespace Auto.Embedding.Lam
@@ -1400,7 +1401,7 @@ theorem CheckerAux
   exists fun _ => BinTree.get?'_leaf _ ▸ GLift.up False;
   apply ImportTable.importFacts_correct
 
-theorem Checker.getValidExport_bigStep
+theorem Checker.getValidExport_directReduce
   (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) (v : Nat)
   (heq : RTable.getValidExport (ChkSteps.runFromBeginning cpv it cs) v = some (lctx, t)) :
   LamThmValid cpv.toLamValuationEraseEtom lctx t :=
@@ -1412,7 +1413,7 @@ theorem Checker.getValidExport_bigStep
 --   caused by compiling the definition of `runResult`. I'm not sure why it's
 --   the case, but Lean sometimes exhibit superlinear (even quadratic) compilation
 --   time with respect to the size of `runResult`.
-theorem Checker.getValidExport_smallStepAux
+theorem Checker.getValidExport_indirectReduceAux
   (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) (v : Nat)
   (importFacts : BinTree REntry) (hImport : it.importFacts = importFacts)
   (lvt lit : BinTree LamSort)
@@ -1442,7 +1443,7 @@ theorem Checker.getValidExport_smallStepAux
   exists fun _ => BinTree.get?'_leaf _ ▸ GLift.up False
   cases hImport; apply ImportTable.importFacts_correct
 
-theorem Checker.getValidExport_smallStep
+theorem Checker.getValidExport_indirectReduce
   (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) (v : Nat)
   (importFacts : BinTree REntry) (hImport : it.importFacts = importFacts)
   (lvt lit : BinTree LamSort)
@@ -1453,10 +1454,10 @@ theorem Checker.getValidExport_smallStep
     (fun n => (lvt.get? n).getD (.base .prop))
     (fun n => (lit.get? n).getD (.base .prop))
     ⟨importFacts, 0, .leaf⟩ cs) v = some (lctx, t)) :
-  LamThmValid cpv.toLamValuationEraseEtom lctx t := Checker.getValidExport_smallStepAux
+  LamThmValid cpv.toLamValuationEraseEtom lctx t := Checker.getValidExport_indirectReduceAux
     cpv it cs v importFacts hImport lvt lit hlvt hlit _ rfl lctx t heq
 
-def Checker.getValidExport_smallStep_reflection_runEq
+def Checker.getValidExport_indirectReduce_reflection_runEq
   (lvt lit : BinTree LamSort) (importFacts : BinTree REntry)
   (cs : ChkSteps) (v : Nat) (lctx : List LamSort) (t : LamTerm):=
   RTable.getValidExport (ChkSteps.run
@@ -1464,16 +1465,16 @@ def Checker.getValidExport_smallStep_reflection_runEq
     (fun n => (lit.get? n).getD (.base .prop))
     ⟨importFacts, 0, .leaf⟩ cs) v == (lctx, t)
 
-theorem Checker.getValidExport_smallStep_reflection
+theorem Checker.getValidExport_indirectReduce_reflection
   (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) (v : Nat)
   (importFacts : BinTree REntry) (hImport : it.importFacts = importFacts)
   (lvt lit : BinTree LamSort)
   (hlvt : lvt = cpv.var.mapOpt (fun x => .some x.fst))
   (hlit : lit = cpv.il.mapOpt (fun x => .some x.fst))
   (lctx : List LamSort) (t : LamTerm)
-  (heq : Checker.getValidExport_smallStep_reflection_runEq lvt lit importFacts cs v lctx t) :
+  (heq : Checker.getValidExport_indirectReduce_reflection_runEq lvt lit importFacts cs v lctx t) :
   LamThmValid cpv.toLamValuationEraseEtom lctx t :=
-  Checker.getValidExport_smallStep cpv it cs v importFacts hImport lvt
+  Checker.getValidExport_indirectReduce cpv it cs v importFacts hImport lvt
     lit hlvt hlit lctx t (LawfulBEq.eq_of_beq heq)
 
 end Auto.Embedding.Lam

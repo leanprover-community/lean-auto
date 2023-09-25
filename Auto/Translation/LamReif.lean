@@ -671,24 +671,27 @@ end Checker
 section BuildChecker
 
   inductive BuildMode where
-    | smallstep
-    | smallstep_reflection
+    | directReduce
+    | indirectReduce
+    | indirectReduce_reflection
   deriving BEq, Hashable, Inhabited
 
   instance : ToString BuildMode where
     toString : BuildMode → String
-    | .smallstep => "smallstep"
-    | .smallstep_reflection => "smallstep_reflection"
+    | .directReduce => "directReduce"
+    | .indirectReduce => "indirectReduce"
+    | .indirectReduce_reflection => "indirectReduce_reflection"
   
   instance : Lean.KVMap.Value BuildMode where
     toDataValue n := toString n
     ofDataValue?
-    | "smallstep" => some .smallstep
-    | "smallstep_reflection" => some .smallstep_reflection
+    | "directReduce" => some .directReduce
+    | "indirectReduce" => some .indirectReduce
+    | "indirectReduce_reflection" => some .indirectReduce_reflection
     | _ => none
 
   register_option auto.checker.buildMode : BuildMode := {
-    defValue := BuildMode.smallstep
+    defValue := BuildMode.indirectReduce
     descr := "Mode when building the checker"
   }
 
@@ -786,7 +789,29 @@ section BuildChecker
 
   -- `re` is the entry we want to retrieve from the `validTable`
   -- The `expr` returned is a proof of the `LamThmValid`-ness of the entry
-  def buildFullCheckerExprFor_smallStep (re : REntry) : ReifM Expr := do
+  def buildFullCheckerExprFor_directReduce (re : REntry) : ReifM Expr := do
+    printCheckerStats
+    let startTime ← IO.monoMsNow
+    let u ← getU
+    let cpvExpr ← buildCPValExpr
+    let cpvTy := Expr.const ``CPVal [u]
+    let checker ← Meta.withLetDecl `cpval cpvTy cpvExpr fun cpvFVarExpr => do
+      let (itExpr, _) ← buildImportTableExpr cpvFVarExpr
+      let csExpr ← buildChkStepsExpr
+      let .some (lctx, t) := re.getValid?
+        | throwError "buildFullCheckerExprFor :: {re} is not a `valid` entry"
+      let vExpr := Lean.toExpr (← lookupREntryPos! re)
+      let eqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr (lctx, t)]]
+      let getEntry := Lean.mkApp7 (.const ``Checker.getValidExport_directReduce [u])
+        (Lean.toExpr lctx) (Lean.toExpr t) cpvExpr itExpr csExpr vExpr eqExpr
+      let getEntry ← Meta.mkLetFVars #[cpvFVarExpr] getEntry
+      trace[auto.buildChecker] "Checker expression built in time {(← IO.monoMsNow) - startTime}ms"
+      return getEntry
+    return checker
+
+  -- `re` is the entry we want to retrieve from the `validTable`
+  -- The `expr` returned is a proof of the `LamThmValid`-ness of the entry
+  def buildFullCheckerExprFor_indirectReduce (re : REntry) : ReifM Expr := do
     printCheckerStats
     let startTime ← IO.monoMsNow
     let u ← getU
@@ -804,7 +829,7 @@ section BuildChecker
       let hLvtExpr ← Meta.mkAppM ``Eq.refl #[lvtExpr]
       let hLitExpr ← Meta.mkAppM ``Eq.refl #[litExpr]
       let heqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr (lctx, t)]]
-      let getEntry := Lean.mkAppN (.const ``Checker.getValidExport_smallStep [u])
+      let getEntry := Lean.mkAppN (.const ``Checker.getValidExport_indirectReduce [u])
         #[cpvExpr, itExpr, csExpr, vExpr, ifExpr, hImportExpr,
           lvtExpr, litExpr, hLvtExpr, hLitExpr, Lean.toExpr lctx, Lean.toExpr t, heqExpr]
       let getEntry ← Meta.mkLetFVars #[cpvFVarExpr] getEntry
@@ -835,7 +860,7 @@ section BuildChecker
       (Lean.toExpr (← getLamEVarTyTree))
     mkNativeAuxDecl "lam_ssrefl_rr" (Lean.mkConst ``RTable) runResultExpr
 
-  def buildFullCheckerExprFor_smallStep_reflection (re : REntry) : ReifM Expr := do
+  def buildFullCheckerExprFor_indirectReduce_reflection (re : REntry) : ReifM Expr := do
     printCheckerStats
     let startTime ← IO.monoMsNow
     let u ← getU
@@ -856,13 +881,13 @@ section BuildChecker
       let hImportExpr ← Meta.mkAppM ``Eq.refl #[ifExpr]
       let hLvtExpr ← Meta.mkAppM ``Eq.refl #[lvtExpr]
       let hLitExpr ← Meta.mkAppM ``Eq.refl #[litExpr]
-      let heqBoolExpr := Lean.mkApp7 (.const ``Checker.getValidExport_smallStep_reflection_runEq [])
+      let heqBoolExpr := Lean.mkApp7 (.const ``Checker.getValidExport_indirectReduce_reflection_runEq [])
         (Lean.mkConst lvtNativeName) (Lean.mkConst litNativeName) (Lean.mkConst ifNativeName)
         (Lean.mkConst csNativeName) vExpr (Lean.toExpr lctx) (Lean.toExpr t)
       let heqNativeName ← mkNativeAuxDecl "lam_ssrefl_hEq" (Lean.mkConst ``Bool) heqBoolExpr
       let heqRflPrf ← Meta.mkEqRefl (toExpr true)
       let heqExpr := mkApp3 (Lean.mkConst ``Lean.ofReduceBool) (Lean.mkConst heqNativeName) (toExpr true) heqRflPrf
-      let getEntry := Lean.mkAppN (.const ``Checker.getValidExport_smallStep_reflection [u])
+      let getEntry := Lean.mkAppN (.const ``Checker.getValidExport_indirectReduce_reflection [u])
         #[cpvExpr, itExpr, csExpr, vExpr, ifExpr, hImportExpr,
           lvtExpr, litExpr, hLvtExpr, hLitExpr, Lean.toExpr lctx, Lean.toExpr t, heqExpr]
       let getEntry ← Meta.mkLetFVars #[cpvFVarExpr] getEntry
@@ -873,8 +898,9 @@ section BuildChecker
   def buildFullCheckerExprFor (re : REntry) : ReifM Expr := do
     let buildMode := auto.checker.buildMode.get (← getOptions)
     match buildMode with
-    | .smallstep => buildFullCheckerExprFor_smallStep re
-    | .smallstep_reflection => buildFullCheckerExprFor_smallStep_reflection re
+    | .directReduce => buildFullCheckerExprFor_directReduce re
+    | .indirectReduce => buildFullCheckerExprFor_indirectReduce re
+    | .indirectReduce_reflection => buildFullCheckerExprFor_indirectReduce_reflection re
 
 end BuildChecker
 
