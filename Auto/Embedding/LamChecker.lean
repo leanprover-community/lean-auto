@@ -1388,6 +1388,11 @@ theorem ChkSteps.run_correct
 def ChkSteps.runFromBeginning (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) :=
   ChkSteps.run cpv.toLamVarTy cpv.toLamILTy ⟨it.importFacts, 0, .leaf⟩ cs
 
+
+-- Note : Using this theorem directly in the checker will cause
+--   performance issue, especially when there are a lot of
+--   `etom`s. This is probably caused by the type of `eV` in
+--   `∃ eV` being dependent on the result of `ChkSteps.runFromBeginning` 
 theorem CheckerAux
   (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) :
   ∃ eV, (ChkSteps.runFromBeginning cpv it cs).inv ⟨cpv, eV⟩ := by
@@ -1401,7 +1406,13 @@ theorem Checker.getValidExport_bigStep
   LamThmValid cpv.toLamValuationEraseEtom lctx t :=
   RTable.getValidExport_correct (CheckerAux _ _ _) heq
 
-theorem Checker.getValidExport_smallStep
+-- Note : Do not use the counterpart of this theorem in proof by reflection.
+-- Surprisingly, if we use this theorem in proof by reflection, the performance
+--   issue will not be the `ChkSteps.run` in `runEq`. Instead, it would be
+--   caused by compiling the definition of `runResult`. I'm not sure why it's
+--   the case, but Lean sometimes exhibit superlinear (even quadratic) compilation
+--   time with respect to the size of `runResult`.
+theorem Checker.getValidExport_smallStepAux
   (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) (v : Nat)
   (importFacts : BinTree REntry) (hImport : it.importFacts = importFacts)
   (lvt lit : BinTree LamSort)
@@ -1431,13 +1442,27 @@ theorem Checker.getValidExport_smallStep
   exists fun _ => BinTree.get?'_leaf _ ▸ GLift.up False
   cases hImport; apply ImportTable.importFacts_correct
 
-def Checker.getValidExport_smallStep_reflection_runEq
-  (lvt lit : BinTree LamSort) (importFacts : BinTree REntry)
-  (cs : ChkSteps) (runResult : RTable) :=
-  ChkSteps.run
+theorem Checker.getValidExport_smallStep
+  (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) (v : Nat)
+  (importFacts : BinTree REntry) (hImport : it.importFacts = importFacts)
+  (lvt lit : BinTree LamSort)
+  (hlvt : lvt = cpv.var.mapOpt (fun x => .some x.fst))
+  (hlit : lit = cpv.il.mapOpt (fun x => .some x.fst))
+  (lctx : List LamSort) (t : LamTerm)
+  (heq : RTable.getValidExport (ChkSteps.run
     (fun n => (lvt.get? n).getD (.base .prop))
     (fun n => (lit.get? n).getD (.base .prop))
-    ⟨importFacts, 0, .leaf⟩ cs == runResult
+    ⟨importFacts, 0, .leaf⟩ cs) v = some (lctx, t)) :
+  LamThmValid cpv.toLamValuationEraseEtom lctx t := Checker.getValidExport_smallStepAux
+    cpv it cs v importFacts hImport lvt lit hlvt hlit _ rfl lctx t heq
+
+def Checker.getValidExport_smallStep_reflection_runEq
+  (lvt lit : BinTree LamSort) (importFacts : BinTree REntry)
+  (cs : ChkSteps) (v : Nat) (lctx : List LamSort) (t : LamTerm):=
+  RTable.getValidExport (ChkSteps.run
+    (fun n => (lvt.get? n).getD (.base .prop))
+    (fun n => (lit.get? n).getD (.base .prop))
+    ⟨importFacts, 0, .leaf⟩ cs) v == (lctx, t)
 
 theorem Checker.getValidExport_smallStep_reflection
   (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) (v : Nat)
@@ -1445,13 +1470,10 @@ theorem Checker.getValidExport_smallStep_reflection
   (lvt lit : BinTree LamSort)
   (hlvt : lvt = cpv.var.mapOpt (fun x => .some x.fst))
   (hlit : lit = cpv.il.mapOpt (fun x => .some x.fst))
-  (runResult : RTable)
-  (runEq : Checker.getValidExport_smallStep_reflection_runEq
-    lvt lit importFacts cs runResult)
   (lctx : List LamSort) (t : LamTerm)
-  (heq : RTable.getValidExport runResult v = some (lctx, t)) :
+  (heq : Checker.getValidExport_smallStep_reflection_runEq lvt lit importFacts cs v lctx t) :
   LamThmValid cpv.toLamValuationEraseEtom lctx t :=
   Checker.getValidExport_smallStep cpv it cs v importFacts hImport lvt
-    lit hlvt hlit runResult (LawfulBEq.eq_of_beq runEq) lctx t heq
+    lit hlvt hlit lctx t (LawfulBEq.eq_of_beq heq)
 
 end Auto.Embedding.Lam

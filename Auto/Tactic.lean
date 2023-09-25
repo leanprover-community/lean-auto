@@ -197,6 +197,7 @@ def collectAllLemmas (hintstx : TSyntax ``hints) (unfolds : TSyntax `Auto.unfold
 -- `ngoal` means `negated goal`
 def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) : TacticM Result := do
   let instr ← parseInstr instrstx
+  let declName? ← Elab.Term.getDeclName?
   match instr with
   | .none =>
     let afterReify (ufacts : Array UMonoFact) : LamReif.ReifM Expr := (do
@@ -227,6 +228,7 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) : TacticM Re
       let contra ← LamReif.validOfImps etomInstantiated unsatCore
       LamReif.printValuation
       LamReif.printProofs
+      Reif.setDeclName? declName?
       let checker ← LamReif.buildCheckerExprFor contra
       let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
       Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra

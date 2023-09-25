@@ -704,7 +704,7 @@ def monomorphize (lemmas : Array Lemma) (k : Reif.State → MetaM α) : MetaM α
     let exlis := s.exprMap.toList.map (fun (e, id) => (id, e))
     let cilis ← s.ciIdMap.toList.mapM (fun (ci, id) => do return (id, ← MetaState.runMetaM ci.toExpr))
     let polyVal := HashMap.ofList (exlis ++ cilis)
-    return (s.ffvars, Reif.State.mk s.ffvars ufacts polyVal s.tyCanMap))
+    return (s.ffvars, Reif.State.mk s.ffvars ufacts polyVal s.tyCanMap none))
   MetaState.runWithIntroducedFVars metaStateMAction k
 
 end Auto.Monomorphization

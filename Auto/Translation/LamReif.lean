@@ -671,24 +671,24 @@ end Checker
 section BuildChecker
 
   inductive BuildMode where
-    | small_step
-    | small_step_reflection
+    | smallstep
+    | smallstep_reflection
   deriving BEq, Hashable, Inhabited
 
   instance : ToString BuildMode where
     toString : BuildMode → String
-    | .small_step => "small_step"
-    | .small_step_reflection => "small_step_reflection"
+    | .smallstep => "smallstep"
+    | .smallstep_reflection => "smallstep_reflection"
   
   instance : Lean.KVMap.Value BuildMode where
     toDataValue n := toString n
     ofDataValue?
-    | "small_step" => some .small_step
-    | "small_step_reflection" => some .small_step_reflection
+    | "smallstep" => some .smallstep
+    | "smallstep_reflection" => some .smallstep_reflection
     | _ => none
 
   register_option auto.checker.buildMode : BuildMode := {
-    defValue := BuildMode.small_step
+    defValue := BuildMode.smallstep
     descr := "Mode when building the checker"
   }
 
@@ -803,62 +803,68 @@ section BuildChecker
       let hImportExpr ← Meta.mkAppM ``Eq.refl #[ifExpr]
       let hLvtExpr ← Meta.mkAppM ``Eq.refl #[lvtExpr]
       let hLitExpr ← Meta.mkAppM ``Eq.refl #[litExpr]
-      let runResultExpr := Lean.mkApp3 (.const ``RTable.mk [])
-        (Lean.toExpr (← getRTableTree)) (Lean.toExpr (← getMaxEVarSucc))
-        (Lean.toExpr (← getLamEVarTyTree))
-      let runEqExpr ← Meta.mkAppM ``Eq.refl #[runResultExpr]
       let heqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr (lctx, t)]]
       let getEntry := Lean.mkAppN (.const ``Checker.getValidExport_smallStep [u])
         #[cpvExpr, itExpr, csExpr, vExpr, ifExpr, hImportExpr,
-          lvtExpr, litExpr, hLvtExpr, hLitExpr, runResultExpr, runEqExpr,
-          Lean.toExpr lctx, Lean.toExpr t, heqExpr]
+          lvtExpr, litExpr, hLvtExpr, hLitExpr, Lean.toExpr lctx, Lean.toExpr t, heqExpr]
       let getEntry ← Meta.mkLetFVars #[cpvFVarExpr] getEntry
       trace[auto.buildChecker] "Checker expression built in time {(← IO.monoMsNow) - startTime}ms"
       return getEntry
     return checker
 
-  private def mkNativeAuxDecl (baseName : Name) (type value : Expr) : MetaM Name := do
-    -- TODO: Fix
-    let auxName := baseName ++ (.str .anonymous (toString (← getEnv).constants.size))
+  private def mkNativeAuxDecl (baseName : Name) (type value : Expr) : Reif.ReifM Name := do
+    let auxName ← Reif.mkAuxName baseName
     let decl := Declaration.defnDecl {
       name := auxName, levelParams := [], type, value
       hints := .abbrev
       safety := .safe
     }
     addDecl decl
+    let startTime ← IO.monoMsNow
     compileDecl decl
+    trace[auto.buildChecker] "Compilation of {auxName} took {(← IO.monoMsNow) - startTime}ms"
     return auxName
+
+  -- This shows the issue that compilation of a reduced expression
+  --   exhibits superlinear behaviour. Try the examples in
+  --   `Test/CheckerScalability/Skolemization.lean`
+  -- This function is not intended to be called in practice
+  def compileRunResultExpr : ReifM Name := do
+    let runResultExpr := Lean.mkApp3 (.const ``RTable.mk [])
+      (Lean.toExpr (← getRTableTree)) (Lean.toExpr (← getMaxEVarSucc))
+      (Lean.toExpr (← getLamEVarTyTree))
+    mkNativeAuxDecl "lam_ssrefl_rr" (Lean.mkConst ``RTable) runResultExpr
 
   def buildFullCheckerExprFor_smallStep_reflection (re : REntry) : ReifM Expr := do
     printCheckerStats
     let startTime ← IO.monoMsNow
     let u ← getU
     let lvtExpr := Lean.toExpr (BinTree.ofListGet ((← getVarVal).map Prod.snd).data)
+    let lvtNativeName ← mkNativeAuxDecl "lam_ssrefl_lvt" (Expr.app (.const ``BinTree [.zero]) (Lean.mkConst ``LamSort)) lvtExpr
     let litExpr := Lean.toExpr (BinTree.ofListGet (← getLamILTy).data)
+    let litNativeName ← mkNativeAuxDecl "lam_ssrefl_lit" (Expr.app (.const ``BinTree [.zero]) (Lean.mkConst ``LamSort)) litExpr
     let cpvExpr ← buildCPValExpr
     let cpvTy := Expr.const ``CPVal [u]
     let checker ← Meta.withLetDecl `cpval cpvTy cpvExpr fun cpvFVarExpr => do
       let (itExpr, ifExpr) ← buildImportTableExpr cpvFVarExpr
+      let ifNativeName ← mkNativeAuxDecl "lam_ssrefl_if" (Expr.app (.const ``BinTree [.zero]) (Lean.mkConst ``REntry)) ifExpr
       let csExpr ← buildChkStepsExpr
+      let csNativeName ← mkNativeAuxDecl "lam_ssrefl_cs" (Lean.mkConst ``ChkSteps) csExpr
       let .some (lctx, t) := re.getValid?
         | throwError "buildFullCheckerExprFor :: {re} is not a `valid` entry"
       let vExpr := Lean.toExpr (← lookupREntryPos! re)
       let hImportExpr ← Meta.mkAppM ``Eq.refl #[ifExpr]
       let hLvtExpr ← Meta.mkAppM ``Eq.refl #[lvtExpr]
       let hLitExpr ← Meta.mkAppM ``Eq.refl #[litExpr]
-      let runResultExpr := Lean.mkApp3 (.const ``RTable.mk [])
-        (Lean.toExpr (← getRTableTree)) (Lean.toExpr (← getMaxEVarSucc))
-        (Lean.toExpr (← getLamEVarTyTree))
-      let runEqBoolExpr := Lean.mkApp5 (.const ``Checker.getValidExport_smallStep_reflection_runEq [])
-        lvtExpr litExpr ifExpr csExpr runResultExpr
-      let runEqNativeName ← mkNativeAuxDecl "lam_small_refl" (Lean.mkConst ``Bool) runEqBoolExpr
-      let runEqRflPrf ← Meta.mkEqRefl (toExpr true)
-      let runEqExpr := mkApp3 (Lean.mkConst ``Lean.ofReduceBool) (Lean.mkConst runEqNativeName) (toExpr true) runEqRflPrf
-      let heqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr (lctx, t)]]
+      let heqBoolExpr := Lean.mkApp7 (.const ``Checker.getValidExport_smallStep_reflection_runEq [])
+        (Lean.mkConst lvtNativeName) (Lean.mkConst litNativeName) (Lean.mkConst ifNativeName)
+        (Lean.mkConst csNativeName) vExpr (Lean.toExpr lctx) (Lean.toExpr t)
+      let heqNativeName ← mkNativeAuxDecl "lam_ssrefl_hEq" (Lean.mkConst ``Bool) heqBoolExpr
+      let heqRflPrf ← Meta.mkEqRefl (toExpr true)
+      let heqExpr := mkApp3 (Lean.mkConst ``Lean.ofReduceBool) (Lean.mkConst heqNativeName) (toExpr true) heqRflPrf
       let getEntry := Lean.mkAppN (.const ``Checker.getValidExport_smallStep_reflection [u])
         #[cpvExpr, itExpr, csExpr, vExpr, ifExpr, hImportExpr,
-          lvtExpr, litExpr, hLvtExpr, hLitExpr, runResultExpr, runEqExpr,
-          Lean.toExpr lctx, Lean.toExpr t, heqExpr]
+          lvtExpr, litExpr, hLvtExpr, hLitExpr, Lean.toExpr lctx, Lean.toExpr t, heqExpr]
       let getEntry ← Meta.mkLetFVars #[cpvFVarExpr] getEntry
       trace[auto.buildChecker] "Checker expression built in time {(← IO.monoMsNow) - startTime}ms"
       return getEntry
@@ -867,8 +873,8 @@ section BuildChecker
   def buildFullCheckerExprFor (re : REntry) : ReifM Expr := do
     let buildMode := auto.checker.buildMode.get (← getOptions)
     match buildMode with
-    | .small_step => buildFullCheckerExprFor_smallStep re
-    | .small_step_reflection => buildFullCheckerExprFor_smallStep_reflection re
+    | .smallstep => buildFullCheckerExprFor_smallStep re
+    | .smallstep_reflection => buildFullCheckerExprFor_smallStep_reflection re
 
 end BuildChecker
 

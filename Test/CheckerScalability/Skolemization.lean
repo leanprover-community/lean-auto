@@ -2,10 +2,10 @@ import Auto.Tactic
 
 set_option profiler true
 set_option auto.optimizeCheckerProof false
+set_option compiler.enableNew false
+set_option auto.checker.buildMode "smallstep_reflection"
 
-set_option trace.auto.buildChecker true in
-set_option trace.auto.lamReif.printProofs true in
-example (f₁ f₂ f₃ f₄ f₅ f₆ f₇ f₈ f₉ f₁₀ f₁₁ : Nat → Nat → Nat)
+theorem test₁ (f₁ f₂ f₃ f₄ f₅ f₆ f₇ f₈ f₉ f₁₀ f₁₁ : Nat → Nat → Nat)
   (H₁ : ∀ x₁, ∃ x₂, ∀ x₃, ∃ x₄, ∀ x₅, ∃ x₆, ∀ x₇, ∃ x₈,
        ∀ x₉, ∃ x₁₀, ∀ x₁₁, ∃ x₁₂, ∀ x₁₃, ∃ x₁₄, ∀ x₁₅, ∃ x₁₆,
     (f₁ (f₂ (f₃ x₁ x₂) (f₄ x₃ x₄)) (f₅ (f₆ x₅ x₆) (f₇ x₇ x₈)) =
@@ -155,7 +155,7 @@ example (f₁ f₂ f₃ f₄ f₅ f₆ f₇ f₈ f₉ f₁₀ f₁₁ : Nat → 
 #check 2
 
 set_option trace.auto.buildChecker true in
-example (f₁ f₂ f₃ f₄ f₅ f₆ f₇ f₈ f₉ f₁₀ f₁₁ : Nat → Nat → Nat)
+theorem test₂ (f₁ f₂ f₃ f₄ f₅ f₆ f₇ f₈ f₉ f₁₀ f₁₁ : Nat → Nat → Nat)
   (x₉ x₁₀ x₁₁ x₁₂ x₁₃ x₁₄ x₁₅ x₁₆ : Nat)
   (H₁ : ∀ x₁, ∃ x₂, ∀ x₃, ∃ x₄, ∀ x₅, ∃ x₆, ∀ x₇, ∃ x₈,
     (f₁ (f₂ (f₃ x₁ x₂) (f₄ x₃ x₄)) (f₅ (f₆ x₅ x₆) (f₇ x₇ x₈)) =
@@ -282,8 +282,7 @@ example (f₁ f₂ f₃ f₄ f₅ f₆ f₇ f₈ f₉ f₁₀ f₁₁ : Nat → 
 #check 2
 
 set_option trace.auto.buildChecker true in
-set_option trace.auto.lamReif.printProofs true in
-example (f₁ f₂ f₃ f₄ f₅ f₆ f₇ f₈ f₉ f₁₀ f₁₁ : Nat → Nat → Nat)
+theorem test₃ (f₁ f₂ f₃ f₄ f₅ f₆ f₇ f₈ f₉ f₁₀ f₁₁ : Nat → Nat → Nat)
   (x₉ x₁₀ x₁₁ x₁₂ x₁₃ x₁₄ x₁₅ x₁₆ : Nat)
   (H₁ : ∀ x₁, ∃ x₂, ∀ x₃, ∃ x₄, ∀ x₅, ∃ x₆, ∀ x₇, ∃ x₈,
     (f₁ (f₂ (f₃ x₁ x₂) (f₄ x₃ x₄)) (f₅ (f₆ x₅ x₆) (f₇ x₇ x₈)) =
@@ -346,5 +345,3 @@ example (f₁ f₂ f₃ f₄ f₅ f₆ f₇ f₈ f₉ f₁₀ f₁₁ : Nat → 
     (f₄ (f₅ (f₆ x₉ x₁₀) (f₇ x₁₁ x₁₂)) (f₈ (f₉ x₁₃ x₁₄) (f₁₀ x₁₅ x₁₆)) =
       f₁₁ (f₁ (f₂ x₁₆ x₁₅) (f₃ x₁₄ x₁₃)) (f₄ (f₅ x₁₂ x₁₁) (f₆ x₁₀ x₉)))) :
   True := by auto
-
-#check 2

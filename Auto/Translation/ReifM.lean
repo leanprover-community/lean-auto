@@ -22,7 +22,8 @@ structure State where
   --   corresponding to these free variables.
   exprFVarVal     : HashMap FVarId Expr := {}
   -- Canonicalization map for types
-  tyCanMap        : HashMap Expr Expr   := {}  
+  tyCanMap        : HashMap Expr Expr   := {}
+  declName?        : Option Name
 
 abbrev ReifM := StateT State MetaM
 
@@ -43,5 +44,10 @@ abbrev ReifM := StateT State MetaM
   match (← getTyCanMap).find? e with
   | .some id => return id
   | .none => throwError "resolveTy :: Unable to resolve {e}"
+
+def mkAuxName (suffix : Name) : ReifM Name := do
+  match (← getDeclName?) with
+  | none          => throwError "ReifM.mkAuxName :: auxiliary declaration cannot be created when declaration name is not available"
+  | some declName => Lean.mkAuxName (declName ++ suffix) 1
 
 end Auto.Reif

@@ -73,6 +73,20 @@ theorem beq_refl [BEq α] (α_beq_refl : ∀ (x : α), (x == x) = true)
     rw [beq_def]; rw [beq_def] at IHl IHr; dsimp [beq]; rw [IHl, IHr]
     rw [Option.beq_refl α_beq_refl]; rfl
 
+def toString [ToString α] : BinTree α → String
+| .leaf => ""
+| .node l x r =>
+  let sx := match x with | .some x => "|" ++ ToString.toString x ++ "|" | .none => ""
+  "{" ++ l.toString ++ sx ++ r.toString ++ "}"
+
+private def toStringDisplayAux [ToString α] (ctx : String) : BinTree α → String
+| .leaf => ""
+| .node l x r =>
+  let sx := match x with | .some x => ctx ++ " : " ++ ToString.toString x ++ "\n" | .none => ""
+  l.toStringDisplayAux (ctx ++ "0") ++ sx ++ r.toStringDisplayAux (ctx ++ "1")
+
+def toStringDisplay [ToString α] (bt : BinTree α) := toStringDisplayAux "R" bt
+
 theorem eq_of_beq_eq_true [BEq α] (α_eq_of_beq_eq_true : ∀ (x y : α), (x == y) = true → x = y)
   {a b : BinTree α} (H : (a == b) = true) : a = b := by
   induction a generalizing b <;> cases b <;> try cases H <;> try rfl
@@ -594,20 +608,6 @@ def toLCtx {α : Type u} [ToLevel.{u}] [ToExpr α] (bl : BinTree α) (default : 
   let get?Expr := mkApp3 (.const ``BinTree.get? [lvl]) type (toExpr bl) (.bvar 0)
   let getDExpr := mkApp3 (.const ``Option.getD [lvl]) type get?Expr (ToExpr.toExpr default)
   .lam `n (.const ``Nat []) getDExpr .default
-
-/- test
-#eval (Lean.toExpr (BinTree.ofList [1,2,3]))
-#eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
-#eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
-#eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
-#eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
-#eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
-#eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
-#eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
-#eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
-#eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
-#eval (Lean.toExpr (BinTree.ofList (List.range 20000))).hash
--/
 
 end BinTree
 
