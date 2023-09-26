@@ -166,6 +166,14 @@ instance : LawfulBEq LamSort where
 theorem LamSort.beq_eq_true_eq (a b : LamSort) : (a.beq b = true) = (a = b) :=
   propext <| Iff.intro eq_of_beq_eq_true (fun h => by subst h; apply beq_refl)
 
+theorem LamSort.beq_eq_false_eq_ne (a b : LamSort) : (a.beq b = false) = (a ≠ b) := by
+  cases h : a.beq b
+  case true =>
+    cases (eq_of_beq_eq_true h); apply propext (Iff.intro (fun h => by cases h) (fun _ => by contradiction))
+  case false =>
+    apply propext (Iff.intro (fun _ h' => by cases h'; rw [beq_refl] at h; cases h) (fun _ => rfl))
+
+
 -- Given `a` and `[ty₀, ty₁, ⋯, tyᵢ₋₁]`, return `ty₀ → ty₁ → ⋯ → tyᵢ₋₁ → a`
 def LamSort.mkFuncs (a : LamSort) (tys : List LamSort) : LamSort :=
   tys.foldr (fun s cur => .func s cur) a

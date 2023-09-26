@@ -1,4 +1,6 @@
 import Auto.Embedding.LamBase
+import Auto.Lib.MonadUtils
+import Auto.Lib.MetaState
 open Lean
 
 namespace Auto.Embedding.Lam
@@ -29,13 +31,22 @@ def LamTerm.interp.{u} (lval : LamValuation.{u}) (lctxTy : Nat → LamSort) :
       | .atom _ => ⟨.base .prop, fun _ => GLift.up False⟩
       | .base _ => ⟨.base .prop, fun _ => GLift.up False⟩
       | .func argTy' resTy =>
-        match heq : LamSort.beq argTy' argTy, heqa : LamSort.beq argTy' s with
-        | true, true =>
-          have heq' := LamSort.eq_of_beq_eq_true heq;
-          ⟨resTy, fun lctxTerm => (fnInterp lctxTerm) (heq' ▸ argInterp lctxTerm)⟩
-        | true,  false => ⟨.base .prop, fun _ => GLift.up False⟩
-        | false, true  => ⟨.base .prop, fun _ => GLift.up False⟩
-        | false, false => ⟨.base .prop, fun _ => GLift.up False⟩
+        match LamSort.beq argTy' s with
+        | true =>
+          match heq : LamSort.beq argTy' argTy with
+          | true =>
+            have heq' := LamSort.eq_of_beq_eq_true heq;
+            ⟨resTy, fun lctxTerm => (fnInterp lctxTerm) (heq' ▸ argInterp lctxTerm)⟩
+          | false => ⟨.base .prop, fun _ => GLift.up False⟩
+        | false  => ⟨.base .prop, fun _ => GLift.up False⟩
+
+theorem LamTerm.interp_substLCtxTerm
+  (lval : LamValuation.{u}) {lctxTy lctxTy' : Nat → LamSort}
+  {lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal}
+  {lctxTerm' : ∀ n, (lctxTy' n).interp lval.tyVal}
+  (HLCtxTyEq : lctxTy = lctxTy') (HLCtxTermEq : HEq lctxTerm lctxTerm') :
+  HEq ((interp lval lctxTy t).snd lctxTerm) ((interp lval lctxTy' t).snd lctxTerm') := by
+  cases HLCtxTyEq; cases HLCtxTermEq; apply HEq.refl
 
 def LamTerm.interpAsProp.{u}
   (lval : LamValuation.{u}) (lctxTy : Nat → LamSort)
@@ -104,46 +115,216 @@ theorem LamThmValid.ofInterpAsProp
   apply LamWF.interp_lctxIrrelevance (lctxTy₁:=dfLCtxTy) (lctxTerm₁:=dfLCtxTerm _) _ _
   intros n h; rw [h₃] at h; cases h
 
-structure InterpState where
-  -- Let `n := lctxTyRev.size`
-  lctxTyRev   : Array LamSort -- Reversed
-  -- Required : `lctxTermRev.size = n`
-  lctxTermRev : Array FVarId  -- Reversed
-  -- Required : `lctxDrop[i] ≝ lctxTermRev[:(i+1)].data ≝ lctxTerm[(n-i-1):]`
-  lctxDrop    : Array FVarId
-  -- Required : `eqFact[i][j] : lctxTerm[i:].drop j = lctxTerm[i+j:]`
-  eqFact      : HashMap (Nat × Nat) FVarId
+def LamTerm.lamCheck?Eq
+  (lval : LamValuation.{u}) (lctx : List LamSort) (t : LamTerm) (s : LamSort) :=
+  t.lamCheck? lval.toLamTyVal (pushLCtxs lctx dfLCtxTy) = s
+
+def LamTerm.lamCheck?Eq'
+  (lval : LamValuation.{u}) (lctx : List ((s : LamSort) × s.interp lval.tyVal))
+  (t : LamTerm) (s : LamSort) :=
+  t.lamCheck? lval.toLamTyVal (fun n => (pushLCtxs lctx (fun _ => ⟨.base .prop, GLift.up False⟩) n).fst) = .some s
+
+theorem LamTerm.lamCheck?Eq'_ofLamCheck?Eq
+  (H : LamTerm.lamCheck?Eq lval (lctx.map Sigma.fst) t s) :
+  LamTerm.lamCheck?Eq' lval lctx t s := by
+  dsimp [LamTerm.lamCheck?Eq'];
+  conv => enter [1, 2, n]; rw [pushLCtxs_comm (f:=Sigma.fst)]
+  exact H
 
 def LamTerm.interpEq.{u}
   (lval : LamValuation.{u}) (lctx : List ((s : LamSort) × s.interp lval.tyVal))
-  (t : LamTerm) (s : LamSort) {α : Type u} (val : α) : Prop :=
-  s.interp lval.tyVal = α ∧
-    match t.interp lval (fun n => (lctx.getD n ⟨.base .prop, GLift.up False⟩).fst) with
-    | ⟨s', interp'⟩ => s' = s ∧ HEq (interp' (fun n => (lctx.getD n ⟨.base .prop, GLift.up False⟩).snd)) val
+  (t : LamTerm) {α : Type u} (val : α) : Prop :=
+    match t.interp lval (fun n => (pushLCtxs lctx (fun _ => ⟨.base .prop, GLift.up False⟩) n).fst) with
+    | ⟨_, interp'⟩ => HEq (interp' (fun n => (pushLCtxs lctx (fun _ => ⟨.base .prop, GLift.up False⟩) n).snd)) val
+
+theorem LamTerm.interpAsProp_of_interpEq {ty : Prop} (proof : ty)
+  (h₁ : LamTerm.lamCheck?Eq' lval .nil p (.base .prop))
+  (h₂ : LamTerm.interpEq lval .nil p (GLift.up ty)) :
+  (LamTerm.interpAsProp lval dfLCtxTy (dfLCtxTerm _) p).down := by
+  dsimp [LamTerm.interpAsProp]
+  have h₁' : p.lamCheck? lval.toLamTyVal dfLCtxTy = .some (.base .prop) := h₁
+  have wft := LamWF.ofLamCheck? h₁'
+  have hInterp := LamTerm.interp_equiv _ _ wft
+  rw [← hInterp]; dsimp; dsimp [interpEq] at h₂
+  rw [pushLCtxs_nil, ← hInterp] at h₂; dsimp at h₂
+  rw [eq_of_heq h₂]; exact proof
+
+theorem LamTerm.lamCheck?Eq'_atom :
+  LamTerm.lamCheck?Eq' lval lctx (.atom n) (lval.lamVarTy n) := rfl
+
+theorem LamTerm.lamCheck?Eq'_etom :
+  LamTerm.lamCheck?Eq' lval lctx (.etom n) (lval.lamEVarTy n) := rfl
+
+theorem LamTerm.lamCheck?Eq'_base :
+  LamTerm.lamCheck?Eq' lval lctx (.base b) (LamBaseTerm.lamCheck lval.toLamTyVal b) := rfl
+
+theorem LamTerm.lamCheck?Eq'_bvar
+  (h : lctx.get? n = .some ⟨s, val⟩) :
+  LamTerm.lamCheck?Eq' lval lctx (.bvar n) s := by
+  dsimp [lamCheck?Eq', lamCheck?]; have ⟨hlt, _⟩ := List.get?_eq_some.mp h
+  rw [pushLCtxs_lt hlt, List.getD_eq_get?, h]; rfl
+
+theorem LamTerm.lamCheck?Eq'_lam
+  (h : LamTerm.lamCheck?Eq' lval (⟨argTy, val⟩ :: lctx) body s) :
+  LamTerm.lamCheck?Eq' lval lctx (.lam argTy body) (.func argTy s) := by
+  dsimp [lamCheck?Eq', lamCheck?]; dsimp [lamCheck?Eq'] at h
+  rw [pushLCtxs_cons] at h
+  conv at h =>
+    enter [1, 2, n]; rw [pushLCtx_comm (f:=Sigma.fst)]
+  dsimp at h; rw [h]
+
+theorem LamTerm.lamCheck?Eq'_app
+  (hFn : LamTerm.lamCheck?Eq' lval lctx fn (.func argTy resTy))
+  (hArg : LamTerm.lamCheck?Eq' lval lctx arg argTy) :
+  LamTerm.lamCheck?Eq' lval lctx (.app argTy fn arg) resTy := by
+  dsimp [lamCheck?Eq', lamCheck?]; rw [hFn, hArg]; dsimp; rw [LamSort.beq_refl]
 
 theorem LamTerm.interpEq_atom
   (lval : LamValuation) (lctx : List ((s : LamSort) × s.interp lval.tyVal))
   (val : (lval.lamVarTy n).interp lval.tyVal) (h : lval.varVal n = val) :
-  LamTerm.interpEq lval lctx (.atom n) (lval.lamVarTy n) val := by
-  apply And.intro rfl; dsimp [interp]; apply And.intro rfl; rw [h]
+  LamTerm.interpEq lval lctx (.atom n) val := heq_of_eq h
 
 theorem LamTerm.interpEq_etom
   (lval : LamValuation) (lctx : List ((s : LamSort) × s.interp lval.tyVal))
   (val : (lval.lamEVarTy n).interp lval.tyVal) (h : lval.eVarVal n = val) :
-  LamTerm.interpEq lval lctx (.etom n) (lval.lamEVarTy n) val := by
-  apply And.intro rfl; dsimp [interp]; apply And.intro rfl; rw [h]
+  LamTerm.interpEq lval lctx (.etom n) val := heq_of_eq h
 
 theorem LamTerm.interpEq_base
   (lval : LamValuation) (lctx : List ((s : LamSort) × s.interp lval.tyVal))
   (val : (LamBaseTerm.lamCheck lval.toLamTyVal b).interp lval.tyVal) (h : b.interp lval = val) :
-  LamTerm.interpEq lval lctx (.base b) (b.lamCheck lval.toLamTyVal) val := by
-  apply And.intro rfl; dsimp [interp]; apply And.intro rfl; rw [h]
+  LamTerm.interpEq lval lctx (.base b) val := heq_of_eq h
 
 theorem LamTerm.interpEq_bvar
   (lval : LamValuation) (lctx : List ((s : LamSort) × s.interp lval.tyVal))
   (s : LamSort) (val : s.interp lval.tyVal) (h : lctx.get? n = .some ⟨s, val⟩) :
-  LamTerm.interpEq lval lctx (.bvar n) s val := by
-  apply And.intro rfl; dsimp [interp]; apply And.intro <;>
-    (rw [List.getD_eq_get?, h]; rfl)
+  LamTerm.interpEq lval lctx (.bvar n) val := by
+  dsimp [interpEq, interp]; have ⟨hlt, _⟩ := List.get?_eq_some.mp h
+  rw [pushLCtxs_lt hlt, List.getD_eq_get?, h]; rfl
+
+theorem LamTerm.interpEq_lam
+  (lval : LamValuation) (lctx : List ((s : LamSort) × s.interp lval.tyVal))
+  (val : argTy.interp lval.tyVal → β)
+  (hBody : ∀ x, LamTerm.interpEq lval (⟨argTy, x⟩ :: lctx) t (val x)) :
+  LamTerm.interpEq lval lctx (.lam argTy t) val := by
+  dsimp [interpEq, interp]; apply HEq.funext; intro x
+  dsimp [interpEq] at hBody; apply HEq.trans _ (hBody x); rw [pushLCtxs_cons]
+  apply LamTerm.interp_substLCtxTerm
+  case HLCtxTyEq =>
+    funext n; rw [pushLCtx_comm (f:=Sigma.fst)]
+  case HLCtxTermEq =>
+    apply HEq.funext; intro n; cases n <;> try rfl
+
+theorem LamTerm.interpEq_app
+  (lval : LamValuation) (lctx : List ((s : LamSort) × s.interp lval.tyVal))
+  {argTy resTy : LamSort}
+  (fnChk : LamTerm.lamCheck?Eq' lval lctx fn (.func argTy resTy))
+  (argChk : LamTerm.lamCheck?Eq' lval lctx arg argTy)
+  (fnVal : argTy.interp lval.tyVal → resTy.interp lval.tyVal) (argVal : argTy.interp lval.tyVal)
+  (hFn : LamTerm.interpEq lval lctx fn fnVal)
+  (hArg : LamTerm.interpEq lval lctx arg argVal) :
+  LamTerm.interpEq lval lctx (.app argTy fn arg) (fnVal argVal) := by
+  revert hFn hArg; dsimp [interpEq, interp]
+  let lctxTy := fun n => (pushLCtxs lctx (fun _ => ⟨.base .prop, GLift.up False⟩) n).fst
+  have fnChk' := (heq_of_eq_sigma (LamTerm.interp_equiv _ _ (LamWF.ofLamCheck? fnChk))).left
+  have argChk' := (heq_of_eq_sigma (LamTerm.interp_equiv _ _ (LamWF.ofLamCheck? argChk))).left
+  revert fnChk' argChk'
+  match interp lval lctxTy fn with
+  | ⟨fnTy', fnInterp'⟩ =>
+    match interp lval lctxTy arg with
+    | ⟨argTy', argInterp'⟩ =>
+      dsimp; intro fnChk' argChk' hFn hArg
+      cases fnChk'; cases argChk'; dsimp
+      rw [LamSort.beq_refl]; dsimp
+      cases hFn; cases hArg; rfl
+
+namespace Interp
+
+structure State where
+  sortFVars    : Array FVarId               := #[]
+  sortMap      : HashMap LamSort FVarId     := {}
+  -- Let `n := lctxTyRev.size`
+  -- Reversed
+  lctxTyRev    : Array LamSort              := #[]
+  -- Required : `lctxTermRev.size = n`
+  -- Reversed
+  lctxTermRev  : Array FVarId               := #[]
+  -- Required : `lctxTyDrop[i] ≝ lctxTyRev[:(i+1)].data ≝ lctxTerm[(n-i-1):]`
+  lctxTyDrop   : Array FVarId               := #[]
+  -- Required : `tyEqFact[i][j] : lctxTy[i:].drop j = lctxTy[i+j:]`
+  typeEqFact   : HashMap (Nat × Nat) FVarId := {}
+  -- Required : `lctxTermDrop[i] ≝ lctxTermRev[:(i+1)].data ≝ lctxTerm[(n-i-1):]`
+  lctxTermDrop : Array FVarId               := #[]
+  -- Required : `termEqFact[i][j] : lctxTerm[i:].drop j = lctxTerm[i+j:]`
+  termEqFact   : HashMap (Nat × Nat) FVarId := {}
+  -- Required : `lctxCon[i] : lctxTerm[i].map Sigma.snd = lctxTy[i]`
+  lctxCon      : Array FVarId               := #[]
+
+abbrev InterpM := StateRefT State MetaState.MetaStateM
+
+#genMonadState InterpM
+
+def getLCtxTy! (idx : Nat) : InterpM LamSort := do
+  let lctxTyRev ← getLctxTyRev
+  if idx ≥ lctxTyRev.size then
+    throwError "getLCtxTy! :: Index out of bound"
+  match lctxTyRev[idx]? with
+  | .some s => return s
+  | .none => throwError "getLCtxTy! :: Unexpected error"
+
+def sort2FVarId (s : LamSort) : InterpM FVarId := do
+  let sortMap ← getSortMap
+  let userName := (`interpsf).appendIndexAfter (← getSortMap).size
+  match sortMap.find? s with
+  | .some id => return id
+  | .none =>
+    match s with
+    | .func argTy resTy =>
+      let argId ← sort2FVarId argTy
+      let resId ← sort2FVarId resTy
+      let fvarId ← MetaState.withLetDecl userName (.const ``LamSort [])
+        (Lean.mkApp2 (.const ``LamSort.func []) (.fvar argId) (.fvar resId)) .default
+      setSortFVars ((← getSortFVars).push fvarId)
+      return fvarId
+    | s =>
+      let fvarId ← MetaState.withLetDecl userName (.const ``LamSort []) (Lean.toExpr s) .default
+      setSortFVars ((← getSortFVars).push fvarId)
+      return fvarId
+
+def collectSortFor (ltv : LamTyVal) : LamTerm → InterpM LamSort
+| .atom n => do
+  let _ ← sort2FVarId (ltv.lamVarTy n)
+  return ltv.lamVarTy n
+| .etom _ => throwError "collectSortFor :: etoms should not occur here"
+| .base b => do
+  let s := b.lamCheck ltv
+  let _ ← sort2FVarId s
+  return s
+| .bvar n => do
+  let s ← getLCtxTy! n
+  let _ ← sort2FVarId s
+  return s
+| .lam s body => do
+  let _ ← sort2FVarId s
+  let bodyTy ← withLCtxTy s (collectSortFor ltv body)
+  let _ ← sort2FVarId (.func s bodyTy)
+  return (.func s bodyTy)
+| .app s fn arg => do
+  let fnTy ← collectSortFor ltv fn
+  let argTy ← collectSortFor ltv arg
+  match fnTy with
+  | .func argTy' resTy =>
+    if argTy' == argTy && argTy' == s then
+      return resTy
+    else
+      throwError "collectSortFor :: Application type mismatch"
+  | _ => throwError "collectSortFor :: Malformed application"
+where withLCtxTy {α : Type} (s : LamSort) (k : InterpM α) : InterpM α := do
+  let lctxTyRev ← getLctxTyRev
+  setLctxTyRev (lctxTyRev.push s)
+  let ret ← k
+  setLctxTyRev lctxTyRev
+  return ret
+
+end Interp
 
 end Auto.Embedding.Lam

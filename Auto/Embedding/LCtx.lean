@@ -432,6 +432,10 @@ section push
     f _ (pushLCtxDep x lctx n) = pushLCtxDep (lctxty:=β) (f xty x) (fun n => f _ (lctx n)) n := by
     dsimp [pushLCtx, pushLCtxDep]
     cases n <;> rfl
+
+  theorem pushLCtx_commDep {β : α → Sort x} {x : α} {lctx : Nat → α} (f : ∀ (x : α), β x) :
+    HEq (f (pushLCtx x lctx n)) (pushLCtxDep (f x) (fun n => f (lctx n)) n) := by
+    cases n <;> rfl
   
   theorem pushLCtxDep_absorbAux {rty : Nat → α} {lctxty : α → Sort u}
     (lctx : ∀ n, lctxty (rty n)) {xty : α} (x : lctxty xty) (n : Nat) :
@@ -502,6 +506,17 @@ section push
   theorem pushLCtxs_cons_succ_Fn (xs : List α) (lctx : Nat → α) :
     (fun n => pushLCtxs (x :: xs) lctx (.succ n)) = pushLCtxs xs lctx :=
     funext (fun n => pushLCtxs_cons_succ xs lctx n)
+
+  theorem pushLCtxs_comm (f : α → β) (xs : List α) (lctx : Nat → α) (n : Nat) :
+    f (pushLCtxs xs lctx n) = pushLCtxs (xs.map f) (fun n => f (lctx n)) n := by
+    induction xs generalizing n
+    case nil => rfl
+    case cons x xs IH =>
+      cases n
+      case zero =>
+        dsimp [List.map]; rw [pushLCtxs_cons_zero, pushLCtxs_cons_zero]
+      case succ n =>
+        dsimp [List.map]; rw [pushLCtxs_cons_succ, pushLCtxs_cons_succ, ← IH]
 
   @[reducible] def pushLCtxsAt (xs : List α) (pos : Nat) :=
     restoreAt pos (pushLCtxs xs)
