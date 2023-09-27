@@ -1,4 +1,5 @@
 import Lean
+import Auto.Lib.ExprExtra
 open Lean Meta Elab
 
 initialize
@@ -32,6 +33,22 @@ def Meta.inspectMVarAssignments : MetaM Unit := do
     trace[auto.inspectMVarAssignments] .compose "ExprMVar Assignments: " (← composeAssignMessage ems)
     let lms := lAssignmentList.map (fun (id, l) => MessageData.compose m!"{Level.mvar id} := " m!"{l}")
     trace[auto.inspectMVarAssignments] .compose "LevelMVar Assignments: " (← composeAssignMessage lms)
+
+-- Synthesize inhabited instance for canonicalized type
+def Meta.trySynthInhabited (e : Expr) : MetaM (Option Expr) := do
+  let eSort ← Expr.normalizeType (← instantiateMVars (← Meta.inferType e))
+  let .sort lvl := eSort
+    | throwError "trySynthInhabited :: {e} is not a type"
+  try
+    if let .some inh ← Meta.synthInstance? e then
+      return .some inh
+  catch _ =>
+    pure .unit
+  if let .some inh ← Meta.synthInstance? (Lean.mkApp (.const ``Inhabited [lvl]) e) then
+    return .some (Lean.mkApp2 (.const ``Inhabited.default [lvl]) e inh)
+  if let .some inh ← Meta.synthInstance? (Lean.mkApp (.const ``Nonempty [lvl]) e) then
+    return .some (Lean.mkApp2 (.const ``Classical.choice [lvl]) e inh)
+  return .none
 
 syntax (name := fromMetaTactic) "fromMetaTactic" "[" ident "]" : tactic
 

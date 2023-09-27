@@ -14,6 +14,7 @@ initialize
   registerTraceClass `auto.mono
   registerTraceClass `auto.mono.printLemmaInst
   registerTraceClass `auto.mono.printConstInst
+  registerTraceClass `auto.mono.printInhabited
 
 register_option auto.mono.saturationThreshold : Nat := {
   defValue := 250
@@ -534,6 +535,10 @@ namespace FVarRep
     ciIdMap  : HashMap ConstInst FVarId := {}
     -- Canonicalization map for types
     tyCanMap : HashMap Expr Expr        := {}
+    -- Inhabited canonicalized types
+    -- The key `Expr` should be of the form `ty₁ → ty₂ → ⋯ → tyₙ`,
+    --   where `ty₁, ty₂, ⋯, tyₙ` are canonicalized types within `tyCanMap`
+    inhTys   : HashMap Expr Expr        := {}
   
   abbrev FVarRepM := StateRefT State MetaState.MetaStateM
   
@@ -546,6 +551,17 @@ namespace FVarRep
       return
     trace[auto.mono.printConstInst] "New {ci}"
     setCiMap ((← getCiMap).insert ci.fingerPrint (insts.push ci))
+
+  -- Synthesize inhabitation fact for type `e`. First filter out bound local instances
+  def synthInhabitedForCanTy (e : Expr) : FVarRepM Unit := do
+    let bfvars := HashSet.empty.insertMany ((← getBfvars).map Expr.fvar)
+    let insts := (← MetaState.getToContext).localInstances
+    let insts := insts.filter (fun ⟨_, fvar⟩ => !bfvars.contains fvar)
+    -- Call `trySynthInhabited`
+    if let .some inh ← MetaState.runMetaM <| (Meta.withNewMCtxDepth <| withReader
+        (fun ctx => {ctx with localInstances := insts}) (Meta.trySynthInhabited e)) then
+      trace[auto.mono.printInhabited] "⦗⦗ {inh} ⦘⦘ : {e}"
+      setInhTys ((← getInhTys).insert e inh)
 
   def processType : Expr → FVarRepM Unit
   | .forallE _ ty body _ => do
@@ -561,6 +577,7 @@ namespace FVarRep
         setTyCanMap ((← getTyCanMap).insert e ec)
         return
     setTyCanMap ((← getTyCanMap).insert e e)
+    synthInhabitedForCanTy e
 
   def ConstInst2FVarId (ci : ConstInst) : FVarRepM FVarId := do
     let ciMap ← FVarRep.getCiMap
@@ -693,18 +710,19 @@ def monomorphize (lemmas : Array Lemma) (k : Reif.State → MetaM α) : MetaM α
     postprocessSaturate
     trace[auto.mono] "Monomorphization took {(← IO.monoMsNow) - startTime}ms")
   let (_, monoSt) ← monoMAction.run {}
-  let fvarRepMAction : FVarRep.FVarRepM (Array UMonoFact) := (do
-    let lis := monoSt.lisArr.concatMap id
-    lis.mapM (fun li => do
-      return ⟨li.proof, ← FVarRep.replacePolyWithFVar li.type⟩))
+  -- Lemma instances
+  let lis := monoSt.lisArr.concatMap id
+  let fvarRepMAction : FVarRep.FVarRepM (Array UMonoFact) :=
+    lis.mapM (fun li => do return ⟨li.proof, ← FVarRep.replacePolyWithFVar li.type⟩)
   let metaStateMAction : MetaState.MetaStateM (Array FVarId × Reif.State) := (do
-    let (ufacts, s) ← fvarRepMAction.run { ciMap := monoSt.ciMap }
-    for (proof, ty) in ufacts do
+    let (uvalids, s) ← fvarRepMAction.run { ciMap := monoSt.ciMap }
+    for (proof, ty) in uvalids do
       trace[auto.mono] "Monomorphized :: {proof} : {ty}"
     let exlis := s.exprMap.toList.map (fun (e, id) => (id, e))
     let cilis ← s.ciIdMap.toList.mapM (fun (ci, id) => do return (id, ← MetaState.runMetaM ci.toExpr))
     let polyVal := HashMap.ofList (exlis ++ cilis)
-    return (s.ffvars, Reif.State.mk s.ffvars ufacts polyVal s.tyCanMap none))
+    let inhs := s.inhTys.toArray.map (fun (key, val) => ((val, key)))
+    return (s.ffvars, Reif.State.mk s.ffvars uvalids polyVal s.tyCanMap inhs none))
   MetaState.runWithIntroducedFVars metaStateMAction k
 
 end Auto.Monomorphization

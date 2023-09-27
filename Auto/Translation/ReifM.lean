@@ -23,7 +23,11 @@ structure State where
   exprFVarVal     : HashMap FVarId Expr := {}
   -- Canonicalization map for types
   tyCanMap        : HashMap Expr Expr   := {}
-  declName?        : Option Name
+  -- Inhabited canonicalized types
+  -- The second `Expr` should be of the form `ty₁ → ty₂ → ⋯ → tyₙ`,
+  --   where `ty₁, ty₂, ⋯, tyₙ` are canonicalized types within `tyCanMap`
+  inhTys          : Array UMonoFact   := {}
+  declName?       : Option Name
 
 abbrev ReifM := StateT State MetaM
 

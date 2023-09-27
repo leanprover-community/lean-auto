@@ -60,6 +60,10 @@ structure State where
     This field also corresponds to the `ImportTable` in `LamChecker.lean`
   -/
   assertions    : HashMap LamTerm (Expr × LamTerm × Nat) := {}
+  /-
+    This hashmap contains lamsorts whose interpretation is inhabited
+  -/
+  inhabitations : HashMap LamSort (Expr × Nat)    := {}
   -- `Embedding/LamChecker/ChkMap`
   -- `chkMap.find?[re]` returns the checkstep which proves `re`
   chkMap        : HashMap REntry (ChkStep × Nat)  := {}
@@ -122,11 +126,16 @@ def printProofs : ReifM Unit := do
     if let .some (cs, n) := chkMap.find? re then
       trace[auto.lamReif.printProofs] "{n} : ChkStep ⦗⦗{cs}⦘⦘ proves ⦗⦗{re}⦘⦘"
     else
-      let .valid [] t := re
-        | throwError "printProofs :: Unexpected entry {re}"
-      let .some (expr, _, n) := (← getAssertions).find? t
-        | throwError "printProofs :: Unable to find assertion associated with {t}"
-      trace[auto.lamReif.printProofs] "{n} : External fact ⦗⦗{← Meta.inferType expr}⦘⦘ proves ⦗⦗{re}⦘⦘"
+      match re with
+      | .valid [] t =>
+        let .some (expr, _, n) := (← getAssertions).find? t
+          | throwError "printProofs :: Unable to find assertion associated with {t}"
+        trace[auto.lamReif.printProofs] "{n} : External fact ⦗⦗{← Meta.inferType expr}⦘⦘ proves ⦗⦗{re}⦘⦘"
+      | .nonempty s =>
+        let .some (expr, n) := (← getInhabitations).find? s
+          | throwError "printProofs :: Unable to find inhabitation fact associated with {s}"
+        trace[auto.lamReif.printProofs] "{n} : Inhabitation fact ⦗⦗{← Meta.inferType expr}⦘⦘ proves ⦗⦗{re}⦘⦘"
+      | _ => throwError "printProofs :: Unexpected entry {re}"
 
 def sort2LamILTyIdx (s : LamSort) : ReifM Nat := do
   let isomTyMap ← getIsomTyMap
@@ -301,7 +310,6 @@ def addREntryToRTable (re : REntry) : ReifM Nat := do
   setRTable (rTable.push re)
   return pos
 
--- **TODO**
 -- `ty` is a reified assumption. `∀, ∃` and `=` in `ty` are supposed to
 --   not be of the import version
 -- The type of `proof` is definitionally equal to `GLift.down (← mkImportVersion ty).interp`
@@ -316,10 +324,17 @@ def newAssertion (proof : Expr) (ty : LamTerm) : ReifM Unit := do
   let tyi ← mkImportVersion ty
   setAssertions ((← getAssertions).insert ty (proof, tyi, pos))
 
+-- The type of `inh` is definitionally equal to `s.interpAsUnlifted`
+def newInhabitation (inh : Expr) (s : LamSort) : ReifM Unit := do
+  if (← getInhabitations).contains s then
+    return
+  let pos ← addREntryToRTable (.nonempty s)
+  setInhabitations ((← getInhabitations).insert s (inh, pos))
+
 /-
   Computes `upFunc` and `downFunc` between `s.interpAsUnlifted` and `s.interpAsLifted`
-  · `upFunc` is such that `upFunc binder` is equivalent to `binder↑`
-  · `downFunc` is such that `downFunc binder↑` is equivalent to `binder`
+  · `upFunc` is such that `upFunc f` is equivalent to `f↑`
+  · `downFunc` is such that `downFunc f↑` is equivalent to `f`
   Return type:
   · The first `Expr` is `upFunc`
   · The second `Expr` is `downFunc`
@@ -514,13 +529,21 @@ def reifTermCheckType (e : Expr) : ReifM (LamSort × LamTerm) := do
 --   within the `validTable`
 def reifFacts (facts : Array UMonoFact) : ReifM (Array LamTerm) :=
   facts.mapM (fun (proof, ty) => do
-    trace[auto.lamReif] "Reifying {proof} : {ty}"
+    trace[auto.lamReif] "Reifying valid fact {proof} : {ty}"
     let (s, lamty) ← reifTermCheckType ty
     if s != .base .prop then
       throwError "reifFacts :: Fact {lamty} is not of type `prop`"
     trace[auto.lamReif.printResult] "Successfully reified proof of {← Meta.zetaReduce ty} to λterm `{lamty}`"
     newAssertion proof lamty
     return lamty)
+
+def reifInhabitations (inh : Array UMonoFact) : ReifM (Array LamSort) :=
+  inh.mapM (fun (inhTy, ty) => do
+    trace[auto.lamReif] "Reifying Inhabitation fact {inhTy} : {ty}"
+    let s ← reifType ty
+    newInhabitation inhTy s
+    return s
+  )
 
 section Checker
 
@@ -769,19 +792,28 @@ section BuildChecker
   def buildImportTableExpr (chkValExpr : Expr) : ReifM (Expr × Expr) := do
     -- let startTime ← IO.monoMsNow
     let u ← getU
-    let lamTermExpr := Expr.const ``LamTerm []
     let mut importTable : BinTree Expr := BinTree.leaf
     let mut importedFactsTree : BinTree REntry := BinTree.leaf
     for (t, (e, ti, n)) in (← getAssertions).toList do
       let tExpr := Lean.toExpr ti
-      let itEntry := Lean.mkApp3 (.const ``importTablePSigmaMk [u]) chkValExpr tExpr e
+      let ieExpr := Expr.app (.const ``ImportEntry.valid []) tExpr
+      let itEntry := Lean.mkApp3 (.const ``importTablePSigmaMk [u]) chkValExpr ieExpr e
       importTable := importTable.insert n itEntry
       if t.maxLooseBVarSucc != 0 || t.maxEVarSucc != 0 then
         throwError "buildImportTableExpr :: Invalid imported fact {t}"
       let veEntry := REntry.valid [] t
       importedFactsTree := importedFactsTree.insert n veEntry
+    for (s, (inh, n)) in (← getInhabitations).toList do
+      let sExpr := Lean.toExpr s
+      let ieExpr := Expr.app (.const ``ImportEntry.nonempty []) sExpr
+      let (upFunc, _, _, sil) ← updownFunc s
+      let inhLift := Lean.mkApp2 (.const ``Nonempty.intro [.succ u]) sil (.app upFunc inh)
+      let itEntry := Lean.mkApp3 (.const ``importTablePSigmaMk [u]) chkValExpr ieExpr inhLift
+      importTable := importTable.insert n itEntry
+      let vEntry := REntry.nonempty s
+      importedFactsTree := importedFactsTree.insert n vEntry
     let type := Lean.mkApp2 (.const ``PSigma [.succ .zero, .zero])
-      lamTermExpr (.app (.const ``importTablePSigmaβ [u]) chkValExpr)
+      (.const ``ImportEntry []) (.app (.const ``importTablePSigmaβ [u]) chkValExpr)
     let importTableExpr := (@instToExprBinTree Expr
       (instExprToExprId type) ⟨.zero, Prop⟩).toExpr importTable
     let importedFacts := Lean.toExpr importedFactsTree

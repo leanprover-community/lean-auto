@@ -375,58 +375,67 @@ theorem RTable.getValidsEnsureLCtx_correct
     | .some (.nonempty _) => intro heq; cases heq
     | .none => intro heq; cases heq
 
+inductive ImportEntry where
+  | valid     : LamTerm → ImportEntry
+  | nonempty  : LamSort → ImportEntry
+
+def ImportEntry.correct (lval : LamValuation) : ImportEntry → Prop
+| .valid t => (t.interpAsProp lval dfLCtxTy (dfLCtxTerm _)).down
+| .nonempty s => Nonempty (s.interp lval.tyVal)
+
 -- The meta code of the checker will prepare this `ImportTable`
 abbrev ImportTable (cpv : CPVal.{u}) :=
-  Auto.BinTree (@PSigma LamTerm (fun p => (LamTerm.interpAsProp cpv.toLamValuationEraseEtom dfLCtxTy (dfLCtxTerm _) p).down))
+  Auto.BinTree (@PSigma ImportEntry (ImportEntry.correct cpv.toLamValuationEraseEtom))
 
 -- Used by the meta code of the checker to build `ImportTable`
-abbrev importTablePSigmaβ (cpv : CPVal.{u}) (p : LamTerm) :=
-  (LamTerm.interpAsProp cpv.toLamValuationEraseEtom dfLCtxTy (dfLCtxTerm _) p).down
+abbrev importTablePSigmaβ (cpv : CPVal.{u}) (ie : ImportEntry) :=
+  ImportEntry.correct cpv.toLamValuationEraseEtom ie
 
 abbrev importTablePSigmaMk (cpv : CPVal.{u}) :=
-  @PSigma.mk LamTerm (importTablePSigmaβ cpv)
-
-abbrev importTablePSigmaDefault (cpv : CPVal.{u}) :
-  @PSigma LamTerm (fun p => (LamTerm.interpAsProp cpv.toLamValuationEraseEtom dfLCtxTy (dfLCtxTerm _) p).down) :=
-  ⟨.base .trueE, True.intro⟩
+  @PSigma.mk ImportEntry (importTablePSigmaβ cpv)
 
 def ImportTable.importFacts (it : ImportTable cpv) : BinTree REntry :=
-  it.mapOpt (fun ⟨p, _⟩ =>
-    match p.lamCheck? cpv.toLamTyValEraseEtom dfLCtxTy with
-    | .some (.base .prop) =>
-      match p.maxLooseBVarSucc with
-      | 0 =>
+  it.mapOpt (fun ⟨ie, _⟩ =>
+    match ie with
+    | .valid p =>
+      match p.lamThmWFCheck? cpv.toLamTyValEraseEtom [] with
+      | .some (.base .prop) =>
         match p.maxEVarSucc with
         | 0 => .some (.valid [] (p.resolveImport cpv.toLamTyValEraseEtom))
         | _ + 1 => .none
-      | _ + 1 => .none
-    | _                   => .none)
+      | _                   => .none
+    | .nonempty s => .some (.nonempty s))
 
 theorem ImportTable.importFacts_correct (it : ImportTable cpv) (n : Nat) :
   it.importFacts.allp (@REntry.correct levt ⟨cpv, eVarVal⟩ n) := by
   dsimp [RTable.inv, importFacts]; rw [BinTree.mapOpt_allp]
-  intro n; apply Option.allp_uniform;
-  intro ⟨p, validp⟩; dsimp
-  cases h₁ : LamTerm.lamCheck? cpv.toLamTyValEraseEtom dfLCtxTy p <;> try exact True.intro
-  case a.some s =>
-    cases s <;> try exact True.intro
-    case base b =>
-      cases b <;> try exact True.intro
-      dsimp
-      cases h₂ : p.maxLooseBVarSucc <;> try exact True.intro
-      cases h₃ : p.maxEVarSucc <;> try exact True.intro
-      dsimp [Option.allp, REntry.correct]
-      apply And.intro
-      case left =>
-        apply LamThmValid.eVarIrrelevance cpv.toLamValuationEraseEtom <;> try rfl
-        case hirr =>
-          intro n H; rw [LamTerm.maxEVarSucc_resolveImport, h₃] at H; cases H
-        case a =>
-          apply LamThmValid.resolveImport (lval:=cpv.toLamValuationEraseEtom)
-          apply LamThmValid.ofInterpAsProp cpv.toLamValuationEraseEtom _ h₁ validp h₂    
-      case right =>
-        rw [LamTerm.maxEVarSucc_resolveImport]
-        rw [h₃]; apply Nat.zero_le
+  intro n; apply Option.allp_uniform
+  intro ⟨ie, validIe⟩; dsimp
+  match ie with
+  | .valid p =>
+    dsimp
+    cases h₁ : LamTerm.lamThmWFCheck? cpv.toLamTyValEraseEtom [] p <;> try exact True.intro
+    case some s =>
+      cases s <;> try exact True.intro
+      case base b =>
+        cases b <;> try exact True.intro
+        dsimp
+        have ⟨h₁, h₂⟩ := LamTerm.lamThmWFCheck?_spec h₁
+        have h₂ := Nat.le_zero.mp h₂
+        cases h₃ : p.maxEVarSucc <;> try exact True.intro
+        apply And.intro
+        case left =>
+          apply LamThmValid.eVarIrrelevance cpv.toLamValuationEraseEtom <;> try rfl
+          case hirr =>
+            intro n H; rw [LamTerm.maxEVarSucc_resolveImport, h₃] at H; cases H
+          case a =>
+            apply LamThmValid.resolveImport (lval:=cpv.toLamValuationEraseEtom)
+            apply LamThmValid.ofInterpAsProp cpv.toLamValuationEraseEtom _ h₁ validIe h₂    
+        case right =>
+          rw [LamTerm.maxEVarSucc_resolveImport]
+          rw [h₃]; apply Nat.zero_le
+  | .nonempty s =>
+    dsimp [REntry.correct, Option.allp]; exact validIe
 
 inductive ChkStep where
   | wfOfCheck (lctx : List LamSort) (t : LamTerm) : ChkStep

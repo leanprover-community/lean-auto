@@ -32,6 +32,17 @@ section ManualCheck
 
 end ManualCheck
 
+-- Inhabitation Reasoning
+
+section Inhabitation
+
+  set_option trace.auto.lamReif.printProofs true
+
+  example (x : α) [Inhabited α] (h : x = y) : x = y := by
+    auto
+
+end Inhabitation
+
 -- Monomorphization
 
 set_option auto.prep.redMode "instances" in

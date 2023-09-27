@@ -2276,6 +2276,18 @@ def LamTerm.lamThmWFCheck? (ltv : LamTyVal) (lctx : List LamSort) (t : LamTerm) 
     | false => .none
   | .none => .none
 
+theorem LamTerm.lamThmWFCheck?_spec
+  (H : LamTerm.lamThmWFCheck? ltv lctx t = .some rty) :
+  LamTerm.lamCheck? ltv (pushLCtxs lctx dfLCtxTy) t = .some rty ∧ t.maxLooseBVarSucc ≤ lctx.length := by
+  dsimp [lamThmWFCheck?] at H; revert H
+  match LamTerm.lamCheck? ltv (pushLCtxs lctx dfLCtxTy) t with
+  | .some s =>
+    dsimp
+    match h₂ : Nat.ble t.maxLooseBVarSucc lctx.length with
+    | true => dsimp; intro H; apply And.intro H; apply Nat.le_of_ble_eq_true h₂
+    | false => intro H; cases H
+  | .none => intro H; cases H
+
 theorem LamThmWF.ofLamThmWFCheck?
   {lval : LamValuation} {lctx : List LamSort} {rty : LamSort} {t : LamTerm}
   (h : LamTerm.lamThmWFCheck? lval.toLamTyVal lctx t = .some rty) : LamThmWF lval lctx rty t := by

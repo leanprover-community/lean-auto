@@ -9,7 +9,14 @@ set_option auto.prep.redMode "reducible"
 set_option trace.auto.tactic true
 set_option trace.auto.lamReif.printResult true
 set_option trace.auto.lamReif.printValuation true
+set_option trace.auto.mono.printInhabited true
 
+example {α : Sort u} (a b : α) (h : a = b) [Inhabited α] : a = b := by
+  auto
+
+#check 2
+
+/--
 -- Testing SynthArg
 example (a b : ℝ) (h1 : a < b) : (∃ c, a < c ∧ c < b) := by
   auto [DenselyOrdered.dense, h1]

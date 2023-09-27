@@ -1,6 +1,7 @@
 import Auto.Tactic
 
 set_option profiler true
+set_option compiler.enableNew false
 
 partial def chopList (s : List α) (n : Nat) : List (List α) :=
   if n == 0 then
@@ -64,7 +65,9 @@ example
 
 #eval IO.println (test₁ 240)
 
--- 1.8s
+-- 2.5s
+set_option maxRecDepth 2000
+set_option trace.auto.buildChecker true in
 example
   (α0 : Prop) (α1 : Prop) (α2 : Prop) (α3 : Prop) (α4 : Prop)
   (α5 : Prop) (α6 : Prop) (α7 : Prop) (α8 : Prop) (α9 : Prop)

@@ -200,8 +200,9 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) : TacticM Re
   let declName? ← Elab.Term.getDeclName?
   match instr with
   | .none =>
-    let afterReify (ufacts : Array UMonoFact) : LamReif.ReifM Expr := (do
-      let exportFacts ← LamReif.reifFacts ufacts
+    let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) : LamReif.ReifM Expr := (do
+      let exportFacts ← LamReif.reifFacts uvalids
+      let exportInhs ← LamReif.reifInhabitations uinhs
       let exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
       let exportFacts ← exportFacts.mapM LamReif.skolemizeMostIntoForall
       let exportFacts ← exportFacts.mapM LamReif.validOfExtensionalize
@@ -234,9 +235,10 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) : TacticM Re
       Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra
       )
     let (proof, _) ← Monomorphization.monomorphize lemmas (@id (Reif.ReifM Expr) do
-      let ufacts ← liftM <| Reif.getFacts
-      let u ← computeMaxLevel ufacts
-      (afterReify ufacts).run' {u := u})
+      let uvalids ← liftM <| Reif.getFacts
+      let uinhs ← liftM <| Reif.getInhTys
+      let u ← computeMaxLevel uvalids
+      (afterReify uvalids uinhs).run' {u := u})
     trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
     return .unsat proof
   | .useSorry => return .unsat (← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []])
