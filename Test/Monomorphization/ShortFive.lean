@@ -43,7 +43,7 @@ variable (square₁      : ∀ b, l (g₀ b) = g₁ (k b))
 open is_short_exact
 
 set_option auto.prep.redMode "reducible"
-set_option trace.auto.lamReif.printResult true
+set_option trace.auto.lamReif.printProofs true
 set_option trace.auto.lamReif.printValuation true
 
 -- set_option pp.explicit true

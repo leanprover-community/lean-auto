@@ -122,7 +122,7 @@ def printProofs : ReifM Unit := do
     if let .some (cs, n) := chkMap.find? re then
       trace[auto.lamReif.printProofs] "{n} : ChkStep ⦗⦗{cs}⦘⦘ proves ⦗⦗{re}⦘⦘"
     else
-      let .some ([], t) := re.getValid?
+      let .valid [] t := re
         | throwError "printProofs :: Unexpected entry {re}"
       let .some (expr, _, n) := (← getAssertions).find? t
         | throwError "printProofs :: Unable to find assertion associated with {t}"
@@ -175,7 +175,7 @@ def lookupREntryPos! (re : REntry) : ReifM Nat := do
   | .some (_, n) => return n
   | .none =>
     match re with
-    | .validEVar0 [] t =>
+    | .valid [] t =>
       match (← getAssertions).find? t with
       | .some (_, _, n) => return n
       | .none => throwError "lookupREntryPos! :: Unknown REntry {re}"
@@ -186,7 +186,7 @@ def lookupREntryProof? (re : REntry) : ReifM (Option (ChkStep ⊕ (Expr × LamTe
   | .some (cs, _) => return .some (.inl cs)
   | .none =>
     match re with
-    | .validEVar0 [] t =>
+    | .valid [] t =>
       match (← getAssertions).find? t with
       | .some (e, t, _) => return .some (.inr (e, t))
       | .none => return .none
@@ -310,7 +310,7 @@ def newAssertion (proof : Expr) (ty : LamTerm) : ReifM Unit := do
   -- Because of the way we `buildImportTableExpr`, we need to deduplicate facts
   if (← getAssertions).contains ty then
     return
-  let pos ← addREntryToRTable (.validEVar0 [] ty)
+  let pos ← addREntryToRTable (.valid [] ty)
   -- This `mkImportVersion` must be called before we build the lval expression
   -- So it cannot be called on-the-fly in `buildImportTableExpr`
   let tyi ← mkImportVersion ty
@@ -544,7 +544,7 @@ section Checker
     return re
 
   def validOfIntroMost (v : REntry) : ReifM REntry := do
-    let .some (_, t) := v.getValid?
+    let .valid _ t := v
       | throwError "validOfIntroMost :: Unexpected entry {v}"
     let mut idx := 0
     let mut t := t
@@ -563,7 +563,7 @@ section Checker
     return re
 
   def validOfRevertAll (v : REntry) : ReifM REntry := do
-    let .some (lctx, _) := v.getValid?
+    let .valid lctx _ := v
       | throwError "validOfRevertAll :: Unexpected entry {v}"
     if lctx.length == 0 then
       return v
@@ -578,7 +578,7 @@ section Checker
   def validOfHnf (v : REntry) : ReifM REntry := do
     let mut v := v
     while true do
-      let .some (_, t) := v.getValid?
+      let .valid _ t := v
         | throwError "validOfHnf :: Unexpected entry {v}"
       if !t.isHeadBetaTarget then
         break
@@ -592,7 +592,7 @@ section Checker
     return re
 
   def validOfBetaReduce (v : REntry) : ReifM REntry := do
-    let .some (_, t) := v.getValid?
+    let .valid _ t := v
       | throwError "validOfBetaReduce :: Unexpected entry {v}"
     validOfBetaBounded v t.betaReduceHackyIdx
 
@@ -645,11 +645,11 @@ section Checker
   def skolemizeMostIntoForall (exV : REntry) : ReifM REntry := do
     let mut exV := exV
     while true do
-      let .some (_, t) := exV.getValid?
+      let .valid _ t := exV
         | throwError "skolemizeAllForall :: Unexpected entry {exV}"
       if t.isMkForallE then
         exV ← validOfIntroMost exV
-      let .some (_, t) := exV.getValid?
+      let .valid _ t := exV
         | throwError "skolemizeAllForall :: Unexpected entry {exV}"
       if t.isMkExistE then
         exV ← skolemize exV
@@ -778,7 +778,7 @@ section BuildChecker
       importTable := importTable.insert n itEntry
       if t.maxLooseBVarSucc != 0 || t.maxEVarSucc != 0 then
         throwError "buildImportTableExpr :: Invalid imported fact {t}"
-      let veEntry := REntry.validEVar0 [] t
+      let veEntry := REntry.valid [] t
       importedFactsTree := importedFactsTree.insert n veEntry
     let type := Lean.mkApp2 (.const ``PSigma [.succ .zero, .zero])
       lamTermExpr (.app (.const ``importTablePSigmaβ [u]) chkValExpr)
@@ -798,7 +798,7 @@ section BuildChecker
     let checker ← Meta.withLetDecl `cpval cpvTy cpvExpr fun cpvFVarExpr => do
       let (itExpr, _) ← buildImportTableExpr cpvFVarExpr
       let csExpr ← buildChkStepsExpr
-      let .some (lctx, t) := re.getValid?
+      let .valid lctx t := re
         | throwError "buildFullCheckerExprFor :: {re} is not a `valid` entry"
       let vExpr := Lean.toExpr (← lookupREntryPos! re)
       let eqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr (lctx, t)]]
@@ -822,7 +822,7 @@ section BuildChecker
     let checker ← Meta.withLetDecl `cpval cpvTy cpvExpr fun cpvFVarExpr => do
       let (itExpr, ifExpr) ← buildImportTableExpr cpvFVarExpr
       let csExpr ← buildChkStepsExpr
-      let .some (lctx, t) := re.getValid?
+      let .valid lctx t := re
         | throwError "buildFullCheckerExprFor :: {re} is not a `valid` entry"
       let vExpr := Lean.toExpr (← lookupREntryPos! re)
       let hImportExpr ← Meta.mkAppM ``Eq.refl #[ifExpr]
@@ -844,10 +844,12 @@ section BuildChecker
       hints := .abbrev
       safety := .safe
     }
+    let startTime₁ ← IO.monoMsNow
     addDecl decl
-    let startTime ← IO.monoMsNow
-    compileDecl decl
-    trace[auto.buildChecker] "Compilation of {auxName} took {(← IO.monoMsNow) - startTime}ms"
+    let startTime₂ ← IO.monoMsNow
+    withOptions (fun opts => opts.set ``compiler.enableNew false) <| compileDecl decl
+    trace[auto.buildChecker] m!"For {auxName}, type checking took {startTime₂ - startTime₁}" ++
+      m!"compilation took {(← IO.monoMsNow) - startTime₁}ms"
     return auxName
 
   -- This shows the issue that compilation of a reduced expression
@@ -875,12 +877,12 @@ section BuildChecker
       let ifNativeName ← mkNativeAuxDecl "lam_ssrefl_if" (Expr.app (.const ``BinTree [.zero]) (Lean.mkConst ``REntry)) ifExpr
       let csExpr ← buildChkStepsExpr
       let csNativeName ← mkNativeAuxDecl "lam_ssrefl_cs" (Lean.mkConst ``ChkSteps) csExpr
-      let .some (lctx, t) := re.getValid?
+      let .valid lctx t := re
         | throwError "buildFullCheckerExprFor :: {re} is not a `valid` entry"
       let vExpr := Lean.toExpr (← lookupREntryPos! re)
-      let hImportExpr ← Meta.mkAppM ``Eq.refl #[ifExpr]
-      let hLvtExpr ← Meta.mkAppM ``Eq.refl #[lvtExpr]
-      let hLitExpr ← Meta.mkAppM ``Eq.refl #[litExpr]
+      let hImportExpr ← Meta.mkAppM ``Eq.refl #[Lean.mkConst ifNativeName]
+      let hLvtExpr ← Meta.mkAppM ``Eq.refl #[Lean.mkConst lvtNativeName]
+      let hLitExpr ← Meta.mkAppM ``Eq.refl #[Lean.mkConst litNativeName]
       let heqBoolExpr := Lean.mkApp7 (.const ``Checker.getValidExport_indirectReduce_reflection_runEq [])
         (Lean.mkConst lvtNativeName) (Lean.mkConst litNativeName) (Lean.mkConst ifNativeName)
         (Lean.mkConst csNativeName) vExpr (Lean.toExpr lctx) (Lean.toExpr t)
@@ -1069,8 +1071,6 @@ open Embedding.Lam LamReif
     return .wf (← lctx.mapM (transLamSort ref)) (← transLamSort ref s) (← transLamTerm ref t)
   | .valid lctx t => do
     return .valid (← lctx.mapM (transLamSort ref)) (← transLamTerm ref t)
-  | .validEVar0 lctx t => do
-    return .validEVar0 (← lctx.mapM (transLamSort ref)) (← transLamTerm ref t)
   | .nonempty s => .nonempty <$> transLamSort ref s
 
   private def transChkStep_EnsureOrder (posCont : Nat → TransM Nat) (poss : Array Nat) : TransM (Array Nat) := do
@@ -1174,7 +1174,7 @@ open Embedding.Lam LamReif
         if expectedEntry != .valid lctx t then throwError "collectProofFor :: Entry mismatch"
     | .inr (e, _) =>
       trace[auto.buildChecker] "Collecting for {hre} by external proof"
-      let .validEVar0 [] t := hre
+      let .valid [] t := hre
         | throwError "collectProofFor :: Unexpected error"
       newAssertion e (← transLamTerm ref t)
   

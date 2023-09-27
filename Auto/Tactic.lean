@@ -202,7 +202,7 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) : TacticM Re
   | .none =>
     let afterReify (ufacts : Array UMonoFact) : LamReif.ReifM Expr := (do
       let exportFacts ← LamReif.reifFacts ufacts
-      let exportFacts := exportFacts.map (Embedding.Lam.REntry.validEVar0 [])
+      let exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
       let exportFacts ← exportFacts.mapM LamReif.skolemizeMostIntoForall
       let exportFacts ← exportFacts.mapM LamReif.validOfExtensionalize
       let exportFacts ← exportFacts.mapM LamReif.validOfBetaReduce
@@ -224,7 +224,7 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) : TacticM Re
       let (proof, proofLamTerm, usedEtoms, unsatCore) ← Lam2D.callDuper exportFacts
       trace[auto.printProof] "Duper found proof of {← Meta.inferType proof}"
       LamReif.newAssertion proof proofLamTerm
-      let etomInstantiated ← LamReif.validOfInstantiateForall (.validEVar0 [] proofLamTerm) (usedEtoms.map .etom)
+      let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
       let contra ← LamReif.validOfImps etomInstantiated unsatCore
       LamReif.printValuation
       LamReif.printProofs

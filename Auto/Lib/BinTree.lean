@@ -233,7 +233,7 @@ def insert'Aux (bt : BinTree α) (n : Nat) (x : α) (rd : Nat) : BinTree α :=
   match rd with
   | 0 => bt
   | .succ rd' =>
-    match h : n with
+    match n with
     | 0 => bt
     | 1 =>
       match bt with

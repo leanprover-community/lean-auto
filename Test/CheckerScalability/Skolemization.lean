@@ -5,6 +5,64 @@ set_option auto.optimizeCheckerProof false
 set_option compiler.enableNew false
 set_option auto.checker.buildMode "indirectReduce_reflection"
 
+set_option trace.auto.lamReif.printProofs true
+theorem test
+  (f₁ f₂ f₃ f₄ f₅ f₆ f₇ f₈ f₉ f₁₀ f₁₁ f₁₂ f₁₃ f₁₄ : Nat → Nat → Nat)
+  (g₁ g₂ g₃ g₄ g₅ g₆ : Nat → Nat → Nat)
+  (f₁₅ f₁₆ f₁₇ f₁₈ f₁₉ f₂₀ f₂₁ f₂₂ f₂₃ f₂₄ f₂₅ f₂₆ f₂₇ f₂₈ : Nat → Nat → Nat)
+  (H₁₂ : ∀ x₁, ∃ x₂, ∀ x₃, ∃ x₄, ∀ x₅, ∃ x₆, ∀ x₇, ∃ x₈,
+       ∀ x₉, ∃ x₁₀, ∀ x₁₁, ∃ x₁₂, ∀ x₁₃, ∃ x₁₄, ∀ x₁₅, ∃ x₁₆,
+       ∀ x₁₇, ∃ x₁₈, ∀ x₁₉, ∃ x₂₀, ∀ x₂₁, ∃ x₂₂, ∀ x₂₃, ∃ x₂₄,
+       ∀ x₂₅, ∃ x₂₆, ∀ x₂₇, ∃ x₂₈, ∀ x₂₉, ∃ x₃₀, ∀ x₃₁, ∃ x₃₂,
+       ∀ x₃₃, ∃ x₃₄, ∀ x₃₅, ∃ x₃₆, ∀ x₃₇, ∃ x₃₈, ∀ x₃₉, ∃ x₄₀,
+       ∀ x₄₁, ∃ x₄₂, ∀ x₄₃, ∃ x₄₄, ∀ x₄₅, ∃ x₄₆, ∀ x₄₇, ∃ x₄₈,
+       ∀ x₄₉, ∃ x₅₀, ∀ x₅₁, ∃ x₅₂, ∀ x₅₃, ∃ x₅₄, ∀ x₅₅, ∃ x₅₆,
+       ∀ x₅₇, ∃ x₅₈, ∀ x₅₉, ∃ x₆₀, ∀ x₆₁, ∃ x₆₂, ∀ x₆₃, ∃ x₆₄,
+    (g₁ (g₁ (f₁ (f₂ (f₃ x₁ x₂) (f₄ x₃ x₄)) (f₅ (f₆ x₅ x₆) (f₇ x₇ x₈)))
+      (f₈ (f₉ (f₁₀ x₉ x₁₀) (f₁₁ x₁₁ x₁₂)) (f₁₂ (f₁₃ x₁₃ x₁₄) (f₁₄ x₁₅ x₁₆))))
+      (g₁ (f₁₅ (f₁₆ (f₁₇ x₁₇ x₁₈) (f₁₈ x₁₉ x₂₀)) (f₁₉ (f₂₀ x₂₁ x₂₂) (f₂₁ x₂₃ x₂₄)))
+        (f₂₂ (f₂₃ (f₂₄ x₂₅ x₂₆) (f₂₅ x₂₇ x₂₈)) (f₂₆ (f₂₇ x₂₉ x₃₀) (f₂₈ x₃₁ x₃₂))))) =
+    (g₂ (g₂ (f₁ (f₂ (f₃ x₃₃ x₃₄) (f₄ x₃₅ x₃₆)) (f₅ (f₆ x₃₇ x₃₈) (f₇ x₃₉ x₄₀)))
+      (f₈ (f₉ (f₁₀ x₄₁ x₄₂) (f₁₁ x₄₃ x₄₄)) (f₁₂ (f₁₃ x₄₅ x₄₆) (f₁₄ x₄₇ x₄₈))))
+      (g₂ (f₁₅ (f₁₆ (f₁₇ x₄₉ x₅₀) (f₁₈ x₅₁ x₅₂)) (f₁₉ (f₂₀ x₅₃ x₅₄) (f₂₁ x₅₅ x₅₆)))
+        (f₂₂ (f₂₃ (f₂₄ x₅₇ x₅₈) (f₂₅ x₅₉ x₆₀)) (f₂₆ (f₂₇ x₆₁ x₆₂) (f₂₈ x₆₃ x₆₄))))))
+  (H₂₃ : ∀ x₁, ∃ x₂, ∀ x₃, ∃ x₄, ∀ x₅, ∃ x₆, ∀ x₇, ∃ x₈,
+       ∀ x₉, ∃ x₁₀, ∀ x₁₁, ∃ x₁₂, ∀ x₁₃, ∃ x₁₄, ∀ x₁₅, ∃ x₁₆,
+       ∀ x₁₇, ∃ x₁₈, ∀ x₁₉, ∃ x₂₀, ∀ x₂₁, ∃ x₂₂, ∀ x₂₃, ∃ x₂₄,
+       ∀ x₂₅, ∃ x₂₆, ∀ x₂₇, ∃ x₂₈, ∀ x₂₉, ∃ x₃₀, ∀ x₃₁, ∃ x₃₂,
+       ∀ x₃₃, ∃ x₃₄, ∀ x₃₅, ∃ x₃₆, ∀ x₃₇, ∃ x₃₈, ∀ x₃₉, ∃ x₄₀,
+       ∀ x₄₁, ∃ x₄₂, ∀ x₄₃, ∃ x₄₄, ∀ x₄₅, ∃ x₄₆, ∀ x₄₇, ∃ x₄₈,
+       ∀ x₄₉, ∃ x₅₀, ∀ x₅₁, ∃ x₅₂, ∀ x₅₃, ∃ x₅₄, ∀ x₅₅, ∃ x₅₆,
+       ∀ x₅₇, ∃ x₅₈, ∀ x₅₉, ∃ x₆₀, ∀ x₆₁, ∃ x₆₂, ∀ x₆₃, ∃ x₆₄,
+    (g₂ (g₂ (f₁ (f₂ (f₃ x₁ x₂) (f₄ x₃ x₄)) (f₅ (f₆ x₅ x₆) (f₇ x₇ x₈)))
+      (f₈ (f₉ (f₁₀ x₉ x₁₀) (f₁₁ x₁₁ x₁₂)) (f₁₂ (f₁₃ x₁₃ x₁₄) (f₁₄ x₁₅ x₁₆))))
+      (g₂ (f₁₅ (f₁₆ (f₁₇ x₁₇ x₁₈) (f₁₈ x₁₉ x₂₀)) (f₁₉ (f₂₀ x₂₁ x₂₂) (f₂₁ x₂₃ x₂₄)))
+        (f₂₂ (f₂₃ (f₂₄ x₂₅ x₂₆) (f₂₅ x₂₇ x₂₈)) (f₂₆ (f₂₇ x₂₉ x₃₀) (f₂₈ x₃₁ x₃₂))))) =
+    (g₃ (g₃ (f₁ (f₂ (f₃ x₃₃ x₃₄) (f₄ x₃₅ x₃₆)) (f₅ (f₆ x₃₇ x₃₈) (f₇ x₃₉ x₄₀)))
+      (f₈ (f₉ (f₁₀ x₄₁ x₄₂) (f₁₁ x₄₃ x₄₄)) (f₁₂ (f₁₃ x₄₅ x₄₆) (f₁₄ x₄₇ x₄₈))))
+      (g₃ (f₁₅ (f₁₆ (f₁₇ x₄₉ x₅₀) (f₁₈ x₅₁ x₅₂)) (f₁₉ (f₂₀ x₅₃ x₅₄) (f₂₁ x₅₅ x₅₆)))
+        (f₂₂ (f₂₃ (f₂₄ x₅₇ x₅₈) (f₂₅ x₅₉ x₆₀)) (f₂₆ (f₂₇ x₆₁ x₆₂) (f₂₈ x₆₃ x₆₄))))))
+  (H₃₄ : ∀ x₁, ∃ x₂, ∀ x₃, ∃ x₄, ∀ x₅, ∃ x₆, ∀ x₇, ∃ x₈,
+       ∀ x₉, ∃ x₁₀, ∀ x₁₁, ∃ x₁₂, ∀ x₁₃, ∃ x₁₄, ∀ x₁₅, ∃ x₁₆,
+       ∀ x₁₇, ∃ x₁₈, ∀ x₁₉, ∃ x₂₀, ∀ x₂₁, ∃ x₂₂, ∀ x₂₃, ∃ x₂₄,
+       ∀ x₂₅, ∃ x₂₆, ∀ x₂₇, ∃ x₂₈, ∀ x₂₉, ∃ x₃₀, ∀ x₃₁, ∃ x₃₂,
+       ∀ x₃₃, ∃ x₃₄, ∀ x₃₅, ∃ x₃₆, ∀ x₃₇, ∃ x₃₈, ∀ x₃₉, ∃ x₄₀,
+       ∀ x₄₁, ∃ x₄₂, ∀ x₄₃, ∃ x₄₄, ∀ x₄₅, ∃ x₄₆, ∀ x₄₇, ∃ x₄₈,
+       ∀ x₄₉, ∃ x₅₀, ∀ x₅₁, ∃ x₅₂, ∀ x₅₃, ∃ x₅₄, ∀ x₅₅, ∃ x₅₆,
+       ∀ x₅₇, ∃ x₅₈, ∀ x₅₉, ∃ x₆₀, ∀ x₆₁, ∃ x₆₂, ∀ x₆₃, ∃ x₆₄,
+    (g₃ (g₃ (f₁ (f₂ (f₃ x₁ x₂) (f₄ x₃ x₄)) (f₅ (f₆ x₅ x₆) (f₇ x₇ x₈)))
+      (f₈ (f₉ (f₁₀ x₉ x₁₀) (f₁₁ x₁₁ x₁₂)) (f₁₂ (f₁₃ x₁₃ x₁₄) (f₁₄ x₁₅ x₁₆))))
+      (g₃ (f₁₅ (f₁₆ (f₁₇ x₁₇ x₁₈) (f₁₈ x₁₉ x₂₀)) (f₁₉ (f₂₀ x₂₁ x₂₂) (f₂₁ x₂₃ x₂₄)))
+        (f₂₂ (f₂₃ (f₂₄ x₂₅ x₂₆) (f₂₅ x₂₇ x₂₈)) (f₂₆ (f₂₇ x₂₉ x₃₀) (f₂₈ x₃₁ x₃₂))))) =
+    (g₄ (g₄ (f₁ (f₂ (f₃ x₃₃ x₃₄) (f₄ x₃₅ x₃₆)) (f₅ (f₆ x₃₇ x₃₈) (f₇ x₃₉ x₄₀)))
+      (f₈ (f₉ (f₁₀ x₄₁ x₄₂) (f₁₁ x₄₃ x₄₄)) (f₁₂ (f₁₃ x₄₅ x₄₆) (f₁₄ x₄₇ x₄₈))))
+      (g₄ (f₁₅ (f₁₆ (f₁₇ x₄₉ x₅₀) (f₁₈ x₅₁ x₅₂)) (f₁₉ (f₂₀ x₅₃ x₅₄) (f₂₁ x₅₅ x₅₆)))
+        (f₂₂ (f₂₃ (f₂₄ x₅₇ x₅₈) (f₂₅ x₅₉ x₆₀)) (f₂₆ (f₂₇ x₆₁ x₆₂) (f₂₈ x₆₃ x₆₄))))))
+  (G₁ : ∀ x y, g₁ x y = a₁)
+  (G₂ : ∀ x y, g₂ x y = a₂)
+  (G₃ : ∀ x y, g₃ x y = a₃)
+  (G₄ : ∀ x y, g₃ x y = a₄) : a₁ = a₄ := by auto
+
 theorem test₁ (f₁ f₂ f₃ f₄ f₅ f₆ f₇ f₈ f₉ f₁₀ f₁₁ : Nat → Nat → Nat)
   (H₁ : ∀ x₁, ∃ x₂, ∀ x₃, ∃ x₄, ∀ x₅, ∃ x₆, ∀ x₇, ∃ x₈,
        ∀ x₉, ∃ x₁₀, ∀ x₁₁, ∃ x₁₂, ∀ x₁₃, ∃ x₁₄, ∀ x₁₅, ∃ x₁₆,
