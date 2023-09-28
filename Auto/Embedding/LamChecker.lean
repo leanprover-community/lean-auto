@@ -438,6 +438,8 @@ theorem ImportTable.importFacts_correct (it : ImportTable cpv) (n : Nat) :
     dsimp [REntry.correct, Option.allp]; exact validIe
 
 inductive ChkStep where
+  | nonemptyOfAtom (n : Nat) : ChkStep
+  | nonemptyOfEtom (n : Nat) : ChkStep
   | wfOfCheck (lctx : List LamSort) (t : LamTerm) : ChkStep
   | wfOfAppend (ex : List LamSort) (pos : Nat) : ChkStep
   | wfOfPrepend (ex : List LamSort) (pos : Nat) : ChkStep
@@ -471,6 +473,8 @@ inductive ChkStep where
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
 def ChkStep.toString : ChkStep → String
+| .nonemptyOfAtom n => s!"nonemptyOfAtom {n}"
+| .nonemptyOfEtom n => s!"nonemptyOfEtom {n}"
 | .wfOfCheck lctx t => s!"wfOfCheck {lctx} {t}"
 | .wfOfAppend ex pos => s!"wfOfAppend {ex} {pos}"
 | .wfOfPrepend ex pos => s!"wfOfPrepend {ex} {pos}"
@@ -571,6 +575,11 @@ def ChkStep.evalValidOfInstantiate (n : Nat) (ltv : LamTyVal) (lctx : List LamSo
       | .none => .fail
 
 def ChkStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : ChkStep) → EvalResult
+| .nonemptyOfAtom n => .addEntry (.nonempty (lvt n))
+| .nonemptyOfEtom n =>
+  match r.maxEVarSucc.ble n with
+  | true => .fail
+  | false => .addEntry (.nonempty ((r.lamEVarTy.get? n).getD (.base .prop)))
 | .wfOfCheck lctx t =>
   match LamTerm.lamThmWFCheck? ⟨lvt, lit, r.toLamEVarTy⟩ lctx t with
   | .some rty =>
@@ -841,6 +850,16 @@ theorem ChkStep.evalValidOfInstantiate_correct
 theorem ChkStep.eval_correct
   (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
   (cs : ChkStep) → EvalResult.correct r cv (cs.eval cv.toLamVarTy cv.toLamILTy r)
+| .nonemptyOfAtom n => by
+  dsimp [eval, EvalResult.correct, REntry.correct]
+  apply Nonempty.intro; exact cv.toLamValuation.varVal n
+| .nonemptyOfEtom n => by
+  dsimp [eval]
+  match Nat.ble r.maxEVarSucc n with
+  | true => exact True.intro
+  | false =>
+    dsimp [EvalResult.correct, REntry.correct]
+    apply Nonempty.intro; exact cv.toLamValuation.eVarVal n
 | .wfOfCheck lctx t => by
   dsimp [eval]
   cases h₁ : LamTerm.lamThmWFCheck? ⟨cv.toLamVarTy, cv.toLamILTy, r.toLamEVarTy⟩ lctx t <;> try exact True.intro

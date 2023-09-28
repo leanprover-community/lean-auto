@@ -161,6 +161,13 @@ section Skolemization
   
   example (p : α → (β → γ) → Prop) (h : ∀ x, ∃ y, p x y) : ∃ (f : _ → _), ∀ x, p x (f x) :=
     by auto
+  
+  example (p : α → Prop) (h₁ : ∃ (_ : α), p x) (h₂ : p x) : p x :=
+    by auto
+  
+  example (p : α → Prop)
+    (h₁ : ∃ (_ _ : β) (_ _ : γ), p x) (h₂ : ∃ (_ _ : β), p x) : p x :=
+    by auto
 
 end Skolemization
 

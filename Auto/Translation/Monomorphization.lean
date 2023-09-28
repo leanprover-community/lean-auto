@@ -721,6 +721,7 @@ def monomorphize (lemmas : Array Lemma) (k : Reif.State → MetaM α) : MetaM α
     let exlis := s.exprMap.toList.map (fun (e, id) => (id, e))
     let cilis ← s.ciIdMap.toList.mapM (fun (ci, id) => do return (id, ← MetaState.runMetaM ci.toExpr))
     let polyVal := HashMap.ofList (exlis ++ cilis)
+    -- Inhabited types
     let inhs := s.inhTys.toArray.map (fun (key, val) => ((val, key)))
     return (s.ffvars, Reif.State.mk s.ffvars uvalids polyVal s.tyCanMap inhs none))
   MetaState.runWithIntroducedFVars metaStateMAction k
