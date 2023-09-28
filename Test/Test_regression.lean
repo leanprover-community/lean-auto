@@ -41,6 +41,9 @@ section Inhabitation
   example (x : α) [Inhabited α] (h : x = y) : x = y := by
     auto
 
+  example (x : Nat) (h : x = y) : x = y := by
+    auto
+
 end Inhabitation
 
 -- Monomorphization

@@ -10,6 +10,7 @@ open Lean
 initialize
   registerTraceClass `auto.lamReif
   registerTraceClass `auto.buildChecker
+  registerTraceClass `auto.lamReif.newChkStep
   registerTraceClass `auto.lamReif.printValuation
   registerTraceClass `auto.lamReif.printProofs
   registerTraceClass `auto.lamReif.printResult
@@ -195,20 +196,33 @@ def lookupREntryPos! (re : REntry) : ReifM Nat := do
       match (← getAssertions).find? t with
       | .some (_, _, n) => return n
       | .none => throwError "lookupREntryPos! :: Unknown REntry {re}"
+    | .nonempty s =>
+      match (← getInhabitations).find? s with
+      | .some (_, n) => return n
+      | .none => throwError "lookupREntryPos! :: Unknown REntry {re}"
     | _ => throwError "lookupREntryPos! :: Unknown REntry {re}"
 
-def lookupREntryProof? (re : REntry) : ReifM (Option (ChkStep ⊕ (Expr × LamTerm))) := do
+inductive REntryProof where
+  | chkStep      : ChkStep → REntryProof
+  | inhabitation : Expr → LamSort → REntryProof
+  | assertion    : Expr → LamTerm → REntryProof
+
+def lookupREntryProof? (re : REntry) : ReifM (Option REntryProof) := do
   match (← getChkMap).find? re with
-  | .some (cs, _) => return .some (.inl cs)
+  | .some (cs, _) => return .some (.chkStep cs)
   | .none =>
     match re with
     | .valid [] t =>
       match (← getAssertions).find? t with
-      | .some (e, t, _) => return .some (.inr (e, t))
+      | .some (e, t, _) => return .some (.assertion e t)
+      | .none => return .none
+    | .nonempty s =>
+      match (← getInhabitations).find? s with
+      | .some (e, _) => return .some (.inhabitation e s)
       | .none => return .none
     | _ => return .none
 
-def lookupREntryProof! (re : REntry) : ReifM (ChkStep ⊕ (Expr × LamTerm)) := do
+def lookupREntryProof! (re : REntry) : ReifM REntryProof := do
   match ← lookupREntryProof? re with
   | .some proof => return proof
   | .none => throwError "lookupREntryProof! :: Unknown REntry {re}"
@@ -296,6 +310,7 @@ def mkImportVersion : LamTerm → ReifM LamTerm
 -- 1. Whether the checkstep produces a new REntry
 -- 2. The `EvalResult` of this checkstep
 def newChkStep (c : ChkStep) (res? : Option EvalResult) : ReifM (Bool × EvalResult) := do
+  trace[auto.lamReif.newChkStep] "New ChkStep {c}"
   -- For an etom-producing checkstep, evaluating it
   --   twice may yield different results. So, we lookup
   --   `chkStepCache` to see whether this checkstep has
@@ -349,7 +364,7 @@ def addREntryToRTable (re : REntry) : ReifM Nat := do
 -- Returns the position of `ty` inside the `validTable` after inserting it
 def newAssertion (proof : Expr) (ty : LamTerm) : ReifM Unit := do
   -- Because of the way we `buildImportTableExpr`, we need to deduplicate facts
-  if (← getAssertions).contains ty then
+  if let .some _ ← lookupREntryProof? (.valid [] ty) then
     return
   let pos ← addREntryToRTable (.valid [] ty)
   -- This `mkImportVersion` must be called before we build the lval expression
@@ -359,7 +374,8 @@ def newAssertion (proof : Expr) (ty : LamTerm) : ReifM Unit := do
 
 -- The type of `inh` is definitionally equal to `s.interpAsUnlifted`
 def newInhabitation (inh : Expr) (s : LamSort) : ReifM Unit := do
-  if (← getInhabitations).contains s then
+  -- Because of the way we `buildImportTableExpr`, we need to deduplicate facts
+  if let .some _ ← lookupREntryProof? (.nonempty s) then
     return
   let pos ← addREntryToRTable (.nonempty s)
   setInhabitations ((← getInhabitations).insert s (inh, pos))
@@ -1221,7 +1237,7 @@ open Embedding.Lam LamReif
         return
       let (highLvlProof, _) ← (lookupREntryProof! hre).run ref
       match highLvlProof with
-      | .inl cs =>
+      | .chkStep cs =>
         trace[auto.buildChecker] "Collecting for {hre} by ChkStep {cs}"
         let er ← processChkStep ref cs
         match er with
@@ -1232,7 +1248,13 @@ open Embedding.Lam LamReif
         | .newEtomWithValid _ lctx t => do
           let expectedEntry ← transREntry ref hre
           if expectedEntry != .valid lctx t then throwError "collectProofFor :: Entry mismatch"
-      | .inr (e, _) =>
+      | .inhabitation e _ =>
+        let .nonempty hs := hre
+          | throwError "collectProofFor :: Unexpected error"
+        let s ← transLamSort ref hs
+        newInhabitation e s
+        trace[auto.buildChecker] "Inhabitation fact {hs} translated to {s}"
+      | .assertion e _ =>
         let .valid [] ht := hre
           | throwError "collectProofFor :: Unexpected error"
         let t ← transLamTerm ref ht
