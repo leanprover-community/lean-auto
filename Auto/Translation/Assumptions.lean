@@ -67,7 +67,7 @@ def Lemma.unfoldConsts (lem : Lemma) (declNames : Array Name) : MetaM Lemma := d
     where `ts` can depend on `ys`
   Note that if `li : LemmaInst`, then `li.toLemma` would not be the
     original lemmas that `li` is an instance of. Instead,
-    `(li.stripForall nbinders).getAppFnN nargs` would be the
+    `(li.stripForallN nbinders).getAppFnN nargs` would be the
     original lemma
 -/
 structure LemmaInst extends Lemma where
@@ -90,7 +90,7 @@ def LemmaInst.ofLemma (lem : Lemma) : MetaM LemmaInst := do
 
 -- Get the proof of the lemma that `li` is an instance of
 def LemmaInst.getProofOfLemma (li : LemmaInst) : Option Expr :=
-  Option.bind (Expr.stripLambda li.nbinders li.proof) (Expr.getAppFnN li.nargs)
+  Option.bind (Expr.stripLambdaN li.nbinders li.proof) (Expr.getAppFnN li.nargs)
 
 instance : ToMessageData LemmaInst where
   toMessageData li := MessageData.compose
@@ -122,6 +122,14 @@ def LemmaInst.equivQuick (li₁ li₂ : LemmaInst) : MetaM Bool := do
   let s₁₂ ← LemmaInst.subsumeQuick li₁ li₂
   let s₂₁ ← LemmaInst.subsumeQuick li₂ li₁
   return s₁₂ && s₂₁
+
+abbrev LemmaInsts := Array LemmaInst
+
+def LemmaInsts.newInst? (lis : LemmaInsts) (li : LemmaInst) : MetaM Bool := do
+  for li' in lis do
+    if ← li'.equivQuick li then
+      return false
+  return true
 
 -- A `LemmaInst`, but after `lambdaMetaTelescope` on the `proof`
 structure MLemmaInst where

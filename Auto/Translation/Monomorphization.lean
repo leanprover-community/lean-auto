@@ -2,6 +2,7 @@ import Lean
 import Auto.Embedding.Lift
 import Auto.Translation.Assumptions
 import Auto.Translation.ReifM
+import Auto.Translation.Inhabitation
 import Auto.Lib.LevelExtra
 import Auto.Lib.ExprExtra
 import Auto.Lib.MonadUtils
@@ -14,7 +15,6 @@ initialize
   registerTraceClass `auto.mono
   registerTraceClass `auto.mono.printLemmaInst
   registerTraceClass `auto.mono.printConstInst
-  registerTraceClass `auto.mono.printInhabited
 
 register_option auto.mono.saturationThreshold : Nat := {
   defValue := 250
@@ -342,7 +342,9 @@ private partial def MLemmaInst.matchConstInst (ci : ConstInst) (mi : MLemmaInst)
 --   of `li` against `ci`
 def LemmaInst.matchConstInst (ci : ConstInst) (li : LemmaInst) : MetaM (HashSet LemmaInst) :=
   Meta.withNewMCtxDepth do
-    let (_, _, mi) ← MLemmaInst.ofLemmaInst li
+    let (lmvars, mvars, mi) ← MLemmaInst.ofLemmaInst li
+    if lmvars.size == 0 && mvars.size == 0 then
+      return HashSet.empty
     MLemmaInst.matchConstInst ci mi mi.type
 
 -- Test whether a lemma is type monomorphic && universe monomorphic
@@ -367,14 +369,6 @@ def LemmaInst.monomorphic? (li : LemmaInst) : MetaM (Option LemmaInst) := do
         | .mvar id => id.assign inst
         | _ => throwError "LemmaInst.monomorphic? :: Unexpected error"
     LemmaInst.ofMLemmaInst mi
-
-abbrev LemmaInsts := Array LemmaInst
-
-def LemmaInsts.newInst? (lis : LemmaInsts) (li : LemmaInst) : MetaM Bool := do
-  for li' in lis do
-    if ← li'.equivQuick li then
-      return false
-  return true
 
 /-
   Monomorphization works as follows:
@@ -535,10 +529,6 @@ namespace FVarRep
     ciIdMap  : HashMap ConstInst FVarId := {}
     -- Canonicalization map for types
     tyCanMap : HashMap Expr Expr        := {}
-    -- Inhabited canonicalized types
-    -- The key `Expr` should be of the form `ty₁ → ty₂ → ⋯ → tyₙ`,
-    --   where `ty₁, ty₂, ⋯, tyₙ` are canonicalized types within `tyCanMap`
-    inhTys   : HashMap Expr Expr        := {}
   
   abbrev FVarRepM := StateRefT State MetaState.MetaStateM
   
@@ -551,17 +541,6 @@ namespace FVarRep
       return
     trace[auto.mono.printConstInst] "New {ci}"
     setCiMap ((← getCiMap).insert ci.fingerPrint (insts.push ci))
-
-  -- Synthesize inhabitation fact for type `e`. First filter out bound local instances
-  def synthInhabitedForCanTy (e : Expr) : FVarRepM Unit := do
-    let bfvars := HashSet.empty.insertMany ((← getBfvars).map Expr.fvar)
-    let insts := (← MetaState.getToContext).localInstances
-    let insts := insts.filter (fun ⟨_, fvar⟩ => !bfvars.contains fvar)
-    -- Call `trySynthInhabited`
-    if let .some inh ← MetaState.runMetaM <| (Meta.withNewMCtxDepth <| withReader
-        (fun ctx => {ctx with localInstances := insts}) (Meta.trySynthInhabited e)) then
-      trace[auto.mono.printInhabited] "⦗⦗ {inh} ⦘⦘ : {e}"
-      setInhTys ((← getInhTys).insert e inh)
 
   def processType : Expr → FVarRepM Unit
   | .forallE _ ty body _ => do
@@ -577,7 +556,6 @@ namespace FVarRep
         setTyCanMap ((← getTyCanMap).insert e ec)
         return
     setTyCanMap ((← getTyCanMap).insert e e)
-    synthInhabitedForCanTy e
 
   def ConstInst2FVarId (ci : ConstInst) : FVarRepM FVarId := do
     let ciMap ← FVarRep.getCiMap
@@ -668,11 +646,11 @@ namespace FVarRep
       let ciId ← ConstInst2FVarId ci
       return .fvar ciId
     Expr.fvar <$> UnknownExpr2FVarId e
-where addForallImpFInst (e : Expr) : FVarRepM Unit := do
-  let bfexprs := (← getBfvars).map Expr.fvar
-  match ← MetaState.runMetaM (ConstInst.ofExpr? #[] bfexprs e) with
-  | .some ci => processConstInst ci
-  | .none => trace[auto.mono] "Warning, {e} is not a valid instance of `forallF` or `ImpF`"
+  where addForallImpFInst (e : Expr) : FVarRepM Unit := do
+    let bfexprs := (← getBfvars).map Expr.fvar
+    match ← MetaState.runMetaM (ConstInst.ofExpr? #[] bfexprs e) with
+    | .some ci => processConstInst ci
+    | .none => trace[auto.mono] "Warning, {e} is not a valid instance of `forallF` or `ImpF`"
 
 end FVarRep
 
@@ -702,7 +680,7 @@ def intromono (lemmas : Array Lemma) (mvarId : MVarId) : MetaM MVarId := do
     mvarId.assign newVal
     return mvar.mvarId!)
 
-def monomorphize (lemmas : Array Lemma) (k : Reif.State → MetaM α) : MetaM α := do
+def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State → MetaM α) : MetaM α := do
   let startTime ← IO.monoMsNow
   let monoMAction : MonoM Unit := (do
     initializeMonoM lemmas
@@ -722,7 +700,13 @@ def monomorphize (lemmas : Array Lemma) (k : Reif.State → MetaM α) : MetaM α
     let cilis ← s.ciIdMap.toList.mapM (fun (ci, id) => do return (id, ← MetaState.runMetaM ci.toExpr))
     let polyVal := HashMap.ofList (exlis ++ cilis)
     -- Inhabited types
-    let inhs := s.inhTys.toArray.map (fun (key, val) => ((val, key)))
+    let tyCans := s.tyCanMap.toArray.map Prod.snd
+    let mut tyCanInhs := #[]
+    for e in tyCans do
+      if let .some inh ← MetaState.runMetaM <| Meta.withNewMCtxDepth <| Meta.trySynthInhabited e then
+        tyCanInhs := tyCanInhs.push ⟨inh, e⟩
+    let inhMatches ← MetaState.runMetaM (inhFacts.mapM (fun fact => Inhabitation.inhFactMatchAtomTys fact tyCans))
+    let inhs := tyCanInhs ++ inhMatches.concatMap id
     return (s.ffvars, Reif.State.mk s.ffvars uvalids polyVal s.tyCanMap inhs none))
   MetaState.runWithIntroducedFVars metaStateMAction k
 

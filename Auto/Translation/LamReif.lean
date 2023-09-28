@@ -8,7 +8,6 @@ import Auto.Embedding.LamChecker
 open Lean
 
 initialize
-  registerTraceClass `auto.lamReif
   registerTraceClass `auto.buildChecker
   registerTraceClass `auto.lamReif.newChkStep
   registerTraceClass `auto.lamReif.printValuation
@@ -735,7 +734,6 @@ def reifTermCheckType (e : Expr) : ReifM (LamSort × LamTerm) := do
 --   within the `validTable`
 def reifFacts (facts : Array UMonoFact) : ReifM (Array LamTerm) :=
   facts.mapM (fun (proof, ty) => do
-    trace[auto.lamReif] "Reifying valid fact {proof} : {ty}"
     let (s, lamty) ← reifTermCheckType ty
     if s != .base .prop then
       throwError "reifFacts :: Fact {lamty} is not of type `prop`"
@@ -745,9 +743,9 @@ def reifFacts (facts : Array UMonoFact) : ReifM (Array LamTerm) :=
 
 def reifInhabitations (inh : Array UMonoFact) : ReifM (Array LamSort) :=
   inh.mapM (fun (inhTy, ty) => do
-    trace[auto.lamReif] "Reifying Inhabitation fact {inhTy} : {ty}"
     let s ← reifType ty
     newInhabitation inhTy s
+    trace[auto.lamReif.printResult] "Successfully reified proof of {ty} to λsort `{s}`"
     return s
   )
 

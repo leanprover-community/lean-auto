@@ -198,6 +198,8 @@ def collectAllLemmas (hintstx : TSyntax ``hints) (unfolds : TSyntax `Auto.unfold
 def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) : TacticM Result := do
   let instr ← parseInstr instrstx
   let declName? ← Elab.Term.getDeclName?
+  let inhFacts ← Inhabitation.getInhFactsFromLCtx
+  traceLemmas "Inhabitation lemmas :" inhFacts
   match instr with
   | .none =>
     let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) : LamReif.ReifM Expr := (do
@@ -234,7 +236,7 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) : TacticM Re
       let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
       Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra
       )
-    let (proof, _) ← Monomorphization.monomorphize lemmas (@id (Reif.ReifM Expr) do
+    let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
       let uvalids ← liftM <| Reif.getFacts
       let uinhs ← liftM <| Reif.getInhTys
       let u ← computeMaxLevel uvalids

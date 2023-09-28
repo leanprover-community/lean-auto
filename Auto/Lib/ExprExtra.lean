@@ -49,20 +49,30 @@ def Expr.mkForallFromBinderDescrs (binders : Array (Name × Expr × BinderInfo))
 def Expr.mkLambdaFromBinderDescrs (binders : Array (Name × Expr × BinderInfo)) (e : Expr) :=
   binders.foldr (fun (n, ty, bi) e => Expr.lam n ty e bi) e
 
-def Expr.stripForall (n : Nat) (e : Expr) : Option Expr :=
+def Expr.stripForall (e : Expr) : Expr :=
+  match e with
+  | .forallE _ _ body _ => Expr.stripForall body
+  | _ => e
+
+def Expr.stripForallN (n : Nat) (e : Expr) : Option Expr :=
   match n with
   | 0 => .some e
   | n' + 1 =>
     match e with
-    | .forallE _ _ body _ => Expr.stripForall n' body
+    | .forallE _ _ body _ => Expr.stripForallN n' body
     | _ => .none
 
-def Expr.stripLambda (n : Nat) (e : Expr) : Option Expr :=
+def Expr.stripLambda (e : Expr) : Expr :=
+  match e with
+  | .lam _ _ body _ => Expr.stripLambda body
+  | _ => e
+
+def Expr.stripLambdaN (n : Nat) (e : Expr) : Option Expr :=
   match n with
   | 0 => .some e
   | n' + 1 =>
     match e with
-    | .lam _ _ body _ => Expr.stripLambda n' body
+    | .lam _ _ body _ => Expr.stripLambdaN n' body
     | _ => .none
 
 def Expr.getAppFnN (n : Nat) (e : Expr) : Option Expr :=
