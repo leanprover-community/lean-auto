@@ -158,7 +158,9 @@ def unfoldConstAndPreprocessLemma (unfolds : Array Prep.ConstUnfoldInfo) (lem : 
           .none
       | _ => .none)
   type ← Core.betaReduce (← instantiateMVars type)
-  return {lem with type := type}
+  let lem := {lem with type := type}
+  let lem ← lem.reorderForallInstDep
+  return lem
 
 def traceLemmas (pre : String) (lemmas : Array Lemma) : TacticM Unit := do
   let mut cnt : Nat := 0
@@ -176,7 +178,10 @@ def checkDuplicatedFact (terms : Array Term) : TacticM Unit :=
         throwError "Auto does not accept duplicated input terms"
 
 def collectAllLemmas (hintstx : TSyntax ``hints) (unfolds : TSyntax `Auto.unfolds)
-  (defeqs : TSyntax `Auto.defeqs) (ngoalAndBinders : Array FVarId) : TacticM (Array Lemma) := do
+  (defeqs : TSyntax `Auto.defeqs) (ngoalAndBinders : Array FVarId) :
+  -- The first `Array Lemma` are `Prop` lemmas
+  -- The second `Array Lemma` are Inhabitation facts
+  TacticM (Array Lemma × Array Lemma) := do
   let inputHints ← parseHints hintstx
   let unfoldInfos ← parseUnfolds unfolds
   let defeqNames ← parseDefeqs defeqs
@@ -192,14 +197,15 @@ def collectAllLemmas (hintstx : TSyntax ``hints) (unfolds : TSyntax `Auto.unfold
   let defeqLemmas ← defeqLemmas.mapM (unfoldConstAndPreprocessLemma unfoldInfos)
   traceLemmas "Lemmas collected from user-provided defeq hints:" defeqLemmas
   trace[auto.tactic] "Preprocessing took {(← IO.monoMsNow) - startTime}ms"
-  return lctxLemmas ++ userLemmas ++ defeqLemmas
+  let inhFacts ← Inhabitation.getInhFactsFromLCtx
+  let inhFacts ← inhFacts.mapM (unfoldConstAndPreprocessLemma unfoldInfos)
+  traceLemmas "Inhabitation lemmas :" inhFacts
+  return (lctxLemmas ++ userLemmas ++ defeqLemmas, inhFacts)
 
 -- `ngoal` means `negated goal`
-def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) : TacticM Result := do
+def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : Array Lemma) : TacticM Result := do
   let instr ← parseInstr instrstx
   let declName? ← Elab.Term.getDeclName?
-  let inhFacts ← Inhabitation.getInhFactsFromLCtx
-  traceLemmas "Inhabitation lemmas :" inhFacts
   match instr with
   | .none =>
     let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) : LamReif.ReifM Expr := (do
@@ -258,8 +264,8 @@ def evalAuto : Tactic
   let (ngoal, absurd) ← MVarId.intro1 nngoal
   replaceMainGoal [absurd]
   withMainContext do
-    let lemmas ← collectAllLemmas hints unfolds defeqs (goalBinders.push ngoal)
-    let result ← runAuto instr lemmas
+    let (lemmas, inhFacts) ← collectAllLemmas hints unfolds defeqs (goalBinders.push ngoal)
+    let result ← runAuto instr lemmas inhFacts
     match result with
     | Result.unsat e => do
       IO.println s!"Unsat. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
@@ -277,7 +283,7 @@ def evalIntromono : Tactic
   let (ngoal, absurd) ← MVarId.intro1 nngoal
   replaceMainGoal [absurd]
   withMainContext do
-    let lemmas ← collectAllLemmas hints unfolds defeqs (goalBinders.push ngoal)
+    let (lemmas, _) ← collectAllLemmas hints unfolds defeqs (goalBinders.push ngoal)
     let newMid ← Monomorphization.intromono lemmas absurd
     replaceMainGoal [newMid]
 | _ => throwUnsupportedSyntax

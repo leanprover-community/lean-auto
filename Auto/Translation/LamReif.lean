@@ -745,7 +745,7 @@ def reifInhabitations (inh : Array UMonoFact) : ReifM (Array LamSort) :=
   inh.mapM (fun (inhTy, ty) => do
     let s ← reifType ty
     newInhabitation inhTy s
-    trace[auto.lamReif.printResult] "Successfully reified proof of {ty} to λsort `{s}`"
+    trace[auto.lamReif.printResult] "Successfully reified inhabitation proof of {ty} to λsort `{s}`"
     return s
   )
 

@@ -21,7 +21,7 @@ where go (pos : Array Bool) (e : Expr) : Array (Array Bool) :=
       #[pos]
     else
       let tys := go (pos.push false) ty
-      let bodys := go (pos.push true) ty
+      let bodys := go (pos.push true) body
       tys ++ bodys
   | _ => #[pos]
 
@@ -53,22 +53,22 @@ def getInhFactsFromLCtx : MetaM (Array Lemma) := withNewMCtxDepth do
       | _ => false
     if let .some _ := Expr.find? quickConstCheck ty then
       continue
-    if let .some _ := Expr.find? Expr.isForall (Expr.stripForall ty) then
+    if let .some _ := Expr.find? Expr.isDepForall (Expr.stripLeadingDepForall ty) then
       continue
     ret := ret.push ⟨.fvar fid, ty, #[]⟩
   return ret
 
 private def inhFactMatchAtomTysAux (inhTy : Lemma) (atomTys : Array Expr) : MetaM LemmaInsts :=
   Meta.withNewMCtxDepth do
-    let mips := getMinimalNonImpPositions (Expr.stripForall inhTy.type)
-    let mut lis : LemmaInsts := #[← LemmaInst.ofLemma inhTy]
+    let mips := getMinimalNonImpPositions (Expr.stripLeadingDepForall inhTy.type)
+    let mut lis : LemmaInsts := #[← LemmaInst.ofLemmaLeadingDepOnly inhTy]
     for mip in mips do
       let mut newInsts : LemmaInsts := #[]
       for li in lis do
         let s ← saveState
         let (_, _, mi) ← MLemmaInst.ofLemmaInst li
         let .some e := getExprNonImpPosition mip mi.type
-          | throwError "inhFactMatchAtomTys :: Unexpected error"
+          | throwError "inhFactMatchAtomTys :: Unexpected error, cannot get position {mip} from {mi.type}"
         for a in atomTys do
           let s' ← saveState
           if (← Meta.isDefEq e a) then

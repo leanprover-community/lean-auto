@@ -43,6 +43,16 @@ def Expr.lambdaBinders (e : Expr) : Array (Name × Expr × BinderInfo) :=
     | _ => []
   Array.mk (aux e)
 
+def Expr.isDepForall (e : Expr) : Bool :=
+  match e with
+  | .forallE _ _ body _ => body.hasLooseBVar 0
+  | _ => false
+
+def Expr.isDepLambda (e : Expr) : Bool :=
+  match e with
+  | .lam _ _ body _ => body.hasLooseBVar 0
+  | _ => false
+
 def Expr.mkForallFromBinderDescrs (binders : Array (Name × Expr × BinderInfo)) (e : Expr) :=
   binders.foldr (fun (n, ty, bi) e => Expr.forallE n ty e bi) e
 
@@ -52,6 +62,15 @@ def Expr.mkLambdaFromBinderDescrs (binders : Array (Name × Expr × BinderInfo))
 def Expr.stripForall (e : Expr) : Expr :=
   match e with
   | .forallE _ _ body _ => Expr.stripForall body
+  | _ => e
+
+def Expr.stripLeadingDepForall (e : Expr) : Expr :=
+  match e with
+  | .forallE _ _ body _ =>
+    if body.hasLooseBVar 0 then
+      stripLeadingDepForall body
+    else
+      e
   | _ => e
 
 def Expr.stripForallN (n : Nat) (e : Expr) : Option Expr :=
@@ -65,6 +84,15 @@ def Expr.stripForallN (n : Nat) (e : Expr) : Option Expr :=
 def Expr.stripLambda (e : Expr) : Expr :=
   match e with
   | .lam _ _ body _ => Expr.stripLambda body
+  | _ => e
+
+def Expr.stripLeadingDepLambda (e : Expr) : Expr :=
+  match e with
+  | .lam _ _ body _ =>
+    if body.hasLooseBVar 0 then
+      stripLeadingDepLambda body
+    else
+      e
   | _ => e
 
 def Expr.stripLambdaN (n : Nat) (e : Expr) : Option Expr :=
@@ -132,23 +160,13 @@ def Expr.constDepArgs (c : Name) : CoreM (Array Nat) := do
     | throwError "Expr.constDepArgs :: Unknown constant {c}"
   return Expr.depArgs decl.type
 
-private partial def Expr.instDepArgsIdx (e : Expr) (idx : Nat) : List Nat :=
-  match e with
-  | .forallE _ _ body bi =>
-    let body' := body.instantiate1 (.sort .zero)
-    let trail := instDepArgsIdx body' (.succ idx)
-    if bi == .instImplicit || body.hasLooseBVars then
-      idx :: trail
-    else
-      trail
-  | _ => .nil
-
-def Expr.instDepArgs (e : Expr) : Array Nat := ⟨Expr.instDepArgsIdx e 0⟩
-
-def Expr.constInstDepArgs (c : Name) : CoreM (Array Nat) := do
-  let .some decl := (← getEnv).find? c
-    | throwError "Expr.constInstDepArgs :: Unknown constant {c}"
-  return Expr.instDepArgs decl.type
+def Expr.numLeadingDepArgs : Expr → Nat
+| .forallE _ _ body _ =>
+  if body.hasLooseBVar 0 then
+    numLeadingDepArgs body + 1
+  else
+    0
+| _ => 0
 
 -- Turn all `Prop` binders into `True`
 private partial def Expr.isMonomorphicFactAux : Expr → MetaM Expr

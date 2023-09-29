@@ -37,11 +37,19 @@ end ManualCheck
 section Inhabitation
 
   set_option trace.auto.lamReif.printProofs true
+  set_option trace.auto.lamReif.printResult true
 
   example (x : α) [Inhabited α] (h : x = y) : x = y := by
     auto
 
   example (x : Nat) (h : x = y) : x = y := by
+    auto
+
+  example (x : α) (h : ∀ (x : α), x = x) : 1 = 1 := by
+    auto
+
+  example (OK : Type → Type) (x : ∀ (α : Type), OK α → OK α)
+    (h : ∀ (x : OK Nat), x = x) : 1 = 1 := by
     auto
 
 end Inhabitation
@@ -54,6 +62,11 @@ example (as bs cs : List α) (f : α → β) :
   intromono [List.append_assoc, List.map_append];
   apply monoLem_0
   rw [monoLem_1]; rw [monoLem_3]; rw [monoLem_3]
+
+example
+  (h : ∀ (α : Type u) (as bs cs : List α), (as ++ bs) ++ cs ≠ as ++ (bs ++ cs) → False)
+  {α : Type u} (as bs cs : List α) : (as ++ bs) ++ cs = as ++ (bs ++ cs) := by
+  auto
 
 open Auto in
 set_option trace.auto.mono.printConstInst true in

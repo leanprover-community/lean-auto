@@ -60,6 +60,22 @@ def Lemma.unfoldConst (lem : Lemma) (declName : Name) : MetaM Lemma := do
 def Lemma.unfoldConsts (lem : Lemma) (declNames : Array Name) : MetaM Lemma := do
   declNames.foldlM (fun lem name => lem.unfoldConst name) lem
 
+-- Reorder top-level `∀` so that (non-prop / dependent) ones precede other ones
+def Lemma.reorderForallInstDep (lem : Lemma) : MetaM Lemma := do
+  let depargs := HashSet.empty.insertMany (Expr.depArgs lem.type)
+  Meta.forallTelescope lem.type fun xs body => do
+    let mut prec := #[]
+    let mut trail := #[]
+    for (fvar, i) in xs.data.zip (List.range xs.size) do
+      if depargs.contains i || !(← Meta.isProp (← Meta.inferType fvar)) then
+        prec := prec.push fvar
+      else
+        trail := trail.push fvar
+    let proof := Expr.headBeta (Lean.mkAppN lem.proof xs)
+    let proof ← Meta.mkLambdaFVars prec (← Meta.mkLambdaFVars trail proof)
+    let type ← Meta.mkForallFVars prec (← Meta.mkForallFVars trail body)
+    return ⟨proof, type, lem.params⟩
+
 /-
   An instance of a `Lemma`. If a lemma has proof `H`,
     then an instance of the lemma would be like
@@ -87,6 +103,31 @@ def LemmaInst.ofLemma (lem : Lemma) : MetaM LemmaInst := do
     let proof ← Meta.mkLambdaFVars xs (mkAppN proof xs)
     let lem' : Lemma := ⟨proof, type, params⟩
     return ⟨lem', xs.size, xs.size⟩
+
+-- Only introduce leading non-prop binders
+-- But, if a prop-binder is an instance binder, we still introduce it
+def LemmaInst.ofLemmaHOL (lem : Lemma) : MetaM LemmaInst := do
+  let ⟨proof, type, params⟩ := lem
+  Meta.forallTelescope type fun xs _ => do
+    let mut xs' := #[]
+    for x in xs do
+      let xty ← Meta.inferType x
+      if (← Meta.isProp xty) && !(← Meta.isClass? xty).isSome then
+        break
+      xs' := xs'.push x
+    let proof ← Meta.mkLambdaFVars xs' (mkAppN proof xs')
+    let lem' : Lemma := ⟨proof, type, params⟩
+    return ⟨lem', xs'.size, xs'.size⟩
+
+def LemmaInst.ofLemmaLeadingDepOnly (lem : Lemma) : MetaM LemmaInst := do
+  let ⟨proof, type, params⟩ := lem
+  let nld := Expr.numLeadingDepArgs type
+  Meta.forallBoundedTelescope type nld fun xs _ => do
+    if xs.size != nld then
+      throwError "LemmaInst.ofLemmaLeadingDepOnly :: Unexpected error"
+    let proof ← Meta.mkLambdaFVars xs (mkAppN proof xs)
+    let lem' : Lemma := ⟨proof, type, params⟩
+    return ⟨lem', xs.size, xs.size⟩  
 
 -- Get the proof of the lemma that `li` is an instance of
 def LemmaInst.getProofOfLemma (li : LemmaInst) : Option Expr :=

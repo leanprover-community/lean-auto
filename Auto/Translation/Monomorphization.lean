@@ -446,7 +446,7 @@ def processConstInst (ci : ConstInst) : MonoM Unit := do
 
 def initializeMonoM (lemmas : Array Lemma) : MonoM Unit := do
   let lemmaInsts ← liftM <| lemmas.mapM (fun lem => do
-    let li ← LemmaInst.ofLemma lem
+    let li ← LemmaInst.ofLemmaHOL lem
     trace[auto.mono.printLemmaInst] "New {li}"
     return li)
   let lemmaInsts := lemmaInsts.map (fun x => #[x])
