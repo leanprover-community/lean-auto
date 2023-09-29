@@ -13,8 +13,10 @@ open Lean
 
 initialize
   registerTraceClass `auto.mono
+  registerTraceClass `auto.mono.match
   registerTraceClass `auto.mono.printLemmaInst
   registerTraceClass `auto.mono.printConstInst
+  registerTraceClass `auto.mono.printResult
 
 register_option auto.mono.saturationThreshold : Nat := {
   defValue := 250
@@ -488,7 +490,7 @@ def saturate : MonoM Unit := do
     | .some (name, cisIdx) =>
       let ci ← lookupActiveCi! name cisIdx
       let lisArr ← getLisArr
-      trace[auto.mono] "Matching against {ci}"
+      trace[auto.mono.match] "Matching against {ci}"
       for (lis, idx) in lisArr.zip ⟨List.range lisArr.size⟩ do
         cnt := cnt + 1
         let mut newLis := lis
@@ -681,8 +683,8 @@ def intromono (lemmas : Array Lemma) (mvarId : MVarId) : MetaM MVarId := do
     return mvar.mvarId!)
 
 def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State → MetaM α) : MetaM α := do
-  let startTime ← IO.monoMsNow
   let monoMAction : MonoM Unit := (do
+    let startTime ← IO.monoMsNow
     initializeMonoM lemmas
     saturate
     postprocessSaturate
@@ -695,18 +697,20 @@ def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State
   let metaStateMAction : MetaState.MetaStateM (Array FVarId × Reif.State) := (do
     let (uvalids, s) ← fvarRepMAction.run { ciMap := monoSt.ciMap }
     for (proof, ty) in uvalids do
-      trace[auto.mono] "Monomorphized :: {proof} : {ty}"
+      trace[auto.mono.printResult] "Monomorphized :: {proof} : {ty}"
     let exlis := s.exprMap.toList.map (fun (e, id) => (id, e))
     let cilis ← s.ciIdMap.toList.mapM (fun (ci, id) => do return (id, ← MetaState.runMetaM ci.toExpr))
     let polyVal := HashMap.ofList (exlis ++ cilis)
     -- Inhabited types
+    let startTime ← IO.monoMsNow
     let tyCans := s.tyCanMap.toArray.map Prod.snd
     let mut tyCanInhs := #[]
     for e in tyCans do
       if let .some inh ← MetaState.runMetaM <| Meta.withNewMCtxDepth <| Meta.trySynthInhabited e then
         tyCanInhs := tyCanInhs.push ⟨inh, e⟩
-    let inhMatches ← MetaState.runMetaM (inhFacts.mapM (fun fact => Inhabitation.inhFactMatchAtomTys fact tyCans))
-    let inhs := tyCanInhs ++ inhMatches.concatMap id
+    let inhMatches ← MetaState.runMetaM (Inhabitation.inhFactMatchAtomTys inhFacts tyCans)
+    let inhs := tyCanInhs ++ inhMatches
+    trace[auto.mono] "Monomorphizing inhabitation facts took {(← IO.monoMsNow) - startTime}ms"
     return (s.ffvars, Reif.State.mk s.ffvars uvalids polyVal s.tyCanMap inhs none))
   MetaState.runWithIntroducedFVars metaStateMAction k
 

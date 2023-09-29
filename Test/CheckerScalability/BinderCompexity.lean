@@ -121,6 +121,8 @@ example
       x20 x21 x22 x23 x24 x25 x26 x27 x28 x29
       x30 x31) : True := by auto
 
+set_option trace.auto.mono true in
+set_option trace.auto.printLemmas true in
 example
   (β : Type)
   (α0 : Type 0)

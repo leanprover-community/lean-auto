@@ -55,6 +55,15 @@ def getInhFactsFromLCtx : MetaM (Array Lemma) := withNewMCtxDepth do
       continue
     if let .some _ := Expr.find? Expr.isDepForall (Expr.stripLeadingDepForall ty) then
       continue
+    let mut new := true
+    for lem in ret do
+      if lem.type == ty then
+        new := false; break
+    if !new then continue
+    for lem in ret do
+      if ← isDefEq lem.type ty then
+        new := false; break
+    if !new then continue
     ret := ret.push ⟨.fvar fid, ty, #[]⟩
   return ret
 
@@ -75,14 +84,17 @@ private def inhFactMatchAtomTysAux (inhTy : Lemma) (atomTys : Array Expr) : Meta
             let newli ← LemmaInst.ofMLemmaInst mi
             if ← newInsts.newInst? newli then
               newInsts := newInsts.push newli
-            newInsts := newInsts.push (← LemmaInst.ofMLemmaInst mi)
           restoreState s'
         restoreState s
       lis := newInsts
     return lis
 
-def inhFactMatchAtomTys (inhLem : Lemma) (atomTys : Array Expr) : MetaM (Array UMonoFact) := do
-  let lis ← inhFactMatchAtomTysAux inhLem atomTys
+def inhFactMatchAtomTys (inhTys : Array Lemma) (atomTys : Array Expr) : MetaM (Array UMonoFact) := do
+  let liss ← inhTys.mapM (fun inhTy => inhFactMatchAtomTysAux inhTy atomTys)
+  let mut lis : LemmaInsts := #[]
+  for li in liss.concatMap id do
+    if ← lis.newInst? li then
+      lis := lis.push li
   let mut ret : Array UMonoFact := #[]
   for li in lis do
     if li.params.size != 0 || li.nbinders != 0 then continue
