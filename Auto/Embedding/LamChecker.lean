@@ -437,70 +437,112 @@ theorem ImportTable.importFacts_correct (it : ImportTable cpv) (n : Nat) :
   | .nonempty s =>
     dsimp [REntry.correct, Option.allp]; exact validIe
 
-inductive ChkStep where
-  | nonemptyOfAtom (n : Nat) : ChkStep
-  | nonemptyOfEtom (n : Nat) : ChkStep
-  | wfOfCheck (lctx : List LamSort) (t : LamTerm) : ChkStep
-  | wfOfAppend (ex : List LamSort) (pos : Nat) : ChkStep
-  | wfOfPrepend (ex : List LamSort) (pos : Nat) : ChkStep
-  | wfOfHeadBeta (pos : Nat) : ChkStep
-  | wfOfBetaBounded (pos : Nat) (bound : Nat) : ChkStep
-  | validOfIntro1F (pos : Nat) : ChkStep
-  | validOfIntro1H (pos : Nat) : ChkStep
-  | validOfIntros (pos idx : Nat) : ChkStep
-  | validOfRevert (pos : Nat) : ChkStep
-  | validOfReverts (pos : Nat) (idx : Nat) : ChkStep
-  | validOfHeadBeta (pos : Nat) : ChkStep
-  | validOfBetaBounded (pos : Nat) (bound : Nat) : ChkStep
-  | validOfExtensionalize (pos : Nat) : ChkStep
-  -- `t₁ → t₂` and `t₁` implies `t₂`
-  | validOfImp (p₁₂ : Nat) (p₁ : Nat) : ChkStep
-  -- `t₁ → t₂ → ⋯ → tₖ → s` and `t₁, t₂, ⋯, tₖ` implies `s`
-  | validOfImps (imp : Nat) (ps : List Nat) : ChkStep
-  | validOfInstantiate1 (pos : Nat) (arg : LamTerm) : ChkStep
-  -- `.bvar i` replaced with `args[i]`
-  | validOfInstantiate (pos : Nat) (args : List LamTerm) : ChkStep
-  -- `.bvar i` replaced with `args.reverse[i]`
-  | validOfInstantiateRev (pos : Nat) (args : List LamTerm) : ChkStep
-  | validOfCongrArg (pos rw : Nat) : ChkStep
-  | validOfCongrFun (pos rw : Nat) : ChkStep
-  | validOfCongr (pos rwFn rwArg : Nat) : ChkStep
-  | validOfCongrArgs (pos : Nat) (rws : List Nat) : ChkStep
-  | validOfCongrFunN (pos rwFn n : Nat) : ChkStep
-  | validOfCongrs (pos rwFn : Nat) (rwArgs : List Nat) : ChkStep
-  | skolemize (pos : Nat) : ChkStep
-  | define (t : LamTerm) : ChkStep
+inductive ConvStep where
+  | validOfHeadBeta (pos : Nat) : ConvStep
+  | validOfBetaBounded (pos : Nat) (bound : Nat) : ConvStep
+  | validOfExtensionalize (pos : Nat) : ConvStep
+  | validOfCongrArg (pos rw : Nat) : ConvStep
+  | validOfCongrFun (pos rw : Nat) : ConvStep
+  | validOfCongr (pos rwFn rwArg : Nat) : ConvStep
+  | validOfCongrArgs (pos : Nat) (rws : List Nat) : ConvStep
+  | validOfCongrFunN (pos rwFn n : Nat) : ConvStep
+  | validOfCongrs (pos rwFn : Nat) (rwArgs : List Nat) : ConvStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
-def ChkStep.toString : ChkStep → String
-| .nonemptyOfAtom n => s!"nonemptyOfAtom {n}"
-| .nonemptyOfEtom n => s!"nonemptyOfEtom {n}"
-| .wfOfCheck lctx t => s!"wfOfCheck {lctx} {t}"
-| .wfOfAppend ex pos => s!"wfOfAppend {ex} {pos}"
-| .wfOfPrepend ex pos => s!"wfOfPrepend {ex} {pos}"
-| .wfOfHeadBeta pos => s!"wfOfHeadBeta {pos}"
-| .wfOfBetaBounded pos bound => s!"wfOfBetaBounded {pos} {bound}"
-| .validOfIntro1F pos => s!"validOfIntro1F {pos}"
-| .validOfIntro1H pos => s!"validOfIntro1H {pos}"
-| .validOfIntros pos idx => s!"validOfIntros {pos} {idx}"
-| .validOfRevert pos => s!"validOfRevert {pos}"
-| .validOfReverts pos idx => s!"validOfReverts {pos} {idx}"
+inductive EtomStep where
+  | skolemize (pos : Nat) : EtomStep
+  | define (t : LamTerm) : EtomStep
+  deriving Inhabited, Hashable, BEq, Lean.ToExpr
+
+inductive InferenceStep where
+  -- `t₁ → t₂` and `t₁` implies `t₂`
+  | validOfImp (p₁₂ : Nat) (p₁ : Nat) : InferenceStep
+  -- `t₁ → t₂ → ⋯ → tₖ → s` and `t₁, t₂, ⋯, tₖ` implies `s`
+  | validOfImps (imp : Nat) (ps : List Nat) : InferenceStep
+  | validOfInstantiate1 (pos : Nat) (arg : LamTerm) : InferenceStep
+  -- `.bvar i` replaced with `args[i]`
+  | validOfInstantiate (pos : Nat) (args : List LamTerm) : InferenceStep
+  -- `.bvar i` replaced with `args.reverse[i]`
+  | validOfInstantiateRev (pos : Nat) (args : List LamTerm) : InferenceStep
+  deriving Inhabited, Hashable, BEq, Lean.ToExpr
+
+inductive LCtxStep where
+  | validOfIntro1F (pos : Nat) : LCtxStep
+  | validOfIntro1H (pos : Nat) : LCtxStep
+  | validOfIntros (pos idx : Nat) : LCtxStep
+  | validOfRevert (pos : Nat) : LCtxStep
+  | validOfReverts (pos : Nat) (idx : Nat) : LCtxStep
+  deriving Inhabited, Hashable, BEq, Lean.ToExpr
+
+inductive NonemptyStep where
+  | nonemptyOfAtom (n : Nat) : NonemptyStep
+  | nonemptyOfEtom (n : Nat) : NonemptyStep
+  deriving Inhabited, Hashable, BEq, Lean.ToExpr
+
+inductive WFStep where
+  | wfOfCheck (lctx : List LamSort) (t : LamTerm) : WFStep
+  | wfOfAppend (ex : List LamSort) (pos : Nat) : WFStep
+  | wfOfPrepend (ex : List LamSort) (pos : Nat) : WFStep
+  | wfOfHeadBeta (pos : Nat) : WFStep
+  | wfOfBetaBounded (pos : Nat) (bound : Nat) : WFStep
+  deriving Inhabited, Hashable, BEq, Lean.ToExpr
+
+inductive ChkStep where
+  | c : ConvStep → ChkStep
+  | e : EtomStep → ChkStep
+  | i : InferenceStep → ChkStep
+  | l : LCtxStep → ChkStep
+  | n : NonemptyStep → ChkStep
+  | w : WFStep → ChkStep
+  deriving Inhabited, Hashable, BEq, Lean.ToExpr
+
+def ConvStep.toString : ConvStep → String
 | .validOfHeadBeta pos => s!"validOfHeadBeta {pos}"
 | .validOfBetaBounded pos bound => s!"validOfBetaBounded {pos} {bound}"
 | .validOfExtensionalize pos => s!"validOfExtensionalize {pos}"
-| .validOfImp p₁₂ p₁ => s!"validOfImp {p₁₂} {p₁}"
-| .validOfImps imp ps => s!"validOfImps {imp} {ps}"
-| .validOfInstantiate1 pos arg => s!"validOfInstantiate1 {pos} {arg}"
-| .validOfInstantiate pos args => s!"validOfInstantiate {pos} {args}"
-| .validOfInstantiateRev pos args => s!"validOfInstantiateRev {pos} {args}"
 | .validOfCongrArg pos rw => s!"validOfCongrArg {pos} {rw}"
 | .validOfCongrFun pos rw => s!"validOfCongrFun {pos} {rw}"
 | .validOfCongr pos rwFn rwArg => s!"validOfCongr {pos} {rwFn} {rwArg}"
 | .validOfCongrArgs pos rws => s!"validOfCongrArgs {pos} {rws}"
 | .validOfCongrFunN pos rwFn n => s!"validOfCongrFunN {pos} {rwFn} {n}"
 | .validOfCongrs pos rwFn rwArgs => s!"validOfCongrs {pos} {rwFn} {rwArgs}"
+
+def EtomStep.toString : EtomStep → String
 | .skolemize pos => s!"skolemize {pos}"
 | .define t => s!"define {t}"
+
+def InferenceStep.toString : InferenceStep → String
+| .validOfImp p₁₂ p₁ => s!"validOfImp {p₁₂} {p₁}"
+| .validOfImps imp ps => s!"validOfImps {imp} {ps}"
+| .validOfInstantiate1 pos arg => s!"validOfInstantiate1 {pos} {arg}"
+| .validOfInstantiate pos args => s!"validOfInstantiate {pos} {args}"
+| .validOfInstantiateRev pos args => s!"validOfInstantiateRev {pos} {args}"
+
+def LCtxStep.toString : LCtxStep → String
+| .validOfIntro1F pos => s!"validOfIntro1F {pos}"
+| .validOfIntro1H pos => s!"validOfIntro1H {pos}"
+| .validOfIntros pos idx => s!"validOfIntros {pos} {idx}"
+| .validOfRevert pos => s!"validOfRevert {pos}"
+| .validOfReverts pos idx => s!"validOfReverts {pos} {idx}"
+
+def NonemptyStep.toString : NonemptyStep → String
+| .nonemptyOfAtom n => s!"nonemptyOfAtom {n}"
+| .nonemptyOfEtom n => s!"nonemptyOfEtom {n}"
+
+def WFStep.toString : WFStep → String
+| .wfOfCheck lctx t => s!"wfOfCheck {lctx} {t}"
+| .wfOfAppend ex pos => s!"wfOfAppend {ex} {pos}"
+| .wfOfPrepend ex pos => s!"wfOfPrepend {ex} {pos}"
+| .wfOfHeadBeta pos => s!"wfOfHeadBeta {pos}"
+| .wfOfBetaBounded pos bound => s!"wfOfBetaBounded {pos} {bound}"
+
+def ChkStep.toString : ChkStep → String
+| .c s => ConvStep.toString s
+| .e s => EtomStep.toString s
+| .i s => InferenceStep.toString s
+| .l s => LCtxStep.toString s
+| .n s => NonemptyStep.toString s
+| .w s => WFStep.toString s
 
 instance : ToString ChkStep where
   toString := ChkStep.toString
@@ -541,7 +583,7 @@ theorem EvalResult.correct_newEtomWithValid_mpLamEVarTy
   have levteq : levt = (fun n => ((r.lamEVarTy.insert r.maxEVarSucc s).get? n).getD (.base .prop)) := funext heq
   cases levteq; exists eVarVal'
 
-def ChkStep.evalValidOfIntros (lctx : List LamSort) (t : LamTerm)
+def LCtxStep.evalValidOfIntros (lctx : List LamSort) (t : LamTerm)
   : (idx : Nat) → EvalResult
   | 0 => .addEntry (.valid lctx t)
   | .succ idx =>
@@ -549,7 +591,7 @@ def ChkStep.evalValidOfIntros (lctx : List LamSort) (t : LamTerm)
     | .some (s, t') => evalValidOfIntros (s :: lctx) t' idx
     | .none => .fail
 
-def ChkStep.evalValidOfReverts (lctx : List LamSort) (t : LamTerm)
+def LCtxStep.evalValidOfReverts (lctx : List LamSort) (t : LamTerm)
   : (idx : Nat) → EvalResult
   | 0 => .addEntry (.valid lctx t)
   | .succ idx =>
@@ -557,7 +599,7 @@ def ChkStep.evalValidOfReverts (lctx : List LamSort) (t : LamTerm)
     | .nil => .fail
     | .cons s lctx => evalValidOfReverts lctx (.mkForallEF s t) idx
 
-def ChkStep.evalValidOfInstantiate (n : Nat) (ltv : LamTyVal) (lctx : List LamSort) (t : LamTerm)
+def InferenceStep.evalValidOfInstantiate (n : Nat) (ltv : LamTyVal) (lctx : List LamSort) (t : LamTerm)
   : (args : List LamTerm) → EvalResult
   | .nil => .addEntry (.valid lctx t)
   | .cons arg args =>
@@ -574,64 +616,7 @@ def ChkStep.evalValidOfInstantiate (n : Nat) (ltv : LamTyVal) (lctx : List LamSo
         | false => .fail
       | .none => .fail
 
-def ChkStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : ChkStep) → EvalResult
-| .nonemptyOfAtom n => .addEntry (.nonempty (lvt n))
-| .nonemptyOfEtom n =>
-  match r.maxEVarSucc.ble n with
-  | true => .fail
-  | false => .addEntry (.nonempty ((r.lamEVarTy.get? n).getD (.base .prop)))
-| .wfOfCheck lctx t =>
-  match LamTerm.lamThmWFCheck? ⟨lvt, lit, r.toLamEVarTy⟩ lctx t with
-  | .some rty =>
-    match Nat.ble t.maxEVarSucc r.maxEVarSucc with
-    | true => .addEntry (.wf lctx rty t)
-    | false => .fail
-  | .none => .fail
-| .wfOfAppend ex pos =>
-  match r.getWF pos with
-  | .some (lctx, s, t) => .addEntry (.wf (lctx ++ ex) s t)
-  | .none => .fail
-| .wfOfPrepend ex pos =>
-  match r.getWF pos with
-  | .some (lctx, s, t) => .addEntry (.wf (ex ++ lctx) s (t.bvarLifts ex.length))
-  | .none => .fail
-| .wfOfHeadBeta pos =>
-  match r.getWF pos with
-  | .some (lctx, s, t) => .addEntry (.wf lctx s t.headBeta)
-  | .none => .fail
-| .wfOfBetaBounded pos bound =>
-  match r.getWF pos with
-  | .some (lctx, s, t) => .addEntry (.wf lctx s (t.betaBounded bound))
-  | .none => .fail
-| .validOfIntro1F pos =>
-  match r.getValid pos with
-  | .some (lctx, t) =>
-    match t.intro1F? with
-    | .some (s, p) => .addEntry (.valid (s :: lctx) p)
-    | .none => .fail
-  | .none => .fail
-| .validOfIntro1H pos =>
-  match r.getValid pos with
-  | .some (lctx, t) =>
-    match t.intro1H? with
-    | .some (s, p) => .addEntry (.valid (s :: lctx) p)
-    | .none => .fail
-  | .none => .fail
-| .validOfIntros pos idx =>
-  match r.getValid pos with
-  | .some (lctx, t) => evalValidOfIntros lctx t idx
-  | .none => .fail
-| .validOfRevert pos =>
-  match r.getValid pos with
-  | .some (lctx, t) =>
-    match lctx with
-    | .nil => .fail
-    | .cons ty lctx => .addEntry (.valid lctx (.mkForallEF ty t))
-  | .none => .fail
-| .validOfReverts pos idx =>
-  match r.getValid pos with
-  | .some (lctx, t) => evalValidOfReverts lctx t idx
-  | .none => .fail
+@[reducible] def ConvStep.eval (r : RTable) : (cs : ConvStep) → EvalResult
 | .validOfHeadBeta pos =>
   match r.getValid pos with
   | .some (lctx, t) => .addEntry (.valid lctx t.headBeta)
@@ -643,52 +628,6 @@ def ChkStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : ChkStep) → E
 | .validOfExtensionalize pos =>
   match r.getValid pos with
   | .some (lctx, t) => .addEntry (.valid lctx t.extensionalize)
-  | .none => .fail
-| .validOfImp p₁₂ p₁ =>
-  match r.getValid p₁₂ with
-  | .some (lctx, t₁₂) =>
-    match r.getValidEnsureLCtx lctx p₁ with
-    | .some t₁ =>
-      match LamTerm.impApp? t₁₂ t₁ with
-      | .some t₂ => .addEntry (.valid lctx t₂)
-      | .none => .fail
-    | .none => .fail
-  | .none => .fail
-| .validOfImps imp ps =>
-  match r.getValid imp with
-  | .some (lctx, t) =>
-    match r.getValidsEnsureLCtx lctx ps with
-    | .some ts =>
-      match t.impApps? ts with
-      | .some res => .addEntry (REntry.valid lctx res)
-      | .none => .fail
-    | .none => .fail
-  | .none => .fail
-| .validOfInstantiate1 pos arg =>
-  match r.getValid pos with
-  | .some (lctx, t) =>
-    match lctx with
-    | .nil => .fail
-    | .cons argTy lctx =>
-      match arg.lamThmWFCheck? ⟨lvt, lit, r.toLamEVarTy⟩ lctx with
-      | .some s =>
-        match s.beq argTy with
-        | true =>
-          match Nat.ble arg.maxEVarSucc r.maxEVarSucc with
-          | true => .addEntry (.valid lctx (LamTerm.instantiate1 arg t))
-          | false => .fail
-        | false => .fail
-      | .none => .fail
-  | .none => .fail
-| .validOfInstantiate pos args =>
-  match r.getValid pos with
-  | .some (lctx, t) =>
-    evalValidOfInstantiate r.maxEVarSucc ⟨lvt, lit, r.toLamEVarTy⟩ lctx t args
-  | .none => .fail
-| .validOfInstantiateRev pos args =>
-  match r.getValid pos with
-  | .some (lctx, t) =>
-    evalValidOfInstantiate r.maxEVarSucc ⟨lvt, lit, r.toLamEVarTy⟩ lctx t args.reverse
   | .none => .fail
 | .validOfCongrArg pos rw =>
   match r.getValid pos with
@@ -756,6 +695,8 @@ def ChkStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : ChkStep) → E
       | .none => .fail
     | .none => .fail
   | .none => .fail
+
+@[reducible] def EtomStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : EtomStep) → EvalResult
 | .skolemize pos =>
   match r.getValid pos with
   | .some (lctx, t) =>
@@ -771,6 +712,125 @@ def ChkStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : ChkStep) → E
     | false => .fail
   | .none => .fail
 
+@[reducible] def InferenceStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : InferenceStep) → EvalResult
+| .validOfImp p₁₂ p₁ =>
+  match r.getValid p₁₂ with
+  | .some (lctx, t₁₂) =>
+    match r.getValidEnsureLCtx lctx p₁ with
+    | .some t₁ =>
+      match LamTerm.impApp? t₁₂ t₁ with
+      | .some t₂ => .addEntry (.valid lctx t₂)
+      | .none => .fail
+    | .none => .fail
+  | .none => .fail
+| .validOfImps imp ps =>
+  match r.getValid imp with
+  | .some (lctx, t) =>
+    match r.getValidsEnsureLCtx lctx ps with
+    | .some ts =>
+      match t.impApps? ts with
+      | .some res => .addEntry (REntry.valid lctx res)
+      | .none => .fail
+    | .none => .fail
+  | .none => .fail
+| .validOfInstantiate1 pos arg =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    match lctx with
+    | .nil => .fail
+    | .cons argTy lctx =>
+      match arg.lamThmWFCheck? ⟨lvt, lit, r.toLamEVarTy⟩ lctx with
+      | .some s =>
+        match s.beq argTy with
+        | true =>
+          match Nat.ble arg.maxEVarSucc r.maxEVarSucc with
+          | true => .addEntry (.valid lctx (LamTerm.instantiate1 arg t))
+          | false => .fail
+        | false => .fail
+      | .none => .fail
+  | .none => .fail
+| .validOfInstantiate pos args =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    evalValidOfInstantiate r.maxEVarSucc ⟨lvt, lit, r.toLamEVarTy⟩ lctx t args
+  | .none => .fail
+| .validOfInstantiateRev pos args =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    evalValidOfInstantiate r.maxEVarSucc ⟨lvt, lit, r.toLamEVarTy⟩ lctx t args.reverse
+  | .none => .fail
+
+@[reducible] def LCtxStep.eval (r : RTable) : (cs : LCtxStep) → EvalResult
+| .validOfIntro1F pos =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    match t.intro1F? with
+    | .some (s, p) => .addEntry (.valid (s :: lctx) p)
+    | .none => .fail
+  | .none => .fail
+| .validOfIntro1H pos =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    match t.intro1H? with
+    | .some (s, p) => .addEntry (.valid (s :: lctx) p)
+    | .none => .fail
+  | .none => .fail
+| .validOfIntros pos idx =>
+  match r.getValid pos with
+  | .some (lctx, t) => evalValidOfIntros lctx t idx
+  | .none => .fail
+| .validOfRevert pos =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    match lctx with
+    | .nil => .fail
+    | .cons ty lctx => .addEntry (.valid lctx (.mkForallEF ty t))
+  | .none => .fail
+| .validOfReverts pos idx =>
+  match r.getValid pos with
+  | .some (lctx, t) => evalValidOfReverts lctx t idx
+  | .none => .fail
+
+@[reducible] def NonemptyStep.eval (lvt : Nat → LamSort) (r : RTable) : (cs : NonemptyStep) → EvalResult
+| .nonemptyOfAtom n => .addEntry (.nonempty (lvt n))
+| .nonemptyOfEtom n =>
+  match r.maxEVarSucc.ble n with
+  | true => .fail
+  | false => .addEntry (.nonempty ((r.lamEVarTy.get? n).getD (.base .prop)))
+
+@[reducible] def WFStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : WFStep) → EvalResult
+| .wfOfCheck lctx t =>
+  match LamTerm.lamThmWFCheck? ⟨lvt, lit, r.toLamEVarTy⟩ lctx t with
+  | .some rty =>
+    match Nat.ble t.maxEVarSucc r.maxEVarSucc with
+    | true => .addEntry (.wf lctx rty t)
+    | false => .fail
+  | .none => .fail
+| .wfOfAppend ex pos =>
+  match r.getWF pos with
+  | .some (lctx, s, t) => .addEntry (.wf (lctx ++ ex) s t)
+  | .none => .fail
+| .wfOfPrepend ex pos =>
+  match r.getWF pos with
+  | .some (lctx, s, t) => .addEntry (.wf (ex ++ lctx) s (t.bvarLifts ex.length))
+  | .none => .fail
+| .wfOfHeadBeta pos =>
+  match r.getWF pos with
+  | .some (lctx, s, t) => .addEntry (.wf lctx s t.headBeta)
+  | .none => .fail
+| .wfOfBetaBounded pos bound =>
+  match r.getWF pos with
+  | .some (lctx, s, t) => .addEntry (.wf lctx s (t.betaBounded bound))
+  | .none => .fail
+
+def ChkStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : ChkStep) → EvalResult
+| .c s => ConvStep.eval r s
+| .e s => EtomStep.eval lvt lit r s
+| .i s => InferenceStep.eval lvt lit r s
+| .l s => LCtxStep.eval r s
+| .n s => NonemptyStep.eval lvt r s
+| .w s => WFStep.eval lvt lit r s
+
 private theorem ChkStep.eval_correct_wfAux
   {cond₁ cond₂ : Prop} (h : LamThmWFP lval₁ lctx₁ s₁ t₁ ∧ cond₁)
   (wfimp : LamThmWF lval₁ lctx₁ s₁ t₁ → LamThmWF lval₂ lctx₂ s₂ t₂)
@@ -785,7 +845,7 @@ private theorem ChkStep.eval_correct_validAux
   LamThmValid lval₂ lctx₂ t₂ ∧ cond₂ :=
   And.intro (vimp h.left) (condimp h.right)
 
-theorem ChkStep.evalValidOfIntros_correct
+theorem LCtxStep.evalValidOfIntros_correct
   {r : RTable} (cv : CVal.{u} r.lamEVarTy)
   (tV : LamThmValid cv.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc) :
   (evalValidOfIntros lctx t idx).correct r cv := by
@@ -800,7 +860,7 @@ theorem ChkStep.evalValidOfIntros_correct
       rw [LamTerm.maxEVarSucc_intro1? h]; exact eS
     | .none => exact True.intro
 
-theorem ChkStep.evalValidOfReverts_correct
+theorem LCtxStep.evalValidOfReverts_correct
   {r : RTable} (cv : CVal.{u} r.lamEVarTy)
   (tV : LamThmValid cv.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc) :
   (evalValidOfReverts lctx t idx).correct r cv := by
@@ -815,7 +875,7 @@ theorem ChkStep.evalValidOfReverts_correct
       dsimp [LamTerm.mkForallEF, LamTerm.maxEVarSucc]
       rw [Nat.max, Nat.max_zero_left]; apply tV.right
 
-theorem ChkStep.evalValidOfInstantiate_correct
+theorem InferenceStep.evalValidOfInstantiate_correct
   {r : RTable} (cv : CVal.{u} r.lamEVarTy)
   (tV : LamThmValid cv.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc) :
   (evalValidOfInstantiate r.maxEVarSucc cv.toLamTyVal lctx t args).correct r cv := by
@@ -847,147 +907,9 @@ theorem ChkStep.evalValidOfInstantiate_correct
         | false => exact True.intro
       | .none => exact True.intro
 
-theorem ChkStep.eval_correct
+theorem ConvStep.eval_correct
   (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
-  (cs : ChkStep) → EvalResult.correct r cv (cs.eval cv.toLamVarTy cv.toLamILTy r)
-| .nonemptyOfAtom n => by
-  dsimp [eval, EvalResult.correct, REntry.correct]
-  apply Nonempty.intro; exact cv.toLamValuation.varVal n
-| .nonemptyOfEtom n => by
-  dsimp [eval]
-  match Nat.ble r.maxEVarSucc n with
-  | true => exact True.intro
-  | false =>
-    dsimp [EvalResult.correct, REntry.correct]
-    apply Nonempty.intro; exact cv.toLamValuation.eVarVal n
-| .wfOfCheck lctx t => by
-  dsimp [eval]
-  cases h₁ : LamTerm.lamThmWFCheck? ⟨cv.toLamVarTy, cv.toLamILTy, r.toLamEVarTy⟩ lctx t <;> try exact True.intro
-  case some s =>
-    match h₂ : Nat.ble (LamTerm.maxEVarSucc t) r.maxEVarSucc with
-    | true =>
-      dsimp [REntry.correct]; apply And.intro (LamThmWFP.ofLamThmWF ?left) ?right
-      case left =>
-        exact LamThmWF.ofLamThmWFCheck? (lval := cv.toLamValuation) h₁
-      case right =>
-        apply Nat.le_of_ble_eq_true h₂
-    | false => exact True.intro
-| .wfOfAppend ex pos => by
-  dsimp [eval]
-  cases h : r.getWF pos <;> try exact True.intro
-  case some lctxst =>
-    match lctxst with
-    | (lctx, s, t) =>
-      have h' := RTable.getWF_correct inv h
-      apply ChkStep.eval_correct_wfAux h' _ id
-      intro hwf; apply LamThmWF.append hwf
-| .wfOfPrepend ex pos => by
-  dsimp [eval]
-  cases h : r.getWF pos <;> try exact True.intro
-  case some lctxst =>
-    match lctxst with
-    | (lctx, s, t) =>
-      have h' := RTable.getWF_correct inv h
-      apply ChkStep.eval_correct_wfAux h'
-      case wfimp =>
-        intro hwf; apply LamThmWF.prepend hwf
-      case condimp =>
-        intro hcond;
-        dsimp [LamTerm.bvarLifts, LamTerm.bvarLiftsIdx]
-        rw [LamTerm.maxEVarSucc_mapBVarAt]; exact hcond
-| .wfOfHeadBeta pos => by
-  dsimp [eval]
-  cases h : r.getWF pos <;> try exact True.intro
-  case some lctxst =>
-    match lctxst with
-    | (lctx, s, t) =>
-      have h' := RTable.getWF_correct inv h
-      apply ChkStep.eval_correct_wfAux h'
-      case wfimp =>
-        intro hwf; apply LamThmWF.ofLamThmEquiv_r;
-        apply LamThmEquiv.ofHeadBeta hwf
-      case condimp =>
-        intro hcond; apply Nat.le_trans _ hcond
-        apply LamTerm.maxEVarSucc_headBeta
-| .wfOfBetaBounded pos bound => by
-  dsimp [eval]
-  cases h : r.getWF pos <;> try exact True.intro
-  case some lctxst =>
-    match lctxst with
-    | (lctx, s, t) =>
-      have h' := RTable.getWF_correct inv h
-      apply ChkStep.eval_correct_wfAux h'
-      case wfimp =>
-        intro hwf; apply LamThmWF.ofLamThmEquiv_r;
-        apply LamThmEquiv.ofBetaBounded hwf
-      case condimp =>
-        intro hcond; apply Nat.le_trans _ hcond
-        apply LamTerm.maxEVarSucc_betaBounded
-| .validOfIntro1F pos => by
-  dsimp [eval]
-  cases h₁ : r.getValid pos <;> try exact True.intro
-  case some lctxt =>
-    match lctxt with
-    | (lctx, t) =>
-      dsimp
-      match h₂ : t.intro1F? with
-      | .some (s, p) =>
-        have h' := RTable.getValid_correct inv h₁
-        apply ChkStep.eval_correct_validAux h'
-        case vimp =>
-          intro hv; apply LamThmValid.intro1F? hv h₂
-        case condimp =>
-          intro hcond; rw [LamTerm.maxEVarSucc_intro1F? h₂]; exact hcond
-      | .none => exact True.intro
-| .validOfIntro1H pos => by
-  dsimp [eval]
-  cases h₁ : r.getValid pos <;> try exact True.intro
-  case some lctxt =>
-    match lctxt with
-    | (lctx, t) =>
-      dsimp
-      match h₂ : t.intro1H? with
-      | .some (s, p) =>
-        have h' := RTable.getValid_correct inv h₁
-        apply ChkStep.eval_correct_validAux h'
-        case vimp =>
-          intro hv; apply LamThmValid.intro1H? hv h₂
-        case condimp =>
-          intro hcond; rw [LamTerm.maxEVarSucc_intro1H? h₂]; exact hcond
-      | .none => exact True.intro
-| .validOfIntros pos idx => by
-  dsimp [eval]
-  cases h : r.getValid pos <;> try exact True.intro
-  case some lctxt =>
-    match lctxt with
-    | (lctx, t) =>
-      have h' := RTable.getValid_correct inv h
-      have hcorrect := ChkStep.evalValidOfIntros_correct (idx:=idx) _ h'
-      dsimp; revert hcorrect
-      cases (evalValidOfIntros lctx t idx) <;> exact id
-| .validOfRevert pos => by
-  dsimp [eval]
-  cases h : r.getValid pos <;> try exact True.intro
-  case some lctxt =>
-    match lctxt with
-    | (lctx, t) =>
-      match lctx with
-      | .nil => exact True.intro
-      | .cons ty lctx =>
-        have h' := RTable.getValid_correct inv h
-        apply And.intro
-        case left => intro lctx'; apply h'.left.revert1F
-        case right =>
-          dsimp [LamTerm.mkForallEF, LamTerm.maxEVarSucc]
-          rw [Nat.max, Nat.max_zero_left]; apply h'.right
-| .validOfReverts pos idx => by
-  dsimp [eval]
-  cases h : r.getValid pos <;> try exact True.intro
-  case some lctxt =>
-    match lctxt with
-    | (lctx, t) =>
-      have h' := RTable.getValid_correct inv h
-      apply ChkStep.evalValidOfReverts_correct _ h'
+  (cs : ConvStep) → EvalResult.correct r cv (cs.eval r)
 | .validOfHeadBeta pos => by
   dsimp [eval]
   cases h : r.getValid pos <;> try exact True.intro
@@ -1027,91 +949,6 @@ theorem ChkStep.eval_correct
         apply LamThmEquiv.ofExtensionalize (LamThmWF.ofLamThmValid hv)
       case condimp =>
         intro hcond; rw [LamTerm.maxEVarSucc_extensionalizeAux]; exact hcond
-| .validOfImp p₁₂ p₁ => by
-  dsimp [eval]
-  match h₁ : r.getValid p₁₂ with
-  | .some (lctx, t₁₂) =>
-    dsimp
-    match h₂ : r.getValidEnsureLCtx lctx p₁ with
-    | .some t₁ =>
-      dsimp
-      match h₃ : LamTerm.impApp? t₁₂ t₁ with
-      | .some t₂ =>
-        have h₁' := RTable.getValid_correct inv h₁
-        have h₂' := RTable.getValidEnsureLCtx_correct inv h₂
-        apply ChkStep.eval_correct_validAux h₁'
-        case vimp =>
-          intro hv; apply LamThmValid.impApp hv h₂'.left h₃
-        case condimp =>
-          intro hcond; apply Nat.le_trans (LamTerm.maxEVarSucc_impApp? h₃) hcond
-      | .none => exact True.intro
-    | .none => exact True.intro
-  | .none => exact True.intro
-| .validOfImps imp ps => by
-  dsimp [eval]
-  match himp : r.getValid imp with
-  | .some (lctx, t) =>
-    dsimp
-    match hps : RTable.getValidsEnsureLCtx r lctx ps with
-    | .some ts =>
-      dsimp
-      match hap : LamTerm.impApps? t ts with
-      | .some t' =>
-        have himp := RTable.getValid_correct inv himp
-        have hps := RTable.getValidsEnsureLCtx_correct inv hps
-        apply ChkStep.eval_correct_validAux himp
-        case vimp =>
-          have hps' := HList.map (fun _ h => And.left h) hps
-          intro hv; apply LamThmValid.impApps himp.left hps' hap
-        case condimp =>
-          intro hcond; apply Nat.le_trans (LamTerm.maxEVarSucc_impApps? hap) hcond
-      | .none => exact True.intro
-    | .none => exact True.intro
-  | .none => exact True.intro
-| .validOfInstantiate1 pos arg => by
-  dsimp [eval]
-  match h₁ : r.getValid pos with
-  | .some (lctx, t) =>
-    dsimp
-    match lctx with
-    | .nil => exact True.intro
-    | .cons argTy lctx =>
-      dsimp
-      match h₂ : LamTerm.lamThmWFCheck? ⟨cv.toLamVarTy, cv.toLamILTy, r.toLamEVarTy⟩ lctx arg with
-      | .some s =>
-        dsimp
-        match h₃ : s.beq argTy with
-        | true =>
-          match h₄ : Nat.ble (LamTerm.maxEVarSucc arg) r.maxEVarSucc with
-          | true =>
-            dsimp [Option.allp, REntry.correct]
-            cases (LamSort.eq_of_beq_eq_true h₃)
-            have h₁' := LamThmWF.ofLamThmWFCheck? (lval:=cv.toLamValuation) h₂
-            have h₂' := RTable.getValid_correct inv h₁
-            apply ChkStep.eval_correct_validAux h₂'
-            case vimp =>
-              intro hv; apply LamThmValid.instantiate1 h₁' hv
-            case condimp =>
-              intro cond; apply Nat.le_trans LamTerm.maxEVarSucc_instantiate1
-              rw [Nat.max_le]; apply And.intro (Nat.le_of_ble_eq_true h₄) cond
-          | false => exact True.intro
-        | false => exact True.intro
-      | .none => exact True.intro
-  | .none => exact True.intro
-| .validOfInstantiate pos args => by
-  dsimp [eval]
-  match h : r.getValid pos with
-  | .some (lctx, t) =>
-    let h' := RTable.getValid_correct inv h
-    apply ChkStep.evalValidOfInstantiate_correct _ h'
-  | .none => exact True.intro
-| .validOfInstantiateRev pos args => by
-  dsimp [eval]
-  match h : r.getValid pos with
-  | .some (lctx, t) =>
-    let h' := RTable.getValid_correct inv h
-    apply ChkStep.evalValidOfInstantiate_correct _ h'
-  | .none => exact True.intro
 | .validOfCongrArg pos rw => by
   dsimp [eval]
   match hpos : r.getValid pos with
@@ -1257,6 +1094,10 @@ theorem ChkStep.eval_correct
       | .none => exact True.intro
     | .none => exact True.intro
   | .none => exact True.intro
+
+theorem EtomStep.eval_correct
+  (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
+  (cs : EtomStep) → EvalResult.correct r cv (cs.eval cv.toLamVarTy cv.toLamILTy r)
 | .skolemize pos => by
   dsimp [eval]
   match h₁ : r.getValid pos with
@@ -1309,6 +1150,255 @@ theorem ChkStep.eval_correct
           rw [Nat.max_le]; apply And.intro (Nat.le_refl _) (Nat.le_step h₂')
     | false => exact True.intro
   | .none => exact True.intro
+
+theorem InferenceStep.eval_correct
+  (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
+  (cs : InferenceStep) → EvalResult.correct r cv (cs.eval cv.toLamVarTy cv.toLamILTy r)
+| .validOfImp p₁₂ p₁ => by
+  dsimp [eval]
+  match h₁ : r.getValid p₁₂ with
+  | .some (lctx, t₁₂) =>
+    dsimp
+    match h₂ : r.getValidEnsureLCtx lctx p₁ with
+    | .some t₁ =>
+      dsimp
+      match h₃ : LamTerm.impApp? t₁₂ t₁ with
+      | .some t₂ =>
+        have h₁' := RTable.getValid_correct inv h₁
+        have h₂' := RTable.getValidEnsureLCtx_correct inv h₂
+        apply ChkStep.eval_correct_validAux h₁'
+        case vimp =>
+          intro hv; apply LamThmValid.impApp hv h₂'.left h₃
+        case condimp =>
+          intro hcond; apply Nat.le_trans (LamTerm.maxEVarSucc_impApp? h₃) hcond
+      | .none => exact True.intro
+    | .none => exact True.intro
+  | .none => exact True.intro
+| .validOfImps imp ps => by
+  dsimp [eval]
+  match himp : r.getValid imp with
+  | .some (lctx, t) =>
+    dsimp
+    match hps : RTable.getValidsEnsureLCtx r lctx ps with
+    | .some ts =>
+      dsimp
+      match hap : LamTerm.impApps? t ts with
+      | .some t' =>
+        have himp := RTable.getValid_correct inv himp
+        have hps := RTable.getValidsEnsureLCtx_correct inv hps
+        apply ChkStep.eval_correct_validAux himp
+        case vimp =>
+          have hps' := HList.map (fun _ h => And.left h) hps
+          intro hv; apply LamThmValid.impApps himp.left hps' hap
+        case condimp =>
+          intro hcond; apply Nat.le_trans (LamTerm.maxEVarSucc_impApps? hap) hcond
+      | .none => exact True.intro
+    | .none => exact True.intro
+  | .none => exact True.intro
+| .validOfInstantiate1 pos arg => by
+  dsimp [eval]
+  match h₁ : r.getValid pos with
+  | .some (lctx, t) =>
+    dsimp
+    match lctx with
+    | .nil => exact True.intro
+    | .cons argTy lctx =>
+      dsimp
+      match h₂ : LamTerm.lamThmWFCheck? ⟨cv.toLamVarTy, cv.toLamILTy, r.toLamEVarTy⟩ lctx arg with
+      | .some s =>
+        dsimp
+        match h₃ : s.beq argTy with
+        | true =>
+          match h₄ : Nat.ble (LamTerm.maxEVarSucc arg) r.maxEVarSucc with
+          | true =>
+            dsimp [Option.allp, REntry.correct]
+            cases (LamSort.eq_of_beq_eq_true h₃)
+            have h₁' := LamThmWF.ofLamThmWFCheck? (lval:=cv.toLamValuation) h₂
+            have h₂' := RTable.getValid_correct inv h₁
+            apply ChkStep.eval_correct_validAux h₂'
+            case vimp =>
+              intro hv; apply LamThmValid.instantiate1 h₁' hv
+            case condimp =>
+              intro cond; apply Nat.le_trans LamTerm.maxEVarSucc_instantiate1
+              rw [Nat.max_le]; apply And.intro (Nat.le_of_ble_eq_true h₄) cond
+          | false => exact True.intro
+        | false => exact True.intro
+      | .none => exact True.intro
+  | .none => exact True.intro
+| .validOfInstantiate pos args => by
+  dsimp [eval]
+  match h : r.getValid pos with
+  | .some (lctx, t) =>
+    let h' := RTable.getValid_correct inv h
+    apply evalValidOfInstantiate_correct _ h'
+  | .none => exact True.intro
+| .validOfInstantiateRev pos args => by
+  dsimp [eval]
+  match h : r.getValid pos with
+  | .some (lctx, t) =>
+    let h' := RTable.getValid_correct inv h
+    apply evalValidOfInstantiate_correct _ h'
+  | .none => exact True.intro
+
+theorem LCtxStep.eval_correct
+  (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
+  (cs : LCtxStep) → EvalResult.correct r cv (cs.eval r)
+| .validOfIntro1F pos => by
+  dsimp [eval]
+  cases h₁ : r.getValid pos <;> try exact True.intro
+  case some lctxt =>
+    match lctxt with
+    | (lctx, t) =>
+      dsimp
+      match h₂ : t.intro1F? with
+      | .some (s, p) =>
+        have h' := RTable.getValid_correct inv h₁
+        apply ChkStep.eval_correct_validAux h'
+        case vimp =>
+          intro hv; apply LamThmValid.intro1F? hv h₂
+        case condimp =>
+          intro hcond; rw [LamTerm.maxEVarSucc_intro1F? h₂]; exact hcond
+      | .none => exact True.intro
+| .validOfIntro1H pos => by
+  dsimp [eval]
+  cases h₁ : r.getValid pos <;> try exact True.intro
+  case some lctxt =>
+    match lctxt with
+    | (lctx, t) =>
+      dsimp
+      match h₂ : t.intro1H? with
+      | .some (s, p) =>
+        have h' := RTable.getValid_correct inv h₁
+        apply ChkStep.eval_correct_validAux h'
+        case vimp =>
+          intro hv; apply LamThmValid.intro1H? hv h₂
+        case condimp =>
+          intro hcond; rw [LamTerm.maxEVarSucc_intro1H? h₂]; exact hcond
+      | .none => exact True.intro
+| .validOfIntros pos idx => by
+  dsimp [eval]
+  cases h : r.getValid pos <;> try exact True.intro
+  case some lctxt =>
+    match lctxt with
+    | (lctx, t) =>
+      have h' := RTable.getValid_correct inv h
+      have hcorrect := evalValidOfIntros_correct (idx:=idx) _ h'
+      dsimp; revert hcorrect
+      cases (evalValidOfIntros lctx t idx) <;> exact id
+| .validOfRevert pos => by
+  dsimp [eval]
+  cases h : r.getValid pos <;> try exact True.intro
+  case some lctxt =>
+    match lctxt with
+    | (lctx, t) =>
+      match lctx with
+      | .nil => exact True.intro
+      | .cons ty lctx =>
+        have h' := RTable.getValid_correct inv h
+        apply And.intro
+        case left => intro lctx'; apply h'.left.revert1F
+        case right =>
+          dsimp [LamTerm.mkForallEF, LamTerm.maxEVarSucc]
+          rw [Nat.max, Nat.max_zero_left]; apply h'.right
+| .validOfReverts pos idx => by
+  dsimp [eval]
+  cases h : r.getValid pos <;> try exact True.intro
+  case some lctxt =>
+    match lctxt with
+    | (lctx, t) =>
+      have h' := RTable.getValid_correct inv h
+      apply evalValidOfReverts_correct _ h'
+
+theorem NonemptyStep.eval_correct
+  (r : RTable) (cv : CVal.{u} r.lamEVarTy) :
+  (cs : NonemptyStep) → EvalResult.correct r cv (cs.eval cv.toLamVarTy r)
+| .nonemptyOfAtom n => by
+  dsimp [eval, EvalResult.correct, REntry.correct]
+  apply Nonempty.intro; exact cv.toLamValuation.varVal n
+| .nonemptyOfEtom n => by
+  dsimp [eval]
+  match Nat.ble r.maxEVarSucc n with
+  | true => exact True.intro
+  | false =>
+    dsimp [EvalResult.correct, REntry.correct]
+    apply Nonempty.intro; exact cv.toLamValuation.eVarVal n
+
+theorem WFStep.eval_correct
+  (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
+  (cs : WFStep) → EvalResult.correct r cv (cs.eval cv.toLamVarTy cv.toLamILTy r)
+| .wfOfCheck lctx t => by
+  dsimp [eval]
+  cases h₁ : LamTerm.lamThmWFCheck? ⟨cv.toLamVarTy, cv.toLamILTy, r.toLamEVarTy⟩ lctx t <;> try exact True.intro
+  case some s =>
+    match h₂ : Nat.ble (LamTerm.maxEVarSucc t) r.maxEVarSucc with
+    | true =>
+      dsimp [REntry.correct]; apply And.intro (LamThmWFP.ofLamThmWF ?left) ?right
+      case left =>
+        exact LamThmWF.ofLamThmWFCheck? (lval := cv.toLamValuation) h₁
+      case right =>
+        apply Nat.le_of_ble_eq_true h₂
+    | false => exact True.intro
+| .wfOfAppend ex pos => by
+  dsimp [eval]
+  cases h : r.getWF pos <;> try exact True.intro
+  case some lctxst =>
+    match lctxst with
+    | (lctx, s, t) =>
+      have h' := RTable.getWF_correct inv h
+      apply ChkStep.eval_correct_wfAux h' _ id
+      intro hwf; apply LamThmWF.append hwf
+| .wfOfPrepend ex pos => by
+  dsimp [eval]
+  cases h : r.getWF pos <;> try exact True.intro
+  case some lctxst =>
+    match lctxst with
+    | (lctx, s, t) =>
+      have h' := RTable.getWF_correct inv h
+      apply ChkStep.eval_correct_wfAux h'
+      case wfimp =>
+        intro hwf; apply LamThmWF.prepend hwf
+      case condimp =>
+        intro hcond;
+        dsimp [LamTerm.bvarLifts, LamTerm.bvarLiftsIdx]
+        rw [LamTerm.maxEVarSucc_mapBVarAt]; exact hcond
+| .wfOfHeadBeta pos => by
+  dsimp [eval]
+  cases h : r.getWF pos <;> try exact True.intro
+  case some lctxst =>
+    match lctxst with
+    | (lctx, s, t) =>
+      have h' := RTable.getWF_correct inv h
+      apply ChkStep.eval_correct_wfAux h'
+      case wfimp =>
+        intro hwf; apply LamThmWF.ofLamThmEquiv_r;
+        apply LamThmEquiv.ofHeadBeta hwf
+      case condimp =>
+        intro hcond; apply Nat.le_trans _ hcond
+        apply LamTerm.maxEVarSucc_headBeta
+| .wfOfBetaBounded pos bound => by
+  dsimp [eval]
+  cases h : r.getWF pos <;> try exact True.intro
+  case some lctxst =>
+    match lctxst with
+    | (lctx, s, t) =>
+      have h' := RTable.getWF_correct inv h
+      apply ChkStep.eval_correct_wfAux h'
+      case wfimp =>
+        intro hwf; apply LamThmWF.ofLamThmEquiv_r;
+        apply LamThmEquiv.ofBetaBounded hwf
+      case condimp =>
+        intro hcond; apply Nat.le_trans _ hcond
+        apply LamTerm.maxEVarSucc_betaBounded
+
+theorem ChkStep.eval_correct
+  (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
+  (cs : ChkStep) → EvalResult.correct r cv (cs.eval cv.toLamVarTy cv.toLamILTy r)
+| .c s => ConvStep.eval_correct r cv inv s
+| .e s => EtomStep.eval_correct r cv inv s
+| .i s => InferenceStep.eval_correct r cv inv s
+| .l s => LCtxStep.eval_correct r cv inv s
+| .n s => NonemptyStep.eval_correct r cv s
+| .w s => WFStep.eval_correct r cv inv s
 
 def RTable.runEvalResult (r : RTable) (n : Nat) : EvalResult → RTable
 | .fail => r

@@ -466,14 +466,14 @@ section Checker
   def nonemptyOfAtom (n : Nat) : ReifM REntry := do
     let .some (_, s) := (← getVarVal).get? n
       | throwError "nonemptyOfAtom :: Index {n} out of bound"
-    let (_, .addEntry re) ← newChkStep (.nonemptyOfAtom n) (.some (.addEntry (.nonempty s)))
+    let (_, .addEntry re) ← newChkStep (.n (.nonemptyOfAtom n)) (.some (.addEntry (.nonempty s)))
       | throwError "nonemptyOfAtom :: Unexpected evaluation result"
     return re
 
   def nonemptyOfEtom (n : Nat) : ReifM REntry := do
     let .some s := (← getLamEVarTy).get? n
       | throwError "nonemptyOfEtom :: Index {n} out of bound"
-    let (_, .addEntry re) ← newChkStep (.nonemptyOfEtom n) (.some (.addEntry (.nonempty s)))
+    let (_, .addEntry re) ← newChkStep (.n (.nonemptyOfEtom n)) (.some (.addEntry (.nonempty s)))
       | throwError "nonemptyOfEtom :: Unexpected evaluation result"
     return re
 
@@ -481,7 +481,7 @@ section Checker
     if idx == 0 then
       return v
     let p ← lookupREntryPos! v
-    let (_, .addEntry re) ← newChkStep (.validOfIntros p idx) .none
+    let (_, .addEntry re) ← newChkStep (.l (.validOfIntros p idx)) .none
       | throwError "validOfIntros :: Unexpected evaluation result"
     return re
 
@@ -500,7 +500,7 @@ section Checker
 
   def validOfReverts (v : REntry) (idx : Nat) : ReifM REntry := do
     let p ← lookupREntryPos! v
-    let (_, .addEntry re) ← newChkStep (.validOfReverts p idx) .none
+    let (_, .addEntry re) ← newChkStep (.l (.validOfReverts p idx)) .none
       | throwError "validOfReverts :: Unexpected evaluation result"
     return re
 
@@ -513,7 +513,7 @@ section Checker
 
   def validOfHeadBeta (v : REntry) : ReifM REntry := do
     let p ← lookupREntryPos! v
-    let (_, .addEntry re) ← newChkStep (.validOfHeadBeta p) .none
+    let (_, .addEntry re) ← newChkStep (.c (.validOfHeadBeta p)) .none
       | throwError "validOfHeadBeta :: Unexpected evaluation result"
     return re
 
@@ -529,7 +529,7 @@ section Checker
 
   def validOfBetaBounded (v : REntry) (bound : Nat) : ReifM REntry := do
     let p ← lookupREntryPos! v
-    let (_, .addEntry re) ← newChkStep (.validOfBetaBounded p bound) .none
+    let (_, .addEntry re) ← newChkStep (.c (.validOfBetaBounded p bound)) .none
       | throwError "validOfBetaBounded :: Unexpected evaluation result"
     return re
 
@@ -540,33 +540,33 @@ section Checker
 
   def validOfExtensionalize (v : REntry) : ReifM REntry := do
     let p ← lookupREntryPos! v
-    let (_, .addEntry re) ← newChkStep (.validOfExtensionalize p) .none
+    let (_, .addEntry re) ← newChkStep (.c (.validOfExtensionalize p)) .none
       | throwError "validOfExtensionalize :: Unexpected evaluation result"
     return re
 
   def validOfImp (v₁₂ : REntry) (v₁ : REntry) : ReifM REntry := do
     let p₁₂ ← lookupREntryPos! v₁₂
     let p₁ ← lookupREntryPos! v₁
-    let (_, .addEntry re) ← newChkStep (.validOfImp p₁₂ p₁) .none
+    let (_, .addEntry re) ← newChkStep (.i (.validOfImp p₁₂ p₁)) .none
       | throwError "validOfImp :: Unexpected evaluation result"
     return re
 
   def validOfImps (impV : REntry) (hypVs : Array REntry) : ReifM REntry := do
     let imp ← lookupREntryPos! impV
     let ps ← hypVs.mapM lookupREntryPos!
-    let (_, .addEntry re) ← newChkStep (.validOfImps imp ps.data) .none
+    let (_, .addEntry re) ← newChkStep (.i (.validOfImps imp ps.data)) .none
       | throwError "validOfImps :: Unexpected evaluation result"
     return re
 
   def validOfInstantiate (v : REntry) (args : Array LamTerm) : ReifM REntry := do
     let p ← lookupREntryPos! v
-    let (_, .addEntry re) ← newChkStep (.validOfInstantiate p args.data) .none
+    let (_, .addEntry re) ← newChkStep (.i (.validOfInstantiate p args.data)) .none
       | throwError "validOfInstantiate :: Unexpected evaluation result"
     return re
 
   def validOfInstantiateRev (v : REntry) (args : Array LamTerm) : ReifM REntry := do
     let p ← lookupREntryPos! v
-    let (_, .addEntry re) ← newChkStep (.validOfInstantiateRev p args.data) .none
+    let (_, .addEntry re) ← newChkStep (.i (.validOfInstantiateRev p args.data)) .none
       | throwError "validOfInstantiateRev :: Unexpected evaluation result"
     return re
 
@@ -581,7 +581,7 @@ section Checker
   def skolemize (exV : REntry) : ReifM REntry := do
     let eidx ← getMaxEVarSucc
     let ex ← lookupREntryPos! exV
-    let (new?, .newEtomWithValid _ lctx t) ← newChkStep (.skolemize ex) .none
+    let (new?, .newEtomWithValid _ lctx t) ← newChkStep (.e (.skolemize ex)) .none
       | throwError "skolemize :: Unexpected evaluation result"
     if new? then
       let _ ← nonemptyOfEtom eidx
@@ -605,7 +605,7 @@ section Checker
 
   def define (t : LamTerm) : ReifM REntry := do
     let eidx ← getMaxEVarSucc
-    let (new?, .newEtomWithValid _ [] t) ← newChkStep (.define t) .none
+    let (new?, .newEtomWithValid _ [] t) ← newChkStep (.e (.define t)) .none
       | throwError "define :: Unexpected evaluation result"
     if new? then
       let _ ← nonemptyOfEtom eidx
@@ -1176,41 +1176,53 @@ open Embedding.Lam LamReif
       lookupREntryPos! (← transREntry ref hre)
 
     partial def transChkStep (ref : State) : ChkStep → TransM ChkStep
-    | .nonemptyOfAtom n => do
-      let .atom n' ← transLamTerm ref (.atom n)
-        | throwError "transChkStep :: Unexpected error"
-      return .nonemptyOfAtom n'
-    | .nonemptyOfEtom n => do
-      let .etom n' ← transLamTerm ref (.etom n)
-        | throwError "transChkStep :: Unexpected error"
-      return .nonemptyOfEtom n'
-    | .wfOfCheck lctx t => return .wfOfCheck (← lctx.mapM (transLamSort ref)) (← transLamTerm ref t)
-    | .wfOfAppend ex pos => return .wfOfAppend (← ex.mapM (transLamSort ref)) (← transPos ref pos)
-    | .wfOfPrepend ex pos => return .wfOfPrepend (← ex.mapM (transLamSort ref)) (← transPos ref pos)
-    | .wfOfHeadBeta pos => return .wfOfHeadBeta (← transPos ref pos)
-    | .wfOfBetaBounded pos bound => return .wfOfBetaBounded (← transPos ref pos) bound
-    | .validOfIntro1F pos => return .validOfIntro1F (← transPos ref pos)
-    | .validOfIntro1H pos => return .validOfIntro1H (← transPos ref pos)
-    | .validOfIntros pos idx => return .validOfIntros (← transPos ref pos) idx
-    | .validOfRevert pos => return .validOfRevert (← transPos ref pos)
-    | .validOfReverts pos idx => return .validOfReverts (← transPos ref pos) idx
-    | .validOfHeadBeta pos => return .validOfHeadBeta (← transPos ref pos)
-    | .validOfBetaBounded pos bound => return .validOfBetaBounded (← transPos ref pos) bound
-    | .validOfExtensionalize pos => return .validOfExtensionalize (← transPos ref pos)
-    | .validOfImp p₁₂ p₁ => return .validOfImp (← transPos ref p₁₂) (← transPos ref p₁)
-    | .validOfImps imp ps => return .validOfImps (← transPos ref imp) (← ps.mapM (transPos ref))
-    | .validOfInstantiate1 pos arg => return .validOfInstantiate1 (← transPos ref pos) (← transLamTerm ref arg)
-    | .validOfInstantiate pos args => return .validOfInstantiate (← transPos ref pos) (← args.mapM (transLamTerm ref))
-    | .validOfInstantiateRev pos args => return .validOfInstantiateRev (← transPos ref pos) (← args.mapM (transLamTerm ref))
-    | .validOfCongrArg pos rw => return .validOfCongrArg (← transPos ref pos) (← transPos ref rw)
-    | .validOfCongrFun pos rw => return .validOfCongrFun (← transPos ref pos) (← transPos ref rw)
-    | .validOfCongr pos rwFn rwArg => return .validOfCongr (← transPos ref pos) (← transPos ref rwFn) (← transPos ref rwArg)
-    | .validOfCongrArgs pos rws => return .validOfCongrArgs (← transPos ref pos) (← rws.mapM (transPos ref))
-    | .validOfCongrFunN pos rw n => return .validOfCongrFunN (← transPos ref pos) (← transPos ref rw) n
-    | .validOfCongrs pos rwFn rwArgs => return .validOfCongrs (← transPos ref pos) (← transPos ref rwFn) (← rwArgs.mapM (transPos ref))
-    | .skolemize pos => return .skolemize (← transPos ref pos)
-    | .define t => return .define (← transLamTerm ref t)
-
+    | .c cs => ChkStep.c <$>
+      match cs with
+      | .validOfHeadBeta pos => return .validOfHeadBeta (← transPos ref pos)
+      | .validOfBetaBounded pos bound => return .validOfBetaBounded (← transPos ref pos) bound
+      | .validOfExtensionalize pos => return .validOfExtensionalize (← transPos ref pos)
+      | .validOfCongrArg pos rw => return .validOfCongrArg (← transPos ref pos) (← transPos ref rw)
+      | .validOfCongrFun pos rw => return .validOfCongrFun (← transPos ref pos) (← transPos ref rw)
+      | .validOfCongr pos rwFn rwArg => return .validOfCongr (← transPos ref pos) (← transPos ref rwFn) (← transPos ref rwArg)
+      | .validOfCongrArgs pos rws => return .validOfCongrArgs (← transPos ref pos) (← rws.mapM (transPos ref))
+      | .validOfCongrFunN pos rw n => return .validOfCongrFunN (← transPos ref pos) (← transPos ref rw) n
+      | .validOfCongrs pos rwFn rwArgs => return .validOfCongrs (← transPos ref pos) (← transPos ref rwFn) (← rwArgs.mapM (transPos ref))
+    | .e cs => ChkStep.e <$>
+      match cs with
+      | .skolemize pos => return .skolemize (← transPos ref pos)
+      | .define t => return .define (← transLamTerm ref t)
+    | .i cs => ChkStep.i <$>
+      match cs with
+      | .validOfImp p₁₂ p₁ => return .validOfImp (← transPos ref p₁₂) (← transPos ref p₁)
+      | .validOfImps imp ps => return .validOfImps (← transPos ref imp) (← ps.mapM (transPos ref))
+      | .validOfInstantiate1 pos arg => return .validOfInstantiate1 (← transPos ref pos) (← transLamTerm ref arg)
+      | .validOfInstantiate pos args => return .validOfInstantiate (← transPos ref pos) (← args.mapM (transLamTerm ref))
+      | .validOfInstantiateRev pos args => return .validOfInstantiateRev (← transPos ref pos) (← args.mapM (transLamTerm ref))
+    | .l cs => ChkStep.l <$>
+      match cs with
+      | .validOfIntro1F pos => return .validOfIntro1F (← transPos ref pos)
+      | .validOfIntro1H pos => return .validOfIntro1H (← transPos ref pos)
+      | .validOfIntros pos idx => return .validOfIntros (← transPos ref pos) idx
+      | .validOfRevert pos => return .validOfRevert (← transPos ref pos)
+      | .validOfReverts pos idx => return .validOfReverts (← transPos ref pos) idx
+    | .n cs => ChkStep.n <$>
+      match cs with
+      | .nonemptyOfAtom n => do
+        let .atom n' ← transLamTerm ref (.atom n)
+          | throwError "transChkStep :: Unexpected error"
+        return .nonemptyOfAtom n'
+      | .nonemptyOfEtom n => do
+        let .etom n' ← transLamTerm ref (.etom n)
+          | throwError "transChkStep :: Unexpected error"
+        return .nonemptyOfEtom n'
+    | .w cs => ChkStep.w <$>
+      match cs with
+      | .wfOfCheck lctx t => return .wfOfCheck (← lctx.mapM (transLamSort ref)) (← transLamTerm ref t)
+      | .wfOfAppend ex pos => return .wfOfAppend (← ex.mapM (transLamSort ref)) (← transPos ref pos)
+      | .wfOfPrepend ex pos => return .wfOfPrepend (← ex.mapM (transLamSort ref)) (← transPos ref pos)
+      | .wfOfHeadBeta pos => return .wfOfHeadBeta (← transPos ref pos)
+      | .wfOfBetaBounded pos bound => return .wfOfBetaBounded (← transPos ref pos) bound
+  
     partial def processChkStep (ref : State) (cs : ChkStep) : TransM EvalResult := do
       if let .some cs' := (← getCsH2lMap).find? cs then
         return ← LamReif.lookupChkStepResult! cs'

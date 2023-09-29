@@ -40,7 +40,9 @@ structure State where
   tyVal           : Array (Expr × Level)  
   varVal          : Array (Expr × LamSort)
   lamEVarTy       : Array LamSort
-  fvarsToAbstract : Array (FVarId × Expr)  := #[]
+  -- Type atoms and term atoms to be abstracted
+  atomsToAbstract : Array (FVarId × Expr)  := #[]
+  -- Etoms to be abstracted
   etomsToAbstract : Array (FVarId × Nat)   := #[]
   -- Type atoms that are used in the expressions sent to external prover
   typeAtomFVars   : HashMap Nat FVarId     := {}
@@ -67,7 +69,7 @@ def withTypeAtomsAsFVar (atoms : Array Nat) : ExternM Unit :=
       | throwError "withTypeAtomAsFVar :: Unknown type atom {atom}"
     let name := (`_exTy).appendIndexAfter (← getTypeAtomFVars).size
     let newFVarId ← withLocalDecl name .default (.sort lvl) .default
-    setFvarsToAbstract ((← getFvarsToAbstract).push (newFVarId, e))
+    setAtomsToAbstract ((← getAtomsToAbstract).push (newFVarId, e))
     setTypeAtomFVars ((← getTypeAtomFVars).insert atom newFVarId)
 
 -- Takes a `s : LamSort` and produces the `un-lifted` version of `s.interp`
@@ -97,7 +99,7 @@ def withTermAtomsAsFVar (atoms : Array Nat) : ExternM Unit :=
     let sinterp ← interpLamSortAsUnlifted s
     let name := (`_exVar).appendIndexAfter (← getTermAtomFVars).size
     let newFVarId ← withLocalDecl name .default sinterp .default
-    setFvarsToAbstract ((← getFvarsToAbstract).push (newFVarId, e))
+    setAtomsToAbstract ((← getAtomsToAbstract).push (newFVarId, e))
     setTermAtomFVars ((← getTermAtomFVars).insert atom newFVarId)
 
 def withEtomsAsFVar (etoms : Array Nat) : ExternM Unit :=
@@ -254,7 +256,7 @@ private def callDuperExternMAction (res : Array REntry) :
     (fun (ty, proof) => do return (ty, ← runMetaM <| Meta.mkAppM ``eq_true #[.fvar proof], #[]))
   -- Note that we're not introducing bound variables into local context
   --   in the above action, so it's reasonable to use `runMetaM`
-  let fvarsToAbstract ← getFvarsToAbstract
+  let atomsToAbstract ← getAtomsToAbstract
   let etomsToAbstract ← getEtomsToAbstract
   let lamEVarTy ← getLamEVarTy
   runMetaM (do
@@ -270,7 +272,7 @@ private def callDuperExternMAction (res : Array REntry) :
         expr ← Meta.mkLambdaFVars #[.fvar fvar] expr
         usedEtoms := eidx :: usedEtoms
     let mut usedVals := []
-    for (fvar, val) in fvarsToAbstract.reverse do
+    for (fvar, val) in atomsToAbstract.reverse do
       if expr.hasAnyFVar (· == fvar) then
         expr ← Meta.mkLambdaFVars #[.fvar fvar] expr
         usedVals := val :: usedVals
