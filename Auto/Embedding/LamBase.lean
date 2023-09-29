@@ -808,11 +808,39 @@ def LamTerm.maxEVarSucc : LamTerm → Nat
 | .lam _ t => t.maxEVarSucc
 | .app _ t₁ t₂ => Nat.max t₁.maxEVarSucc t₂.maxEVarSucc
 
+def LamTerm.mkNot (t : LamTerm) : LamTerm :=
+  .app (.base .prop) (.base .not) t
+
+theorem LamTerm.maxEVarSucc_mkNot :
+  (mkNot t).maxEVarSucc = t.maxEVarSucc := by
+  dsimp [maxEVarSucc]; rw [Nat.max, Nat.max_zero_left]
+
+def LamTerm.mkAnd (t₁ t₂ : LamTerm) : LamTerm :=
+  .app (.base .prop) (.app (.base .prop) (.base .and) t₁) t₂
+
+theorem LamTerm.maxEVarSucc_mkAnd :
+  (mkAnd t₁ t₂).maxEVarSucc = max t₁.maxEVarSucc t₂.maxEVarSucc := by
+  dsimp [maxEVarSucc]; rw [Nat.max, Nat.max, Nat.max_zero_left]
+
+def LamTerm.mkOr (t₁ t₂ : LamTerm) : LamTerm :=
+  .app (.base .prop) (.app (.base .prop) (.base .or) t₁) t₂
+
+theorem LamTerm.maxEVarSucc_mkOr :
+  (mkOr t₁ t₂).maxEVarSucc = max t₁.maxEVarSucc t₂.maxEVarSucc := by
+  dsimp [maxEVarSucc]; rw [Nat.max, Nat.max, Nat.max_zero_left]
+
 def LamTerm.mkImp (t₁ t₂ : LamTerm) : LamTerm :=
   .app (.base .prop) (.app (.base .prop) (.base .imp) t₁) t₂
 
 theorem LamTerm.maxEVarSucc_mkImp :
   (mkImp t₁ t₂).maxEVarSucc = max t₁.maxEVarSucc t₂.maxEVarSucc := by
+  dsimp [maxEVarSucc]; rw [Nat.max, Nat.max, Nat.max_zero_left]
+
+def LamTerm.mkIff (t₁ t₂ : LamTerm) : LamTerm :=
+  .app (.base .prop) (.app (.base .prop) (.base .iff) t₁) t₂
+
+theorem LamTerm.maxEVarSucc_mkIff :
+  (mkIff t₁ t₂).maxEVarSucc = max t₁.maxEVarSucc t₂.maxEVarSucc := by
   dsimp [maxEVarSucc]; rw [Nat.max, Nat.max, Nat.max_zero_left]
 
 def LamTerm.mkEq (s : LamSort) (t₁ t₂ : LamTerm) : LamTerm :=
@@ -1243,6 +1271,30 @@ def LamWF.getArg {ltv : LamTyVal}
   (wft : LamWF ltv ⟨lctx, .app argTy fn arg, resTy⟩) : LamWF ltv ⟨lctx, arg, argTy⟩ :=
   match wft with
   | .ofApp _ _ HArg => HArg
+
+def LamWF.mkNot {ltv : LamTyVal}
+  (wft : LamWF ltv ⟨lctx, t, .base .prop⟩) : LamWF ltv ⟨lctx, .mkNot t, .base .prop⟩ :=
+  LamWF.ofApp _ (.ofBase .ofNot) wft
+
+def LamWF.mkAnd {ltv : LamTyVal}
+  (wft₁ : LamWF ltv ⟨lctx, t₁, .base .prop⟩) (wft₂ : LamWF ltv ⟨lctx, t₂, .base .prop⟩) :
+  LamWF ltv ⟨lctx, .mkAnd t₁ t₂, .base .prop⟩ :=
+  LamWF.ofApp _ (LamWF.ofApp _ (.ofBase .ofAnd) wft₁) wft₂
+
+def LamWF.mkOr {ltv : LamTyVal}
+  (wft₁ : LamWF ltv ⟨lctx, t₁, .base .prop⟩) (wft₂ : LamWF ltv ⟨lctx, t₂, .base .prop⟩) :
+  LamWF ltv ⟨lctx, .mkOr t₁ t₂, .base .prop⟩ :=
+  LamWF.ofApp _ (LamWF.ofApp _ (.ofBase .ofOr) wft₁) wft₂
+
+def LamWF.mkImp {ltv : LamTyVal}
+  (wft₁ : LamWF ltv ⟨lctx, t₁, .base .prop⟩) (wft₂ : LamWF ltv ⟨lctx, t₂, .base .prop⟩) :
+  LamWF ltv ⟨lctx, .mkImp t₁ t₂, .base .prop⟩ :=
+  LamWF.ofApp _ (LamWF.ofApp _ (.ofBase .ofImp) wft₁) wft₂
+
+def LamWF.mkIff {ltv : LamTyVal}
+  (wft₁ : LamWF ltv ⟨lctx, t₁, .base .prop⟩) (wft₂ : LamWF ltv ⟨lctx, t₂, .base .prop⟩) :
+  LamWF ltv ⟨lctx, .mkIff t₁ t₂, .base .prop⟩ :=
+  LamWF.ofApp _ (LamWF.ofApp _ (.ofBase .ofIff) wft₁) wft₂
 
 def LamWF.mkEq {ltv : LamTyVal}
   (wft₁ : LamWF ltv ⟨lctx, t₁, s⟩) (wft₂ : LamWF ltv ⟨lctx, t₂, s⟩) :

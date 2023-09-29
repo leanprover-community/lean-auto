@@ -1,5 +1,6 @@
-import Auto.Embedding.LamConv
 import Auto.Embedding.LamTermInterp
+import Auto.Embedding.LamConv
+import Auto.Embedding.LamPrep
 import Auto.Lib.BinTree
 
 namespace Auto.Embedding.Lam
@@ -441,6 +442,7 @@ inductive ConvStep where
   | validOfHeadBeta (pos : Nat) : ConvStep
   | validOfBetaBounded (pos : Nat) (bound : Nat) : ConvStep
   | validOfExtensionalize (pos : Nat) : ConvStep
+  | validOfEqSymm (pos : Nat) : ConvStep
   | validOfCongrArg (pos rw : Nat) : ConvStep
   | validOfCongrFun (pos rw : Nat) : ConvStep
   | validOfCongr (pos rwFn rwArg : Nat) : ConvStep
@@ -500,6 +502,7 @@ def ConvStep.toString : ConvStep → String
 | .validOfHeadBeta pos => s!"validOfHeadBeta {pos}"
 | .validOfBetaBounded pos bound => s!"validOfBetaBounded {pos} {bound}"
 | .validOfExtensionalize pos => s!"validOfExtensionalize {pos}"
+| .validOfEqSymm pos => s!"validOfEqSymm {pos}"
 | .validOfCongrArg pos rw => s!"validOfCongrArg {pos} {rw}"
 | .validOfCongrFun pos rw => s!"validOfCongrFun {pos} {rw}"
 | .validOfCongr pos rwFn rwArg => s!"validOfCongr {pos} {rwFn} {rwArg}"
@@ -628,6 +631,13 @@ def InferenceStep.evalValidOfInstantiate (n : Nat) (ltv : LamTyVal) (lctx : List
 | .validOfExtensionalize pos =>
   match r.getValid pos with
   | .some (lctx, t) => .addEntry (.valid lctx t.extensionalize)
+  | .none => .fail
+| .validOfEqSymm pos =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    match t.eqSymm? with
+    | .some t' => .addEntry (REntry.valid lctx t')
+    | .none => .fail
   | .none => .fail
 | .validOfCongrArg pos rw =>
   match r.getValid pos with
@@ -949,6 +959,23 @@ theorem ConvStep.eval_correct
         apply LamThmEquiv.ofExtensionalize (LamThmWF.ofLamThmValid hv)
       case condimp =>
         intro hcond; rw [LamTerm.maxEVarSucc_extensionalizeAux]; exact hcond
+| .validOfEqSymm pos => by
+  dsimp [eval]
+  cases h₁ : r.getValid pos <;> try exact True.intro
+  case some lctxt =>
+    match lctxt with
+    | (lctx, t) =>
+      dsimp
+      match h₂ : t.eqSymm? with
+      | .some t' =>
+        have h' := RTable.getValid_correct inv h₁
+        apply ChkStep.eval_correct_validAux h'
+        case vimp =>
+          intro hv; apply LamThmValid.mpLamThmEquiv _ _ hv
+          apply LamThmEquiv.eqSymm? (LamThmWF.ofLamThmValid hv) h₂
+        case condimp =>
+          intro hcond; rw [LamTerm.maxEVarSucc_eqSymm? h₂]; exact hcond
+      | .none => exact True.intro
 | .validOfCongrArg pos rw => by
   dsimp [eval]
   match hpos : r.getValid pos with

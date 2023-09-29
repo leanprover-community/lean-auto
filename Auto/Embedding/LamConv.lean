@@ -281,6 +281,60 @@ theorem LamEquiv.congr_mkForallEFN
     apply LamEquiv.forall_congr; apply Eq.mp _ H
     rw [pushLCtxs_cons]
 
+def LamTerm.eqSymm? (t : LamTerm) : Option LamTerm :=
+  match t with
+  | .app s (.app _ (.base (.eq _)) lhs) rhs => .some (.app s (.app s (.base (.eq s)) rhs) lhs)
+  | _ => .none
+
+theorem LamTerm.maxEVarSucc_eqSymm?
+  (heq : LamTerm.eqSymm? t = .some t') : t'.maxEVarSucc = t.maxEVarSucc := by
+  cases t <;> try cases heq
+  case app s fn arg =>
+    cases fn <;> try cases heq
+    case app s' fn' arg' =>
+      cases fn' <;> try cases heq
+      case base b =>
+        cases b <;> try cases heq
+        simp [maxEVarSucc, Nat.max, Nat.max_zero_left]
+        apply Nat.max_comm
+
+def LamWF.eqSymm?
+  (wft : LamWF ltv ⟨lctx, t, s⟩) (heq : t.eqSymm? = .some t') :
+  LamWF ltv ⟨lctx, t', s⟩ := by
+  cases t <;> try cases heq
+  case app s fn arg =>
+    cases fn <;> try cases heq
+    case app s' fn' arg' =>
+      cases fn' <;> try cases heq
+      case base b =>
+        cases b <;> try cases heq
+        cases wft.getFn.getFn.getBase
+        match wft with
+        | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) Hlhs) Hrhs =>
+          exact LamWF.mkEq Hrhs Hlhs
+
+theorem LamEquiv.eqSymm?
+  (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩) (heq : t.eqSymm? = .some t') :
+  LamEquiv lval lctx (.base .prop) t t' := by
+  cases t <;> try cases heq
+  case app s fn arg =>
+    cases fn <;> try cases heq
+    case app s' fn' arg' =>
+      cases fn' <;> try cases heq
+      case base b =>
+        cases b <;> try cases heq
+        cases wft.getFn.getFn.getBase
+        match wft with
+        | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) Hlhs) Hrhs =>
+          exists LamWF.mkEq Hlhs Hrhs; exists LamWF.mkEq Hrhs Hlhs
+          intro lctxTerm; apply GLift.down.inj; apply propext
+          apply Iff.intro Eq.symm Eq.symm
+
+theorem LamThmEquiv.eqSymm?
+  (wft : LamThmWF lval lctx s t) (heq : t.eqSymm? = .some t') :
+  LamThmEquiv lval lctx (.base .prop) t t' :=
+  fun lctx' => LamEquiv.eqSymm? (wft lctx') heq
+
 def LamTerm.app_bvarLift_bvar0 (s : LamSort) (t : LamTerm) : LamTerm :=
   .app s t.bvarLift (.bvar 0)
 
