@@ -68,28 +68,6 @@ example
   {α : Type u} (as bs cs : List α) : (as ++ bs) ++ cs = as ++ (bs ++ cs) := by
   auto
 
-open Auto in
-set_option trace.auto.mono.printConstInst true in
-example
-  (Vector8 : Type u → Type u)
-  (map : ∀ {α} {β} (f : α → β), Vector8 α → Vector8 β)
-  (zip : ∀ {α} {β}, Vector8 α → Vector8 β → Vector8 (α × β))
-  (zip_map_prod_fst : ∀ {α} {β} (xs : Vector8 α) (ys : Vector8 β),
-    map Prod.fst (zip xs ys) = xs)
-  (zip_map_prod_snd : ∀ {α} {β} (xs : Vector8 α) (ys : Vector8 β),
-    map Prod.snd (zip xs ys) = ys)
-  (as bs cs ds : Vector8 α)
-  (h : ∀ (δ : Type _) (f₁ f₂ f₃ f₄ : δ → α) (xs : Vector8 δ),
-    map f₁ xs = as ∧ map f₂ xs = bs ∧ map f₃ xs = cs ∧ map f₄ xs = ds → False) :
-  False := by
-  -- `auto` cannot properly find the expected instantiations because
-  --   we do not collect partially instantiated polymorphic constants
-  --   (i.e. polymorphic constants with some dependent arguments instantiated
-  --    and some dependent arguments not instantiated)
-  --   and we do not match against instances of polymorphic logical constants
-  --   (i.e. `∀, ∃, =`)
-  intromono [zip_map_prod_fst, zip_map_prod_snd, h]; sorry
-
 section MonomorphizationWierdExample
 
   def List.directZip : {α : Type u} → List α → {β : Type v} → List β → List (α × β)
@@ -98,8 +76,8 @@ section MonomorphizationWierdExample
     | _, _::_, _, [] => []
     | _, x::xs, _, y::ys => (x,y) :: directZip xs ys
 
-  def prod_eq₁' : ∀ (x : α) (y : β), Prod.fst (x, y) = x := sorry
-  def prod_eq₂' : ∀ (x : α) (y : β), Prod.snd (x, y) = y := sorry
+  def prod_eq₁' : ∀ (x : α) (y : β), Prod.fst (x, y) = x := by auto
+  def prod_eq₂' : ∀ (x : α) (y : β), Prod.snd (x, y) = y := by auto
 
   set_option auto.mono.saturationThreshold 800 in
   example

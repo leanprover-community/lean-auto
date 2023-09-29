@@ -893,7 +893,7 @@ section BuildChecker
       let vExpr := Lean.toExpr (← lookupREntryPos! re)
       let eqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr (lctx, t)]]
       let getEntry := Lean.mkApp7 (.const ``Checker.getValidExport_directReduce [u])
-        (Lean.toExpr lctx) (Lean.toExpr t) cpvExpr itExpr csExpr vExpr eqExpr
+        (Lean.toExpr lctx) (Lean.toExpr t) cpvFVarExpr itExpr csExpr vExpr eqExpr
       let getEntry ← Meta.mkLetFVars #[cpvFVarExpr] getEntry
       trace[auto.buildChecker] "Checker expression built in time {(← IO.monoMsNow) - startTime}ms"
       return getEntry
@@ -920,7 +920,7 @@ section BuildChecker
       let hLitExpr ← Meta.mkAppM ``Eq.refl #[litExpr]
       let heqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr (lctx, t)]]
       let getEntry := Lean.mkAppN (.const ``Checker.getValidExport_indirectReduce [u])
-        #[cpvExpr, itExpr, csExpr, vExpr, ifExpr, hImportExpr,
+        #[cpvFVarExpr, itExpr, csExpr, vExpr, ifExpr, hImportExpr,
           lvtExpr, litExpr, hLvtExpr, hLitExpr, Lean.toExpr lctx, Lean.toExpr t, heqExpr]
       let getEntry ← Meta.mkLetFVars #[cpvFVarExpr] getEntry
       trace[auto.buildChecker] "Checker expression built in time {(← IO.monoMsNow) - startTime}ms"
@@ -980,7 +980,7 @@ section BuildChecker
       let heqRflPrf ← Meta.mkEqRefl (toExpr true)
       let heqExpr := mkApp3 (Lean.mkConst ``Lean.ofReduceBool) (Lean.mkConst heqNativeName) (toExpr true) heqRflPrf
       let getEntry := Lean.mkAppN (.const ``Checker.getValidExport_indirectReduce_reflection [u])
-        #[cpvExpr, itExpr, csExpr, vExpr, ifExpr, hImportExpr,
+        #[cpvFVarExpr, itExpr, csExpr, vExpr, ifExpr, hImportExpr,
           lvtExpr, litExpr, hLvtExpr, hLitExpr, Lean.toExpr lctx, Lean.toExpr t, heqExpr]
       let getEntry ← Meta.mkLetFVars #[cpvFVarExpr] getEntry
       trace[auto.buildChecker] "Checker expression built in time {(← IO.monoMsNow) - startTime}ms"
