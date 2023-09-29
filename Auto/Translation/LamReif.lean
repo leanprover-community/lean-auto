@@ -1181,6 +1181,7 @@ open Embedding.Lam LamReif
       | .validOfHeadBeta pos => return .validOfHeadBeta (← transPos ref pos)
       | .validOfBetaBounded pos bound => return .validOfBetaBounded (← transPos ref pos) bound
       | .validOfExtensionalize pos => return .validOfExtensionalize (← transPos ref pos)
+      | .validOfEqSymm pos => return .validOfEqSymm (← transPos ref pos)
       | .validOfCongrArg pos rw => return .validOfCongrArg (← transPos ref pos) (← transPos ref rw)
       | .validOfCongrFun pos rw => return .validOfCongrFun (← transPos ref pos) (← transPos ref rw)
       | .validOfCongr pos rwFn rwArg => return .validOfCongr (← transPos ref pos) (← transPos ref rwFn) (← transPos ref rwArg)
