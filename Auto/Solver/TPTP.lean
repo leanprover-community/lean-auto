@@ -43,10 +43,9 @@ def querySolver (query : String) : MetaM Unit := do
   let name := tptp.solver.name.get (← getOptions)
   let solver ← createSolver name
   solver.stdin.putStr s!"{query}\n"
-  -- TODO
-  throwError "Ouch"
-  let line ← solver.stdout.getLine
-  trace[auto.tptp.result] "Result: {line}"
+  let (_, solver) ← solver.takeStdin
+  let result ← solver.stdout.readToEnd
+  trace[auto.tptp.result] "Result: {result}"
   solver.kill
 
 end Solver.TPTP
