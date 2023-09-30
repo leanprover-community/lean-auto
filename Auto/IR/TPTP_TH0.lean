@@ -28,31 +28,38 @@ def transCstrReal : CstrReal → String
 def transBitvec (bv : List Bool) : String :=
   String.join (bv.map (fun x => if x then "1" else "0"))
 
-def transLamBaseTerm : LamBaseTerm → String
-| .trueE      => s!"$true"
-| .falseE     => s!"$false"
-| .not        => s!"(~)"
-| .and        => s!"(&)"
-| .or         => s!"(|)"
-| .imp        => s!"(=>)"
-| .iff        => s!"(=)" -- Zipperposition seems buggy on (<=>)
-| .intVal n   => s!"{n}"
-| .realVal cr => s!"{transCstrReal cr}"
-| .bvVal v    => s!"t_bv{transBitvec v}" 
-| .eqI _      => s!"(=)"
-| .forallEI _ => s!"!!"
-| .existEI _  => s!"??"
-| .eq _       => s!"(=)"
-| .forallE _  => s!"!!"
-| .existE _   => s!"??"
+def transLamBaseTerm : LamBaseTerm → Except String String
+| .trueE      => .ok s!"$true"
+| .falseE     => .ok s!"$false"
+| .not        => .ok s!"(~)"
+| .and        => .ok s!"(&)"
+| .or         => .ok s!"(|)"
+| .imp        => .ok s!"(=>)"
+| .iff        => .ok s!"(=)" -- Zipperposition seems buggy on (<=>)
+| .intVal n   => .ok s!"{n}"
+| .realVal cr => .ok s!"{transCstrReal cr}"
+| .bvVal v    => .ok s!"t_bv{transBitvec v}"
+| .eqI _      => .error "transLamBaseTerm :: eqI should not occur here"
+| .forallEI _ => .error "transLamBaseTerm :: forallEI should not occur here"
+| .existEI _  => .error "transLamBaseTerm :: existEI should not occur here"
+| .eq _       => .ok s!"(=)"
+| .forallE _  => .ok s!"!!"
+| .existE _   => .ok s!"??"
 
-def transLamTerm (t : LamTerm) (lctx := 0) : String :=
+def transLamTerm (t : LamTerm) (lctx := 0) : Except String String :=
   match t with
-  | .atom n      => s!"t_a{n}"
-  | .etom n      => s!"t_e{n}"
+  | .atom n      => .ok s!"t_a{n}"
+  | .etom n      => .ok s!"t_e{n}"
   | .base b      => transLamBaseTerm b
-  | .bvar n      => s!"X{lctx - n}"
-  | .lam s t     => s!"(^ [X{lctx + 1} : {transLamSort s}] : {transLamTerm t (lctx + 1)})"
-  | .app _ t₁ t₂ => s!"({transLamTerm t₁ lctx} @ {transLamTerm t₂ lctx})"
+  | .bvar n      => .ok s!"X{lctx - n}"
+  | .lam s t     =>
+    match transLamTerm t (lctx + 1) with
+    | .ok ts => .ok s!"(^ [X{lctx + 1} : {transLamSort s}] : {ts})"
+    | .error e => .error e
+  | .app _ t₁ t₂ =>
+    match transLamTerm t₁ lctx, transLamTerm t₂ lctx with
+    | .ok t₁s, .ok t₂s => .ok s!"({t₁s} @ {t₂s})"
+    | .error e, _ => .error e
+    | .ok _, .error e => .error e
 
 end Auto.Lam2TH0

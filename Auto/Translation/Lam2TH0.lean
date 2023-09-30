@@ -20,8 +20,10 @@ def lam2TH0 (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort) (facts : Arra
       let .some s := lamEVarTy.get? i
         | throwError "lam2TH0 :: Unexpected error"
       return s!"thf(typedecl_t_e{i}, type, t_e{i}: {transLamSort s})."))
-  let facts := facts.zipWithIndex.map (fun (t, i) =>
-    s!"thf(fact{i}, axiom, {transLamTerm t}).")
+  let facts ← facts.zipWithIndex.mapM (fun (t, i) =>
+    match transLamTerm t with
+    | .ok ts => return s!"thf(fact{i}, axiom, {ts})."
+    | .error e => throwError e)
   let sep := "\n"
   return s!"{String.intercalate sep sorts}\n\n{String.intercalate sep types}\n\n{String.intercalate sep facts.data}"
 
