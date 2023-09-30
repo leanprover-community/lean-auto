@@ -1,5 +1,7 @@
 import Auto.Embedding.LamTermInterp
 import Auto.Embedding.LamConv
+import Auto.Embedding.LamInference
+import Auto.Embedding.LamLCtx
 import Auto.Embedding.LamPrep
 import Auto.Lib.BinTree
 

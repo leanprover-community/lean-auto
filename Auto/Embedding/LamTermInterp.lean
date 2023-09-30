@@ -1,4 +1,4 @@
-import Auto.Embedding.LamBase
+import Auto.Embedding.LamSystem
 import Auto.Lib.MonadUtils
 import Auto.Lib.MetaState
 open Lean
