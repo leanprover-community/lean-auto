@@ -459,7 +459,7 @@ theorem LamTerm.maxEVarSucc_iff_equiv_eq?
 
 theorem LamEquiv.iff_equiv_eq?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
-  (heq : LamTerm.iff_equiv_eq?  t = .some t') :
+  (heq : LamTerm.iff_equiv_eq? t = .some t') :
   LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.app _ (.base .iff) lhs) rhs, Eq.refl _ => by

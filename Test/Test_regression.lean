@@ -3,6 +3,8 @@ import Auto.Tactic
 set_option auto.prep.redMode "reducible"
 set_option trace.auto.lamReif.printResult true
 set_option trace.auto.lamReif.printValuation true
+set_option trace.auto.tptp.printQuery true
+set_option trace.auto.tptp.result true
 
 -- Manual Check
 

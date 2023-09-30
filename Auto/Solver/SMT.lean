@@ -90,10 +90,12 @@ def querySolver (query : Array IR.SMT.Command) : MetaM Unit := do
   | .atom (.symb "sat") =>
     emitCommand solver .getModel
     let model ← getSexp solver
+    solver.kill
     trace[auto.smt.result] "{name} says Sat, model:\n {model}"
   | .atom (.symb "unsat") =>
     emitCommand solver .getProof
     let proof ← getSexp solver
+    solver.kill
     trace[auto.smt.result] "{name} says Unsat, proof:\n {proof}"
   | _ => trace[auto.smt.result] "{name} produces unexpected check-sat response\n {checkSatResponse}"
 

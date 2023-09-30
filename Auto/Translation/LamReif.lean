@@ -1009,7 +1009,7 @@ section ExportUtils
   | .func a b => (collectLamSortAtoms a).insertMany (collectLamSortAtoms b)
 
   -- Collect type atoms in a LamBaseTerm
-  def collectLamBaseTermAtoms (b : LamBaseTerm) : MetaM (HashSet Nat) := do
+  def collectLamBaseTermAtoms (b : LamBaseTerm) : CoreM (HashSet Nat) := do
     let s? : Option LamSort ← (do
       match b with
       | .eqI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
@@ -1026,14 +1026,15 @@ section ExportUtils
 
   -- The first hashset is the type atoms
   -- The second hashset is the term atoms
+  -- The third hashset is the term etoms
   -- This function is called when we're trying to export terms
   --   from `λ` to external provers, e.g. Lean/Duper
   -- Therefore, we expect that `eqI, forallEI` and `existEI`
   --   does not occur in the `LamTerm`
-  def collectAtoms (varVal : Array (Expr × LamSort)) (lamEVarTy : Array LamSort) :
-    LamTerm → MetaM (HashSet Nat × HashSet Nat × HashSet Nat)
+  def collectLamTermAtoms (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort) :
+    LamTerm → CoreM (HashSet Nat × HashSet Nat × HashSet Nat)
   | .atom n => do
-    let .some (_, s) := varVal[n]?
+    let .some s := lamVarTy[n]?
       | throwError "collectAtoms :: Unknown term atom {n}"
     return (collectLamSortAtoms s, HashSet.empty.insert n, HashSet.empty)
   | .etom n => do
@@ -1044,15 +1045,34 @@ section ExportUtils
     return (← collectLamBaseTermAtoms b, HashSet.empty, HashSet.empty)
   | .bvar _ => pure (HashSet.empty, HashSet.empty, HashSet.empty)
   | .lam s t => do
-    let (typeHs, termHs, etomHs) ← collectAtoms varVal lamEVarTy t
+    let (typeHs, termHs, etomHs) ← collectLamTermAtoms lamVarTy lamEVarTy t
     let sHs := collectLamSortAtoms s
     return (mergeHashSet typeHs sHs, termHs, etomHs)
   | .app _ t₁ t₂ => do
-    let (typeHs₁, termHs₁, etomHs₁) ← collectAtoms varVal lamEVarTy t₁
-    let (typeHs₂, termHs₂, etomHs₂) ← collectAtoms varVal lamEVarTy t₂
+    let (typeHs₁, termHs₁, etomHs₁) ← collectLamTermAtoms lamVarTy lamEVarTy t₁
+    let (typeHs₂, termHs₂, etomHs₂) ← collectLamTermAtoms lamVarTy lamEVarTy t₂
     return (mergeHashSet typeHs₁ typeHs₂,
             mergeHashSet termHs₁ termHs₂,
             mergeHashSet etomHs₁ etomHs₂)
+
+  def collectLamTermsAtoms (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort)
+    (ts : Array LamTerm) : CoreM (HashSet Nat × HashSet Nat × HashSet Nat) :=
+    ts.foldlM (fun (tyHs, aHs, eHs) t => do
+      let (tyHs', aHs', eHs') ← collectLamTermAtoms lamVarTy lamEVarTy t
+      return (mergeHashSet tyHs tyHs', mergeHashSet aHs aHs', mergeHashSet eHs eHs'))
+      (HashSet.empty, HashSet.empty, HashSet.empty)
+
+  def collectLamTermBitvecs : LamTerm → HashSet (List Bool)
+  | .base b =>
+    match b with
+    | .bvVal l => HashSet.empty.insert l
+    | _ => HashSet.empty
+  | .lam _ body => collectLamTermBitvecs body
+  | .app _ fn arg => mergeHashSet (collectLamTermBitvecs fn) (collectLamTermBitvecs arg)
+  | _ => HashSet.empty
+
+  def collectLamTermsBitvecs (ts : Array LamTerm) : HashSet (List Bool) :=
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermBitvecs t)) HashSet.empty
 
 end ExportUtils
 

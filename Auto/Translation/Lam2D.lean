@@ -176,11 +176,7 @@ def interpLamTermAsUnlifted (lctx : Nat) : LamTerm → ExternM Expr
 def withTranslatedLamTerms (ts : Array LamTerm) : ExternM (Array Expr) := do
   let varVal ← getVarVal
   let lamEVarTy ← getLamEVarTy
-  let hss ← runMetaM <| ts.mapM (fun t => do collectAtoms varVal lamEVarTy t)
-  let (typeHs, termHs, etomHs) := hss.foldl
-    (fun (typeHs, termHs, etomHs) (typeHs', termHs', etomHs') =>
-        (mergeHashSet typeHs typeHs', mergeHashSet termHs termHs', mergeHashSet etomHs etomHs'))
-        (HashSet.empty, HashSet.empty, HashSet.empty)
+  let (typeHs, termHs, etomHs) ← runMetaM <| collectLamTermsAtoms (varVal.map Prod.snd) lamEVarTy ts
   withTypeAtomsAsFVar typeHs.toArray
   withTermAtomsAsFVar termHs.toArray
   withEtomsAsFVar etomHs.toArray

@@ -1,6 +1,7 @@
 import Lean
 import Auto.Translation
 import Auto.Solver.SMT
+import Auto.Solver.TPTP
 import Auto.HintDB
 open Lean Elab Tactic
 
@@ -216,6 +217,18 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
       let exportFacts ← exportFacts.mapM LamReif.validOfExtensionalize
       let exportFacts ← exportFacts.mapM LamReif.validOfBetaReduce
       let exportFacts ← exportFacts.mapM LamReif.validOfRevertAll
+      -- ! tptp
+      try
+        let lamVarTy := (← LamReif.getVarVal).map Prod.snd
+        let lamEVarTy ← LamReif.getLamEVarTy
+        let exportLamTerms ← exportFacts.mapM (fun re => do
+          match re.getValid? with
+          | .some ([], t) => return t | _ => throwError "runAuto :: Unexpected error")
+        let query ← lam2TH0 lamVarTy lamEVarTy exportLamTerms
+        trace[auto.tptp.printQuery] "Query:\n{query}"
+        Solver.TPTP.querySolver query
+      catch e =>
+        trace[auto.tptp.result] "TPTP invocation failed with {e.toMessageData}"
       -- ! smt
       -- try
       --   let lamVarTy := (← LamReif.getVarVal).map Prod.snd
