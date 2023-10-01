@@ -40,7 +40,7 @@ example (a b c d : ℝ) (h1 : a < b) : Set.Icc a b ⊆ Set.Ico c d ↔ c ≤ a �
 
 set_option trace.auto.lamReif.printValuation true in
 example : f '' s ⊆ v ↔ s ⊆ f ⁻¹' v := by
-  auto [Set.subset_def, Set.mem_image f, Set.mem_preimage]
+  auto [Set.subset_def, Set.mem_image, Set.mem_preimage]
 
 example (h : Function.Injective f) : f ⁻¹' (f '' s) ⊆ s := by
   auto [Set.subset_def, Set.mem_preimage, Function.Injective.mem_set_image, h]

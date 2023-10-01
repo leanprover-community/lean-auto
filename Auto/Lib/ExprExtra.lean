@@ -199,6 +199,22 @@ def Expr.whnfIfNotForall (e : Expr) : MetaM Expr := do
   else
     return (← Meta.whnf e)
 
+def Expr.formatWithUsername (e : Expr) : MetaM Format := do
+  let fvarIds := (collectFVars {} e).fvarIds
+  let names ← fvarIds.mapM (fun fid => do
+    match ← fid.findDecl? with
+    | .some decl => return decl.userName
+    | .none => throwError "Expr.formatWithUsername :: Unknown free variable {(Expr.fvar fid).dbgToString}")
+  let e := e.replaceFVars (fvarIds.map Expr.fvar) (names.map (Expr.const · []))
+  let e ← instantiateMVars e
+  let mvarIds := (Expr.collectMVars {} e).result
+  let names ← mvarIds.mapM (fun mid => do
+    match ← mid.findDecl? with
+    | .some decl => return decl.userName
+    | .none => throwError "xpr.formatWithUsername :: Unknown metavariable {(Expr.mvar mid).dbgToString}")
+  let e := (e.abstract (mvarIds.map Expr.mvar)).instantiateRev (names.map (Expr.const · []))
+  return f!"{e}"
+
 -- `ident` must be of type `Expr → TermElabM Unit`
 -- Compiles `term` into `Expr`, then applies `ident` to it
 syntax (name := getExprAndApply) "#getExprAndApply" "[" term "|" ident "]" : command
