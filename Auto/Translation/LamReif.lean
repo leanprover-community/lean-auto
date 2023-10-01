@@ -553,6 +553,26 @@ section Checker
       | throwError "validOfExtensionalize :: Unexpected evaluation result"
     return re
 
+  def validOfElimBVar (v : REntry) (n : REntry) : ReifM REntry := do
+    let pv ← lookupREntryPos! v
+    let pn ← lookupREntryPos! n
+    let (_, .addEntry re) ← newChkStep (.i (.validOfElimBVar pv pn)) .none
+      | throwError "validOfElimBVar :: Unexpected evaluation result"
+    return re
+
+  def validOfElimBVars (v : REntry) (ns : Array REntry) : ReifM REntry := do
+    let pv ← lookupREntryPos! v
+    let pns ← ns.mapM lookupREntryPos!
+    let (_, .addEntry re) ← newChkStep (.i (.validOfElimBVars pv pns.data)) .none
+      | throwError "validOfElimBVars :: Unexpected evaluation result"
+    return re
+
+  -- Given `∀ (_ : s₀) (_ : s₁) ⋯ (_ : sₖ₋₁), body` and the fact
+  --   that `s₀, s₁, ⋯, sₖ₋₁` are nonempty, return a proof of `body`
+  def validOfElimForalls (v : REntry) (ns : Array REntry) : ReifM REntry := do
+    let introed ← validOfIntros v ns.size
+    validOfElimBVars introed ns.reverse
+
   def validOfImp (v₁₂ : REntry) (v₁ : REntry) : ReifM REntry := do
     let p₁₂ ← lookupREntryPos! v₁₂
     let p₁ ← lookupREntryPos! v₁
@@ -1019,6 +1039,9 @@ section ExportUtils
   | .base _ => HashSet.empty
   | .func a b => (collectLamSortAtoms a).insertMany (collectLamSortAtoms b)
 
+  def collectLamSortsAtoms (ss : Array LamSort) : HashSet Nat :=
+    ss.foldl (fun hs s => hs.insertMany (collectLamSortAtoms s)) HashSet.empty
+
   -- Collect type atoms in a LamBaseTerm
   def collectLamBaseTermAtoms (b : LamBaseTerm) : CoreM (HashSet Nat) := do
     let s? : Option LamSort ← (do
@@ -1225,6 +1248,8 @@ open Embedding.Lam LamReif
       | .define t => return .define (← transLamTerm ref t)
     | .i cs => ChkStep.i <$>
       match cs with
+      | .validOfElimBVar pv pn => return .validOfElimBVar (← transPos ref pv) (← transPos ref pn)
+      | .validOfElimBVars pv pns => return .validOfElimBVars (← transPos ref pv) (← pns.mapM (transPos ref))
       | .validOfImp p₁₂ p₁ => return .validOfImp (← transPos ref p₁₂) (← transPos ref p₁)
       | .validOfImps imp ps => return .validOfImps (← transPos ref imp) (← ps.mapM (transPos ref))
       | .validOfInstantiate1 pos arg => return .validOfInstantiate1 (← transPos ref pos) (← transLamTerm ref arg)

@@ -70,11 +70,6 @@ instance : LawfulBEq REntry where
   eq_of_beq := REntry.eq_of_beq_eq_true
   rfl := REntry.beq_refl
 
-def REntry.getValid? : REntry → Option (List LamSort × LamTerm)
-| .wf _ _ _ => .none
-| .valid ss t => .some (ss, t)
-| .nonempty _ => .none
-
 -- Table of valid propositions and well-formed formulas
 -- Note that `Auto.BinTree α` is equivalent to `Nat → Option α`,
 --   which means that `.some` entries may be interspersed

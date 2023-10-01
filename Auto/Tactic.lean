@@ -211,8 +211,9 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
   | .none =>
     let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) : LamReif.ReifM Expr := (do
       let exportFacts ← LamReif.reifFacts uvalids
-      let exportInhs ← LamReif.reifInhabitations uinhs
       let exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
+      let exportInhs ← LamReif.reifInhabitations uinhs
+      let exportInhs := exportInhs.map Embedding.Lam.REntry.nonempty
       let exportFacts ← exportFacts.mapM LamReif.skolemizeMostIntoForall
       let exportFacts ← exportFacts.mapM LamReif.validOfExtensionalize
       let exportFacts ← exportFacts.mapM LamReif.validOfBetaReduce
@@ -222,8 +223,9 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
         let lamVarTy := (← LamReif.getVarVal).map Prod.snd
         let lamEVarTy ← LamReif.getLamEVarTy
         let exportLamTerms ← exportFacts.mapM (fun re => do
-          match re.getValid? with
-          | .some ([], t) => return t | _ => throwError "runAuto :: Unexpected error")
+          match re with
+          | .valid [] t => return t
+          | _ => throwError "runAuto :: Unexpected error")
         let query ← lam2TH0 lamVarTy lamEVarTy exportLamTerms
         trace[auto.tptp.printQuery] "Query:\n{query}"
         Solver.TPTP.querySolver query
@@ -243,11 +245,12 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
       -- catch e =>
       --   trace[auto.smt.result] "SMT invocation failed with {e.toMessageData}"
       -- reconstruction
-      let (proof, proofLamTerm, usedEtoms, unsatCore) ← Lam2D.callDuper exportFacts
+      let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ← Lam2D.callDuper exportInhs exportFacts
       trace[auto.printProof] "Duper found proof of {← Meta.inferType proof}"
       LamReif.newAssertion proof proofLamTerm
       let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
-      let contra ← LamReif.validOfImps etomInstantiated unsatCore
+      let forallElimed ← LamReif.validOfElimForalls etomInstantiated usedInhs
+      let contra ← LamReif.validOfImps forallElimed unsatCore
       LamReif.printValuation
       LamReif.printProofs
       Reif.setDeclName? declName?

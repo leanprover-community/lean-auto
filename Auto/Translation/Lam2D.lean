@@ -170,6 +170,11 @@ def interpLamTermAsUnlifted (lctx : Nat) : LamTerm → ExternM Expr
 | .app _ fn arg => do
   return .app (← interpLamTermAsUnlifted lctx fn) (← interpLamTermAsUnlifted lctx arg)
 
+def withTranslatedLamSorts (ss : Array LamSort) : ExternM (Array Expr) := do
+  let typeHs := collectLamSortsAtoms ss
+  withTypeAtomsAsFVar typeHs.toArray
+  ss.mapM interpLamSortAsUnlifted
+
 -- The external prover should only see the local context
 --   and an array of Lean expressions, and should not see
 --   anything within `ExternM, LamReif.ReifM, ULiftM` or `Reif.ReifM`
@@ -232,11 +237,18 @@ private def callDuperMetaMAction (lemmas : Array (Expr × Expr × Array Name)) :
   | .unknown => throwError "callDuper :: Duper was terminated"
 
 --Meta.mkLambdaFVars (fvars.map (.fvar ·)) expr
-private def callDuperExternMAction (res : Array REntry) :
-  ExternM (Expr × LamTerm × Array Nat × Array REntry) := do
-  let ts ← res.mapM (fun re => do
-    match re.getValid? with
-    | .some ([], t) => return t
+private def callDuperExternMAction (nonempties : Array REntry) (valids : Array REntry) :
+  ExternM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := do
+  let ss ← nonempties.mapM (fun re => do
+    match re with
+    | .nonempty s => return s
+    | _ => throwError "callDuperExternMAction :: {re} is not a `nonempty` entry")
+  let inhs ← withTranslatedLamSorts ss
+  let inhs ← runMetaM <| Meta.withTransparency .reducible <| inhs.mapM (fun e => Meta.reduceAll e)
+  let inhFVars ← withHyps inhs
+  let ts ← valids.mapM (fun re => do
+    match re with
+    | .valid [] t => return t
     | _ => throwError "callDuperExternMAction :: {re} is not a `valid` entry")
   let hyps ← withTranslatedLamTerms ts
   for hyp in hyps do
@@ -246,8 +258,6 @@ private def callDuperExternMAction (res : Array REntry) :
       throwError "callDuper :: Hypothesis {hyp} is not a proposition"
   let hyps ← runMetaM <| Meta.withTransparency .reducible <| hyps.mapM (fun e => Meta.reduceAll e)
   let hypFvars ← withHyps hyps
-  if hyps.size != hypFvars.size then
-    throwError "callDuper :: Unexpected error"
   let lemmas : Array (Expr × Expr × Array Name) ← (hyps.zip hypFvars).mapM
     (fun (ty, proof) => do return (ty, ← runMetaM <| Meta.mkAppM ``eq_true #[.fvar proof], #[]))
   -- Note that we're not introducing bound variables into local context
@@ -258,10 +268,15 @@ private def callDuperExternMAction (res : Array REntry) :
   runMetaM (do
     let mut expr ← callDuperMetaMAction lemmas
     let mut usedHyps := []
-    for (fvar, re_t) in (hypFvars.zip (res.zip ts)).reverse do
+    for (fvar, re_t) in (hypFvars.zip (valids.zip ts)).reverse do
       if expr.hasAnyFVar (· == fvar) then
         expr ← Meta.mkLambdaFVars #[.fvar fvar] expr
         usedHyps := re_t :: usedHyps
+    let mut usedInhs := []
+    for (fvar, re_s) in (inhFVars.zip (nonempties.zip ss)).reverse do
+      if expr.hasAnyFVar (· == fvar) then
+        expr ← Meta.mkLambdaFVars #[.fvar fvar] expr
+        usedInhs := re_s :: usedInhs
     let mut usedEtoms := []
     for (fvar, eidx) in etomsToAbstract do
       if expr.hasAnyFVar (· == fvar) then
@@ -273,28 +288,39 @@ private def callDuperExternMAction (res : Array REntry) :
         expr ← Meta.mkLambdaFVars #[.fvar fvar] expr
         usedVals := val :: usedVals
     let proofLamTermPre := (Array.mk usedHyps).foldr (fun (_, t') t => t'.mkImp t) (.base .falseE)
+    let proofLamTermPre := (Array.mk usedInhs).foldr (fun (_, s) t => t.mkForallEF s) proofLamTermPre
     let proofLamTermPre := proofLamTermPre.abstractsRevImp ((Array.mk usedEtoms).map LamTerm.etom)
     let usedEtomTys ← usedEtoms.mapM (fun etom => do
       let .some ty := lamEVarTy[etom]?
         | throwError "callDuper :: Unexpected error"
       return ty)
     let proofLamTerm := usedEtomTys.foldr (fun s cur => LamTerm.mkForallEF s cur) proofLamTermPre
-    return (mkAppN expr ⟨usedVals⟩, proofLamTerm, ⟨usedEtoms⟩, ⟨usedHyps.map Prod.fst⟩))
+    return (mkAppN expr ⟨usedVals⟩, proofLamTerm, ⟨usedEtoms⟩, ⟨usedInhs.map Prod.fst⟩, ⟨usedHyps.map Prod.fst⟩))
 
--- Given `ts = #[t₀, t₁, ⋯, kₖ₋₁]`, invoke Duper to get a proof 
---   `proof : (s₀ → s₁ → ⋯ → sₗ₋₁ → ⊥).interp`, and returns
---       `((fun etoms => proof), (∀ etoms, s₀ → s₁ → ⋯ → sₗ₋₁ → ⊥), etoms, [s₀, s₁, ⋯, sₗ₋₁])`
--- Here `[s₀, s₁, ⋯, sₗ₋₁]` is a subsequence of `[t₀, t₁, ⋯, kₖ₋₁]`, and
---   `etoms` are all the etoms present in `s₀ → s₁ → ⋯ → sₗ₋₁ → ⊥`
+-- Given
+-- · `nonempties = #[s₀, s₁, ⋯, sᵤ₋₁]`
+-- · `valids = #[t₀, t₁, ⋯, kₖ₋₁]`
+-- Invoke Duper to get a proof of
+--   `proof : (∀ (_ : v₀) (_ : v₁) ⋯ (_ : vᵤ₋₁), w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥).interp`
+-- and returns
+-- · `fun etoms => proof`
+-- · `∀ etoms, ∀ (_ : v₀) (_ : v₁) ⋯ (_ : vᵤ₋₁), w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥)`
+-- · `etoms`
+-- · `[s₀, s₁, ⋯, sᵤ₋₁]`
+-- · `[w₀, w₁, ⋯, wₗ₋₁]`
+-- Here
+-- · `[v₀, v₁, ⋯, vᵤ₋₁]` is a subsequence of `[s₀, s₁, ⋯, sᵤ₋₁]`
+-- · `[w₀, w₁, ⋯, wₗ₋₁]` is a subsequence of `[t₀, t₁, ⋯, kₖ₋₁]`
+-- · `etoms` are all the etoms present in `w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥`
 -- It is important to add `Meta.withNewMCtxDepth`, otherwise exprmvars
 --   or levelmvars of the current level will be assigned, and we'll
 --   get weird proof reconstruction error
-def callDuper (ts : Array REntry) :
-  ReifM (Expr × LamTerm × Array Nat × Array REntry) := Meta.withNewMCtxDepth <| do
+def callDuper (nonempties : Array REntry) (valids : Array REntry) :
+  ReifM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := Meta.withNewMCtxDepth <| do
   let tyVal ← LamReif.getTyVal
   let varVal ← LamReif.getVarVal
   let lamEVarTy ← LamReif.getLamEVarTy
-  runAtMetaM' <| (callDuperExternMAction ts).run'
+  runAtMetaM' <| (callDuperExternMAction nonempties valids).run'
     { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
 
 end Auto.Lam2D
