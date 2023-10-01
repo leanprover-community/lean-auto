@@ -46,24 +46,15 @@ set_option auto.prep.redMode "reducible"
 set_option trace.auto.lamReif.printProofs true
 set_option trace.auto.lamReif.printValuation true
 
--- set_option pp.explicit true
 set_option trace.auto.printLemmas true
 set_option trace.auto.tactic true
 set_option auto.mono.saturationThreshold 500
+set_option trace.auto.tptp.printQuery true
+set_option trace.auto.tptp.result true
 theorem short_five_mono (injh : Injective h) (injl : Injective l) :
     Injective k := by
   auto [injective_iff_map_eq_zero, injl, injh, short_exact₁.inj,
        square₀, square₁, short_exact₀.ker_in_im, map_zero] u[Injective]
-
-/- Duper fails violently
-theorem short_five_mono' (injh : Injective h) (injl : Injective l) :
-    Injective k := by
-  rw [injective_iff_map_eq_zero]
-  let injs := short_exact₁.inj
-  dsimp [Injective] at injh injl injs
-  duper [injl, injh, injs, square₀, square₁,
-         is_short_exact.ker_in_im short_exact₀, map_zero]
--/
 
 theorem short_five_epi (surjh : Surjective h) (surjl : Surjective l) :
     Surjective k := by
@@ -74,5 +65,15 @@ theorem short_five_epi (surjh : Surjective h) (surjl : Surjective l) :
     auto [map_sub, square₁, hg₀b₀, hlc₀, sub_self]
   rcases short_exact₁.ker_in_im _ this with ⟨a₁, hf₁a₁⟩
   auto [map_sub, square₀, surjh a₁, hf₁a₁, sub_sub_cancel]
+
+theorem short_five_epi' (surjh : Surjective h) (surjl : Surjective l) :
+    Surjective k := by
+  intro b₁
+  rcases surjl (g₁ b₁) with ⟨c₀, hlc₀⟩
+  rcases short_exact₀.surj c₀ with ⟨b₀, hg₀b₀⟩
+  have : g₁ (k b₀ - b₁) = 0 := by
+    auto [map_sub, square₁, hg₀b₀, hlc₀, sub_self]
+  unfold Surjective at surjh
+  auto [map_sub, square₀, surjh, short_exact₁.ker_in_im, this, sub_sub_cancel]
 
 end ShortFive
