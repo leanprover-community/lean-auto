@@ -4,6 +4,7 @@ import Auto.Embedding.LamInference
 import Auto.Embedding.LamLCtx
 import Auto.Embedding.LamPrep
 import Auto.Lib.BinTree
+open Lean
 
 namespace Auto.Embedding.Lam
 
@@ -1578,5 +1579,47 @@ theorem Checker.getValidExport_indirectReduce_reflection
   LamThmValid cpv.toLamValuationEraseEtom lctx t :=
   Checker.getValidExport_indirectReduce cpv it cs v importFacts hImport lvt
     lit hlvt hlit lctx t (LawfulBEq.eq_of_beq heq)
+
+-- Checker utility
+structure RTableStatus where
+  rTable        : Array REntry := #[]
+  rTableTree    : BinTree REntry := BinTree.leaf
+  nonemptyMap   : HashMap LamSort Nat := {}
+  wfMap         : HashMap (List LamSort × LamSort × LamTerm) Nat := {}
+  validMap      : HashMap (List LamSort × LamTerm) Nat := {}
+  -- maxEVarSucc
+  maxEVarSucc   : Nat := 0
+  -- lamEVarTy
+  lamEVarTy     : Array LamSort := #[]
+  -- This works as a cache for `BinTree.ofListGet lamEVarTy.data`
+  lamEVarTyTree : BinTree LamSort := BinTree.leaf
+  -- `chkMap.find?[re]` returns the checkstep which proves `re`
+  chkMap        : HashMap REntry ChkStep := {}
+  deriving Inhabited
+
+def RTableStatus.push (rs : RTableStatus) (re : REntry) :=
+  let rsize := rs.rTable.size
+  let rs := {rs with rTable := rs.rTable.push re,
+                     rTableTree := rs.rTableTree.insert rsize re}
+  match re with
+  | .nonempty s => {rs with nonemptyMap := rs.nonemptyMap.insert s rsize}
+  | .wf lctx s t => {rs with wfMap := rs.wfMap.insert (lctx, s, t) rsize}
+  | .valid lctx t => {rs with validMap := rs.validMap.insert (lctx, t) rsize}
+
+def RTableStatus.addEntry (rs : RTableStatus) (c : ChkStep) (re : REntry) :=
+  { rs.push re with chkMap := rs.chkMap.insert re c}
+
+def RTableStatus.newEtomWithValid (rs : RTableStatus) (c : ChkStep) (re : REntry) (s : LamSort) :=
+  let eidx := rs.maxEVarSucc
+  { rs.push re with chkMap := rs.chkMap.insert re c
+                    maxEVarSucc := eidx + 1,
+                    lamEVarTy := rs.lamEVarTy.push s
+                    lamEVarTyTree := rs.lamEVarTyTree.insert eidx s}
+
+def RTableStatus.findPos? (rs : RTableStatus) (re : REntry) :=
+  match re with
+  | .nonempty s => rs.nonemptyMap.find? s
+  | .wf lctx s t => rs.wfMap.find? (lctx, s, t)
+  | .valid lctx t => rs.validMap.find? (lctx, t)
 
 end Auto.Embedding.Lam

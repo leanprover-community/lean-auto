@@ -48,8 +48,17 @@ section Inhabitation
   example (x : α) (h : ∀ (x : α), x = x) : 1 = 1 := by
     auto
 
-  example (OK : Type → Type) (x : ∀ (α : Type), OK α → OK α)
+  -- `OK Nat → OK Nat` should be blocked for being trivial
+  example (OK : Type → Type)
+    (inh : ∀ (α : Type), OK α → OK α)
     (h : ∀ (x : OK Nat), x = x) : 1 = 1 := by
+    auto
+  
+  -- Either `inh₁` or `inh₂` should be blocked for being redundant
+  example (OK₁ OK₂ : Type → Type)
+    (inh₁ : ∀ (α : Type), OK₁ α → OK₂ α)
+    (inh₂ : ∀ (α : Type), OK₁ α → OK₁ α → OK₂ α)
+    (h : OK₁ Nat → ∀ (x : OK₂ Nat), x = x) : 1 = 1 := by
     auto
 
 end Inhabitation
