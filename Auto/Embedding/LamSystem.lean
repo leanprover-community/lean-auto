@@ -47,6 +47,8 @@ def LamThmEquiv (lval : LamValuation) (lctx : List LamSort) (rty : LamSort)
   (t₁ t₂ : LamTerm) :=
   ∀ (lctx' : Nat → LamSort), LamEquiv lval (pushLCtxs lctx lctx') rty t₁ t₂
 
+noncomputable def LamNonempty.get (h : LamNonempty tyVal s) : s.interp tyVal := Classical.choice h
+
 theorem LamValid_substLCtxRecWF
   (lctx' : Nat → LamSort) (heq : ∀ n, lctx' n = lctx n)
   {lval : LamValuation} {wf : LamWF lval.toLamTyVal ⟨lctx, t, .base .prop⟩} :

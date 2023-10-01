@@ -1409,6 +1409,10 @@ def LamWF.ofAtom' {ltv : LamTyVal} {lctx : Nat → LamSort} (n : Nat)
   (s : LamSort) (heq : ltv.lamVarTy n = s) : LamWF ltv ⟨lctx, .atom n, s⟩ := by
   rw [← heq]; apply LamWF.ofAtom
 
+def LamWF.ofEtom' {ltv : LamTyVal} {lctx : Nat → LamSort} (n : Nat)
+  (s : LamSort) (heq : ltv.lamEVarTy n = s) : LamWF ltv ⟨lctx, .etom n, s⟩ := by
+  rw [← heq]; apply LamWF.ofEtom
+
 def LamWF.ofBVar' {ltv : LamTyVal} {lctx : Nat → LamSort} (n : Nat)
   (s : LamSort) (heq : lctx n = s) : LamWF ltv ⟨lctx, .bvar n, s⟩ := by
   rw [← heq]; apply LamWF.ofBVar

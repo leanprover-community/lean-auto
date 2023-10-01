@@ -361,40 +361,81 @@ def LamTerm.instantiateAt (idx : Nat) (arg : LamTerm) : (body : LamTerm) → Lam
 | .lam s body    => .lam s (LamTerm.instantiateAt (.succ idx) arg body)
 | .app s fn arg' => .app s (LamTerm.instantiateAt idx arg fn) (LamTerm.instantiateAt idx arg arg')
 
-theorem LamTerm.maxEVarSucc_instantiateAt :
-  (LamTerm.instantiateAt idx arg body).maxEVarSucc ≤ Nat.max arg.maxEVarSucc body.maxEVarSucc := by
-  induction body generalizing idx <;> try apply Nat.le_max_right
+theorem LamTerm.instantiateAt_bVarIrrelevance (h : LamTerm.hasLooseBVarEq idx t = false) :
+  LamTerm.instantiateAt idx arg₁ t = LamTerm.instantiateAt idx arg₂ t := by
+  induction t generalizing idx <;> try rfl
   case bvar n =>
-    dsimp [instantiateAt, pushLCtxAt, restoreAt]
-    match Nat.ble idx n with
+    dsimp [instantiateAt, pushLCtxAt, restoreAt, pushLCtx]
+    match h₁ : Nat.ble idx n with
     | true =>
-      dsimp [pushLCtx]
-      match n - idx with
+      dsimp
+      match h₂ : n - idx with
       | 0 =>
-        apply Nat.le_trans _ (Nat.le_max_left _ _)
-        dsimp [bvarLifts, bvarLiftsIdx]
-        rw [LamTerm.maxEVarSucc_mapBVarAt]; apply Nat.le_refl
-      | _ + 1 => apply Nat.le_max_right
-    | false => apply Nat.le_max_right
+        dsimp;
+        rw [Nat.eq_of_le_of_lt_succ (Nat.sub_eq_zero_iff_le.mp h₂) (
+          Nat.succ_le_succ (Nat.le_of_ble_eq_true h₁)
+        )] at h
+        dsimp [hasLooseBVarEq] at h; rw [Nat.beq_refl] at h; cases h
+      | _ + 1 => rfl
+    | false => rfl
   case lam s body IH =>
-    dsimp [instantiateAt, maxEVarSucc]; apply IH
+    dsimp [instantiateAt]; rw [IH h]
+  case app s fn body IHFn IHBody =>
+    dsimp [hasLooseBVarEq] at h; have ⟨hFn, hBody⟩ := (Bool.or_eq_false _ _).mp h
+    dsimp [instantiateAt]; rw [IHFn hFn, IHBody hBody]
+
+theorem LamTerm.maxEVarSucc_instantiateAt :
+  (LamTerm.instantiateAt idx arg body).maxEVarSucc =
+    match body.hasLooseBVarEq idx with
+    | true => Nat.max arg.maxEVarSucc body.maxEVarSucc
+    | false => body.maxEVarSucc := by
+  induction body generalizing idx <;> dsimp [instantiateAt, hasLooseBVarEq]
+  case bvar n =>
+    dsimp [pushLCtxAt, restoreAt, pushLCtx]
+    match h₁ : Nat.ble idx n with
+    | true =>
+      dsimp
+      match h₂ : n - idx with
+      | 0 =>
+        dsimp; rw [maxEVarSucc_bvarLifts]
+        rw [Nat.eq_of_le_of_lt_succ (Nat.sub_eq_zero_iff_le.mp h₂) (
+          Nat.succ_le_succ (Nat.le_of_ble_eq_true h₁)
+        )]; rw [Nat.beq_refl]
+        simp [maxEVarSucc, Nat.max_zero_right]
+      | _ + 1 =>
+        dsimp
+        match h₃ : idx.beq n with
+        | true => cases (Nat.eq_of_beq_eq_true h₃); rw [Nat.sub_self] at h₂; cases h₂
+        | false => rfl
+    | false =>
+      dsimp
+      match h₂ : Nat.beq idx n with
+      | true => cases (Nat.eq_of_beq_eq_true h₂); rw [Nat.ble_eq_true_of_le .refl] at h₁; cases h₁
+      | false => rfl
+  case lam s body IH =>
+    dsimp [maxEVarSucc]; apply IH
   case app s fn arg' IHFn IHArg' =>
-    dsimp [instantiateAt, maxEVarSucc]
-    rw [Nat.max_le]; apply And.intro
-    case left =>
-      apply Nat.le_trans IHFn
-      rw [Nat.max_le]; apply And.intro
-      case left => apply Nat.le_max_left
-      case right =>
-        apply Nat.le_trans _ (Nat.le_max_right _ _)
-        apply Nat.le_max_left
-    case right =>
-      apply Nat.le_trans IHArg'
-      rw [Nat.max_le]; apply And.intro
-      case left => apply Nat.le_max_left
-      case right =>
-        apply Nat.le_trans _ (Nat.le_max_right _ _)
-        apply Nat.le_max_right
+    dsimp [maxEVarSucc]; rw [IHFn, IHArg']
+    match hasLooseBVarEq idx fn, hasLooseBVarEq idx arg' with
+    | true, true =>
+      simp [Nat.max]
+      conv => enter [1, 1]; rw [Nat.max_comm]
+      conv => enter [1]; rw [Nat.max_assoc]
+      conv => enter [1, 1]; rw [← Nat.max_assoc]; enter [2]; rw [Nat.max_eq_left .refl]
+      conv => enter [1, 1]; rw [Nat.max_comm]
+      apply Eq.symm; apply Nat.max_assoc
+    | true, false =>
+      simp [Nat.max]; apply Eq.symm; apply Nat.max_assoc
+    | false, true =>
+      simp [Nat.max]; rw [Nat.max_assoc, Nat.max_assoc]
+      conv => enter [1, 1]; rw [Nat.max_comm]
+    | false, false => rfl
+
+theorem LamTerm.maxEVarSucc_instantiateAt_le :
+  (LamTerm.instantiateAt idx arg body).maxEVarSucc ≤ Nat.max arg.maxEVarSucc body.maxEVarSucc := by
+  rw [LamTerm.maxEVarSucc_instantiateAt]; cases hasLooseBVarEq idx body
+  case false => dsimp; apply Nat.le_max_right
+  case true => exact .refl
 
 def LamWF.instantiateAt
   (ltv : LamTyVal) (idx : Nat)
@@ -481,9 +522,18 @@ theorem LamWF.interp_instantiateAt.{u}
 
 def LamTerm.instantiate1 := LamTerm.instantiateAt 0
 
+theorem LamTerm.instantiate1_bVarIrrelevance (h : LamTerm.hasLooseBVarEq 0 t = false) :
+  LamTerm.instantiate1 arg₁ t = LamTerm.instantiate1 arg₂ t := LamTerm.instantiateAt_bVarIrrelevance h
+
 theorem LamTerm.maxEVarSucc_instantiate1 :
+  (LamTerm.instantiate1 arg body).maxEVarSucc =
+    match body.hasLooseBVarEq 0 with
+    | true => Nat.max arg.maxEVarSucc body.maxEVarSucc
+    | false => body.maxEVarSucc := LamTerm.maxEVarSucc_instantiateAt
+
+theorem LamTerm.maxEVarSucc_instantiate1_le :
   (LamTerm.instantiate1 arg body).maxEVarSucc ≤ Nat.max arg.maxEVarSucc body.maxEVarSucc :=
-  LamTerm.maxEVarSucc_instantiateAt
+  LamTerm.maxEVarSucc_instantiateAt_le
 
 def LamWF.instantiate1
   (ltv : LamTyVal) {arg : LamTerm} {argTy : LamSort}
@@ -684,7 +734,7 @@ theorem LamTerm.maxEVarSucc_topBeta :
     dsimp [topBeta]; cases fn <;> try apply Nat.le_refl
     case lam s' body =>
       dsimp [topBetaAux, maxEVarSucc]; rw [Nat.max, Nat.max_comm]
-      apply LamTerm.maxEVarSucc_instantiate1
+      apply LamTerm.maxEVarSucc_instantiate1_le
 
 def LamWF.topBeta
   (ltv : LamTyVal) {t : LamTerm} {ty : LamSort} (lctx : Nat → LamSort)
@@ -748,7 +798,7 @@ theorem LamTerm.maxEVarSucc_beta
     cases t <;> try apply LamTerm.maxEVarSucc_mkAppN (.cons harg hargs) ht
     case lam s body =>
       dsimp [beta]; apply IH
-      apply Nat.le_trans LamTerm.maxEVarSucc_instantiate1
+      apply Nat.le_trans LamTerm.maxEVarSucc_instantiate1_le
       rw [Nat.max_le]; apply And.intro harg ht
 
 def LamWF.ofBeta

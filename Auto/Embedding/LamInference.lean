@@ -1,6 +1,45 @@
-import Auto.Embedding.LamSystem
+import Auto.Embedding.LamConv
 
 namespace Auto.Embedding.Lam
+
+def LamTerm.elimBVar? (t : LamTerm) : Option LamTerm :=
+  match t.hasLooseBVarEq 0 with
+  | false => .some (LamTerm.instantiate1 (.atom 0) t)
+  | true => .none
+
+theorem LamTerm.maxEVarSucc_elimBVarIdx?
+  (heq : LamTerm.elimBVar? t = .some t') : t'.maxEVarSucc = t.maxEVarSucc := by
+  dsimp [LamTerm.elimBVar?] at heq; cases h : hasLooseBVarEq 0 t <;> rw [h] at heq <;> cases heq
+  rw [maxEVarSucc_instantiate1, h]
+
+theorem LamThmValid.elimBVarIdx? (hv : LamThmValid lval (s :: lctx) t)
+  (heq : LamTerm.elimBVar? t = .some t') (hInh : LamNonempty lval.tyVal s) :
+  LamThmValid lval lctx t' := by
+  dsimp [LamTerm.elimBVar?] at heq; cases h : t.hasLooseBVarEq 0 <;> rw [h] at heq <;> cases heq
+  have sinh := hInh.get
+  let lval' :=
+    {lval with lamEVarTy := fun n => match n.blt t.maxEVarSucc with | true => lval.lamEVarTy n | false => s
+               eVarVal := fun n => by simp [LamSort.interp]; match n.blt t.maxEVarSucc with | true => exact lval.eVarVal n | false => exact sinh}
+  have meeq : (LamTerm.instantiate1 (LamTerm.atom 0) t).maxEVarSucc = t.maxEVarSucc := by
+    rw [LamTerm.maxEVarSucc_instantiate1]; cases LamTerm.hasLooseBVarEq 0 t <;> dsimp
+    case true => simp [LamTerm.maxEVarSucc, Nat.max, Nat.max_zero_left]
+  have hirr : ∀ (n : Nat), n < t.maxEVarSucc →
+    lval'.lamEVarTy n = lval.lamEVarTy n ∧ HEq (lval'.eVarVal n) (lval.eVarVal n) := by
+    intro n; dsimp
+    match h : n.blt t.maxEVarSucc with
+    | true => dsimp; intro _; apply And.intro rfl HEq.rfl
+    | false =>
+      rw [← Bool.eq_false_eq_not_eq_true] at h;
+      dsimp at h; rw [Nat.blt_eq] at h; intro h'; apply False.elim (h h')
+  apply LamThmValid.eVarIrrelevance lval' lval rfl rfl HEq.rfl HEq.rfl HEq.rfl rfl (by rw [meeq]; exact hirr) ?valid
+  rw [LamTerm.instantiate1_bVarIrrelevance (arg₂ := (.etom t.maxEVarSucc)) h]
+  apply LamThmValid.instantiate1 (argTy:=s)
+  case hw =>
+    intro lctx'; apply LamWF.ofEtom'; dsimp [Nat.blt]
+    rw [(Nat.ble_eq_false_eq_lt _).mp .refl]
+  case hv =>
+    apply LamThmValid.eVarIrrelevance lval lval' rfl rfl HEq.rfl HEq.rfl HEq.rfl rfl _ hv
+    intro n h'; apply And.intro (hirr n h').left.symm (hirr n h').right.symm
 
 def LamTerm.impApp? (t₁₂ t₁ : LamTerm) : Option LamTerm :=
   match t₁₂ with
