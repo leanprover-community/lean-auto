@@ -1,4 +1,4 @@
-import Auto.Embedding.LamBase
+import Auto.Embedding.LamConv
 
 namespace Auto.Lam2TH0
 open Embedding.Lam
@@ -46,20 +46,40 @@ def transLamBaseTerm : LamBaseTerm → Except String String
 | .forallE _  => .ok s!"!!"
 | .existE _   => .ok s!"??"
 
-def transLamTerm (t : LamTerm) (lctx := 0) : Except String String :=
+partial def transLamTerm (t : LamTerm) (lctx := 0) : Except String String :=
   match t with
   | .atom n      => .ok s!"t_a{n}"
   | .etom n      => .ok s!"t_e{n}"
   | .base b      => transLamBaseTerm b
-  | .bvar n      => .ok s!"X{lctx - n}"
+  | .bvar n      => .ok s!"X{lctx - n - 1}"
   | .lam s t     =>
     match transLamTerm t (lctx + 1) with
-    | .ok ts => .ok s!"(^ [X{lctx + 1} : {transLamSort s}] : {ts})"
+    | .ok ts => .ok s!"(^ [X{lctx} : {transLamSort s}] : {ts})"
     | .error e => .error e
   | .app _ t₁ t₂ =>
-    match transLamTerm t₁ lctx, transLamTerm t₂ lctx with
-    | .ok t₁s, .ok t₂s => .ok s!"({t₁s} @ {t₂s})"
-    | .error e, _ => .error e
-    | .ok _, .error e => .error e
+    if t₁.isForallE || t₁.isExistE then
+      transQuantApp t₁ t₂ lctx
+    else
+      match transLamTerm t₁ lctx, transLamTerm t₂ lctx with
+      | .ok t₁s, .ok t₂s => .ok s!"({t₁s} @ {t₂s})"
+      | .error e, _ => .error e
+      | .ok _, .error e => .error e
+where
+  expandQuantBody (s : LamSort) (t : LamTerm) : LamTerm :=
+    match t with
+    | .lam _ body => body
+    | _ => (LamTerm.app s t (.bvar 0)).headBeta
+  transQuantApp (quant body : LamTerm) (lctx : Nat) : Except String String :=
+    let info : Except String (String × LamSort) :=
+      match quant with
+      | .base (.forallE s) => .ok ("!", s)
+      | .base (.existE s) => .ok ("?", s)
+      | _ => .error "transLamTerm :: Unexpected error"
+    match info with
+    | .ok (qs, s) =>
+      match transLamTerm (expandQuantBody s body) (lctx + 1) with
+      | .ok bs => .ok s!"({qs} [X{lctx} : {transLamSort s}] : {bs})"
+      | .error e => .error e
+    | .error e => .error e
 
 end Auto.Lam2TH0

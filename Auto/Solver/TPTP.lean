@@ -33,7 +33,7 @@ abbrev SolverProc := IO.Process.Child ⟨.piped, .piped, .piped⟩
 
 def createSolver (name : SolverName) : MetaM SolverProc := do
   match name with
-  | .zipperposition => createAux "zipperposition" #["-i=tptp", "--mode=ho-competititve", "-t=10"]
+  | .zipperposition => createAux "zipperposition" #["-i=tptp", "--mode=ho-competitive", "-t=10"]
 where
   createAux (path : String) (args : Array String) : MetaM SolverProc :=
     IO.Process.spawn {stdin := .piped, stdout := .piped, stderr := .piped,

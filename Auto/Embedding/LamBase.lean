@@ -711,6 +711,18 @@ def LamTerm.isApp : LamTerm → Bool
 | .app _ _ _ => true
 | _ => false
 
+def LamTerm.isForallE : LamTerm → Bool
+| .base (.forallE _) => true
+| _ => false
+
+def LamTerm.isExistE : LamTerm → Bool
+| .base (.existE _) => true
+| _ => false
+
+def LamTerm.isEq : LamTerm → Bool
+| .base (.eq _) => true
+| _ => false
+
 def LamTerm.isMkForallE : LamTerm → Bool
 | .app _ (.base (.forallE _)) _ => true
 | _ => false
