@@ -39,13 +39,24 @@ section Inhabitation
   set_option trace.auto.lamReif.printProofs true
   set_option trace.auto.lamReif.printResult true
 
-  example (x : α) [Inhabited α] (h : x = y) : x = y := by
+  example [Inhabited α] (h : ∀ (x : α), True) : ∃ (x : α), True := by
     auto
 
-  example (x : Nat) (h : x = y) : x = y := by
+  example [Nonempty α] (h : ∀ (x : α), True) : ∃ (x : α), True := by
     auto
 
-  example (x : α) (h : ∀ (x : α), x = x) : 1 = 1 := by
+  example (h : ∀ (x : Nat), x = x) : ∃ (x : Nat), x = x := by
+    auto
+
+  example (x : α) (y : β) (h : ∀ (x : α) (y : β), x = x ∧ y = y) :
+     ∃ (x : α) (y : β), x = x ∧ y = y := by
+    auto
+
+  example (a : α) (p : α → Prop) : (∃ x, p x → r) ↔ ((∀ x, p x) → r) := by
+    auto
+  
+  set_option trace.auto.lamReif.printProofs true in
+  example (a : α) (p : α → Prop) : (∃ x, r → p x) ↔ (r → ∃ x, p x) := by
     auto
 
   -- `OK Nat → OK Nat` should be blocked for being trivial

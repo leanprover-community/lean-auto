@@ -212,8 +212,9 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
     let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) : LamReif.ReifM Expr := (do
       let exportFacts ← LamReif.reifFacts uvalids
       let exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
-      let exportInhs ← LamReif.reifInhabitations uinhs
-      let exportInhs := exportInhs.map Embedding.Lam.REntry.nonempty
+      let _ ← LamReif.reifInhabitations uinhs
+      let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
+        (fun (s, _) => Embedding.Lam.REntry.nonempty s)
       let exportFacts ← exportFacts.mapM LamReif.skolemizeMostIntoForall
       let exportFacts ← exportFacts.mapM LamReif.validOfExtensionalize
       let exportFacts ← exportFacts.mapM LamReif.validOfBetaReduce

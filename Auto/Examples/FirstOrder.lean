@@ -17,8 +17,7 @@ set_option trace.auto.tactic true
 example : (∃ x : α, r) → r := by
   auto
 example (a : α) : r → (∃ x : α, r) := by
-  try auto
-  sorry
+  auto
 example : (∃ x, p x ∧ r) ↔ (∃ x, p x) ∧ r := by
   auto
 example : (∃ x, p x ∨ q x) ↔ (∃ x, p x) ∨ (∃ x, q x) := by
@@ -35,18 +34,15 @@ example : (¬ ∀ x, p x) ↔ (∃ x, ¬ p x) := by
 
 example : (∀ x, p x → r) ↔ (∃ x, p x) → r := by
   auto
-example (a : α) : (∃ x, p x → r) ↔ (∀ x, p x) → r := by
-  try auto
-  sorry
+example (a : α) : (∃ x, p x → r) ↔ ((∀ x, p x) → r) := by
+  auto
 example (a : α) : (∃ x, r → p x) ↔ (r → ∃ x, p x) := by
-  try auto
-  sorry
+  auto
 
 def p_ : Nat → Prop := fun x => False
 
 example : (∃ x, r → p_ x) ↔ (r → ∃ x, p_ x) := by
-  try auto;
-  sorry
+  auto
 
 end
 
@@ -68,8 +64,7 @@ variable (α : Type) (p q : α → Prop)
 variable (r : Prop)
 
 example (_ : α) : ((∀ x : α, r) ↔ r) := by
-  try auto;
-  sorry
+  auto
 example : (∀ x, p x ∨ r) ↔ (∀ x, p x) ∨ r := by
   auto
 example : (∀ x, r → p x) ↔ (r → ∀ x, p x) := by
@@ -110,8 +105,7 @@ example (H : ∃ x, P x ∧ Q x) : ∃ x, Q x ∧ P x := by
   auto
 
 example (x : X) : ∃ x, ((∃ y, P y) → P x) := by
-  try auto;
-  sorry
+  auto
 example : (∃ x, ∀ y, T x y) → ∀ y, ∃ x, T x y := by
   auto
 example (x y : Nat) (f : Nat → Nat) : x = y → f x = f y := by

@@ -64,7 +64,7 @@ def ExternM.run' (m : ExternM α) (s : State) : MetaStateM α :=
 def withTypeAtomsAsFVar (atoms : Array Nat) : ExternM Unit :=
   for atom in atoms do
     if (← getTypeAtomFVars).contains atom then
-      return
+      continue
     let .some (e, lvl) := (← getTyVal)[atom]?
       | throwError "withTypeAtomAsFVar :: Unknown type atom {atom}"
     let name := (`_exTy).appendIndexAfter (← getTypeAtomFVars).size
@@ -93,7 +93,7 @@ def interpLamSortAsUnlifted : LamSort → ExternM Expr
 def withTermAtomsAsFVar (atoms : Array Nat) : ExternM Unit :=
   for atom in atoms do
     if (← getTermAtomFVars).contains atom then
-      return
+      continue
     let .some (e, s) := (← getVarVal)[atom]?
       | throwError "withTermAtomAsFVar :: Unknown term atom {atom}"
     let sinterp ← interpLamSortAsUnlifted s
@@ -128,7 +128,10 @@ def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
 | .not        => return .const ``Not []
 | .and        => return .const ``And []
 | .or         => return .const ``Or []
-| .imp        => return .const ``ImpF [.zero, .zero]
+| .imp        => do
+  let .some (.defnInfo impVal) := (← getEnv).find? ``ImpF
+    | throwError "interpLamBaseTermAsUnlifted :: Unexpected error"
+  return impVal.value.instantiateLevelParams impVal.levelParams [.zero, .zero]
 | .iff        => return .const ``Iff []
 | .intVal _   => throwError "Not implemented"
 | .realVal c  => return interpCstrRealAsUnlifted c
@@ -143,7 +146,10 @@ def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
   let sort ← runMetaM <| Expr.normalizeType (← MetaState.inferType ty)
   let Expr.sort lvl := sort
     | throwError "interpLamBaseTermAsUnlifted :: Unexpected sort {sort}"
-  return mkAppN (.const ``forallF [lvl, .zero]) #[← interpLamSortAsUnlifted s]
+  let .some (.defnInfo forallVal) := (← getEnv).find? ``forallF
+    | throwError "interpLamBaseTermAsUnlifted :: Unexpected error"
+  let forallFExpr := forallVal.value.instantiateLevelParams forallVal.levelParams [lvl, .zero]
+  return mkAppN forallFExpr #[← interpLamSortAsUnlifted s]
 | .existE s  => do
   return ← runMetaM <| Meta.mkAppOptM ``Exists #[← interpLamSortAsUnlifted s]
 
@@ -244,7 +250,6 @@ private def callDuperExternMAction (nonempties : Array REntry) (valids : Array R
     | .nonempty s => return s
     | _ => throwError "callDuperExternMAction :: {re} is not a `nonempty` entry")
   let inhs ← withTranslatedLamSorts ss
-  let inhs ← runMetaM <| Meta.withTransparency .reducible <| inhs.mapM (fun e => Meta.reduceAll e)
   let inhFVars ← withHyps inhs
   let ts ← valids.mapM (fun re => do
     match re with
@@ -256,7 +261,7 @@ private def callDuperExternMAction (nonempties : Array REntry) (valids : Array R
       throwError "callDuper :: Malformed hypothesis {hyp}"
     if !(← runMetaM <| Meta.isProp hyp) then
       throwError "callDuper :: Hypothesis {hyp} is not a proposition"
-  let hyps ← runMetaM <| Meta.withTransparency .reducible <| hyps.mapM (fun e => Meta.reduceAll e)
+  let hyps ← runMetaM <| hyps.mapM (fun e => Core.betaReduce e)
   let hypFvars ← withHyps hyps
   let lemmas : Array (Expr × Expr × Array Name) ← (hyps.zip hypFvars).mapM
     (fun (ty, proof) => do return (ty, ← runMetaM <| Meta.mkAppM ``eq_true #[.fvar proof], #[]))
