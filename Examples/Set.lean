@@ -119,23 +119,27 @@ open Set
 #check mem_iUnion
 #check mem_iInter
 
+set_option maxHeartbeats 10000 in
 example : (s ∩ ⋃ i, A i) = ⋃ i, A i ∩ s := by
   apply Set.ext; auto [mem_inter_iff, mem_iUnion]
 
+set_option maxHeartbeats 10000 in
 example : (⋂ i, A i ∩ B i) = (⋂ i, A i) ∩ ⋂ i, B i := by
   apply Set.ext; auto [mem_inter_iff, mem_iInter]
 
+set_option maxHeartbeats 10000 in
 example : (s ∪ ⋂ i, A i) = ⋂ i, A i ∪ s := by
   apply Set.ext; auto [mem_union, mem_iInter]
 
 def primeset : Set ℕ :=
   { x | Nat.Prime x }
 
+set_option maxHeartbeats 10000 in
 set_option trace.auto.lamReif.printResult true in
 example : (⋃ p ∈ primeset, { x | p ^ 2 ∣ x }) = { x | ∃ p ∈ primeset, p ^ 2 ∣ x } := by
   apply Set.ext; intro x
   rw [mem_iUnion]; conv => enter [1, 1, i]; rw [mem_iUnion]
-  simp
+  auto [mem_setOf]
 
 #check Nat.exists_prime_and_dvd
 

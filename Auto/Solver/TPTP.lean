@@ -11,6 +11,8 @@ namespace Auto
 namespace Solver.TPTP
 
 inductive SolverName where
+  -- Disable TPTP prover
+  | none
   | zipperposition
   -- zipperposition + E theorem prover, portfolio
   | zeport
@@ -18,12 +20,14 @@ deriving BEq, Hashable, Inhabited
 
 instance : ToString SolverName where
   toString : SolverName → String
+  | .none => "none"
   | .zipperposition => "zipperposition"
   | .zeport => "zeport"
 
 instance : Lean.KVMap.Value SolverName where
   toDataValue n := toString n
   ofDataValue?
+  | "none" => some .none
   | "zipperposition" => some .zipperposition
   | "zeport" => some .zeport
   | _ => none
@@ -43,6 +47,9 @@ abbrev SolverProc := IO.Process.Child ⟨.piped, .piped, .piped⟩
 private def createAux (path : String) (args : Array String) : MetaM SolverProc :=
     IO.Process.spawn {stdin := .piped, stdout := .piped, stderr := .piped,
                       cmd := path, args := args}
+
+def queryNone : MetaM Unit := do
+  trace[auto.tptp.result] "TPTP solver is disabled. No result available."
 
 def queryZipperposition (query : String) : MetaM Unit := do
   let solver ← createAux "zipperposition" #["-i=tptp", "--mode=ho-competitive", "-t=10"]
@@ -81,6 +88,7 @@ where attempt (action : MetaM Unit) := try action catch _ => pure ()
 
 def querySolver (query : String) : MetaM Unit := do
   match tptp.solver.name.get (← getOptions) with
+  | .none => queryNone
   | .zipperposition => queryZipperposition query
   | .zeport => queryZEPort query
 

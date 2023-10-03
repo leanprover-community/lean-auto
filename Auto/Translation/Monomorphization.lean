@@ -192,7 +192,7 @@ def ConstInst.ofExpr? (params : Array Name) (bvars : Array Expr) (e : Expr) : Me
   -- If the head contains bound variable, then this is not
   --   a valid instance
   if let .some _ := fn.find? (fun e => bvarSet.contains e) then
-    return none
+    return .none
   let args := e.getAppArgs
   let .some head := CiHead.ofExpr? fn
     | return .none
@@ -218,7 +218,10 @@ def ConstInst.ofExpr? (params : Array Name) (bvars : Array Expr) (e : Expr) : Me
       argsIdx := argsIdx.push idx
       argsInst := argsInst.push arg
     headType := body.instantiate1 arg
-  return some ⟨head, argsInst, argsIdx⟩
+  headType ← Core.betaReduce headType
+  if (Expr.depArgs headType).size != 0 || (Expr.instArgs headType).size != 0 then
+    return .none
+  return .some ⟨head, argsInst, argsIdx⟩
 
 private def ConstInst.toExprAux (args : List (Option Expr))
   (tys : List (Name × Expr × BinderInfo)) (e ty : Expr) : Option Expr :=
@@ -579,6 +582,7 @@ namespace FVarRep
       return fvarId
   
   def UnknownExpr2FVarId (e : Expr) : FVarRepM FVarId := do
+    trace[auto.mono] "Do not know how to deal with expression {e}. Turning it into free variable ..."
     for (e', fid) in (← getExprMap).toList do
       if ← MetaState.isDefEqRigid e e' then
         return fid

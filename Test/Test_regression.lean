@@ -230,15 +230,6 @@ section UnfoldConst
   set_option trace.auto.printLemmas true
   example : True := by auto d[Nat.rec]
 
-  -- Brute force example
-  -- This must be fixed
-  set_option auto.prep.redMode "instances" in
-  set_option trace.auto.lamReif.printResult true in
-  set_option trace.auto.lamReif.printValuation true in
-  example : (∀ (m n k : Nat), m + n + k = m + (n + k)) := by
-    intros m n k; revert m n; induction k
-    case zero => auto u[Nat.add] d[Nat.rec]
-
 end UnfoldConst
 
 -- First Order
@@ -382,3 +373,27 @@ section TypeDefeq
     auto [H]
 
 end TypeDefeq
+
+-- Issues
+
+section Issues
+
+  set_option tptp.solver.name "none"
+  set_option trace.auto.mono true
+  set_option trace.auto.mono.printConstInst true
+  set_option trace.auto.lamReif.printResult true
+
+  -- Do not know how to deal with expression ∃ i_1, dvd i x
+  -- Non-dependent ∃, but whose domain type is a `Prop`
+  example (x : Nat) (primeset : Nat → Prop) (dvd : Nat → Nat → Prop) :
+    ((∃ (i : _) (i_1 : primeset i), dvd i x) ↔ (∃ p, primeset p ∧ dvd p x)) := by
+    auto
+
+    -- Brute force example
+  -- This must be fixed
+  set_option auto.prep.redMode "instances" in
+  example : (∀ (m n k : Nat), m + n + k = m + (n + k)) := by
+    intros m n k; revert m n; induction k
+    case zero => auto u[Nat.add] d[Nat.rec]
+
+end Issues
