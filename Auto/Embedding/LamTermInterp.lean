@@ -271,6 +271,10 @@ def getLCtxTy! (idx : Nat) : InterpM LamSort := do
   | .some s => return s
   | .none => throwError "getLCtxTy! :: Unexpected error"
 
+-- Turning a sort into `fvar` in a hash-consing manner
+-- For example, for `.func (.atom 0) (.atom 0)`, we'll have
+-- 1. .atom 0 → fvar₀ := .atom 0
+-- 2. .func (.atom 0) (.atom 0) → fvar₁ := .func fvar₀ fvar₀
 def sort2FVarId (s : LamSort) : InterpM FVarId := do
   let sortMap ← getSortMap
   let userName := (`interpsf).appendIndexAfter (← getSortMap).size
@@ -290,6 +294,8 @@ def sort2FVarId (s : LamSort) : InterpM FVarId := do
       setSortFVars ((← getSortFVars).push fvarId)
       return fvarId
 
+-- Turning all sorts occurring in a `LamTerm` into `fvar`, in
+--   a hash-consing manner
 def collectSortFor (ltv : LamTyVal) : LamTerm → InterpM LamSort
 | .atom n => do
   let _ ← sort2FVarId (ltv.lamVarTy n)
