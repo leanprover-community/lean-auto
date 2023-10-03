@@ -389,7 +389,7 @@ section Issues
     ((∃ (i : _) (i_1 : primeset i), dvd i x) ↔ (∃ p, primeset p ∧ dvd p x)) := by
     auto
 
-    -- Brute force example
+  -- Brute force example
   -- This must be fixed
   set_option auto.prep.redMode "instances" in
   example : (∀ (m n k : Nat), m + n + k = m + (n + k)) := by
