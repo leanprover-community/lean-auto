@@ -2098,6 +2098,36 @@ theorem LamWF.ofMapBVarAt.correct (lval : LamValuation.{u}) {restoreDep : _}
 -- Changing all `.bvar ?n` in `t` (where `?n >= idx`) to `.bvar (?n + lvl)`
 def LamTerm.bvarLiftsIdx (idx lvl : Nat) := LamTerm.mapBVarAt idx (fun x => Nat.add x lvl)
 
+theorem LamTerm.bvarLiftsIdx_eq_bvar :
+  bvarLiftsIdx idx lvl t = bvar n ↔
+  (n < idx ∧ t = .bvar n) ∨ (n ≥ idx + lvl ∧ t = .bvar (n - lvl)) := by
+  cases t <;> simp [bvarLiftsIdx, mapBVarAt]
+  case bvar n' =>
+    dsimp [mapAt]; cases h₁ : idx.ble n' <;> dsimp
+    case false =>
+      have h₁' := Nat.lt_of_ble_eq_false h₁; clear h₁
+      apply Iff.intro
+      case mp => intro h; cases h; apply Or.inl (And.intro h₁' rfl)
+      case mpr =>
+        intro h; cases h
+        case inl h => apply h.right
+        case inr h =>
+          apply False.elim (Nat.not_le_of_lt h₁' _); cases h.right
+          apply Nat.le_sub_of_add_le h.left
+    case true =>
+      have h₁' := Nat.le_of_ble_eq_true h₁; clear h₁
+      rw [Nat.add_assoc, Nat.add_comm lvl idx, ← Nat.add_assoc]
+      rw [Nat.sub_add_cancel h₁']; apply Iff.intro
+      case mp =>
+        intro h; cases h; apply Or.inr (And.intro (Nat.add_le_add_right h₁' _) _)
+        rw [Nat.add_sub_cancel]
+      case mpr =>
+        intro h; cases h
+        case inl h => cases h.right; apply False.elim (Nat.not_le_of_lt h.left h₁')
+        case inr h =>
+          cases h.right; rw [Nat.sub_add_cancel]; apply Nat.le_trans _ h.left
+          apply Nat.le_add_left
+
 theorem LamTerm.maxEVarSucc_bvarLiftsIdx {t : LamTerm} :
   (t.bvarLiftsIdx idx lvl).maxEVarSucc = t.maxEVarSucc := maxEVarSucc_mapBVarAt
 

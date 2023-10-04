@@ -248,10 +248,29 @@ section push
 
   theorem pushLCtxAt_zero (x : α) : pushLCtxAt x 0 = pushLCtx x := restoreAt_zero _
 
-  theorem pushLCtxAt_eq (x : α) (idx : Nat) : pushLCtxAt x idx lctx idx = x := by
+  theorem pushLCtxAt_lt (x : α) (pos : Nat) (n : Nat) (hlt : n < pos) : pushLCtxAt x pos lctx n = lctx n := by
     dsimp [pushLCtxAt, restoreAt]
-    rw [show (idx.ble idx = true) by (apply Nat.ble_eq_true_of_le; apply Nat.le_refl)]
+    rw [show (pos.ble n = false) by (apply Nat.ble_eq_false_of_lt _ hlt)]
+
+  theorem pushLCtxAt_eq (x : α) (pos : Nat) : pushLCtxAt x pos lctx pos = x := by
+    dsimp [pushLCtxAt, restoreAt]
+    rw [show (pos.ble pos = true) by (apply Nat.ble_eq_true_of_le; apply Nat.le_refl)]
     rw [Nat.sub_self]
+  
+  theorem pushLCtxAt_gt (x : α) (pos : Nat) (n : Nat) (hle : n > pos) : pushLCtxAt x pos lctx n = lctx n.pred := by
+    dsimp [pushLCtxAt, restoreAt]
+    rw [show (pos.ble n = true) by (apply Nat.ble_eq_true_of_le; apply Nat.le_of_lt hle)]
+    dsimp [pushLCtx]; cases h : n - pos
+    case zero =>
+      have hge : pos ≥ n := Nat.le_of_sub_eq_zero h
+      apply False.elim (Nat.not_le_of_lt hle hge)
+    case succ _ =>
+      dsimp; cases n
+      case zero => cases hle
+      case succ n =>
+        have hle' := Nat.le_of_succ_le_succ hle
+        rw [Nat.succ_sub hle'] at h; cases h
+        rw [Nat.sub_add_cancel hle']; rfl
 
   theorem pushLCtxAt_succ_zero (x : α) (pos : Nat) (lctx : Nat → α) :
     pushLCtxAt x (.succ pos) lctx 0 = lctx 0 := rfl

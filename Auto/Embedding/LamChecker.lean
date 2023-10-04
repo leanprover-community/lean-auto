@@ -468,9 +468,9 @@ inductive EtomStep where
 inductive InferenceStep where
   -- If `t` has no loose bvar `0` and `s` is inhabited (pn), then
   --  `∀ (_ : s), t` (pv) implies `LamTerm.instantiate1 (.atom 0) t`
-  | validOfElimBVar (pv : Nat) (pn : Nat) : InferenceStep
-  -- Repeated `validOfElimBVar`
-  | validOfElimBVars (pv : Nat) (pns : List Nat) : InferenceStep
+  | validOfBVarLower (pv : Nat) (pn : Nat) : InferenceStep
+  -- Equivalent to repeated `validOfBVarLower`
+  | validOfBVarLowers (pv : Nat) (pns : List Nat) : InferenceStep
   -- `t₁ → t₂` and `t₁` implies `t₂`
   | validOfImp (p₁₂ : Nat) (p₁ : Nat) : InferenceStep
   -- `t₁ → t₂ → ⋯ → tₖ → s` and `t₁, t₂, ⋯, tₖ` implies `s`
@@ -529,8 +529,8 @@ def EtomStep.toString : EtomStep → String
 | .define t => s!"define {t}"
 
 def InferenceStep.toString : InferenceStep → String
-| .validOfElimBVar pv pn => s!"validOfElimBVar {pv} {pn}"
-| .validOfElimBVars pv pns => s!"validOfElimBVars {pv} {pns}"
+| .validOfBVarLower pv pn => s!"validOfBVarLower {pv} {pn}"
+| .validOfBVarLowers pv pns => s!"validOfBVarLowers {pv} {pns}"
 | .validOfImp p₁₂ p₁ => s!"validOfImp {p₁₂} {p₁}"
 | .validOfImps imp ps => s!"validOfImps {imp} {ps}"
 | .validOfInstantiate1 pos arg => s!"validOfInstantiate1 {pos} {arg}"
@@ -635,19 +635,19 @@ def InferenceStep.evalValidOfInstantiate (n : Nat) (ltv : LamTyVal) (lctx : List
         | false => .fail
       | .none => .fail
 
-def InferenceStep.evalValidOfElimBVars (r : RTable) (lctx : List LamSort) (t : LamTerm) (pns : List Nat) : EvalResult :=
+def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns : List Nat) : Option (List LamSort) :=
   match pns with
-  | .nil => .addEntry (.valid lctx t)
+  | .nil => .some lctx
   | .cons pn pns' =>
     match r.getNonempty pn with
-    | .none => .fail
+    | .none => .none
     | .some s =>
       match lctx with
-      | .nil => .fail
+      | .nil => .none
       | .cons s' lctx' =>
-        match s.beq s', t.elimBVar? with
-        | true, .some t' => evalValidOfElimBVars r lctx' t' pns'
-        | _, _ => .fail
+        match s.beq s' with
+        | false => .none
+        | true => evalValidOfBVarLowers r lctx' pns'
     
 @[reducible] def ConvStep.eval (r : RTable) : (cs : ConvStep) → EvalResult
 | .validOfHeadBeta pos =>
@@ -753,7 +753,7 @@ def InferenceStep.evalValidOfElimBVars (r : RTable) (lctx : List LamSort) (t : L
   | .none => .fail
 
 @[reducible] def InferenceStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : InferenceStep) → EvalResult
-| .validOfElimBVar pv pn =>
+| .validOfBVarLower pv pn =>
   match r.getValid pv with
   | .some (lctx, t) =>
     match r.getNonempty pn with
@@ -762,13 +762,19 @@ def InferenceStep.evalValidOfElimBVars (r : RTable) (lctx : List LamSort) (t : L
       match lctx with
       | .nil => .fail
       | .cons s' lctx' =>
-        match s.beq s', LamTerm.elimBVar? t with
+        match s.beq s', LamTerm.bvarLower? t with
         | true, .some t' => .addEntry (.valid lctx' t')
         | _, _ => .fail
   | .none => .fail
-| .validOfElimBVars pv pns =>
+| .validOfBVarLowers pv pns =>
   match r.getValid pv with
-  | .some (lctx, t) => evalValidOfElimBVars r lctx t pns
+  | .some (lctx, t) =>
+    match t.bvarLowers? pns.length with
+    | .some t' =>
+      match evalValidOfBVarLowers r lctx pns with
+      | .some lctx' => .addEntry (.valid lctx' t')
+      | .none => .fail
+    | .none => .fail
   | .none => .fail
 | .validOfImp p₁₂ p₁ =>
   match r.getValid p₁₂ with
@@ -932,34 +938,31 @@ theorem LCtxStep.evalValidOfReverts_correct
       dsimp [LamTerm.mkForallEF, LamTerm.maxEVarSucc]
       rw [Nat.max, Nat.max_zero_left]; apply tV.right
 
-theorem InferenceStep.evalValidOfElimBVars_correct
+theorem InferenceStep.evalValidOfBVarLowers_correct
   {r : RTable} (cv : CVal.{u} r.lamEVarTy) (inv : RTable.inv r cv)
-  (tV : LamThmValid cv.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc) :
-  (evalValidOfElimBVars r lctx t pns).correct r cv := by
-  induction pns generalizing lctx t
+  (heq : evalValidOfBVarLowers r lctx pns = .some lctx') :
+  ∃ (ss : _) (_ : HList (LamNonempty cv.tyVal) ss),
+    ss.length = pns.length ∧ lctx = ss ++ lctx' := by
+  induction pns generalizing lctx
   case nil =>
-    unfold evalValidOfElimBVars; exact tV
+    unfold evalValidOfBVarLowers at heq; cases heq; exists .nil, .nil;
   case cons pn pns' IH =>
-    unfold evalValidOfElimBVars
+    unfold evalValidOfBVarLowers at heq; revert heq
     match h₁ : r.getNonempty pn with
-    | .none => exact True.intro
+    | .none => intro h; cases h
     | .some s =>
       dsimp
       match lctx with
-      | .nil => exact True.intro
-      | .cons s' lctx' =>
+      | .nil => intro h; cases h
+      | .cons s' lctx'' =>
         dsimp
-        match h₂ : LamSort.beq s s', h₃ : LamTerm.elimBVar? t with
-        | true, .some t' =>
+        match h₂ : LamSort.beq s s' with
+        | true =>
           have h₁' := RTable.getNonempty_correct inv h₁
-          cases (LamSort.eq_of_beq_eq_true h₂)
-          dsimp; apply IH; apply ChkStep.eval_correct_validAux tV
-          case vimp =>
-            intro tV; apply LamThmValid.elimBVarIdx? tV h₃ h₁'
-          case condimp =>
-            intro tV; rw [LamTerm.maxEVarSucc_elimBVarIdx? h₃]; exact tV
-        | true, .none => exact True.intro
-        | false, _ => exact True.intro
+          cases (LamSort.eq_of_beq_eq_true h₂); dsimp
+          intro eeq; have ⟨ss, hInh, pneq, sseq⟩ := IH eeq
+          exists .cons s ss, .cons h₁' hInh; simp [pneq, sseq]
+        | false => intro h; cases h
 
 theorem InferenceStep.evalValidOfInstantiate_correct
   {r : RTable} (cv : CVal.{u} r.lamEVarTy)
@@ -1257,22 +1260,49 @@ theorem EtomStep.eval_correct
 theorem InferenceStep.eval_correct
   (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
   (cs : InferenceStep) → EvalResult.correct r cv (cs.eval cv.toLamVarTy cv.toLamILTy r)
-| .validOfElimBVar pv pn => by
+| .validOfBVarLower pv pn => by
   dsimp [eval]
   match h₁ : r.getValid pv with
   | .some (lctx, t) =>
-    dsimp
-    have h₁' := RTable.getValid_correct inv h₁
-    have hi := InferenceStep.evalValidOfElimBVars_correct (pns:=[pn]) _ inv h₁'
-    unfold evalValidOfElimBVars at hi; unfold evalValidOfElimBVars at hi;
-    exact hi
+    dsimp; have h₁' := RTable.getValid_correct inv h₁
+    match h₂ : r.getNonempty pn with
+    | .some s =>
+      dsimp; have h₂' := RTable.getNonempty_correct inv h₂
+      match lctx with
+      | .nil => exact True.intro
+      | .cons s' lctx =>
+        dsimp
+        match h₃ : s.beq s', h₄ : t.bvarLower? with
+        | true, .some t' =>
+          cases LamSort.eq_of_beq_eq_true h₃
+          apply ChkStep.eval_correct_validAux h₁'
+          case vimp =>
+            intro hv; apply LamThmValid.bvarLower? (lval:=cv.toLamValuation) hv h₄ h₂'
+          case condimp =>
+            intro hcond; rw [LamTerm.maxEVarSucc_bvarLower? h₄]; exact hcond
+        | true, .none => exact True.intro
+        | false, _ => exact True.intro
+    | .none => exact True.intro
   | .none => exact True.intro
-| .validOfElimBVars pv pns => by
+| .validOfBVarLowers pv pns => by
   dsimp [eval]
   match h₁ : r.getValid pv with
   | .some (lctx, t) =>
-    have h₁' := RTable.getValid_correct inv h₁
-    apply InferenceStep.evalValidOfElimBVars_correct _ inv h₁'
+    dsimp; have h₁' := RTable.getValid_correct inv h₁
+    match h₂ : LamTerm.bvarLowers? (List.length pns) t with
+    | .some t' =>
+      dsimp
+      match h₃ : evalValidOfBVarLowers r lctx pns with
+      | .some lctx' =>
+        apply ChkStep.eval_correct_validAux h₁'
+        case vimp =>
+          have ⟨ss, hInh, pneq, sseq⟩ := evalValidOfBVarLowers_correct cv inv h₃
+          intro hv; apply LamThmValid.bvarLowers? (lval:=cv.toLamValuation) (ss:=ss) _ pneq h₂ hInh
+          rw [← sseq]; exact hv
+        case condimp =>
+          intro hcond; rw [LamTerm.maxEVarSucc_bvarLowers? h₂]; exact hcond
+      | .none => exact True.intro
+    | .none => exact True.intro
   | .none => exact True.intro
 | .validOfImp p₁₂ p₁ => by
   dsimp [eval]

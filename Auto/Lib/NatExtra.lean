@@ -40,6 +40,23 @@ theorem Nat.ble_add (a b e : Nat) : Nat.ble a b = Nat.ble (a + e) (b + e) := by
 
 theorem Nat.zero_ble (b : Nat) : Nat.ble 0 b = true := by cases b <;> rfl
 
+theorem Nat.tricotomy {m n : Nat} : m < n ∨ m = n ∨ m > n := by
+  cases Nat.le_or_le m n
+  case inl h =>
+    cases Nat.lt_or_eq_of_le h
+    case inl h => exact Or.inl h
+    case inr h => exact Or.inr (Or.inl h)
+  case inr h =>
+    cases Nat.lt_or_eq_of_le h
+    case inl h => exact Or.inr (Or.inr h)
+    case inr h => exact Or.inr (Or.inl h.symm)
+
+theorem Nat.lt_or_gt_of_ne {m n : Nat} (H : m ≠ n) : m < n ∨ m > n :=
+  match @Nat.tricotomy m n with
+  | .inl h => Or.inl h
+  | .inr (.inl h) => False.elim (H h)
+  | .inr (.inr h) => Or.inr h
+
 theorem Nat.eq_of_le_of_lt_succ {n m : Nat} (h₁ : n ≤ m) (h₂ : m < n + 1) : m = n :=
   Nat.le_antisymm (Nat.le_of_succ_le_succ h₂) h₁
 

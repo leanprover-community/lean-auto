@@ -585,6 +585,121 @@ theorem LamThmValid.instantiate1
   exists (LamWF.instantiate1 _ _ hArg wfBody); intro lctxTerm;
   rw [← LamWF.interp_instantiate1]; apply vBody
 
+def LamTerm.bvarLowersIdx? (idx : Nat) (lvl : Nat) : LamTerm → Option LamTerm
+| .atom n => .some (.atom n)
+| .etom n => .some (.etom n)
+| .base b => .some (.base b)
+| .bvar n =>
+  match idx.ble n with
+  | true =>
+    match (idx + lvl).ble n with
+    | true => .some (.bvar (n - lvl))
+    | false => .none
+  | false => .some (.bvar n)
+| .lam s body =>
+  match bvarLowersIdx? (.succ idx) lvl body with
+  | .some body' => .some (.lam s body')
+  | .none => .none
+| .app s fn arg =>
+  match bvarLowersIdx? idx lvl fn, bvarLowersIdx? idx lvl arg with
+  | .some fn', .some arg' => .some (.app s fn' arg')
+  | _, _ => .none
+
+theorem LamTerm.bvarLowersIdx?_bvar_eq_some :
+  bvarLowersIdx? idx lvl (bvar n) = .some t ↔
+  (n < idx ∧ t = .bvar n) ∨ (n ≥ idx + lvl ∧ t = .bvar (n - lvl)) := by
+  dsimp [bvarLowersIdx?]; cases h₁ : idx.ble n <;> simp
+  case false =>
+    have h₁' := Nat.lt_of_ble_eq_false h₁; clear h₁
+    apply Iff.intro
+    case mp =>
+      intro h; cases h; apply Or.inl; apply And.intro h₁' rfl
+    case mpr =>
+      intro h; cases h
+      case inl h' => apply h'.right.symm
+      case inr h' =>
+        have h₁ := Nat.not_le_of_lt h₁'
+        have h'' := Nat.le_trans (Nat.le_add_right _ _) h'.left
+        apply False.elim (h₁ h'')
+  case true =>
+    have h₁' := Nat.le_of_ble_eq_true h₁; clear h₁
+    cases h₂ : (idx + lvl).ble n <;> simp
+    case false =>
+      have h₂' := Nat.lt_of_ble_eq_false h₂; clear h₂
+      apply not_or.mpr (And.intro ?nlt ?nge)
+      case nlt => intro h; have h' := Nat.not_le_of_lt h.left; apply h' h₁'
+      case nge => intro h; have h' := Nat.not_le_of_lt h₂'; apply h' h.left
+    case true =>
+      have h₂' := Nat.le_of_ble_eq_true h₂; clear h₂
+      apply Iff.intro <;> intro h
+      case mp => cases h; apply Or.inr (And.intro h₂' rfl)
+      case mpr =>
+        cases h
+        case inl h => have h' := Nat.not_le_of_lt h.left; apply False.elim (h' h₁')
+        case inr h => apply h.right.symm
+
+theorem LamTerm.bvarLowersIdx?_spec :
+  bvarLowersIdx? idx lvl t = .some t' ↔ bvarLiftsIdx idx lvl t' = t := by
+  induction t generalizing idx lvl t' <;> try (
+    dsimp [bvarLowersIdx?]; cases t' <;> simp <;> try (intro h; cases h)
+    simp [bvarLiftsIdx, mapBVarAt]; apply Iff.intro <;> apply Eq.symm)
+  case bvar n =>
+    rw [LamTerm.bvarLowersIdx?_bvar_eq_some]
+    rw [LamTerm.bvarLiftsIdx_eq_bvar]
+  case lam s body IH =>
+    dsimp [bvarLowersIdx?]
+    cases t' <;> try (
+      simp [bvarLiftsIdx, mapBVarAt]
+      cases h₁ : bvarLowersIdx? (Nat.succ idx) lvl body <;> (solve | simp))
+    case lam s' body' =>
+      rw [bvarLiftsIdx_lam]; simp
+      rw [← IH]; cases h : bvarLowersIdx? (Nat.succ idx) lvl body
+      case none => simp
+      case some bodyL => simp; intro _; apply Iff.intro Eq.symm Eq.symm
+  case app s fn arg IHFn IHArg =>
+    dsimp [bvarLowersIdx?]
+    cases t' <;> try (
+      simp [bvarLiftsIdx, mapBVarAt];
+      cases h₁ : bvarLowersIdx? idx lvl fn <;>
+      cases h₂ : bvarLowersIdx? idx lvl arg <;> (solve | simp))
+    case app s' fn' arg' =>
+      rw [bvarLiftsIdx_app]; simp; rw [← IHFn, ← IHArg]
+      cases h₁ : bvarLowersIdx? idx lvl fn <;> simp
+      case some fnL =>
+        cases h₂ : bvarLowersIdx? idx lvl arg <;> simp
+        intro _ _; apply Iff.intro Eq.symm Eq.symm
+
+theorem LamTerm.maxEVarSucc_bvarLowersIdx?
+  (heq : LamTerm.bvarLowersIdx? idx lvl t = .some t') : t'.maxEVarSucc = t.maxEVarSucc := by
+  cases bvarLowersIdx?_spec.mp heq; rw [maxEVarSucc_bvarLiftsIdx]
+
+def LamTerm.bvarLowers? (lvl : Nat) (t : LamTerm) := bvarLowersIdx? 0 lvl t
+
+theorem LamTerm.bvarLowers?_spec : bvarLowers? lvl t = .some t' ↔ bvarLifts lvl t' = t :=
+  bvarLowersIdx?_spec
+
+theorem LamTerm.maxEVarSucc_bvarLowers?
+  (heq : LamTerm.bvarLowers? lvl t = .some t') : t'.maxEVarSucc = t.maxEVarSucc :=
+  LamTerm.maxEVarSucc_bvarLowersIdx? heq
+
+def LamTerm.bvarLowerIdx? (idx : Nat) (t : LamTerm) := bvarLowersIdx? idx 1 t
+
+theorem LamTerm.bvarLowerIdx?_spec : bvarLowerIdx? idx t = .some t' ↔ bvarLiftIdx idx t' = t :=
+  bvarLowersIdx?_spec
+
+theorem LamTerm.maxEVarSucc_bvarLowerIdx?
+  (heq : LamTerm.bvarLowerIdx? idx t = .some t') : t'.maxEVarSucc = t.maxEVarSucc :=
+  LamTerm.maxEVarSucc_bvarLowersIdx? heq
+
+def LamTerm.bvarLower? := bvarLowerIdx? 0
+
+theorem LamTerm.bvarLower?_spec : bvarLower? t = .some t' ↔ bvarLift t' = t :=
+  bvarLowersIdx?_spec
+
+theorem LamTerm.maxEVarSucc_bvarLower?
+  (heq : LamTerm.bvarLower? t = .some t') : t'.maxEVarSucc = t.maxEVarSucc :=
+  LamTerm.maxEVarSucc_bvarLowersIdx? heq
+
 def LamBaseTerm.resolveImport (ltv : LamTyVal) : LamBaseTerm → LamBaseTerm
 | .eqI n      => .eq (ltv.lamILTy n)
 | .forallEI n => .forallE (ltv.lamILTy n)
