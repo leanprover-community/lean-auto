@@ -800,14 +800,14 @@ theorem LamValid.eq_congrArg
   LamValid lval lctx (.mkEq resTy (.app argTy fn arg₁) (.app argTy fn arg₂)) := by
   apply LamValid.eq_congr _ HArg; apply LamValid.eq_refl wfFn₁
 
-def LamWF.funext
+def LamWF.funextF
   (wf : LamWF ltv ⟨lctx, .mkEq (.func argTy resTy) fn₁ fn₂, s⟩) :
   LamWF ltv ⟨pushLCtx argTy lctx, .mkEq resTy (.app argTy fn₁.bvarLift (.bvar 0)) (.app argTy fn₂.bvarLift (.bvar 0)), .base .prop⟩ :=
   let wflAp := LamWF.ofApp _ wf.getFn.getArg.ofBVarLift .pushLCtx_ofBVar
   let wfrAp := LamWF.ofApp _ wf.getArg.ofBVarLift .pushLCtx_ofBVar
   LamWF.mkEq wflAp wfrAp
 
-def LamWF.ofFunext
+def LamWF.ofFunextF
   (wf : LamWF ltv ⟨pushLCtx argTy lctx, .mkEq resTy (.app argTy fn₁.bvarLift (.bvar 0)) (.app argTy fn₂.bvarLift (.bvar 0)), s⟩) :
   LamWF ltv ⟨lctx, .mkEq (.func argTy resTy) fn₁ fn₂, .base .prop⟩ :=
   let wfl := wf.getFn.getArg.getFn.fromBVarLift
@@ -830,10 +830,10 @@ theorem LamWF.interp_funext
       case mp =>
         intro h x; rw [← LamWF.interp_ofBVarLift, ← LamWF.interp_ofBVarLift, h]
       case mpr =>
-        intro h; apply _root_.funext; intro x; have h' := h x
+        intro h; apply funext; intro x; have h' := h x
         rw [← LamWF.interp_ofBVarLift, ← LamWF.interp_ofBVarLift] at h'; exact h'
 
-theorem LamEquiv.eqFunext
+theorem LamEquiv.eqFunextF
   (wfEq : LamWF lval.toLamTyVal ⟨lctx, .mkEq (.func argTy resTy) fn₁ fn₂, s⟩) :
   LamEquiv lval lctx s
     (.mkEq (.func argTy resTy) fn₁ fn₂)
@@ -854,23 +854,38 @@ theorem LamEquiv.eqFunext
       case left => rw [← LamWF.interp_ofBVarLift]
       case right => rw [← LamWF.interp_ofBVarLift]
 
-theorem LamEquiv.funext
+theorem LamEquiv.eqFunextH
+  (wfEq : LamWF lval.toLamTyVal ⟨pushLCtx argTy lctx, .mkEq resTy p₁ p₂, s⟩) :
+  LamEquiv lval lctx s
+    (.mkForallEF argTy (.mkEq resTy p₁ p₂))
+    (.mkEq (.func argTy resTy) (.lam argTy p₁) (.lam argTy p₂)) := by
+  cases wfEq.getFn.getFn.getBase
+  match wfEq with
+  | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) wfFn₁) wfFn₂ =>
+    exists LamWF.mkForallEF (.ofApp _ (.ofApp _ (.ofBase (.ofEq _)) wfFn₁) wfFn₂)
+    exists LamWF.mkEq (.ofLam _ wfFn₁) (.ofLam _ wfFn₂); intro lctxTerm
+    dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, eqLiftFn, forallLiftFn]
+    apply GLift.down.inj; dsimp; apply propext (Iff.intro ?mp ?mpr)
+    case mp => apply funext
+    case mpr => intro h x; apply _root_.congrFun h
+
+theorem LamEquiv.funextF
   (eAp : LamEquiv lval (pushLCtx argTy lctx) resTy (.app argTy fn₁.bvarLift (.bvar 0)) (.app argTy fn₂.bvarLift (.bvar 0))) :
   LamEquiv lval lctx (.func argTy resTy) fn₁ fn₂ := by
   have ⟨wfFnAp₁, wfFnAp₂, hFnAp⟩ := eAp
   apply LamEquiv.ofLamValid (s:=.func argTy resTy) _
   have hEqValid := LamValid.ofLamEquiv eAp
   apply LamValid.mpLamEquiv (s:=.base .prop) (LamValid.revert1F hEqValid)
-  apply LamEquiv.symm; apply LamEquiv.eqFunext
+  apply LamEquiv.symm; apply LamEquiv.eqFunextF
   apply LamWF.mkEq wfFnAp₁.getFn.fromBVarLift wfFnAp₂.getFn.fromBVarLift
 
-theorem LamValid.eqFunext
+theorem LamValid.funextF
   {fn₁ fn₂ : LamTerm}
   (HApp : LamValid lval (pushLCtx argTy lctx) (.mkEq resTy
     (.app argTy fn₁.bvarLift (.bvar 0)) (.app argTy fn₂.bvarLift (.bvar 0)))) :
   LamValid lval lctx (.mkEq (.func argTy resTy) fn₁ fn₂) :=
   have heqAp := LamEquiv.ofLamValid HApp
-  have heqFn := LamEquiv.funext heqAp
+  have heqFn := LamEquiv.funextF heqAp
   LamValid.ofLamEquiv heqFn
 
 theorem LamValid.impLift (H : LamValid lval lctx (.mkImp t₁ t₂)) :

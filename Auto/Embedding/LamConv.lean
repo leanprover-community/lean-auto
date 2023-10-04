@@ -26,7 +26,7 @@ theorem LamEquiv.etaExpand1
   {lval : LamValuation.{u}}
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, .func argTy resTy⟩) :
   LamEquiv lval lctx (.func argTy resTy) t (t.etaExpand1 argTy) :=
-  ⟨wft, LamWF.etaExpand1 wft, fun _ => _root_.funext (fun _ => Eq.symm (LamWF.interp_app_bvarLift_bvar0 _))⟩
+  ⟨wft, LamWF.etaExpand1 wft, fun _ => funext (fun _ => Eq.symm (LamWF.interp_app_bvarLift_bvar0 _))⟩
 
 -- This is meant to eta-expand a term `t` which has type `argTys₀ → ⋯ → argTysᵢ₋₁ → resTy`
 def LamTerm.etaExpandAux (argTys : List LamSort) (t : LamTerm) : LamTerm :=
@@ -149,7 +149,7 @@ theorem LamEquiv.ofExtensionalizeEqFWithAux
     rw [List.nil_append, List.singleton_append]
     rw [LamTerm.etaExpandAux_append_singleton, LamTerm.etaExpandAux_append_singleton]
     apply LamEquiv.trans (IH wfl wfr); dsimp [LamTerm.mkForallEFN]
-    apply LamEquiv.congr_mkForallEFN; apply LamEquiv.eqFunext
+    apply LamEquiv.congr_mkForallEFN; apply LamEquiv.eqFunextF
     apply LamWF.mkEq (.etaExpandAux wfl) (.etaExpandAux wfr)
 
 theorem LamEquiv.ofExtensionalizeEqFWith
@@ -497,7 +497,7 @@ theorem LamWF.interp_instantiateAt.{u}
     | _ + 1 => rfl
   | false => rfl
 | lctxTy, lctxTerm, wfArg, .ofLam (argTy:=argTy') bodyTy' (body:=body') H =>
-  _root_.funext (fun x => by
+  funext (fun x => by
     have wfArg' := LamWF.ofBVarLift (s:=argTy') (lctx:=lctxTy) _ wfArg
     rw [← LamTerm.bvarLifts_succ_r] at wfArg'
     rw [pushLCtx_pushLCtxAt] at H
@@ -672,7 +672,7 @@ theorem LamWF.interp_resolveImport
   | .ofBase b => LamBaseTerm.LamWF.interp_resolveImport lval b
   | .ofBVar n => rfl
   | .ofLam s hwf => by
-    apply _root_.funext; intros x; dsimp [interp]
+    apply funext; intros x; dsimp [interp]
     rw [LamWF.interp_resolveImport _ _ hwf]
   | .ofApp s wfFn wfArg => by
     dsimp [interp];
