@@ -1,4 +1,4 @@
-import Auto.Embedding.LamBase
+import Auto.Embedding.LamBVarOp
 
 namespace Auto.Embedding.Lam
 
@@ -49,9 +49,16 @@ def LamThmEquiv (lval : LamValuation) (lctx : List LamSort) (rty : LamSort)
 def LamGenEquiv (lval : LamValuation) (t₁ t₂ : LamTerm) := ∀ (lctx : Nat → LamSort) (rty : LamSort),
   LamWF lval.toLamTyVal ⟨lctx, t₁, rty⟩ → LamEquiv lval lctx rty t₁ t₂
 
--- Generic conversions like clausification satisfy `LamGenEquiv`
+def LamGenEquivWith (lval : LamValuation) (rty : LamSort) (t₁ t₂ : LamTerm) :=
+  ∀ (lctx : Nat → LamSort), LamWF lval.toLamTyVal ⟨lctx, t₁, rty⟩ → LamEquiv lval lctx rty t₁ t₂
+
+-- Generic conversions like clausification satisfy `LamGenConv`
 def LamGenConv (lval : LamValuation) (conv : LamTerm → Option LamTerm) :=
   ∀ (t₁ t₂ : LamTerm), conv t₁ = .some t₂ → LamGenEquiv lval t₁ t₂
+
+-- Generic conversions like eta expansion satisfy `LamGenConvWith`
+def LamGenConvWith (lval : LamValuation) (conv : LamSort → LamTerm → Option LamTerm) :=
+  ∀ (rty : LamSort) (t₁ t₂ : LamTerm), conv rty t₁ = .some t₂ → LamGenEquivWith lval rty t₁ t₂
 
 def LamGenModify (lval : LamValuation) (modify : LamTerm → Option LamTerm) (weaken? : Bool) :=
   ∀ (t₁ t₂ : LamTerm), modify t₁ = .some t₂ → ∀ (lctx : Nat → LamSort),
@@ -67,11 +74,11 @@ def LamTerm.rwGenAt (pos : List Bool) (conv : LamTerm → Option LamTerm) (t : L
   | .nil => conv t
   | .cons b pos =>
     match t with
+    | .lam s body => (rwGenAt pos conv body).bind (LamTerm.lam s ·)
     | .app s fn arg =>
       match b with
       | false => (rwGenAt pos conv fn).bind (LamTerm.app s · arg)
       | true => (rwGenAt pos conv arg).bind (LamTerm.app s fn ·)
-    | .lam s body => (rwGenAt pos conv body).bind (LamTerm.lam s ·)
     | _ => .none
 
 def LamTerm.rwGenAll (conv : LamTerm → Option LamTerm) (t : LamTerm) : Option LamTerm :=
@@ -110,6 +117,68 @@ theorem LamTerm.rwGenAll_app : rwGenAll conv (.app s fn arg) =
     match rwGenAll conv fn, rwGenAll conv arg with
     | .some fn', .some arg' => .some (.app s fn' arg')
     | _, _ => .none := by simp [rwGenAll]
+
+-- Apply conversion theorem at a given position in `t`
+-- The conversion should only be ones that satisfy `LamGenConvWith`
+def LamTerm.rwGenAtWith (pos : List Bool) (conv : LamSort → LamTerm → Option LamTerm)
+  (rty : LamSort) (t : LamTerm) : Option LamTerm :=
+  match pos with
+  | .nil => conv rty t
+  | .cons b pos =>
+    match t with
+    | .lam s body =>
+      match rty with
+      | .func _ resTy => (rwGenAtWith pos conv resTy body).bind (LamTerm.lam s ·)
+      | _ => .none
+    | .app s fn arg =>
+      match b with
+      | false => (rwGenAtWith pos conv (.func s rty) fn).bind (LamTerm.app s · arg)
+      | true => (rwGenAtWith pos conv s arg).bind (LamTerm.app s fn ·)
+    | _ => .none
+
+def LamTerm.rwGenAllWith (conv : LamSort → LamTerm → Option LamTerm)
+  (rty : LamSort) (t : LamTerm) : Option LamTerm :=
+  match conv rty t with
+  | .some t' => .some t'
+  | .none =>
+    match t with
+    | .lam s body =>
+      match rty with
+      | .func _ resTy => (rwGenAllWith conv resTy body).bind (LamTerm.lam s ·)
+      | _ => .none
+    | .app s fn arg =>
+      match rwGenAllWith conv (.func s rty) fn, rwGenAllWith conv s arg with
+      | .some fn', .some arg' => .some (.app s fn' arg')
+      | _, _ => .none
+    | _ => .none
+
+theorem LamTerm.rwGenAllWith_atom : rwGenAllWith conv s (.atom n) = conv s (.atom n) := by
+  simp [rwGenAllWith]; cases conv s (atom n) <;> rfl
+
+theorem LamTerm.rwGenAllWith_etom : rwGenAllWith conv s (.etom n) = conv s (.etom n) := by
+  simp [rwGenAllWith]; cases conv s (etom n) <;> rfl
+
+theorem LamTerm.rwGenAllWith_base : rwGenAllWith conv s (.base b) = conv s (.base b) := by
+  simp [rwGenAllWith]; cases conv s (base b) <;> rfl
+
+theorem LamTerm.rwGenAllWith_bvar : rwGenAllWith conv s (.bvar n) = conv s (.bvar n) := by
+  simp [rwGenAllWith]; cases conv s (bvar n) <;> rfl
+
+theorem LamTerm.rwGenAllWith_lam : rwGenAllWith conv rty (.lam s body) =
+  match conv rty (.lam s body) with
+  | .some t' => .some t'
+  | .none =>
+    match rty with
+    | .func _ resTy => (rwGenAllWith conv resTy body).bind (LamTerm.lam s ·)
+    | _ => .none := by simp [rwGenAllWith]
+
+theorem LamTerm.rwGenAllWith_app : rwGenAllWith conv rty (.app s fn arg) =
+  match conv rty (.app s fn arg) with
+  | .some t' => .some t'
+  | .none =>
+    match rwGenAllWith conv (.func s rty) fn, rwGenAllWith conv s arg with
+    | .some fn', .some arg' => .some (.app s fn' arg')
+    | _, _ => .none := by simp [rwGenAllWith]
 
 -- Determine whether a position is negative / whether a position is positive
 def LamTerm.isSign (sign : Bool) (pos : List Bool) (t : LamTerm) :=
@@ -524,6 +593,8 @@ theorem LamThmEquiv.refl (wf : LamThmWF lval lctx s t) :
 
 theorem LamGenEquiv.refl : LamGenEquiv lval t t := fun _ _ => LamEquiv.refl
 
+theorem LamGenEquivWith.refl : LamGenEquivWith lval s t t := fun _ => LamEquiv.refl
+
 theorem LamEquiv.eq (wf : LamWF lval.toLamTyVal ⟨lctx, t₁, s⟩)
   (heq : t₁ = t₂) : LamEquiv lval lctx s t₁ t₂ := heq ▸ LamEquiv.refl wf
 
@@ -568,6 +639,12 @@ theorem LamGenEquiv.ofLam (e : LamGenEquiv lval a b) :
   intro lctx rty wf₁; cases wf₁
   case ofLam _ wfBody =>
     apply LamEquiv.ofLam; apply e _ _ wfBody
+
+theorem LamGenEquivWith.ofLam (e : LamGenEquivWith lval s a b) :
+  LamGenEquivWith lval (.func w'' s) (.lam w a) (.lam w b) := by
+  intros lctx wf₁; cases wf₁
+  case ofLam wfBody =>
+    apply LamEquiv.ofLam; apply e _ wfBody
 
 theorem LamEquiv.fromLam
   (e : LamEquiv lval lctx (.func w s) (.lam w a) (.lam w b)) :
@@ -620,6 +697,16 @@ theorem LamGenEquiv.congr (eFn : LamGenEquiv lval fn₁ fn₂) (eArg : LamGenEqu
   case eFn => apply eFn _ _ wfFn
   case eArg => apply eArg _ _ wfArg
 
+theorem LamGenEquivWith.congr
+  (eFn : LamGenEquivWith lval (.func argTy resTy) fn₁ fn₂)
+  (eArg : LamGenEquivWith lval argTy arg₁ arg₂) :
+  LamGenEquivWith lval resTy (.app argTy fn₁ arg₁) (.app argTy fn₂ arg₂) := by
+  intros lctx wfAp₁; cases wfAp₁
+  case ofApp wfArg wfFn =>
+    apply LamEquiv.congr
+    case eFn => apply eFn _ wfFn
+    case eArg => apply eArg _ wfArg
+
 theorem LamEquiv.congrFun
   (eFn : LamEquiv lval lctx (.func argTy resTy) fn₁ fn₂)
   (wfArg : LamWF lval.toLamTyVal ⟨lctx, arg, argTy⟩) :
@@ -636,6 +723,10 @@ theorem LamGenEquiv.congrFun (eFn : LamGenEquiv lval fn₁ fn₂) :
   LamGenEquiv lval (.app s fn₁ arg) (.app s fn₂ arg) :=
   LamGenEquiv.congr eFn LamGenEquiv.refl
 
+theorem LamGenEquivWith.congrFun (eFn : LamGenEquivWith lval (.func s resTy) fn₁ fn₂) :
+  LamGenEquivWith lval resTy (.app s fn₁ arg) (.app s fn₂ arg) :=
+  LamGenEquivWith.congr eFn LamGenEquivWith.refl
+
 theorem LamEquiv.congrArg
   (wfFn : LamWF lval.toLamTyVal ⟨lctx, fn, .func argTy resTy⟩)
   (eArg : LamEquiv lval lctx argTy arg₁ arg₂) :
@@ -651,6 +742,10 @@ theorem LamThmEquiv.congrArg
 theorem LamGenEquiv.congrArg (eArg : LamGenEquiv lval arg₁ arg₂) :
   LamGenEquiv lval (.app s fn arg₁) (.app s fn arg₂) :=
   LamGenEquiv.congr LamGenEquiv.refl eArg
+
+theorem LamGenEquivWith.congrArg (eArg : LamGenEquivWith lval s arg₁ arg₂) :
+  LamGenEquivWith lval resTy (.app s fn arg₁) (.app s fn arg₂) :=
+  LamGenEquivWith.congr LamGenEquivWith.refl eArg
 
 theorem LamEquiv.congr_mkLamFN :
   LamEquiv lval (pushLCtxs l lctx) s t₁ t₂ ↔ LamEquiv lval lctx (s.mkFuncsRev l) (.mkLamFN t₁ l) (.mkLamFN t₂ l) := by
@@ -1019,6 +1114,61 @@ theorem LamGenConv.rwGenAll (H : LamGenConv lval conv) : LamGenConv lval (LamTer
         intro h; cases h; apply LamGenEquiv.congr
         case eFn => apply IHFn _ h₂
         case eArg => apply IHArg _ h₃
+      | .some fn', .none => intro h; cases h
+      | .none, _ => intro h; cases h
+
+theorem LamGenConvWith.rwGenAtWith (H : LamGenConvWith lval conv) : LamGenConvWith lval (LamTerm.rwGenAtWith pos conv) := by
+  induction pos
+  case nil => exact H
+  case cons b pos IH =>
+    dsimp [LamTerm.rwGenAtWith, LamGenConv]; intros rty t₁ t₂
+    cases t₁ <;> try (intro h; cases h)
+    case lam s body =>
+      dsimp; cases rty <;> try (intro h; cases h)
+      case func _ resTy =>
+        dsimp; cases h₁ : LamTerm.rwGenAtWith pos conv resTy body <;> intro h <;> cases h
+        case refl body' =>
+          apply LamGenEquivWith.ofLam; apply IH _ _ _ h₁
+    case app s fn arg =>
+      dsimp
+      match b with
+      | true =>
+        dsimp; cases h₁ : LamTerm.rwGenAtWith pos conv s arg <;> intro h <;> cases h
+        case refl arg' =>
+          apply LamGenEquivWith.congrArg; apply IH _ _ _ h₁
+      | false =>
+        dsimp; cases h₁ : LamTerm.rwGenAtWith pos conv (.func s rty) fn <;> intro h <;> cases h
+        case refl fn' =>
+          apply LamGenEquivWith.congrFun; apply IH _ _ _ h₁
+
+theorem LamGenConvWith.rwGenAllWith (H : LamGenConvWith lval conv) : LamGenConvWith lval (LamTerm.rwGenAllWith conv) := by
+  intro s t₁; induction t₁ generalizing s <;> intros t₂
+  case atom n => dsimp [LamGenConvWith] at H; rw [LamTerm.rwGenAllWith_atom]; apply H
+  case etom n => dsimp [LamGenConvWith] at H; rw [LamTerm.rwGenAllWith_etom]; apply H
+  case base b => dsimp [LamGenConvWith] at H; rw [LamTerm.rwGenAllWith_base]; apply H
+  case bvar n => dsimp [LamGenConvWith] at H; rw [LamTerm.rwGenAllWith_bvar]; apply H
+  case lam s' body IH =>
+    simp [LamTerm.rwGenAllWith]
+    match h₁ : conv s (.lam s' body) with
+    | .some t' => intro h₂; cases h₂; apply H _ _ _ h₁
+    | .none =>
+      dsimp
+      cases s <;> try (intro h; cases h)
+      case func _ resTy =>
+        dsimp
+        match h₂ : LamTerm.rwGenAllWith conv resTy body with
+        | .some t' => intro h; cases h; apply LamGenEquivWith.ofLam; apply IH _ _ h₂
+        | .none => intro h; cases h
+  case app s' fn arg IHFn IHArg =>
+    simp [LamTerm.rwGenAllWith]
+    match h₁ : conv s (.app s' fn arg) with
+    | .some t' => intro h₂; cases h₂; apply H _ _ _ h₁
+    | .none =>
+      match h₂ : LamTerm.rwGenAllWith conv (.func s' s) fn, h₃ : LamTerm.rwGenAllWith conv s' arg with
+      | .some fn', .some arg' =>
+        intro h; cases h; apply LamGenEquivWith.congr
+        case eFn => apply IHFn _ _ h₂
+        case eArg => apply IHArg _ _ h₃
       | .some fn', .none => intro h; cases h
       | .none, _ => intro h; cases h
 
