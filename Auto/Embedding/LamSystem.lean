@@ -69,16 +69,16 @@ def LamGenModify (lval : LamValuation) (modify : LamTerm → Option LamTerm) (we
 
 -- Apply conversion theorem at a given position in `t`
 -- The conversion should only be ones that satisfy `LamGenConv`
-def LamTerm.rwGenAt (pos : List Bool) (conv : LamTerm → Option LamTerm) (t : LamTerm) : Option LamTerm :=
-  match pos with
+def LamTerm.rwGenAt (occ : List Bool) (conv : LamTerm → Option LamTerm) (t : LamTerm) : Option LamTerm :=
+  match occ with
   | .nil => conv t
-  | .cons b pos =>
+  | .cons b occ =>
     match t with
-    | .lam s body => (rwGenAt pos conv body).bind (LamTerm.lam s ·)
+    | .lam s body => (rwGenAt occ conv body).bind (LamTerm.lam s ·)
     | .app s fn arg =>
       match b with
-      | false => (rwGenAt pos conv fn).bind (LamTerm.app s · arg)
-      | true => (rwGenAt pos conv arg).bind (LamTerm.app s fn ·)
+      | false => (rwGenAt occ conv fn).bind (LamTerm.app s · arg)
+      | true => (rwGenAt occ conv arg).bind (LamTerm.app s fn ·)
     | _ => .none
 
 def LamTerm.rwGenAll (conv : LamTerm → Option LamTerm) (t : LamTerm) : Option LamTerm :=
@@ -120,20 +120,20 @@ theorem LamTerm.rwGenAll_app : rwGenAll conv (.app s fn arg) =
 
 -- Apply conversion theorem at a given position in `t`
 -- The conversion should only be ones that satisfy `LamGenConvWith`
-def LamTerm.rwGenAtWith (pos : List Bool) (conv : LamSort → LamTerm → Option LamTerm)
+def LamTerm.rwGenAtWith (occ : List Bool) (conv : LamSort → LamTerm → Option LamTerm)
   (rty : LamSort) (t : LamTerm) : Option LamTerm :=
-  match pos with
+  match occ with
   | .nil => conv rty t
-  | .cons b pos =>
+  | .cons b occ =>
     match t with
     | .lam s body =>
       match rty with
-      | .func _ resTy => (rwGenAtWith pos conv resTy body).bind (LamTerm.lam s ·)
+      | .func _ resTy => (rwGenAtWith occ conv resTy body).bind (LamTerm.lam s ·)
       | _ => .none
     | .app s fn arg =>
       match b with
-      | false => (rwGenAtWith pos conv (.func s rty) fn).bind (LamTerm.app s · arg)
-      | true => (rwGenAtWith pos conv s arg).bind (LamTerm.app s fn ·)
+      | false => (rwGenAtWith occ conv (.func s rty) fn).bind (LamTerm.app s · arg)
+      | true => (rwGenAtWith occ conv s arg).bind (LamTerm.app s fn ·)
     | _ => .none
 
 def LamTerm.rwGenAllWith (conv : LamSort → LamTerm → Option LamTerm)
@@ -151,6 +151,9 @@ def LamTerm.rwGenAllWith (conv : LamSort → LamTerm → Option LamTerm)
       | .some fn', .some arg' => .some (.app s fn' arg')
       | _, _ => .none
     | _ => .none
+
+def LamTerm.evarEquiv (conv : LamTerm → Option LamTerm) :=
+  ∀ t t', conv t = .some t' → t'.maxEVarSucc = t.maxEVarSucc
 
 theorem LamTerm.rwGenAllWith_atom : rwGenAllWith conv s (.atom n) = conv s (.atom n) := by
   simp [rwGenAllWith]; cases conv s (atom n) <;> rfl
@@ -181,40 +184,40 @@ theorem LamTerm.rwGenAllWith_app : rwGenAllWith conv rty (.app s fn arg) =
     | _, _ => .none := by simp [rwGenAllWith]
 
 -- Determine whether a position is negative / whether a position is positive
-def LamTerm.isSign (sign : Bool) (pos : List Bool) (t : LamTerm) :=
-  match pos with
+def LamTerm.isSign (sign : Bool) (occ : List Bool) (t : LamTerm) :=
+  match occ with
   | .nil => sign
-  | .cons b pos =>
+  | .cons b occ =>
     match t with
     | .app _ (.base .not) arg =>
-      b && isSign (not sign) pos arg
+      b && isSign (not sign) occ arg
     | .app _ (.app _ (.base .and) arg₁) arg₂ =>
       match b with
-      | true => isSign sign pos arg₂
+      | true => isSign sign occ arg₂
       | false =>
-        match pos with
+        match occ with
         | .nil => false
-        | .cons b' pos => b' && isSign sign pos arg₁
+        | .cons b' occ => b' && isSign sign occ arg₁
     | .app _ (.app _ (.base .or) arg₁) arg₂ =>
       match b with
-      | true => isSign sign pos arg₂
+      | true => isSign sign occ arg₂
       | false =>
-        match pos with
+        match occ with
         | .nil => false
-        | .cons b' pos => b' && isSign sign pos arg₁
+        | .cons b' occ => b' && isSign sign occ arg₁
     | .app _ (.app _ (.base .imp) arg₁) arg₂ =>
       match b with
-      | true => isSign sign pos arg₂
+      | true => isSign sign occ arg₂
       | false =>
-        match pos with
+        match occ with
         | .nil => false
-        | .cons b' pos => b' && isSign (not sign) pos arg₁
+        | .cons b' occ => b' && isSign (not sign) occ arg₁
     -- Args of `↔` are neither positive or negative
     | _ => false
 
-def LamTerm.rwGenAtIfSign (sign : Bool) (pos : List Bool) (conv : LamTerm → Option LamTerm) (t : LamTerm) : Option LamTerm :=
-  match LamTerm.isSign sign pos t with
-  | true => rwGenAt pos conv t
+def LamTerm.rwGenAtIfSign (sign : Bool) (occ : List Bool) (conv : LamTerm → Option LamTerm) (t : LamTerm) : Option LamTerm :=
+  match LamTerm.isSign sign occ t with
+  | true => rwGenAt occ conv t
   | false => .none
 
 noncomputable def LamNonempty.get (h : LamNonempty tyVal s) : s.interp tyVal := Classical.choice h
@@ -575,7 +578,6 @@ theorem LamValid.mpLamEquiv (hp : LamValid lval lctx p₁)
   exact ⟨wfp₂, fun lctxTerm' => heqp _ ▸ hp₁ lctxTerm'⟩
 
 theorem LamThmValid.mpLamThmEquiv
-  (lctx : List LamSort)
   (hequiv : LamThmEquiv lval lctx (.base .prop) p₁ p₂)
   (hp : LamThmValid lval lctx p₁) : LamThmValid lval lctx p₂ := by
   intros lctx';
@@ -1069,26 +1071,72 @@ theorem LamValid.or_imp_or_of_right_imp
   case inl ha => exact Or.inl ha
   case inr hb => exact Or.inr (hbi hb)
 
-theorem LamGenConv.rwGenAt (H : LamGenConv lval conv) : LamGenConv lval (LamTerm.rwGenAt pos conv) := by
-  induction pos
+theorem LamTerm.evarEquiv_rwGenAt (H : evarEquiv conv) : evarEquiv (rwGenAt occ conv) := by
+  induction occ
   case nil => exact H
-  case cons b pos IH =>
+  case cons b occ IH =>
+    dsimp [rwGenAt]; intro t₁ t₂; dsimp
+    cases t₁ <;> try (intro h; cases h)
+    case lam s body =>
+      dsimp; cases h₁ : rwGenAt occ conv body <;> intro h <;> cases h
+      case refl body' =>
+        dsimp [maxEVarSucc]; apply IH _ _ h₁
+    case app s fn arg =>
+      match b with
+      | true =>
+        dsimp; cases h₁ : rwGenAt occ conv arg <;> intro h <;> cases h
+        case refl arg' =>
+          dsimp [maxEVarSucc]; rw [IH _ _ h₁]
+      | false =>
+        dsimp; cases h₁ : rwGenAt occ conv fn <;> intro h <;> cases h
+        case refl arg' =>
+          dsimp [maxEVarSucc]; rw [IH _ _ h₁]
+
+theorem LamGenConv.rwGenAt (H : LamGenConv lval conv) : LamGenConv lval (LamTerm.rwGenAt occ conv) := by
+  induction occ
+  case nil => exact H
+  case cons b occ IH =>
     dsimp [LamTerm.rwGenAt, LamGenConv]; intros t₁ t₂
     cases t₁ <;> try (intro h; cases h)
     case lam s body =>
-      dsimp; cases h₁ : LamTerm.rwGenAt pos conv body <;> intro h <;> cases h
+      dsimp; cases h₁ : LamTerm.rwGenAt occ conv body <;> intro h <;> cases h
       case refl body' =>
         apply LamGenEquiv.ofLam; apply IH _ _ h₁
     case app s fn arg =>
       match b with
       | true =>
-        dsimp; cases h₁ : LamTerm.rwGenAt pos conv arg <;> intro h <;> cases h
+        dsimp; cases h₁ : LamTerm.rwGenAt occ conv arg <;> intro h <;> cases h
         case refl arg' =>
           apply LamGenEquiv.congrArg; apply IH _ _ h₁
       | false =>
-        dsimp; cases h₁ : LamTerm.rwGenAt pos conv fn <;> intro h <;> cases h
+        dsimp; cases h₁ : LamTerm.rwGenAt occ conv fn <;> intro h <;> cases h
         case refl fn' =>
           apply LamGenEquiv.congrFun; apply IH _ _ h₁
+
+theorem LamTerm.evarEquiv_rwGenAll (H : evarEquiv conv) : evarEquiv (rwGenAll conv) := by
+  intro t₁; induction t₁ <;> intros t₂
+  case atom n => rw [rwGenAll_atom]; apply H
+  case etom n => rw [rwGenAll_etom]; apply H
+  case base b => rw [rwGenAll_base]; apply H
+  case bvar n => rw [rwGenAll_bvar]; apply H
+  case lam s body IH =>
+    simp [rwGenAll]
+    match h₁ : conv (.lam s body) with
+    | .some t' => intro h₂; cases h₂; apply H _ _ h₁
+    | .none =>
+      match h₂ : rwGenAll conv body with
+      | .some t' => intro h; cases h; dsimp [maxEVarSucc]; apply IH _ h₂
+      | .none => intro h; cases h
+  case app s fn arg IHFn IHArg =>
+    simp [rwGenAll]
+    match h₁ : conv (.app s fn arg) with
+    | .some t' => intro h₂; cases h₂; apply H _ _ h₁
+    | .none =>
+      match h₂ : rwGenAll conv fn, h₃ : rwGenAll conv arg with
+      | .some fn', .some arg' =>
+        intro h; cases h; dsimp [maxEVarSucc]; rw [IHFn _ h₂]; rw [IHArg _ h₃]
+      | .some fn', .none => intro h; cases h
+      | .none, _ => intro h; cases h
 
 theorem LamGenConv.rwGenAll (H : LamGenConv lval conv) : LamGenConv lval (LamTerm.rwGenAll conv) := by
   intro t₁; induction t₁ <;> intros t₂
@@ -1117,29 +1165,84 @@ theorem LamGenConv.rwGenAll (H : LamGenConv lval conv) : LamGenConv lval (LamTer
       | .some fn', .none => intro h; cases h
       | .none, _ => intro h; cases h
 
-theorem LamGenConvWith.rwGenAtWith (H : LamGenConvWith lval conv) : LamGenConvWith lval (LamTerm.rwGenAtWith pos conv) := by
-  induction pos
+theorem LamTerm.evarEquiv_rwGenAtWith (H : ∀ s, evarEquiv (conv s)) :
+  ∀ s, evarEquiv (LamTerm.rwGenAtWith occ conv s) := by
+  induction occ
   case nil => exact H
-  case cons b pos IH =>
+  case cons b occ IH =>
     dsimp [LamTerm.rwGenAtWith, LamGenConv]; intros rty t₁ t₂
     cases t₁ <;> try (intro h; cases h)
     case lam s body =>
       dsimp; cases rty <;> try (intro h; cases h)
       case func _ resTy =>
-        dsimp; cases h₁ : LamTerm.rwGenAtWith pos conv resTy body <;> intro h <;> cases h
+        dsimp; cases h₁ : LamTerm.rwGenAtWith occ conv resTy body <;> intro h <;> cases h
+        case refl body' =>
+          dsimp [maxEVarSucc]; apply IH _ _ _ h₁
+    case app s fn arg =>
+      dsimp
+      match b with
+      | true =>
+        dsimp; cases h₁ : LamTerm.rwGenAtWith occ conv s arg <;> intro h <;> cases h
+        case refl arg' =>
+          dsimp [maxEVarSucc]; rw [IH _ _ _ h₁]
+      | false =>
+        dsimp; cases h₁ : LamTerm.rwGenAtWith occ conv (.func s rty) fn <;> intro h <;> cases h
+        case refl fn' =>
+          dsimp [maxEVarSucc]; rw [IH _ _ _ h₁]
+
+theorem LamGenConvWith.rwGenAtWith (H : LamGenConvWith lval conv) : LamGenConvWith lval (LamTerm.rwGenAtWith occ conv) := by
+  induction occ
+  case nil => exact H
+  case cons b occ IH =>
+    dsimp [LamTerm.rwGenAtWith, LamGenConv]; intros rty t₁ t₂
+    cases t₁ <;> try (intro h; cases h)
+    case lam s body =>
+      dsimp; cases rty <;> try (intro h; cases h)
+      case func _ resTy =>
+        dsimp; cases h₁ : LamTerm.rwGenAtWith occ conv resTy body <;> intro h <;> cases h
         case refl body' =>
           apply LamGenEquivWith.ofLam; apply IH _ _ _ h₁
     case app s fn arg =>
       dsimp
       match b with
       | true =>
-        dsimp; cases h₁ : LamTerm.rwGenAtWith pos conv s arg <;> intro h <;> cases h
+        dsimp; cases h₁ : LamTerm.rwGenAtWith occ conv s arg <;> intro h <;> cases h
         case refl arg' =>
           apply LamGenEquivWith.congrArg; apply IH _ _ _ h₁
       | false =>
-        dsimp; cases h₁ : LamTerm.rwGenAtWith pos conv (.func s rty) fn <;> intro h <;> cases h
+        dsimp; cases h₁ : LamTerm.rwGenAtWith occ conv (.func s rty) fn <;> intro h <;> cases h
         case refl fn' =>
           apply LamGenEquivWith.congrFun; apply IH _ _ _ h₁
+
+theorem LamTerm.evarEquiv_rwGenAllWith (H : ∀ s, evarEquiv (conv s)) :
+  ∀ s, evarEquiv (LamTerm.rwGenAllWith conv s) := by
+  intro s t₁; induction t₁ generalizing s <;> intros t₂
+  case atom n => rw [LamTerm.rwGenAllWith_atom]; apply H
+  case etom n => rw [LamTerm.rwGenAllWith_etom]; apply H
+  case base b => rw [LamTerm.rwGenAllWith_base]; apply H
+  case bvar n => rw [LamTerm.rwGenAllWith_bvar]; apply H
+  case lam s' body IH =>
+    simp [LamTerm.rwGenAllWith]
+    match h₁ : conv s (.lam s' body) with
+    | .some t' => intro h₂; cases h₂; apply H _ _ _ h₁
+    | .none =>
+      dsimp
+      cases s <;> try (intro h; cases h)
+      case func _ resTy =>
+        dsimp
+        match h₂ : LamTerm.rwGenAllWith conv resTy body with
+        | .some t' => intro h; cases h; dsimp [maxEVarSucc]; apply IH _ _ h₂
+        | .none => intro h; cases h
+  case app s' fn arg IHFn IHArg =>
+    simp [LamTerm.rwGenAllWith]
+    match h₁ : conv s (.app s' fn arg) with
+    | .some t' => intro h₂; cases h₂; apply H _ _ _ h₁
+    | .none =>
+      match h₂ : LamTerm.rwGenAllWith conv (.func s' s) fn, h₃ : LamTerm.rwGenAllWith conv s' arg with
+      | .some fn', .some arg' =>
+        intro h; cases h; dsimp [maxEVarSucc]; rw [IHFn _ _ h₂]; rw [IHArg _ _ h₃]
+      | .some fn', .none => intro h; cases h
+      | .none, _ => intro h; cases h
 
 theorem LamGenConvWith.rwGenAllWith (H : LamGenConvWith lval conv) : LamGenConvWith lval (LamTerm.rwGenAllWith conv) := by
   intro s t₁; induction t₁ generalizing s <;> intros t₂
@@ -1173,11 +1276,11 @@ theorem LamGenConvWith.rwGenAllWith (H : LamGenConvWith lval conv) : LamGenConvW
       | .none, _ => intro h; cases h
 
 theorem LamGenModify.rwGenAtIfSign {modify} (H : LamGenModify lval modify weaken?) :
-  LamGenModify lval (LamTerm.rwGenAtIfSign (weaken? == weaken?') pos modify) weaken?' := by
-  generalize hl' : pos.length = l
-  have hl : pos.length ≤ l := by cases hl'; exact .refl
+  LamGenModify lval (LamTerm.rwGenAtIfSign (weaken? == weaken?') occ modify) weaken?' := by
+  generalize hl' : occ.length = l
+  have hl : occ.length ≤ l := by cases hl'; exact .refl
   clear hl'
-  induction l generalizing pos weaken? weaken?'
+  induction l generalizing occ weaken? weaken?'
   case zero =>
     cases List.length_eq_zero.mp (Nat.le_zero.mp hl)
     dsimp [LamTerm.rwGenAtIfSign, LamTerm.isSign]
@@ -1185,14 +1288,14 @@ theorem LamGenModify.rwGenAtIfSign {modify} (H : LamGenModify lval modify weaken
     | true => cases (Bool.beq_to_eq _ _).mp h; exact H
     | false => dsimp [LamGenModify]; intro t₁ t₂ h; cases h
   case succ l IH =>
-    cases pos
+    cases occ
     case nil =>
       exact IH H (Nat.zero_le _)
-    case cons b pos =>
+    case cons b occ =>
       have hl' := Nat.le_of_succ_le_succ hl
       dsimp [LamGenModify, LamTerm.rwGenAtIfSign]
       intros t₁ t₂
-      match h₁ : LamTerm.isSign (weaken? == weaken?') (b :: pos) t₁ with
+      match h₁ : LamTerm.isSign (weaken? == weaken?') (b :: occ) t₁ with
       | true =>
         dsimp; cases t₁ <;> try cases h₁
         case app sI fnI argI =>
@@ -1203,9 +1306,9 @@ theorem LamGenModify.rwGenAtIfSign {modify} (H : LamGenModify lval modify weaken
             have ⟨beqT, h₁'⟩ := (Bool.and_eq_true _ _).mp h₁
             clear h₁; cases beqT
             dsimp [LamTerm.rwGenAt]
-            cases h₂ : LamTerm.rwGenAt pos modify argI <;> intro h <;> cases h
+            cases h₂ : LamTerm.rwGenAt occ modify argI <;> intro h <;> cases h
             case refl argI' =>
-              have IH' := @IH weaken? (!weaken?') pos H hl' argI argI';
+              have IH' := @IH weaken? (!weaken?') occ H hl' argI argI';
               clear IH; rw [← Bool.not_beq_swap] at IH';
               dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [h₁'] at IH'; dsimp at IH'
               intro lctx wfNArgI; cases wfNArgI.getFn.getBase; have .ofApp _ _ wfArgI := wfNArgI
@@ -1227,9 +1330,9 @@ theorem LamGenModify.rwGenAtIfSign {modify} (H : LamGenModify lval modify weaken
               case and =>
                 cases b <;> dsimp at h₁ <;> dsimp [LamTerm.rwGenAt]
                 case true =>
-                  cases h₂ : LamTerm.rwGenAt pos modify argI <;> intro h <;> cases h
+                  cases h₂ : LamTerm.rwGenAt occ modify argI <;> intro h <;> cases h
                   case refl argI' =>
-                    have IH' := @IH weaken? weaken?' pos H hl' argI argI';
+                    have IH' := @IH weaken? weaken?' occ H hl' argI argI';
                     clear IH; dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [h₁] at IH'; dsimp at IH'
                     have IH := IH' h₂ lctx wfArgI; clear IH'
                     cases weaken?'
@@ -1240,15 +1343,15 @@ theorem LamGenModify.rwGenAtIfSign {modify} (H : LamGenModify lval modify weaken
                       dsimp; have ⟨.ofApp _ (.ofApp _ _ wfArgI') _, _⟩ := IH
                       apply LamValid.impLift (LamValid.and_imp_and_of_right_imp wfArgII wfArgI' wfArgI) IH
                 case false =>
-                  cases h₂ : LamTerm.rwGenAt pos modify (.app (.base .prop) (.base .and) argII) <;> intro h <;> cases h
+                  cases h₂ : LamTerm.rwGenAt occ modify (.app (.base .prop) (.base .and) argII) <;> intro h <;> cases h
                   case refl argAp' =>
-                    cases pos <;> try cases h₁
-                    case cons b' pos =>
+                    cases occ <;> try cases h₁
+                    case cons b' occ =>
                       dsimp at h₁; have ⟨b't, h₁'⟩ := (Bool.and_eq_true _ _).mp h₁; cases b't; clear h₁
-                      have IH' := @IH weaken? weaken?' pos H (Nat.le_of_lt hl') argII;
+                      have IH' := @IH weaken? weaken?' occ H (Nat.le_of_lt hl') argII;
                       clear IH; dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [h₁'] at IH'; dsimp at IH'
                       dsimp [LamTerm.rwGenAt] at h₂; revert h₂
-                      cases h₃ : LamTerm.rwGenAt pos modify argII <;> intro h₂ <;> cases h₂
+                      cases h₃ : LamTerm.rwGenAt occ modify argII <;> intro h₂ <;> cases h₂
                       case refl argII' =>
                         have IH := IH' argII' h₃ lctx wfArgII; clear IH'
                         cases weaken?'
@@ -1261,9 +1364,9 @@ theorem LamGenModify.rwGenAtIfSign {modify} (H : LamGenModify lval modify weaken
               case or =>
                 cases b <;> dsimp at h₁ <;> dsimp [LamTerm.rwGenAt]
                 case true =>
-                  cases h₂ : LamTerm.rwGenAt pos modify argI <;> intro h <;> cases h
+                  cases h₂ : LamTerm.rwGenAt occ modify argI <;> intro h <;> cases h
                   case refl argI' =>
-                    have IH' := @IH weaken? weaken?' pos H hl' argI argI';
+                    have IH' := @IH weaken? weaken?' occ H hl' argI argI';
                     clear IH; dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [h₁] at IH'; dsimp at IH'
                     have IH := IH' h₂ lctx wfArgI; clear IH'
                     cases weaken?'
@@ -1274,15 +1377,15 @@ theorem LamGenModify.rwGenAtIfSign {modify} (H : LamGenModify lval modify weaken
                       dsimp; have ⟨.ofApp _ (.ofApp _ _ wfArgI') _, _⟩ := IH
                       apply LamValid.impLift (LamValid.or_imp_or_of_right_imp wfArgII wfArgI' wfArgI) IH
                 case false =>
-                  cases h₂ : LamTerm.rwGenAt pos modify (.app (.base .prop) (.base .or) argII) <;> intro h <;> cases h
+                  cases h₂ : LamTerm.rwGenAt occ modify (.app (.base .prop) (.base .or) argII) <;> intro h <;> cases h
                   case refl argAp' =>
-                    cases pos <;> try cases h₁
-                    case cons b' pos =>
+                    cases occ <;> try cases h₁
+                    case cons b' occ =>
                       dsimp at h₁; have ⟨b't, h₁'⟩ := (Bool.and_eq_true _ _).mp h₁; cases b't; clear h₁
-                      have IH' := @IH weaken? weaken?' pos H (Nat.le_of_lt hl') argII;
+                      have IH' := @IH weaken? weaken?' occ H (Nat.le_of_lt hl') argII;
                       clear IH; dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [h₁'] at IH'; dsimp at IH'
                       dsimp [LamTerm.rwGenAt] at h₂; revert h₂
-                      cases h₃ : LamTerm.rwGenAt pos modify argII <;> intro h₂ <;> cases h₂
+                      cases h₃ : LamTerm.rwGenAt occ modify argII <;> intro h₂ <;> cases h₂
                       case refl argII' =>
                         have IH := IH' argII' h₃ lctx wfArgII; clear IH'
                         cases weaken?'
@@ -1295,9 +1398,9 @@ theorem LamGenModify.rwGenAtIfSign {modify} (H : LamGenModify lval modify weaken
               case imp =>
                 cases b <;> dsimp at h₁ <;> dsimp [LamTerm.rwGenAt]
                 case true =>
-                  cases h₂ : LamTerm.rwGenAt pos modify argI <;> intro h <;> cases h
+                  cases h₂ : LamTerm.rwGenAt occ modify argI <;> intro h <;> cases h
                   case refl argI' =>
-                    have IH' := @IH weaken? weaken?' pos H hl' argI argI';
+                    have IH' := @IH weaken? weaken?' occ H hl' argI argI';
                     clear IH; dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [h₁] at IH'; dsimp at IH'
                     have IH := IH' h₂ lctx wfArgI; clear IH'
                     cases weaken?'
@@ -1308,15 +1411,15 @@ theorem LamGenModify.rwGenAtIfSign {modify} (H : LamGenModify lval modify weaken
                       dsimp; have ⟨.ofApp _ (.ofApp _ _ wfArgI') _, _⟩ := IH
                       apply LamValid.impLift (LamValid.imp_trans' wfArgII wfArgI' wfArgI) IH
                 case false =>
-                  cases h₂ : LamTerm.rwGenAt pos modify (.app (.base .prop) (.base .imp) argII) <;> intro h <;> cases h
+                  cases h₂ : LamTerm.rwGenAt occ modify (.app (.base .prop) (.base .imp) argII) <;> intro h <;> cases h
                   case refl argAp' =>
-                    cases pos <;> try cases h₁
-                    case cons b' pos =>
+                    cases occ <;> try cases h₁
+                    case cons b' occ =>
                       dsimp at h₁; have ⟨b't, h₁'⟩ := (Bool.and_eq_true _ _).mp h₁; cases b't; clear h₁
-                      have IH' := @IH weaken? (!weaken?') pos H (Nat.le_of_lt hl') argII;
+                      have IH' := @IH weaken? (!weaken?') occ H (Nat.le_of_lt hl') argII;
                       clear IH; dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [← Bool.not_beq_swap, h₁'] at IH'; dsimp at IH'
                       dsimp [LamTerm.rwGenAt] at h₂; revert h₂
-                      cases h₃ : LamTerm.rwGenAt pos modify argII <;> intro h₂ <;> cases h₂
+                      cases h₃ : LamTerm.rwGenAt occ modify argII <;> intro h₂ <;> cases h₂
                       case refl argII' =>
                         have IH := IH' argII' h₃ lctx wfArgII; clear IH'
                         cases weaken?'

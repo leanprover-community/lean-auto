@@ -1,4 +1,5 @@
 import Std.Data.List.Lemmas
+import Auto.Lib.IsomType
 
 namespace Auto
 
@@ -127,5 +128,8 @@ theorem List.map_equiv (f₁ f₂ : α → β) (hequiv : ∀ x, f₁ x = f₂ x)
 
 theorem List.length_reverseAux (l₁ l₂ : List α) : (l₁.reverseAux l₂).length = l₁.length + l₂.length := by
   rw [List.reverseAux_eq]; rw [List.length_append]; rw [List.length_reverse]
+
+theorem List.reverse_IsomType : IsomType (List α) (List α) :=
+  ⟨List.reverse, List.reverse, List.reverse_reverse, List.reverse_reverse⟩
 
 end Auto

@@ -18,6 +18,12 @@ theorem Option.allp_uniform (p : α → Prop) (x : Option α) :
   case none => exact True.intro
   case some v => apply h
 
+theorem Option.isNone_eq_not_isSome {x : Option α} : x.isNone = !x.isSome := by
+  cases x <;> rfl
+
+theorem Option.isSome_eq_not_isNone {x : Option α} : x.isSome = !x.isNone := by
+  cases x <;> rfl
+
 theorem Option.beq_none_none [BEq α] : (none (α:=α) == none) = true := rfl
 
 theorem Option.beq_none_some [BEq α] : (none (α:=α) == some x) = false := rfl

@@ -229,6 +229,89 @@ theorem LamSort.getArgTys_getResTy_eq :
 | .base _ => rfl
 | .func _ resTy => congrArg _ (@getArgTys_getResTy_eq resTy)
 
+-- Given `ty₀ → ty₁ → ⋯ → tyₙ₋₁ → a`, return `[ty₀, ty₁, ⋯, tyₙ₋₁]`
+def LamSort.getArgTysN (n : Nat) (s : LamSort) : Option (List LamSort) :=
+  match n with
+  | .zero => .some .nil
+  | .succ n =>
+    match s with
+    | .func argTy resTy => (getArgTysN n resTy).bind (argTy :: ·)
+    | _ => .none
+
+-- Given `ty₀ → ty₁ → ⋯ → tyₙ₋₁ → a`, return `a`
+def LamSort.getResTyN (n : Nat) (s : LamSort) : Option LamSort :=
+  match n with
+  | .zero => s
+  | .succ n =>
+    match s with
+    | .func _ resTy => getResTyN n resTy
+    | _ => .none
+
+theorem LamSort.getArgTysN_getResTysN_eq_some :
+  (getArgTysN n s).isSome = (getResTyN n s).isSome := by
+  induction n generalizing s
+  case zero => rfl
+  case succ n IH =>
+    dsimp [getArgTysN, getResTyN]; cases s <;> try rfl
+    case func argTy resTy =>
+      have IH' := @IH resTy; dsimp
+      cases h₁ : getArgTysN n resTy <;> rw [h₁] at IH' <;> dsimp at IH'
+        <;> cases h₂ : getResTyN n resTy <;> rw [h₂] at IH' <;> cases IH' <;> rfl
+
+theorem LamSort.getArgTysN_eq_some_of_getResTysN_eq_some
+  (heq : getResTyN n s = .some resTy) : ∃ l, getArgTysN n s = .some l := by
+  apply Option.isSome_iff_exists.mp; rw [getArgTysN_getResTysN_eq_some]
+  apply Option.isSome_iff_exists.mpr; exists resTy
+
+theorem LamSort.getResTysN_eq_some_of_getArgTysN_eq_some
+  (heq : getArgTysN n s = .some l) : ∃ resTy, getResTyN n s = .some resTy := by
+  apply Option.isSome_iff_exists.mp; rw [← getArgTysN_getResTysN_eq_some]
+  apply Option.isSome_iff_exists.mpr; exists l
+
+theorem LamSort.getArgTysN_getResTysN_eq_none :
+  (getArgTysN n s).isNone = (getResTyN n s).isNone := by
+  rw [Option.isNone_eq_not_isSome, Option.isNone_eq_not_isSome]
+  rw [getArgTysN_getResTysN_eq_some]
+
+theorem LamSort.getArgTysN_getResTyN_eq
+  (hArg : getArgTysN n s = .some l) (hRes : getResTyN n s = .some s') :
+  s = s'.mkFuncs l := by
+  induction n generalizing s s' l
+  case zero =>
+    cases hArg; cases hRes; rfl
+  case succ n IH =>
+    cases s <;> try cases hArg
+    case func argTy resTy =>
+      dsimp [getArgTysN] at hArg; dsimp [getResTyN] at hRes
+      cases h₁ : getArgTysN n resTy <;> rw [h₁] at hArg <;> cases hArg
+      case refl l' =>
+        dsimp [mkFuncs]; apply congrArg; apply IH h₁ hRes
+
+theorem LamSort.getArgTysN_mkFuncs_eq_some_iff :
+  getArgTysN n (mkFuncs s l) = some l ↔ l.length = n := by
+  induction n generalizing s l
+  case zero =>
+    dsimp [getArgTysN]; apply Iff.intro
+    case mp => intro h; cases h; rfl
+    case mpr => intro h; cases l <;> cases h; rfl
+  case succ n IH =>
+    dsimp [getArgTysN]; cases l
+    case nil =>
+      dsimp [mkFuncs]; apply Iff.intro
+      case mp =>
+        cases s <;> intro h <;> try cases h
+        case func argTy resTy =>
+          dsimp at h; cases h₁ : getArgTysN n resTy <;> rw [h₁] at h <;> cases h
+      case mpr =>
+        intro h; cases h
+    case cons s' l =>
+      rw [mkFuncs_cons]; dsimp; cases h₁ : getArgTysN n (mkFuncs s l)
+      case none => simp; intro h; rw [IH.mpr h] at h₁; cases h₁
+      case some l' =>
+        simp; apply Iff.intro
+        case mp => intro h; cases h; apply IH.mp h₁
+        case mpr => intro h; have h₂ := (IH (s:=s)).mpr h; rw [h₁] at h₂; cases h₂; rfl
+
 @[reducible] def LamSort.interp.{u} (val : Nat → Type u) : LamSort → Type u
 | .atom n => val n
 | .base b => b.interp
@@ -968,6 +1051,36 @@ theorem LamTerm.mkForallEFN_append_singleton :
   mkForallEFN t (l₁ ++ [s]) = mkForallEF s (mkForallEFN t l₁) := by
   rw [mkForallEFN_append]; rfl
 
+def LamTerm.getLamBodyN (n : Nat) (t : LamTerm) : Option LamTerm :=
+  match n with
+  | .zero => t
+  | .succ n' =>
+    match t with
+    | .lam _ body => getLamBodyN n' body
+    | _ => .none
+
+theorem LamTerm.maxEVarSucc_getLamBodyN
+  (heq : LamTerm.getLamBodyN n t = .some t') :
+  t'.maxEVarSucc = t.maxEVarSucc := by
+  induction n generalizing t t'
+  case zero => cases heq; rfl
+  case succ n IH =>
+    cases t <;> try cases heq
+    case lam s body =>
+      dsimp [getLamBodyN] at heq; dsimp [maxEVarSucc]; apply IH heq
+
+theorem LamTerm.getLamBodyN_mkLamFN_length_eq
+  (h : l.length = n) : getLamBodyN n (mkLamFN t l) = .some t := by
+  revert l; rw [IsomType.eqForall' (p:=fun _ => _) List.reverse_IsomType]
+  intro l; unfold List.reverse_IsomType; dsimp; rw [List.length_reverse]
+  induction n generalizing l t
+  case zero => intro h; cases l <;> cases h; rfl
+  case succ n IH =>
+    intro h; cases l <;> cases h
+    case refl s' l =>
+      rw [List.reverse_cons]; rw [mkLamFN_append_singleton]; dsimp [getLamBodyN]
+      dsimp [Nat.add] at IH; apply IH; rfl
+
 def LamTerm.getAppFn : LamTerm → LamTerm
 | .app _ fn _ => getAppFn fn
 | t           => t
@@ -1014,6 +1127,77 @@ theorem LamTerm.appFn_appArg_eqAux (args : List (LamSort × LamTerm)) (t : LamTe
 
 theorem LamTerm.appFn_appArg_eq (t : LamTerm) : t = LamTerm.mkAppN t.getAppFn t.getAppArgs := appFn_appArg_eqAux [] t
 
+def LamTerm.getAppFnN (n : Nat) (t : LamTerm) : Option LamTerm :=
+  match n with
+  | .zero => t
+  | .succ n =>
+    match t with
+    | .app _ fn _ => getAppFnN n fn
+    | _ => .none
+
+theorem LamTerm.getAppFnN_add : getAppFnN (n + m) t = (getAppFnN n t).bind (getAppFnN m) := by
+  induction n generalizing m t
+  case zero => rw [Nat.zero_add]; rfl
+  case succ n IH =>
+    rw [Nat.succ_add]; cases t <;> try rfl
+    case app s fn arg => dsimp [getAppFnN]; rw [IH]
+
+theorem LamTerm.getAppFnN_succ' : getAppFnN (.succ n) t = (getAppFnN n t).bind (getAppFnN 1) := by
+  rw [Nat.succ_eq_add_one]; rw [getAppFnN_add]
+
+theorem LamTerm.maxEVarSucc_getAppFnN (heq : LamTerm.getAppFnN n t = .some t') :
+  t'.maxEVarSucc ≤ t.maxEVarSucc := by
+  induction n generalizing t t'
+  case zero => cases heq; apply Nat.le_refl
+  case succ n IH =>
+    cases t <;> try cases heq
+    case app s fn arg =>
+      dsimp [getAppFnN] at heq; dsimp [maxEVarSucc]; apply Nat.le_trans _ (Nat.le_max_left _ _)
+      apply IH heq
+
+def LamTerm.getAppArgsNAux (n : Nat) (args : List (LamSort × LamTerm)) (t : LamTerm) : Option (List (LamSort × LamTerm)) :=
+  match n with
+  | .zero => args 
+  | .succ n =>
+    match t with
+    | .app s fn arg => getAppArgsNAux n ((s, arg) :: args) fn
+    | _ => .none
+
+theorem LamTerm.getAppArgsNAux_eq : getAppArgsNAux n args t = (getAppArgsNAux n [] t).bind (· ++ args) := by
+  induction n generalizing t args
+  case zero => rfl
+  case succ n IH =>
+    cases t <;> try rfl
+    case app s fn arg =>
+      dsimp [getAppArgsNAux]; rw [IH (args:=(s, arg) :: args), IH (args:=[(s, arg)])]
+      cases getAppArgsNAux n [] fn <;> dsimp
+      rw [List.append_assoc]; rfl
+
+theorem LamTerm.maxEVarSucc_getAppArgsNAux
+  (hs : HList (fun (_, arg) => arg.maxEVarSucc ≤ m) args) (ht : t.maxEVarSucc ≤ m)
+  (heq : LamTerm.getAppArgsNAux n args t = .some args') :
+  HList (fun (_, arg) => arg.maxEVarSucc ≤ m) args' := by
+  induction n generalizing t args args'
+  case zero => cases heq; exact hs
+  case succ n IH =>
+    cases t <;> try cases heq
+    case app s fn arg =>
+      dsimp [getAppArgsNAux] at heq; dsimp [maxEVarSucc]; dsimp [maxEVarSucc] at ht
+      rw [Nat.max_le] at ht; apply IH (.cons _ hs) ht.left heq; apply ht.right
+
+def LamTerm.getAppArgsN n := getAppArgsNAux n []
+
+theorem LamTerm.maxEVarSucc_getAppArgsN
+  (heq : LamTerm.getAppArgsN n t = .some l) :
+  HList (fun (_, arg) => arg.maxEVarSucc ≤ t.maxEVarSucc) l :=
+  LamTerm.maxEVarSucc_getAppArgsNAux .nil (Nat.le_refl _) heq
+
+theorem LamTerm.getAppArgsN_zero : LamTerm.getAppArgsN 0 = fun _ => .some [] := rfl
+
+theorem LamTerm.getAppArgsN_succ_app :
+  LamTerm.getAppArgsN (.succ n) (.app s fn arg) = (getAppArgsN n fn).bind (· ++ [(s, arg)]) := by
+  dsimp [getAppArgsN, getAppArgsNAux]; rw [getAppArgsNAux_eq]
+
 def LamTerm.bvarApps (t : LamTerm) (lctx : List LamSort) (idx : Nat) :=
   match lctx with
   | .nil => t
@@ -1056,6 +1240,16 @@ theorem LamTerm.maxLooseBVarSucc_bvarAppsRev : (LamTerm.bvarAppsRev t lctx).maxL
     dsimp [bvarAppsRev, maxLooseBVarSucc]; rw [IH]
     dsimp [maxLooseBVarSucc]; rw [Nat.max, ← Nat.max_assoc]
     rw [Nat.max_eq_left (b:=tys.length)]; apply Nat.le_succ
+
+theorem LamTerm.getAppFnN_bvarAppsRev_length_eq
+  (heq : l.length = n) : getAppFnN n (bvarAppsRev t l) = t := by
+  induction n generalizing l t
+  case zero => cases l <;> cases heq; rfl
+  case succ n IH =>
+    cases l <;> cases heq
+    case refl s' l =>
+      rw [getAppFnN_succ']; dsimp [bvarAppsRev]
+      dsimp [Nat.add] at IH; rw [IH rfl]; rfl
 
 def LamTerm.reprPrec (t : LamTerm) (n : Nat) :=
   let s :=
@@ -1388,6 +1582,15 @@ def LamWF.mkLamFN {ltv : LamTyVal}
     dsimp [LamTerm.mkLamFN]; rw [pushLCtxs_cons] at wfp
     apply LamWF.mkLamFN (ls:=ls); apply LamWF.ofLam _ wfp
 
+def LamWF.ofMkLamFN {ltv : LamTyVal}
+  (wfLam : LamWF ltv ⟨lctx, .mkLamFN p ls, LamSort.mkFuncsRev s ls⟩) :
+  LamWF ltv ⟨pushLCtxs ls lctx, p, s⟩ :=
+  match ls with
+  | .nil => wfLam
+  | .cons s ls => by
+    dsimp [LamTerm.mkLamFN] at wfLam; rw [pushLCtxs_cons]
+    apply LamWF.getLam; apply LamWF.ofMkLamFN (ls:=ls) wfLam
+
 def LamWF.mkForallEFN {ltv : LamTyVal}
   (wfp : LamWF ltv ⟨pushLCtxs ls lctx, p, .base .prop⟩) :
   LamWF ltv ⟨lctx, .mkForallEFN p ls, .base .prop⟩ :=
@@ -1453,6 +1656,16 @@ def LamWF.bvarAppsRev
     dsimp [LamTerm.bvarAppsRev]
     revert wft; rw [List.reverse_cons, pushLCtxs_append, pushLCtxs_singleton]
     intro wft; apply bvarAppsRev (.ofApp _ wft _); apply LamWF.bvarAppsRev_Aux
+
+def LamWF.fromBVarAppsRev
+  (wfAp : LamWF ltv ⟨pushLCtxs lctx.reverse lctx', t.bvarAppsRev lctx, s⟩) :
+  LamWF ltv ⟨pushLCtxs lctx.reverse lctx', t, LamSort.mkFuncs s lctx⟩ :=
+  match lctx with
+  | .nil => wfAp
+  | .cons ty lctx => by
+    dsimp [LamTerm.bvarAppsRev] at wfAp; revert wfAp
+    rw [List.reverse_cons, pushLCtxs_append, pushLCtxs_singleton]
+    intro wfAp; have wfAp' := fromBVarAppsRev wfAp; exact wfAp'.getFn
 
 def LamWF.reprPrec (wf : LamWF f judge) (n : Nat) (lctxDep : Nat) :=
   let rec formatLCtxAux prec : (lctx : List LamSort) → Lean.Format

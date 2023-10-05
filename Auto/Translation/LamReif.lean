@@ -1236,12 +1236,18 @@ open Embedding.Lam LamReif
       | .validOfBetaBounded pos bound => return .validOfBetaBounded (← transPos ref pos) bound
       | .validOfExtensionalize pos => return .validOfExtensionalize (← transPos ref pos)
       | .validOfEqSymm pos => return .validOfEqSymm (← transPos ref pos)
+      | .validOfMp pos rw => return .validOfMp (← transPos ref pos) (← transPos ref rw)
       | .validOfCongrArg pos rw => return .validOfCongrArg (← transPos ref pos) (← transPos ref rw)
       | .validOfCongrFun pos rw => return .validOfCongrFun (← transPos ref pos) (← transPos ref rw)
       | .validOfCongr pos rwFn rwArg => return .validOfCongr (← transPos ref pos) (← transPos ref rwFn) (← transPos ref rwArg)
       | .validOfCongrArgs pos rws => return .validOfCongrArgs (← transPos ref pos) (← rws.mapM (transPos ref))
       | .validOfCongrFunN pos rw n => return .validOfCongrFunN (← transPos ref pos) (← transPos ref rw) n
       | .validOfCongrs pos rwFn rwArgs => return .validOfCongrs (← transPos ref pos) (← transPos ref rwFn) (← rwArgs.mapM (transPos ref))
+    | .ca cs => ChkStep.ca <$>
+      match cs with
+      | .validOfEtaExpand1At pos occ => return .validOfEtaExpand1At (← transPos ref pos) occ
+      | .validOfEtaReduce1At pos occ => return .validOfEtaReduce1At (← transPos ref pos) occ
+      | .validOfEtaExpandAt pos occ => return .validOfEtaExpandAt (← transPos ref pos) occ
     | .e cs => ChkStep.e <$>
       match cs with
       | .skolemize pos => return .skolemize (← transPos ref pos)

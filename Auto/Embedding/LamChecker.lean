@@ -452,12 +452,19 @@ inductive ConvStep where
   | validOfBetaBounded (pos : Nat) (bound : Nat) : ConvStep
   | validOfExtensionalize (pos : Nat) : ConvStep
   | validOfEqSymm (pos : Nat) : ConvStep
+  | validOfMp (pos rw : Nat) : ConvStep
   | validOfCongrArg (pos rw : Nat) : ConvStep
   | validOfCongrFun (pos rw : Nat) : ConvStep
   | validOfCongr (pos rwFn rwArg : Nat) : ConvStep
   | validOfCongrArgs (pos : Nat) (rws : List Nat) : ConvStep
   | validOfCongrFunN (pos rwFn n : Nat) : ConvStep
   | validOfCongrs (pos rwFn : Nat) (rwArgs : List Nat) : ConvStep
+  deriving Inhabited, Hashable, BEq, Lean.ToExpr
+
+inductive ConvAtStep where
+  | validOfEtaExpand1At (pos : Nat) (occ : List Bool) : ConvAtStep
+  | validOfEtaReduce1At (pos : Nat) (occ : List Bool) : ConvAtStep
+  | validOfEtaExpandAt (pos : Nat) (occ : List Bool) : ConvAtStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
 inductive EtomStep where
@@ -505,6 +512,7 @@ inductive WFStep where
 
 inductive ChkStep where
   | c : ConvStep → ChkStep
+  | ca : ConvAtStep → ChkStep
   | e : EtomStep → ChkStep
   | i : InferenceStep → ChkStep
   | l : LCtxStep → ChkStep
@@ -517,12 +525,18 @@ def ConvStep.toString : ConvStep → String
 | .validOfBetaBounded pos bound => s!"validOfBetaBounded {pos} {bound}"
 | .validOfExtensionalize pos => s!"validOfExtensionalize {pos}"
 | .validOfEqSymm pos => s!"validOfEqSymm {pos}"
+| .validOfMp pos rw => s!"validOfMp {pos} {rw}"
 | .validOfCongrArg pos rw => s!"validOfCongrArg {pos} {rw}"
 | .validOfCongrFun pos rw => s!"validOfCongrFun {pos} {rw}"
 | .validOfCongr pos rwFn rwArg => s!"validOfCongr {pos} {rwFn} {rwArg}"
 | .validOfCongrArgs pos rws => s!"validOfCongrArgs {pos} {rws}"
 | .validOfCongrFunN pos rwFn n => s!"validOfCongrFunN {pos} {rwFn} {n}"
 | .validOfCongrs pos rwFn rwArgs => s!"validOfCongrs {pos} {rwFn} {rwArgs}"
+
+def ConvAtStep.toString : ConvAtStep → String
+| .validOfEtaExpand1At pos occ => s!"validOfEtaExpand1At {pos} {occ}"
+| .validOfEtaReduce1At pos occ => s!"validOfEtaReduce1At {pos} {occ}"
+| .validOfEtaExpandAt pos occ => s!"validOfEtaExpandAt {pos} {occ}"
 
 def EtomStep.toString : EtomStep → String
 | .skolemize pos => s!"skolemize {pos}"
@@ -556,12 +570,13 @@ def WFStep.toString : WFStep → String
 | .wfOfBetaBounded pos bound => s!"wfOfBetaBounded {pos} {bound}"
 
 def ChkStep.toString : ChkStep → String
-| .c s => ConvStep.toString s
-| .e s => EtomStep.toString s
-| .i s => InferenceStep.toString s
-| .l s => LCtxStep.toString s
-| .n s => NonemptyStep.toString s
-| .w s => WFStep.toString s
+| .c s  => ConvStep.toString s
+| .ca s => ConvAtStep.toString s
+| .e s  => EtomStep.toString s
+| .i s  => InferenceStep.toString s
+| .l s  => LCtxStep.toString s
+| .n s  => NonemptyStep.toString s
+| .w s  => WFStep.toString s
 
 instance : ToString ChkStep where
   toString := ChkStep.toString
@@ -669,6 +684,16 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
     | .some t' => .addEntry (REntry.valid lctx t')
     | .none => .fail
   | .none => .fail
+| .validOfMp pos rw =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    match r.getValidEnsureLCtx lctx rw with
+    | .some rw =>
+      match LamTerm.mp? rw t with
+      | .some t' => .addEntry (REntry.valid lctx t')
+      | .none => .fail
+    | .none => .fail
+  | .none => .fail
 | .validOfCongrArg pos rw =>
   match r.getValid pos with
   | .some (lctx, t) =>
@@ -733,6 +758,29 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
         | .some res => .addEntry (REntry.valid lctx res)
         | .none => .fail
       | .none => .fail
+    | .none => .fail
+  | .none => .fail
+
+@[reducible] def ConvAtStep.eval (r : RTable) : (cs : ConvAtStep) → EvalResult
+| .validOfEtaExpand1At pos occ =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    match LamTerm.rwGenAtWith occ LamTerm.etaExpand1? (.base .prop) t with
+    | .some t' => .addEntry (.valid lctx t')
+    | .none => .fail
+  | .none => .fail
+| .validOfEtaReduce1At pos occ =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    match LamTerm.rwGenAt occ LamTerm.etaReduce1? t with
+    | .some t' => .addEntry (.valid lctx t')
+    | .none => .fail
+  | .none => .fail
+| .validOfEtaExpandAt pos occ =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    match LamTerm.rwGenAtWith occ (fun s t => LamTerm.etaExpand s t) (.base .prop) t with
+    | .some t' => .addEntry (.valid lctx t')
     | .none => .fail
   | .none => .fail
 
@@ -887,12 +935,13 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
   | .none => .fail
 
 def ChkStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : ChkStep) → EvalResult
-| .c s => ConvStep.eval r s
-| .e s => EtomStep.eval lvt lit r s
-| .i s => InferenceStep.eval lvt lit r s
-| .l s => LCtxStep.eval r s
-| .n s => NonemptyStep.eval lvt r s
-| .w s => WFStep.eval lvt lit r s
+| .c s  => ConvStep.eval r s
+| .ca s => ConvAtStep.eval r s
+| .e s  => EtomStep.eval lvt lit r s
+| .i s  => InferenceStep.eval lvt lit r s
+| .l s  => LCtxStep.eval r s
+| .n s  => NonemptyStep.eval lvt r s
+| .w s  => WFStep.eval lvt lit r s
 
 private theorem ChkStep.eval_correct_wfAux
   {cond₁ cond₂ : Prop} (h : LamThmWFP lval₁ lctx₁ s₁ t₁ ∧ cond₁)
@@ -1008,7 +1057,7 @@ theorem ConvStep.eval_correct
       have h' := RTable.getValid_correct inv h
       apply ChkStep.eval_correct_validAux h'
       case vimp =>
-        intro hv; apply LamThmValid.mpLamThmEquiv _ _ hv
+        intro hv; apply LamThmValid.mpLamThmEquiv _ hv
         apply LamThmEquiv.ofHeadBeta (LamThmWF.ofLamThmValid hv)
       case condimp =>
         intro hcond; apply Nat.le_trans LamTerm.maxEVarSucc_headBeta hcond
@@ -1021,7 +1070,7 @@ theorem ConvStep.eval_correct
       have h' := RTable.getValid_correct inv h
       apply ChkStep.eval_correct_validAux h'
       case vimp =>
-        intro hv; apply LamThmValid.mpLamThmEquiv _ _ hv
+        intro hv; apply LamThmValid.mpLamThmEquiv _ hv
         apply LamThmEquiv.ofBetaBounded (LamThmWF.ofLamThmValid hv)
       case condimp =>
         intro hcond; apply Nat.le_trans LamTerm.maxEVarSucc_betaBounded hcond
@@ -1034,7 +1083,7 @@ theorem ConvStep.eval_correct
       have h' := RTable.getValid_correct inv h
       apply ChkStep.eval_correct_validAux h'
       case vimp =>
-        intro hv; apply LamThmValid.mpLamThmEquiv _ _ hv
+        intro hv; apply LamThmValid.mpLamThmEquiv _ hv
         apply LamThmEquiv.ofExtensionalize (LamThmWF.ofLamThmValid hv)
       case condimp =>
         intro hcond; rw [LamTerm.maxEVarSucc_extensionalizeAux]; exact hcond
@@ -1050,11 +1099,33 @@ theorem ConvStep.eval_correct
         have h' := RTable.getValid_correct inv h₁
         apply ChkStep.eval_correct_validAux h'
         case vimp =>
-          intro hv; apply LamThmValid.mpLamThmEquiv _ _ hv
+          intro hv; apply LamThmValid.mpLamThmEquiv _ hv
           apply LamThmEquiv.eqSymm? (LamThmWF.ofLamThmValid hv) h₂
         case condimp =>
           intro hcond; rw [LamTerm.maxEVarSucc_eqSymm? h₂]; exact hcond
       | .none => exact True.intro
+| .validOfMp pos rw => by
+  dsimp [eval]
+  match hpos : r.getValid pos with
+  | .some (lctx, t) =>
+    dsimp
+    match hrw : r.getValidEnsureLCtx lctx rw with
+    | .some rwt =>
+      dsimp
+      match hmp : LamTerm.mp? rwt t with
+      | .some t' =>
+        have hpos' := RTable.getValid_correct inv hpos
+        have hrw' := RTable.getValidEnsureLCtx_correct inv hrw
+        apply ChkStep.eval_correct_validAux hpos'
+        case vimp =>
+          intro hv; apply LamThmValid.mpLamThmEquiv _ hv
+          apply LamThmEquiv.mp? (LamThmWF.ofLamThmValid hv) hrw'.left hmp
+        case condimp =>
+          intro _; apply Nat.le_trans _ hrw'.right
+          apply LamTerm.maxEVarSucc_mp? hmp
+      | .none => exact True.intro
+    | .none => exact True.intro
+  | .none => exact True.intro
 | .validOfCongrArg pos rw => by
   dsimp [eval]
   match hpos : r.getValid pos with
@@ -1070,7 +1141,7 @@ theorem ConvStep.eval_correct
         let hrw := RTable.getValidEnsureLCtx_correct inv hrw
         apply ChkStep.eval_correct_validAux ht
         case vimp =>
-          intro hv; apply LamThmValid.mpLamThmEquiv _ _ hv
+          intro hv; apply LamThmValid.mpLamThmEquiv _ hv
           apply LamThmEquiv.congrArg? (LamThmWF.ofLamThmValid hv) hrw.left hcongr
         case condimp =>
           intro cond; apply LamTerm.maxEVarSucc_congrArg? cond hrw.right hcongr
@@ -1092,7 +1163,7 @@ theorem ConvStep.eval_correct
         let hrw := RTable.getValidEnsureLCtx_correct inv hrw
         apply ChkStep.eval_correct_validAux ht
         case vimp =>
-          intro hv; apply LamThmValid.mpLamThmEquiv _ _ hv
+          intro hv; apply LamThmValid.mpLamThmEquiv _ hv
           apply LamThmEquiv.congrFun? (LamThmWF.ofLamThmValid hv) hrw.left hcongr
         case condimp =>
           intro cond; apply LamTerm.maxEVarSucc_congrFun? cond hrw.right hcongr
@@ -1118,7 +1189,7 @@ theorem ConvStep.eval_correct
           let hrwArg := RTable.getValidEnsureLCtx_correct inv hrwArg
           apply ChkStep.eval_correct_validAux ht
           case vimp =>
-            intro hv; apply LamThmValid.mpLamThmEquiv _ _ hv
+            intro hv; apply LamThmValid.mpLamThmEquiv _ hv
             apply LamThmEquiv.congr? (LamThmWF.ofLamThmValid hv) hrwFn.left hrwArg.left hcongr
           case condimp =>
             intro cond; apply LamTerm.maxEVarSucc_congr? cond hrwFn.right hrwArg.right hcongr
@@ -1140,7 +1211,7 @@ theorem ConvStep.eval_correct
         let hrws := RTable.getValidsEnsureLCtx_correct inv hrws
         apply ChkStep.eval_correct_validAux ht
         case vimp =>
-          intro hv; apply LamThmValid.mpLamThmEquiv _ _ hv
+          intro hv; apply LamThmValid.mpLamThmEquiv _ hv
           have hrws' := HList.map (fun _ h => And.left h) hrws
           apply LamThmEquiv.congrArgs? (LamThmWF.ofLamThmValid hv) hrws' hcongr
         case condimp =>
@@ -1164,7 +1235,7 @@ theorem ConvStep.eval_correct
         let hrwFn := RTable.getValidEnsureLCtx_correct inv hrwFn
         apply ChkStep.eval_correct_validAux ht
         case vimp =>
-          intro hv; apply LamThmValid.mpLamThmEquiv _ _ hv
+          intro hv; apply LamThmValid.mpLamThmEquiv _ hv
           apply LamThmEquiv.congrFunN? (LamThmWF.ofLamThmValid hv) hrwFn.left hcongr
         case condimp =>
           intro cond; apply LamTerm.maxEVarSucc_congrFunN? cond hrwFn.right hcongr
@@ -1190,7 +1261,7 @@ theorem ConvStep.eval_correct
           let hrwArgs := RTable.getValidsEnsureLCtx_correct inv hrwArgs
           apply ChkStep.eval_correct_validAux ht
           case vimp =>
-            intro hv; apply LamThmValid.mpLamThmEquiv _ _ hv
+            intro hv; apply LamThmValid.mpLamThmEquiv _ hv
             have hrwArgs' := HList.map (fun _ h => And.left h) hrwArgs
             apply LamThmEquiv.congrs? (LamThmWF.ofLamThmValid hv) hrwFn.left hrwArgs' hcongr
           case condimp =>
@@ -1390,6 +1461,71 @@ theorem InferenceStep.eval_correct
     apply evalValidOfInstantiate_correct _ h'
   | .none => exact True.intro
 
+theorem ConvAtStep.eval_correct
+  (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
+  (cs : ConvAtStep) → EvalResult.correct r cv (cs.eval r)
+| .validOfEtaExpand1At pos occ => by
+  dsimp [eval]
+  match h₁ : r.getValid pos with
+  | .some (lctx, t) =>
+    dsimp
+    match h₂ : LamTerm.rwGenAtWith occ LamTerm.etaExpand1? (.base .prop) t with
+    | .some t' =>
+      dsimp
+      have h₁' := RTable.getValid_correct inv h₁
+      apply ChkStep.eval_correct_validAux h₁'
+      case vimp =>
+        intro hv lctx'; have ⟨wft, _⟩ := hv lctx'
+        have hequiv := LamGenConvWith.rwGenAtWith LamGenConvWith.etaExpand1? _ _ _ h₂ _ wft
+        apply LamValid.mpLamEquiv (hv _) hequiv
+      case condimp =>
+        intro hcond
+        rw [LamTerm.evarEquiv_rwGenAtWith (fun s => @LamTerm.maxEVarSucc_etaExpand1? s) _ _ _ h₂]
+        exact hcond
+    | .none => exact True.intro
+  | .none => exact True.intro
+| .validOfEtaReduce1At pos occ => by
+  dsimp [eval]
+  match h₁ : r.getValid pos with
+  | .some (lctx, t) =>
+    dsimp
+    match h₂ : LamTerm.rwGenAt occ LamTerm.etaReduce1? t with
+    | .some t' =>
+      dsimp
+      have h₁' := RTable.getValid_correct inv h₁
+      apply ChkStep.eval_correct_validAux h₁'
+      case vimp =>
+        intro hv lctx'; have ⟨wft, _⟩ := hv lctx'
+        have hequiv := LamGenConv.rwGenAt LamGenConv.etaReduce1? _ _ h₂ _ _ wft
+        apply LamValid.mpLamEquiv (hv _) hequiv
+      case condimp =>
+        intro hcond
+        rw [LamTerm.evarEquiv_rwGenAt @LamTerm.maxEVarSucc_etaReduce1? _ _ h₂]
+        exact hcond
+    | .none => exact True.intro
+  | .none => exact True.intro
+| .validOfEtaExpandAt pos occ => by
+  dsimp [eval]
+  match h₁ : r.getValid pos with
+  | .some (lctx, t) =>
+    dsimp
+    match h₂ : LamTerm.rwGenAtWith occ (fun s t => LamTerm.etaExpand s t) (.base .prop) t with
+    | .some t' =>
+      dsimp
+      have h₁' := RTable.getValid_correct inv h₁
+      apply ChkStep.eval_correct_validAux h₁'
+      case vimp =>
+        intro hv lctx'; have ⟨wft, _⟩ := hv lctx'
+        have hequiv := LamGenConvWith.rwGenAtWith LamGenConvWith.etaExpand _ _ _ h₂ _ wft
+        apply LamValid.mpLamEquiv (hv _) hequiv
+      case condimp =>
+        intro hcond
+        rw [LamTerm.evarEquiv_rwGenAtWith (fun s t₁ t₂ heq => by
+          cases heq; apply LamTerm.maxEVarSucc_etaExpand) _ _ _ h₂]
+        exact hcond
+    | .none => exact True.intro
+  | .none => exact True.intro
+
 theorem LCtxStep.eval_correct
   (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
   (cs : LCtxStep) → EvalResult.correct r cv (cs.eval r)
@@ -1543,12 +1679,13 @@ theorem WFStep.eval_correct
 theorem ChkStep.eval_correct
   (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
   (cs : ChkStep) → EvalResult.correct r cv (cs.eval cv.toLamVarTy cv.toLamILTy r)
-| .c s => ConvStep.eval_correct r cv inv s
-| .e s => EtomStep.eval_correct r cv inv s
-| .i s => InferenceStep.eval_correct r cv inv s
-| .l s => LCtxStep.eval_correct r cv inv s
-| .n s => NonemptyStep.eval_correct r cv s
-| .w s => WFStep.eval_correct r cv inv s
+| .c s  => ConvStep.eval_correct r cv inv s
+| .ca s => ConvAtStep.eval_correct r cv inv s
+| .e s  => EtomStep.eval_correct r cv inv s
+| .i s  => InferenceStep.eval_correct r cv inv s
+| .l s  => LCtxStep.eval_correct r cv inv s
+| .n s  => NonemptyStep.eval_correct r cv s
+| .w s  => WFStep.eval_correct r cv inv s
 
 def RTable.runEvalResult (r : RTable) (n : Nat) : EvalResult → RTable
 | .fail => r
