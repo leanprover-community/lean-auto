@@ -287,7 +287,7 @@ theorem LamSort.getArgTysN_getResTyN_eq
       case refl l' =>
         dsimp [mkFuncs]; apply congrArg; apply IH h₁ hRes
 
-theorem LamSort.getArgTysN_mkFuncs_eq_some_iff :
+theorem LamSort.getArgTysN_mkFuncs_eq_l_iff :
   getArgTysN n (mkFuncs s l) = some l ↔ l.length = n := by
   induction n generalizing s l
   case zero =>
@@ -1006,6 +1006,7 @@ theorem LamTerm.maxEVarSucc_mkAppN
     dsimp [mkAppN]; apply IH; dsimp [maxEVarSucc]
     rw [Nat.max_le]; exact And.intro ht head
 
+-- Given `t` and `[s₀, s₁, ⋯, sᵢ₋₁]`, return `λ (_ : sᵢ₋₁) ⋯ (_ : s₀), t`
 def LamTerm.mkLamFN (t : LamTerm) : List LamSort → LamTerm
 | .nil => t
 | .cons s lctx => (LamTerm.lam s t).mkLamFN lctx
@@ -1051,6 +1052,24 @@ theorem LamTerm.mkForallEFN_append_singleton :
   mkForallEFN t (l₁ ++ [s]) = mkForallEF s (mkForallEFN t l₁) := by
   rw [mkForallEFN_append]; rfl
 
+def LamTerm.getLamBody : LamTerm → LamTerm
+| .lam _ body => getLamBody body
+| t => t
+
+theorem LamTerm.maxEVarSucc_getLamBody : (LamTerm.getLamBody t).maxEVarSucc = t.maxEVarSucc := by
+  induction t <;> try rfl
+  case lam s body IH => dsimp [getLamBody]; apply IH
+
+def LamTerm.getLamTys : LamTerm → List LamSort
+| .lam argTy body => argTy :: getLamTys body
+| _ => []
+
+theorem LamTerm.lamBody_lamTys_eq (t : LamTerm) : t = LamTerm.mkLamFN t.getLamBody t.getLamTys.reverse := by
+  induction t <;> try rfl
+  case lam s body IH =>
+    dsimp [getLamBody, getLamTys]; rw [List.reverse_cons]
+    rw [mkLamFN_append_singleton, ← IH]
+
 def LamTerm.getLamBodyN (n : Nat) (t : LamTerm) : Option LamTerm :=
   match n with
   | .zero => t
@@ -1080,6 +1099,77 @@ theorem LamTerm.getLamBodyN_mkLamFN_length_eq
     case refl s' l =>
       rw [List.reverse_cons]; rw [mkLamFN_append_singleton]; dsimp [getLamBodyN]
       dsimp [Nat.add] at IH; apply IH; rfl
+
+def LamTerm.getLamTysN (n : Nat) (t : LamTerm) : Option (List LamSort) :=
+  match n with
+  | .zero => .some []
+  | .succ n' =>
+    match t with
+    | .lam argTy body => (getLamTysN n' body).bind (List.cons argTy ·)
+    | _ => .none
+
+theorem LamTerm.getLamTysN_getLamBodyN_eq_some :
+  (getLamTysN n t).isSome = (getLamBodyN n t).isSome := by
+  induction n generalizing t
+  case zero => rfl
+  case succ n IH =>
+    dsimp [getLamTysN, getLamBodyN]; cases t <;> try rfl
+    case lam s body => dsimp; rw [← IH]; cases getLamTysN n body <;> rfl
+
+theorem LamTerm.getLamTysN_eq_some_of_getLamBodyN_eq_some
+  (heq : getLamBodyN n t = .some body) : ∃ l, getLamTysN n t = .some l := by
+  apply Option.isSome_iff_exists.mp; rw [getLamTysN_getLamBodyN_eq_some]
+  apply Option.isSome_iff_exists.mpr; exists body
+
+theorem LamTerm.getLamBodyN_eq_some_of_getLamTysN_eq_some
+  (heq : getLamTysN n t = .some l) : ∃ body, getLamBodyN n t = .some body := by
+  apply Option.isSome_iff_exists.mp; rw [← getLamTysN_getLamBodyN_eq_some]
+  apply Option.isSome_iff_exists.mpr; exists l
+
+theorem LamTerm.getLamTysN_getLamBodyN_eq_none :
+  (getLamTysN n t).isNone = (getLamBodyN n t).isNone := by
+  rw [Option.isNone_eq_not_isSome, Option.isNone_eq_not_isSome]
+  rw [getLamTysN_getLamBodyN_eq_some]
+
+theorem LamTerm.getLamTysN_getLamBodyN_eq
+  (hTys : getLamTysN n t = .some l) (hBody : getLamBodyN n t = .some body) :
+  t = body.mkLamFN l.reverse := by
+  induction n generalizing t body l
+  case zero => cases hTys; cases hBody; rfl
+  case succ n IH =>
+    cases t <;> try cases hTys
+    case lam s body' =>
+      dsimp [getLamTysN] at hTys; dsimp [getLamBodyN] at hBody
+      cases h₁ : getLamTysN n body' <;> rw [h₁] at hTys <;> cases hTys
+      case refl l' =>
+        rw [List.reverse_cons, mkLamFN_append_singleton]; rw [← IH h₁ hBody]
+
+theorem LamTerm.getLamTysN_mkLamFN_eq_l_iff :
+  getLamTysN n (mkLamFN t l) = .some l.reverse ↔ l.length = n := by
+  revert l; rw [IsomType.eqForall' (p:=fun _ => _) List.reverse_IsomType]
+  intro l; unfold List.reverse_IsomType; dsimp; rw [List.reverse_reverse, List.length_reverse]
+  induction n generalizing t l
+  case zero =>
+    dsimp [getLamTysN]; apply Iff.intro
+    case mp => intro h; cases l <;> cases h; rfl
+    case mpr => intro h; cases l <;> cases h; rfl
+  case succ n IH =>
+    dsimp [getLamTysN]; cases l
+    case nil =>
+      dsimp [mkLamFN]; apply Iff.intro
+      case mp =>
+        cases  t<;> intro h <;> try cases h
+        case lam s body =>
+          dsimp at h; cases h₁ : getLamTysN n body <;> rw [h₁] at h <;> cases h
+      case mpr =>
+        intro h; cases h
+    case cons s' l =>
+      rw [List.reverse_cons, mkLamFN_append_singleton]; dsimp; cases h₁ : getLamTysN n (mkLamFN t l.reverse)
+      case none => simp; intro h; rw [(IH _).mpr h] at h₁; cases h₁
+      case some l' =>
+        simp; apply Iff.intro
+        case mp => intro h; cases h; apply (IH _).mp h₁
+        case mpr => intro h; have h₂ := (IH (t:=t) _).mpr h; rw [h₁] at h₂; cases h₂; rfl
 
 def LamTerm.getAppFn : LamTerm → LamTerm
 | .app _ fn _ => getAppFn fn
@@ -1590,6 +1680,25 @@ def LamWF.ofMkLamFN {ltv : LamTyVal}
   | .cons s ls => by
     dsimp [LamTerm.mkLamFN] at wfLam; rw [pushLCtxs_cons]
     apply LamWF.getLam; apply LamWF.ofMkLamFN (ls:=ls) wfLam
+
+def LamWF.ofMkLamFN_s_eq_mkFuncsRevAux {ltv : LamTyVal}
+  (wfLam : LamWF ltv ⟨lctx, .mkLamFN p ls.reverse, s⟩) :
+  (s' : LamSort) ×' (s = LamSort.mkFuncs s' ls) :=
+  match ls with
+  | .nil => ⟨s, rfl⟩
+  | .cons argTy ls => by
+    rw [List.reverse_cons] at wfLam; rw [LamTerm.mkLamFN_append_singleton] at wfLam
+    cases wfLam; case ofLam bodyTy wfBody =>
+      have ⟨s', heq⟩ := ofMkLamFN_s_eq_mkFuncsRevAux wfBody
+      exists s'; rw [heq]; rfl
+
+def LamWF.ofMkLamFN_s_eq_mkFuncsRev {ltv : LamTyVal}
+  (wfLam : LamWF ltv ⟨lctx, .mkLamFN p ls, s⟩) :
+  PSigma (fun s' => s = LamSort.mkFuncsRev s' ls) := by
+  revert wfLam; apply IsomType.substForallRev List.reverse_IsomType ?H ls
+  unfold List.reverse_IsomType; dsimp; clear ls; intro ls wfLam
+  have ⟨s', heq⟩ := ofMkLamFN_s_eq_mkFuncsRevAux wfLam
+  exists s'; rw [← LamSort.mkFuncs_eq]; exact heq
 
 def LamWF.mkForallEFN {ltv : LamTyVal}
   (wfp : LamWF ltv ⟨pushLCtxs ls lctx, p, .base .prop⟩) :

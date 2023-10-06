@@ -67,6 +67,18 @@ def LamGenModify (lval : LamValuation) (modify : LamTerm → Option LamTerm) (we
     | false => LamValid lval lctx (.mkImp t₂ t₁)
     | true => LamValid lval lctx (.mkImp t₁ t₂)
 
+def LamTerm.getPos (occ : List Bool) (t : LamTerm) : Option LamTerm :=
+  match occ with
+  | .nil => t
+  | .cons b occ =>
+    match t with
+    | .lam _ body => getPos occ body
+    | .app _ fn arg =>
+      match b with
+      | false => getPos occ fn
+      | true => getPos occ arg
+    | _ => .none
+
 -- Apply conversion theorem at a given position in `t`
 -- The conversion should only be ones that satisfy `LamGenConv`
 def LamTerm.rwGenAt (occ : List Bool) (conv : LamTerm → Option LamTerm) (t : LamTerm) : Option LamTerm :=
@@ -117,6 +129,21 @@ theorem LamTerm.rwGenAll_app : rwGenAll conv (.app s fn arg) =
     match rwGenAll conv fn, rwGenAll conv arg with
     | .some fn', .some arg' => .some (.app s fn' arg')
     | _, _ => .none := by simp [rwGenAll]
+
+def LamTerm.getPosWith (occ : List Bool) (rty : LamSort) (t : LamTerm) : Option (LamSort × LamTerm) :=
+  match occ with
+  | .nil => .some (rty, t)
+  | .cons b occ =>
+    match t with
+    | .lam _ body =>
+      match rty with
+      | .func _ resTy => getPosWith occ resTy body
+      | _ => .none
+    | .app s fn arg =>
+      match b with
+      | false => getPosWith occ (.func s rty) fn
+      | true => getPosWith occ s arg
+    | _ => .none
 
 -- Apply conversion theorem at a given position in `t`
 -- The conversion should only be ones that satisfy `LamGenConvWith`

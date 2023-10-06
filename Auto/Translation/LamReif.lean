@@ -553,6 +553,56 @@ section Checker
       | throwError "validOfExtensionalize :: Unexpected evaluation result"
     return re
 
+  def validOfEtaExpand1At (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let pv ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.ca (.validOfEtaExpand1At pv occ)) .none
+      | throwError "validOfEtaExpand1At :: Unexpected evaluation result"
+    return re
+
+  def validOfEtaReduce1At (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let pv ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.ca (.validOfEtaReduce1At pv occ)) .none
+      | throwError "validOfEtaReduce1At :: Unexpected evaluation result"
+    return re
+
+  def validOfEtaExpandNAt (v : REntry) (n : Nat) (occ : List Bool) : ReifM REntry := do
+    let pv ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.ca (.validOfEtaExpandNAt pv n occ)) .none
+      | throwError "validOfEtaExpandNAt :: Unexpected evaluation result"
+    return re
+
+  def validOfEtaReduceNAt (v : REntry) (n : Nat) (occ : List Bool) : ReifM REntry := do
+    let pv ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.ca (.validOfEtaReduceNAt pv n occ)) .none
+      | throwError "validOfEtaReduceNAt :: Unexpected evaluation result"
+    return re
+
+  def validOfEtaExpandAt (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let .valid _ t := v
+      | throwError "validOfEtaExpandAt :: Unexpected entry {v}"
+    let .some (rty, _) := LamTerm.getPosWith occ (.base .prop) t
+      | throwError "validOfEtaExpandAt :: {occ} is not a valid position of {t}"
+    let n := rty.getArgTys.length
+    if n == 0 then
+      return v
+    else if n == 1 then
+      validOfEtaExpand1At v occ
+    else
+      validOfEtaExpandNAt v n occ
+
+  def validOfEtaReduceAt (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let .valid _ t := v
+      | throwError "validOfEtaReduceAt :: Unexpected entry {v}"
+    let .some tocc := LamTerm.getPos occ t
+      | throwError "validOfEtaReduceAt :: {occ} is not a valid position of {t}"
+    let n := tocc.getLamTys.length
+    if n == 0 then
+      return v
+    else if n == 1 then
+      validOfEtaReduce1At v occ
+    else
+      validOfEtaReduceNAt v n occ
+
   def validOfBVarLower (v : REntry) (n : REntry) : ReifM REntry := do
     let pv ← lookupREntryPos! v
     let pn ← lookupREntryPos! n
@@ -1247,7 +1297,8 @@ open Embedding.Lam LamReif
       match cs with
       | .validOfEtaExpand1At pos occ => return .validOfEtaExpand1At (← transPos ref pos) occ
       | .validOfEtaReduce1At pos occ => return .validOfEtaReduce1At (← transPos ref pos) occ
-      | .validOfEtaExpandAt pos occ => return .validOfEtaExpandAt (← transPos ref pos) occ
+      | .validOfEtaExpandNAt pos n occ => return .validOfEtaExpandNAt (← transPos ref pos) n occ
+      | .validOfEtaReduceNAt pos n occ => return .validOfEtaReduceNAt (← transPos ref pos) n occ
     | .e cs => ChkStep.e <$>
       match cs with
       | .skolemize pos => return .skolemize (← transPos ref pos)

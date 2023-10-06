@@ -100,10 +100,11 @@ def LamWF.etaExpandWith (wft : LamWF ltv ⟨lctx, t, .mkFuncs s l⟩) :
   rw [LamSort.mkFuncs_eq]; apply LamWF.mkLamFN
   apply LamWF.etaExpandAux; exact wft
 
-def LamWF.fromEtaExpandWith (wft : LamWF ltv ⟨lctx, t.etaExpandWith l, .mkFuncs s l⟩) :
-  LamWF ltv ⟨lctx, t, .mkFuncs s l⟩ := by
-  apply LamWF.fromEtaExpandAux; apply LamWF.ofMkLamFN
-  rw [← LamSort.mkFuncs_eq]; exact wft
+def LamWF.fromEtaExpandWith (wft : LamWF ltv ⟨lctx, t.etaExpandWith l, s⟩) :
+  LamWF ltv ⟨lctx, t, s⟩ := by
+  have ⟨s', heq⟩ := ofMkLamFN_s_eq_mkFuncsRev wft; cases heq
+  rw [← LamSort.mkFuncs_eq]; apply LamWF.fromEtaExpandAux
+  apply LamWF.ofMkLamFN; exact wft
 
 theorem LamEquiv.etaExpandWithAux
   {lval : LamValuation.{u}} {l : List LamSort}
@@ -142,10 +143,7 @@ def LamWF.etaExpand (wft : LamWF ltv ⟨lctx, t, s⟩) :
   rw [LamSort.getArgTys_getResTy_eq] at wft'; exact wft'
 
 def LamWF.fromEtaExpand (wfEx : LamWF ltv ⟨lctx, t.etaExpand s, s⟩) :
-  LamWF ltv ⟨lctx, t, s⟩ := by
-  rw [← LamSort.getArgTys_getResTy_eq (s:=s)]
-  apply LamWF.fromEtaExpandWith
-  rw [LamSort.getArgTys_getResTy_eq]; exact wfEx
+  LamWF ltv ⟨lctx, t, s⟩ := LamWF.fromEtaExpandWith wfEx
 
 theorem LamEquiv.etaExpand
   {lval : LamValuation.{u}} (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩) :
@@ -162,7 +160,7 @@ def LamTerm.etaExpandN? (n : Nat) (s : LamSort) (t : LamTerm) : Option LamTerm :
   | .some l => t.etaExpandWith l
   | .none => .none
 
-theorem LamTerm.maxEVarSucc_etaExpand? (heq : etaExpandN? n s t = .some t') :
+theorem LamTerm.maxEVarSucc_etaExpandN? (heq : etaExpandN? n s t = .some t') :
   t'.maxEVarSucc = t.maxEVarSucc := by
   dsimp [etaExpandN?] at heq; cases h : s.getArgTysN n <;> rw [h] at heq <;> cases heq
   case refl l => rw [maxEVarSucc_etaExpandWith]
@@ -183,14 +181,7 @@ theorem LamWF.fromEtaExpandN?
   (heq : LamTerm.etaExpandN? n s t = .some t') (wfEx : LamWF ltv ⟨lctx, t', s⟩) :
   LamWF ltv ⟨lctx, t, s⟩ := by
   dsimp [LamTerm.etaExpandN?] at heq; cases h₁ : s.getArgTysN n <;> rw [h₁] at heq <;> cases heq
-  case refl l =>
-    apply LamWF.ofNonemptyLamWF
-    have ⟨resTy, h₂⟩ := LamSort.getResTysN_eq_some_of_getArgTysN_eq_some h₁
-    apply Nonempty.intro
-    have seq := LamSort.getArgTysN_getResTyN_eq h₁ h₂
-    conv at wfEx => arg 2; rw [seq]
-    have wfEx' := LamWF.fromEtaExpandWith wfEx
-    rw [← seq] at wfEx'; exact wfEx'
+  case refl l => apply LamWF.fromEtaExpandWith wfEx
 
 theorem LamEquiv.etaExpandN?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩) (heq : LamTerm.etaExpandN? n s t = .some t') :
@@ -202,6 +193,10 @@ theorem LamEquiv.etaExpandN?
     have seq := LamSort.getArgTysN_getResTyN_eq h₁ h₂
     conv => arg 3; rw [seq]
     apply LamEquiv.etaExpandWith; rw [← seq]; exact wft
+
+theorem LamGenConvWith.etaExpandN? : LamGenConvWith lval (LamTerm.etaExpandN? n) := by
+  intros rty t₁ t₂ heq lctx wft
+  apply LamEquiv.etaExpandN? wft heq
 
 def LamTerm.etaReduce1? (t : LamTerm) : Option LamTerm :=
   match t with
@@ -260,8 +255,8 @@ def LamTerm.etaReduceNAux? (n : Nat) (t : LamTerm) : Option LamTerm :=
     | .none => .none
   | .none => .none
 
-def LamTerm.etaReduceN? (n : Nat) (rty : LamSort) (t : LamTerm) : Option LamTerm :=
-  match rty.getArgTysN n with
+def LamTerm.etaReduceN? (n : Nat) (t : LamTerm) : Option LamTerm :=
+  match t.getLamTysN n with
   | .some tys =>
     match t.etaReduceNAux? n with
     | .some t' =>
@@ -279,41 +274,51 @@ theorem LamTerm.etaReduceNAux?_etaExpandWith_length_eq
   rw [(bvarLowers?_spec (t':=t')).mpr]; rw [h]
 
 theorem LamTerm.etaReduceN?_spec :
-  etaReduceN? n rty t = .some t' ↔ t'.etaExpandN? n rty = .some t := by
+  etaReduceN? n t = .some t' ↔ ∃ l, l.length = n ∧ t'.etaExpandWith l = t := by
   apply Iff.intro
   case mp =>
     intro heq; dsimp [etaReduceN?] at heq
-    cases h₁ : LamSort.getArgTysN n rty <;> rw [h₁] at heq <;> try cases heq
+    cases h₁ : getLamTysN n t <;> rw [h₁] at heq <;> try cases heq
     case some l =>
-      dsimp at heq; have ⟨resTy, h₂⟩ := LamSort.getResTysN_eq_some_of_getArgTysN_eq_some h₁
-      cases LamSort.getArgTysN_getResTyN_eq h₁ h₂
-      dsimp [etaExpandN?]; rw [h₁]; dsimp; apply congrArg
-      revert heq; dsimp [etaReduceNAux?]
-      cases getLamBodyN n t <;> try (intro h; cases h)
-      case some aps =>
-        dsimp; cases getAppFnN n aps <;> try (intro h; cases h)
-        case some tl =>
-          dsimp; cases bvarLowers? n tl <;> try (intro h; cases h)
-          case some td =>
-            dsimp; cases h₃ : (etaExpandWith l td).beq t <;> intro h <;> cases h
-            apply LamTerm.eq_of_beq_eq_true h₃
+      dsimp at heq; have ⟨body, h₂⟩ := getLamBodyN_eq_some_of_getLamTysN_eq_some h₁
+      cases LamTerm.getLamTysN_getLamBodyN_eq h₁ h₂
+      have leq := (LamTerm.getLamTysN_mkLamFN_eq_l_iff (l:=l.reverse)).mp
+        (by rw [List.reverse_reverse]; exact h₁)
+      have leq' := leq; rw [List.length_reverse] at leq'; exists l, leq'
+      dsimp [etaExpandWith]
+      revert heq; dsimp [etaReduceNAux?]; rw [getLamBodyN_mkLamFN_length_eq leq]
+      dsimp; cases getAppFnN n body <;> try (intro h; cases h)
+      case some tl =>
+        dsimp; cases bvarLowers? n tl <;> try (intro h; cases h)
+        case some td =>
+          dsimp; cases h₃ : (etaExpandWith l td).beq (mkLamFN body l.reverse) <;> intro h <;> cases h
+          apply LamTerm.eq_of_beq_eq_true h₃
   case mpr =>
-    intro heq; dsimp [etaExpandN?] at heq
-    cases h₁ : LamSort.getArgTysN n rty <;> rw [h₁] at heq <;> cases heq
-    case some l =>
-      have ⟨resTy, h₂⟩ := LamSort.getResTysN_eq_some_of_getArgTysN_eq_some h₁
-      cases LamSort.getArgTysN_getResTyN_eq h₁ h₂
-      dsimp [etaReduceN?]; rw [h₁]; dsimp
-      have leq := LamSort.getArgTysN_mkFuncs_eq_some_iff.mp h₁
-      rw [etaReduceNAux?_etaExpandWith_length_eq leq]; dsimp
-      rw [LamTerm.beq_refl]
+    intro ⟨l, leq, exEq⟩; cases exEq; dsimp [etaReduceN?]
+    have leq' := leq; rw [← List.length_reverse] at leq'
+    rw [LamTerm.etaReduceNAux?_etaExpandWith_length_eq leq]; dsimp
+    have geq : getLamTysN n (etaExpandWith l t') = .some l := by
+      dsimp [etaExpandWith]; rw [getLamTysN_mkLamFN_eq_l_iff.mpr leq']
+      rw [List.reverse_reverse]
+    rw [geq]; dsimp; rw [LamTerm.beq_refl]
+
+theorem LamTerm.maxEVarSucc_etaReduceN? (heq : LamTerm.etaReduceN? n t = .some t') :
+  t'.maxEVarSucc = t.maxEVarSucc := by
+  have ⟨l, _, heq'⟩ := etaReduceN?_spec.mp heq; cases heq'; rw [maxEVarSucc_etaExpandWith]
 
 theorem LamEquiv.etaReduceN?
-  (wft : LamWF lval.toLamTyVal ⟨lctx, t, rty⟩) (heq : LamTerm.etaReduceN? n rty t = .some t') :
+  (wft : LamWF lval.toLamTyVal ⟨lctx, t, rty⟩) (heq : LamTerm.etaReduceN? n t = .some t') :
   LamEquiv lval lctx rty t t' := by
-  have heq' := LamTerm.etaReduceN?_spec.mp heq
-  have wfRed := LamWF.fromEtaExpandN? heq' wft
-  apply LamEquiv.symm; apply LamEquiv.etaExpandN? wfRed heq'
+  have ⟨l, leq, exEq⟩ := LamTerm.etaReduceN?_spec.mp heq; cases exEq
+  have wfRed := LamWF.fromEtaExpandWith wft
+  apply LamEquiv.symm; apply LamEquiv.etaExpandN? (n:=n) wfRed
+  have ⟨s', leq⟩ := LamWF.ofMkLamFN_s_eq_mkFuncsRev wft; cases leq
+  dsimp [LamTerm.etaExpandN?]; rw [← LamSort.mkFuncs_eq]
+  rw [LamSort.getArgTysN_mkFuncs_eq_l_iff.mpr leq]
+
+theorem LamGenConv.etaReduceN? : LamGenConv lval (LamTerm.etaReduceN? n) := by
+  intros t₁ t₂ heq lctx rty wft
+  apply LamEquiv.etaReduceN? wft heq
 
 def LamTerm.extensionalizeEqFWith (argTys : List LamSort) (resTy : LamSort) (lhs rhs : LamTerm) :=
   let extFn := fun x => etaExpandAux argTys x
