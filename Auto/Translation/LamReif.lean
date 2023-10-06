@@ -553,6 +553,12 @@ section Checker
       | throwError "validOfExtensionalize :: Unexpected evaluation result"
     return re
 
+  def validOfEqSymm (v : REntry) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.c (.validOfEqSymm p)) .none
+      | throwError "validOfEqSymm :: Unexpected evaluation result"
+    return re
+
   def validOfEtaExpand1At (v : REntry) (occ : List Bool) : ReifM REntry := do
     let pv ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.ca (.validOfEtaExpand1At pv occ)) .none
@@ -567,12 +573,20 @@ section Checker
 
   def validOfEtaExpandNAt (v : REntry) (n : Nat) (occ : List Bool) : ReifM REntry := do
     let pv ← lookupREntryPos! v
+    if n == 0 then
+      return v
+    if n == 1 then
+      return ← validOfEtaExpand1At v occ
     let (_, .addEntry re) ← newChkStep (.ca (.validOfEtaExpandNAt pv n occ)) .none
       | throwError "validOfEtaExpandNAt :: Unexpected evaluation result"
     return re
 
   def validOfEtaReduceNAt (v : REntry) (n : Nat) (occ : List Bool) : ReifM REntry := do
     let pv ← lookupREntryPos! v
+    if n == 0 then
+      return v
+    if n == 1 then
+      return ← validOfEtaReduce1At v occ
     let (_, .addEntry re) ← newChkStep (.ca (.validOfEtaReduceNAt pv n occ)) .none
       | throwError "validOfEtaReduceNAt :: Unexpected evaluation result"
     return re
@@ -583,12 +597,7 @@ section Checker
     let .some (rty, _) := LamTerm.getPosWith occ (.base .prop) t
       | throwError "validOfEtaExpandAt :: {occ} is not a valid position of {t}"
     let n := rty.getArgTys.length
-    if n == 0 then
-      return v
-    else if n == 1 then
-      validOfEtaExpand1At v occ
-    else
-      validOfEtaExpandNAt v n occ
+    validOfEtaExpandNAt v n occ
 
   def validOfEtaReduceAt (v : REntry) (occ : List Bool) : ReifM REntry := do
     let .valid _ t := v
@@ -596,12 +605,7 @@ section Checker
     let .some tocc := LamTerm.getPos occ t
       | throwError "validOfEtaReduceAt :: {occ} is not a valid position of {t}"
     let n := tocc.getLamTys.length
-    if n == 0 then
-      return v
-    else if n == 1 then
-      validOfEtaReduce1At v occ
-    else
-      validOfEtaReduceNAt v n occ
+    validOfEtaReduceNAt v n occ
 
   def validOfBVarLower (v : REntry) (n : REntry) : ReifM REntry := do
     let pv ← lookupREntryPos! v
@@ -666,6 +670,7 @@ section Checker
       let _ ← nonemptyOfEtom eidx
     return .valid lctx t
 
+  -- TODO: To be replaced by complete clausification
   def skolemizeMostIntoForall (exV : REntry) : ReifM REntry := do
     let mut exV := exV
     while true do
@@ -693,6 +698,35 @@ section Checker
   -- Functions that turns data structure in `ReifM.State` into `Expr`
 
 end Checker
+
+section CheckerUtils
+
+  -- def toDefinition? (v : REntry) : ReifM (Option REntry) := do
+  --   let .valid lctx t := v
+  --     | throwError "toDefinition :: Unexpected entry {v}"
+  --   let mut introed := t
+  --   let mut lctx' := lctx
+  --   while true do
+  --     match introed.intro1? with
+  --     | .some (s, i) => introed := i; lctx' := s :: lctx'
+  --     | .none => break
+  --   let nForall := lctx'.length - lctx.length
+  --   let .app _ (.app _ (.base (.eq _)) lhs) rhs := introed
+  --     | return .none
+  --   let ml := isGeneral lctx' lhs
+  --   let mr := isGeneral lctx' rhs
+  --   if ml.isNone && mr.isNone then return .none
+  --   let m := ml <|> mr
+  --   let v ← validOfIntroMost v
+  --   let v ← reorderLCtx v m
+  --   let v := if ml.isNone then (← validOfEqSymm v) else v
+  --   let v ← validOfIntensionalizeEqNAt v nForall []
+  --   let v ← validOfEtaReduceNAt v nForall [false, true]
+  --   return .some v
+  -- where
+  --   isGeneral (lctx : List LamSort) (t : LamTerm) : Option (Array Nat) := sorry
+
+end CheckerUtils
 
 -- Accept a new expression representing λterm atom
 -- Returns the index of it in the `varVal` array

@@ -371,11 +371,13 @@ theorem LamTerm.maxEVarSucc_extensionalizeEqF :
   maxEVarSucc_extensionalizeEqFWith
 
 def LamWF.extensionalizeEqF
-  (wfl : LamWF ltv ⟨lctx, lhs, s⟩)
-  (wfr : LamWF ltv ⟨lctx, rhs, s⟩) :
+  (wf : LamWF ltv ⟨lctx, .mkEq s lhs rhs, s'⟩) :
   LamWF ltv ⟨lctx, .extensionalizeEqF s lhs rhs, .base .prop⟩ := by
-  rw [← LamSort.getArgTys_getResTy_eq (s:=s)] at wfl wfr
-  exact LamWF.extensionalizeEqFWith wfl wfr
+  cases wf.getFn.getFn.getBase
+  match wf with
+  | .ofApp _ (.ofApp _ _ wfl) wfr =>
+    rw [← LamSort.getArgTys_getResTy_eq (s:=s)] at wfl wfr
+    exact LamWF.extensionalizeEqFWith wfl wfr
 
 theorem LamEquiv.ofExtensionalizeEqF
   {lval : LamValuation.{u}} (wf : LamWF lval.toLamTyVal ⟨lctx, .mkEq s lhs rhs, s'⟩) :
@@ -386,6 +388,118 @@ theorem LamEquiv.ofExtensionalizeEqF
     rw [← LamSort.getArgTys_getResTy_eq (s:=s)]
     intro wfl wfr; apply Eq.mp _ (LamEquiv.ofExtensionalizeEqFWith wfl wfr)
     rw [LamSort.getArgTys_getResTy_eq]; rfl
+
+def LamTerm.extensionalizeEq?F? (t : LamTerm) : Option LamTerm :=
+  match t with
+  | .app s (.app _ (.base (.eq _)) lhs) rhs => extensionalizeEqF s lhs rhs
+  | _ => .none
+
+theorem LamTerm.maxEVarSucc_extensionalizeEq?F?
+  (heq : extensionalizeEq?F? t = .some t') : t'.maxEVarSucc = t.maxEVarSucc := by
+  match t, heq with
+  | .app _ (.app _ (.base (.eq _)) lhs) rhs, Eq.refl _ =>
+    dsimp [maxEVarSucc]; rw [maxEVarSucc_extensionalizeEqF]
+    rw [Nat.max, Nat.max, Nat.max_zero_left]
+
+def LamWF.extensionalizeEq?F?
+  (wft : LamWF ltv ⟨lctx, t, s⟩) (heq : t.extensionalizeEq?F? = .some t') :
+  LamWF ltv ⟨lctx, t', .base .prop⟩ := by
+  match t, heq with
+  | .app _ (.app _ (.base (.eq _)) lhs) rhs, Eq.refl _ =>
+    cases wft.getFn.getFn.getBase
+    apply LamWF.extensionalizeEqF wft
+
+theorem LamEquiv.ofextensionalizeEq?F?
+  {lval : LamValuation.{u}} (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
+  (heq : t.extensionalizeEq?F? = .some t') :
+  LamEquiv lval lctx (.base .prop) t t' := by
+  match t, heq with
+  | .app _ (.app _ (.base (.eq _)) lhs) rhs, Eq.refl _ =>
+    cases wft.getFn.getFn.getBase
+    apply LamEquiv.ofExtensionalizeEqF wft
+
+def LamTerm.extensionalizeEqFN? (n : Nat) (s : LamSort) (lhs rhs : LamTerm) : Option LamTerm :=
+  match s.getArgTysN n, s.getResTyN n with
+  | .some argTys, .some resTy => extensionalizeEqFWith argTys resTy lhs rhs
+  | _, _ => .none
+
+theorem LamTerm.maxEVarSucc_extensionalizeEqFN?
+  (heq : extensionalizeEqFN? n s lhs rhs = .some t') :
+  t'.maxEVarSucc = max lhs.maxEVarSucc rhs.maxEVarSucc := by
+  dsimp [extensionalizeEqFN?] at heq
+  match s.getArgTysN n, s.getResTyN n, heq with
+  | .some argTys, .some resTy, Eq.refl _ =>
+    rw [maxEVarSucc_extensionalizeEqFWith]
+
+def LamWF.extensionalizeEqFN?
+  (wf : LamWF ltv ⟨lctx, .mkEq s lhs rhs, s'⟩)
+  (heq : LamTerm.extensionalizeEqFN? n s lhs rhs = .some t') :
+  LamWF ltv ⟨lctx, t', .base .prop⟩ := by
+  dsimp [LamTerm.extensionalizeEqFN?] at heq
+  match h₁ : s.getArgTysN n, h₂ : s.getResTyN n, heq with
+  | .some argTys, .some resTy, Eq.refl _ =>
+    clear heq; apply LamWF.extensionalizeEqFWith <;>
+      rw [← LamSort.getArgTysN_getResTyN_eq h₁ h₂]
+    exact wf.getFn.getArg; exact wf.getArg
+
+theorem LamEquiv.ofExtensionalizeEqFN?
+  {lval : LamValuation.{u}} (wft : LamWF lval.toLamTyVal ⟨lctx, .mkEq s lhs rhs, s'⟩)
+  (heq : LamTerm.extensionalizeEqFN? n s lhs rhs = .some t') :
+  LamEquiv lval lctx (.base .prop) (.mkEq s lhs rhs) t' := by
+  dsimp [LamTerm.extensionalizeEqFN?] at heq
+  match h₁ : s.getArgTysN n, h₂ : s.getResTyN n, heq with
+  | .some argTys, .some resTy, Eq.refl _ =>
+    clear heq; rw [LamSort.getArgTysN_getResTyN_eq h₁ h₂]
+    apply LamEquiv.ofExtensionalizeEqFWith <;>
+      rw [← LamSort.getArgTysN_getResTyN_eq h₁ h₂]
+    exact wft.getFn.getArg; exact wft.getArg
+
+def LamTerm.extensionalizeEq?FN? (n : Nat) (t : LamTerm) : Option LamTerm :=
+  match t with
+  | .app s (.app _ (.base (.eq _)) lhs) rhs => extensionalizeEqFN? n s lhs rhs
+  | _ => .none
+
+theorem LamTerm.maxEVarSucc_extensionalizeEq?FN?
+  (heq : extensionalizeEq?FN? n t = .some t') : t'.maxEVarSucc = t.maxEVarSucc := by
+  cases t <;> try cases heq
+  case app s fn rhs =>
+    cases fn <;> try cases heq
+    case app s' b lhs =>
+      cases b <;> try cases heq
+      case base b =>
+        cases b <;> try cases heq
+        case eq s =>
+          dsimp [maxEVarSucc]; rw [maxEVarSucc_extensionalizeEqFN? heq]
+          rw [Nat.max, Nat.max, Nat.max_zero_left]
+
+def LamWF.extensionalizeEq?FN?
+  (wft : LamWF ltv ⟨lctx, t, s⟩) (heq : t.extensionalizeEq?FN? n = .some t') :
+  LamWF ltv ⟨lctx, t', .base .prop⟩ := by
+  cases t <;> try cases heq
+  case app s fn rhs =>
+    cases fn <;> try cases heq
+    case app s' b lhs =>
+      cases b <;> try cases heq
+      case base b =>
+        cases b <;> try cases heq
+        case eq s =>
+          cases wft.getFn.getFn.getBase
+          apply LamWF.extensionalizeEqFN? wft heq
+
+theorem LamEquiv.ofextensionalizeEq?FN?
+  {lval : LamValuation.{u}} (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
+  (heq : t.extensionalizeEq?FN? n = .some t') :
+  LamEquiv lval lctx (.base .prop) t t' := by
+  cases t <;> try cases heq
+  case app s fn rhs =>
+    cases fn <;> try cases heq
+    case app s' b lhs =>
+      cases b <;> try cases heq
+      case base b =>
+        cases b <;> try cases heq
+        case eq s =>
+          cases wft.getFn.getFn.getBase
+          apply LamEquiv.ofExtensionalizeEqFN? wft heq
 
 def LamTerm.extensionalizeEq (t : LamTerm) : LamTerm :=
   match t with
@@ -425,7 +539,8 @@ def LamWF.extensionalizeEq (wf : LamWF ltv ⟨lctx, t, s⟩) :
     case eq s' =>
       dsimp [LamTerm.extensionalizeEq]; cases wf.getBase
       apply LamWF.ofLam; apply LamWF.ofLam
-      apply LamWF.extensionalizeEqF; apply LamWF.ofBVar 1; apply LamWF.ofBVar 0
+      apply LamWF.extensionalizeEqF
+      apply LamWF.mkEq (LamWF.ofBVar 1) (LamWF.ofBVar 0)
   case app s' fn arg =>
     cases fn <;> try exact wf
     case base b =>
@@ -433,14 +548,14 @@ def LamWF.extensionalizeEq (wf : LamWF ltv ⟨lctx, t, s⟩) :
       case eq _ =>
         dsimp [LamTerm.extensionalizeEq]; cases wf.getFn.getBase
         apply LamWF.ofLam; apply LamWF.extensionalizeEqF
-        apply LamWF.ofBVarLift; apply wf.getArg; apply LamWF.ofBVar 0
+        apply LamWF.mkEq (LamWF.ofBVarLift _ wf.getArg) (LamWF.ofBVar 0)
     case app _ fn' arg' =>
       cases fn' <;> try exact wf
       case base b =>
         cases b <;> try exact wf
         case eq _ =>
           cases wf.getFn.getFn.getBase
-          apply LamWF.extensionalizeEqF wf.getFn.getArg wf.getArg
+          apply LamWF.extensionalizeEqF wf
 
 theorem LamEquiv.ofExtensionalizeEq
   {lval : LamValuation.{u}} (wf : LamWF lval.toLamTyVal ⟨lctx, t, s⟩) :
@@ -1771,5 +1886,3 @@ section UnsafeOps
   def LamTerm.instantiatesImp := LamTerm.instantiatesAtImp 0
 
 end UnsafeOps
-
-end Auto.Embedding.Lam

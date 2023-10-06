@@ -450,7 +450,9 @@ theorem ImportTable.importFacts_correct (it : ImportTable cpv) (n : Nat) :
 inductive ConvStep where
   | validOfHeadBeta (pos : Nat) : ConvStep
   | validOfBetaBounded (pos : Nat) (bound : Nat) : ConvStep
+  -- Exhaustively rewrite using functional extensionality
   | validOfExtensionalize (pos : Nat) : ConvStep
+  -- Symmetry to top-level equality
   | validOfEqSymm (pos : Nat) : ConvStep
   | validOfMp (pos rw : Nat) : ConvStep
   | validOfCongrArg (pos rw : Nat) : ConvStep

@@ -823,8 +823,23 @@ def LamTerm.size : LamTerm → Nat
 | .etom _ => 1
 | .base _ => 1
 | .bvar _ => 1
-| .lam _ t => t.size +1
+| .lam _ t => t.size + 1
 | .app _ t₁ t₂ => t₁.size + t₂.size
+
+theorem LamTerm.size_ne_zero : size t > 0 := by
+  induction t <;> try (dsimp [size]; apply Nat.le_refl)
+  case lam s body IH =>
+    dsimp [size]; apply Nat.le_trans IH (Nat.le_succ _)
+  case app s fn arg _ IHArg =>
+    dsimp [size]; apply Nat.le_trans IHArg (Nat.le_add_left _ _)
+
+theorem LamTerm.size_lam_gt_size_body : size (.lam s t) > size t := Nat.le_refl _
+
+theorem LamTerm.size_app_gt_size_fn : size (.app s fn arg) > size fn :=
+  Nat.add_le_add_left size_ne_zero _
+
+theorem LamTerm.size_app_gt_size_arg : size (.app s fn arg) > size arg := by
+  dsimp [size]; rw [Nat.add_comm]; apply Nat.add_le_add_left size_ne_zero
 
 -- Check whether the term contains loose bound variables `idx` levels
 --   above local context root
@@ -1158,7 +1173,7 @@ theorem LamTerm.getLamTysN_mkLamFN_eq_l_iff :
     case nil =>
       dsimp [mkLamFN]; apply Iff.intro
       case mp =>
-        cases  t<;> intro h <;> try cases h
+        cases t <;> intro h <;> try cases h
         case lam s body =>
           dsimp at h; cases h₁ : getLamTysN n body <;> rw [h₁] at h <;> cases h
       case mpr =>
@@ -1340,6 +1355,35 @@ theorem LamTerm.getAppFnN_bvarAppsRev_length_eq
     case refl s' l =>
       rw [getAppFnN_succ']; dsimp [bvarAppsRev]
       dsimp [Nat.add] at IH; rw [IH rfl]; rfl
+
+def LamTerm.getForallEFBody (t : LamTerm) : LamTerm :=
+  match t with
+  | .app _ (.base (.forallE _)) (.lam _ body) => getForallEFBody body
+  | _ => t
+
+theorem LamTerm.maxEVarSucc_getForallEFBody : (LamTerm.getForallEFBody t).maxEVarSucc = t.maxEVarSucc := by
+  generalize hsize' : t.size = n
+  have hsize : t.size ≤ n := by cases hsize'; apply Nat.le_refl
+  clear hsize'; induction n generalizing t
+  case zero => have hnz := @size_ne_zero t; rw [Nat.le_zero.mp hsize] at hnz; cases hnz
+  case succ n IH =>
+    cases t <;> try rfl
+    case app s fn arg =>
+      cases fn <;> try rfl
+      case base b =>
+        cases b <;> try rfl
+        case forallE s' =>
+          cases arg <;> try rfl
+          case lam s'' body =>
+            dsimp [getForallEFBody, maxEVarSucc]
+            rw [IH, Nat.max, Nat.max_zero_left]
+            have hsize' := Nat.le_trans size_app_gt_size_arg hsize
+            apply Nat.le_of_succ_le_succ (Nat.le_of_succ_le hsize')
+
+def LamTerm.getForallEFTys (t : LamTerm) : List LamSort :=
+  match t with
+  | .app _ (.base (.forallE s)) (.lam _ body) => s :: getForallEFTys body
+  | _ => []
 
 def LamTerm.reprPrec (t : LamTerm) (n : Nat) :=
   let s :=
@@ -2313,5 +2357,28 @@ theorem LamWF.interp_lctxIrrelevance
         case h₂ =>
           apply IHArg; intros n hlt;
           apply (hirr n (Nat.le_trans hlt (Nat.le_max_right _ _)))
+
+theorem LamTerm.forallEFBody_forallEFTys_eq (wft : LamWF ltv ⟨lctx, t, s⟩) :
+  t = LamTerm.mkForallEFN t.getForallEFBody t.getForallEFTys.reverse := by
+  generalize hsize' : t.size = n
+  have hsize : t.size ≤ n := by cases hsize'; apply Nat.le_refl
+  clear hsize'; induction n generalizing lctx t s
+  case zero => have hnz := @size_ne_zero t; rw [Nat.le_zero.mp hsize] at hnz; cases hnz
+  case succ n IH =>
+    cases t <;> try rfl
+    case app s fn arg =>
+      cases fn <;> try rfl
+      case base b =>
+        cases b <;> try rfl
+        case forallE s' =>
+          cases arg <;> try rfl
+          case lam s'' body =>
+            dsimp [getForallEFTys]; rw [List.reverse_cons, mkForallEFN_append_singleton]
+            dsimp [getForallEFBody]
+            cases wft.getFn.getBase; cases wft.getArg
+            case ofLam wfBody =>
+              rw [← IH wfBody]; rfl
+              have hsize' := Nat.le_trans size_app_gt_size_arg hsize
+              apply Nat.le_of_succ_le_succ (Nat.le_of_succ_le hsize')
 
 end Auto.Embedding.Lam
