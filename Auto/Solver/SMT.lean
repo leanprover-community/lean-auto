@@ -78,7 +78,7 @@ where
     IO.Process.spawn {stdin := .piped, stdout := .piped, stderr := .piped,
                       cmd := path, args := args}
 
--- Only put declarations in the query
+/-- Only put declarations in the query -/
 def querySolver (query : Array IR.SMT.Command) : MetaM Unit := do
   let name := smt.solver.name.get (← getOptions)
   let solver ← createSolver name

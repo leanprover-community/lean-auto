@@ -8,10 +8,12 @@ namespace Auto.Inhabitation
 private def logicalConsts : HashSet Name := HashSet.empty.insertMany
   #[``Eq, ``Exists, ``And, ``Or, ``Iff, ``Not]
 
--- Given an expression, return the array of positions of
---   minimal non-implication subexpressions
--- e.g. for `((a → b → c) → (d → e))`, we have
---   `[(0, 0), (0, 1, 0), (0, 1, 1), (1, 0), (1, 1)]`
+/--
+  Given an expression, return the array of positions of
+    minimal non-implication subexpressions
+  e.g. for `((a → b → c) → (d → e))`, we have
+    `[(0, 0), (0, 1, 0), (0, 1, 1), (1, 0), (1, 1)]`
+-/
 def getMinimalNonImpPositions (e : Expr) : Array (Array Bool) :=
   go #[] e
 where go (pos : Array Bool) (e : Expr) : Array (Array Bool) :=

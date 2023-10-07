@@ -29,7 +29,7 @@ def hexadecimal : ERE :=
 def binary : ERE :=
   .comp #[.ofStr "#b", ERE.some (.inStr "01")]
 
--- Characters not allowed within a pair of double quote
+/-- Characters not allowed within a pair of double quote -/
 private def stringAux : EREBracket :=
   .minus (.inStr ("\"" ++ unprintable)) (.inStr whitespace)
 
@@ -59,7 +59,7 @@ def lparen : ERE := .inStr "("
 
 def rparen : ERE := .inStr ")"
 
--- Special constants
+/-- Special constants -/
 def specConst : ERE := .plus #[
   .attr numeral "numeral",
   .attr decimal "decimal",

@@ -25,16 +25,18 @@ section NFA
     | .inl _ => Hashable.hash (0, 0)
     | .inr a => Hashable.hash (1, hash a)
 
-  -- The state of a `n : NFA` is a natual number
-  -- The number of states is `n.tr.size`
-  -- The set of all possible states is `{0,1,...,n.tr.size}`,
-  --   where `0` is the initial state and `n.size` is the accept state
-  -- `n.tr` represents the transition function
-  --   of the `NFA`, where `Unit` is the `ε` transition.
-  --   We assume that the accept state does not have any
-  --   outward transitions, so it's not recorded in `n`.
-  -- So, by definition, the accept state has no outcoming edges.
-  -- However, the initial state might have incoming edges
+  /--
+    The state of a `n : NFA` is a natual number
+    The number of states is `n.tr.size`
+    The set of all possible states is `{0,1,...,n.tr.size}`,
+      where `0` is the initial state and `n.size` is the accept state
+    `n.tr` represents the transition function
+      of the `NFA`, where `Unit` is the `ε` transition.
+      We assume that the accept state does not have any
+      outward transitions, so it's not recorded in `n`.
+    So, by definition, the accept state has no outcoming edges.
+    However, the initial state might have incoming edges
+  -/
   structure NFA where
     tr    : Array (HashMap (Unit ⊕ σ) (Array Nat))
     -- Each state (including the accept state) is associated
@@ -137,13 +139,13 @@ section NFA
   
   end Run
 
-  -- Criterion : The destination of all transitions should be ≤ n.size
+  /-- Criterion : The destination of all transitions should be ≤ n.size -/
   def NFA.wf (n : NFA σ) : Bool :=
     n.tr.size >= 1
     && n.tr.all (fun hmap => hmap.toList.all (fun (_, arr) => arr.all (· <= n.tr.size)))
     && n.attrs.size == n.tr.size + 1
 
-  -- Delete invalid transitions and turn the NFA into a well-formed one
+  /-- Delete invalid transitions and turn the NFA into a well-formed one -/
   def NFA.normalize (n : NFA σ) : NFA σ :=
     let size := n.tr.size
     let normEntry (x : _ × Array Nat) :=
@@ -153,7 +155,7 @@ section NFA
     let attrs' := attrs'.append ⟨(List.range (size + 1 - attrs'.size)).map (fun _ => HashSet.empty)⟩
     NFA.mk tr' attrs'
 
-  -- Whether the NFA's initial state has incoming edges
+  /-- Whether the NFA's initial state has incoming edges -/
   def NFA.hasEdgeToInit (n : NFA σ) : Bool :=
     n.tr.any (fun hmap => hmap.toList.any (fun (_, arr) => arr.contains 0))
 
@@ -166,7 +168,7 @@ section NFA
   private def NFA.addEdgesToHMap (x : HashMap (Unit ⊕ σ) (Array Nat)) (e : (Unit ⊕ σ) × Array Nat) :=
       x.insert e.fst (match x.find? e.fst with | some arr => arr ++ e.snd | none => e.snd)
 
-  -- Add attribute to a specific state
+  /-- Add attribute to a specific state -/
   def NFA.addAttrToState (n : NFA σ) (s : Nat) (attr : String) :=
     if s >= n.attrs.size then
       panic!"NFA.addAttrToState :: Invalid state {s} for {n}"
@@ -174,7 +176,7 @@ section NFA
       let new_attrs := n.attrs.modify s (fun hs => hs.insert attr)
       NFA.mk n.tr new_attrs
 
-  -- Add attribute to accept state
+  /-- Add attribute to accept state -/
   def NFA.addAttr (n : NFA σ) (attr : String) :=
     if n.attrs.size = 0 then
       panic!"NFA.addAttr :: Invalid {n}"
@@ -182,18 +184,18 @@ section NFA
       let new_attrs := n.attrs.modify (n.attrs.size - 1) (fun hs => hs.insert attr)
       NFA.mk n.tr new_attrs
 
-  -- Does not accept any string
+  /-- Does not accept any string -/
   def NFA.zero : NFA σ := NFA.mk #[HashMap.empty] #[.empty, .empty]
 
-  -- Only accepts empty string
+  /-- Only accepts empty string -/
   def NFA.epsilon : NFA σ :=
     NFA.mk #[HashMap.empty.insert (.inl .unit) #[1]] #[.empty, .empty]
 
-  -- Accepts a character
+  /-- Accepts a character -/
   def NFA.ofSymb (c : σ) : NFA σ :=
     NFA.mk #[HashMap.empty.insert (.inr c) #[1]] #[.empty, .empty]
 
-  -- Produce an NFA whose language is the union of `m`'s and `n`'s
+  /-- Produce an NFA whose language is the union of `m`'s and `n`'s -/
   def NFA.plus (m n : NFA σ) : NFA σ :=
     -- `0` is the new initial state
     let off_m := 1
@@ -274,7 +276,7 @@ section NFA
     let new_attrs := #[.empty] ++ m.attrs ++ #[.empty]
     NFA.mk new_tr new_attrs
 
-  -- Extra functionality
+  /-- Extra functionality -/
   private def NFA.multiCompAux : List (NFA σ) → NFA σ
   | .nil => NFA.epsilon
   | .cons a .nil => a
@@ -318,11 +320,11 @@ section NFA
   else
     NFA.comp (r.repeatN n) (r.repeatAtMost (m - n))
 
-  -- Accepts all characters in an array of characters
+  /-- Accepts all characters in an array of characters -/
   def NFA.ofSymbPlus (cs : Array σ) : NFA σ :=
     NFA.mk #[HashMap.ofList (cs.map (fun c => (.inr c,#[1]))).data] #[.empty, .empty]
 
-  -- An `NFA UInt32` that accepts exactly a string
+  /-- An `NFA UInt32` that accepts exactly a string -/
   def NFA.ofSymbComp (s : Array σ) : NFA σ :=
     let tr := (Array.mk s.data).mapIdx (fun idx c => HashMap.empty.insert (.inr c) #[idx.val + 1])
     let attrs := Array.mk ((List.range (s.size + 1)).map (fun _ => .empty))

@@ -15,7 +15,7 @@ import Auto.MathlibEmulator
 -- Simply Typed Lambda Calculus = HOL (without polymorphism)
 namespace Auto.Embedding.Lam
 
--- Interpreted sorts
+/-- Interpreted sorts -/
 inductive LamBaseSort
   | prop : LamBaseSort             -- GLift `prop`
   | int  : LamBaseSort             -- GLift `int`
@@ -173,8 +173,7 @@ theorem LamSort.beq_eq_false_eq_ne (a b : LamSort) : (a.beq b = false) = (a ≠ 
   case false =>
     apply propext (Iff.intro (fun _ h' => by cases h'; rw [beq_refl] at h; cases h) (fun _ => rfl))
 
-
--- Given `a` and `[ty₀, ty₁, ⋯, tyᵢ₋₁]`, return `ty₀ → ty₁ → ⋯ → tyᵢ₋₁ → a`
+/-- Given `a` and `[ty₀, ty₁, ⋯, tyᵢ₋₁]`, return `ty₀ → ty₁ → ⋯ → tyᵢ₋₁ → a` -/
 def LamSort.mkFuncs (a : LamSort) (tys : List LamSort) : LamSort :=
   tys.foldr (fun s cur => .func s cur) a
 
@@ -193,7 +192,7 @@ theorem LamSort.mkFuncs_append : LamSort.mkFuncs a (tys₁ ++ tys₂) = .mkFuncs
 theorem LamSort.mkFuncs_append_singleton : LamSort.mkFuncs a (tys ++ [ty]) = .mkFuncs (.func ty a) tys := by
   rw [LamSort.mkFuncs_append, LamSort.mkFuncs_singleton]
 
--- Given `a` and `[ty₀, ty₁, ⋯, tyᵢ₋₁]`, return `tyᵢ₋₁ → ⋯ → ty₁ → ty₀ → a`
+/-- Given `a` and `[ty₀, ty₁, ⋯, tyᵢ₋₁]`, return `tyᵢ₋₁ → ⋯ → ty₁ → ty₀ → a` -/
 def LamSort.mkFuncsRev (a : LamSort) (tys : List LamSort) : LamSort :=
   tys.foldl (fun cur s => .func s cur) a
 
@@ -211,13 +210,13 @@ theorem LamSort.mkFuncs_eq : LamSort.mkFuncs a tys = LamSort.mkFuncsRev a tys.re
   conv => enter [1, 2]; rw [← List.reverse_reverse tys]
   apply Eq.symm mkFuncsRev_eq
 
--- Given `ty₀ → ty₁ → ⋯ → tyᵢ₋₁ → a`, return `[ty₀, ty₁, ⋯, tyᵢ₋₁]`
+/-- Given `ty₀ → ty₁ → ⋯ → tyᵢ₋₁ → a`, return `[ty₀, ty₁, ⋯, tyᵢ₋₁]` -/
 def LamSort.getArgTys : LamSort → List LamSort
 | .atom _ => .nil
 | .base _ => .nil
 | .func argTy resTy => argTy :: getArgTys resTy
 
--- Given `ty₀ → ty₁ → ⋯ → tyᵢ₋₁ → a`, return `a`
+/-- Given `ty₀ → ty₁ → ⋯ → tyᵢ₋₁ → a`, return `a` -/
 def LamSort.getResTy : LamSort → LamSort
 | .atom n => .atom n
 | .base b => .base b
@@ -229,7 +228,7 @@ theorem LamSort.getArgTys_getResTy_eq :
 | .base _ => rfl
 | .func _ resTy => congrArg _ (@getArgTys_getResTy_eq resTy)
 
--- Given `ty₀ → ty₁ → ⋯ → tyₙ₋₁ → a`, return `[ty₀, ty₁, ⋯, tyₙ₋₁]`
+/-- Given `ty₀ → ty₁ → ⋯ → tyₙ₋₁ → a`, return `[ty₀, ty₁, ⋯, tyₙ₋₁]` -/
 def LamSort.getArgTysN (n : Nat) (s : LamSort) : Option (List LamSort) :=
   match n with
   | .zero => .some .nil
@@ -238,7 +237,7 @@ def LamSort.getArgTysN (n : Nat) (s : LamSort) : Option (List LamSort) :=
     | .func argTy resTy => (getArgTysN n resTy).bind (argTy :: ·)
     | _ => .none
 
--- Given `ty₀ → ty₁ → ⋯ → tyₙ₋₁ → a`, return `a`
+/-- Given `ty₀ → ty₁ → ⋯ → tyₙ₋₁ → a`, return `a` -/
 def LamSort.getResTyN (n : Nat) (s : LamSort) : Option LamSort :=
   match n with
   | .zero => s
@@ -329,7 +328,7 @@ def LamSort.curryRev (f : HList (LamSort.interp tyVal) tys → LamSort.interp ty
   | .nil => f .nil
   | .cons _ tys => LamSort.curryRev (tys:=tys) (fun xs x => f (.cons x xs))
 
--- Representable real numbers
+/-- Representable real numbers -/
 inductive CstrReal
   | zero    : CstrReal
   | one     : CstrReal
@@ -373,21 +372,23 @@ def CstrReal.interp : (c : CstrReal) → Real
 | zero => 0
 | one  => 1
 
--- Interpreted constants
--- Note that `eq`, `forallE`, `existE` have `ilVal/lamILTy`
---   associated with them. During proof reconstruction, we should collect
---   the sort arguments of all `eq, forallE, existE` that occurs in the
---   proof into `ilVal`.
--- For `ilVal`, we need to use `ILLift.ofIsomTy` to construct
---   `ILLift` structures. The idea is that we want the interpretation
---   of reified assumptions to be definitionally
---   equal to the assumption (or `GLift.up` applied to the assumption, to
---   be precise), so we'll have to use the specially designed
---   `of(Eq/Forall/Exist)Lift` function.
--- Note that at the end of the proof, we'll have a `LamTerm.base .falseE`,
---   no `=, ∀, ∃` left, so whatever `(Eq/Forall/Exist)Lift`
---   structure are within the `(eq/forall/lam)Val`, the final result
---   will always interpret to `GLift.up False`.
+/--
+  Interpreted constants
+  Note that `eq`, `forallE`, `existE` have `ilVal/lamILTy`
+    associated with them. During proof reconstruction, we should collect
+    the sort arguments of all `eq, forallE, existE` that occurs in the
+    proof into `ilVal`.
+  For `ilVal`, we need to use `ILLift.ofIsomTy` to construct
+    `ILLift` structures. The idea is that we want the interpretation
+    of reified assumptions to be definitionally
+    equal to the assumption (or `GLift.up` applied to the assumption, to
+    be precise), so we'll have to use the specially designed
+    `of(Eq/Forall/Exist)Lift` function.
+  Note that at the end of the proof, we'll have a `LamTerm.base .falseE`,
+    no `=, ∀, ∃` left, so whatever `(Eq/Forall/Exist)Lift`
+    structure are within the `(eq/forall/lam)Val`, the final result
+    will always interpret to `GLift.up False`.
+-/
 inductive LamBaseTerm
   | trueE    : LamBaseTerm -- Propositional `true`
   | falseE   : LamBaseTerm -- Propositional `false`
@@ -841,8 +842,10 @@ theorem LamTerm.size_app_gt_size_fn : size (.app s fn arg) > size fn :=
 theorem LamTerm.size_app_gt_size_arg : size (.app s fn arg) > size arg := by
   dsimp [size]; rw [Nat.add_comm]; apply Nat.add_le_add_left size_ne_zero
 
--- Check whether the term contains loose bound variables `idx` levels
---   above local context root
+/--
+  Check whether the term contains loose bound variables `idx` levels
+    above local context root
+-/
 def LamTerm.hasLooseBVarEq (idx : Nat) : LamTerm → Bool
 | .atom _ => false
 | .etom _ => false
@@ -851,8 +854,10 @@ def LamTerm.hasLooseBVarEq (idx : Nat) : LamTerm → Bool
 | .lam _ t => t.hasLooseBVarEq (.succ idx)
 | .app _ t₁ t₂ => t₁.hasLooseBVarEq idx || t₂.hasLooseBVarEq idx
 
--- Check whether the term contains loose bound variables greater
---   or equal to `idx` levels above local context root
+/--
+  Check whether the term contains loose bound variables greater
+    or equal to `idx` levels above local context root
+-/
 def LamTerm.hasLooseBVarGe (idx : Nat) : LamTerm → Bool
 | .atom _ => false
 | .etom _ => false
@@ -1021,7 +1026,7 @@ theorem LamTerm.maxEVarSucc_mkAppN
     dsimp [mkAppN]; apply IH; dsimp [maxEVarSucc]
     rw [Nat.max_le]; exact And.intro ht head
 
--- Given `t` and `[s₀, s₁, ⋯, sᵢ₋₁]`, return `λ (_ : s₀) ⋯ (_ : sᵢ₋₁), t`
+-- Given `t` and `[s₀, s₁, ⋯, sᵢ₋₁]`, return `λ (? : s₀) ⋯ (? : sᵢ₋₁), t`
 def LamTerm.mkLamFN (t : LamTerm) : List LamSort → LamTerm
 | .nil => t
 | .cons s lctx => LamTerm.lam s (t.mkLamFN lctx)
@@ -1044,7 +1049,7 @@ theorem LamTerm.maxEVarSucc_mkLamFN {t : LamTerm} :
   case cons s lctx IH =>
     dsimp [mkLamFN, maxEVarSucc]; rw [IH]
 
--- Given `t` and `[s₀, s₁, ⋯, sᵢ₋₁]`, return `∀ (_ : sᵢ₋₁) ⋯ (_ : s₀), t`
+-- Given `t` and `[s₀, s₁, ⋯, sᵢ₋₁]`, return `∀ (? : sᵢ₋₁) ⋯ (? : s₀), t`
 def LamTerm.mkForallEFN (t : LamTerm) : List LamSort → LamTerm
 | .nil => t
 | .cons s lctx => LamTerm.mkForallEF s (t.mkForallEFN lctx)
@@ -1068,6 +1073,7 @@ theorem LamTerm.mkForallEFN_append_singleton :
   mkForallEFN t (l₁ ++ [s]) = mkForallEFN (mkForallEF s t) l₁ := by
   rw [mkForallEFN_append]; rfl
 
+/-- Given `λ (_ : ty₀) ⋯ (_ : tyᵢ₋₁), body`, return `body` -/
 def LamTerm.getLamBody : LamTerm → LamTerm
 | .lam _ body => getLamBody body
 | t => t
@@ -1076,6 +1082,7 @@ theorem LamTerm.maxEVarSucc_getLamBody : (LamTerm.getLamBody t).maxEVarSucc = t.
   induction t <;> try rfl
   case lam s body IH => dsimp [getLamBody]; apply IH
 
+/-- Given `λ (_ : ty₀) ⋯ (_ : tyᵢ₋₁), _`, return `[ty₀, ⋯, tyᵢ₋₁]` -/
 def LamTerm.getLamTys : LamTerm → List LamSort
 | .lam argTy body => argTy :: getLamTys body
 | _ => []
@@ -1481,8 +1488,10 @@ theorem LamTerm.lamCheck?_irrelevence
     intros n hlt; rw [hirr n (Nat.le_trans hlt (Nat.le_max_right _ _))]
     intros n hlt; rw [hirr n (Nat.le_trans hlt (Nat.le_max_left _ _))]
 
--- Judgement. `lamVarTy, lctx ⊢ term : type?`
--- We put `rterm` before `rty` to avoid dependent elimination failure
+/--
+  Judgement. `lamVarTy, lctx ⊢ term : type?`
+  We put `rterm` before `rty` to avoid dependent elimination failure
+-/
 structure LamJudge where
   lctx   : Nat → LamSort
   rterm  : LamTerm
@@ -1717,7 +1726,7 @@ def LamWF.mkLamFN {ltv : LamTyVal}
     rw [List.reverse_cons, pushLCtxs_append_singleton] at wfp
     apply LamWF.ofLam; apply LamWF.mkLamFN (ls:=ls) wfp
 
-def LamWF.ofMkLamFN {ltv : LamTyVal}
+def LamWF.fromMkLamFN {ltv : LamTyVal}
   (wfLam : LamWF ltv ⟨lctx, .mkLamFN p ls, LamSort.mkFuncs s ls⟩) :
   LamWF ltv ⟨pushLCtxs ls.reverse lctx, p, s⟩ :=
   match ls with
@@ -1725,9 +1734,9 @@ def LamWF.ofMkLamFN {ltv : LamTyVal}
   | .cons s ls => by
     dsimp [LamTerm.mkLamFN] at wfLam;
     rw [List.reverse_cons, pushLCtxs_append_singleton]
-    apply LamWF.ofMkLamFN (ls:=ls); apply wfLam.getLam
+    apply LamWF.fromMkLamFN (ls:=ls); apply wfLam.getLam
 
-def LamWF.ofMkLamFN_s_eq_mkFuncs_reverse {ltv : LamTyVal}
+def LamWF.fromMkLamFN_s_eq_mkFuncs_reverse {ltv : LamTyVal}
   (wfLam : LamWF ltv ⟨lctx, .mkLamFN p ls, s⟩) :
   (s' : LamSort) ×' (s = LamSort.mkFuncs s' ls) :=
   match ls with
@@ -1735,7 +1744,7 @@ def LamWF.ofMkLamFN_s_eq_mkFuncs_reverse {ltv : LamTyVal}
   | .cons argTy ls => by
     dsimp [LamTerm.mkLamFN] at wfLam; cases wfLam
     case ofLam _ wfBody =>
-      have ⟨s', seq⟩ := ofMkLamFN_s_eq_mkFuncs_reverse wfBody
+      have ⟨s', seq⟩ := fromMkLamFN_s_eq_mkFuncs_reverse wfBody
       exists s'; cases seq; rfl
 
 def LamWF.mkForallEFN {ltv : LamTyVal}
@@ -2185,7 +2194,7 @@ theorem LamWF.interp_eqForallEF
   GLift.down (LamWF.interp lval lctx lctxTerm (.mkForallEF wf)) = (∀ x,
     GLift.down (LamWF.interp lval (pushLCtx s lctx) (pushLCtxDep x lctxTerm) wf)) := rfl
 
-theorem LamWF.interp_eqForallEFN
+theorem LamWF.interp_eqForallEFN'
   {lval : LamValuation.{u}} {lctxTerm : ∀ n, (lctx n).interp lval.tyVal}
   {wf : LamWF lval.toLamTyVal ⟨pushLCtxs ls lctx, t, .base .prop⟩} :
   GLift.down (LamWF.interp lval lctx lctxTerm (.mkForallEFN' wf)) = (∀ xs,
@@ -2211,6 +2220,15 @@ theorem LamWF.interp_eqForallEFN
     apply congrArg; apply eq_of_heq; apply interp_heq <;> try rfl
     case HLCtxTyEq => rw [pushLCtxs_cons]
     case HLCtxTermEq => apply HEq.symm; apply pushLCtxsDep_cons
+
+theorem LamWF.interp_eqForallEFN
+  {lval : LamValuation.{u}} {ls : List LamSort} {lctxTerm : ∀ n, (lctx n).interp lval.tyVal}
+  {wf : LamWF lval.toLamTyVal ⟨pushLCtxs ls.reverse lctx, t, .base .prop⟩} :
+  GLift.down (LamWF.interp lval lctx lctxTerm (.mkForallEFN wf)) = (∀ xs,
+    GLift.down (LamWF.interp lval (pushLCtxs ls.reverse lctx) (pushLCtxsDep xs lctxTerm) wf)) := by
+  apply Eq.trans _ interp_eqForallEFN'; apply congrArg
+  apply eq_of_heq; apply interp_heq <;> try rfl
+  rw [List.reverse_reverse]
 
 theorem LamWF.interp_bvarApps
   {lval : LamValuation.{u}}

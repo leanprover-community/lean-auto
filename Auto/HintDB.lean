@@ -3,14 +3,16 @@ open Lean
 
 namespace Auto
 
--- Hint database is a collection of lemmas that users
---   can supply to a tactic. Users only need to provide
---   the name of the hint database to the tactic.
--- Each hint database has a name, which is internally stored as a string.
--- User can add a lemma to a hint database (internally, .addLemma),
---   or combine several existing hint databases to form a larger
---   hint database (internally, .compose), or both.
---   Note that .compose is dynamic.
+/--
+  Hint database is a collection of lemmas that users
+    can supply to a tactic. Users only need to provide
+    the name of the hint database to the tactic.
+  Each hint database has a name, which is internally stored as a string.
+  User can add a lemma to a hint database (internally, .addLemma),
+    or combine several existing hint databases to form a larger
+    hint database (internally, .compose), or both.
+    Note that .compose is dynamic.
+-/
 inductive HintDB where
   | empty     : HintDB
   | addLemma  : (lem : Name) → (hintdb : HintDB) → HintDB

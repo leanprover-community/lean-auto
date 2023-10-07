@@ -15,7 +15,7 @@ def mergeArray (a1 a2 : Array α) :=
   else
     a1 ++ a2
 
--- Effectively a map from `α` to arbitrary type
+/-- Effectively a map from `α` to arbitrary type -/
 class Container {α : Type u} (C : Type v → Type w) where
   get?   : ∀ {β}, C β → α → Option β
   insert : ∀ {β}, C β → α → β → C β

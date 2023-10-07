@@ -5,9 +5,11 @@ open Lean
 
 namespace Auto.Embedding.Lam
 
--- Interpreting while typechecking a `λ` term. If the term fails to
---   typecheck at some point, return `⟨.base .prop, GLift.up False⟩`
---   as a default value.
+/--
+  Interpreting while typechecking a `λ` term. If the term fails to
+    typecheck at some point, return `⟨.base .prop, GLift.up False⟩`
+    as a default value.
+-/
 def LamTerm.interp.{u} (lval : LamValuation.{u}) (lctxTy : Nat → LamSort) :
   (t : LamTerm) → (s : LamSort) ×
     ((lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal) → s.interp lval.tyVal)
@@ -97,7 +99,7 @@ theorem LamThmValid.getDefault (H : LamThmValid lval [] t) :
 theorem LamThmValid.getFalse (H : LamThmValid lval [] (.base .falseE)) : False :=
   LamThmValid.getDefault H
 
--- Only accepts propositions `p` without loose bound variables
+/-- Only accepts propositions `p` without loose bound variables -/
 theorem LamThmValid.ofInterpAsProp
   (lval : LamValuation) (p : LamTerm)
   (h₁ : LamTerm.lamCheck? lval.toLamTyVal dfLCtxTy p = .some (.base .prop))
@@ -271,10 +273,12 @@ def getLCtxTy! (idx : Nat) : InterpM LamSort := do
   | .some s => return s
   | .none => throwError "getLCtxTy! :: Unexpected error"
 
--- Turning a sort into `fvar` in a hash-consing manner
--- For example, for `.func (.atom 0) (.atom 0)`, we'll have
--- 1. .atom 0 → fvar₀ := .atom 0
--- 2. .func (.atom 0) (.atom 0) → fvar₁ := .func fvar₀ fvar₀
+/--
+  Turning a sort into `fvar` in a hash-consing manner
+  For example, for `.func (.atom 0) (.atom 0)`, we'll have
+  1. .atom 0 → fvar₀ := .atom 0
+  2. .func (.atom 0) (.atom 0) → fvar₁ := .func fvar₀ fvar₀
+-/
 def sort2FVarId (s : LamSort) : InterpM FVarId := do
   let sortMap ← getSortMap
   let userName := (`interpsf).appendIndexAfter (← getSortMap).size
@@ -294,8 +298,7 @@ def sort2FVarId (s : LamSort) : InterpM FVarId := do
       setSortFVars ((← getSortFVars).push fvarId)
       return fvarId
 
--- Turning all sorts occurring in a `LamTerm` into `fvar`, in
---   a hash-consing manner
+/-- Turning all sorts occurring in a `LamTerm` into `fvar`, in a hash-consing manner -/
 def collectSortFor (ltv : LamTyVal) : LamTerm → InterpM LamSort
 | .atom n => do
   let _ ← sort2FVarId (ltv.lamVarTy n)

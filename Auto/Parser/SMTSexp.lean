@@ -126,11 +126,13 @@ def ParseResult.toString : ParseResult → String
 
 local instance : Hashable Char := ⟨fun c => hash c.val⟩
 
--- Note: Make sure that the next character of `s` is either `EOF` or white space
--- This is because wee rely on the property that:
---    For each lexicon `l` with a white space at position `p`, the
---    part of `l` before `p` will always be identified as `incomplete`
---    by `ERE.ADFALexEagerL SMTSexp.lexiconADFA`, and never as `done`.
+/--
+  Note: Make sure that the next character of `s` is either `EOF` or white space
+  This is because wee rely on the property that:
+     For each lexicon `l` with a white space at position `p`, the
+     part of `l` before `p` will always be identified as `incomplete`
+     by `ERE.ADFALexEagerL SMTSexp.lexiconADFA`, and never as `done`.
+-/
 def parseSexp (s : String) (p : String.Pos) (partialResult : PartialResult) : ParseResult := Id.run <| do
   if p == s.endPos then
     return .incomplete partialResult p

@@ -49,7 +49,7 @@ def CiHead.toExpr : CiHead → Expr
 | .mvar id => .mvar id
 | .const name lvls => .const name lvls.data
 
--- Ignore constant's levels
+/-- Ignore constant's levels -/
 def CiHead.fingerPrint : CiHead → Expr
 | .fvar id => .fvar id
 | .mvar id => .mvar id
@@ -78,7 +78,7 @@ def CiHead.isInstanceQuick (ci : CiHead) : MetaM Bool := do
     return true
   return false
 
--- **Remark**: This function assigns level mvars if necessary
+/-- **Remark**: This function assigns level mvars if necessary -/
 def CiHead.equiv (ch₁ ch₂ : CiHead) : MetaM Bool :=
   match ch₁, ch₂ with
   | .fvar id₁, .fvar id₂ => pure (id₁ == id₂)
@@ -94,7 +94,7 @@ def CiHead.equiv (ch₁ ch₂ : CiHead) : MetaM Bool :=
     return true
   | _, _ => pure false
 
-/-
+/--
   If a constant `c` is of type `∀ (xs : αs), t`,
     then its valid instance will be `c` with all of its
     universe levels, dependent arguments and instance
@@ -135,10 +135,12 @@ private def ConstInst.toMessageDataAux (ci : ConstInst) : MessageData :=
 instance : ToMessageData ConstInst where
   toMessageData ci := m!"ConstInst ⦗⦗ {ci.head}{ci.toMessageDataAux} ⦘⦘"
 
--- **Remark**: This function assigns metavariables if necessary,
---   but its only usage in this file is under `Meta.withNewMCtxDepth`
--- Note that since `ci₁, ci₂` are both `ConstInst`, they does not
---   contain loose bound variables
+/--
+  **Remark**: This function assigns metavariables if necessary,
+    but its only usage in this file is under `Meta.withNewMCtxDepth`
+  Note that since `ci₁, ci₂` are both `ConstInst`, they does not
+    contain loose bound variables
+-/
 def ConstInst.equiv (ci₁ ci₂ : ConstInst) : MetaM Bool := do
   let ⟨head₁, argsInst₁, idx₁⟩ := ci₁
   let ⟨head₂, argsInst₂, idx₂⟩ := ci₂
@@ -153,9 +155,11 @@ def ConstInst.equiv (ci₁ ci₂ : ConstInst) : MetaM Bool := do
       return false
   return true
 
--- **Remark**:
--- · This function assigns metavariables if necessary
--- · Runs in `MetaM`, so `e` should not have loose bound variables
+/--
+  **Remark**:
+  · This function assigns metavariables if necessary
+  · Runs in `MetaM`, so `e` should not have loose bound variables
+-/
 def ConstInst.matchExpr (e : Expr) (ci : ConstInst) : MetaM Bool := do
   let fn := e.getAppFn
   let .some ch := CiHead.ofExpr? fn
@@ -251,8 +255,10 @@ def ConstInst.toExpr (ci : ConstInst) : MetaM Expr := do
     | throwError "ConstInst.toExpr :: Unexpected error"
   return ret
 
--- Precondition : `.some ci == ← ConstInst.ofExpr? e`
--- Returns the list of non-dependent arguments in `e.getAppArgs`
+/--
+  Precondition : `.some ci == ← ConstInst.ofExpr? e`
+  Returns the list of non-dependent arguments in `e.getAppArgs`
+-/
 def ConstInst.getOtherArgs (ci : ConstInst) (e : Expr) : CoreM (Array Expr) := do
   let mut args := e.getAppArgs.map Option.some
   for idx in ci.argsIdx do
@@ -297,22 +303,26 @@ where processOther (params : Array Name) (e : Expr) : MetaM (Array ConstInst) :=
   | .some ci => return #[ci]
   | .none => return #[]
 
--- Array of instances of a polymorphic constant
+/-- Array of instances of a polymorphic constant -/
 abbrev ConstInsts := Array ConstInst
 
--- Given an array `cis` and a potentially new instance `ci`
--- · If `ci` is new, add it to `ConstInsts` and return `true`
--- · If `ci` is not new, return an element of the original `ConstInsts`
---   which is definitionally equal to `ci`
+/--
+  Given an array `cis` and a potentially new instance `ci`
+  · If `ci` is new, add it to `ConstInsts` and return `true`
+  · If `ci` is not new, return an element of the original `ConstInsts`
+    which is definitionally equal to `ci`
+-/
 def ConstInsts.canonicalize? (cis : ConstInsts) (ci : ConstInst) : MetaM (Option ConstInst) := do
   for ci' in cis do
     if ← Meta.withNewMCtxDepth (ci'.equiv ci) then
       return .some ci'
   return .none
 
--- Given an MLemmaInst `mi` and a subexpressions `e` of `mi.type`,
---   try to match `e` and the subexpressions of `e` against `ci`.
--- This function is used by `LemmaInst.matchConstInst` only
+/--
+  Given an MLemmaInst `mi` and a subexpressions `e` of `mi.type`,
+    try to match `e` and the subexpressions of `e` against `ci`.
+  This function is used by `LemmaInst.matchConstInst` only
+-/
 private partial def MLemmaInst.matchConstInst (ci : ConstInst) (mi : MLemmaInst) : Expr → MetaM (HashSet LemmaInst)
 | .bvar _ => throwError "MLemmaInst.matchConstInst :: Loose bound variable"
 | e@(.app ..) => do
@@ -343,8 +353,7 @@ private partial def MLemmaInst.matchConstInst (ci : ConstInst) (mi : MLemmaInst)
 | .proj .. => throwError "MLemmaInst.matchConstInst :: Projections should have been turned into ordinary expressions"
 | _ => return HashSet.empty
 
--- Given a LemmaInst `li` and a ConstInst `ci`, try to match all subexpressions
---   of `li` against `ci`
+/-- Given a LemmaInst `li` and a ConstInst `ci`, try to match all subexpressions of `li` against `ci` -/
 def LemmaInst.matchConstInst (ci : ConstInst) (li : LemmaInst) : MetaM (HashSet LemmaInst) :=
   Meta.withNewMCtxDepth do
     let (lmvars, mvars, mi) ← MLemmaInst.ofLemmaInst li
@@ -352,12 +361,14 @@ def LemmaInst.matchConstInst (ci : ConstInst) (li : LemmaInst) : MetaM (HashSet 
       return HashSet.empty
     MLemmaInst.matchConstInst ci mi mi.type
 
--- Test whether a lemma is type monomorphic && universe monomorphic
---   By universe monomorphic we mean `lem.params = #[]`
--- We also require that all instance arguments (argument whose type
---   is a class) are instantiated. If all dependent arguments are
---   instantiated, but some instance arguments are not instantiated,
---   we will try to synthesize the instance arguments
+/--
+  Test whether a lemma is type monomorphic && universe monomorphic
+    By universe monomorphic we mean `lem.params = #[]`
+  We also require that all instance arguments (argument whose type
+    is a class) are instantiated. If all dependent arguments are
+    instantiated, but some instance arguments are not instantiated,
+    we will try to synthesize the instance arguments
+-/
 def LemmaInst.monomorphic? (li : LemmaInst) : MetaM (Option LemmaInst) := do
   if li.params.size != 0 then
     return .none
@@ -426,9 +437,10 @@ def CiMap.canonicalize? (ciMap : HashMap Expr ConstInsts) (ci : ConstInst) :
     | .none => return (false, insts, ci)
   | .none => return (false, #[], ci)
 
--- Process a potentially new ConstInst. If it's new, return its index
---   in the corresponding `ConstInsts` array. If it's not new, return
---   `.none`.
+/--
+  Process a potentially new ConstInst. If it's new, return its index
+    in the corresponding `ConstInsts` array. If it's not new, return `.none`.
+-/
 def processConstInst (ci : ConstInst) : MonoM Unit := do
   let (old?, insts, ci) ← CiMap.canonicalize? (← getCiMap) ci
   if old? then
@@ -518,7 +530,7 @@ def saturate : MonoM Unit := do
       trace[auto.mono] "Monomorphization Saturated after {cnt} small steps"
       return
 
--- Remove non-monomorphic lemma instances
+/-- Remove non-monomorphic lemma instances -/
 def postprocessSaturate : MonoM Unit := do
   let lisArr ← getLisArr
   let lisArr ← liftM <| lisArr.mapM (fun lis => lis.filterMapM LemmaInst.monomorphic?)
@@ -539,7 +551,7 @@ namespace FVarRep
   
   #genMonadState FVarRepM
 
-  -- Similar to `Monomorphization.processConstInst`
+  /-- Similar to `Monomorphization.processConstInst` -/
   def processConstInst (ci : ConstInst) : FVarRepM Unit := do
     let (old?, insts, ci) ← MetaState.runMetaM <| CiMap.canonicalize? (← getCiMap) ci
     if old? then
@@ -594,8 +606,7 @@ namespace FVarRep
     setFfvars ((← getFfvars).push fvarId)
     return fvarId
 
-  -- Since we're now dealing with monomorphized lemmas, there are no
-  --   bound level parameters
+  /-- Since we're now dealing with monomorphized lemmas, there are no bound level parameters -/
   partial def replacePolyWithFVar : Expr → FVarRepM Expr
   | .lam name ty body binfo => do
     processType ty
@@ -660,9 +671,11 @@ namespace FVarRep
 
 end FVarRep
 
--- Given `mvarId : ty`, create a fresh mvar `m` of type
---   `monofact₁ → monofact₂ → ⋯ → monofactₙ → ty`
--- and return `(m proof₁ proof₂ ⋯ proofₙ, m)`
+/--
+  Given `mvarId : ty`, create a fresh mvar `m` of type
+    `monofact₁ → monofact₂ → ⋯ → monofactₙ → ty`
+  and return `(m proof₁ proof₂ ⋯ proofₙ, m)`
+-/
 def intromono (lemmas : Array Lemma) (mvarId : MVarId) : MetaM MVarId := do
   let startTime ← IO.monoMsNow
   let monoMAction : MonoM Unit := (do

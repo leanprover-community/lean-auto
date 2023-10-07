@@ -39,12 +39,14 @@ namespace Auto
 syntax (name := genMonadContext) "#genMonadContext" term : command
 syntax (name := genMonadState) "#genMonadState" term : command
 
--- `instStructTy`: An expression of the form `<structure> param₁ param₂ ⋯ paramₙ`
--- `Name`: The name of the structure
--- `Expr`: <structure>.mk with parameters instantiated
--- `Array (Name × Expr)`
---   `Name`: Name of the field
---   `Expr`: The projection function of this field, with parameters instantiated
+/--
+  `instStructTy`: An expression of the form `<structure> param₁ param₂ ⋯ paramₙ`
+  `Name`: The name of the structure
+  `Expr`: <structure>.mk with parameters instantiated
+  `Array (Name × Expr)`
+    `Name`: Name of the field
+    `Expr`: The projection function of this field, with parameters instantiated
+-/
 def structureProjs (structTy : Expr) : CoreM (Name × Expr × Array (Name × Expr)) := do
   let .const structName lvls := structTy.getAppFn
     | throwError s!"structureProjs :: Head symbol of {structTy} is not a constant"

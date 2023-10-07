@@ -131,9 +131,10 @@ private def Expr.instArgsIdx (e : Expr) (idx : Nat) : List Nat :=
     | _ => trail
   | _ => .nil
 
--- Given an expression `e`, which is the type of some
---   term `t`, find the arguments of `t` that are class
---   instances
+/--
+  Given an expression `e`, which is the type of some term
+    `t`, find the arguments of `t` that are class instances
+-/
 def Expr.instArgs (e : Expr) : Array Nat := ⟨Expr.instArgsIdx e 0⟩
 
 private partial def Expr.depArgsIdx (e : Expr) (idx : Nat) : List Nat :=
@@ -148,13 +149,17 @@ private partial def Expr.depArgsIdx (e : Expr) (idx : Nat) : List Nat :=
     | false => trail
   | _ => .nil
 
--- Given `e = ∀ (xs : αs), t`, return the indexes of dependent `∀` binders
---   within `xs`. This function only works for expressions that does not
---   contain loose bound variables
+/--
+  Given `e = ∀ (xs : αs), t`, return the indexes of dependent `∀` binders
+    within `xs`. This function only works for expressions that does not
+    contain loose bound variables
+-/
 def Expr.depArgs (e : Expr) : Array Nat := ⟨Expr.depArgsIdx e 0⟩
 
--- Given the name `c` of a constant, suppose `@c : ty`, return
---   `Expr.depArgs ty`
+/--
+  Given the name `c` of a constant, suppose `@c : ty`, return
+    `Expr.depArgs ty`
+-/
 def Expr.constDepArgs (c : Name) : CoreM (Array Nat) := do
   let .some decl := (← getEnv).find? c
     | throwError "Expr.constDepArgs :: Unknown constant {c}"
@@ -168,7 +173,7 @@ def Expr.numLeadingDepArgs : Expr → Nat
     0
 | _ => 0
 
--- Turn all `Prop` binders into `True`
+/-- Turn all `Prop` binders into `True` -/
 private partial def Expr.isMonomorphicFactAux : Expr → MetaM Expr
 | .forallE name ty body bi => do
   let ty := if (← Meta.isProp ty) ∧ !body.hasLooseBVars then .const ``False [] else ty
@@ -178,17 +183,21 @@ private partial def Expr.isMonomorphicFactAux : Expr → MetaM Expr
     Meta.mkForallFVars #[x] body
 | _ => pure (.const ``False [])
 
--- Test whether `e` is a monomorphic fact.
--- `e` is a monomorphic fact iff for all subterms `t : α` of `e`
---    where `α` is not of type `Prop`, `α` does not depend on bound
---    variables.
+/--
+  Test whether `e` is a monomorphic fact.
+  `e` is a monomorphic fact iff for all subterms `t : α` of `e`
+     where `α` is not of type `Prop`, `α` does not depend on bound
+     variables.
+-/
 def Expr.isMonomorphicFact (e : Expr) : MetaM Bool := do
   let e ← Expr.isMonomorphicFactAux e
   return (Expr.depArgs e).size == 0
 
--- This should only be used when we're sure that reducing `ty`
---   won't be too expensive
--- e.g. `ty` must be defeq to `Expr.sort <?lvl>`
+/--
+  This should only be used when we're sure that reducing `ty`
+    won't be too expensive
+  e.g. `ty` must be defeq to `Expr.sort <?lvl>`
+-/
 def Expr.normalizeType (ty : Expr) : MetaM Expr := do
   let ty ← Meta.reduceAll ty
   return ← instantiateMVars ty
@@ -215,8 +224,10 @@ def Expr.formatWithUsername (e : Expr) : MetaM Format := do
   let e := (e.abstract (mvarIds.map Expr.mvar)).instantiateRev (names.map (Expr.const · []))
   return f!"{e}"
 
--- `ident` must be of type `Expr → TermElabM Unit`
--- Compiles `term` into `Expr`, then applies `ident` to it
+/--
+  `ident` must be of type `Expr → TermElabM Unit`
+  Compiles `term` into `Expr`, then applies `ident` to it
+-/
 syntax (name := getExprAndApply) "#getExprAndApply" "[" term "|" ident "]" : command
 
 @[command_elab Auto.getExprAndApply]
@@ -235,8 +246,10 @@ unsafe def elabGetExprAndApply : CommandElab := fun stx =>
       | Except.error err => throwError "elabGetExprAndApply :: Failed to evaluate {fname} to a term of type (Expr → TermElabM Unit), error : {err}"
     | _ => throwUnsupportedSyntax
 
--- Consider the canonical instance of `Lean.ToExpr Expr`. We require that
---   `(← exprFromExpr (← Lean.toExpr e)) ≝ e`
+/--
+  Consider the canonical instance of `Lean.ToExpr Expr`. We require that
+    `(← exprFromExpr (← Lean.toExpr e)) ≝ e`
+-/
 unsafe def exprFromExpr (eToExpr : Expr) : TermElabM Expr := do
   let ty ← Meta.inferType eToExpr
   if ! (← Meta.isDefEq ty (.const ``Expr [])) then

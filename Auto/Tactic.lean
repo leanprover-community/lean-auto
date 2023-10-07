@@ -57,8 +57,7 @@ structure InputHints where
   lctxhyps : Bool       := false
 deriving Inhabited, BEq
 
--- Parse `hints` to an array of `Term`, which is still syntax
--- `Array Term`
+/-- Parse `hints` to an array of `Term`, which is still syntax -/
 def parseHints : TSyntax ``hints → TacticM InputHints
 | `(hints| [ $[$hs],* ]) => do
   let mut terms := #[]
@@ -203,7 +202,7 @@ def collectAllLemmas (hintstx : TSyntax ``hints) (unfolds : TSyntax `Auto.unfold
   traceLemmas "Inhabitation lemmas :" inhFacts
   return (lctxLemmas ++ userLemmas ++ defeqLemmas, inhFacts)
 
--- `ngoal` means `negated goal`
+/-- `ngoal` means `negated goal` -/
 def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : Array Lemma) : TacticM Result := do
   let instr ← parseInstr instrstx
   let declName? ← Elab.Term.getDeclName?

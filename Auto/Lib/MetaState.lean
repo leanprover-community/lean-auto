@@ -56,7 +56,7 @@ def runAtMetaM (n : MetaStateM α) : MetaM (α × Meta.Context) := do
   set sc.toState
   return (ret, sc.toContext)
 
--- Run `n`, set State and discard context
+/-- Run `n`, set State and discard context -/
 def runAtMetaM' (n : MetaStateM α) : MetaM α := do
   let s ← get
   let ctx ← read

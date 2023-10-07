@@ -39,9 +39,11 @@ partial def withNewBinder (m : ExprDeCompM α) : ExprDeCompM (α × String) := d
   modify (fun s => {s with binderNames := bn})
   return (ret, nn)
 
--- Reverse process of compiling string to `Expr`, similar to `toString`
--- The `Expr` already has a `toString`, but that `toString` is
---   very different from "decompiling" the `expr`
+/--
+  Reverse process of compiling string to `Expr`, similar to `toString`
+  The `Expr` already has a `toString`, but that `toString` is
+    very different from "decompiling" the `expr`
+-/
 private partial def exprDeCompileAux (final : Bool) (e : Expr) : ExprDeCompM String := do
   match e with
   | Expr.forallE _ d b _ =>

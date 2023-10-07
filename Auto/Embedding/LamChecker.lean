@@ -8,7 +8,7 @@ open Lean
 
 namespace Auto.Embedding.Lam
 
--- An entry of RTable
+/-- An entry of RTable -/
 inductive REntry where
   -- Well-formed formulas, with types
   -- We do not import well-formedness facts because
@@ -70,10 +70,12 @@ instance : LawfulBEq REntry where
   eq_of_beq := REntry.eq_of_beq_eq_true
   rfl := REntry.beq_refl
 
--- Table of valid propositions and well-formed formulas
--- Note that `Auto.BinTree α` is equivalent to `Nat → Option α`,
---   which means that `.some` entries may be interspersed
---   with `.none` entries
+/--
+  Table of valid propositions and well-formed formulas
+  Note that `Auto.BinTree α` is equivalent to `Nat → Option α`,
+    which means that `.some` entries may be interspersed
+    with `.none` entries
+-/
 structure RTable where
   entries     : BinTree REntry
   maxEVarSucc : Nat
@@ -112,28 +114,28 @@ def RTable.toLamEVarTy (r : RTable) := fun n => (r.lamEVarTy.get? n).getD (.base
 
 section CVal
 
-  -- Checker Partial Valuation (Valuation without `lamEVarTy` and `eVarVal`)
+  /-- Checker Partial Valuation (Valuation without `lamEVarTy` and `eVarVal`) -/
   structure CPVal where
     tyVal     : Nat → Type u
     var       : BinTree ((s : LamSort) × (s.interp tyVal))
     il        : BinTree ((s : LamSort) × (ILLift.{u} (s.interp tyVal)))
 
-  -- Checker Valuation
+  /-- Checker Valuation -/
   structure CVal (lamEVarTy : BinTree LamSort) extends CPVal where
     eVarVal   : ∀ (n : Nat), ((lamEVarTy.get? n).getD (.base .prop)).interp tyVal
 
   abbrev eVarTy (tyVal : Nat → Type u) (lamEVarTy : BinTree LamSort) :=
     ∀ (n : Nat), ((lamEVarTy.get? n).getD (.base .prop)).interp tyVal
 
-  -- Used in checker metacode to construct `var`
+  /-- Used in checker metacode to construct `var` -/
   abbrev varSigmaMk.{u} (tyVal : Nat → Type u) :=
     @Sigma.mk LamSort (LamSort.interp tyVal)
   
-  -- Used in checker metacode to construct `il`
+  /-- Used in checker metacode to construct `il` -/
   abbrev ilβ.{u} (tyVal : Nat → Type u) (s : LamSort) : Type u :=
     ILLift.{u} (s.interp tyVal)
   
-  -- Used in checker metacode to construct `il`
+  /-- Used in checker metacode to construct `il` -/
   abbrev ilSigmaMk.{u} (tyVal : Nat → Type u) :=
     @Sigma.mk LamSort (ilβ.{u} tyVal)
   
@@ -212,7 +214,7 @@ theorem REntry.correct_increaseMaxEVarSucc
   REntry.correct cv maxEVarSucc₂ re := by
   cases re <;> (try apply c₁) <;> (try apply And.intro c₁.left) <;> try (apply Nat.le_trans c₁.right; apply h)
 
--- Invariant of `RTable`
+/-- Invariant of `RTable` -/
 def RTable.inv (r : RTable) (cv : CVal.{u} r.lamEVarTy) :=
   r.entries.allp (fun re => re.correct cv r.maxEVarSucc)
 
@@ -393,11 +395,11 @@ def ImportEntry.correct (lval : LamValuation) : ImportEntry → Prop
 | .valid t => (t.interpAsProp lval dfLCtxTy (dfLCtxTerm _)).down
 | .nonempty s => Nonempty (s.interp lval.tyVal)
 
--- The meta code of the checker will prepare this `ImportTable`
+/-- The meta code of the checker will prepare this `ImportTable` -/
 abbrev ImportTable (cpv : CPVal.{u}) :=
   Auto.BinTree (@PSigma ImportEntry (ImportEntry.correct cpv.toLamValuationEraseEtom))
 
--- Used by the meta code of the checker to build `ImportTable`
+/-- Used by the meta code of the checker to build `ImportTable` -/
 abbrev importTablePSigmaβ (cpv : CPVal.{u}) (ie : ImportEntry) :=
   ImportEntry.correct cpv.toLamValuationEraseEtom ie
 
@@ -1727,15 +1729,17 @@ def RTable.runEvalResult (r : RTable) (n : Nat) : EvalResult → RTable
            lamEVarTy := r.lamEVarTy.insert r.maxEVarSucc s,
            maxEVarSucc := r.maxEVarSucc + 1 }
 
--- The first `ChkStep` specifies the checker step
--- The second `Nat` specifies the position to insert the resulting term
--- Note that
---   1. All entries `(x : ChkStep × Nat)` that insert result into the
---      `wf` table should have distinct second component
---   2. All entries `(x : ChkStep × Nat)` that insert result into the
---      `valid` table should have distinct second component
--- Note that we decide where (`wf` or `valid`) to insert the resulting
---   term by looking at `(c : ChkStep).eval`
+/--
+  The first `ChkStep` specifies the checker step
+  The second `Nat` specifies the position to insert the resulting term
+  Note that
+    1. All entries `(x : ChkStep × Nat)` that insert result into the
+       `wf` table should have distinct second component
+    2. All entries `(x : ChkStep × Nat)` that insert result into the
+       `valid` table should have distinct second component
+  Note that we decide where (`wf` or `valid`) to insert the resulting
+    term by looking at `(c : ChkStep).eval`
+-/
 abbrev ChkSteps := BinTree (ChkStep × Nat)
 
 def ChkStep.run (lvt lit : Nat → LamSort) (r : RTable) (c : ChkStep) (n : Nat) : RTable :=
@@ -1781,11 +1785,12 @@ theorem ChkSteps.run_correct
 def ChkSteps.runFromBeginning (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) :=
   ChkSteps.run cpv.toLamVarTy cpv.toLamILTy ⟨it.importFacts, 0, .leaf⟩ cs
 
-
--- Note : Using this theorem directly in the checker will cause
---   performance issue, especially when there are a lot of
---   `etom`s. This is probably caused by the type of `eV` in
---   `∃ eV` being dependent on the result of `ChkSteps.runFromBeginning` 
+/--
+  Note : Using this theorem directly in the checker will cause
+    performance issue, especially when there are a lot of
+    `etom`s. This is probably caused by the type of `eV` in
+    `∃ eV` being dependent on the result of `ChkSteps.runFromBeginning` 
+-/
 theorem CheckerAux
   (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) :
   ∃ eV, (ChkSteps.runFromBeginning cpv it cs).inv ⟨cpv, eV⟩ := by
@@ -1799,12 +1804,14 @@ theorem Checker.getValidExport_directReduce
   LamThmValid cpv.toLamValuationEraseEtom lctx t :=
   RTable.getValidExport_correct (CheckerAux _ _ _) heq
 
--- Note : Do not use the counterpart of this theorem in proof by reflection.
--- Surprisingly, if we use this theorem in proof by reflection, the performance
---   issue will not be the `ChkSteps.run` in `runEq`. Instead, it would be
---   caused by compiling the definition of `runResult`. I'm not sure why it's
---   the case, but Lean sometimes exhibit superlinear (even quadratic) compilation
---   time with respect to the size of `runResult`.
+/--
+  Note : Do not use the counterpart of this theorem in proof by reflection.
+  Surprisingly, if we use this theorem in proof by reflection, the performance
+    issue will not be the `ChkSteps.run` in `runEq`. Instead, it would be
+    caused by compiling the definition of `runResult`. I'm not sure why it's
+    the case, but Lean sometimes exhibit superlinear (even quadratic) compilation
+    time with respect to the size of `runResult`.
+-/
 theorem Checker.getValidExport_indirectReduceAux
   (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) (v : Nat)
   (importFacts : BinTree REntry) (hImport : it.importFacts = importFacts)
@@ -1869,7 +1876,7 @@ theorem Checker.getValidExport_indirectReduce_reflection
   Checker.getValidExport_indirectReduce cpv it cs v importFacts hImport lvt
     lit hlvt hlit lctx t (LawfulBEq.eq_of_beq heq)
 
--- Checker utility
+/-- Checker utility -/
 structure RTableStatus where
   rTable        : Array REntry := #[]
   rTableTree    : BinTree REntry := BinTree.leaf

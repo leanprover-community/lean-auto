@@ -34,7 +34,7 @@ def Meta.inspectMVarAssignments : MetaM Unit := do
     let lms := lAssignmentList.map (fun (id, l) => MessageData.compose m!"{Level.mvar id} := " m!"{l}")
     trace[auto.inspectMVarAssignments] .compose "LevelMVar Assignments: " (← composeAssignMessage lms)
 
--- Synthesize inhabited instance for canonicalized type
+/-- Synthesize inhabited instance for a given type -/
 def Meta.trySynthInhabited (e : Expr) : MetaM (Option Expr) := do
   let eSort ← Expr.normalizeType (← instantiateMVars (← Meta.inferType e))
   let .sort lvl := eSort
@@ -63,7 +63,7 @@ unsafe def evalFromMetaTactic : Tactic.Tactic
   Tactic.liftMetaTactic mt
 | _ => Elab.throwUnsupportedSyntax
 
--- We assume that `value` contains no free variables or metavariables
+/-- We assume that `value` contains no free variables or metavariables -/
 def Meta.exprAddAndCompile (value : Expr) (declName : Name) : MetaM Unit := do
   let type ← inferType value
   let us := collectLevelParams {} value |>.params

@@ -18,13 +18,15 @@ initialize
 namespace Auto.LamReif
 open Embedding.Lam
 
--- We require that all instances of polymorphic constants,
---   including `∀`, `∃`, `BitVec`, are turned into free variables
---   before being sent to `LamReif.` Since propositional
---   implication `→` has the same representation as `∀` in Lean `Expr`,
---   we also require that they are turned into free variables.
--- In this way, the expression that `LamReif` receives is an
---   essentially higher-order term that can be reified directly.
+/--
+  We require that all instances of polymorphic constants,
+    including `∀`, `∃`, `BitVec`, are turned into free variables
+    before being sent to `LamReif.` Since propositional
+    implication `→` has the same representation as `∀` in Lean `Expr`,
+    we also require that they are turned into free variables.
+  In this way, the expression that `LamReif` receives is an
+    essentially higher-order term that can be reified directly.
+-/
 structure State where
   -- Maps previously reified type to their type atom index
   tyVarMap      : HashMap Expr Nat                := {}
@@ -166,7 +168,7 @@ def lookupTyVal! (n : Nat) : ReifM (Expr × Level) := do
   else
     throwError "lookupTyVal! :: Unknown type atom {n}"
 
--- Lookup valuation of term atom
+/-- Lookup valuation of term atom -/
 def lookupVarVal! (n : Nat) : ReifM (Expr × LamSort) := do
   if let .some r := (← getVarVal)[n]? then
     return r
@@ -256,8 +258,10 @@ def lookupEtomChkStep! (eidx : Nat) : ReifM ChkStep := do
   else
     throwError "lookupEtomChkStep! :: Unknown etom {eidx}"
 
--- This should only be used at the meta level, i.e. in code that will
---   be evaluated during the execution of `auto`
+/--
+  This should only be used at the meta level, i.e. in code that will
+    be evaluated during the execution of `auto`
+-/
 private def getLamTyValAtMeta : ReifM LamTyVal := do
   let varVal ← getVarVal
   let varTy := varVal.map Prod.snd
@@ -273,7 +277,7 @@ def resolveLamBaseTermImport : LamBaseTerm → ReifM LamBaseTerm
 | .existEI n  => do return .existE (← lookupLamILTy! n)
 | t           => pure t
 
--- Models `resolveImport` on the `meta` level
+/-- Models `resolveImport` on the `meta` level -/
 def resolveImport : LamTerm → ReifM LamTerm
 | .atom n       => return .atom n
 | .etom _       => throwError "resolveImport :: etom should not occur here"
@@ -282,18 +286,20 @@ def resolveImport : LamTerm → ReifM LamTerm
 | .lam s t      => return .lam s (← resolveImport t)
 | .app s fn arg => return .app s (← resolveImport fn) (← resolveImport arg)
 
--- This is the inverse of `resolveImport`
--- · When importing external proof `H : α`, we will reify `α`
---   into `t : LamTerm` using `reifTerm`. The `t` returned
---   by `reifTerm` has `eq` for `Eq`, `forallE` for `∀` and
---   `existE` for `∃`.
--- · It's easy to see that `t.interp` will not be definitionally
---   equal to `α` because `=, ∀, ∃` within `α` operates on the
---   original domain, while `=, ∀, ∃` in `t.interp` operates on
---   the lifted domain
--- · Therefore, we need to turn `=, ∀, ∃` in `t` into import
---   version to get `t'`, and design an appropriate `ilVal`,
---   such that `GLift.down t'.interp` is definitionally equal to `α`   
+/--
+  This is the inverse of `resolveImport`
+  · When importing external proof `H : α`, we will reify `α`
+    into `t : LamTerm` using `reifTerm`. The `t` returned
+    by `reifTerm` has `eq` for `Eq`, `forallE` for `∀` and
+    `existE` for `∃`.
+  · It's easy to see that `t.interp` will not be definitionally
+    equal to `α` because `=, ∀, ∃` within `α` operates on the
+    original domain, while `=, ∀, ∃` in `t.interp` operates on
+    the lifted domain
+  · Therefore, we need to turn `=, ∀, ∃` in `t` into import
+    version to get `t'`, and design an appropriate `ilVal`,
+    such that `GLift.down t'.interp` is definitionally equal to `α`  
+-/ 
 def mkImportVersion : LamTerm → ReifM LamTerm
 | .atom n => return (.atom n)
 | .etom _ => throwError "mkImportVersion :: etom should not occur here"
@@ -309,10 +315,12 @@ def mkImportVersion : LamTerm → ReifM LamTerm
 | .app s t₁ t₂ => do
   return .app s (← mkImportVersion t₁) (← mkImportVersion t₂)
 
--- A new `ChkStep`. `res` is the expected result of the `ChkStep`
--- Returns:
--- 1. Whether the checkstep produces a new REntry
--- 2. The `EvalResult` of this checkstep
+/--
+  A new `ChkStep`. `res` is the expected result of the `ChkStep`
+  Returns:
+  1. Whether the checkstep produces a new REntry
+  2. The `EvalResult` of this checkstep
+-/
 def newChkStep (c : ChkStep) (res? : Option EvalResult) : ReifM (Bool × EvalResult) := do
   trace[auto.lamReif.newChkStep] "New ChkStep {c}"
   -- For an etom-producing checkstep, evaluating it
@@ -345,16 +353,18 @@ def newChkStep (c : ChkStep) (res? : Option EvalResult) : ReifM (Bool × EvalRes
     setRst ((← getRst).newEtomWithValid c re s)
   return (true, res)
 
--- Returns the position of the entry inside the `RTable`
+/-- Returns the position of the entry inside the `RTable` -/
 def addREntryToRTable (re : REntry) : ReifM Nat := do
   let pos := (← getRTable).size
   setRst ((← getRst).push re)
   return pos
 
--- `ty` is a reified assumption. `∀, ∃` and `=` in `ty` are supposed to
---   not be of the import version
--- The type of `proof` is definitionally equal to `GLift.down (← mkImportVersion ty).interp`
--- Returns the position of `ty` inside the `validTable` after inserting it
+/--
+  `ty` is a reified assumption. `∀, ∃` and `=` in `ty` are supposed to
+    not be of the import version
+  The type of `proof` is definitionally equal to `GLift.down (← mkImportVersion ty).interp`
+  Returns the position of `ty` inside the `validTable` after inserting it
+-/
 def newAssertion (proof : Expr) (ty : LamTerm) : ReifM Unit := do
   -- Because of the way we `buildImportTableExpr`, we need to deduplicate facts
   if let .some _ ← lookupREntryProof? (.valid [] ty) then
@@ -365,8 +375,10 @@ def newAssertion (proof : Expr) (ty : LamTerm) : ReifM Unit := do
   let tyi ← mkImportVersion ty
   setAssertions ((← getAssertions).insert ty (proof, tyi, pos))
 
--- Returns `false` if `s` is subsumed by previous inhabited sorts
--- Returns `true` if not
+/--
+  Returns `false` if `s` is subsumed by previous inhabited sorts
+  Returns `true` if not
+-/
 def inhSubsumptionCheck (s : LamSort) : ReifM Bool := do
   if Inhabitation.trivialQuick s then
     return false
@@ -376,7 +388,7 @@ def inhSubsumptionCheck (s : LamSort) : ReifM Bool := do
       return false
   return true
 
--- The type of `inh` is definitionally equal to `s.interpAsUnlifted`
+/-- The type of `inh` should be definitionally equal to `s.interpAsUnlifted` -/
 def newInhabitation (inh : Expr) (s : LamSort) : ReifM Unit := do
   -- Because of the way we `buildImportTableExpr`, we need to deduplicate facts
   if !(← inhSubsumptionCheck s) then
@@ -430,8 +442,10 @@ partial def updownFunc (s : LamSort) : ReifM (Expr × Expr × Expr × Expr) :=
     let down := Expr.lam `_ ftyUp (Expr.lam `_ ty₁ (.app df₂ (.app (.bvar 1) (.app uf₁ (.bvar 0)))) .default) .default
     return (up, down, fty, ftyUp)
 
--- `(e, s)` is a pair from the `varVal` field of `LamReif.ReifM.State`
--- Returns the lifted counterpart of `e`
+/--
+  `(e, s)` is a pair from the `varVal` field of `LamReif.ReifM.State`
+  Returns the lifted counterpart of `e`
+-/
 def varValInterp (e : Expr) (s : LamSort) : ReifM Expr := do
   let (up, _, _, _) ← updownFunc s
   return .app up e
@@ -455,7 +469,7 @@ section ILLifting
     let isomTy : Expr := mkAppN (.const ``IsomType.mk [uOrig, .succ u]) #[ty, upTy, upFunc, downFunc, eq₁, eq₂]
     return isomTy
 
-  -- Suppose `u ← getU`, this function returns a term of type `ILLift.{u} s.interpAsLifted`
+  /-- Suppose `u ← getU`, this function returns a term of type `ILLift.{u} s.interpAsLifted` -/
   def mkImportingILLift (s : LamSort) := do
     let (upFunc, downFunc, ty, upTy, uOrig) ← mkImportAux s
     let isomTy ← mkIsomType upFunc downFunc ty upTy uOrig
@@ -464,9 +478,8 @@ section ILLifting
 
 end ILLifting
 
+-- Functions that operates on the checker table
 section Checker
-
-  -- Functions that operates on the checker table
 
   def nonemptyOfAtom (n : Nat) : ReifM (Option REntry) := do
     let .some (_, s) := (← getVarVal).get? n
@@ -621,8 +634,10 @@ section Checker
       | throwError "validOfBVarLowers :: Unexpected evaluation result"
     return re
 
-  -- Given `∀ (_ : s₀) (_ : s₁) ⋯ (_ : sₖ₋₁), body` and the fact
-  --   that `s₀, s₁, ⋯, sₖ₋₁` are nonempty, return a proof of `body`
+  /--
+    Given `∀ (_ : s₀) (_ : s₁) ⋯ (_ : sₖ₋₁), body` and the fact
+      that `s₀, s₁, ⋯, sₖ₋₁` are nonempty, return a proof of `body`
+  -/
   def validOfElimForalls (v : REntry) (ns : Array REntry) : ReifM REntry := do
     let introed ← validOfIntros v ns.size
     validOfBVarLowers introed ns.reverse
@@ -653,8 +668,10 @@ section Checker
       | throwError "validOfInstantiateRev :: Unexpected evaluation result"
     return re
 
-  -- Given `∀ x₀ x₁ ⋯ xₖ₋₁, p` and `arg₀, arg₁, ⋯, argₖ₋₁`, return
-  --   `p[x₀/arg₀, x₁/arg₁, ⋯, xₖ₋₁/argₖ₋₁]`
+  /--
+    Given `∀ x₀ x₁ ⋯ xₖ₋₁, p` and `arg₀, arg₁, ⋯, argₖ₋₁`, return
+      `p[x₀/arg₀, x₁/arg₁, ⋯, xₖ₋₁/argₖ₋₁]`
+  -/
   def validOfInstantiateForall (v : REntry) (args : Array LamTerm) : ReifM REntry := do
     if args.size == 0 then
       return v
@@ -695,8 +712,6 @@ section Checker
       let _ ← nonemptyOfEtom eidx
     return .valid [] t
 
-  -- Functions that turns data structure in `ReifM.State` into `Expr`
-
 end Checker
 
 section CheckerUtils
@@ -728,8 +743,10 @@ section CheckerUtils
 
 end CheckerUtils
 
--- Accept a new expression representing λterm atom
--- Returns the index of it in the `varVal` array
+/--
+  Accept a new expression representing λterm atom
+  Returns the index of it in the `varVal` array
+-/
 def newTermExpr (e : Expr) (sort : LamSort) : ReifM LamTerm := do
   let varMap ← getVarMap
   let varVal ← getVarVal
@@ -843,8 +860,7 @@ def reifTermCheckType (e : Expr) : ReifM (LamSort × LamTerm) := do
     | throwError "reifTermCheckType :: LamTerm {t} is not type correct"
   return (s, t)
 
--- Return the positions of the reified and `resolveImport`-ed facts
---   within the `validTable`
+/-- Return the positions of the reified and `resolveImport`-ed facts within the `validTable` -/
 def reifFacts (facts : Array UMonoFact) : ReifM (Array LamTerm) :=
   facts.mapM (fun (proof, ty) => do
     let (s, lamty) ← reifTermCheckType ty
@@ -920,7 +936,7 @@ section BuildChecker
     --   throwError "buildLamValuation :: Malformed tyVal"
     return tyValExpr
 
-  -- **Build `LamVarTy` and `varVal`**
+  /-- **Build `LamVarTy` and `varVal`** -/
   def buildVarExpr (tyValExpr : Expr) : ReifM Expr := do
     let u ← getU
     let lamSortExpr := Expr.const ``LamSort []
@@ -932,7 +948,7 @@ section BuildChecker
       (.const ``Sigma [.zero, u]) lamSortExpr
       (.app (.const ``LamSort.interp [u]) tyValExpr))
 
-  -- **Build `lamILTy` and `ilVal`**
+  /-- **Build `lamILTy` and `ilVal`** -/
   def buildILExpr (tyValExpr : Expr) : ReifM Expr := do
     let u ← getU
     let lamSortExpr := Expr.const ``LamSort []
@@ -961,7 +977,7 @@ section BuildChecker
     -- trace[auto.buildChecker] "LamValuation typechecked in time {(← IO.monoMsNow) - startTime}"
     return lamValuationExpr
 
-  -- `lvalExpr` is the `LamValuation`
+  /-- `lvalExpr` is the `LamValuation` -/
   def buildImportTableExpr (chkValExpr : Expr) : ReifM (Expr × Expr) := do
     -- let startTime ← IO.monoMsNow
     let u ← getU
@@ -992,8 +1008,10 @@ section BuildChecker
     let importedFacts := Lean.toExpr importedFactsTree
     return (importTableExpr, importedFacts)
 
-  -- `re` is the entry we want to retrieve from the `validTable`
-  -- The `expr` returned is a proof of the `LamThmValid`-ness of the entry
+  /--
+    `re` is the entry we want to retrieve from the `validTable`
+    The `expr` returned is a proof of the `LamThmValid`-ness of the entry
+  -/
   def buildFullCheckerExprFor_directReduce (re : REntry) : ReifM Expr := do
     printCheckerStats
     let startTime ← IO.monoMsNow
@@ -1014,8 +1032,10 @@ section BuildChecker
       return getEntry
     return checker
 
-  -- `re` is the entry we want to retrieve from the `validTable`
-  -- The `expr` returned is a proof of the `LamThmValid`-ness of the entry
+  /--
+    `re` is the entry we want to retrieve from the `validTable`
+    The `expr` returned is a proof of the `LamThmValid`-ness of the entry
+  -/
   def buildFullCheckerExprFor_indirectReduce (re : REntry) : ReifM Expr := do
     printCheckerStats
     let startTime ← IO.monoMsNow
@@ -1057,10 +1077,12 @@ section BuildChecker
       m!"compilation took {(← IO.monoMsNow) - startTime₁}ms"
     return auxName
 
-  -- This shows the issue that compilation of a reduced expression
-  --   exhibits superlinear behaviour. Try the examples in
-  --   `Test/CheckerScalability/Skolemization.lean`
-  -- This function is not intended to be called in practice
+  /--
+    This can be used to shows the issue that compilation of a reduced
+      expression exhibits superlinear behaviour. Try the examples in
+      `Test/CheckerScalability/Skolemization.lean`
+    This function is not intended to be called in practice
+  -/
   def compileRunResultExpr : ReifM Name := do
     let runResultExpr := Lean.mkApp3 (.const ``RTable.mk [])
       (Lean.toExpr (← getRTableTree)) (Lean.toExpr (← getMaxEVarSucc))
@@ -1126,7 +1148,7 @@ section ExportUtils
   def collectLamSortsAtoms (ss : Array LamSort) : HashSet Nat :=
     ss.foldl (fun hs s => hs.insertMany (collectLamSortAtoms s)) HashSet.empty
 
-  -- Collect type atoms in a LamBaseTerm
+  /-- Collect type atoms in a LamBaseTerm -/
   def collectLamBaseTermAtoms (b : LamBaseTerm) : CoreM (HashSet Nat) := do
     let s? : Option LamSort ← (do
       match b with
@@ -1142,13 +1164,15 @@ section ExportUtils
     else
       return HashSet.empty
 
-  -- The first hashset is the type atoms
-  -- The second hashset is the term atoms
-  -- The third hashset is the term etoms
-  -- This function is called when we're trying to export terms
-  --   from `λ` to external provers, e.g. Lean/Duper
-  -- Therefore, we expect that `eqI, forallEI` and `existEI`
-  --   does not occur in the `LamTerm`
+  /--
+    The first hashset is the type atoms
+    The second hashset is the term atoms
+    The third hashset is the term etoms
+    This function is called when we're trying to export terms
+      from `λ` to external provers, e.g. Lean/Duper
+    Therefore, we expect that `eqI, forallEI` and `existEI`
+      does not occur in the `LamTerm`
+  -/
   def collectLamTermAtoms (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort) :
     LamTerm → CoreM (HashSet Nat × HashSet Nat × HashSet Nat)
   | .atom n => do
@@ -1240,8 +1264,10 @@ open Embedding.Lam LamReif
       setTyVarMap ((← getTyVarMap).insert val.fst idx)
       return idx
   
-  -- When translating `Lam` to `Lam` in `Lam2Lam`, make sure that
-  --   the `LamSort` in this `val` is already translated.
+  /--
+    When translating `Lam` to `Lam` in `Lam2Lam`, make sure that
+      the `LamSort` in this `val` is already translated.
+  -/
   def transTermAtom (a : Nat) (val : Expr × LamSort) : TransM Nat := do
     let termH2lMap ← getTermH2lMap
     match termH2lMap.find? a with
@@ -1421,8 +1447,10 @@ open Embedding.Lam LamReif
 
   end
   
-  -- Delete irrelevant Valuations and ChkSteps, but make sure that
-  --   entries in `res` are still provable
+  /--
+    Delete irrelevant Valuations and ChkSteps, but make sure that
+      entries in `res` are still provable
+  -/
   def optimizedStateFor (res : Array REntry) : LamReif.ReifM State := do
     let ref ← get
     let (_, s') ← ((res.foldlM (fun _ re => collectProofFor ref re) ()).run {}).run { u := ref.u }
@@ -1433,7 +1461,7 @@ end Lam2Lam
 namespace LamReif
 open Embedding.Lam
 
--- Build optimized checker = Optimize state + Build full checker
+/-- Build optimized checker = Optimize state + Build full checker -/
 def buildOptimizedCheckerExprFor (re : REntry) : ReifM Expr := do
   let s' ← Lam2Lam.optimizedStateFor #[re]
   let (e, _) ← (buildFullCheckerExprFor re).run s'
@@ -1444,7 +1472,7 @@ register_option auto.optimizeCheckerProof : Bool := {
   descr := "Whether to optimize checker proof"
 }
 
--- Decide whether to optimize based on option
+/-- Decide whether to optimize based on option -/
 def buildCheckerExprFor (re : REntry) : ReifM Expr := do
   match auto.optimizeCheckerProof.get (← getOptions) with
   | true => buildOptimizedCheckerExprFor re

@@ -16,7 +16,7 @@ open Embedding.Lam
 -- Open `SMT`
 open IR.SMT
 
--- High-level construct
+/-- High-level construct -/
 private inductive LamAtom where
   | sort : Nat → LamAtom
   | term : Nat → LamAtom
@@ -38,7 +38,7 @@ private def lamSort2SSortAux : LamSort → TransM LamAtom SSort
 | .base b => return lamBaseSort2SSort b
 | .func _ _ => throwError "lamSort2STermAux :: Unexpected error. Higher order input?"
 
--- Only translates first-order types
+/-- Only translates first-order types -/
 private def lamSort2SSort : LamSort → TransM LamAtom (List SSort × SSort)
 | .func argTy resTy => do
   let (smargs, smres) ← lamSort2SSort resTy
@@ -140,8 +140,8 @@ where
     (ts.push arg, t)
   | t => (#[], t)
 
+/-- `facts` should not contain import versions of `eq, ∀` or `∃` -/
 def lamFOL2SMT (lamVarTy lamEVarTy : Array LamSort)
-  -- `facts` should not contain import versions of `eq, ∀` or `∃`
   (facts : Array LamTerm) : TransM LamAtom (Array IR.SMT.Command) := do
   for t in facts do
     let sterm ← lamTerm2STerm lamVarTy lamEVarTy t

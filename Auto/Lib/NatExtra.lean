@@ -2,7 +2,7 @@ import Std.Data.Nat.Lemmas
 
 namespace Auto
 
--- A version of `Nat.beq_refl` that reduces to `Eq.refl`
+/-- A version of `Nat.beq_refl` that reduces to `Eq.refl` -/
 def Nat.beq_refl' : (a : Nat) → (a.beq a) = true
 | 0 => rfl
 | n + 1 => Nat.beq_refl' n

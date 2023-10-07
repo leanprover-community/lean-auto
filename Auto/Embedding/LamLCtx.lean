@@ -22,7 +22,7 @@ theorem LamValid.intro1F? (H : LamValid lval lctx t)
     | .ofApp _ (.ofBase (.ofForallE _)) (.ofLam _ Hp) => by
       apply LamValid.intro1F H
 
--- First-order logic style intro1
+/-- First-order logic style intro1 -/
 theorem LamThmValid.intro1F? (H : LamThmValid lval lctx t)
   (heq : LamTerm.intro1F? t = .some (s, p)) : LamThmValid lval (s :: lctx) p :=
   fun lctx' => by rw [pushLCtxs_cons]; apply LamValid.intro1F? (H lctx') heq
@@ -46,19 +46,19 @@ theorem LamValid.intro1H? (H : LamValid lval lctx t)
     have ⟨wfl, vl⟩ := H
     match wfl with
     | .ofApp _ (.ofBase (.ofForallE _)) Hp => by
-      let Hp' := LamWF.ofBVarLiftIdx (s:=s) 0 _ Hp
+      let Hp' := LamWF.bvarLiftIdx (s:=s) 0 _ Hp
       let HApp := LamWF.ofApp s Hp' (.ofBVar 0)
       rw [← pushLCtxAt_zero]; exists HApp; intro lctxTerm
       dsimp [LamWF.interp]
       have vl' := vl (fun n => lctxTerm (.succ n)) (lctxTerm 0)
       apply Eq.mp _ vl'; apply congrArg; apply congrFun;
-      apply Eq.trans (LamWF.interp_ofBVarLiftIdx lval (idx:=0) lctx
+      apply Eq.trans (LamWF.interp_bvarLiftIdx lval (idx:=0) lctx
         (fun n => lctxTerm (Nat.succ n)) (lctxTerm 0) _ Hp) ?req
       apply eq_of_heq; apply LamWF.interp_heq <;> try rfl
       case HLCtxTermEq =>
         apply HEq.funext; intro n; cases n <;> rfl
 
--- Higher-order logic style intro1
+/-- Higher-order logic style intro1 -/
 theorem LamThmValid.intro1H? (H : LamThmValid lval lctx t)
   (heq : LamTerm.intro1H? t = .some (s, p)) : LamThmValid lval (s :: lctx) p :=
   fun lctx' => by rw [pushLCtxs_cons]; apply LamValid.intro1H? (H lctx') heq

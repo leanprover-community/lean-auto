@@ -12,7 +12,7 @@ theorem LamValid.bvarLowers?
   have ⟨wft', ht'⟩ := hv; have hInh' := hInh.map (fun s inh => Classical.choice inh)
   exists LamWF.fromBVarLifts hlvl _ wft'; intro lctxTerm
   have ht'' := ht' (pushLCtxsDep hInh' lctxTerm)
-  rw [LamWF.interp_ofBVarLifts lval hInh' hlvl]; apply Eq.mp _ ht''
+  rw [LamWF.interp_bvarLifts lval hInh' hlvl]; apply Eq.mp _ ht''
   apply congrArg; apply LamWF.interp_substWF
 
 theorem LamThmValid.bvarLowers?

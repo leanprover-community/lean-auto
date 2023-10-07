@@ -10,7 +10,8 @@ import Auto.Lib.Pos
 -- Make sure that `Lean.toExpr Nat` is overriden
 import Auto.Lib.ToExprExtra
 
-/- Polymorphic binary tree
+/-
+  Polymorphic binary tree
   For definitions with `'`, the tree behaves as `{n : Nat // n ≠ 0} → α`
   For definitions without `'`, the tree behaves as `Nat → α`
 -/
@@ -366,7 +367,7 @@ theorem insert'.correct₂ (bt : BinTree β) (n₁ n₂ : Nat) (x : β) : n₁ �
 theorem insert.correct₂ (bt : BinTree β) (n₁ n₂ : Nat) (x : β) (H : n₁ ≠ n₂) : get? (insert bt n₁ x) n₂ = get? bt n₂ :=
   insert'.correct₂ bt (.succ n₁) (.succ n₂) x (fun h => H (Nat.succ.inj h))
 
--- Depth-first preorder traversal of the `BinTree`
+/-- Depth-first preorder traversal of the `BinTree` -/
 def foldl (f : α → β → α) (init : α) : BinTree β → α
 | .leaf => init
 | .node l x r =>
@@ -589,7 +590,7 @@ def ofListGet (xs : List α) : BinTree α :=
   let xs' := xs.zip (List.range xs.length)
   xs'.foldl (fun bt (x, n) => bt.insert' (.succ n) x) .leaf
 
--- Property : `xs.foldl f init = (ofListFoldl xs).foldl f init`
+/-- Property : `xs.foldl f init = (ofListFoldl xs).foldl f init` -/
 partial def ofListFoldl (xs : List α) : BinTree α :=
   match xs with
   | [] => .leaf
@@ -600,8 +601,8 @@ partial def ofListFoldl (xs : List α) : BinTree α :=
     let mid := xs.get? nElem
     .node (ofListFoldl l) mid (ofListFoldl r)
 
--- Given a `bl : BinTree α`, return `Lean.toExpr (fun n => (BinTree.get? bl n).getD default)`
 open Lean in
+/-- Given a `bl : BinTree α`, return `Lean.toExpr (fun n => (BinTree.get? bl n).getD default)` -/
 def toLCtx {α : Type u} [ToLevel.{u}] [ToExpr α] (bl : BinTree α) (default : α) : Expr :=
   let lvl := ToLevel.toLevel.{u}
   let type := toTypeExpr α
@@ -735,8 +736,8 @@ theorem mapOpt_allpPos (f : α → Option β) (p : β → Prop) :
       case some x => exact hx
     case right => exact (mapOpt_allpPos _ _ _).mpr hr
 
--- Given a `bl : BinTree α`, return `Lean.toExpr (fun n => (BinTree.get?Pos bl n).getD default)`
 open Lean in
+/-- Given a `bl : BinTree α`, return `Lean.toExpr (fun n => (BinTree.get?Pos bl n).getD default)` -/
 def toLCtxPos {α : Type u} [ToLevel.{u}] [ToExpr α] (bl : BinTree α) (default : α) : Expr :=
   let lvl := ToLevel.toLevel.{u}
   let type := toTypeExpr α

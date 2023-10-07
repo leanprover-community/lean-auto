@@ -17,7 +17,7 @@ instance : ToMessageData Lemma where
   toMessageData lem := MessageData.compose
     m!"⦗⦗ {lem.proof} : {lem.type} @@ " (.compose (MessageData.array lem.params toMessageData) m!" ⦘⦘")
 
--- `lem₁` subsumes `lem₂`
+/-- Check whether `lem₁` subsumes `lem₂` -/
 def Lemma.subsumeQuick (lem₁ lem₂ : Lemma) : MetaM Bool := Meta.withNewMCtxDepth <| do
   let paramInst₁ ← lem₁.params.mapM (fun _ => Meta.mkFreshLevelMVar)
   let type₁ := lem₁.type.instantiateLevelParamsArray lem₁.params paramInst₁
@@ -52,15 +52,17 @@ def Lemma.unfoldConst (lem : Lemma) (declName : Name) : MetaM Lemma := do
     return ⟨proof, result.expr, lem.params⟩
   | .none => return ⟨lem.proof, result.expr, lem.params⟩
 
--- `declNames` must be topologically sorted, i.e., we do not allow
---   the situation where
---   · `n` and `m` are both in `declNames`
---   · `n` is before `m`
---   · The declaration body of `m` contains `n`
+/--
+  `declNames` must be topologically sorted, i.e., we do not allow
+    the situation where
+    · `n` and `m` are both in `declNames`
+    · `n` is before `m`
+    · The declaration body of `m` contains `n`
+-/
 def Lemma.unfoldConsts (lem : Lemma) (declNames : Array Name) : MetaM Lemma := do
   declNames.foldlM (fun lem name => lem.unfoldConst name) lem
 
--- Reorder top-level `∀` so that (non-prop / dependent) ones precede other ones
+/-- Reorder top-level `∀` so that (non-prop / dependent) ones precede other ones -/
 def Lemma.reorderForallInstDep (lem : Lemma) : MetaM Lemma := do
   let depargs := HashSet.empty.insertMany (Expr.depArgs lem.type)
   Meta.forallTelescope lem.type fun xs body => do
@@ -104,8 +106,10 @@ def LemmaInst.ofLemma (lem : Lemma) : MetaM LemmaInst := do
     let lem' : Lemma := ⟨proof, type, params⟩
     return ⟨lem', xs.size, xs.size⟩
 
--- Only introduce leading non-prop binders
--- But, if a prop-binder is an instance binder, we still introduce it
+/--
+  Only introduce leading non-prop binders
+  But, if a prop-binder is an instance binder, we still introduce it
+-/
 def LemmaInst.ofLemmaHOL (lem : Lemma) : MetaM LemmaInst := do
   let ⟨proof, type, params⟩ := lem
   Meta.forallTelescope type fun xs _ => do
@@ -129,7 +133,7 @@ def LemmaInst.ofLemmaLeadingDepOnly (lem : Lemma) : MetaM LemmaInst := do
     let lem' : Lemma := ⟨proof, type, params⟩
     return ⟨lem', xs.size, xs.size⟩  
 
--- Get the proof of the lemma that `li` is an instance of
+/-- Get the proof of the lemma that `li` is an instance of -/
 def LemmaInst.getProofOfLemma (li : LemmaInst) : Option Expr :=
   Option.bind (Expr.stripLambdaN li.nbinders li.proof) (Expr.getAppFnN li.nargs)
 
@@ -172,7 +176,7 @@ def LemmaInsts.newInst? (lis : LemmaInsts) (li : LemmaInst) : MetaM Bool := do
       return false
   return true
 
--- A `LemmaInst`, but after `lambdaMetaTelescope` on the `proof`
+/-- A `LemmaInst`, but after `lambdaMetaTelescope` on the `proof` -/
 structure MLemmaInst where
   origProof : Expr
   args      : Array Expr
@@ -246,10 +250,12 @@ partial def collectUniverseLevels : Expr → MetaM (HashSet Level)
 | .mdata _ e' => collectUniverseLevels e'
 | .proj .. => throwError "Please unfold projections before collecting universe levels"
 
--- Universe monomprphic facts
--- User-supplied facts should have their universe level parameters
---   instantiated before being put into `Reif.State.facts`
--- The first `Expr` is the proof, and the second `Expr` is the fact
+/--
+  Universe monomprphic facts
+  User-supplied facts should have their universe level parameters
+    instantiated before being put into `Reif.State.facts`
+  The first `Expr` is the proof, and the second `Expr` is the fact
+-/
 abbrev UMonoFact := Expr × Expr
 
 def computeMaxLevel (facts : Array UMonoFact) : MetaM Level := do

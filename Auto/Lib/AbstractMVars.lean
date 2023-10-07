@@ -37,7 +37,7 @@ def mkFreshId : M Name := do
 def mkFreshFVarId : M FVarId :=
   return { name := (← mkFreshId) }
 
--- Bug fix for ``abstractLevelMVars`` in Lean
+/-- Bug fix for ``abstractLevelMVars`` in Lean -/
 private partial def abstractLevelMVars (u : Level) : M Level := do
   if !u.hasMVar then
     return u

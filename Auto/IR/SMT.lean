@@ -55,12 +55,11 @@ where go : List SSort → List SIdent →  List String
 def SSort.toString (s : SSort) (binders : Array SIdent) : String :=
   SSort.toStringAux s binders.data
 
--- Caution : Do not use this in define-sort, because sort
---   there might contain bvars
+/-- Caution : Do not use this in define-sort, because sort there might contain bvars -/
 instance : ToString SSort where
   toString s := SSort.toString s #[]
 
--- 〈qual_identifier〉 ::= 〈identifier〉 | ( as 〈identifier〉 〈sort〉 )
+/--〈qual_identifier〉 ::= 〈identifier〉 | ( as 〈identifier〉 〈sort〉 ) -/
 inductive QualIdent where
   | ident   : SIdent → QualIdent
   | qualed  : SIdent → SSort → QualIdent
@@ -160,8 +159,10 @@ def STerm.toString (s : STerm) (binders : Array SIdent) : String :=
 instance : ToString STerm where
   toString s := STerm.toString s #[]
 
---〈selector_dec〉 ::= ( 〈symbol〉 〈sort〉 )
---〈constructor_dec〉 ::= ( 〈symbol〉 〈selector_dec〉∗ )
+/-
+ 〈selector_dec〉 ::= ( 〈symbol〉 〈sort〉 )
+ 〈constructor_dec〉 ::= ( 〈symbol〉 〈selector_dec〉∗ )
+-/
 structure ConstrDecl where
   name     : String
   selDecls : Array (String × SSort)
@@ -219,28 +220,30 @@ def SMTOption.toString : SMTOption → String
 instance : ToString SMTOption where
   toString := SMTOption.toString
 
---〈sorted_var〉   ::= ( 〈symbol〉 〈sort〉 )
---〈datatype_dec〉 ::= ( 〈constructor_dec〉+ ) | ( par ( 〈symbol〉+ ) ( 〈constructor_dec〉+ ) )
---〈function_dec〉 ::= ( 〈symbol〉 ( 〈sorted_var〉∗ ) 〈sort〉 )
---〈function_def〉 ::= 〈symbol〉 ( 〈sorted_var〉∗ ) 〈sort〉 〈term〉
--- command   ::= ( assert 〈term〉 )
---               ( check-sat )
---               ...
---               ( declare-fun 〈symbol〉 ( 〈sort〉∗ ) 〈sort〉 )
---               ( declare-sort 〈symbol〉 〈numeral〉 )
---               ( define-fun 〈function_def〉 )
---               ( define-fun-rec 〈function_def〉 )
---               ( define-sort 〈symbol〉 ( 〈symbol〉∗ ) 〈sort〉 )
---               ( declare-datatype 〈symbol〉 〈datatype_dec〉)
---               ...
---               ( get-model )
---               ( get-option 〈keyword〉 )
---               ( get-proof )
---               ( get-unsat-assumptions )
---               ( get-unsat-core )
---               ...
---               ( set-option 〈option〉 )
---               ( set-logic 〈symbol 〉 )
+/--
+ 〈sorted_var〉   ::= ( 〈symbol〉 〈sort〉 )
+ 〈datatype_dec〉 ::= ( 〈constructor_dec〉+ ) | ( par ( 〈symbol〉+ ) ( 〈constructor_dec〉+ ) )
+ 〈function_dec〉 ::= ( 〈symbol〉 ( 〈sorted_var〉∗ ) 〈sort〉 )
+ 〈function_def〉 ::= 〈symbol〉 ( 〈sorted_var〉∗ ) 〈sort〉 〈term〉
+  command   ::= ( assert 〈term〉 )
+                ( check-sat )
+                ...
+                ( declare-fun 〈symbol〉 ( 〈sort〉∗ ) 〈sort〉 )
+                ( declare-sort 〈symbol〉 〈numeral〉 )
+                ( define-fun 〈function_def〉 )
+                ( define-fun-rec 〈function_def〉 )
+                ( define-sort 〈symbol〉 ( 〈symbol〉∗ ) 〈sort〉 )
+                ( declare-datatype 〈symbol〉 〈datatype_dec〉)
+                ...
+                ( get-model )
+                ( get-option 〈keyword〉 )
+                ( get-proof )
+                ( get-unsat-assumptions )
+                ( get-unsat-core )
+                ...
+                ( set-option 〈option〉 )
+                ( set-logic 〈symbol 〉 )
+-/
 inductive Command where
   | assert    : (prop : STerm) → Command
   | setLogic  : String → Command
@@ -302,10 +305,12 @@ section
   -- Type of (identifiers in higher-level logic)
   variable (ω : Type) [BEq ω] [Hashable ω]
 
-  -- The main purpose of this state is for name generation
-  --   and symbol declaration/definition, so we do not distinguish
-  --   between sort identifiers, datatype identifiers
-  --   and function identifiers
+  /--
+    The main purpose of this state is for name generation
+      and symbol declaration/definition, so we do not distinguish
+      between sort identifiers, datatype identifiers
+      and function identifiers
+  -/
   structure State where
     -- Map from high-level construct to symbol
     h2lMap   : HashMap ω String := {}
@@ -349,7 +354,7 @@ section
   def hIn (e : ω) : TransM ω Bool := do
     return (← getH2lMap).contains e
 
-  -- Used for e.g. bound variables
+  /-- Used for e.g. bound variables -/
   partial def disposableName : TransM ω String := do
     let l2hMap ← getL2hMap
     let idx ← getIdx
@@ -359,8 +364,10 @@ section
     setIdx (idx + 1)
     return currName
 
-  -- Note that this function is idempotent
-  -- Turn high-level construct into low-level symbol
+  /--
+    Turn high-level construct into low-level symbol
+    Note that this function is idempotent
+  -/
   partial def h2Symb (cstr : ω) : TransM ω String := do
     let l2hMap ← getL2hMap
     let h2lMap ← getH2lMap

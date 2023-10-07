@@ -3,7 +3,7 @@ open Lean
 
 namespace Auto
 
--- Lean's "repr" does not deal with LevelMVarId correctly
+/-- Lean's "repr" does not deal with LevelMVarId correctly -/
 partial def levelAuthRepr (l : Level) : String :=
   match l with
   | .zero => "Level.zero"
@@ -13,7 +13,7 @@ partial def levelAuthRepr (l : Level) : String :=
   | .param n => "Level.param `" ++ n.toString
   | .mvar id => "Level.mvar (LevelMVarId.mk `" ++ id.name.toString ++ ")"
 
--- Lean's "repr" does not deal with LevelMVarId correctly
+/-- Lean's "repr" does not deal with LevelMVarId correctly -/
 partial def exprAuthRepr (e : Expr) : String :=
   match e with
   | Expr.forallE _ d b _ => "Expr.forallE `_ (" ++ exprAuthRepr d ++ ") (" ++ exprAuthRepr b ++ ") BinderInfo.default"

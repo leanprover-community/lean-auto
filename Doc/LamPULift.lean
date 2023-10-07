@@ -126,8 +126,7 @@ mutual
     let eUp := mkAppN (.const ``GLift.up [lvl, u]) #[ty, e]
     return (eUp, eUpTy)
 
-  -- In the return type, the first `Expr` is `eUp↓`, and the second `Expr` is
-  --   the type of `e↑`
+  /-- In the return type, the first `Expr` is `eUp↓`, and the second `Expr` is the type of `e↑` -/
   partial def cstULiftNeg (u : Level) (eUp : Expr) : (ty : Expr) → MetaM (Expr × Expr)
   | .bvar idx => throwError "Auto.cstULift :: Loose bound variable"
   | .lam .. => throwError "Auto.cstULift :: Please β-reduce type before calling cstULift"
@@ -262,7 +261,7 @@ section TestcstULift
 end TestcstULift
 
 
--- Auxiliary declaration for an example below
+/-- Auxiliary declaration for an example below -/
 private axiom A_Constant : ∀ (α : Type) (β : α) (x : α) (y : Nat), α
 
 noncomputable def A_Constant.Lift.{u} := fun

@@ -3,12 +3,13 @@ import Std.Data.List.Lemmas
 
 namespace Auto.Embedding.Lam₂
 
--- 0 = *
--- 1 = * -> *
--- 2 = * -> * -> *
--- ...
+/--
+  0 = *
+  1 = * -> *
+  2 = * -> * -> *
+  ...
+-/
 abbrev Lam₂Sort := Nat
--- Idea : Use a table consisting of dtt sorts organized as a binary tree
 
 def Lam₂Sort.interp.{u} : Lam₂Sort → Type u
 | 0 => Sort u
@@ -71,11 +72,13 @@ theorem Lam₂Type.beq_eq (a b : Lam₂Type) : (a.beq b = true) → a = b := by
 theorem Lam₂Type.beq_eq_true_eq (a b : Lam₂Type) : (a.beq b = true) = (a = b) :=
   propext <| Iff.intro (beq_eq a b) (fun h => by subst h; apply beq_refl)
 
--- `tcVal`: Valuation of type constructors
--- `ltyLCtx` : Number of type variables in the local context
--- Returns:
---   1. Number of type arguments the type takes, if the type is well-formed
---   2. None, otherwise
+/--
+  `tcVal`: Valuation of type constructors
+  `ltyLCtx` : Number of type variables in the local context
+  Returns:
+    1. Number of type arguments the type takes, if the type is well-formed
+    2. None, otherwise
+-/
 def Lam₂Type.check (tcVal : Nat → Lam₂Sort) (ltyLCtx : Nat) : Lam₂Type → Option Nat
 | .atom n => .some (tcVal n)
 | .bvar n => if n < ltyLCtx then .some 0 else .none
@@ -88,8 +91,7 @@ def Lam₂Type.check (tcVal : Nat → Lam₂Sort) (ltyLCtx : Nat) : Lam₂Type �
   | .some (n + 1), .some 0 => .some n
   | _, _ => .none
 
--- Sort Judgement
---   `val, typelctx ⊢ type : Sort`
+/-- Sort Judgement `val, typelctx ⊢ type : Sort` -/
 @[reducible] def Lam₂Type.interp.{u}
   (val : Nat → ((n : Lam₂Sort) × Lam₂Sort.interp n)) (lctx : List (Sort u)) :
   Lam₂Type → Option ((n : Lam₂Sort) × Lam₂Sort.interp n)

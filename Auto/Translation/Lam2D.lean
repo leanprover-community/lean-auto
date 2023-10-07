@@ -29,13 +29,15 @@ namespace Auto.Lam2D
 open LamReif
 open Embedding.Lam MetaState
 
--- All the type atoms and term atoms are interpreted as fvars, which
---   are let-declarations in the local context. We don't want the external
---   prover to unfold these let-declarations, so we add these atoms as
---   non-let free variables into the local context, run the external prover,
---   abstract these free variables after the external prover has
---   finished, and apply the abstracted expression to the value of
---   these atoms to restore the requires expression.
+/--
+  All the type atoms and term atoms are interpreted as fvars, which
+    are let-declarations in the local context. We don't want the external
+    prover to unfold these let-declarations, so we add these atoms as
+    non-let free variables into the local context, run the external prover,
+    abstract these free variables after the external prover has
+    finished, and apply the abstracted expression to the value of
+    these atoms to restore the requires expression.
+-/
 structure State where
   tyVal           : Array (Expr × Level)  
   varVal          : Array (Expr × LamSort)
@@ -72,10 +74,12 @@ def withTypeAtomsAsFVar (atoms : Array Nat) : ExternM Unit :=
     setAtomsToAbstract ((← getAtomsToAbstract).push (newFVarId, e))
     setTypeAtomFVars ((← getTypeAtomFVars).insert atom newFVarId)
 
--- Takes a `s : LamSort` and produces the `un-lifted` version of `s.interp`
---   (note that `s.interp` is lifted)
--- This function should be called after we've called
---   `withTypeAtomAsFVar` on all the type atoms occurring in `s`
+/--
+  Takes a `s : LamSort` and produces the `un-lifted` version of `s.interp`
+    (note that `s.interp` is lifted)
+  This function should be called after we've called
+    `withTypeAtomAsFVar` on all the type atoms occurring in `s`
+-/
 def interpLamSortAsUnlifted : LamSort → ExternM Expr
 | .atom n => do
   let .some fid := (← getTypeAtomFVars).find? n
@@ -153,10 +157,12 @@ def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
 | .existE s  => do
   return ← runMetaM <| Meta.mkAppOptM ``Exists #[← interpLamSortAsUnlifted s]
 
--- Takes a `t : LamTerm` and produces the `un-lifted` version of `t.interp`.
--- This function should be called after we've called
---   `withTermAtomAsFVar` on all the term atoms occurring in `t`
--- `lctx` is here for pretty printing
+/--
+  Takes a `t : LamTerm` and produces the `un-lifted` version of `t.interp`.
+  This function should be called after we've called
+    `withTermAtomAsFVar` on all the term atoms occurring in `t`
+  `lctx` is here for pretty printing
+-/
 def interpLamTermAsUnlifted (lctx : Nat) : LamTerm → ExternM Expr
 | .atom n => do
   let .some fid := (← getTermAtomFVars).find? n
@@ -181,9 +187,11 @@ def withTranslatedLamSorts (ss : Array LamSort) : ExternM (Array Expr) := do
   withTypeAtomsAsFVar typeHs.toArray
   ss.mapM interpLamSortAsUnlifted
 
--- The external prover should only see the local context
---   and an array of Lean expressions, and should not see
---   anything within `ExternM, LamReif.ReifM, ULiftM` or `Reif.ReifM`
+/--
+  The external prover should only see the local context
+    and an array of Lean expressions, and should not see
+    anything within `ExternM, LamReif.ReifM, ULiftM` or `Reif.ReifM`
+-/
 def withTranslatedLamTerms (ts : Array LamTerm) : ExternM (Array Expr) := do
   let varVal ← getVarVal
   let lamEVarTy ← getLamEVarTy
@@ -193,9 +201,11 @@ def withTranslatedLamTerms (ts : Array LamTerm) : ExternM (Array Expr) := do
   withEtomsAsFVar etomHs.toArray
   ts.mapM (interpLamTermAsUnlifted 0)
 
--- Given a list of non-dependent types `ty₁, ty₂, ⋯, tyₙ`, add
---   free variables `x₁ : ty₁, x₂ : ty₂, ⋯, xₙ : tyₙ` into local context,
---   and return `#[x₁, x₂, ⋯, xₙ]`
+/--
+  Given a list of non-dependent types `ty₁, ty₂, ⋯, tyₙ`, add
+    free variables `x₁ : ty₁, x₂ : ty₂, ⋯, xₙ : tyₙ` into local context,
+    and return `#[x₁, x₂, ⋯, xₙ]`
+-/
 def withHyps (hyps : Array Expr) : ExternM (Array FVarId) := do
   let mut ret := #[]
   for hyp in hyps do
@@ -204,7 +214,7 @@ def withHyps (hyps : Array Expr) : ExternM (Array FVarId) := do
     ret := ret.push newFVarId
   return ret
 
--- Override the one in duper so that it works for `MetaM`
+/-- Override the one in duper so that it works for `MetaM` -/
 def Duper.withoutModifyingCoreEnv (m : MetaM α) : MetaM α :=
   try
     let env := (← liftM (get : CoreM Core.State)).env
@@ -214,7 +224,7 @@ def Duper.withoutModifyingCoreEnv (m : MetaM α) : MetaM α :=
   catch e =>
     throwError e.toMessageData
 
--- Override the one in duper so that it works for `MetaM`
+/-- Override the one in duper so that it works for `MetaM` -/
 def Duper.rconsProof (state : Duper.ProverM.State) : MetaM Expr := do
   let some emptyClause := state.emptyClause
     | throwError "rconsProof :: Can't find empty clause in ProverM's state"
@@ -242,7 +252,6 @@ private def callDuperMetaMAction (lemmas : Array (Expr × Expr × Array Name)) :
     throwError "callDuper :: Duper saturated"
   | .unknown => throwError "callDuper :: Duper was terminated"
 
---Meta.mkLambdaFVars (fvars.map (.fvar ·)) expr
 private def callDuperExternMAction (nonempties : Array REntry) (valids : Array REntry) :
   ExternM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := do
   let ss ← nonempties.mapM (fun re => do
@@ -302,24 +311,26 @@ private def callDuperExternMAction (nonempties : Array REntry) (valids : Array R
     let proofLamTerm := usedEtomTys.foldr (fun s cur => LamTerm.mkForallEF s cur) proofLamTermPre
     return (mkAppN expr ⟨usedVals⟩, proofLamTerm, ⟨usedEtoms⟩, ⟨usedInhs.map Prod.fst⟩, ⟨usedHyps.map Prod.fst⟩))
 
--- Given
--- · `nonempties = #[s₀, s₁, ⋯, sᵤ₋₁]`
--- · `valids = #[t₀, t₁, ⋯, kₖ₋₁]`
--- Invoke Duper to get a proof of
---   `proof : (∀ (_ : v₀) (_ : v₁) ⋯ (_ : vᵤ₋₁), w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥).interp`
--- and returns
--- · `fun etoms => proof`
--- · `∀ etoms, ∀ (_ : v₀) (_ : v₁) ⋯ (_ : vᵤ₋₁), w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥)`
--- · `etoms`
--- · `[s₀, s₁, ⋯, sᵤ₋₁]`
--- · `[w₀, w₁, ⋯, wₗ₋₁]`
--- Here
--- · `[v₀, v₁, ⋯, vᵤ₋₁]` is a subsequence of `[s₀, s₁, ⋯, sᵤ₋₁]`
--- · `[w₀, w₁, ⋯, wₗ₋₁]` is a subsequence of `[t₀, t₁, ⋯, kₖ₋₁]`
--- · `etoms` are all the etoms present in `w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥`
--- It is important to add `Meta.withNewMCtxDepth`, otherwise exprmvars
---   or levelmvars of the current level will be assigned, and we'll
---   get weird proof reconstruction error
+/--
+  Given
+  · `nonempties = #[s₀, s₁, ⋯, sᵤ₋₁]`
+  · `valids = #[t₀, t₁, ⋯, kₖ₋₁]`
+  Invoke Duper to get a proof of
+    `proof : (∀ (_ : v₀) (_ : v₁) ⋯ (_ : vᵤ₋₁), w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥).interp`
+  and returns
+  · `fun etoms => proof`
+  · `∀ etoms, ∀ (_ : v₀) (_ : v₁) ⋯ (_ : vᵤ₋₁), w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥)`
+  · `etoms`
+  · `[s₀, s₁, ⋯, sᵤ₋₁]`
+  · `[w₀, w₁, ⋯, wₗ₋₁]`
+  Here
+  · `[v₀, v₁, ⋯, vᵤ₋₁]` is a subsequence of `[s₀, s₁, ⋯, sᵤ₋₁]`
+  · `[w₀, w₁, ⋯, wₗ₋₁]` is a subsequence of `[t₀, t₁, ⋯, kₖ₋₁]`
+  · `etoms` are all the etoms present in `w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥`
+  It is important to add `Meta.withNewMCtxDepth`, otherwise exprmvars
+    or levelmvars of the current level will be assigned, and we'll
+    get weird proof reconstruction error
+-/
 def callDuper (nonempties : Array REntry) (valids : Array REntry) :
   ReifM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := Meta.withNewMCtxDepth <| do
   let tyVal ← LamReif.getTyVal

@@ -3,8 +3,10 @@ import Auto.Lib.IsomType
 
 namespace Auto
 
--- This function is slow and is not meant to be used in
---   computation. It's main use is in the pushs_pops theorems
+/--
+  This function is slow and is not meant to be used in computation
+  It's main use is in the pushs_pops theorems
+-/
 def List.ofFun (f : Nat → α) (n : Nat) : List α :=
   match n with
   | 0 => .nil

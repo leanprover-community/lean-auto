@@ -37,8 +37,10 @@ abbrev ReifM := StateT State MetaM
   let fvarsToAbstract ← getFvarsToAbstract
   setFvarsToAbstract (fvarsToAbstract.push id)
 
--- Given an expression `e`, if it's a `fvar` and is in `polyVal`,
---   return its value recorded in `polyVal`. Otherwise return `e`
+/--
+  Given an expression `e`, if it's a `fvar` and is in `polyVal`,
+    return its value recorded in `polyVal`. Otherwise return `e`
+-/
 @[inline] def resolveVal (e : Expr) : ReifM Expr :=
   match e with
   | .fvar id => do return ((← getExprFVarVal).find? id).getD e
