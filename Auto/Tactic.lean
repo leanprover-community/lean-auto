@@ -217,6 +217,7 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
       let exportFacts ← exportFacts.mapM LamReif.skolemizeMostIntoForall
       let exportFacts ← exportFacts.mapM LamReif.validOfExtensionalize
       let exportFacts ← exportFacts.mapM LamReif.validOfBetaReduce
+      let _ ← LamReif.recognizeDefinitions exportFacts
       let exportFacts ← exportFacts.mapM LamReif.validOfRevertAll
       -- ! tptp
       try

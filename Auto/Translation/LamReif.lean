@@ -14,6 +14,7 @@ initialize
   registerTraceClass `auto.lamReif.printValuation
   registerTraceClass `auto.lamReif.printProofs
   registerTraceClass `auto.lamReif.printResult
+  registerTraceClass `auto.lamReif.recognizeDefinitions
 
 namespace Auto.LamReif
 open Embedding.Lam
@@ -533,6 +534,18 @@ section Checker
       return v
     validOfReverts v lctx.length
 
+  def validOfAppend (v : REntry) (ex : Array LamSort) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.l (.validOfAppend p ex.toList)) .none
+      | throwError "validOfAppend :: Unexpected evaluation result"
+    return re
+
+  def validOfPrepend (v : REntry) (ex : Array LamSort) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.l (.validOfPrepend p ex.toList)) .none
+      | throwError "validOfPrepend :: Unexpected evaluation result"
+    return re
+
   def validOfHeadBeta (v : REntry) : ReifM REntry := do
     let p ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.c (.validOfHeadBeta p)) .none
@@ -620,6 +633,24 @@ section Checker
     let n := tocc.getLamTys.length
     validOfEtaReduceNAt v n occ
 
+  def validOfExtensionalizeEqAt (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let pv ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.ca (.validOfExtensionalizeEqAt pv occ)) .none
+      | throwError "validOfExtensionalizeEqAt :: Unexpected evaluation result"
+    return re
+
+  def validOfExtensionalizeEqFNAt (v : REntry) (n : Nat) (occ : List Bool) : ReifM REntry := do
+    let pv ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.ca (.validOfExtensionalizeEqFNAt pv n occ)) .none
+      | throwError "validOfExtensionalizeEqFNAt :: Unexpected evaluation result"
+    return re
+
+  def validOfIntensionalizeEqAt (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let pv ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.ca (.validOfIntensionalizeEqAt pv occ)) .none
+      | throwError "validOfIntensionalizeEqAt :: Unexpected evaluation result"
+    return re
+
   def validOfBVarLower (v : REntry) (n : REntry) : ReifM REntry := do
     let pv ← lookupREntryPos! v
     let pn ← lookupREntryPos! n
@@ -656,6 +687,7 @@ section Checker
       | throwError "validOfImps :: Unexpected evaluation result"
     return re
 
+  /-- Repeated instantiation -/
   def validOfInstantiate (v : REntry) (args : Array LamTerm) : ReifM REntry := do
     let p ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.i (.validOfInstantiate p args.data)) .none
@@ -716,30 +748,60 @@ end Checker
 
 section CheckerUtils
 
-  -- def toDefinition? (v : REntry) : ReifM (Option REntry) := do
-  --   let .valid lctx t := v
-  --     | throwError "toDefinition :: Unexpected entry {v}"
-  --   let mut introed := t
-  --   let mut lctx' := lctx
-  --   while true do
-  --     match introed.intro1? with
-  --     | .some (s, i) => introed := i; lctx' := s :: lctx'
-  --     | .none => break
-  --   let nForall := lctx'.length - lctx.length
-  --   let .app _ (.app _ (.base (.eq _)) lhs) rhs := introed
-  --     | return .none
-  --   let ml := isGeneral lctx' lhs
-  --   let mr := isGeneral lctx' rhs
-  --   if ml.isNone && mr.isNone then return .none
-  --   let m := ml <|> mr
-  --   let v ← validOfIntroMost v
-  --   let v ← reorderLCtx v m
-  --   let v := if ml.isNone then (← validOfEqSymm v) else v
-  --   let v ← validOfIntensionalizeEqNAt v nForall []
-  --   let v ← validOfEtaReduceNAt v nForall [false, true]
-  --   return .some v
-  -- where
-  --   isGeneral (lctx : List LamSort) (t : LamTerm) : Option (Array Nat) := sorry
+  /--
+    `.bvar i` will be turned into `.bvar map[i]`
+    It is required that the size of `rmap` is equal to the length of local context
+  -/
+  def reorderLCtx (v : REntry) (rmap : Array Nat) : ReifM REntry := do
+    let .valid lctx _ := v
+      | throwError "reorderLCtx :: Unexpected entry {v}"
+    let lsize := lctx.length
+    if rmap.size != lsize then
+      throwError "reorderLCtx :: Length of lctx does not equal size of reorder map"
+    let mut ex : Array LamSort := rmap.map (fun _ => .atom 0)
+    let mut argBVarIdx : Array Nat := #[]
+    for (s, i) in (Array.mk lctx).zipWithIndex do
+      let .some i' := rmap[i]?
+        | throwError "reorderLCtx :: Does not know where does `.bvar i` map to"
+      if i' >= lsize then
+        throwError "reorderLCtx :: Index {i'} out of bound {lsize}"
+      ex := ex.set! i' s
+      argBVarIdx := argBVarIdx.push (lsize - i - 1 + i')
+    let v ← validOfAppend v ex
+    validOfInstantiate v (argBVarIdx.map LamTerm.bvar)
+
+  /-- Refer to docstring of `LamTerm.isGeneral` -/
+  def toDefinition? (v : REntry) : ReifM (Option REntry) := do
+    let .valid lctx t := v
+      | throwError "toDefinition :: Unexpected entry {v}"
+    let mut introed := t
+    let mut lctx' := lctx
+    while true do
+      match introed.intro1? with
+      | .some (s, i) => introed := i; lctx' := s :: lctx'
+      | .none => break
+    let .app _ (.app _ (.base (.eq _)) lhs) rhs := introed
+      | return .none
+    let ml := lhs.isGeneral lctx'.length
+    let mr := rhs.isGeneral lctx'.length
+    if ml.isNone && mr.isNone then return .none
+    let .some m := ml <|> mr
+      | throwError "toDefinition? :: Unexpected error"
+    let v ← validOfIntroMost v
+    let v ← reorderLCtx v m
+    let v := if ml.isNone then (← validOfEqSymm v) else v
+    let v ← validOfRevertAll v
+    let v ← validOfIntensionalizeEqAt v []
+    let v ← validOfEtaReduceNAt v lctx'.length [false, true]
+    return .some v
+
+  def recognizeDefinitions (vs : Array REntry) : ReifM (Array REntry) := do
+    let mut ret := #[]
+    for v in vs do
+      if let .some v' ← toDefinition? v then
+        trace[auto.lamReif.recognizeDefinitions] "Entry {v} is def-like and is turned into {v'}"
+        ret := ret.push v'
+    return ret
 
 end CheckerUtils
 
@@ -1359,6 +1421,9 @@ open Embedding.Lam LamReif
       | .validOfEtaReduce1At pos occ => return .validOfEtaReduce1At (← transPos ref pos) occ
       | .validOfEtaExpandNAt pos n occ => return .validOfEtaExpandNAt (← transPos ref pos) n occ
       | .validOfEtaReduceNAt pos n occ => return .validOfEtaReduceNAt (← transPos ref pos) n occ
+      | .validOfExtensionalizeEqAt pos occ => return .validOfExtensionalizeEqAt (← transPos ref pos) occ
+      | .validOfExtensionalizeEqFNAt pos n occ => return .validOfExtensionalizeEqFNAt (← transPos ref pos) n occ
+      | .validOfIntensionalizeEqAt pos occ => return .validOfIntensionalizeEqAt (← transPos ref pos) occ
     | .e cs => ChkStep.e <$>
       match cs with
       | .skolemize pos => return .skolemize (← transPos ref pos)
@@ -1379,6 +1444,8 @@ open Embedding.Lam LamReif
       | .validOfIntros pos idx => return .validOfIntros (← transPos ref pos) idx
       | .validOfRevert pos => return .validOfRevert (← transPos ref pos)
       | .validOfReverts pos idx => return .validOfReverts (← transPos ref pos) idx
+      | .validOfAppend pos ex => return .validOfAppend (← transPos ref pos) (← ex.mapM (transLamSort ref))
+      | .validOfPrepend pos ex => return .validOfPrepend (← transPos ref pos) (← ex.mapM (transLamSort ref))
     | .n cs => ChkStep.n <$>
       match cs with
       | .nonemptyOfAtom n => do
@@ -1392,8 +1459,8 @@ open Embedding.Lam LamReif
     | .w cs => ChkStep.w <$>
       match cs with
       | .wfOfCheck lctx t => return .wfOfCheck (← lctx.mapM (transLamSort ref)) (← transLamTerm ref t)
-      | .wfOfAppend ex pos => return .wfOfAppend (← ex.mapM (transLamSort ref)) (← transPos ref pos)
-      | .wfOfPrepend ex pos => return .wfOfPrepend (← ex.mapM (transLamSort ref)) (← transPos ref pos)
+      | .wfOfAppend pos ex => return .wfOfAppend (← transPos ref pos) (← ex.mapM (transLamSort ref))
+      | .wfOfPrepend pos ex => return .wfOfPrepend (← transPos ref pos) (← ex.mapM (transLamSort ref))
       | .wfOfHeadBeta pos => return .wfOfHeadBeta (← transPos ref pos)
       | .wfOfBetaBounded pos bound => return .wfOfBetaBounded (← transPos ref pos) bound
   

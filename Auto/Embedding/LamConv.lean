@@ -381,7 +381,7 @@ def LamWF.extensionalizeEq?F?
     cases wft.getFn.getFn.getBase
     apply LamWF.extensionalizeEqF wft
 
-theorem LamEquiv.ofextensionalizeEq?F?
+theorem LamEquiv.ofExtensionalizeEq?F?
   {lval : LamValuation.{u}} (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
   (heq : t.extensionalizeEq?F? = .some t') :
   LamEquiv lval lctx (.base .prop) t t' := by
@@ -458,7 +458,20 @@ def LamWF.extensionalizeEq?FN?
           cases wft.getFn.getFn.getBase
           apply LamWF.extensionalizeEqFN? wft heq
 
-theorem LamEquiv.ofextensionalizeEq?FN?
+theorem LamWF.s_eq_prop_of_extensionalizeEq?FN?_eq_some
+  (wft : LamWF ltv ⟨lctx, t, s⟩) (heq : t.extensionalizeEq?FN? n = .some t') :
+  s = .base .prop := by
+  cases t <;> try cases heq
+  case app s fn rhs =>
+    cases fn <;> try cases heq
+    case app s' b lhs =>
+      cases b <;> try cases heq
+      case base b =>
+        cases b <;> try cases heq
+        case eq s =>
+          cases wft.getFn.getFn.getBase; rfl
+
+theorem LamEquiv.ofExtensionalizeEq?FN?
   {lval : LamValuation.{u}} (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
   (heq : t.extensionalizeEq?FN? n = .some t') :
   LamEquiv lval lctx (.base .prop) t t' := by
@@ -472,6 +485,11 @@ theorem LamEquiv.ofextensionalizeEq?FN?
         case eq s =>
           cases wft.getFn.getFn.getBase
           apply LamEquiv.ofExtensionalizeEqFN? wft heq
+
+theorem LamGenConv.ofExtensionalizeEq?FN? : LamGenConv lval (LamTerm.extensionalizeEq?FN? n) := by
+  intro t₁ t₂ heq lctx rty wf
+  cases LamWF.s_eq_prop_of_extensionalizeEq?FN?_eq_some wf heq
+  apply LamEquiv.ofExtensionalizeEq?FN? wf heq
 
 def LamTerm.extensionalizeEq (t : LamTerm) : LamTerm :=
   match t with
@@ -559,6 +577,10 @@ theorem LamEquiv.ofExtensionalizeEq
 theorem LamThmEquiv.ofExtensionalizeEq (wf : LamThmWF lval lctx s t) :
   LamThmEquiv lval lctx s t t.extensionalizeEq :=
   fun lctx' => LamEquiv.ofExtensionalizeEq (wf lctx')
+
+theorem LamGenConv.ofExtensionalizeEq : LamGenConv lval (fun t => LamTerm.extensionalizeEq t) := by
+  intros t₁ t₂ heq lctx rty wf; cases heq
+  apply LamEquiv.ofExtensionalizeEq wf
 
 def LamTerm.extensionalizeAux (isAppFn : Bool) (t : LamTerm) : LamTerm :=
   let cont (r : LamTerm) : LamTerm :=
@@ -694,7 +716,7 @@ def LamWF.fromIntensionalizeEqWith
     dsimp [LamTerm.intensionalizeEqWith, LamTerm.mkLamFN] at wfInt; rw [LamSort.mkFuncs_cons] at wfInt
     apply LamWF.mkForallEF (fromIntensionalizeEqWith (fromIntensionalizeEq1 wfInt))
 
-theorem LamEquiv.ofintensionalizeEqWith
+theorem LamEquiv.ofIntensionalizeEqWith
   (wfEq : LamWF lval.toLamTyVal ⟨lctx, .mkForallEFN (.mkEq s lhs rhs) l, s'⟩) :
   LamEquiv lval lctx (.base .prop) (.mkForallEFN (.mkEq s lhs rhs) l) (.intensionalizeEqWith l s lhs rhs) := by
   dsimp [LamTerm.intensionalizeEqWith]
@@ -723,22 +745,34 @@ theorem LamTerm.maxEVarSucc_intensionalizeEq? (heq : intensionalizeEq? t = .some
     rw [maxEVarSucc_intensionalizeEqWith, ← maxEVarSucc_getForallEFBody (t:=t), h₁]
     dsimp [maxEVarSucc]; rw [Nat.max, Nat.max, Nat.max_zero_left]
 
+theorem LamWF.s_eq_prop_of_intensionalizeEq?_eq_some
+  (wft : LamWF ltv ⟨lctx, t, s'⟩) (heq : LamTerm.intensionalizeEq? t = .some t') :
+  s' = .base .prop := by
+  dsimp [LamTerm.intensionalizeEq?] at heq
+  match h₁ : t.getForallEFBody, heq with
+  | .app s (.app _ (.base (.eq _)) lhs) rhs, Eq.refl _ =>
+    have teq := LamTerm.forallEFBody_forallEFTys_eq wft; rw [teq, h₁] at wft
+    revert wft; cases (LamTerm.getForallEFTys t)
+    case nil => intro wft; cases wft.getFn.getFn.getBase; rfl
+    case cons => intro wft; cases wft.getFn.getBase; rfl
+
 theorem LamEquiv.ofIntensionalizeEq?
   {lval : LamValuation.{u}} (wft : LamWF lval.toLamTyVal ⟨lctx, t, s'⟩)
   (heq : LamTerm.intensionalizeEq? t = .some t') :
   LamEquiv lval lctx (.base .prop) t t' := by
+  cases (LamWF.s_eq_prop_of_intensionalizeEq?_eq_some wft heq)
   dsimp [LamTerm.intensionalizeEq?] at heq
   match h₁ : t.getForallEFBody, heq with
   | .app s (.app _ (.base (.eq _)) lhs) rhs, Eq.refl _ =>
     clear heq; have teq := LamTerm.forallEFBody_forallEFTys_eq wft; rw [teq, h₁] at wft
-    have s'eq : s' = .base .prop := by
-      revert wft; cases (LamTerm.getForallEFTys t)
-      case nil => intro wft; cases wft.getFn.getFn.getBase; rfl
-      case cons => intro wft; cases wft.getFn.getBase; rfl
-    cases s'eq
     have wfEq := LamWF.fromMkForallEFN wft; cases wfEq.getFn.getFn.getBase
     conv => enter [4]; rw [teq, h₁]
-    apply LamEquiv.ofintensionalizeEqWith wft
+    apply LamEquiv.ofIntensionalizeEqWith wft
+
+theorem LamGenConv.ofIntensionalizeEq? : LamGenConv lval LamTerm.intensionalizeEq? := by
+  intro t₁ t₂ heq lctx rty wf
+  cases (LamWF.s_eq_prop_of_intensionalizeEq?_eq_some wf heq)
+  apply LamEquiv.ofIntensionalizeEq? wf heq
 
 /--
   Suppose we have `(λ x. func[body]) arg`
@@ -1959,6 +1993,49 @@ section UnsafeOps
   | .lam s body    => .lam s (LamTerm.instantiatesAtImp (.succ idx) args body)
   | .app s fn arg' => .app s (LamTerm.instantiatesAtImp idx args fn) (LamTerm.instantiatesAtImp idx args arg')
   
+  /-- Turn `.bvar i` into `args[i]` -/
   def LamTerm.instantiatesImp := LamTerm.instantiatesAtImp 0
+
+  /--
+    Determine whether a λ term `t` (within `LamThmValid lval lctx t`) is of the form
+    `LamTerm.mkAppN ((.atom i) <|> (.etom i)) [.bvar iₖ₋₁, ⋯, .bvar i₁, .bvar i₀]`
+    where `i₀, i₁, ⋯, iₖ₋₁` is a permutation of `0, 1, 2, ⋯, k - 1` and `k`
+    is the length of `lctx`.
+    · If `t` is of the above form, return a list `l` of length `k` where
+      `∀ 0 ≤ j < k, l[iⱼ] = j`
+    · This is an auxiliary function for definition unfolding. If we identify
+      equalities in the input formulas with `lhs` or `rhs` being general,
+      for example `lhs = LamTerm.mkAppN (.atom i) [.bvar iₖ₋₁, ⋯, .bvar i₁, .bvar i₀]`,
+      then we can
+      · First, reorder local context and intensionalize the above equation to
+        make it look like a definition of `.atom i`
+      · Then, exhaustively unfold `.atom i` in all input formulas using this definition
+      · Finally, remove the original equation (i.e. `lhs = rhs`) from the set of input formulas
+      It's easy to see that the above procedure is sound and complete.
+    · Note that the above procedure will not be complete if we relax the condition
+        `` `i₀, i₁, ⋯, iₖ₋₁` is a permutation of `0, 1, 2, ⋯, k - 1` ``
+      to
+        `` `i₀, i₁, ⋯, iₖ₋₁` is a permutation of a subsequence of `0, 1, 2, ⋯, k - 1` ``
+      To see this, consider the following example with two input formulas:
+        (Note: `#i` is type atom, `!i` is term atom, `⟨i⟩` is `.bvar i`)
+      1. `LamThmValid [#0, #0, #0] (!0 ⟨0⟩ ⟨1⟩ = !1 ⟨0⟩ ⟨1⟩ ⟨0⟩ ⟨2⟩)` (lhs is (relaxed) general)
+      2. `LamThmValid [] (!1 !2 !2 !2 !2 = !1 !2 !2 !2 !3)`
+  -/
+  def LamTerm.isGeneral (k : Nat) (t : LamTerm) : Option (Array Nat) := Id.run <| do
+    let mut ret := (Array.mk (List.range k)).map (fun _ => k)
+    let appargsRev := Array.mk t.getAppArgs.reverse
+    let appFn := t.getAppFn
+    if appargsRev.size != k then
+      return .none
+    if !appFn.isAtom && !appFn.isEtom then
+      return .none
+    for ((_, arg), idx) in appargsRev.zipWithIndex do
+      let .bvar i := arg
+        | return .none
+      -- Index within range, `ret[i]` is not assigned before
+      if ret[i]? != .some k then
+        return .none
+      ret := ret.set! i idx
+    return ret
 
 end UnsafeOps

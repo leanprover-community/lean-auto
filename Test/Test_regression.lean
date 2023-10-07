@@ -374,6 +374,29 @@ section TypeDefeq
 
 end TypeDefeq
 
+-- Definition Recognition
+
+section DefinitionRecognition
+
+  set_option trace.auto.lamReif.recognizeDefinitions true
+
+  example (a b : α) (f : α → α) (H : f b = a) : True := by
+    auto
+
+  example (f g : α → β) (h : α → α) (H : ∀ x, f x = g (h x)) : True := by
+    auto
+
+  example (f : α → α → α) (g : α → α → α → α → α) (H : ∀ x y z, f x y = g x y z z) : True := by
+    auto
+
+  example (f : α → α → α) (g : α → α → α) (H : ∀ x y, f y x = g x x) : True := by
+    auto
+
+  example (f : α → β → γ → δ → ε) (g : α → α → ε) (H : ∀ x t z y, f x y z t = g x x) : True := by
+    auto
+
+end DefinitionRecognition
+
 -- Issues
 
 section Issues

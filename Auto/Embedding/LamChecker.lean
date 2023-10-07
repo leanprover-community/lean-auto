@@ -452,9 +452,9 @@ theorem ImportTable.importFacts_correct (it : ImportTable cpv) (n : Nat) :
 inductive ConvStep where
   | validOfHeadBeta (pos : Nat) : ConvStep
   | validOfBetaBounded (pos : Nat) (bound : Nat) : ConvStep
-  -- Exhaustively rewrite using functional extensionality
+  /-- Exhaustively rewrite using functional extensionality -/
   | validOfExtensionalize (pos : Nat) : ConvStep
-  -- Symmetry to top-level equality
+  /-- Symmetry to top-level equality -/
   | validOfEqSymm (pos : Nat) : ConvStep
   | validOfMp (pos rw : Nat) : ConvStep
   | validOfCongrArg (pos rw : Nat) : ConvStep
@@ -470,6 +470,20 @@ inductive ConvAtStep where
   | validOfEtaReduce1At (pos : Nat) (occ : List Bool) : ConvAtStep
   | validOfEtaExpandNAt (pos n : Nat) (occ : List Bool) : ConvAtStep
   | validOfEtaReduceNAt (pos n : Nat) (occ : List Bool) : ConvAtStep
+  /--
+    Turn
+    · `f = g`   into              `∀ x₁ x₂ ⋯ xₙ, f x₁ x₂ ⋯ xₙ = g x₁ x₂ ⋯ xₙ`
+    · `f =  `   into     `fun g => ∀ x₁ x₂ ⋯ xₙ, f x₁ x₂ ⋯ xₙ = g x₁ x₂ ⋯ xₙ`
+    · `  =  `   into   `fun f g => ∀ x₁ x₂ ⋯ xₙ, f x₁ x₂ ⋯ xₙ = g x₁ x₂ ⋯ xₙ`
+  -/
+  | validOfExtensionalizeEqAt (pos : Nat) (occ : List Bool) : ConvAtStep
+  /--
+    Turn `f = g` into `∀ x₁ x₂ ⋯ xₙ, f x₁ x₂ ⋯ xₙ = g x₁ x₂ ⋯ xₙ`,
+      where `f` and `g` must be of type `s₀ → s₁ → ⋯ → sₙ₋₁ → ?`
+  -/
+  | validOfExtensionalizeEqFNAt (pos n : Nat) (occ : List Bool) : ConvAtStep
+  /-- Turn `∀ x₁ x₂ ⋯ xₙ, f x₁ x₂ ⋯ xₙ = g x₁ x₂ ⋯ xₙ` into `f = g` -/
+  | validOfIntensionalizeEqAt (pos : Nat) (occ : List Bool) : ConvAtStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
 inductive EtomStep where
@@ -478,19 +492,32 @@ inductive EtomStep where
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
 inductive InferenceStep where
-  -- If `t` has no loose bvar `0` and `s` is inhabited (pn), then
-  --  `∀ (_ : s), t` (pv) implies `LamTerm.instantiate1 (.atom 0) t`
+  /--
+    If `t` has no loose bvar `0` and `s` is inhabited (pn), then
+    `∀ (_ : s), t` (pv) implies `LamTerm.instantiate1 (.atom 0) t`
+  -/
   | validOfBVarLower (pv : Nat) (pn : Nat) : InferenceStep
-  -- Equivalent to repeated `validOfBVarLower`
+  /-- Equivalent to repeated `validOfBVarLower` -/
   | validOfBVarLowers (pv : Nat) (pns : List Nat) : InferenceStep
-  -- `t₁ → t₂` and `t₁` implies `t₂`
+  /-- `t₁ → t₂` and `t₁` implies `t₂` -/
   | validOfImp (p₁₂ : Nat) (p₁ : Nat) : InferenceStep
-  -- `t₁ → t₂ → ⋯ → tₖ → s` and `t₁, t₂, ⋯, tₖ` implies `s`
+  /-- `t₁ → t₂ → ⋯ → tₖ → s` and `t₁, t₂, ⋯, tₖ` implies `s` -/
   | validOfImps (imp : Nat) (ps : List Nat) : InferenceStep
+  /-- `.bvar 0` replaced with `arg` -/
   | validOfInstantiate1 (pos : Nat) (arg : LamTerm) : InferenceStep
-  -- `.bvar i` replaced with `args[i]`
+  /--
+    Call `validOfInstantiate1` sequentially on `arg[0] ⋯ args[k-1]`
+    Note that `.bvar i` is not always replaced with `args[i]` because
+      later instantiations will lower bvars in `args[i]` and may further
+      instantiate bound variables occurring in `args[i]`
+  -/
   | validOfInstantiate (pos : Nat) (args : List LamTerm) : InferenceStep
-  -- `.bvar i` replaced with `args.reverse[i]`
+  /--
+    Call `validOfInstantiate1` sequentially on `arg[k-1] ⋯ args[0]`
+    Note that `.bvar i` is not always replaced with `args.reverse[i]` because
+      later instantiations will lower bvars in `args.reverse[i]` and may further
+      instantiate bound variables occurring in `args.reverse[i]`
+  -/
   | validOfInstantiateRev (pos : Nat) (args : List LamTerm) : InferenceStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
@@ -500,6 +527,10 @@ inductive LCtxStep where
   | validOfIntros (pos idx : Nat) : LCtxStep
   | validOfRevert (pos : Nat) : LCtxStep
   | validOfReverts (pos : Nat) (idx : Nat) : LCtxStep
+  /-- `LamThmValid lval lctx t` => `LamThmValid lval (lctx ++ ex) t` -/
+  | validOfAppend (pos : Nat) (ex : List LamSort) : LCtxStep
+  /-- `LamThmValid lval lctx t` => `LamThmValid lval (ex ++ lctx) (t.bvarLifts ex.length)` -/
+  | validOfPrepend (pos : Nat) (ex : List LamSort) : LCtxStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
 inductive NonemptyStep where
@@ -509,8 +540,10 @@ inductive NonemptyStep where
 
 inductive WFStep where
   | wfOfCheck (lctx : List LamSort) (t : LamTerm) : WFStep
-  | wfOfAppend (ex : List LamSort) (pos : Nat) : WFStep
-  | wfOfPrepend (ex : List LamSort) (pos : Nat) : WFStep
+  /-- `LamWF ltv ⟨lctx, t, s⟩` => `LamWF ltv ⟨lctx ++ ex, t, s⟩` -/
+  | wfOfAppend (pos : Nat) (ex : List LamSort) : WFStep
+  /-- `LamWF ltv ⟨lctx, t, s⟩` => `LamWF ltv ⟨ex ++ lctx, t.bvarLifts ex.length, s⟩` -/
+  | wfOfPrepend (pos : Nat) (ex : List LamSort) : WFStep
   | wfOfHeadBeta (pos : Nat) : WFStep
   | wfOfBetaBounded (pos : Nat) (bound : Nat) : WFStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
@@ -543,6 +576,9 @@ def ConvAtStep.toString : ConvAtStep → String
 | .validOfEtaReduce1At pos occ => s!"validOfEtaReduce1At {pos} {occ}"
 | .validOfEtaExpandNAt pos n occ => s!"validOfEtaExpandNAt {pos} {n} {occ}"
 | .validOfEtaReduceNAt pos n occ => s!"validOfEtaReduceNAt {pos} {n} {occ}"
+| .validOfExtensionalizeEqAt pos occ => s!"validOfExtensionalizeEqAt {pos} {occ}"
+| .validOfExtensionalizeEqFNAt pos n occ => s!"validOfExtensionalizeEqFNAt {pos} {n} {occ}"
+| .validOfIntensionalizeEqAt pos occ => s!"validOfIntensionalizeEqAt {pos} {occ}"
 
 def EtomStep.toString : EtomStep → String
 | .skolemize pos => s!"skolemize {pos}"
@@ -563,6 +599,8 @@ def LCtxStep.toString : LCtxStep → String
 | .validOfIntros pos idx => s!"validOfIntros {pos} {idx}"
 | .validOfRevert pos => s!"validOfRevert {pos}"
 | .validOfReverts pos idx => s!"validOfReverts {pos} {idx}"
+| .validOfAppend pos ex => s!"validOfAppend {pos} {ex}"
+| .validOfPrepend pos ex => s!"validOfPrepend {pos} {ex}"
 
 def NonemptyStep.toString : NonemptyStep → String
 | .nonemptyOfAtom n => s!"nonemptyOfAtom {n}"
@@ -570,8 +608,8 @@ def NonemptyStep.toString : NonemptyStep → String
 
 def WFStep.toString : WFStep → String
 | .wfOfCheck lctx t => s!"wfOfCheck {lctx} {t}"
-| .wfOfAppend ex pos => s!"wfOfAppend {ex} {pos}"
-| .wfOfPrepend ex pos => s!"wfOfPrepend {ex} {pos}"
+| .wfOfAppend pos ex => s!"wfOfAppend {pos} {ex}"
+| .wfOfPrepend pos ex => s!"wfOfPrepend {pos} {ex}"
 | .wfOfHeadBeta pos => s!"wfOfHeadBeta {pos}"
 | .wfOfBetaBounded pos bound => s!"wfOfBetaBounded {pos} {bound}"
 
@@ -796,6 +834,27 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
     | .some t' => .addEntry (.valid lctx t')
     | .none => .fail
   | .none => .fail
+| .validOfExtensionalizeEqAt pos occ =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    match LamTerm.rwGenAt occ (fun t => LamTerm.extensionalizeEq t) t with
+    | .some t' => .addEntry (.valid lctx t')
+    | .none => .fail
+  | .none => .fail
+| .validOfExtensionalizeEqFNAt pos n occ =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    match LamTerm.rwGenAt occ (LamTerm.extensionalizeEq?FN? n) t with
+    | .some t' => .addEntry (.valid lctx t')
+    | .none => .fail
+  | .none => .fail
+| .validOfIntensionalizeEqAt pos occ =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    match LamTerm.rwGenAt occ LamTerm.intensionalizeEq? t with
+    | .some t' => .addEntry (.valid lctx t')
+    | .none => .fail
+  | .none => .fail
 
 @[reducible] def EtomStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : EtomStep) → EvalResult
 | .skolemize pos =>
@@ -914,6 +973,14 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
   match r.getValid pos with
   | .some (lctx, t) => evalValidOfReverts lctx t idx
   | .none => .fail
+| .validOfAppend pos ex =>
+  match r.getValid pos with
+  | .some (lctx, t) => .addEntry (.valid (lctx ++ ex) t)
+  | .none => .fail
+| .validOfPrepend pos ex =>
+  match r.getValid pos with
+  | .some (lctx, t) => .addEntry (.valid (ex ++ lctx) (t.bvarLifts ex.length))
+  | .none => .fail
 
 @[reducible] def NonemptyStep.eval (lvt : Nat → LamSort) (r : RTable) : (cs : NonemptyStep) → EvalResult
 | .nonemptyOfAtom n => .addEntry (.nonempty (lvt n))
@@ -930,11 +997,11 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
     | true => .addEntry (.wf lctx rty t)
     | false => .fail
   | .none => .fail
-| .wfOfAppend ex pos =>
+| .wfOfAppend pos ex =>
   match r.getWF pos with
   | .some (lctx, s, t) => .addEntry (.wf (lctx ++ ex) s t)
   | .none => .fail
-| .wfOfPrepend ex pos =>
+| .wfOfPrepend pos ex =>
   match r.getWF pos with
   | .some (lctx, s, t) => .addEntry (.wf (ex ++ lctx) s (t.bvarLifts ex.length))
   | .none => .fail
@@ -1559,6 +1626,68 @@ theorem ConvAtStep.eval_correct
         exact hcond
     | .none => exact True.intro
   | .none => exact True.intro
+| .validOfExtensionalizeEqAt pos occ => by
+  dsimp [eval]
+  match h₁ : r.getValid pos with
+  | .some (lctx, t) =>
+    dsimp
+    match h₂ : LamTerm.rwGenAt occ (fun t => LamTerm.extensionalizeEq t) t with
+    | .some t' =>
+      dsimp
+      have h₁' := RTable.getValid_correct inv h₁
+      apply ChkStep.eval_correct_validAux h₁'
+      case vimp =>
+        intro hv lctx'; have ⟨wft, _⟩ := hv lctx'
+        have hequiv := LamGenConv.rwGenAt LamGenConv.ofExtensionalizeEq _ _ h₂ _ _ wft
+        apply LamValid.mpLamEquiv (hv _) hequiv
+      case condimp =>
+        intro hcond
+        have eveq : LamTerm.evarEquiv fun t => some (LamTerm.extensionalizeEq t) := by
+          intro t t' h; cases h; apply LamTerm.maxEVarSucc_extensionalizeEq
+        rw [LamTerm.evarEquiv_rwGenAt eveq _ _ h₂]
+        exact hcond
+    | .none => exact True.intro
+  | .none => exact True.intro
+| .validOfExtensionalizeEqFNAt pos n occ => by
+  dsimp [eval]
+  match h₁ : r.getValid pos with
+  | .some (lctx, t) =>
+    dsimp
+    match h₂ : LamTerm.rwGenAt occ (LamTerm.extensionalizeEq?FN? n) t with
+    | .some t' =>
+      dsimp
+      have h₁' := RTable.getValid_correct inv h₁
+      apply ChkStep.eval_correct_validAux h₁'
+      case vimp =>
+        intro hv lctx'; have ⟨wft, _⟩ := hv lctx'
+        have hequiv := LamGenConv.rwGenAt LamGenConv.ofExtensionalizeEq?FN? _ _ h₂ _ _ wft
+        apply LamValid.mpLamEquiv (hv _) hequiv
+      case condimp =>
+        intro hcond
+        rw [LamTerm.evarEquiv_rwGenAt (@LamTerm.maxEVarSucc_extensionalizeEq?FN? n) _ _ h₂]
+        exact hcond
+    | .none => exact True.intro
+  | .none => exact True.intro
+| .validOfIntensionalizeEqAt pos occ => by
+  dsimp [eval]
+  match h₁ : r.getValid pos with
+  | .some (lctx, t) =>
+    dsimp
+    match h₂ : LamTerm.rwGenAt occ LamTerm.intensionalizeEq? t with
+    | .some t' =>
+      dsimp
+      have h₁' := RTable.getValid_correct inv h₁
+      apply ChkStep.eval_correct_validAux h₁'
+      case vimp =>
+        intro hv lctx'; have ⟨wft, _⟩ := hv lctx'
+        have hequiv := LamGenConv.rwGenAt LamGenConv.ofIntensionalizeEq? _ _ h₂ _ _ wft
+        apply LamValid.mpLamEquiv (hv _) hequiv
+      case condimp =>
+        intro hcond
+        rw [LamTerm.evarEquiv_rwGenAt @LamTerm.maxEVarSucc_intensionalizeEq? _ _ h₂]
+        exact hcond
+    | .none => exact True.intro
+  | .none => exact True.intro
 
 theorem LCtxStep.eval_correct
   (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
@@ -1628,6 +1757,26 @@ theorem LCtxStep.eval_correct
     | (lctx, t) =>
       have h' := RTable.getValid_correct inv h
       apply evalValidOfReverts_correct _ h'
+| .validOfAppend pos ex => by
+  dsimp [eval]
+  cases h : r.getValid pos <;> try exact True.intro
+  case some lctxt =>
+    match lctxt with
+    | (lctx, t) =>
+      have h' := RTable.getValid_correct inv h
+      apply ChkStep.eval_correct_validAux h'
+      case vimp => intro hv; apply LamThmValid.append; exact hv
+      case condimp => exact id
+| .validOfPrepend pos ex => by
+  dsimp [eval]
+  cases h : r.getValid pos <;> try exact True.intro
+  case some lctxt =>
+    match lctxt with
+    | (lctx, t) =>
+      have h' := RTable.getValid_correct inv h
+      apply ChkStep.eval_correct_validAux h'
+      case vimp => intro hv; apply LamThmValid.prepend; exact hv
+      case condimp => intro hcond; rw [LamTerm.maxEVarSucc_bvarLifts]; exact hcond
 
 theorem NonemptyStep.eval_correct
   (r : RTable) (cv : CVal.{u} r.lamEVarTy) :
@@ -1658,7 +1807,7 @@ theorem WFStep.eval_correct
       case right =>
         apply Nat.le_of_ble_eq_true h₂
     | false => exact True.intro
-| .wfOfAppend ex pos => by
+| .wfOfAppend pos ex => by
   dsimp [eval]
   cases h : r.getWF pos <;> try exact True.intro
   case some lctxst =>
@@ -1667,7 +1816,7 @@ theorem WFStep.eval_correct
       have h' := RTable.getWF_correct inv h
       apply ChkStep.eval_correct_wfAux h' _ id
       intro hwf; apply LamThmWF.append hwf
-| .wfOfPrepend ex pos => by
+| .wfOfPrepend pos ex => by
   dsimp [eval]
   cases h : r.getWF pos <;> try exact True.intro
   case some lctxst =>

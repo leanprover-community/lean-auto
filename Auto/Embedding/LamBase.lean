@@ -779,6 +779,10 @@ def LamTerm.isAtom : LamTerm → Bool
 | .atom _ => true
 | _ => false
 
+def LamTerm.isEtom : LamTerm → Bool
+| .etom _ => true
+| _ => false
+
 def LamTerm.isBase : LamTerm → Bool
 | .base _ => true
 | _ => false
