@@ -1021,20 +1021,20 @@ theorem LamTerm.maxEVarSucc_mkAppN
     dsimp [mkAppN]; apply IH; dsimp [maxEVarSucc]
     rw [Nat.max_le]; exact And.intro ht head
 
--- Given `t` and `[s₀, s₁, ⋯, sᵢ₋₁]`, return `λ (_ : sᵢ₋₁) ⋯ (_ : s₀), t`
+-- Given `t` and `[s₀, s₁, ⋯, sᵢ₋₁]`, return `λ (_ : s₀) ⋯ (_ : sᵢ₋₁), t`
 def LamTerm.mkLamFN (t : LamTerm) : List LamSort → LamTerm
 | .nil => t
-| .cons s lctx => (LamTerm.lam s t).mkLamFN lctx
+| .cons s lctx => LamTerm.lam s (t.mkLamFN lctx)
 
 theorem LamTerm.mkLamFN_append :
-  mkLamFN t (l₁ ++ l₂) = mkLamFN (mkLamFN t l₁) l₂ := by
+  mkLamFN t (l₁ ++ l₂) = mkLamFN (mkLamFN t l₂) l₁ := by
   induction l₁ generalizing t
   case nil => rfl
   case cons s l₁ IH =>
-    rw [List.cons_append]; dsimp [mkLamFN]; apply IH
+    rw [List.cons_append]; dsimp [mkLamFN]; rw [IH]
 
 theorem LamTerm.mkLamFN_append_singleton :
-  mkLamFN t (l₁ ++ [s]) = .lam s (mkLamFN t l₁) := by
+  mkLamFN t (l₁ ++ [s]) = mkLamFN (.lam s t) l₁ := by
   rw [mkLamFN_append]; rfl
 
 theorem LamTerm.maxEVarSucc_mkLamFN {t : LamTerm} :
@@ -1042,29 +1042,30 @@ theorem LamTerm.maxEVarSucc_mkLamFN {t : LamTerm} :
   induction lctx generalizing t
   case nil => rfl
   case cons s lctx IH =>
-    dsimp [mkLamFN]; rw [IH]; rfl
+    dsimp [mkLamFN, maxEVarSucc]; rw [IH]
 
+-- Given `t` and `[s₀, s₁, ⋯, sᵢ₋₁]`, return `∀ (_ : sᵢ₋₁) ⋯ (_ : s₀), t`
 def LamTerm.mkForallEFN (t : LamTerm) : List LamSort → LamTerm
 | .nil => t
-| .cons s lctx => (LamTerm.mkForallEF s t).mkForallEFN lctx
+| .cons s lctx => LamTerm.mkForallEF s (t.mkForallEFN lctx)
 
 theorem LamTerm.maxEVarSucc_mkForallEFN {t : LamTerm} :
   (t.mkForallEFN lctx).maxEVarSucc = t.maxEVarSucc := by
   induction lctx generalizing t
   case nil => rfl
   case cons s lctx IH =>
-    dsimp [mkForallEFN]; rw [IH]
-    dsimp [mkForallEF, maxEVarSucc]; rw [Nat.max, Nat.max_zero_left]
+    dsimp [mkForallEFN, maxEVarSucc]; rw [IH]
+    rw [Nat.max, Nat.max_zero_left]
 
 theorem LamTerm.mkForallEFN_append :
-  mkForallEFN t (l₁ ++ l₂) = mkForallEFN (mkForallEFN t l₁) l₂ := by
+  mkForallEFN t (l₁ ++ l₂) = mkForallEFN (mkForallEFN t l₂) l₁ := by
   induction l₁ generalizing t
   case nil => rfl
   case cons s l₁ IH =>
-    rw [List.cons_append]; dsimp [mkForallEFN]; apply IH
+    dsimp [mkForallEFN]; rw [IH]
 
 theorem LamTerm.mkForallEFN_append_singleton :
-  mkForallEFN t (l₁ ++ [s]) = mkForallEF s (mkForallEFN t l₁) := by
+  mkForallEFN t (l₁ ++ [s]) = mkForallEFN (mkForallEF s t) l₁ := by
   rw [mkForallEFN_append]; rfl
 
 def LamTerm.getLamBody : LamTerm → LamTerm
@@ -1079,11 +1080,10 @@ def LamTerm.getLamTys : LamTerm → List LamSort
 | .lam argTy body => argTy :: getLamTys body
 | _ => []
 
-theorem LamTerm.lamBody_lamTys_eq (t : LamTerm) : t = LamTerm.mkLamFN t.getLamBody t.getLamTys.reverse := by
+theorem LamTerm.lamBody_lamTys_eq (t : LamTerm) : t = LamTerm.mkLamFN t.getLamBody t.getLamTys := by
   induction t <;> try rfl
   case lam s body IH =>
-    dsimp [getLamBody, getLamTys]; rw [List.reverse_cons]
-    rw [mkLamFN_append_singleton, ← IH]
+    dsimp [getLamBody, getLamTys]; dsimp [mkLamFN]; rw [← IH]
 
 def LamTerm.getLamBodyN (n : Nat) (t : LamTerm) : Option LamTerm :=
   match n with
@@ -1105,14 +1105,12 @@ theorem LamTerm.maxEVarSucc_getLamBodyN
 
 theorem LamTerm.getLamBodyN_mkLamFN_length_eq
   (h : l.length = n) : getLamBodyN n (mkLamFN t l) = .some t := by
-  revert l; rw [IsomType.eqForall' (p:=fun _ => _) List.reverse_IsomType]
-  intro l; unfold List.reverse_IsomType; dsimp; rw [List.length_reverse]
   induction n generalizing l t
-  case zero => intro h; cases l <;> cases h; rfl
+  case zero => cases l <;> cases h; rfl
   case succ n IH =>
-    intro h; cases l <;> cases h
+    cases l <;> cases h
     case refl s' l =>
-      rw [List.reverse_cons]; rw [mkLamFN_append_singleton]; dsimp [getLamBodyN]
+      dsimp [mkLamFN, getLamBodyN]
       dsimp [Nat.add] at IH; apply IH; rfl
 
 def LamTerm.getLamTysN (n : Nat) (t : LamTerm) : Option (List LamSort) :=
@@ -1148,7 +1146,7 @@ theorem LamTerm.getLamTysN_getLamBodyN_eq_none :
 
 theorem LamTerm.getLamTysN_getLamBodyN_eq
   (hTys : getLamTysN n t = .some l) (hBody : getLamBodyN n t = .some body) :
-  t = body.mkLamFN l.reverse := by
+  t = body.mkLamFN l := by
   induction n generalizing t body l
   case zero => cases hTys; cases hBody; rfl
   case succ n IH =>
@@ -1157,12 +1155,10 @@ theorem LamTerm.getLamTysN_getLamBodyN_eq
       dsimp [getLamTysN] at hTys; dsimp [getLamBodyN] at hBody
       cases h₁ : getLamTysN n body' <;> rw [h₁] at hTys <;> cases hTys
       case refl l' =>
-        rw [List.reverse_cons, mkLamFN_append_singleton]; rw [← IH h₁ hBody]
+        dsimp [mkLamFN]; rw [← IH h₁ hBody]
 
 theorem LamTerm.getLamTysN_mkLamFN_eq_l_iff :
-  getLamTysN n (mkLamFN t l) = .some l.reverse ↔ l.length = n := by
-  revert l; rw [IsomType.eqForall' (p:=fun _ => _) List.reverse_IsomType]
-  intro l; unfold List.reverse_IsomType; dsimp; rw [List.reverse_reverse, List.length_reverse]
+  getLamTysN n (mkLamFN t l) = .some l ↔ l.length = n := by
   induction n generalizing t l
   case zero =>
     dsimp [getLamTysN]; apply Iff.intro
@@ -1179,12 +1175,12 @@ theorem LamTerm.getLamTysN_mkLamFN_eq_l_iff :
       case mpr =>
         intro h; cases h
     case cons s' l =>
-      rw [List.reverse_cons, mkLamFN_append_singleton]; dsimp; cases h₁ : getLamTysN n (mkLamFN t l.reverse)
-      case none => simp; intro h; rw [(IH _).mpr h] at h₁; cases h₁
+      dsimp [mkLamFN]; cases h₁ : getLamTysN n (mkLamFN t l)
+      case none => simp; intro h; rw [IH.mpr h] at h₁; cases h₁
       case some l' =>
         simp; apply Iff.intro
-        case mp => intro h; cases h; apply (IH _).mp h₁
-        case mpr => intro h; have h₂ := (IH (t:=t) _).mpr h; rw [h₁] at h₂; cases h₂; rfl
+        case mp => intro h; cases h; apply IH.mp h₁
+        case mpr => intro h; have h₂ := (IH (t:=t)).mpr h; rw [h₁] at h₂; cases h₂; rfl
 
 def LamTerm.getAppFn : LamTerm → LamTerm
 | .app _ fn _ => getAppFn fn
@@ -1654,6 +1650,10 @@ def LamWF.mkForallEF {ltv : LamTyVal}
   (wfp : LamWF ltv ⟨pushLCtx s lctx, p, .base .prop⟩) :
   LamWF ltv ⟨lctx, .mkForallEF s p, .base .prop⟩ := LamWF.ofApp _ (.ofBase (.ofForallE _)) (.ofLam _ wfp)
 
+def LamWF.fromMkForallEF {ltv : LamTyVal}
+  (wf : LamWF ltv ⟨lctx, .mkForallEF s p, .base .prop⟩) :
+  LamWF ltv ⟨pushLCtx s lctx, p, .base .prop⟩ := wf.getArg.getLam
+
 def LamWF.mkAppN {s : LamSort}
   (wfFn : LamWF ltv ⟨lctx, f, s.mkFuncs (args.map Prod.fst)⟩)
   (wfArgs : HList (fun (s, t) => LamWF ltv ⟨lctx, t, s⟩) args) :
@@ -1708,50 +1708,65 @@ def LamWF.getAppArgs
     case ys => apply HList.cons _ .nil; exact wfArg
 
 def LamWF.mkLamFN {ltv : LamTyVal}
-  (wfp : LamWF ltv ⟨pushLCtxs ls lctx, p, s⟩) :
-  LamWF ltv ⟨lctx, .mkLamFN p ls, LamSort.mkFuncsRev s ls⟩ :=
+  (wfp : LamWF ltv ⟨pushLCtxs ls.reverse lctx, p, s⟩) :
+  LamWF ltv ⟨lctx, .mkLamFN p ls, LamSort.mkFuncs s ls⟩ :=
   match ls with
   | .nil => wfp
   | .cons s ls => by
-    dsimp [LamTerm.mkLamFN]; rw [pushLCtxs_cons] at wfp
-    apply LamWF.mkLamFN (ls:=ls); apply LamWF.ofLam _ wfp
+    dsimp [LamTerm.mkLamFN]
+    rw [List.reverse_cons, pushLCtxs_append_singleton] at wfp
+    apply LamWF.ofLam; apply LamWF.mkLamFN (ls:=ls) wfp
 
 def LamWF.ofMkLamFN {ltv : LamTyVal}
-  (wfLam : LamWF ltv ⟨lctx, .mkLamFN p ls, LamSort.mkFuncsRev s ls⟩) :
-  LamWF ltv ⟨pushLCtxs ls lctx, p, s⟩ :=
+  (wfLam : LamWF ltv ⟨lctx, .mkLamFN p ls, LamSort.mkFuncs s ls⟩) :
+  LamWF ltv ⟨pushLCtxs ls.reverse lctx, p, s⟩ :=
   match ls with
   | .nil => wfLam
   | .cons s ls => by
-    dsimp [LamTerm.mkLamFN] at wfLam; rw [pushLCtxs_cons]
-    apply LamWF.getLam; apply LamWF.ofMkLamFN (ls:=ls) wfLam
+    dsimp [LamTerm.mkLamFN] at wfLam;
+    rw [List.reverse_cons, pushLCtxs_append_singleton]
+    apply LamWF.ofMkLamFN (ls:=ls); apply wfLam.getLam
 
-def LamWF.ofMkLamFN_s_eq_mkFuncsRevAux {ltv : LamTyVal}
-  (wfLam : LamWF ltv ⟨lctx, .mkLamFN p ls.reverse, s⟩) :
+def LamWF.ofMkLamFN_s_eq_mkFuncs_reverse {ltv : LamTyVal}
+  (wfLam : LamWF ltv ⟨lctx, .mkLamFN p ls, s⟩) :
   (s' : LamSort) ×' (s = LamSort.mkFuncs s' ls) :=
   match ls with
   | .nil => ⟨s, rfl⟩
   | .cons argTy ls => by
-    rw [List.reverse_cons] at wfLam; rw [LamTerm.mkLamFN_append_singleton] at wfLam
-    cases wfLam; case ofLam bodyTy wfBody =>
-      have ⟨s', heq⟩ := ofMkLamFN_s_eq_mkFuncsRevAux wfBody
-      exists s'; rw [heq]; rfl
-
-def LamWF.ofMkLamFN_s_eq_mkFuncsRev {ltv : LamTyVal}
-  (wfLam : LamWF ltv ⟨lctx, .mkLamFN p ls, s⟩) :
-  PSigma (fun s' => s = LamSort.mkFuncsRev s' ls) := by
-  revert wfLam; apply IsomType.substForallRev List.reverse_IsomType ?H ls
-  unfold List.reverse_IsomType; dsimp; clear ls; intro ls wfLam
-  have ⟨s', heq⟩ := ofMkLamFN_s_eq_mkFuncsRevAux wfLam
-  exists s'; rw [← LamSort.mkFuncs_eq]; exact heq
+    dsimp [LamTerm.mkLamFN] at wfLam; cases wfLam
+    case ofLam _ wfBody =>
+      have ⟨s', seq⟩ := ofMkLamFN_s_eq_mkFuncs_reverse wfBody
+      exists s'; cases seq; rfl
 
 def LamWF.mkForallEFN {ltv : LamTyVal}
-  (wfp : LamWF ltv ⟨pushLCtxs ls lctx, p, .base .prop⟩) :
+  (wfp : LamWF ltv ⟨pushLCtxs ls.reverse lctx, p, .base .prop⟩) :
   LamWF ltv ⟨lctx, .mkForallEFN p ls, .base .prop⟩ :=
   match ls with
   | .nil => wfp
   | .cons s ls => by
-    dsimp [LamTerm.mkForallEFN]; rw [pushLCtxs_cons] at wfp
-    apply LamWF.mkForallEFN (ls:=ls); apply LamWF.mkForallEF wfp
+    dsimp [LamTerm.mkForallEFN]
+    rw [List.reverse_cons, pushLCtxs_append_singleton] at wfp
+    apply LamWF.mkForallEF; apply LamWF.mkForallEFN (ls:=ls) wfp
+
+def LamWF.fromMkForallEFN {ltv : LamTyVal}
+  (wf : LamWF ltv ⟨lctx, .mkForallEFN p ls, .base .prop⟩) :
+  LamWF ltv ⟨pushLCtxs ls.reverse lctx, p, .base .prop⟩ :=
+  match ls with
+  | .nil => wf
+  | .cons s ls => by
+    dsimp [LamTerm.mkForallEFN] at wf
+    rw [List.reverse_cons, pushLCtxs_append_singleton]
+    apply LamWF.fromMkForallEFN (ls:=ls); apply LamWF.fromMkForallEF wf
+
+def LamWF.mkForallEFN' {ltv : LamTyVal}
+  (wfp : LamWF ltv ⟨pushLCtxs ls lctx, p, .base .prop⟩) :
+  LamWF ltv ⟨lctx, .mkForallEFN p ls.reverse, .base .prop⟩ := by
+  apply LamWF.mkForallEFN; rw [List.reverse_reverse]; exact wfp
+
+def LamWF.fromMkForallEFN' {ltv : LamTyVal}
+  (wf : LamWF ltv ⟨lctx, .mkForallEFN p ls.reverse, .base .prop⟩) :
+  LamWF ltv ⟨pushLCtxs ls lctx, p, .base .prop⟩ := by
+  rw [← List.reverse_reverse (as:=ls)]; apply LamWF.fromMkForallEFN wf
 
 def LamWF.mkExistE {ltv : LamTyVal}
   (wfp : LamWF ltv ⟨lctx, p, .func s (.base .prop)⟩) :
@@ -2170,24 +2185,12 @@ theorem LamWF.interp_eqForallEF
   GLift.down (LamWF.interp lval lctx lctxTerm (.mkForallEF wf)) = (∀ x,
     GLift.down (LamWF.interp lval (pushLCtx s lctx) (pushLCtxDep x lctxTerm) wf)) := rfl
 
-theorem LamWF.interp_eqLamFN
-  {lval : LamValuation.{u}} {lctxTerm : ∀ n, (lctx n).interp lval.tyVal}
-  {wf : LamWF lval.toLamTyVal ⟨pushLCtxs ls lctx, t, s⟩} :
-  LamWF.interp lval lctx lctxTerm (.mkLamFN wf) = LamSort.curryRev (fun xs =>
-    LamWF.interp lval (pushLCtxs ls lctx) (pushLCtxsDep xs lctxTerm) wf) := by
-  induction ls generalizing t s
-  case nil => rfl
-  case cons s' ls IH =>
-    dsimp [LamSort.curryRev, mkLamFN]; rw [IH]
-    apply congrArg; funext xs x; dsimp [interp]; apply interp_substLCtxTerm
-    case HLCtxTyEq => rw [pushLCtxs_cons]
-    case HLCtxTermEq => apply HEq.symm; apply pushLCtxsDep_cons
-
 theorem LamWF.interp_eqForallEFN
   {lval : LamValuation.{u}} {lctxTerm : ∀ n, (lctx n).interp lval.tyVal}
   {wf : LamWF lval.toLamTyVal ⟨pushLCtxs ls lctx, t, .base .prop⟩} :
-  GLift.down (LamWF.interp lval lctx lctxTerm (.mkForallEFN wf)) = (∀ xs,
+  GLift.down (LamWF.interp lval lctx lctxTerm (.mkForallEFN' wf)) = (∀ xs,
     GLift.down (LamWF.interp lval (pushLCtxs ls lctx) (pushLCtxsDep xs lctxTerm) wf)) := by
+  generalize LamWF.mkForallEFN' wf = wfMkF
   induction ls generalizing t
   case nil =>
     dsimp [mkForallEFN, interp]
@@ -2195,13 +2198,16 @@ theorem LamWF.interp_eqForallEFN
       enter [2]; rw [IsomType.eqForall HList.nil_IsomType.{u + 1, u + 1, 0}]
       rw [PUnit.eqForall]; unfold HList.nil_IsomType; dsimp
       dsimp [pushLCtxs, pushLCtxsDep, Nat.blt, Nat.ble]
+    apply congrArg; apply interp_substWF
   case cons s ls IH =>
-    dsimp [mkForallEFN, interp]; apply Eq.trans IH
+    revert wfMkF; rw [List.reverse_cons, LamTerm.mkForallEFN_append_singleton]; intro wfMkF
+    apply Eq.trans (IH (wf:=LamWF.fromMkForallEFN' wfMkF) _)
     conv =>
       enter [2]; rw [IsomType.eqForall HList.cons_IsomType]; rw [Prod.eqForall']
       unfold HList.cons_IsomType; dsimp; enter [xs, x]
-    dsimp [mkForallEF, interp, LamBaseTerm.LamWF.interp, forallLiftFn]
-    apply forall_congr; intro xs; apply forall_congr; intro x
+    apply forall_congr; intro xs
+    rw [interp_app, interp_base, interp_lam, eq_of_heq (LamBaseTerm.interp_equiv _ _)]
+    apply forall_congr; intro x
     apply congrArg; apply eq_of_heq; apply interp_heq <;> try rfl
     case HLCtxTyEq => rw [pushLCtxs_cons]
     case HLCtxTermEq => apply HEq.symm; apply pushLCtxsDep_cons
@@ -2359,7 +2365,7 @@ theorem LamWF.interp_lctxIrrelevance
           apply (hirr n (Nat.le_trans hlt (Nat.le_max_right _ _)))
 
 theorem LamTerm.forallEFBody_forallEFTys_eq (wft : LamWF ltv ⟨lctx, t, s⟩) :
-  t = LamTerm.mkForallEFN t.getForallEFBody t.getForallEFTys.reverse := by
+  t = LamTerm.mkForallEFN t.getForallEFBody t.getForallEFTys := by
   generalize hsize' : t.size = n
   have hsize : t.size ≤ n := by cases hsize'; apply Nat.le_refl
   clear hsize'; induction n generalizing lctx t s
@@ -2373,8 +2379,7 @@ theorem LamTerm.forallEFBody_forallEFTys_eq (wft : LamWF ltv ⟨lctx, t, s⟩) :
         case forallE s' =>
           cases arg <;> try rfl
           case lam s'' body =>
-            dsimp [getForallEFTys]; rw [List.reverse_cons, mkForallEFN_append_singleton]
-            dsimp [getForallEFBody]
+            dsimp [getForallEFTys, getForallEFBody, mkForallEFN]
             cases wft.getFn.getBase; cases wft.getArg
             case ofLam wfBody =>
               rw [← IH wfBody]; rfl

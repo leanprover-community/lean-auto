@@ -527,17 +527,26 @@ theorem LamValid.eqForallEH : LamValid lval lctx (.mkForallE s t) ↔ LamValid l
 theorem LamThmValid.eqForallEH : LamThmValid lval lctx (.mkForallE s t) ↔ LamThmValid lval (s :: lctx) (.app s t.bvarLift (.bvar 0)) :=
   Iff.intro LamThmValid.intro1H LamThmValid.revert1H
 
-theorem LamValid.eqForallEFN : LamValid lval lctx (.mkForallEFN t l) ↔ LamValid lval (pushLCtxs l lctx) t := by
-  induction l generalizing t
-  case nil => rw [pushLCtxs_nil]; rfl
+theorem LamValid.eqForallEFN : LamValid lval lctx (.mkForallEFN t l) ↔ LamValid lval (pushLCtxs l.reverse lctx) t := by
+  induction l generalizing t lctx
+  case nil => rfl
   case cons s l IH =>
-    dsimp [LamTerm.mkForallEFN]; rw [pushLCtxs_cons]
-    rw [IH, ← LamValid.eqForallEF]
+    dsimp [LamTerm.mkForallEFN]
+    rw [List.reverse_cons, pushLCtxs_append_singleton]
+    rw [← IH, ← LamValid.eqForallEF]
 
-theorem LamThmValid.eqForallEFN : LamThmValid lval lctx (.mkForallEFN t l) ↔ LamThmValid lval (l ++ lctx) t :=
+theorem LamValid.eqForallEFN' : LamValid lval lctx (.mkForallEFN t l.reverse) ↔ LamValid lval (pushLCtxs l lctx) t := by
+  conv => enter [2, 2]; rw [← List.reverse_reverse (as:=l)]
+  exact LamValid.eqForallEFN
+
+theorem LamThmValid.eqForallEFN : LamThmValid lval lctx (.mkForallEFN t l) ↔ LamThmValid lval (l.reverse ++ lctx) t :=
   Iff.intro
     (fun H lctx' => by rw [pushLCtxs_append]; exact LamValid.eqForallEFN.mp (H lctx'))
     (fun H lctx' => have H' := H lctx'; by rw [pushLCtxs_append] at H'; exact LamValid.eqForallEFN.mpr H')
+
+theorem LamThmValid.eqForallEFN' : LamThmValid lval lctx (.mkForallEFN t l.reverse) ↔ LamThmValid lval (l ++ lctx) t := by
+  conv => enter [2, 2, 1]; rw [← List.reverse_reverse (as:=l)]
+  exact LamThmValid.eqForallEFN
 
 theorem LamThmValid.append (H : LamThmValid lval lctx t)
   (ex : List LamSort) : LamThmValid lval (lctx ++ ex) t := by
@@ -777,18 +786,16 @@ theorem LamGenEquivWith.congrArg (eArg : LamGenEquivWith lval s arg₁ arg₂) :
   LamGenEquivWith.congr LamGenEquivWith.refl eArg
 
 theorem LamEquiv.congr_mkLamFN :
-  LamEquiv lval (pushLCtxs l lctx) s t₁ t₂ ↔ LamEquiv lval lctx (s.mkFuncsRev l) (.mkLamFN t₁ l) (.mkLamFN t₂ l) := by
-  induction l generalizing t₁ t₂ s
+  LamEquiv lval (pushLCtxs l.reverse lctx) s t₁ t₂ ↔ LamEquiv lval lctx (s.mkFuncs l) (.mkLamFN t₁ l) (.mkLamFN t₂ l) := by
+  induction l generalizing t₁ t₂ s lctx
   case nil => exact Iff.intro id id
   case cons ls l IH =>
-    dsimp [LamTerm.mkLamFN, LamWF.mkLamFN]; apply Iff.trans _ IH
+    dsimp [LamTerm.mkLamFN, LamWF.mkLamFN]
+    rw [LamSort.mkFuncs_cons, List.reverse_cons, pushLCtxs_append_singleton]
+    apply Iff.trans IH
     apply Iff.intro
-    case mp =>
-      intro H; apply LamEquiv.ofLam; apply Eq.mp _ H
-      rw [pushLCtxs_cons]
-    case mpr =>
-      intro H; rw [pushLCtxs_cons]
-      apply LamEquiv.fromLam; apply H
+    case mp => apply LamEquiv.ofLam
+    case mpr => apply LamEquiv.fromLam
 
 theorem LamEquiv.congrs {args : List (LamSort × LamTerm × LamTerm)}
   (wfApp : LamWF lval.toLamTyVal ⟨lctx, LamTerm.mkAppN fn₁ (args.map (fun (s, t₁, _) => (s, t₁))), resTy⟩)
@@ -854,14 +861,19 @@ theorem LamEquiv.forall_congr
   apply _root_.congrArg; apply eqFn
 
 theorem LamEquiv.congr_mkForallEFN
-  (H : LamEquiv lval (pushLCtxs l lctx) (.base .prop) t₁ t₂) :
+  (H : LamEquiv lval (pushLCtxs l.reverse lctx) (.base .prop) t₁ t₂) :
   LamEquiv lval lctx (.base .prop) (.mkForallEFN t₁ l) (.mkForallEFN t₂ l) := by
-  induction l generalizing t₁ t₂
+  induction l generalizing t₁ t₂ lctx
   case nil => exact H
   case cons ls l IH =>
-    dsimp [LamTerm.mkForallEFN, LamWF.mkForallEFN]; apply IH
-    apply LamEquiv.forall_congr; apply Eq.mp _ H
-    rw [pushLCtxs_cons]
+    dsimp [LamTerm.mkForallEFN, LamWF.mkForallEFN];
+    apply LamEquiv.forall_congr; apply IH
+    rw [List.reverse_cons] at H; rw [pushLCtxs_append_singleton] at H; exact H
+
+theorem LamEquiv.congr_mkForallEFN'
+  (H : LamEquiv lval (pushLCtxs l lctx) (.base .prop) t₁ t₂) :
+  LamEquiv lval lctx (.base .prop) (.mkForallEFN t₁ l.reverse) (.mkForallEFN t₂ l.reverse) := by
+  rw [← List.reverse_reverse (as:=l)] at H; exact congr_mkForallEFN H
 
 theorem LamEquiv.not_imp_not
   (wf₁ : LamWF lval.toLamTyVal ⟨lctx, t₁, .base .prop⟩)

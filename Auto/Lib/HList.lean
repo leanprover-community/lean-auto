@@ -136,6 +136,17 @@ theorem HList.append_IsomType {α : Type u} {β : α → Sort v} {xs ys : List �
    HList.append_get_append_eq,
    fun ⟨l₁, l₂⟩ => by dsimp; congr; rw [append_get_left_eq]; rw [append_get_right_eq]⟩
 
+theorem HList.append_singleton_IsomType {α : Type u} {β : α → Sort v} {xs : List α} {x : α} :
+  IsomType (HList β (xs ++ [x])) (PProd (HList β xs) (β x)) :=
+  ⟨fun l => ⟨l.append_get_left, match l.append_get_right with | .cons x .nil => x⟩,
+   fun ⟨l, e⟩ => HList.append l (.cons e .nil),
+   fun l => by
+      dsimp; conv => enter [2]; rw [← HList.append_get_append_eq (xs:=l)]
+      apply congrArg; generalize append_get_right l = l'
+      match l' with
+      | .cons e .nil => rfl,
+   fun ⟨l, e⟩ => by dsimp; rw [append_get_left_eq, append_get_right_eq]⟩
+
 def HList.reverseAux : {as : _} → (xs : HList β as) → (ys : HList β bs) → HList β (List.reverseAux as bs)
   | .nil,       .nil,       r => r
   | .cons _ as, .cons x xs, r => reverseAux (as:=as) xs (.cons x r)
