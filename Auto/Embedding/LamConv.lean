@@ -104,29 +104,19 @@ def LamWF.fromEtaExpandWith (wft : LamWF ltv ⟨lctx, t.etaExpandWith l, s⟩) :
   have ⟨s', heq⟩ := ofMkLamFN_s_eq_mkFuncs_reverse wft; cases heq
   apply LamWF.fromEtaExpandAux; apply LamWF.ofMkLamFN wft
 
-theorem LamEquiv.etaExpandWithAux
-  {lval : LamValuation.{u}} {l : List LamSort}
-  (wft : LamWF lval.toLamTyVal ⟨lctx, t, .mkFuncs s l.reverse⟩) :
-  LamEquiv lval lctx (.mkFuncs s l.reverse) t (t.etaExpandWith l.reverse) := by
-  dsimp [LamTerm.etaExpandWith]
-  induction l generalizing lctx s t
-  case nil =>
-    exists wft, LamWF.etaExpandWith wft; intro lctxTerm
-    apply eq_of_heq; apply LamWF.interp_heq <;> try rfl
-    dsimp [LamSort.getArgTys]; rw [LamTerm.etaExpandAux_nil]; rfl
-  case cons ls l IH =>
-    revert wft; rw [List.reverse_cons, LamSort.mkFuncs_append_singleton]; intro wft
-    rw [LamTerm.etaExpandAux_append_singleton, LamTerm.mkLamFN_append_singleton]
-    apply LamEquiv.trans' (IH wft)
-    apply LamEquiv.congr_mkLamFN.mp (LamEquiv.etaExpand1 (resTy:=s) _)
-    apply LamWF.etaExpandAux wft
-
 theorem LamEquiv.etaExpandWith
   {lval : LamValuation.{u}} {l : List LamSort}
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, .mkFuncs s l⟩) :
   LamEquiv lval lctx (.mkFuncs s l) t (t.etaExpandWith l) := by
-  have lrr : l = l.reverse.reverse := by rw [List.reverse_reverse]
-  revert wft; rw [lrr]; apply LamEquiv.etaExpandWithAux
+  dsimp [LamTerm.etaExpandWith]
+  induction l generalizing lctx s t
+  case nil =>
+    rw [LamTerm.etaExpandAux_nil]; apply LamEquiv.refl wft
+  case cons ls l IH =>
+    rw [LamSort.mkFuncs_cons, LamTerm.etaExpandAux_cons]; dsimp [LamTerm.mkLamFN]
+    rw [LamSort.mkFuncs_cons] at wft; have wfte := wft.etaExpand1
+    apply LamEquiv.trans _ (LamEquiv.ofLam (IH wfte.getLam))
+    apply LamEquiv.etaExpand1 wft
 
 def LamTerm.etaExpand (s : LamSort) (t : LamTerm) := etaExpandWith s.getArgTys t
 
@@ -328,32 +318,22 @@ def LamWF.extensionalizeEqFWith
   LamWF ltv ⟨lctx, LamTerm.extensionalizeEqFWith l s lhs rhs, .base .prop⟩ :=
   LamWF.mkForallEFN (.mkEq (.etaExpandAux wfl) (.etaExpandAux wfr))
 
-theorem LamEquiv.ofExtensionalizeEqFWithAux
-  {lval : LamValuation.{u}} {l : List LamSort}
-  (wfl : LamWF lval.toLamTyVal ⟨lctx, lhs, .mkFuncs s l.reverse⟩)
-  (wfr : LamWF lval.toLamTyVal ⟨lctx, rhs, .mkFuncs s l.reverse⟩) :
-  LamEquiv lval lctx (.base .prop) (.mkEq (.mkFuncs s l.reverse) lhs rhs) (.extensionalizeEqFWith l.reverse s lhs rhs) := by
-  dsimp [LamTerm.extensionalizeEqFWith]
-  induction l generalizing lctx s lhs rhs
-  case nil =>
-    exists LamWF.mkEq wfl wfr, LamWF.extensionalizeEqFWith wfl wfr; intro lctxTerm
-    apply eq_of_heq; apply LamWF.interp_heq <;> try rfl
-    dsimp [LamSort.mkFuncs, LamTerm.extensionalizeEqFWith]
-    rw [LamTerm.etaExpandAux_nil, LamTerm.etaExpandAux_nil]; rfl
-  case cons ls l IH =>
-    revert wfl wfr; rw [List.reverse_cons, LamSort.mkFuncs_append_singleton]; intro wfl wfr
-    rw [LamTerm.etaExpandAux_append_singleton, LamTerm.etaExpandAux_append_singleton]
-    apply LamEquiv.trans (IH wfl wfr); rw [LamTerm.mkForallEFN_append_singleton]
-    apply LamEquiv.congr_mkForallEFN; apply LamEquiv.eqFunextF
-    apply LamWF.mkEq (.etaExpandAux wfl) (.etaExpandAux wfr)
-
 theorem LamEquiv.ofExtensionalizeEqFWith
   {lval : LamValuation.{u}} {l : List LamSort}
   (wfl : LamWF lval.toLamTyVal ⟨lctx, lhs, .mkFuncs s l⟩)
   (wfr : LamWF lval.toLamTyVal ⟨lctx, rhs, .mkFuncs s l⟩) :
   LamEquiv lval lctx (.base .prop) (.mkEq (.mkFuncs s l) lhs rhs) (.extensionalizeEqFWith l s lhs rhs) := by
-  have lrr : l = l.reverse.reverse := by rw [List.reverse_reverse]
-  revert wfl wfr; rw [lrr]; apply LamEquiv.ofExtensionalizeEqFWithAux
+  dsimp [LamTerm.extensionalizeEqFWith]
+  induction l generalizing lctx s lhs rhs
+  case nil =>
+    rw [LamTerm.etaExpandAux_nil, LamTerm.etaExpandAux_nil]
+    apply LamEquiv.refl (.mkEq wfl wfr)
+  case cons ls l IH =>
+    revert wfl wfr; rw [LamSort.mkFuncs_cons]; intro wfl wfr
+    rw [LamTerm.etaExpandAux_cons, LamTerm.etaExpandAux_cons]
+    dsimp [LamTerm.mkForallEFN]
+    apply LamEquiv.trans _ (forall_congr (IH wfl.etaExpand1.getLam wfr.etaExpand1.getLam))
+    apply LamEquiv.eqFunextF (.mkEq wfl wfr)
 
 def LamTerm.extensionalizeEqF (s : LamSort) (lhs rhs : LamTerm) :=
   extensionalizeEqFWith s.getArgTys s.getResTy lhs rhs
