@@ -16,7 +16,7 @@ namespace Auto
 inductive HintDB where
   | empty     : HintDB
   | addLemma  : (lem : Name) → (hintdb : HintDB) → HintDB
-  | compose     : (hintdbs : Array String) → HintDB
+  | compose   : (hintdbs : Array String) → HintDB
 deriving BEq, Hashable, Inhabited, Repr
 
 abbrev HintDBExtension :=
@@ -46,7 +46,7 @@ partial def HintDB.toHashSet : HintDB → AttrM (HashSet Name)
 private def throwUnregisteredHintDB (dbname action : String) : AttrM Unit := do
   let cmdstr := "#declare_hintdb " ++ dbname
   throwError ("Please declare hint database using " ++
-    s!"command {repr cmdstr} before " ++ action ++ " it")
+    s!"command {repr cmdstr} before {action}")
 
 def registerHintDB : IO Unit :=
   registerBuiltinAttribute {
@@ -60,7 +60,7 @@ def registerHintDB : IO Unit :=
         let state' := state.insert dbname (.addLemma decl db)
         modifyEnv fun env => hintDBExt.modifyState env fun _ => state'
       else
-        throwUnregisteredHintDB dbname "adding lemma to"
+        throwUnregisteredHintDB dbname "adding lemma to it"
     erase := fun _ => do
       throwError "Lemmas cannot be erased from hint database"
   }
@@ -96,7 +96,7 @@ def elabprinthintdb : CommandElab := fun stx => do
       let hset ← liftCoreM (db.toHashSet)
       logInfoAt stx m!"{hset.toList}"
     else
-      liftCoreM <| throwUnregisteredHintDB dbname "printing"
+      liftCoreM <| throwUnregisteredHintDB dbname "printing it"
   | _ => throwUnsupportedSyntax
 
 @[command_elab composehintdb]
