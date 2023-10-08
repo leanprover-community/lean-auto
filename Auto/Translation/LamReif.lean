@@ -14,7 +14,8 @@ initialize
   registerTraceClass `auto.lamReif.printValuation
   registerTraceClass `auto.lamReif.printProofs
   registerTraceClass `auto.lamReif.printResult
-  registerTraceClass `auto.lamReif.recognizeDefinitions
+  registerTraceClass `auto.lamReif.prep.def
+  registerTraceClass `auto.lamReif.prep.printResult
 
 namespace Auto.LamReif
 open Embedding.Lam
@@ -822,7 +823,7 @@ section CheckerUtils
       active := active.pop
       let .some v' ← toDefinition? back
         | passive := passive.push back; continue
-      trace[auto.lamReif.recognizeDefinitions] "Entry {back} is def-like and is turned into {v'}"
+      trace[auto.lamReif.def] "Entry {back} is def-like and is turned into {v'}"
       let .valid [] (.app _ (.app _ (.base (.eq _)) lhs) rhs) := v'
         | throwError "recognizeDefsAndUnfold :: Unexpected definition entry {v'}"
       -- If the left-hand-side occurs inside the right-hand-side,
@@ -848,7 +849,10 @@ section CheckerUtils
        else
         vs)
     let vs ← vs.mapM validOfBetaReduce
-    vs.mapM validOfRevertAll
+    let vs ← vs.mapM validOfRevertAll
+    for v in vs do
+      trace[auto.lamReif.prep.printResult] "{v}"
+    return vs
 
 end CheckerUtils
 

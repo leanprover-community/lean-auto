@@ -378,7 +378,7 @@ end TypeDefeq
 
 section DefinitionRecognition
 
-  set_option trace.auto.lamReif.recognizeDefinitions true
+  set_option trace.auto.lamReif.prep.defs true
 
   example (a b : α) (f : α → α) (H : f b = a) : True := by
     auto

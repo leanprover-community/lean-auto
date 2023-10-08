@@ -27,7 +27,6 @@ variable (s t u : Set α)
 
 -- Blocking duper so that examples run faster
 -- Duper succeeds on one of the following examples
-set_option maxHeartbeats 5000
 
 example (h : s ⊆ t) : s ∩ u ⊆ t ∩ u := by
   auto [mem_inter_iff, subset_def, h]
@@ -52,7 +51,6 @@ example : s ∩ (s ∪ t) = s := by
 example : s ∪ s ∩ t = s := by
   auto [Set.ext, mem_union, mem_inter_iff]
 
-set_option maxHeartbeats 200000 in
 example : s \ t ∪ t = s ∪ t := by
   apply Set.ext; auto [mem_union, mem_diff]
 
