@@ -457,6 +457,8 @@ inductive ConvStep where
   /-- Symmetry to top-level equality -/
   | validOfEqSymm (pos : Nat) : ConvStep
   | validOfMp (pos rw : Nat) : ConvStep
+  /-- Exhaustively rewrite using facts of form `valid [] (lhs = rhs)` -/
+  | validOfMpAll (pos rw : Nat) : ConvStep
   | validOfCongrArg (pos rw : Nat) : ConvStep
   | validOfCongrFun (pos rw : Nat) : ConvStep
   | validOfCongr (pos rwFn rwArg : Nat) : ConvStep
@@ -527,9 +529,9 @@ inductive LCtxStep where
   | validOfIntros (pos idx : Nat) : LCtxStep
   | validOfRevert (pos : Nat) : LCtxStep
   | validOfReverts (pos : Nat) (idx : Nat) : LCtxStep
-  /-- `LamThmValid lval lctx t` => `LamThmValid lval (lctx ++ ex) t` -/
+  /-- `valid lctx t` => `valid (lctx ++ ex) t` -/
   | validOfAppend (pos : Nat) (ex : List LamSort) : LCtxStep
-  /-- `LamThmValid lval lctx t` => `LamThmValid lval (ex ++ lctx) (t.bvarLifts ex.length)` -/
+  /-- `valid lctx t` => `valid (ex ++ lctx) (t.bvarLifts ex.length)` -/
   | validOfPrepend (pos : Nat) (ex : List LamSort) : LCtxStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
@@ -540,9 +542,9 @@ inductive NonemptyStep where
 
 inductive WFStep where
   | wfOfCheck (lctx : List LamSort) (t : LamTerm) : WFStep
-  /-- `LamWF ltv ⟨lctx, t, s⟩` => `LamWF ltv ⟨lctx ++ ex, t, s⟩` -/
+  /-- `wf lctx s t` => `wf (lctx ++ ex) s t` -/
   | wfOfAppend (pos : Nat) (ex : List LamSort) : WFStep
-  /-- `LamWF ltv ⟨lctx, t, s⟩` => `LamWF ltv ⟨ex ++ lctx, t.bvarLifts ex.length, s⟩` -/
+  /-- `wf lctx s t` => `wf (ex ++ lctx) s (t.bvarLifts ex.length)` -/
   | wfOfPrepend (pos : Nat) (ex : List LamSort) : WFStep
   | wfOfHeadBeta (pos : Nat) : WFStep
   | wfOfBetaBounded (pos : Nat) (bound : Nat) : WFStep
@@ -564,6 +566,7 @@ def ConvStep.toString : ConvStep → String
 | .validOfExtensionalize pos => s!"validOfExtensionalize {pos}"
 | .validOfEqSymm pos => s!"validOfEqSymm {pos}"
 | .validOfMp pos rw => s!"validOfMp {pos} {rw}"
+| .validOfMpAll pos rw => s!"validOfMpAll {pos} {rw}"
 | .validOfCongrArg pos rw => s!"validOfCongrArg {pos} {rw}"
 | .validOfCongrFun pos rw => s!"validOfCongrFun {pos} {rw}"
 | .validOfCongr pos rwFn rwArg => s!"validOfCongr {pos} {rwFn} {rwArg}"
@@ -734,6 +737,16 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
     match r.getValidEnsureLCtx lctx rw with
     | .some rw =>
       match LamTerm.mp? rw t with
+      | .some t' => .addEntry (REntry.valid lctx t')
+      | .none => .fail
+    | .none => .fail
+  | .none => .fail
+| .validOfMpAll pos rw =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    match r.getValidEnsureLCtx [] rw with
+    | .some rw =>
+      match LamTerm.mpAll? rw t with
       | .some t' => .addEntry (REntry.valid lctx t')
       | .none => .fail
     | .none => .fail
@@ -1203,6 +1216,29 @@ theorem ConvStep.eval_correct
         case condimp =>
           intro _; apply Nat.le_trans _ hrw'.right
           apply LamTerm.maxEVarSucc_mp? hmp
+      | .none => exact True.intro
+    | .none => exact True.intro
+  | .none => exact True.intro
+| .validOfMpAll pos rw => by
+  dsimp [eval]
+  match hpos : r.getValid pos with
+  | .some (lctx, t) =>
+    dsimp
+    match hrw : r.getValidEnsureLCtx [] rw with
+    | .some rwt =>
+      dsimp
+      match hmp : LamTerm.mpAll? rwt t with
+      | .some t' =>
+        have hpos' := RTable.getValid_correct inv hpos
+        have hrw' := RTable.getValidEnsureLCtx_correct inv hrw
+        apply ChkStep.eval_correct_validAux hpos'
+        case vimp =>
+          intro hv; apply LamThmValid.mpLamThmEquiv _ hv
+          intro lctx'; have ⟨hwf, _⟩ := hpos'.left lctx'
+          apply LamGenConv.mpAll? hrw'.left _ _ hmp _ _ hwf
+        case condimp =>
+          intro _; apply Nat.le_trans (LamTerm.evarBounded_mpAll? _ _ hmp)
+          apply Nat.max_le.mpr (And.intro hrw'.right hpos'.right)
       | .none => exact True.intro
     | .none => exact True.intro
   | .none => exact True.intro

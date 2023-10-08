@@ -95,6 +95,7 @@ def LamTerm.rwGenAt (occ : List Bool) (conv : LamTerm → Option LamTerm) (t : L
       | true => (rwGenAt occ conv arg).bind (LamTerm.app s fn ·)
     | _ => .none
 
+-- **TODO:** This function always returns `.some`
 def LamTerm.rwGenAll (conv : LamTerm → Option LamTerm) (t : LamTerm) : Option LamTerm :=
   match conv t with
   | .some t' => .some t'
@@ -105,18 +106,18 @@ def LamTerm.rwGenAll (conv : LamTerm → Option LamTerm) (t : LamTerm) : Option 
       match rwGenAll conv fn, rwGenAll conv arg with
       | .some fn', .some arg' => .some (.app s fn' arg')
       | _, _ => .none
-    | _ => .none
+    | _ => t
 
-theorem LamTerm.rwGenAll_atom : rwGenAll conv (.atom n) = conv (.atom n) := by
+theorem LamTerm.rwGenAll_atom : rwGenAll conv (.atom n) = (conv (.atom n)).getD (.atom n) := by
   simp [rwGenAll]; cases conv (atom n) <;> rfl
 
-theorem LamTerm.rwGenAll_etom : rwGenAll conv (.etom n) = conv (.etom n) := by
+theorem LamTerm.rwGenAll_etom : rwGenAll conv (.etom n) = (conv (.etom n)).getD (.etom n) := by
   simp [rwGenAll]; cases conv (etom n) <;> rfl
 
-theorem LamTerm.rwGenAll_base : rwGenAll conv (.base b) = conv (.base b) := by
+theorem LamTerm.rwGenAll_base : rwGenAll conv (.base b) = (conv (.base b)).getD (.base b) := by
   simp [rwGenAll]; cases conv (base b) <;> rfl
 
-theorem LamTerm.rwGenAll_bvar : rwGenAll conv (.bvar n) = conv (.bvar n) := by
+theorem LamTerm.rwGenAll_bvar : rwGenAll conv (.bvar n) = (conv (.bvar n)).getD (.bvar n) := by
   simp [rwGenAll]; cases conv (bvar n) <;> rfl
 
 theorem LamTerm.rwGenAll_lam : rwGenAll conv (.lam s body) =
@@ -167,6 +168,7 @@ def LamTerm.rwGenAtWith (occ : List Bool) (conv : LamSort → LamTerm → Option
       | true => (rwGenAtWith occ conv s arg).bind (LamTerm.app s fn ·)
     | _ => .none
 
+-- **TODO:** This function always returns `.some`
 def LamTerm.rwGenAllWith (conv : LamSort → LamTerm → Option LamTerm)
   (rty : LamSort) (t : LamTerm) : Option LamTerm :=
   match conv rty t with
@@ -181,21 +183,24 @@ def LamTerm.rwGenAllWith (conv : LamSort → LamTerm → Option LamTerm)
       match rwGenAllWith conv (.func s rty) fn, rwGenAllWith conv s arg with
       | .some fn', .some arg' => .some (.app s fn' arg')
       | _, _ => .none
-    | _ => .none
+    | _ => t
 
 def LamTerm.evarEquiv (conv : LamTerm → Option LamTerm) :=
   ∀ t t', conv t = .some t' → t'.maxEVarSucc = t.maxEVarSucc
 
-theorem LamTerm.rwGenAllWith_atom : rwGenAllWith conv s (.atom n) = conv s (.atom n) := by
+def LamTerm.evarBounded (conv : LamTerm → Option LamTerm) (bound : Nat) :=
+  ∀ t t', conv t = .some t' → t'.maxEVarSucc ≤ max bound t.maxEVarSucc
+
+theorem LamTerm.rwGenAllWith_atom : rwGenAllWith conv s (.atom n) = (conv s (.atom n)).getD (.atom n) := by
   simp [rwGenAllWith]; cases conv s (atom n) <;> rfl
 
-theorem LamTerm.rwGenAllWith_etom : rwGenAllWith conv s (.etom n) = conv s (.etom n) := by
+theorem LamTerm.rwGenAllWith_etom : rwGenAllWith conv s (.etom n) = (conv s (.etom n)).getD (.etom n) := by
   simp [rwGenAllWith]; cases conv s (etom n) <;> rfl
 
-theorem LamTerm.rwGenAllWith_base : rwGenAllWith conv s (.base b) = conv s (.base b) := by
+theorem LamTerm.rwGenAllWith_base : rwGenAllWith conv s (.base b) = (conv s (.base b)).getD (.base b) := by
   simp [rwGenAllWith]; cases conv s (base b) <;> rfl
 
-theorem LamTerm.rwGenAllWith_bvar : rwGenAllWith conv s (.bvar n) = conv s (.bvar n) := by
+theorem LamTerm.rwGenAllWith_bvar : rwGenAllWith conv s (.bvar n) = (conv s (.bvar n)).getD (.bvar n) := by
   simp [rwGenAllWith]; cases conv s (bvar n) <;> rfl
 
 theorem LamTerm.rwGenAllWith_lam : rwGenAllWith conv rty (.lam s body) =
@@ -1114,6 +1119,58 @@ theorem LamValid.or_imp_or_of_right_imp
   case inl ha => exact Or.inl ha
   case inr hb => exact Or.inr (hbi hb)
 
+theorem LamTerm.evarBounded_le
+  (H : evarBounded f bound) (hle : bound ≤ bound') : evarBounded f bound' := by
+  intro t t' heq; apply Nat.le_trans (H _ _ heq)
+  apply Nat.max_le.mpr (And.intro ?ll ?lr)
+  case ll => apply Nat.le_trans hle (Nat.le_max_left _ _)
+  case lr => apply Nat.le_max_right
+
+theorem LamTerm.evarBounded_none : evarBounded (fun _ => .none) bound := by
+  intro t t' heq; cases heq
+
+theorem LamTerm.evarBounded_eqNone (H : ∀ t, f t = .none) : evarBounded f bound := by
+  intro t t' heq; rw [H] at heq; cases heq
+
+theorem LamTerm.evarEquiv_none : evarEquiv (fun _ => .none) := by
+  intro t t' heq; cases heq
+
+theorem LamTerm.evarEquiv_eqNone (H : ∀ t, f t = .none) : evarEquiv f := by
+  intro t t' heq; rw [H] at heq; cases heq
+
+theorem LamTerm.evarBounded_rwGenAt (H : evarBounded conv bound) : evarBounded (rwGenAt occ conv) bound := by
+  induction occ
+  case nil => exact H
+  case cons b occ IH =>
+    dsimp [rwGenAt]; intro t₁ t₂; dsimp
+    cases t₁ <;> try (intro h; cases h)
+    case lam s body =>
+      dsimp; cases h₁ : rwGenAt occ conv body <;> intro h <;> cases h
+      case refl body' =>
+        dsimp [maxEVarSucc]; apply IH _ _ h₁
+    case app s fn arg =>
+      match b with
+      | true =>
+        dsimp; cases h₁ : rwGenAt occ conv arg <;> intro h <;> cases h
+        case refl arg' =>
+          dsimp [maxEVarSucc]
+          apply Nat.max_le.mpr (And.intro ?ll ?lr)
+          case ll => apply Nat.le_trans (Nat.le_max_left _ _) (Nat.le_max_right _ _)
+          case lr =>
+            cases (Nat.le_max_iff _ _ _).mp (IH _ _ h₁)
+            case inl w => apply Nat.le_trans w (Nat.le_max_left _ _)
+            case inr w => apply Nat.le_trans w (Nat.le_trans (Nat.le_max_right _ _) (Nat.le_max_right _ _))
+      | false =>
+        dsimp; cases h₁ : rwGenAt occ conv fn <;> intro h <;> cases h
+        case refl fn' =>
+          dsimp [maxEVarSucc]
+          apply Nat.max_le.mpr (And.intro ?ll ?lr)
+          case ll =>
+            cases (Nat.le_max_iff _ _ _).mp (IH _ _ h₁)
+            case inl w => apply Nat.le_trans w (Nat.le_max_left _ _)
+            case inr w => apply Nat.le_trans w (Nat.le_trans (Nat.le_max_left _ _) (Nat.le_max_right _ _))
+          case lr => apply Nat.le_trans (Nat.le_max_right _ _) (Nat.le_max_right _ _)
+
 theorem LamTerm.evarEquiv_rwGenAt (H : evarEquiv conv) : evarEquiv (rwGenAt occ conv) := by
   induction occ
   case nil => exact H
@@ -1132,8 +1189,14 @@ theorem LamTerm.evarEquiv_rwGenAt (H : evarEquiv conv) : evarEquiv (rwGenAt occ 
           dsimp [maxEVarSucc]; rw [IH _ _ h₁]
       | false =>
         dsimp; cases h₁ : rwGenAt occ conv fn <;> intro h <;> cases h
-        case refl arg' =>
+        case refl fn' =>
           dsimp [maxEVarSucc]; rw [IH _ _ h₁]
+
+theorem LamGenConv.none : LamGenConv lval (fun _ => .none) := by
+  intro t₁ t₂ heq; cases heq
+
+theorem LamGenConv.eqNone (H : ∀ t, f t = .none) : LamGenConv lval f := by
+  intro t₁ t₂ heq; rw [H] at heq; cases heq
 
 theorem LamGenConv.rwGenAt (H : LamGenConv lval conv) : LamGenConv lval (LamTerm.rwGenAt occ conv) := by
   induction occ
@@ -1156,12 +1219,71 @@ theorem LamGenConv.rwGenAt (H : LamGenConv lval conv) : LamGenConv lval (LamTerm
         case refl fn' =>
           apply LamGenEquiv.congrFun; apply IH _ _ h₁
 
+theorem LamTerm.evarBounded_rwGenAll (H : evarBounded conv bound) :
+  evarBounded (rwGenAll conv) bound := by
+  intro t₁; induction t₁ <;> intros t₂
+  case atom n =>
+    rw [rwGenAll_atom]; cases h : conv (atom n) <;> intro heq <;> cases heq
+    case none.refl => apply Nat.le_max_right
+    case some.refl => apply H; rw [h]; rfl
+  case etom n =>
+    rw [rwGenAll_etom]; cases h : conv (etom n) <;> intro heq <;> cases heq
+    case none.refl => apply Nat.le_max_right
+    case some.refl => apply H; rw [h]; rfl
+  case base b =>
+    rw [rwGenAll_base]; cases h : conv (base b) <;> intro heq <;> cases heq
+    case none.refl => apply Nat.le_max_right
+    case some.refl => apply H; rw [h]; rfl
+  case bvar n =>
+    rw [rwGenAll_bvar]; cases h : conv (bvar n) <;> intro heq <;> cases heq
+    case none.refl => apply Nat.le_max_right
+    case some.refl => apply H; rw [h]; rfl
+  case lam s body IH =>
+    simp [rwGenAll]
+    match h₁ : conv (.lam s body) with
+    | .some t' => intro h₂; cases h₂; apply H _ _ h₁
+    | .none =>
+      match h₂ : rwGenAll conv body with
+      | .some t' => intro h; cases h; dsimp [maxEVarSucc]; apply IH _ h₂
+      | .none => intro h; cases h
+  case app s fn arg IHFn IHArg =>
+    simp [rwGenAll]
+    match h₁ : conv (.app s fn arg) with
+    | .some t' => intro h₂; cases h₂; apply H _ _ h₁
+    | .none =>
+      match h₂ : rwGenAll conv fn, h₃ : rwGenAll conv arg with
+      | .some fn', .some arg' =>
+        intro h; cases h; dsimp [maxEVarSucc]; rw [Nat.max, Nat.max]
+        apply Nat.max_le.mpr (And.intro ?ll ?lr)
+        case ll =>
+          cases (Nat.le_max_iff _ _ _).mp (IHFn _ h₂)
+          case inl w => apply Nat.le_trans w (Nat.le_max_left _ _)
+          case inr w => apply Nat.le_trans w (Nat.le_trans (Nat.le_max_left _ _) (Nat.le_max_right _ _))
+        case lr =>
+          cases (Nat.le_max_iff _ _ _).mp (IHArg _ h₃)
+          case inl w => apply Nat.le_trans w (Nat.le_max_left _ _)
+          case inr w => apply Nat.le_trans w (Nat.le_trans (Nat.le_max_right _ _) (Nat.le_max_right _ _))
+      | .some fn', .none => intro h; cases h
+      | .none, _ => intro h; cases h
+
 theorem LamTerm.evarEquiv_rwGenAll (H : evarEquiv conv) : evarEquiv (rwGenAll conv) := by
   intro t₁; induction t₁ <;> intros t₂
-  case atom n => rw [rwGenAll_atom]; apply H
-  case etom n => rw [rwGenAll_etom]; apply H
-  case base b => rw [rwGenAll_base]; apply H
-  case bvar n => rw [rwGenAll_bvar]; apply H
+  case atom n =>
+    rw [rwGenAll_atom]; cases h : conv (atom n) <;> intro heq <;> cases heq
+    case none.refl => rfl
+    case some.refl => apply H; rw [h]; rfl
+  case etom n =>
+    rw [rwGenAll_etom]; cases h : conv (etom n) <;> intro heq <;> cases heq
+    case none.refl => rfl
+    case some.refl => apply H; rw [h]; rfl
+  case base b =>
+    rw [rwGenAll_base]; cases h : conv (base b) <;> intro heq <;> cases heq
+    case none.refl => rfl
+    case some.refl => apply H; rw [h]; rfl
+  case bvar n =>
+    rw [rwGenAll_bvar]; cases h : conv (bvar n) <;> intro heq <;> cases heq
+    case none.refl => rfl
+    case some.refl => apply H; rw [h]; rfl
   case lam s body IH =>
     simp [rwGenAll]
     match h₁ : conv (.lam s body) with
@@ -1183,10 +1305,26 @@ theorem LamTerm.evarEquiv_rwGenAll (H : evarEquiv conv) : evarEquiv (rwGenAll co
 
 theorem LamGenConv.rwGenAll (H : LamGenConv lval conv) : LamGenConv lval (LamTerm.rwGenAll conv) := by
   intro t₁; induction t₁ <;> intros t₂
-  case atom n => dsimp [LamGenConv] at H; rw [LamTerm.rwGenAll_atom]; apply H
-  case etom n => dsimp [LamGenConv] at H; rw [LamTerm.rwGenAll_etom]; apply H
-  case base b => dsimp [LamGenConv] at H; rw [LamTerm.rwGenAll_base]; apply H
-  case bvar n => dsimp [LamGenConv] at H; rw [LamTerm.rwGenAll_bvar]; apply H
+  case atom n =>
+    dsimp [LamGenConv] at H; rw [LamTerm.rwGenAll_atom]
+    cases h : conv (.atom n) <;> intro heq <;> cases heq
+    case none.refl => apply LamGenEquiv.refl
+    case some.refl => apply H _ _ h
+  case etom n =>
+    dsimp [LamGenConv] at H; rw [LamTerm.rwGenAll_etom]
+    cases h : conv (.etom n) <;> intro heq <;> cases heq
+    case none.refl => apply LamGenEquiv.refl
+    case some.refl => apply H _ _ h
+  case base b =>
+    dsimp [LamGenConv] at H; rw [LamTerm.rwGenAll_base]
+    cases h : conv (.base b) <;> intro heq <;> cases heq
+    case none.refl => apply LamGenEquiv.refl
+    case some.refl => apply H _ _ h
+  case bvar n =>
+    dsimp [LamGenConv] at H; rw [LamTerm.rwGenAll_bvar]
+    cases h : conv (.bvar n) <;> intro heq <;> cases heq
+    case none.refl => apply LamGenEquiv.refl
+    case some.refl => apply H _ _ h
   case lam s body IH =>
     simp [LamTerm.rwGenAll]
     match h₁ : conv (.lam s body) with
@@ -1207,6 +1345,43 @@ theorem LamGenConv.rwGenAll (H : LamGenConv lval conv) : LamGenConv lval (LamTer
         case eArg => apply IHArg _ h₃
       | .some fn', .none => intro h; cases h
       | .none, _ => intro h; cases h
+
+theorem LamTerm.evarBounded_rwGenAtWith (H : ∀ s, evarBounded (conv s) bound) :
+  ∀ s, evarBounded (LamTerm.rwGenAtWith occ conv s) bound := by
+  induction occ
+  case nil => exact H
+  case cons b occ IH =>
+    dsimp [LamTerm.rwGenAtWith, LamGenConv]; intros rty t₁ t₂
+    cases t₁ <;> try (intro h; cases h)
+    case lam s body =>
+      dsimp; cases rty <;> try (intro h; cases h)
+      case func _ resTy =>
+        dsimp; cases h₁ : LamTerm.rwGenAtWith occ conv resTy body <;> intro h <;> cases h
+        case refl body' =>
+          dsimp [maxEVarSucc]; apply IH _ _ _ h₁
+    case app s fn arg =>
+      dsimp
+      match b with
+      | true =>
+        dsimp; cases h₁ : LamTerm.rwGenAtWith occ conv s arg <;> intro h <;> cases h
+        case refl arg' =>
+          dsimp [maxEVarSucc]
+          apply Nat.max_le.mpr (And.intro ?ll ?lr)
+          case ll => apply Nat.le_trans (Nat.le_max_left _ _) (Nat.le_max_right _ _)
+          case lr =>
+            cases (Nat.le_max_iff _ _ _).mp (IH _ _ _ h₁)
+            case inl w => apply Nat.le_trans w (Nat.le_max_left _ _)
+            case inr w => apply Nat.le_trans w (Nat.le_trans (Nat.le_max_right _ _) (Nat.le_max_right _ _))
+      | false =>
+        dsimp; cases h₁ : LamTerm.rwGenAtWith occ conv (.func s rty) fn <;> intro h <;> cases h
+        case refl fn' =>
+          dsimp [maxEVarSucc]
+          apply Nat.max_le.mpr (And.intro ?ll ?lr)
+          case ll =>
+            cases (Nat.le_max_iff _ _ _).mp (IH _ _ _ h₁)
+            case inl w => apply Nat.le_trans w (Nat.le_max_left _ _)
+            case inr w => apply Nat.le_trans w (Nat.le_trans (Nat.le_max_left _ _) (Nat.le_max_right _ _))
+          case lr => apply Nat.le_trans (Nat.le_max_right _ _) (Nat.le_max_right _ _)
 
 theorem LamTerm.evarEquiv_rwGenAtWith (H : ∀ s, evarEquiv (conv s)) :
   ∀ s, evarEquiv (LamTerm.rwGenAtWith occ conv s) := by
@@ -1233,6 +1408,12 @@ theorem LamTerm.evarEquiv_rwGenAtWith (H : ∀ s, evarEquiv (conv s)) :
         case refl fn' =>
           dsimp [maxEVarSucc]; rw [IH _ _ _ h₁]
 
+theorem LamGenConvWith.none : LamGenConvWith lval (fun _ _ => .none) := by
+  intro s t₁ t₂ heq; cases heq
+
+theorem LamGenConvWith.eqNone (H : ∀ s t, f s t = .none) : LamGenConvWith lval f := by
+  intro s t₁ t₂ heq; rw [H] at heq; cases heq
+
 theorem LamGenConvWith.rwGenAtWith (H : LamGenConvWith lval conv) : LamGenConvWith lval (LamTerm.rwGenAtWith occ conv) := by
   induction occ
   case nil => exact H
@@ -1257,13 +1438,84 @@ theorem LamGenConvWith.rwGenAtWith (H : LamGenConvWith lval conv) : LamGenConvWi
         case refl fn' =>
           apply LamGenEquivWith.congrFun; apply IH _ _ _ h₁
 
+theorem LamTerm.evarBounded_rwGenAllWith (H : ∀ s, evarBounded (conv s) bound) :
+  ∀ s, evarBounded (LamTerm.rwGenAllWith conv s) bound := by
+  intro s t₁; induction t₁ generalizing s <;> intros t₂
+  case atom n =>
+    rw [LamTerm.rwGenAllWith_atom]
+    cases h : conv s (.atom n) <;> intro heq <;> cases heq
+    case none.refl => apply Nat.le_max_right
+    case some.refl => apply H _ _ _ h
+  case etom n =>
+    rw [LamTerm.rwGenAllWith_etom]
+    cases h : conv s (.etom n) <;> intro heq <;> cases heq
+    case none.refl => apply Nat.le_max_right
+    case some.refl => apply H _ _ _ h
+  case base b =>
+    rw [LamTerm.rwGenAllWith_base]
+    cases h : conv s (.base b) <;> intro heq <;> cases heq
+    case none.refl => apply Nat.le_max_right
+    case some.refl => apply H _ _ _ h
+  case bvar n =>
+    rw [LamTerm.rwGenAllWith_bvar]
+    cases h : conv s (.bvar n) <;> intro heq <;> cases heq
+    case none.refl => apply Nat.le_max_right
+    case some.refl => apply H _ _ _ h
+  case lam s' body IH =>
+    simp [LamTerm.rwGenAllWith]
+    match h₁ : conv s (.lam s' body) with
+    | .some t' => intro h₂; cases h₂; apply H _ _ _ h₁
+    | .none =>
+      dsimp
+      cases s <;> try (intro h; cases h)
+      case func _ resTy =>
+        dsimp
+        match h₂ : LamTerm.rwGenAllWith conv resTy body with
+        | .some t' => intro h; cases h; dsimp [maxEVarSucc]; apply IH _ _ h₂
+        | .none => intro h; cases h
+  case app s' fn arg IHFn IHArg =>
+    simp [LamTerm.rwGenAllWith]
+    match h₁ : conv s (.app s' fn arg) with
+    | .some t' => intro h₂; cases h₂; apply H _ _ _ h₁
+    | .none =>
+      match h₂ : LamTerm.rwGenAllWith conv (.func s' s) fn, h₃ : LamTerm.rwGenAllWith conv s' arg with
+      | .some fn', .some arg' =>
+        intro h; cases h; dsimp [maxEVarSucc]
+        apply Nat.max_le.mpr (And.intro ?ll ?lr)
+        case ll =>
+          cases (Nat.le_max_iff _ _ _).mp (IHFn _ _ h₂)
+          case inl w => apply Nat.le_trans w (Nat.le_max_left _ _)
+          case inr w => apply Nat.le_trans w (Nat.le_trans (Nat.le_max_left _ _) (Nat.le_max_right _ _))
+        case lr =>
+          cases (Nat.le_max_iff _ _ _).mp (IHArg _ _ h₃)
+          case inl w => apply Nat.le_trans w (Nat.le_max_left _ _)
+          case inr w => apply Nat.le_trans w (Nat.le_trans (Nat.le_max_right _ _) (Nat.le_max_right _ _))
+      | .some fn', .none => intro h; cases h
+      | .none, _ => intro h; cases h
+
 theorem LamTerm.evarEquiv_rwGenAllWith (H : ∀ s, evarEquiv (conv s)) :
   ∀ s, evarEquiv (LamTerm.rwGenAllWith conv s) := by
   intro s t₁; induction t₁ generalizing s <;> intros t₂
-  case atom n => rw [LamTerm.rwGenAllWith_atom]; apply H
-  case etom n => rw [LamTerm.rwGenAllWith_etom]; apply H
-  case base b => rw [LamTerm.rwGenAllWith_base]; apply H
-  case bvar n => rw [LamTerm.rwGenAllWith_bvar]; apply H
+  case atom n =>
+    rw [LamTerm.rwGenAllWith_atom]
+    cases h : conv s (.atom n) <;> intro heq <;> cases heq
+    case none.refl => rfl
+    case some.refl => apply H _ _ _ h
+  case etom n =>
+    rw [LamTerm.rwGenAllWith_etom]
+    cases h : conv s (.etom n) <;> intro heq <;> cases heq
+    case none.refl => rfl
+    case some.refl => apply H _ _ _ h
+  case base b =>
+    rw [LamTerm.rwGenAllWith_base]
+    cases h : conv s (.base b) <;> intro heq <;> cases heq
+    case none.refl => rfl
+    case some.refl => apply H _ _ _ h
+  case bvar n =>
+    rw [LamTerm.rwGenAllWith_bvar]
+    cases h : conv s (.bvar n) <;> intro heq <;> cases heq
+    case none.refl => rfl
+    case some.refl => apply H _ _ _ h
   case lam s' body IH =>
     simp [LamTerm.rwGenAllWith]
     match h₁ : conv s (.lam s' body) with
@@ -1289,10 +1541,26 @@ theorem LamTerm.evarEquiv_rwGenAllWith (H : ∀ s, evarEquiv (conv s)) :
 
 theorem LamGenConvWith.rwGenAllWith (H : LamGenConvWith lval conv) : LamGenConvWith lval (LamTerm.rwGenAllWith conv) := by
   intro s t₁; induction t₁ generalizing s <;> intros t₂
-  case atom n => dsimp [LamGenConvWith] at H; rw [LamTerm.rwGenAllWith_atom]; apply H
-  case etom n => dsimp [LamGenConvWith] at H; rw [LamTerm.rwGenAllWith_etom]; apply H
-  case base b => dsimp [LamGenConvWith] at H; rw [LamTerm.rwGenAllWith_base]; apply H
-  case bvar n => dsimp [LamGenConvWith] at H; rw [LamTerm.rwGenAllWith_bvar]; apply H
+  case atom n =>
+    dsimp [LamGenConvWith] at H; rw [LamTerm.rwGenAllWith_atom]
+    cases h : conv s (.atom n) <;> intro heq <;> cases heq
+    case none.refl => apply LamGenEquivWith.refl
+    case some.refl => apply H _ _ _ h
+  case etom n =>
+    dsimp [LamGenConvWith] at H; rw [LamTerm.rwGenAllWith_etom]
+    cases h : conv s (.etom n) <;> intro heq <;> cases heq
+    case none.refl => apply LamGenEquivWith.refl
+    case some.refl => apply H _ _ _ h
+  case base b =>
+    dsimp [LamGenConvWith] at H; rw [LamTerm.rwGenAllWith_base]
+    cases h : conv s (.base b) <;> intro heq <;> cases heq
+    case none.refl => apply LamGenEquivWith.refl
+    case some.refl => apply H _ _ _ h
+  case bvar n =>
+    dsimp [LamGenConvWith] at H; rw [LamTerm.rwGenAllWith_bvar]
+    cases h : conv s (.bvar n) <;> intro heq <;> cases heq
+    case none.refl => apply LamGenEquivWith.refl
+    case some.refl => apply H _ _ _ h
   case lam s' body IH =>
     simp [LamTerm.rwGenAllWith]
     match h₁ : conv s (.lam s' body) with

@@ -585,6 +585,20 @@ section Checker
       | throwError "validOfEqSymm :: Unexpected evaluation result"
     return re
 
+  def validOfMp (vp : REntry) (vrw : REntry) : ReifM REntry := do
+    let pp ← lookupREntryPos! vp
+    let prw ← lookupREntryPos! vrw
+    let (_, .addEntry re) ← newChkStep (.c (.validOfMp pp prw)) .none
+      | throwError "validOfMp :: Unexpected evaluation result"
+    return re
+
+  def validOfMpAll (vp : REntry) (vrw : REntry) : ReifM REntry := do
+    let pp ← lookupREntryPos! vp
+    let prw ← lookupREntryPos! vrw
+    let (_, .addEntry re) ← newChkStep (.c (.validOfMpAll pp prw)) .none
+      | throwError "validOfMpAll :: Unexpected evaluation result"
+    return re
+
   def validOfEtaExpand1At (v : REntry) (occ : List Bool) : ReifM REntry := do
     let pv ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.ca (.validOfEtaExpand1At pv occ)) .none
@@ -774,7 +788,7 @@ section CheckerUtils
   def toDefinition? (v : REntry) : ReifM (Option REntry) := do
     let .valid lctx t := v
       | throwError "toDefinition :: Unexpected entry {v}"
-    let mut introed := t
+    let mut introed := t.betaReduceHacky
     let mut lctx' := lctx
     while true do
       match introed.intro1? with
@@ -782,26 +796,59 @@ section CheckerUtils
       | .none => break
     let .app _ (.app _ (.base (.eq _)) lhs) rhs := introed
       | return .none
-    let ml := lhs.isGeneral lctx'.length
-    let mr := rhs.isGeneral lctx'.length
+    let ml := lhs.getLamBody.isGeneral (lctx'.length + lhs.getLamTys.length)
+    let mr := rhs.getLamBody.isGeneral (lctx'.length + rhs.getLamTys.length)
     if ml.isNone && mr.isNone then return .none
     let .some m := ml <|> mr
       | throwError "toDefinition? :: Unexpected error"
+    let v ← validOfBetaReduce v
     let v ← validOfIntroMost v
-    let v ← reorderLCtx v m
     let v := if ml.isNone then (← validOfEqSymm v) else v
+    let v ← validOfExtensionalizeEqFNAt v (m.size - lctx'.length) []
+    let v ← validOfBetaReduce v
+    let v ← validOfIntros v (m.size - lctx'.length)
+    let v ← reorderLCtx v m
     let v ← validOfRevertAll v
     let v ← validOfIntensionalizeEqAt v []
-    let v ← validOfEtaReduceNAt v lctx'.length [false, true]
+    let v ← validOfEtaReduceNAt v m.size [false, true]
     return .some v
 
-  def recognizeDefinitions (vs : Array REntry) : ReifM (Array REntry) := do
-    let mut ret := #[]
-    for v in vs do
-      if let .some v' ← toDefinition? v then
-        trace[auto.lamReif.recognizeDefinitions] "Entry {v} is def-like and is turned into {v'}"
-        ret := ret.push v'
-    return ret
+  def recognizeDefsAndUnfold (vs : Array REntry) : ReifM (Array REntry) := do
+    let mut active := vs
+    let mut passive := #[]
+    while true do
+      let .some back := active.back?
+        | break
+      active := active.pop
+      let .some v' ← toDefinition? back
+        | passive := passive.push back; continue
+      trace[auto.lamReif.recognizeDefinitions] "Entry {back} is def-like and is turned into {v'}"
+      let .valid [] (.app _ (.app _ (.base (.eq _)) lhs) rhs) := v'
+        | throwError "recognizeDefsAndUnfold :: Unexpected definition entry {v'}"
+      -- If the left-hand-side occurs inside the right-hand-side,
+      --   then this definition is recursive and we will not unfold it
+      if rhs.abstractsImp #[lhs] != rhs then
+        passive := passive.push back; continue
+      passive ← passive.mapM (validOfMpAll · v')
+      active ← active.mapM (validOfMpAll · v')
+    return passive
+
+  register_option auto.lamReif.prep.def : Bool := {
+    defValue := true
+    descr := "Recognize and unfold definitions"
+  }
+
+  def preprocess (vs : Array REntry) : ReifM (Array REntry) := do
+    let vs ← vs.mapM skolemizeMostIntoForall
+    let vs ← vs.mapM validOfExtensionalize
+    let vs ← vs.mapM validOfBetaReduce
+    let vs :=
+      (if auto.lamReif.prep.def.get (← getOptions) then
+        ← recognizeDefsAndUnfold vs
+       else
+        vs)
+    let vs ← vs.mapM validOfBetaReduce
+    vs.mapM validOfRevertAll
 
 end CheckerUtils
 
@@ -1409,6 +1456,7 @@ open Embedding.Lam LamReif
       | .validOfExtensionalize pos => return .validOfExtensionalize (← transPos ref pos)
       | .validOfEqSymm pos => return .validOfEqSymm (← transPos ref pos)
       | .validOfMp pos rw => return .validOfMp (← transPos ref pos) (← transPos ref rw)
+      | .validOfMpAll pos rw => return .validOfMpAll (← transPos ref pos) (← transPos ref rw)
       | .validOfCongrArg pos rw => return .validOfCongrArg (← transPos ref pos) (← transPos ref rw)
       | .validOfCongrFun pos rw => return .validOfCongrFun (← transPos ref pos) (← transPos ref rw)
       | .validOfCongr pos rwFn rwArg => return .validOfCongr (← transPos ref pos) (← transPos ref rwFn) (← transPos ref rwArg)

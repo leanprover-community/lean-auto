@@ -1556,6 +1556,26 @@ theorem LamThmEquiv.neSymm?
   LamThmEquiv lval lctx (.base .prop) t t' :=
   fun lctx' => LamEquiv.neSymm? (wft lctx') heq
 
+def LamTerm.mpEq? (lhs rhs : LamTerm) (t : LamTerm) : Option LamTerm :=
+  match t.beq lhs with
+  | true => .some rhs
+  | false => .none
+
+theorem LamTerm.evarBounded_mpEq? : evarBounded (LamTerm.mpEq? lhs rhs) rhs.maxEVarSucc := by
+  intro t t'; dsimp [mpEq?]
+  cases h : t.beq lhs <;> dsimp <;> intro heq <;> cases heq
+  cases LamTerm.eq_of_beq_eq_true h
+  apply Nat.le_max_left
+
+theorem LamGenConv.mpEq?
+  (hequiv : LamThmEquiv lval [] rty lhs rhs) : LamGenConv lval (LamTerm.mpEq? lhs rhs) := by
+  intro t₁ t₂ heq lctx rty wf
+  dsimp [LamTerm.mpEq?] at heq; revert heq
+  cases h : t₁.beq lhs <;> dsimp <;> intro heq <;> cases heq
+  cases LamTerm.eq_of_beq_eq_true h
+  have ⟨wfl, _⟩ := hequiv lctx; rw [pushLCtxs_nil] at wfl
+  cases (LamWF.unique wf wfl).left; apply hequiv
+
 def LamTerm.mp? (rw : LamTerm) (t : LamTerm) : Option LamTerm :=
   match rw with
   | .app _ (.app _ (base (.eq _)) arg') res =>
@@ -1609,6 +1629,48 @@ theorem LamThmEquiv.mp?
   (wft : LamThmWF lval lctx rty t) (Hrw : LamThmValid lval lctx rw)
   (heq : LamTerm.mp? rw t = .some t') : LamThmEquiv lval lctx rty t t' :=
   fun lctx' => LamEquiv.mp? (wft lctx') (Hrw lctx') heq
+
+def LamTerm.mpAll (lhs rhs : LamTerm) (t : LamTerm) : Option LamTerm :=
+  LamTerm.rwGenAll (mpEq? lhs rhs) t
+
+theorem LamGenConv.mpAll
+  (hequiv : LamThmEquiv lval [] s lhs rhs) : LamGenConv lval (LamTerm.mpAll lhs rhs) := by
+  apply LamGenConv.rwGenAll; apply LamGenConv.mpEq? hequiv
+
+theorem LamTerm.evarBounded_mpAll : evarBounded (LamTerm.mpAll lhs rhs) rhs.maxEVarSucc := by
+  apply LamTerm.evarBounded_rwGenAll; apply LamTerm.evarBounded_mpEq?
+
+def LamTerm.mpAll? (rw : LamTerm) (t : LamTerm) : Option LamTerm :=
+  match rw with
+  | .app _ (.app _ (.base (.eq _)) lhs) rhs => mpAll lhs rhs t
+  | _ => .none
+
+theorem LamTerm.evarBounded_mpAll? : evarBounded (LamTerm.mpAll? rw) rw.maxEVarSucc := by
+  dsimp [LamTerm.mpAll?]
+  cases rw <;> try dsimp <;> try apply evarBounded_none
+  case app s fn rhs =>
+    cases fn <;> try dsimp <;> try apply evarBounded_none
+    case app s eqt lhs =>
+      cases eqt <;> try dsimp <;> try apply evarBounded_none
+      case base b =>
+        cases b <;> (try dsimp) <;> try apply evarBounded_none
+        apply evarBounded_le (bound := rhs.maxEVarSucc)
+        case H => apply LamTerm.evarBounded_mpAll
+        case hle => dsimp [maxEVarSucc]; apply Nat.le_max_right
+
+theorem LamGenConv.mpAll?
+  (hvalid : LamThmValid lval [] rw) : LamGenConv lval (LamTerm.mpAll? rw) := by
+  dsimp [LamTerm.mpAll?]
+  cases rw <;> try dsimp <;> try apply LamGenConv.none
+  case app s fn rhs =>
+    cases fn <;> try dsimp <;> try apply LamGenConv.none
+    case app s eqt lhs =>
+      cases eqt <;> try dsimp <;> try apply LamGenConv.none
+      case base b =>
+        cases b <;> (try dsimp) <;> try apply LamGenConv.none
+        apply LamGenConv.mpAll (LamThmEquiv.ofLamThmValid (s:=s) _ _)
+        intro lctx; have ⟨wf, _⟩ := hvalid lctx
+        cases wf.getFn.getFn.getBase; apply hvalid
 
 def LamTerm.congrArg? (t : LamTerm) (rw : LamTerm) : Option LamTerm :=
   match t with
@@ -2000,9 +2062,8 @@ section UnsafeOps
     Determine whether a λ term `t` (within `LamThmValid lval lctx t`) is of the form
     `LamTerm.mkAppN ((.atom i) <|> (.etom i)) [.bvar iₖ₋₁, ⋯, .bvar i₁, .bvar i₀]`
     where `i₀, i₁, ⋯, iₖ₋₁` is a permutation of `0, 1, 2, ⋯, k - 1` and `k`
-    is the length of `lctx`.
-    · If `t` is of the above form, return a list `l` of length `k` where
-      `∀ 0 ≤ j < k, l[iⱼ] = j`
+    is the length of `lctx`. If `t` is of the above form, return a list `l` of
+    length `k` where `∀ 0 ≤ j < k, l[iⱼ] = j`
     · This is an auxiliary function for definition unfolding. If we identify
       equalities in the input formulas with `lhs` or `rhs` being general,
       for example `lhs = LamTerm.mkAppN (.atom i) [.bvar iₖ₋₁, ⋯, .bvar i₁, .bvar i₀]`,
@@ -2011,11 +2072,13 @@ section UnsafeOps
         make it look like a definition of `.atom i`
       · Then, exhaustively unfold `.atom i` in all input formulas using this definition
       · Finally, remove the original equation (i.e. `lhs = rhs`) from the set of input formulas
-      It's easy to see that the above procedure is sound and complete.
+      It's easy to see that the above procedure is sound and complete if
+        `rhs` does not contains `lhs`.
     · Note that the above procedure will not be complete if we relax the condition
         `` `i₀, i₁, ⋯, iₖ₋₁` is a permutation of `0, 1, 2, ⋯, k - 1` ``
-      to
+        to
         `` `i₀, i₁, ⋯, iₖ₋₁` is a permutation of a subsequence of `0, 1, 2, ⋯, k - 1` ``
+        even if we require that `rhs` does not contain `lhs`.
       To see this, consider the following example with two input formulas:
         (Note: `#i` is type atom, `!i` is term atom, `⟨i⟩` is `.bvar i`)
       1. `LamThmValid [#0, #0, #0] (!0 ⟨0⟩ ⟨1⟩ = !1 ⟨0⟩ ⟨1⟩ ⟨0⟩ ⟨2⟩)` (lhs is (relaxed) general)

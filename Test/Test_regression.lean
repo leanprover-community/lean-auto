@@ -392,7 +392,28 @@ section DefinitionRecognition
   example (f : α → α → α) (g : α → α → α) (H : ∀ x y, f y x = g x x) : True := by
     auto
 
+  example (f : α → α → α) (g : α → α → α) (H : (fun x y => f y x) = (fun x y => f x y)) : True := by
+    auto
+
+  example (f : α → α → α) (g : α → α → α) (H : (fun x y => f y x) = (fun x y => g x x)) : True := by
+    auto
+
+  example (f : α → α → α) (g : α → α → α) (H : (fun x y => g x x) = (fun x y => f y x)) : True := by
+    auto
+
   example (f : α → β → γ → δ → ε) (g : α → α → ε) (H : ∀ x t z y, f x y z t = g x x) : True := by
+    auto
+
+  set_option trace.auto.lamReif.printProofs true
+
+  example (a b : α) (f : α → α) (H : f b = a) : f (f b) = f a := by
+    auto
+
+  example (a : α) (f : α → α) (H : f a = a) : f (f a) = a := by
+    auto
+
+  example (f : α → α → α) (g : α → α → α) (H : (fun x y => f y x) = (fun x y => g x x)) :
+    f b a = f c a := by
     auto
 
 end DefinitionRecognition
