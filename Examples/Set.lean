@@ -117,15 +117,12 @@ open Set
 #check mem_iUnion
 #check mem_iInter
 
-set_option maxHeartbeats 10000 in
 example : (s ∩ ⋃ i, A i) = ⋃ i, A i ∩ s := by
   apply Set.ext; auto [mem_inter_iff, mem_iUnion]
 
-set_option maxHeartbeats 10000 in
 example : (⋂ i, A i ∩ B i) = (⋂ i, A i) ∩ ⋂ i, B i := by
   apply Set.ext; auto [mem_inter_iff, mem_iInter]
 
-set_option maxHeartbeats 10000 in
 example : (s ∪ ⋂ i, A i) = ⋂ i, A i ∪ s := by
   apply Set.ext; auto [mem_union, mem_iInter]
 
