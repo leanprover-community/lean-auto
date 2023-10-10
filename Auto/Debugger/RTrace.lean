@@ -4,7 +4,7 @@ open Lean
 namespace Auto.Debugger
 
 initialize
-  registerTraceClass `debugger.rtrace
+  registerTraceClass `auto.debugger.rtrace
 
 /--
   If we're debugging a program, but there are so many trace messages
@@ -136,7 +136,7 @@ def rtrace [Monad m] [MonadLiftT IO m] [MonadTrace m] [MonadRef m] [AddMessageCo
   let state ← @id (IO _) <| RTrace.rtraceState.get
   match state.find? clsName with
   | .some (range, idx) =>
-    if range.contains idx then (addTrace `debugger.rtrace (m!"{clsName} {idx} : " ++ msg))
+    if range.contains idx then (addTrace `auto.debugger.rtrace (m!"{clsName} {idx} : " ++ msg))
     @id (IO _ ) <| RTrace.rtraceState.set (state.insert clsName (range, idx + 1))
   | .none => pure ()
 
