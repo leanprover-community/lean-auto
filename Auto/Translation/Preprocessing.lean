@@ -49,7 +49,7 @@ def unfoldProj (e : Expr) : MetaM Expr :=
   | _ => return e
 
 /-- This function is expensive -/
-partial def preprocessTerm (term : Expr) : MetaM Expr := do
+partial def preprocessExpr (term : Expr) : MetaM Expr := do
   let red (e : Expr) : MetaM TransformStep := do
     let e := e.consumeMData
     let e ← Meta.whnf e
@@ -62,6 +62,28 @@ partial def preprocessTerm (term : Expr) : MetaM Expr := do
     return .continue e
   let term ← Meta.transform term (pre := redProj)
   return term
+
+/--
+  We assume that all defeq facts have the form
+    `∀ (x₁ : ⋯) ⋯ (xₙ : ⋯), c ... = ...`
+  where `c` is a constant. To avoid `whnf` from reducing
+  `c ⋯` (which can happen when e.g. `c` is a recursor), we
+  call `forallTelescope`, then call `Prep.preprocessExpr` on
+  · All the arguments of `c`, and
+  · The right-hand side of the equation
+-/
+def preprocessDefeq (type : Expr) : MetaM (Option Expr) := do
+  let type := Expr.eraseMData type
+  Meta.forallTelescope type fun xs b => do
+    let .app (.app (.app (.const ``Eq lvls) ty) lhs) rhs := b
+      | return .none
+    let ty ← preprocessExpr ty
+    let lhFn := lhs.getAppFn
+    let lhArgs ← lhs.getAppArgs.mapM preprocessExpr
+    let lhs := mkAppN lhFn lhArgs
+    let rhs ← preprocessExpr rhs
+    let eq' := Lean.mkApp3 (.const ``Eq lvls) ty lhs rhs
+    return .some (← mkForallFVars xs eq')
 
 /-- From a user-provided term `stx`, produce a lemma -/
 def elabLemma (stx : Term) : TacticM Lemma :=
@@ -93,7 +115,7 @@ def addRecAsLemma (recVal : RecursorVal) : TacticM (Array Lemma) := do
         let proof ← mkEqRefl expr
         return (← mkLambdaFVars ys proof, ← mkForallFVars ys eq)
       let proof ← instantiateMVars (← mkLambdaFVars xs proof)
-      let eq ← instantiateMVars (← mkLambdaFVars xs eq)
+      let eq ← instantiateMVars (← mkForallFVars xs eq)
       return ⟨proof, eq, recVal.levelParams.toArray⟩
   return Array.mk res
 
@@ -127,9 +149,27 @@ def getConstUnfoldInfo (name : Name) : MetaM ConstUnfoldInfo := do
     | throwError "getConstUnfoldInfo :: Unknown declaration {name}"
   let .some val := ci.value?
     | throwError "getConstUnfoldInfo :: {name} is not a definition, thus cannot be unfolded"
-  let val ← preprocessTerm val
+  let val ← preprocessExpr val
   let params := ci.levelParams
   return ⟨name, val, ⟨params⟩⟩
+
+/--
+  Unfold constants occurring in expression `e`
+  `unfolds` should satisfy the following constraint:
+    ∀ i j, i < j → `unfolds[j].name` does not occur in `unfolds[i].val`
+-/
+def unfoldConsts (unfolds : Array Prep.ConstUnfoldInfo) (e : Expr) : Expr := Id.run <| do
+  let mut e := e
+  for ⟨uiname, val, params⟩ in unfolds do
+    e := e.replace (fun e =>
+      match e with
+      | .const name lvls =>
+        if name == uiname then
+          val.instantiateLevelParams params.data lvls
+        else
+          .none
+      | _ => .none)
+  return e
 
 end Prep
 

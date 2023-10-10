@@ -230,6 +230,12 @@ section UnfoldConst
   set_option trace.auto.printLemmas true
   example : True := by auto d[Nat.rec]
 
+  example : ∀ b, (!b) = true ↔ b = false := by
+  -- Typeclass problem
+  have em : ∀ (b : Bool), b = true ∨ b = false := by
+    intro b; cases b <;> decide
+  auto [em] u[not, cond.match_1] d[Bool.rec]
+
 end UnfoldConst
 
 -- First Order
@@ -378,7 +384,7 @@ end TypeDefeq
 
 section DefinitionRecognition
 
-  set_option trace.auto.lamReif.prep.defs true
+  set_option trace.auto.lamReif.prep.def true
 
   example (a b : α) (f : α → α) (H : f b = a) : True := by
     auto
@@ -417,6 +423,19 @@ section DefinitionRecognition
     auto
 
 end DefinitionRecognition
+
+-- Ad-hoc support
+
+section Adhoc
+
+  -- If-then-else
+  example (h₁ : if 2 < 3 then False else True) (h₂ : 2 < 3) : False := by
+    auto
+
+  example (h₁ : if 2 > 3 then True else False) (h₂ : ¬ 2 > 3) : False := by
+    auto
+
+end Adhoc
 
 -- Issues
 

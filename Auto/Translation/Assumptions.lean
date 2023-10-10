@@ -17,6 +17,14 @@ instance : ToMessageData Lemma where
   toMessageData lem := MessageData.compose
     m!"⦗⦗ {lem.proof} : {lem.type} @@ " (.compose (MessageData.array lem.params toMessageData) m!" ⦘⦘")
 
+/-- Create a `Lemma` out of a constant, given the name of the constant -/
+def Lemma.ofConst (name : Name) : CoreM Lemma := do
+  let .some decl := (← getEnv).find? name
+    | throwError "Lemma.ofConst :: Unknown constant {name}"
+  let type := decl.type
+  let params := decl.levelParams
+  return ⟨.const name (params.map Level.param), type, ⟨params⟩⟩
+
 /-- Check whether `lem₁` subsumes `lem₂` -/
 def Lemma.subsumeQuick (lem₁ lem₂ : Lemma) : MetaM Bool := Meta.withNewMCtxDepth <| do
   let paramInst₁ ← lem₁.params.mapM (fun _ => Meta.mkFreshLevelMVar)

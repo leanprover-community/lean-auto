@@ -143,21 +143,31 @@ def collectDefeqLemmas (names : Array Name) : TacticM (Array Lemma) :=
   Meta.withNewMCtxDepth do
     let lemmas ← names.concatMapM Prep.elabDefEq
     lemmas.mapM (fun (⟨proof, type, params⟩ : Lemma) => do
-      let type ← Prep.preprocessTerm (← instantiateMVars type)
+      let type ← instantiateMVars type
       return ⟨proof, type, params⟩)
 
-def unfoldConstAndPreprocessLemma (unfolds : Array Prep.ConstUnfoldInfo) (lem : Lemma) : TacticM Lemma := do
-  let mut type ← Prep.preprocessTerm (← instantiateMVars lem.type)
-  for ⟨uiname, val, params⟩ in unfolds do
-    type := type.replace (fun e =>
-      match e with
-      | .const name lvls =>
-        if name == uiname then
-          val.instantiateLevelParams params.data lvls
-        else
-          .none
-      | _ => .none)
-  type ← Core.betaReduce (← instantiateMVars type)
+def unfoldConstAndPreprocessLemma (unfolds : Array Prep.ConstUnfoldInfo) (lem : Lemma) : MetaM Lemma := do
+  let type ← Prep.preprocessExpr (← instantiateMVars lem.type)
+  let type := Prep.unfoldConsts unfolds type
+  let type ← Core.betaReduce (← instantiateMVars type)
+  let lem := {lem with type := type}
+  let lem ← lem.reorderForallInstDep
+  return lem
+
+/--
+  We assume that all defeq facts have the form
+    `∀ (x₁ : ⋯) ⋯ (xₙ : ⋯), c ... = ...`
+  where `c` is a constant. To avoid `whnf` from reducing
+  `c`, we call `forallTelescope`, then call `Prep.preprocessExpr`
+  on
+  · All the arguments of `c`, and
+  · The right-hand side of the equation
+-/
+def unfoldConstAndPreprocessDefeq (unfolds : Array Prep.ConstUnfoldInfo) (lem : Lemma) : MetaM Lemma := do
+  let .some type ← Prep.preprocessDefeq (← instantiateMVars lem.type)
+    | throwError "unfoldConstAndPreprocessDefeq :: Unrecognized definitional equation {lem.type}"
+  let type := Prep.unfoldConsts unfolds type
+  let type ← Core.betaReduce (← instantiateMVars type)
   let lem := {lem with type := type}
   let lem ← lem.reorderForallInstDep
   return lem
@@ -187,18 +197,18 @@ def collectAllLemmas (hintstx : TSyntax ``hints) (unfolds : TSyntax `Auto.unfold
   let defeqNames ← parseDefeqs defeqs
   let startTime ← IO.monoMsNow
   let lctxLemmas ← collectLctxLemmas inputHints.lctxhyps ngoalAndBinders
-  let lctxLemmas ← lctxLemmas.mapM (unfoldConstAndPreprocessLemma unfoldInfos)
+  let lctxLemmas ← lctxLemmas.mapM (m:=MetaM) (unfoldConstAndPreprocessLemma unfoldInfos)
   traceLemmas "Lemmas collected from local context:" lctxLemmas
   checkDuplicatedFact inputHints.terms
   let userLemmas ← collectUserLemmas inputHints.terms
-  let userLemmas ← userLemmas.mapM (unfoldConstAndPreprocessLemma unfoldInfos)
+  let userLemmas ← userLemmas.mapM (m:=MetaM) (unfoldConstAndPreprocessLemma unfoldInfos)
   traceLemmas "Lemmas collected from user-provided terms:" userLemmas
   let defeqLemmas ← collectDefeqLemmas defeqNames
-  let defeqLemmas ← defeqLemmas.mapM (unfoldConstAndPreprocessLemma unfoldInfos)
+  let defeqLemmas ← defeqLemmas.mapM (m:=MetaM) (unfoldConstAndPreprocessDefeq unfoldInfos)
   traceLemmas "Lemmas collected from user-provided defeq hints:" defeqLemmas
   trace[auto.tactic] "Preprocessing took {(← IO.monoMsNow) - startTime}ms"
   let inhFacts ← Inhabitation.getInhFactsFromLCtx
-  let inhFacts ← inhFacts.mapM (unfoldConstAndPreprocessLemma unfoldInfos)
+  let inhFacts ← inhFacts.mapM (m:=MetaM) (unfoldConstAndPreprocessLemma unfoldInfos)
   traceLemmas "Inhabitation lemmas :" inhFacts
   return (lctxLemmas ++ userLemmas ++ defeqLemmas, inhFacts)
 
@@ -206,6 +216,8 @@ def collectAllLemmas (hintstx : TSyntax ``hints) (unfolds : TSyntax `Auto.unfold
 def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : Array Lemma) : TacticM Result := do
   let instr ← parseInstr instrstx
   let declName? ← Elab.Term.getDeclName?
+  -- Add auxiliary lemmas
+  let lemmas := lemmas.append (← auxLemmas lemmas)
   match instr with
   | .none =>
     let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) : LamReif.ReifM Expr := (do

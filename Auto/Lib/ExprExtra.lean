@@ -4,6 +4,15 @@ open Lean Elab Command
 
 namespace Auto
 
+def Expr.eraseMData : Expr → Expr
+| .app fn arg => .app (eraseMData fn) (eraseMData arg)
+| .lam name ty body bi => .lam name (eraseMData ty) (eraseMData body) bi
+| .forallE name ty body bi => .forallE name (eraseMData ty) (eraseMData body) bi
+| .letE name type value body nonDep => .letE name (eraseMData type) (eraseMData value) (eraseMData body) nonDep
+| .mdata _ expr => expr
+| .proj typeName idx struct => .proj typeName idx (eraseMData struct)
+| e => e
+
 def Expr.hasCurrentDepthLevelMVar : Expr → MetaM Bool
 | .sort l => Level.hasCurrentDepthLevelMVar l
 | .const _ ls => ls.anyM Level.hasCurrentDepthLevelMVar
