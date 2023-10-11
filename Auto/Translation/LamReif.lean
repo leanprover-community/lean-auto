@@ -426,6 +426,9 @@ partial def updownFunc (s : LamSort) : ReifM (Expr × Expr × Expr × Expr) :=
     | .prop =>
       let ty := Expr.sort .zero
       return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
+    | .bool =>
+      let ty := Expr.const ``Bool []
+      return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
     | .int =>
       let ty := Expr.const ``Int []
       return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
@@ -725,6 +728,37 @@ section Checker
     let v ← validOfIntros v args.size
     validOfInstantiateRev v args
 
+  def validOfAndLeft (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.i (.validOfAndLeft p occ)) .none
+      | throwError "validOfAndLeft :: Unexpected evaluation result"
+    return re
+
+  def validOfAndRight (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.i (.validOfAndRight p occ)) .none
+      | throwError "validOfAndRight :: Unexpected evaluation result"
+    return re
+
+  /-- Exhaustively decompose `∧` at position `occ` -/
+  partial def decomposeAnd (v : REntry) (occ : List Bool) : ReifM (Array REntry) := do
+    let .valid _ t := v
+      | throwError "decomposeAnd :: Unexpected entry"
+    if !(t.isSign true occ) then throwError "decomposeAnd :: {occ} is not a positive position of {t}"
+    let .some sub := t.getPos occ
+      | throwError "decomposeAnd :: Unexpected error"
+    if sub.getAppFn == .base .and && sub.getAppArgs.length == 2 then
+      let left ← validOfAndLeft v occ
+      let right ← validOfAndRight v occ
+      return (← decomposeAnd left occ).append (← decomposeAnd right occ)
+    else
+      return #[v]
+
+  def boolFacts : ReifM REntry := do
+    let (_, .addEntry re) ← newChkStep (.f .boolFacts) .none
+      | throwError "boolFacts :: Unexpected evaluation result"
+    return re
+
   def skolemize (exV : REntry) : ReifM REntry := do
     let eidx ← getMaxEVarSucc
     let ex ← lookupREntryPos! exV
@@ -854,6 +888,14 @@ section CheckerUtils
       trace[auto.lamReif.prep.printResult] "{v}"
     return vs
 
+  def auxLemmas (vs : Array REntry) : ReifM (Array REntry) := do
+    let mut ret := #[]
+    -- Boolean facts
+    if vs.any (fun re => re.containsSort (.base .bool)) then
+      let factsConj ← boolFacts
+      ret := ret.append (← decomposeAnd factsConj [])
+    return ret
+
 end CheckerUtils
 
 /--
@@ -893,6 +935,7 @@ def processTypeExpr (e : Expr) : ReifM LamSort := do
       return .base .prop
     else
       newTypeExpr e
+  | .const ``Bool [] => return .base .bool
   | .const ``Int [] => return .base .int
   | .const ``Real [] => return .base .real
   | .app (.const ``Bitvec []) (.lit (.natVal n)) => return .base (.bv n)
@@ -923,6 +966,11 @@ def processTermExprAux (e : Expr) : ReifM LamTerm :=
   | .const ``Iff [] => return .base .iff
   -- **TODO: Integer, Real number, Bit vector**
   -- `α` is the original (un-lifted) type
+  | .const ``true [] => return .base .trueb
+  | .const ``false [] => return .base .falseb
+  | .const ``not [] => return .base .notb
+  | .const ``and [] => return .base .andb
+  | .const ``or [] => return .base .orb
   | .app (.const ``Eq _) α =>
     return .base (.eq (← reifType α))
   | .app (.const ``Embedding.forallF _) α =>
@@ -1480,6 +1528,9 @@ open Embedding.Lam LamReif
       match cs with
       | .skolemize pos => return .skolemize (← transPos ref pos)
       | .define t => return .define (← transLamTerm ref t)
+    | .f cs => ChkStep.f <$>
+      match cs with
+      | .boolFacts => return .boolFacts
     | .i cs => ChkStep.i <$>
       match cs with
       | .validOfBVarLower pv pn => return .validOfBVarLower (← transPos ref pv) (← transPos ref pn)
@@ -1489,6 +1540,8 @@ open Embedding.Lam LamReif
       | .validOfInstantiate1 pos arg => return .validOfInstantiate1 (← transPos ref pos) (← transLamTerm ref arg)
       | .validOfInstantiate pos args => return .validOfInstantiate (← transPos ref pos) (← args.mapM (transLamTerm ref))
       | .validOfInstantiateRev pos args => return .validOfInstantiateRev (← transPos ref pos) (← args.mapM (transLamTerm ref))
+      | .validOfAndLeft pos occ => return .validOfAndLeft (← transPos ref pos) occ
+      | .validOfAndRight pos occ => return .validOfAndRight (← transPos ref pos) occ
     | .l cs => ChkStep.l <$>
       match cs with
       | .validOfIntro1F pos => return .validOfIntro1F (← transPos ref pos)

@@ -12,6 +12,7 @@ open Embedding.Lam
 
 def transLamBaseSort : LamBaseSort → String
 | .prop => "$o"
+| .bool => "$o"
 | .int  => "$int"
 | .real => "$real"
 | .bv n => s!"s_bv{n}"
@@ -36,6 +37,11 @@ def transLamBaseTerm : LamBaseTerm → Except String String
 | .or         => .ok s!"(|)"
 | .imp        => .ok s!"(=>)"
 | .iff        => .ok s!"(=)" -- Zipperposition seems buggy on (<=>)
+| .trueb      => .ok s!"$true"
+| .falseb     => .ok s!"$false"
+| .notb       => .ok s!"(~)"
+| .andb       => .ok s!"(&)"
+| .orb        => .ok s!"(|)"
 | .intVal n   => .ok s!"{n}"
 | .realVal cr => .ok s!"{transCstrReal cr}"
 | .bvVal v    => .ok s!"t_bv{transBitvec v}"

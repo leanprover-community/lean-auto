@@ -25,6 +25,7 @@ deriving Inhabited, Hashable, BEq
 
 private def lamBaseSort2SSort : LamBaseSort → SSort
 | .prop => .app (.symb "Bool") #[]
+| .bool => .app (.symb "Bool") #[]
 | .int  => .app (.symb "Int") #[]
 | .real => .app (.symb "Real") #[]
 | .bv n => .app (.indexed "BitVec" (.inr n)) #[]
@@ -51,10 +52,13 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .or     => return .qIdApp (QualIdent.ofString "or") #[arg1, arg2]
 | .imp    => return .qIdApp (QualIdent.ofString "=>") #[arg1, arg2]
 | .iff    => return .qIdApp (QualIdent.ofString "not") #[.qIdApp (QualIdent.ofString "xor") #[arg1, arg2]]
+| .andb   => return .qIdApp (QualIdent.ofString "and") #[arg1, arg2]
+| .orb    => return .qIdApp (QualIdent.ofString "or") #[arg1, arg2]
 | t       => throwError "lamTerm2STerm :: The arity of {repr t} is not 2"
 
 private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamAtom STerm
 | .not => return .qIdApp (QualIdent.ofString "not") #[arg]
+| .notb => return .qIdApp (QualIdent.ofString "not") #[arg]
 | t    => throwError "lamTerm2STerm :: The arity of {repr t} is not 1"
 
 private def Int2STerm : Int → STerm
@@ -70,6 +74,8 @@ private def Bitvec2STerm (bv : List Bool) : STerm := .sConst (.binary bv)
 private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtom STerm
 | .trueE     => return .qIdApp (QualIdent.ofString "true") #[]
 | .falseE    => return .qIdApp (QualIdent.ofString "false") #[]
+| .trueb     => return .qIdApp (QualIdent.ofString "true") #[]
+| .falseb    => return .qIdApp (QualIdent.ofString "false") #[]
 | .intVal n  => return Int2STerm n
 | .realVal c => return CstrReal2STerm c
 | .bvVal bv  => return Bitvec2STerm bv

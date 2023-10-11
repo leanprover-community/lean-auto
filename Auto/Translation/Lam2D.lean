@@ -88,6 +88,7 @@ def interpLamSortAsUnlifted : LamSort → ExternM Expr
 | .base b =>
   match b with
   | .prop => return .sort .zero
+  | .bool => return .const ``Bool []
   | .int  => return .const ``Int []
   | .real => return .const ``Real []
   | .bv n => return .app (.const ``Bitvec []) (.lit (.natVal n))
@@ -137,6 +138,11 @@ def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
     | throwError "interpLamBaseTermAsUnlifted :: Unexpected error"
   return impVal.value.instantiateLevelParams impVal.levelParams [.zero, .zero]
 | .iff        => return .const ``Iff []
+| .trueb      => return .const ``true []
+| .falseb     => return .const ``false []
+| .notb       => return .const ``not []
+| .andb       => return .const ``and []
+| .orb        => return .const ``or []
 | .intVal _   => throwError "Not implemented"
 | .realVal c  => return interpCstrRealAsUnlifted c
 | .bvVal _    => throwError "Not implemented"

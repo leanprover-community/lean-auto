@@ -230,11 +230,13 @@ section UnfoldConst
   set_option trace.auto.printLemmas true
   example : True := by auto d[Nat.rec]
 
-  example : ∀ b, (!b) = true ↔ b = false := by
-  -- Typeclass problem
-  have em : ∀ (b : Bool), b = true ∨ b = false := by
-    intro b; cases b <;> decide
-  auto [em] u[not, cond.match_1] d[Bool.rec]
+  def not' (b : Bool) :=
+    match b with
+    | true => false
+    | false => true
+
+  example : ∀ b, (not' b) = true ↔ b = false := by
+    auto u[not', not'.match_1] d[Bool.rec]
 
 end UnfoldConst
 
@@ -433,6 +435,18 @@ section Adhoc
     auto
 
   example (h₁ : if 2 > 3 then True else False) (h₂ : ¬ 2 > 3) : False := by
+    auto
+
+  -- Boolean
+  example : true ≠ false := by
+    auto
+
+  example : (!a && !b) = !(a || b) := by
+    auto
+
+  example
+    (a b : α) [inst : Decidable (a = b)]
+    (h : if (a = b) then True else a = b) : a = b := by
     auto
 
 end Adhoc

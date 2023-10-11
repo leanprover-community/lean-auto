@@ -227,6 +227,7 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
       let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
         (fun (s, _) => Embedding.Lam.REntry.nonempty s)
       let exportFacts ← LamReif.preprocess exportFacts
+      let exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)
       -- ! tptp
       try
         let lamVarTy := (← LamReif.getVarVal).map Prod.snd

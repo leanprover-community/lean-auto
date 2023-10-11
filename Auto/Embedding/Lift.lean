@@ -21,6 +21,15 @@ def orLift.{u} (p q : GLift.{1, u} Prop) :=
 def iffLift.{u} (p q : GLift.{1, u} Prop) :=
   GLift.up (Iff p.down q.down)
 
+def notbLift.{u} (p : GLift.{1, u} Bool) :=
+  GLift.up (not p.down)
+
+def andbLift.{u} (p q : GLift.{1, u} Bool) :=
+  GLift.up (p.down && q.down)
+
+def orbLift.{u} (p q : GLift.{1, u} Bool) :=
+  GLift.up (p.down || q.down)
+
 @[reducible] def ImpF.{u, v} (p : Sort u) (q : Sort v) := p → q
 
 def impLift.{u}

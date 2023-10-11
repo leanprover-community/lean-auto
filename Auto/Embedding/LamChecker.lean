@@ -70,6 +70,12 @@ instance : LawfulBEq REntry where
   eq_of_beq := REntry.eq_of_beq_eq_true
   rfl := REntry.beq_refl
 
+def REntry.containsSort (re : REntry) (s : LamSort) : Bool :=
+  match re with
+  | .wf ss s' t => ss.any (fun s' => s'.contains s) || s'.contains s || t.containsSort s
+  | .valid ss t => ss.any (fun s' => s'.contains s) || t.containsSort s
+  | .nonempty s' => s'.contains s
+
 /--
   Table of valid propositions and well-formed formulas
   Note that `Auto.BinTree α` is equivalent to `Nat → Option α`,
@@ -493,6 +499,10 @@ inductive EtomStep where
   | define (t : LamTerm) : EtomStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
+inductive FactStep where
+  | boolFacts : FactStep
+  deriving Inhabited, Hashable, BEq, Lean.ToExpr
+
 inductive InferenceStep where
   /--
     If `t` has no loose bvar `0` and `s` is inhabited (pn), then
@@ -521,6 +531,8 @@ inductive InferenceStep where
       instantiate bound variables occurring in `args.reverse[i]`
   -/
   | validOfInstantiateRev (pos : Nat) (args : List LamTerm) : InferenceStep
+  | validOfAndLeft (pos : Nat) (occ : List Bool) : InferenceStep
+  | validOfAndRight (pos : Nat) (occ : List Bool) : InferenceStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
 inductive LCtxStep where
@@ -554,6 +566,7 @@ inductive ChkStep where
   | c : ConvStep → ChkStep
   | ca : ConvAtStep → ChkStep
   | e : EtomStep → ChkStep
+  | f : FactStep → ChkStep
   | i : InferenceStep → ChkStep
   | l : LCtxStep → ChkStep
   | n : NonemptyStep → ChkStep
@@ -587,6 +600,9 @@ def EtomStep.toString : EtomStep → String
 | .skolemize pos => s!"skolemize {pos}"
 | .define t => s!"define {t}"
 
+def FactStep.toString : FactStep → String
+| .boolFacts => s!"boolFacts"
+
 def InferenceStep.toString : InferenceStep → String
 | .validOfBVarLower pv pn => s!"validOfBVarLower {pv} {pn}"
 | .validOfBVarLowers pv pns => s!"validOfBVarLowers {pv} {pns}"
@@ -595,6 +611,8 @@ def InferenceStep.toString : InferenceStep → String
 | .validOfInstantiate1 pos arg => s!"validOfInstantiate1 {pos} {arg}"
 | .validOfInstantiate pos args => s!"validOfInstantiate {pos} {args}"
 | .validOfInstantiateRev pos args => s!"validOfInstantiateRev {pos} {args}"
+| .validOfAndLeft pos occ => s!"validOfAndLeft {pos} {occ}"
+| .validOfAndRight pos occ => s!"validOfAndRight {pos} {occ}"
 
 def LCtxStep.toString : LCtxStep → String
 | .validOfIntro1F pos => s!"validOfIntro1F {pos}"
@@ -620,6 +638,7 @@ def ChkStep.toString : ChkStep → String
 | .c s  => ConvStep.toString s
 | .ca s => ConvAtStep.toString s
 | .e s  => EtomStep.toString s
+| .f s  => FactStep.toString s
 | .i s  => InferenceStep.toString s
 | .l s  => LCtxStep.toString s
 | .n s  => NonemptyStep.toString s
@@ -885,6 +904,9 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
     | false => .fail
   | .none => .fail
 
+@[reducible] def FactStep.eval : (cs : FactStep) → EvalResult
+| .boolFacts => .addEntry (.valid [] LamTerm.boolFacts)
+
 @[reducible] def InferenceStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : InferenceStep) → EvalResult
 | .validOfBVarLower pv pn =>
   match r.getValid pv with
@@ -954,6 +976,20 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
   match r.getValid pos with
   | .some (lctx, t) =>
     evalValidOfInstantiate r.maxEVarSucc ⟨lvt, lit, r.toLamEVarTy⟩ lctx t args.reverse
+  | .none => .fail
+| .validOfAndLeft pos occ =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    match LamTerm.rwGenAtIfSign true occ LamTerm.andLeft? t with
+    | .some t' => .addEntry (.valid lctx t')
+    | .none => .fail
+  | .none => .fail
+| .validOfAndRight pos occ =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    match LamTerm.rwGenAtIfSign true occ LamTerm.andRight? t with
+    | .some t' => .addEntry (.valid lctx t')
+    | .none => .fail
   | .none => .fail
 
 @[reducible] def LCtxStep.eval (r : RTable) : (cs : LCtxStep) → EvalResult
@@ -1031,6 +1067,7 @@ def ChkStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : ChkStep) → E
 | .c s  => ConvStep.eval r s
 | .ca s => ConvAtStep.eval r s
 | .e s  => EtomStep.eval lvt lit r s
+| .f s  => FactStep.eval s
 | .i s  => InferenceStep.eval lvt lit r s
 | .l s  => LCtxStep.eval r s
 | .n s  => NonemptyStep.eval lvt r s
@@ -1444,6 +1481,13 @@ theorem EtomStep.eval_correct
     | false => exact True.intro
   | .none => exact True.intro
 
+theorem FactStep.eval_correct
+  (r : RTable) (cv : CVal.{u} r.lamEVarTy):
+  (cs : FactStep) → EvalResult.correct r cv cs.eval
+| .boolFacts => by
+  dsimp [eval]; apply And.intro LamThmValid.boolFacts
+  rw [LamTerm.maxEVarSucc_boolFacts]; apply Nat.zero_le
+
 theorem InferenceStep.eval_correct
   (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
   (cs : InferenceStep) → EvalResult.correct r cv (cs.eval cv.toLamVarTy cv.toLamILTy r)
@@ -1575,6 +1619,46 @@ theorem InferenceStep.eval_correct
   | .some (lctx, t) =>
     let h' := RTable.getValid_correct inv h
     apply evalValidOfInstantiate_correct _ h'
+  | .none => exact True.intro
+| .validOfAndLeft pos occ => by
+  dsimp [eval]
+  match h₁ : r.getValid pos with
+  | .some (lctx, t) =>
+    dsimp
+    match h₂ : LamTerm.rwGenAtIfSign true occ LamTerm.andLeft? t with
+    | .some t' =>
+      dsimp; have h₁' := RTable.getValid_correct inv h₁
+      apply ChkStep.eval_correct_validAux h₁'
+      case vimp =>
+        intro hv lctx'
+        have hv' := hv lctx'; revert hv'; apply LamValid.impLift
+        apply LamGenModify.rwGenAtIfSign (weaken?':=true) LamGenModify.andLeft? _ _ h₂
+        apply LamThmWF.ofLamThmValid hv
+      case condimp =>
+        intro hcond; apply Nat.le_trans (Nat.le_trans (m:=max 0 t.maxEVarSucc) _ _) hcond
+        apply LamTerm.evarBounded_rwGenAtIfSign LamTerm.evarBounded_andLeft? _ _ h₂
+        rw [Nat.max_zero_left]; apply Nat.le_refl
+    | .none => exact True.intro
+  | .none => exact True.intro
+| .validOfAndRight pos occ => by
+  dsimp [eval]
+  match h₁ : r.getValid pos with
+  | .some (lctx, t) =>
+    dsimp
+    match h₂ : LamTerm.rwGenAtIfSign true occ LamTerm.andRight? t with
+    | .some t' =>
+      dsimp; have h₁' := RTable.getValid_correct inv h₁
+      apply ChkStep.eval_correct_validAux h₁'
+      case vimp =>
+        intro hv lctx'
+        have hv' := hv lctx'; revert hv'; apply LamValid.impLift
+        apply LamGenModify.rwGenAtIfSign (weaken?':=true) LamGenModify.andRight? _ _ h₂
+        apply LamThmWF.ofLamThmValid hv
+      case condimp =>
+        intro hcond; apply Nat.le_trans (Nat.le_trans (m:=max 0 t.maxEVarSucc) _ _) hcond
+        apply LamTerm.evarBounded_rwGenAtIfSign LamTerm.evarBounded_andRight? _ _ h₂
+        rw [Nat.max_zero_left]; apply Nat.le_refl
+    | .none => exact True.intro
   | .none => exact True.intro
 
 theorem ConvAtStep.eval_correct
@@ -1901,6 +1985,7 @@ theorem ChkStep.eval_correct
 | .c s  => ConvStep.eval_correct r cv inv s
 | .ca s => ConvAtStep.eval_correct r cv inv s
 | .e s  => EtomStep.eval_correct r cv inv s
+| .f s  => FactStep.eval_correct r cv s
 | .i s  => InferenceStep.eval_correct r cv inv s
 | .l s  => LCtxStep.eval_correct r cv inv s
 | .n s  => NonemptyStep.eval_correct r cv s

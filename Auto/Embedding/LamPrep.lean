@@ -2,6 +2,44 @@ import Auto.Embedding.LamConv
 
 namespace Auto.Embedding.Lam
 
+def LamTerm.andLeft? (t : LamTerm) : Option LamTerm :=
+  match t with
+  | .app _ (.app _ (.base .and) lhs) _ => lhs
+  | _ => .none
+
+theorem LamTerm.evarBounded_andLeft? : evarBounded andLeft? 0 := by
+  intro t t' heq
+  match t, heq with
+  | .app _ (.app _ (.base .and) _) _, Eq.refl _ =>
+    dsimp [maxEVarSucc]; simp [Nat.max, Nat.max_zero_left]
+    apply Nat.le_max_left
+
+theorem LamGenModify.andLeft? : LamGenModify lval LamTerm.andLeft? true := by
+  intro t₁ t₂ heq lctx hwf; dsimp
+  match t₁, heq with
+  | .app _ (.app _ (.base .and) _) _, Eq.refl _ =>
+    cases hwf.getFn.getFn.getBase
+    apply LamValid.and_left hwf.getFn.getArg hwf.getArg
+
+def LamTerm.andRight? (t : LamTerm) : Option LamTerm :=
+  match t with
+  | .app _ (.app _ (.base .and) _) rhs => rhs
+  | _ => .none
+
+theorem LamTerm.evarBounded_andRight? : evarBounded andRight? 0 := by
+  intro t t' heq
+  match t, heq with
+  | .app _ (.app _ (.base .and) _) _, Eq.refl _ =>
+    dsimp [maxEVarSucc]; simp [Nat.max, Nat.max_zero_left]
+    apply Nat.le_max_right
+
+theorem LamGenModify.andRight? : LamGenModify lval LamTerm.andRight? true := by
+  intro t₁ t₂ heq lctx hwf; dsimp
+  match t₁, heq with
+  | .app _ (.app _ (.base .and) _) _, Eq.refl _ =>
+    cases hwf.getFn.getFn.getBase
+    apply LamValid.and_right hwf.getFn.getArg hwf.getArg
+
 theorem eq_not_of_ne (h : a ≠ b) : a = (¬ b) :=
   propext (Iff.intro
     (fun ha hb => h (Eq.trans (eq_true ha) (eq_true hb).symm))
@@ -11,8 +49,6 @@ theorem ne_of_eq_not (h : a = (¬ b)) : a ≠ b := fun h' =>
   have hb : b := Classical.byContradiction (fun nb => nb (Eq.mp h' (Eq.mp h.symm nb)))
   have hnb : ¬ b := Eq.mp h (Eq.mp h'.symm hb)
   hnb hb
-
-def LamTerm.equalize (t : LamTerm) : LamTerm := .mkEq (.base .prop) t (.base .trueE)
 
 theorem LamEquiv.not_true_equiv_false :
   LamEquiv lval lctx (.base .prop) (.mkNot (.base .trueE)) (.base .falseE) := by
@@ -69,6 +105,8 @@ theorem LamThmEquiv.prop_ne_equiv_eq_not?
   (heq : LamTerm.prop_ne_equiv_eq_not? t = .some t') :
   LamThmEquiv lval lctx (.base .prop) t t' :=
   fun lctx' => LamEquiv.prop_ne_equiv_eq_not? (wft lctx') heq
+
+def LamTerm.equalize (t : LamTerm) : LamTerm := .mkEq (.base .prop) t (.base .trueE)
 
 theorem LamTerm.maxEVarSucc_equalize : (LamTerm.equalize t).maxEVarSucc = t.maxEVarSucc := by
   simp [maxEVarSucc, Nat.max, Nat.max_zero_left, Nat.max_zero_right]
