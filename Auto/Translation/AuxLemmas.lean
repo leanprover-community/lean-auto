@@ -19,6 +19,11 @@ def iteLemmas : CoreM (Array Lemma) := do
   let fl ← Lemma.ofConst ``ite_eq_false
   return #[tl, fl]
 
+def decideLemmas : CoreM (Array Lemma) := do
+  let tl ← Lemma.ofConst ``decide_eq_true
+  let fl ← Lemma.ofConst ``decide_eq_false
+  return #[tl, fl]
+
 /--
   Given an array of lemmas collected from the user input, return
     the array of lemmas that should be added in order to help
@@ -29,6 +34,9 @@ def auxLemmas (lemmas : Array Lemma) : CoreM (Array Lemma) := do
   -- Add `iteLemmas`
   if lemmas.any (fun ⟨_, e, _⟩ => (e.find? (fun sub => sub.constName? = .some ``ite)).isSome) then
     ret := ret.append (← iteLemmas)
+  -- Add `decideLemmas`
+  if lemmas.any (fun ⟨_, e, _⟩ => (e.find? (fun sub => sub.constName? = .some ``decide)).isSome) then
+    ret := ret.append (← decideLemmas)
   return ret
 
 end Auto

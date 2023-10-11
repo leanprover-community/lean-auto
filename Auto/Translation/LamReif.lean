@@ -253,7 +253,6 @@ def lookupChkStepResult! (cs : ChkStep) : ReifM EvalResult := do
   else
     throwError "lookupChkStepEtom! :: ChkStep {cs} did not produce new etom"
 
-
 def lookupEtomChkStep! (eidx : Nat) : ReifM ChkStep := do
   if let .some c := (← getEtomChkStep).find? eidx then
     return c
@@ -793,6 +792,18 @@ section Checker
       let _ ← nonemptyOfEtom eidx
     return .valid [] t
 
+  def validOfPropNeEquivEqNot (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.p .validOfPropNeEquivEqNot p occ) .none
+      | throwError "validOfPropNeEquivEqNot :: Unexpected evaluation result"
+    return re
+
+  def validOfPropext (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.p .validOfPropext p occ) .none
+      | throwError "validOfPropext :: Unexpected evaluation result"
+    return re
+
 end Checker
 
 section CheckerUtils
@@ -829,8 +840,10 @@ section CheckerUtils
       match introed.intro1? with
       | .some (s, i) => introed := i; lctx' := s :: lctx'
       | .none => break
-    let .app _ (.app _ (.base (.eq _)) lhs) rhs := introed
+    let .app _ (.app _ (.base head) lhs) rhs := introed
       | return .none
+    if !head.isEq && !(head == .iff) then
+      return .none
     let ml := lhs.getLamBody.isGeneral (lctx'.length + lhs.getLamTys.length)
     let mr := rhs.getLamBody.isGeneral (lctx'.length + rhs.getLamTys.length)
     if ml.isNone && mr.isNone then return .none
@@ -838,7 +851,8 @@ section CheckerUtils
       | throwError "toDefinition? :: Unexpected error"
     let v ← validOfBetaReduce v
     let v ← validOfIntroMost v
-    let v := if ml.isNone then (← validOfEqSymm v) else v
+    let v ← (do if (head == .iff) then validOfPropext v [] else pure v)
+    let v ← (do if ml.isNone then validOfEqSymm v else pure v)
     let v ← validOfExtensionalizeEqFNAt v (m.size - lctx'.length) []
     let v ← validOfBetaReduce v
     let v ← validOfIntros v (m.size - lctx'.length)
@@ -857,7 +871,7 @@ section CheckerUtils
       active := active.pop
       let .some v' ← toDefinition? back
         | passive := passive.push back; continue
-      trace[auto.lamReif.def] "Entry {back} is def-like and is turned into {v'}"
+      trace[auto.lamReif.prep.def] "Entry {back} is def-like and is turned into {v'}"
       let .valid [] (.app _ (.app _ (.base (.eq _)) lhs) rhs) := v'
         | throwError "recognizeDefsAndUnfold :: Unexpected definition entry {v'}"
       -- If the left-hand-side occurs inside the right-hand-side,
@@ -1561,6 +1575,7 @@ open Embedding.Lam LamReif
         let .etom n' ← transLamTerm ref (.etom n)
           | throwError "transChkStep :: Unexpected error"
         return .nonemptyOfEtom n'
+    | .p cs pos occ => return ChkStep.p cs (← transPos ref pos) occ
     | .w cs => ChkStep.w <$>
       match cs with
       | .wfOfCheck lctx t => return .wfOfCheck (← lctx.mapM (transLamSort ref)) (← transLamTerm ref t)

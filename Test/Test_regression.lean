@@ -227,7 +227,7 @@ section UnfoldConst
   example : let c := 2; c = 2 := by
     try auto u[c];
     auto
-  set_option trace.auto.printLemmas true
+
   example : True := by auto d[Nat.rec]
 
   def not' (b : Bool) :=
@@ -424,6 +424,9 @@ section DefinitionRecognition
     f b a = f c a := by
     auto
 
+  example (H : α ↔ β) : α = β := by
+    auto
+
 end DefinitionRecognition
 
 -- Ad-hoc support
@@ -448,6 +451,11 @@ section Adhoc
     (a b : α) [inst : Decidable (a = b)]
     (h : if (a = b) then True else a = b) : a = b := by
     auto
+  
+  -- Decide
+  example : ∀ b, !(b = true) ↔ b = false := by auto
+
+  example : ∀ b, !(b = false) ↔ b = true := by auto
 
 end Adhoc
 

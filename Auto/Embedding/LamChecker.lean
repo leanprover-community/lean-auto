@@ -552,6 +552,11 @@ inductive NonemptyStep where
   | nonemptyOfEtom (n : Nat) : NonemptyStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
+inductive PrepConvStep where
+  | validOfPropNeEquivEqNot : PrepConvStep
+  | validOfPropext : PrepConvStep
+  deriving Inhabited, Hashable, BEq, Lean.ToExpr
+
 inductive WFStep where
   | wfOfCheck (lctx : List LamSort) (t : LamTerm) : WFStep
   /-- `wf lctx s t` => `wf (lctx ++ ex) s t` -/
@@ -570,6 +575,7 @@ inductive ChkStep where
   | i : InferenceStep → ChkStep
   | l : LCtxStep → ChkStep
   | n : NonemptyStep → ChkStep
+  | p : PrepConvStep → Nat → List Bool → ChkStep
   | w : WFStep → ChkStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
@@ -627,6 +633,10 @@ def NonemptyStep.toString : NonemptyStep → String
 | .nonemptyOfAtom n => s!"nonemptyOfAtom {n}"
 | .nonemptyOfEtom n => s!"nonemptyOfEtom {n}"
 
+def PrepConvStep.toString : PrepConvStep → String
+| .validOfPropNeEquivEqNot => s!"validOfPropNeEquivEqNot"
+| .validOfPropext => s!"validOfPropext"
+
 def WFStep.toString : WFStep → String
 | .wfOfCheck lctx t => s!"wfOfCheck {lctx} {t}"
 | .wfOfAppend pos ex => s!"wfOfAppend {pos} {ex}"
@@ -642,6 +652,7 @@ def ChkStep.toString : ChkStep → String
 | .i s  => InferenceStep.toString s
 | .l s  => LCtxStep.toString s
 | .n s  => NonemptyStep.toString s
+| .p s pos occ => s!"{PrepConvStep.toString s} {pos} {occ}"
 | .w s  => WFStep.toString s
 
 instance : ToString ChkStep where
@@ -1038,6 +1049,10 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
   | true => .fail
   | false => .addEntry (.nonempty ((r.lamEVarTy.get? n).getD (.base .prop)))
 
+@[reducible] def PrepConvStep.eval : (cs : PrepConvStep) → LamTerm → Option LamTerm
+| .validOfPropNeEquivEqNot => LamTerm.prop_ne_equiv_eq_not?
+| .validOfPropext => LamTerm.propext?
+
 @[reducible] def WFStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : WFStep) → EvalResult
 | .wfOfCheck lctx t =>
   match LamTerm.lamThmWFCheck? ⟨lvt, lit, r.toLamEVarTy⟩ lctx t with
@@ -1071,6 +1086,13 @@ def ChkStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : ChkStep) → E
 | .i s  => InferenceStep.eval lvt lit r s
 | .l s  => LCtxStep.eval r s
 | .n s  => NonemptyStep.eval lvt r s
+| .p s pos occ =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    match LamTerm.rwGenAt occ s.eval t with
+    | .some t' => .addEntry (.valid lctx t')
+    | .none => .fail
+  | .none => .fail
 | .w s  => WFStep.eval lvt lit r s
 
 private theorem ChkStep.eval_correct_wfAux
@@ -1912,6 +1934,15 @@ theorem NonemptyStep.eval_correct
     dsimp [EvalResult.correct, REntry.correct]
     apply Nonempty.intro; exact cv.toLamValuation.eVarVal n
 
+theorem PrepConvStep.eval_correct (lval : LamValuation) :
+  (cs : PrepConvStep) → LamGenConv lval cs.eval ∧ LamTerm.evarBounded cs.eval 0
+| .validOfPropNeEquivEqNot => And.intro
+  LamGenConv.prop_ne_equiv_eq_not?
+  (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_prop_ne_equiv_eq_not?)
+| .validOfPropext => And.intro
+  LamGenConv.propext?
+  (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_propext?)
+
 theorem WFStep.eval_correct
   (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
   (cs : WFStep) → EvalResult.correct r cv (cs.eval cv.toLamVarTy cv.toLamILTy r)
@@ -1989,6 +2020,26 @@ theorem ChkStep.eval_correct
 | .i s  => InferenceStep.eval_correct r cv inv s
 | .l s  => LCtxStep.eval_correct r cv inv s
 | .n s  => NonemptyStep.eval_correct r cv s
+| .p s pos occ => by
+  dsimp [eval]
+  match h₁ : r.getValid pos with
+  | .some (lctx, t) =>
+    dsimp
+    match h₂ : LamTerm.rwGenAt occ s.eval t with
+    | .some t' =>
+      have h₁' := RTable.getValid_correct inv h₁
+      have prep_correct := PrepConvStep.eval_correct cv.toLamValuation s
+      apply ChkStep.eval_correct_validAux h₁'
+      case vimp =>
+        apply LamThmValid.mpLamThmEquiv; intro lctx';
+        have ⟨wf, _⟩ := h₁'.left lctx'
+        apply LamGenConv.rwGenAt prep_correct.left _ _ h₂ _ _ wf
+      case condimp =>
+        apply Nat.le_trans
+        have h := LamTerm.evarBounded_rwGenAt prep_correct.right _ _ h₂
+        rw [Nat.max_zero_left] at h; exact h
+    | .none => exact True.intro
+  | .none => exact True.intro
 | .w s  => WFStep.eval_correct r cv inv s
 
 def RTable.runEvalResult (r : RTable) (n : Nat) : EvalResult → RTable

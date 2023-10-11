@@ -1,7 +1,7 @@
 import Auto.Translation.ReifM
 import Auto.Translation.Preprocessing
 import Auto.Translation.Monomorphization
-import Auto.Translation.ExtraLemmas
+import Auto.Translation.AuxLemmas
 import Auto.Translation.LamReif
 import Auto.Translation.LamFOL2SMT
 import Auto.Translation.Lam2TH0

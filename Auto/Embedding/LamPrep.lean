@@ -100,11 +100,10 @@ theorem LamEquiv.prop_ne_equiv_eq_not?
     | .ofApp _ (.ofBase .ofNot) (.ofApp _ (.ofApp _ (.ofBase (.ofEq _)) Hlhs) Hrhs) =>
       apply LamEquiv.prop_ne_equiv_eq_not Hlhs Hrhs
 
-theorem LamThmEquiv.prop_ne_equiv_eq_not?
-  (wft : LamThmWF lval lctx s t)
-  (heq : LamTerm.prop_ne_equiv_eq_not? t = .some t') :
-  LamThmEquiv lval lctx (.base .prop) t t' :=
-  fun lctx' => LamEquiv.prop_ne_equiv_eq_not? (wft lctx') heq
+theorem LamGenConv.prop_ne_equiv_eq_not? : LamGenConv lval LamTerm.prop_ne_equiv_eq_not? := by
+  intros t₁ t₂ heq lctx rty wf
+  have hequiv := LamEquiv.prop_ne_equiv_eq_not? wf heq
+  have ⟨wf', _⟩ := hequiv; cases (wf'.unique wf).left; exact hequiv
 
 def LamTerm.equalize (t : LamTerm) : LamTerm := .mkEq (.base .prop) t (.base .trueE)
 
@@ -483,21 +482,21 @@ theorem LamThmEquiv.not_eq_not_equiv_eq?
   fun lctx' => LamEquiv.not_eq_not_equiv_eq? (wft lctx') heq
 
 /-- (a ↔ b) ↔ (a = b) -/
-def LamTerm.iff_equiv_eq? (t : LamTerm) : Option LamTerm :=
+def LamTerm.propext? (t : LamTerm) : Option LamTerm :=
   match t with
   | .app _ (.app _ (.base .iff) lhs) rhs => .some (.mkEq (.base .prop) lhs rhs)
   | _ => .none
 
-theorem LamTerm.maxEVarSucc_iff_equiv_eq?
-  (heq : LamTerm.iff_equiv_eq? t = .some t') :
-  t.maxEVarSucc = t'.maxEVarSucc :=
+theorem LamTerm.maxEVarSucc_propext?
+  (heq : LamTerm.propext? t = .some t') :
+  t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
   | .app _ (.app _ (.base .iff) lhs) rhs, Eq.refl _ => by
     simp [maxEVarSucc, Nat.max, Nat.max_zero_left]
 
-theorem LamEquiv.iff_equiv_eq?
+theorem LamEquiv.propext?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
-  (heq : LamTerm.iff_equiv_eq? t = .some t') :
+  (heq : LamTerm.propext? t = .some t') :
   LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.app _ (.base .iff) lhs) rhs, Eq.refl _ => by
@@ -512,8 +511,7 @@ theorem LamEquiv.iff_equiv_eq?
       case mpr =>
         intro h; apply iff_of_eq (_root_.congrArg GLift.down h)
 
-theorem LamThmEquiv.iff_equiv_eq?
-  (wft : LamThmWF lval lctx s t)
-  (heq : LamTerm.iff_equiv_eq?  t = .some t') :
-  LamThmEquiv lval lctx (.base .prop) t t' :=
-  fun lctx' => LamEquiv.iff_equiv_eq? (wft lctx') heq
+theorem LamGenConv.propext? : LamGenConv lval LamTerm.propext? := by
+  intros t₁ t₂ heq lctx rty wf
+  have hequiv := LamEquiv.propext? wf heq
+  have ⟨wf', _⟩ := hequiv; cases (LamWF.unique wf wf').left; exact hequiv

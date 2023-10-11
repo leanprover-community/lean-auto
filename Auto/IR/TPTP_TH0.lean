@@ -13,7 +13,7 @@ open Embedding.Lam
 def transLamBaseSort : LamBaseSort → String
 | .prop => "$o"
 | .bool => "$o"
-| .int  => "$int"
+| .int  => "s_int"
 | .real => "$real"
 | .bv n => s!"s_bv{n}"
 

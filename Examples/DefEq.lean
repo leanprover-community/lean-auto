@@ -5,8 +5,13 @@ that out.
 import Mathlib.Data.Set.Intervals.Basic
 import Mathlib.Data.Real.Basic
 import Mathlib.Data.Nat.Prime
+import Auto.Tactic
 
 open Set
+
+set_option trace.auto.tptp.printQuery true
+set_option trace.auto.tptp.result true
+set_option trace.auto.lamReif.printResult true
 
 -- works
 example (a b : ℕ) (P : ℕ → Prop) (h : P (a + b)) : P (b + a) := by
@@ -15,34 +20,35 @@ example (a b : ℕ) (P : ℕ → Prop) (h : P (a + b)) : P (b + a) := by
 
 -- automation has to unify the two descriptions of +
 example (a b : ℕ) (P : ℕ → Prop) (h : P (a + b)) : P (b + a) := by
-  sorry
+  auto [h, add_comm]
 
+-- Not enough hypothesis, refer to `Test/Monomorphization/SimpleMathlib`
 example (a b c d : ℤ) (h1 : a ≤ b) (h2 : c ≤ d) : Icc a b ⊆ Icc c d ↔ c ≤ a ∧ b ≤ d := by
-  have h3 : ∀ s t : Set ℝ, s ⊆ t ↔ ∀ x, x ∈ s → x ∈ t := by intros; rfl
-  have h4 : ∀ (a b x : ℝ), x ∈ Icc a b ↔ a ≤ x ∧ x ≤ b := @Set.mem_Icc ℝ _
-  -- smt [h1, h2, h3, h4]
-  sorry
+  have h3 : ∀ s t : Set ℤ, s ⊆ t ↔ ∀ x, x ∈ s → x ∈ t := by intros; rfl
+  have h4 : ∀ (a b x : ℤ), x ∈ Icc a b ↔ a ≤ x ∧ x ≤ b := @Set.mem_Icc ℤ _
+  auto [h1, h2, h3, h4]
 
+-- Not enough hypothesis, refer to `Test/Monomorphization/SimpleMathlib`
 example (a b c d : ℝ) (h1 : a ≤ b) (h2 : c ≤ d) : Icc a b ⊆ Icc c d ↔ c ≤ a ∧ b ≤ d := by
   have h3 : ∀ s t : Set ℝ, s ⊆ t ↔ ∀ x, x ∈ s → x ∈ t := by intros; rfl
   have h4 : ∀ (a b x : ℝ), x ∈ Icc a b ↔ a ≤ x ∧ x ≤ b := @Set.mem_Icc ℝ _
-  -- smt [h1, h2, h3, h4]
-  sorry
+  auto [h1, h2, h3, h4]
 
 -- mathlib proof
 theorem prime_def_lt'' {p : ℕ} : Nat.Prime p ↔ 2 ≤ p ∧ ∀ (m) (_ : m ∣ p), m = 1 ∨ m = p := by
   refine' ⟨fun h => ⟨h.two_le, h.eq_one_or_self_of_dvd⟩, fun h => _⟩
   -- Porting note: needed to make ℕ explicit
   have h1 := (@one_lt_two ℕ ..).trans_le h.1
-  refine' ⟨mt Nat.isUnit_iff.mp h1.ne', fun a b hab => _⟩
-  simp only [Nat.isUnit_iff]
-  apply Or.imp_right _ (h.2 a _)
-  · rintro rfl
-    rw [← mul_right_inj' (pos_of_gt h1).ne', ← hab, mul_one]
-  · rw [hab]
-    exact dvd_mul_right _ _
+  refine' ⟨mt Nat.isUnit_iff.mp h1.ne', _⟩
+  auto [Nat.isUnit_iff, mul_right_inj' (pos_of_gt h1).ne',
+        mul_one, dvd_mul_right, h.2]
 
+-- **TODO**: Fix: Zipperposition succeeds if `auto.lamReif.prep.def false`,
+--   but fails if `auto.lamReif.prep.def true`
+set_option auto.lamReif.prep.def true
+set_option trace.auto.lamReif.prep.def true
 -- Here we give all the theorem statements explicitly. We should be able to eliminate them.
+-- !! Zipperposition solves this example in under 0.1s
 theorem prime_def_lt''_new {p : ℕ} : Nat.Prime p ↔ 2 ≤ p ∧ ∀ (m) (_ : m ∣ p), m = 1 ∨ m = p := by
   have h1 : (1 : Nat) < 2 := @one_lt_two Nat _ _ _ _ _
   have h2 : ∀ {a b c : ℕ}, a < b → b ≤ c → a < c := @LT.lt.trans_le Nat _
@@ -56,4 +62,4 @@ theorem prime_def_lt''_new {p : ℕ} : Nat.Prime p ↔ 2 ≤ p ∧ ∀ (m) (_ : 
   have h10 : ∀ {p : ℕ}, Nat.Prime p → ∀ (m : ℕ), m ∣ p → m = 1 ∨ m = p := @Nat.Prime.eq_one_or_self_of_dvd
   have h11 := Nat.irreducible_iff_nat_prime
   have h12 : ∀ {p : ℕ}, Irreducible p ↔ ¬IsUnit p ∧ ∀ (a b : ℕ), p = a * b → IsUnit a ∨ IsUnit b := @irreducible_iff Nat _
-  sorry  -- using all the hypotheses
+  auto

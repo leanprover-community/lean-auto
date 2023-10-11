@@ -8,6 +8,7 @@ def lam2TH0 (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort) (facts : Arra
   let (typeHs, termHs, etomHs) ← LamReif.collectLamTermsAtoms lamVarTy lamEVarTy facts
   let bvHs := LamReif.collectLamTermsBitvecs facts
   let sorts :=
+    ["thf(sortdecl_int, type, s_int: $tType)."] ++
     bvHs.toList.map (fun l => s!"thf(sortdecl_bv{l.length}, type, s_bv{l.length}: $tType).") ++ 
     typeHs.toList.map (fun i => s!"thf(sortdecl_{i}, type, s_a{i}: $tType).")
   let types :=

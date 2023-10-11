@@ -1145,6 +1145,10 @@ theorem LamValid.or_imp_or_of_right_imp
   case inl ha => exact Or.inl ha
   case inr hb => exact Or.inr (hbi hb)
 
+theorem LamTerm.evarBounded_of_evarEquiv
+  (H : evarEquiv f) : evarBounded f bound := by
+  intros t t' heq; rw [H _ _ heq]; apply Nat.le_max_right
+
 theorem LamTerm.evarBounded_le
   (H : evarBounded f bound) (hle : bound ≤ bound') : evarBounded f bound' := by
   intro t t' heq; apply Nat.le_trans (H _ _ heq)
