@@ -61,6 +61,10 @@ open Complex
 
 variable (θ : ℂ)
 
+set_option profiler true
+set_option trace.auto.lamReif.printProofs true
+set_option trace.auto.tptp.result true
+
 /-- The `n`-th Chebyshev polynomial of the first kind evaluates on `cos θ` to the
 value `cos (n * θ)`. -/
 @[simp]
@@ -75,23 +79,39 @@ theorem T_complex_cos : ∀ n, (T ℂ n).eval (cos θ) = cos (n * θ)
     rw [T_complex_cos (n + 1), T_complex_cos n]
     simp only [Nat.cast_add, Nat.cast_one, add_mul, cos_add, one_mul, mul_assoc, sin_two_mul,
       cos_two_mul]
-    ring
+    simp [mul_sub, pow_two]
+    auto [sub_right_comm, mul_comm, mul_assoc]
+
+/--
+  Zipperposition portfolio mode times out, but duper succeeds
+-/
+theorem T_complex_cos' : ∀ n, (T ℂ n).eval (cos θ) = cos (n * θ)
+  | 0 => by auto [T_zero, eval_one, Nat.cast_zero, zero_mul, cos_zero]
+  | 1 => by auto [eval_X, one_mul, T_one, Nat.cast_one]
+  | n + 2 => by
+    -- Porting note: partially rewrote proof for lean4 numerals.
+    have : (2 : ℂ[X]) = (2 : ℕ) := by norm_num
+    simp only [this, eval_X, eval_one, T_add_two, eval_sub, eval_mul, eval_nat_cast]
+    simp only [Nat.cast_ofNat, Nat.cast_add]
+    rw [T_complex_cos' (n + 1), T_complex_cos' n]
+    simp only [Nat.cast_add, Nat.cast_one, add_mul, cos_add, one_mul, mul_assoc, sin_two_mul,
+      cos_two_mul]
+    simp [mul_sub, sub_right_comm]
+    auto [pow_two, mul_comm, mul_assoc]
 
 /-- The `n`-th Chebyshev polynomial of the second kind evaluates on `cos θ` to the
 value `sin ((n + 1) * θ) / sin θ`. -/
 @[simp]
 theorem U_complex_cos (n : ℕ) : (U ℂ n).eval (cos θ) * sin θ = sin ((n + 1) * θ) := by
   induction' n with d hd
-  · simp [U_zero, eval_one, zero_add, one_mul, Nat.zero_eq, CharP.cast_eq_zero]
+  -- `auto` fails if we provide `CharP.cast_eq_zero` instead of `CharP.cast_eq_zero _ Nat.zero`
+  · auto [U_zero, eval_one, zero_add, one_mul, Nat.zero_eq, CharP.cast_eq_zero _ Nat.zero]
   · rw [U_eq_X_mul_U_add_T]
     simp only [eval_add, eval_mul, eval_X, T_complex_cos, add_mul, mul_assoc, hd, one_mul]
     -- Porting note: added `trans` to prevent `rw` from going on a wild goose chase applying `rfl`
-    trans cos θ * sin (↑(d.succ) * θ) + cos (↑(d.succ) * θ) * sin θ
-    swap
-    · conv_rhs => rw [sin_add, mul_comm]
-    push_cast
-    auto [add_mul, one_mul]
-
+    push_cast; rw [sin_add ((↑d + 1) * θ)]
+    auto [add_mul, one_mul, mul_comm]
+  
 end Complex
 
 -- ### Real versions
