@@ -219,6 +219,21 @@ def poly₄
   drefl attempt 37 unifier 0 contains 0
   exact f; exact f; exact x
 
+-- Eta expansion test
+def Set α := α → Prop
+
+def eta₁ (done : Prop) (inh : Nat → Prop)
+         (h : ∀ (f g : Set Nat), f = g → done) : done := by
+  apply h
+  drefl attempt 10 unifier 0 contains 0
+  exact inh
+
+def eta₂ (done : Prop) (inh : Nat → Prop)
+         (h : ∀ (f g : Set Nat), (fun x => f x) = (fun x => g x) → done) : done := by
+  apply h
+  drefl attempt 10 unifier 0 contains 0
+  exact inh
+
 -- Negative tests
 set_option trace.auto.dunif.debug true in
 def neg₁ (done : Prop) (f : Nat → Nat)
@@ -239,3 +254,9 @@ def neg₃ : (Nat → Bool → Nat → Bool → Nat) = (Bool → Nat → Bool �
 set_option trace.auto.dunif.debug true in
 def neg₄ : (Nat → Type 2 → Type 1) = (Nat → Bool → Type 2) := by
   drefl attempt 11 unifier 0 contains 0
+
+-- Not very clear whether we need to succeed
+def unclear₁ (done : Prop)
+         (h : ∀ (f g : Set Nat), (fun x => f x) = g → done) : done := by
+  apply h
+  drefl attempt 10 unifier 0 contains 0
