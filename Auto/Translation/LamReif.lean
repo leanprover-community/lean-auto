@@ -863,7 +863,7 @@ section CheckerUtils
     return .some v
 
   def recognizeDefsAndUnfold (vs : Array REntry) : ReifM (Array REntry) := do
-    let mut active := vs
+    let mut active := vs.reverse
     let mut passive := #[]
     while true do
       let .some back := active.back?

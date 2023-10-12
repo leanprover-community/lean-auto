@@ -13,26 +13,16 @@ set_option trace.auto.tptp.printQuery true
 set_option trace.auto.tptp.result true
 set_option trace.auto.lamReif.printResult true
 
--- works
-example (a b : ℕ) (P : ℕ → Prop) (h : P (a + b)) : P (b + a) := by
-  rw [add_comm]
-  assumption
-
 -- automation has to unify the two descriptions of +
 example (a b : ℕ) (P : ℕ → Prop) (h : P (a + b)) : P (b + a) := by
   auto [h, add_comm]
 
--- Not enough hypothesis, refer to `Test/Monomorphization/SimpleMathlib`
 example (a b c d : ℤ) (h1 : a ≤ b) (h2 : c ≤ d) : Icc a b ⊆ Icc c d ↔ c ≤ a ∧ b ≤ d := by
-  have h3 : ∀ s t : Set ℤ, s ⊆ t ↔ ∀ x, x ∈ s → x ∈ t := by intros; rfl
-  have h4 : ∀ (a b x : ℤ), x ∈ Icc a b ↔ a ≤ x ∧ x ≤ b := @Set.mem_Icc ℤ _
-  auto [h1, h2, h3, h4]
+  auto [subset_def, Set.mem_Icc, h1, h2, @le_trans, @le_total]
 
--- Not enough hypothesis, refer to `Test/Monomorphization/SimpleMathlib`
 example (a b c d : ℝ) (h1 : a ≤ b) (h2 : c ≤ d) : Icc a b ⊆ Icc c d ↔ c ≤ a ∧ b ≤ d := by
   have h3 : ∀ s t : Set ℝ, s ⊆ t ↔ ∀ x, x ∈ s → x ∈ t := by intros; rfl
-  have h4 : ∀ (a b x : ℝ), x ∈ Icc a b ↔ a ≤ x ∧ x ≤ b := @Set.mem_Icc ℝ _
-  auto [h1, h2, h3, h4]
+  auto [subset_def, Set.mem_Icc, h1, h2, h3, @le_trans, @le_total]
 
 -- mathlib proof
 theorem prime_def_lt'' {p : ℕ} : Nat.Prime p ↔ 2 ≤ p ∧ ∀ (m) (_ : m ∣ p), m = 1 ∨ m = p := by
@@ -43,12 +33,11 @@ theorem prime_def_lt'' {p : ℕ} : Nat.Prime p ↔ 2 ≤ p ∧ ∀ (m) (_ : m �
   auto [Nat.isUnit_iff, mul_right_inj' (pos_of_gt h1).ne',
         mul_one, dvd_mul_right, h.2]
 
--- **TODO**: Fix: Zipperposition succeeds if `auto.lamReif.prep.def false`,
---   but fails if `auto.lamReif.prep.def true`
-set_option auto.lamReif.prep.def true
-set_option trace.auto.lamReif.prep.def true
+-- Zipperposition succeeds if `auto.lamReif.prep.def false`, but fails if `auto.lamReif.prep.def true`
+set_option auto.lamReif.prep.def false in
+set_option trace.auto.lamReif.prep.def true in
+set_option trace.auto.lamReif.prep.printResult true in
 -- Here we give all the theorem statements explicitly. We should be able to eliminate them.
--- !! Zipperposition solves this example in under 0.1s
 theorem prime_def_lt''_new {p : ℕ} : Nat.Prime p ↔ 2 ≤ p ∧ ∀ (m) (_ : m ∣ p), m = 1 ∨ m = p := by
   have h1 : (1 : Nat) < 2 := @one_lt_two Nat _ _ _ _ _
   have h2 : ∀ {a b c : ℕ}, a < b → b ≤ c → a < c := @LT.lt.trans_le Nat _
