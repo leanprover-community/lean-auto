@@ -27,18 +27,13 @@ example (a e : ℝ) (h1 : a < e) : (∃ b c d, a < b ∧ b < c ∧ c < d ∧ d <
 set_option trace.auto.printLemmas true in
 example (a b c d : ℝ) (h1 : a < b) :
   Set.Icc a b ⊆ Set.Ico c d ↔ c ≤ a ∧ b < d := by
-  rw [Set.subset_def];
-  auto [Set.mem_Icc, Set.mem_Ico, @le_trans, @le_total, @lt_iff_not_le, DenselyOrdered.dense a b, h1]
+  rw [Set.subset_def]
+  auto [Set.mem_Icc, Set.mem_Ico, @le_trans, @le_total, @lt_iff_not_le, h1]
 
 set_option trace.auto.smt.result true in
 example (a b c d : ℝ) (h1 : a < b) : Set.Icc a b ⊆ Set.Ico c d ↔ c ≤ a ∧ b < d := by
   rw [Set.subset_def]
-  auto [Set.mem_Icc, Set.mem_Ico, @le_trans, @le_total, @lt_iff_not_le, DenselyOrdered.dense a b, h1]
-
-set_option trace.auto.smt.result true in
-example (a b c d : ℝ) (h1 : a < b) : Set.Icc a b ⊆ Set.Ico c d ↔ c ≤ a ∧ b < d := by
-  rw [Set.subset_def]
-  auto [Set.mem_Icc, Set.mem_Ico, @le_trans, @le_total, @lt_iff_not_le, DenselyOrdered.dense a b, h1]
+  auto [Set.mem_Icc, Set.mem_Ico, @le_trans, @le_total, @lt_iff_not_le, h1]
 
 set_option trace.auto.lamReif.printValuation true in
 example : f '' s ⊆ v ↔ s ⊆ f ⁻¹' v := by
@@ -48,9 +43,7 @@ example (h : Function.Injective f) : f ⁻¹' (f '' s) ⊆ s := by
   auto [Set.subset_def, Set.mem_preimage, Function.Injective.mem_set_image, h]
 
 example : f '' (f ⁻¹' u) ⊆ u := by
-  rw [Set.subset_def]
-  auto [Set.mem_image, Set.mem_preimage]
+  auto [Set.subset_def, Set.mem_image, Set.mem_preimage]
 
 example (h : Function.Surjective f) : u ⊆ f '' (f ⁻¹' u) := by
-  rw [Set.subset_def]; unfold Function.Surjective at h
-  auto [Set.mem_image, Set.mem_preimage, h]
+  auto [Set.subset_def, Set.mem_image, Set.mem_preimage, h] d[Function.Surjective]

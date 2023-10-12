@@ -1,11 +1,17 @@
 import Mathlib.Tactic
 import Mathlib.Data.Set.Lattice
 import Mathlib.Data.Set.Function
+import Auto.Tactic
 
 /-
 Taken from Mathematics in Lean. The solutions use definitional equality, so for a first-order
 prover we need to add axioms to unfold the definitions.
 -/
+
+set_option trace.auto.tptp.result true
+set_option tptp.solver.name "zeport"
+set_option tptp.zeport.path "/home/indprinciple/Programs/zipperposition/portfolio/portfolio.fo.parallel.py"
+
 
 section
 
@@ -27,14 +33,23 @@ example : f '' s ⊆ v ↔ s ⊆ f ⁻¹' v := by
   rw [← fxeq]
   apply h xs
 
+example : f '' s ⊆ v ↔ s ⊆ f ⁻¹' v := by
+  auto [subset_def, mem_image, mem_preimage]
+
 example (h : Injective f) : f ⁻¹' (f '' s) ⊆ s := by
   rintro x ⟨y, ys, fxeq⟩
   rw [← h fxeq]
   exact ys
 
+example (h : Injective f) : f ⁻¹' (f '' s) ⊆ s := by
+  auto [subset_def, mem_preimage, Injective.mem_set_image, h]
+
 example : f '' (f ⁻¹' u) ⊆ u := by
   rintro y ⟨x, xmem, rfl⟩
   exact xmem
+
+example : f '' (f ⁻¹' u) ⊆ u := by
+  auto [subset_def, mem_image, mem_preimage]
 
 example (h : Surjective f) : u ⊆ f '' (f ⁻¹' u) := by
   intro y yu
@@ -46,22 +61,35 @@ example (h : Surjective f) : u ⊆ f '' (f ⁻¹' u) := by
     exact yu
   exact fxeq
 
+example (h : Surjective f) : u ⊆ f '' (f ⁻¹' u) := by
+  auto [subset_def, mem_image, mem_preimage, h] d[Surjective]
+
 example (h : s ⊆ t) : f '' s ⊆ f '' t := by
   rintro y ⟨x, xs, fxeq⟩
   use x, h xs
-  exact fxeq
+
+example (h : s ⊆ t) : f '' s ⊆ f '' t := by
+  auto [subset_def, mem_image, h]
 
 example (h : u ⊆ v) : f ⁻¹' u ⊆ f ⁻¹' v := by
   intro x; apply h
 
+example (h : u ⊆ v) : f ⁻¹' u ⊆ f ⁻¹' v := by
+  auto [subset_def, mem_preimage, h]
+
+example : f ⁻¹' (u ∪ v) = f ⁻¹' u ∪ f ⁻¹' v := rfl
+
 example : f ⁻¹' (u ∪ v) = f ⁻¹' u ∪ f ⁻¹' v := by
-  ext x; rfl
+  ext x; auto [mem_union, mem_preimage]
 
 example : f '' (s ∩ t) ⊆ f '' s ∩ f '' t := by
   rintro y ⟨x, ⟨xs, xt⟩, rfl⟩
   constructor
   . use x, xs
   . use x, xt
+
+example : f '' (s ∩ t) ⊆ f '' s ∩ f '' t := by
+  auto [mem_inter_iff, subset_def, mem_image]
 
 example (h : Injective f) : f '' s ∩ f '' t ⊆ f '' (s ∩ t) := by
   rintro y ⟨⟨x₁, x₁s, rfl⟩, ⟨x₂, x₂t, fx₂eq⟩⟩
@@ -73,18 +101,13 @@ example (h : Injective f) : f '' s ∩ f '' t ⊆ f '' (s ∩ t) := by
   . rfl
 
 example : f '' s \ f '' t ⊆ f '' (s \ t) := by
-  rintro y ⟨⟨x₁, x₁s, rfl⟩, h⟩
-  use x₁
-  constructor
-  . constructor
-    . exact x₁s
-    . intro h'
-      apply h
-      use x₁, h'
-  . rfl
+  intro x; auto [mem_image, mem_diff]
 
 example : f ⁻¹' u \ f ⁻¹' v ⊆ f ⁻¹' (u \ v) :=
   fun x ↦ id
+
+example : f ⁻¹' u \ f ⁻¹' v ⊆ f ⁻¹' (u \ v) := by
+  intro x; auto [mem_preimage, mem_diff]
 
 example : f '' s ∩ v = f '' (s ∩ f ⁻¹' v) := by
   ext y; constructor
@@ -93,19 +116,31 @@ example : f '' s ∩ v = f '' (s ∩ f ⁻¹' v) := by
   rintro ⟨x, ⟨⟨xs, fxv⟩, rfl⟩⟩
   exact ⟨⟨x, xs, rfl⟩, fxv⟩
 
+example : f '' s ∩ v = f '' (s ∩ f ⁻¹' v) := by
+  ext y; auto [mem_inter_iff, mem_image, mem_preimage]
+
 example : f '' (s ∩ f ⁻¹' u) ⊆ f '' s ∩ u := by
   rintro y ⟨x, ⟨xs, fxu⟩, rfl⟩
   exact ⟨⟨x, xs, rfl⟩, fxu⟩
 
+example : f '' (s ∩ f ⁻¹' u) ⊆ f '' s ∩ u := by
+  intro x; auto [mem_inter_iff, mem_image, mem_preimage]
+
 example : s ∩ f ⁻¹' u ⊆ f ⁻¹' (f '' s ∩ u) := by
   rintro x ⟨xs, fxu⟩
   exact ⟨⟨x, xs, rfl⟩, fxu⟩
+
+example : s ∩ f ⁻¹' u ⊆ f ⁻¹' (f '' s ∩ u) := by
+  intro x; auto [mem_inter_iff, mem_image, mem_preimage]
 
 example : s ∪ f ⁻¹' u ⊆ f ⁻¹' (f '' s ∪ u) := by
   rintro x (xs | fxu)
   · left
     exact ⟨x, xs, rfl⟩
   right; exact fxu
+
+example : s ∪ f ⁻¹' u ⊆ f ⁻¹' (f '' s ∪ u) := by
+  intro x; auto [mem_union, mem_image, mem_preimage]
 
 variable {I : Type _} (A : I → Set α) (B : I → Set β)
 
@@ -114,15 +149,20 @@ example : (f '' ⋃ i, A i) = ⋃ i, f '' A i := by
   constructor
   · rintro ⟨x, ⟨i, xAi⟩, fxeq⟩
     use i, x
-    exact ⟨xAi, fxeq⟩
   rintro ⟨i, x, xAi, fxeq⟩
   exact ⟨x, ⟨i, xAi⟩, fxeq⟩
+
+example : (f '' ⋃ i, A i) = ⋃ i, f '' A i := by
+  ext y; simp; apply Iff.intro <;> auto
 
 example : (f '' ⋂ i, A i) ⊆ ⋂ i, f '' A i := by
   intro y; simp
   intro x h fxeq i
   use x
   exact ⟨h i, fxeq⟩
+
+example : (f '' ⋂ i, A i) ⊆ ⋂ i, f '' A i := by
+  intro y; simp; auto
 
 example (i : I) (injf : Injective f) : (⋂ i, f '' A i) ⊆ f '' ⋂ i, A i := by
   intro y; simp
@@ -136,6 +176,9 @@ example (i : I) (injf : Injective f) : (⋂ i, f '' A i) ⊆ f '' ⋂ i, A i := 
     rw [this]
     exact x'Ai
   exact fxeq
+
+example (i : I) (injf : Injective f) : (⋂ i, f '' A i) ⊆ f '' ⋂ i, A i := by
+  intro y; simp; auto [injf] d[Injective]
 
 example : (f ⁻¹' ⋃ i, B i) = ⋃ i, f ⁻¹' B i := by
   ext x
@@ -152,23 +195,28 @@ section
 open Set Real
 
 example : InjOn sqrt { x | x ≥ 0 } := by
-  intro x xnonneg y ynonneg
-  intro e
+  intro x xnonneg y ynonneg e
   calc
     x = sqrt x ^ 2 := by rw [sq_sqrt xnonneg]
     _ = sqrt y ^ 2 := by rw [e]
     _ = y := by rw [sq_sqrt ynonneg]
 
+example : InjOn sqrt { x | x ≥ 0 } := by
+  intro x xnonneg y ynonneg; dsimp at *
+  auto [xnonneg, ynonneg, sq_sqrt]
 
 example : InjOn (fun x ↦ x ^ 2) { x : ℝ | x ≥ 0 } := by
-  intro x xnonneg y ynonneg
-  intro e
+  intro x xnonneg y ynonneg e
   dsimp at *
   calc
     x = sqrt (x ^ 2) := by rw [sqrt_sq xnonneg]
     _ = sqrt (y ^ 2) := by rw [e]
     _ = y := by rw [sqrt_sq ynonneg]
 
+set_option trace.auto.lamReif.printResult true in
+example : InjOn (fun x ↦ x ^ 2) { x : ℝ | x ≥ 0 } := by
+  intro x xnonneg y ynonneg; dsimp at *
+  auto [xnonneg, ynonneg, sqrt_sq]
 
 example : sqrt '' { x | x ≥ 0 } = { y | y ≥ 0 } := by
   ext y; constructor
@@ -182,6 +230,10 @@ example : sqrt '' { x | x ≥ 0 } = { y | y ≥ 0 } := by
   apply sqrt_sq
   assumption
 
+example : sqrt '' { x | x ≥ 0 } = { y | y ≥ 0 } := by
+  ext y; rw [mem_image]; dsimp
+  auto [sqrt_sq, sqrt_nonneg, pow_nonneg]
+
 example : (range fun x ↦ x ^ 2) = { y : ℝ | y ≥ 0 } := by
   ext y
   constructor
@@ -191,6 +243,10 @@ example : (range fun x ↦ x ^ 2) = { y : ℝ | y ≥ 0 } := by
   intro ynonneg
   use sqrt y
   exact sq_sqrt ynonneg
+
+example : (range fun x ↦ x ^ 2) = { y : ℝ | y ≥ 0 } := by
+  ext y; rw [mem_range]; dsimp
+  auto [pow_two_nonneg, sq_sqrt]
 
 end
 
@@ -205,36 +261,26 @@ def inverse (f : α → β) : β → α := fun y : β ↦
   if h : ∃ x, f x = y then Classical.choose h else default
 
 theorem inverse_spec {f : α → β} (y : β) (h : ∃ x, f x = y) : f (inverse f y) = y := by
-  rw [inverse]; dsimp; rw [dif_pos h]
+  rw [inverse]; rw [dif_pos h]
   exact Classical.choose_spec h
 
 variable (f : α → β)
 
 open Function
 
-example : Injective f ↔ LeftInverse (inverse f) f := by
-  constructor
-  · intro h y
-    apply h
-    apply inverse_spec
-    use y
-  intro h x1 x2 e
-  rw [← h x1, ← h x2, e]
-
 example : Injective f ↔ LeftInverse (inverse f) f :=
   ⟨fun h y ↦ h (inverse_spec _ ⟨y, rfl⟩), fun h x1 x2 e ↦ by rw [← h x1, ← h x2, e]⟩
 
-example : Surjective f ↔ RightInverse (inverse f) f := by
-  constructor
-  · intro h y
-    apply inverse_spec
-    apply h
-  intro h y
-  use inverse f y
-  apply h
+example : Injective f ↔ LeftInverse (inverse f) f := by
+  dsimp [Injective, LeftInverse]
+  auto [inverse_spec]
 
 example : Surjective f ↔ RightInverse (inverse f) f :=
   ⟨fun h y ↦ inverse_spec _ (h _), fun h y ↦ ⟨inverse f y, h _⟩⟩
+
+example : Surjective f ↔ RightInverse (inverse f) f := by
+  dsimp [Surjective, Function.RightInverse, LeftInverse]
+  auto [inverse_spec]
 
 end
 
@@ -253,5 +299,11 @@ theorem Cantor : ∀ f : α → Set α, ¬Surjective f := by
   have h₂ : j ∈ S := h₁
   have h₃ : j ∉ S := by rwa [h] at h₁
   contradiction
+
+theorem Cantor' : ∀ f : α → Set α, ¬Surjective f := by
+  intro f surjf
+  let S := { i | i ∉ f i }
+  have s_spec : ∀ i, i ∈ S ↔ i ∉ f i := by intros; rfl
+  auto [surjf S, s_spec]
 
 end
