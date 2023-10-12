@@ -118,9 +118,29 @@ theorem LamEquiv.equalize (wft : LamWF lval.toLamTyVal ⟨lctx, t, .base .prop�
     (fun h => GLift.down.inj _ _ (eq_true h))
     (fun h => of_eq_true (_root_.congrArg GLift.down h)))
 
-theorem LamThmEquiv.equalize (wft : LamThmWF lval lctx (.base .prop) t) :
-  LamThmEquiv lval lctx (.base .prop) t t.equalize :=
-  fun lctx' => LamEquiv.equalize (wft lctx')
+def LamTerm.equalize? (s : LamSort) (t : LamTerm) : Option LamTerm :=
+  match s with
+  | .base .prop => .some (.mkEq (.base .prop) t (.base .trueE))
+  | _ => .none
+
+theorem LamTerm.maxEVarSucc_equalize? (heq : equalize? s t = .some t') :
+  t'.maxEVarSucc = t.maxEVarSucc := by
+  match s, heq with
+  | .base .prop, Eq.refl _ =>
+    simp [maxEVarSucc, Nat.max, Nat.max_zero_left, Nat.max_zero_right]
+
+theorem LamEquiv.equalize?
+  (wft : LamWF lval.toLamTyVal ⟨lctx, t, .base .prop⟩)
+  (heq : t.equalize? s = .some t') :
+  s = .base .prop ∧ LamEquiv lval lctx (.base .prop) t t' := by
+  match s, heq with
+  | .base .prop, Eq.refl _ =>
+    apply And.intro rfl; apply LamEquiv.equalize wft
+
+theorem LamGenConv.equalize? : LamGenConvWith lval LamTerm.equalize? := by
+  intros rty t₁ t₂ heq lctx wf
+  match rty, heq with
+  | .base .prop, Eq.refl _ => apply LamEquiv.equalize wf
 
 /-- (True = False) ↔ False -/
 def LamTerm.true_eq_false_equiv_false? (t : LamTerm) : Option LamTerm :=
@@ -142,12 +162,12 @@ theorem LamTerm.maxEVarSucc_true_eq_false_equiv_false?
 theorem LamEquiv.true_eq_false_equiv_false?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
   (heq : LamTerm.true_eq_false_equiv_false? t = .some t') :
-  LamEquiv lval lctx (.base .prop) t t' := by
+  s = .base .prop ∧ LamEquiv lval lctx (.base .prop) t t' := by
   dsimp [LamTerm.true_eq_false_equiv_false?] at heq; revert heq
   cases hbeq : t.beq (.mkEq (.base .prop) (.base .trueE) (.base .falseE))
   case true =>
     intro h; cases h; cases (LamTerm.eq_of_beq_eq_true hbeq)
-    cases wft.getFn.getFn.getBase; exists wft
+    cases wft.getFn.getFn.getBase; exists rfl, wft
     match wft with
     | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) (.ofBase .ofTrueE)) (.ofBase .ofFalseE) =>
       exists (.ofBase .ofFalseE); intro lctxTerm; apply GLift.down.inj
@@ -158,11 +178,10 @@ theorem LamEquiv.true_eq_false_equiv_false?
   case false =>
     intro h; cases h
 
-theorem LamThmEquiv.true_eq_false_equiv_false?
-  (wft : LamThmWF lval lctx s t)
-  (heq : LamTerm.true_eq_false_equiv_false? t = .some t') :
-  LamThmEquiv lval lctx (.base .prop) t t' :=
-  fun lctx' => LamEquiv.true_eq_false_equiv_false? (wft lctx') heq
+theorem LamGenConv.true_eq_false_equiv_false? : LamGenConv lval LamTerm.true_eq_false_equiv_false? := by
+  intros t₁ t₂ heq lctx rty wf
+  have ⟨heq, hequiv⟩ := LamEquiv.true_eq_false_equiv_false? wf heq
+  cases heq; apply hequiv
 
 /-- (False = True) ↔ False -/
 def LamTerm.false_eq_true_equiv_false? (t : LamTerm) : Option LamTerm :=
@@ -184,12 +203,12 @@ theorem LamTerm.maxEVarSucc_false_eq_true_equiv_false?
 theorem LamEquiv.false_eq_true_equiv_false?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
   (heq : LamTerm.false_eq_true_equiv_false? t = .some t') :
-  LamEquiv lval lctx (.base .prop) t t' := by
+  s = .base .prop ∧ LamEquiv lval lctx (.base .prop) t t' := by
   dsimp [LamTerm.false_eq_true_equiv_false?] at heq; revert heq
   cases hbeq : t.beq (.mkEq (.base .prop) (.base .falseE) (.base .trueE) )
   case true =>
     intro h; cases h; cases (LamTerm.eq_of_beq_eq_true hbeq)
-    cases wft.getFn.getFn.getBase; exists wft
+    cases wft.getFn.getFn.getBase; exists rfl, wft
     match wft with
     | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) (.ofBase .ofFalseE)) (.ofBase .ofTrueE) =>
       exists (.ofBase .ofFalseE); intro lctxTerm; apply GLift.down.inj
@@ -200,13 +219,18 @@ theorem LamEquiv.false_eq_true_equiv_false?
   case false =>
     intro h; cases h
 
-theorem LamThmEquiv.false_eq_true_equiv_false?
-  (wft : LamThmWF lval lctx s t)
-  (heq : LamTerm.false_eq_true_equiv_false? t = .some t') :
-  LamThmEquiv lval lctx (.base .prop) t t' :=
-  fun lctx' => LamEquiv.false_eq_true_equiv_false? (wft lctx') heq
+theorem LamGenConv.false_eq_true_equiv_false? : LamGenConv lval LamTerm.false_eq_true_equiv_false? := by
+  intros t₁ t₂ heq rty lctx wf
+  have ⟨heq, hequiv⟩ := LamEquiv.false_eq_true_equiv_false? wf heq
+  cases heq; apply hequiv
 
-/-- (a = True) ↔ a -/
+/--
+  (a = True) ↔ a
+
+  At first sight, it seems that this theorem will never be used
+    in clausification. However, it will, as we need to turn
+    `(a = b) = True` into `a = b`
+-/
 def LamTerm.eq_true_equiv? (t : LamTerm) : Option LamTerm :=
   match t with
   | .app _ (.app _ (.base (.eq _)) lhs) (.base .trueE) => .some lhs
@@ -222,10 +246,10 @@ theorem LamTerm.maxEVarSucc_eq_true_equiv?
 theorem LamEquiv.eq_true_equiv?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
   (heq : LamTerm.eq_true_equiv? t = .some t') :
-  LamEquiv lval lctx (.base .prop) t t' :=
+  s = .base .prop ∧ LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.app _ (.base (.eq _)) lhs) (.base .trueE), Eq.refl _ => by
-    cases wft.getFn.getFn.getBase; cases wft.getArg.getBase; exists wft
+    cases wft.getFn.getFn.getBase; cases wft.getArg.getBase; exists rfl, wft
     match wft with
     | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) Hlhs) (.ofBase .ofTrueE) =>
       exists Hlhs; intro lctxTerm
@@ -236,13 +260,18 @@ theorem LamEquiv.eq_true_equiv?
       case mpr =>
         intro h; apply GLift.down.inj _ _ (eq_true h)
 
-theorem LamThmEquiv.eq_true_equiv?
-  (wft : LamThmWF lval lctx s t)
-  (heq : LamTerm.eq_true_equiv? t = .some t') :
-  LamThmEquiv lval lctx (.base .prop) t t' :=
-  fun lctx' => LamEquiv.eq_true_equiv? (wft lctx') heq
+theorem LamGenConv.eq_true_equiv? : LamGenConv lval LamTerm.eq_true_equiv? := by
+  intros t₁ t₂ heq rty lctx wf
+  have ⟨heq, hequiv⟩ := LamEquiv.eq_true_equiv? wf heq
+  cases heq; apply hequiv
 
-/-- (a = False) ↔ (¬ a) -/
+/--
+  (a = False) ↔ (¬ a)
+
+  At first sight, it seems that this theorem will never be used
+    in clausification. However, it will, as we need to turn
+    `(a = b) = False` into `a ≠ b`
+-/
 def LamTerm.eq_false_equiv? (t : LamTerm) : Option LamTerm :=
   match t with
   | .app _ (.app _ (.base (.eq _)) lhs) (.base .falseE) => .some (.mkNot lhs)
@@ -258,10 +287,10 @@ theorem LamTerm.maxEVarSucc_eq_false_equiv?
 theorem LamEquiv.eq_false_equiv?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
   (heq : LamTerm.eq_false_equiv? t = .some t') :
-  LamEquiv lval lctx (.base .prop) t t' :=
+  s = .base .prop ∧ LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.app _ (.base (.eq _)) lhs) (.base .falseE), Eq.refl _ => by
-    cases wft.getFn.getFn.getBase; cases wft.getArg.getBase; exists wft
+    cases wft.getFn.getFn.getBase; cases wft.getArg.getBase; exists rfl, wft
     match wft with
     | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) Hlhs) (.ofBase .ofFalseE) =>
       exists LamWF.mkNot Hlhs; intro lctxTerm
@@ -272,11 +301,10 @@ theorem LamEquiv.eq_false_equiv?
       case mpr =>
         intro h; apply GLift.down.inj _ _ (eq_false h)
 
-theorem LamThmEquiv.eq_false_equiv?
-  (wft : LamThmWF lval lctx s t)
-  (heq : LamTerm.eq_false_equiv? t = .some t') :
-  LamThmEquiv lval lctx (.base .prop) t t' :=
-  fun lctx' => LamEquiv.eq_false_equiv? (wft lctx') heq
+theorem LamGenConv.eq_false_equiv? : LamGenConv lval LamTerm.eq_false_equiv? := by
+  intros t₁ t₂ heq lctx rty wf
+  have ⟨heq, hequiv⟩ := LamEquiv.eq_false_equiv? wf heq
+  cases heq; apply hequiv
 
 /-- (a ≠ True) ↔ (a = False) -/
 def LamTerm.ne_true_equiv_eq_false? (t : LamTerm) : Option LamTerm :=
@@ -295,20 +323,20 @@ theorem LamTerm.maxEVarSucc_ne_true_equiv_eq_false?
 theorem LamEquiv.ne_true_equiv_eq_false?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
   (heq : LamTerm.ne_true_equiv_eq_false? t = .some t') :
-  LamEquiv lval lctx (.base .prop) t t' :=
+  s = .base .prop ∧ LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.base .not) (.app _ (.app _ (.base (.eq _)) lhs) (.base .trueE)), Eq.refl _ =>
     match wft with
     | .ofApp _ (.ofBase .ofNot) (.ofApp _ (.ofApp _ (.ofBase (.ofEq _)) Hlhs) (.ofBase .ofTrueE)) => by
+      apply And.intro rfl
       apply LamEquiv.trans (prop_ne_equiv_eq_not Hlhs (.ofBase .ofTrueE))
       apply LamEquiv.congrArg (.ofApp _ (.ofBase (.ofEq _)) Hlhs)
       apply LamEquiv.not_true_equiv_false
 
-theorem LamThmEquiv.ne_true_equiv_eq_false?
-  (wft : LamThmWF lval lctx s t)
-  (heq : LamTerm.ne_true_equiv_eq_false? t = .some t') :
-  LamThmEquiv lval lctx (.base .prop) t t' :=
-  fun lctx' => LamEquiv.ne_true_equiv_eq_false? (wft lctx') heq
+theorem LamGenConv.ne_true_equiv_eq_false? : LamGenConv lval LamTerm.ne_true_equiv_eq_false? := by
+  intros t₁ t₂ heq lctx rty wf
+  have ⟨heq, hequiv⟩ := LamEquiv.ne_true_equiv_eq_false? wf heq
+  cases heq; apply hequiv
 
 /-- (a ≠ False) ↔ (a = True) -/
 def LamTerm.ne_false_equiv_eq_true? (t : LamTerm) : Option LamTerm :=
@@ -327,20 +355,20 @@ theorem LamTerm.maxEVarSucc_ne_false_equiv_eq_true?
 theorem LamEquiv.ne_false_equiv_eq_true?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
   (heq : LamTerm.ne_false_equiv_eq_true? t = .some t') :
-  LamEquiv lval lctx (.base .prop) t t' :=
+  s = .base .prop ∧ LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.base .not) (.app _ (.app _ (.base (.eq _)) lhs) (.base .falseE)), Eq.refl _ =>
     match wft with
     | .ofApp _ (.ofBase .ofNot) (.ofApp _ (.ofApp _ (.ofBase (.ofEq _)) Hlhs) (.ofBase .ofFalseE)) => by
+      apply And.intro rfl
       apply LamEquiv.trans (prop_ne_equiv_eq_not Hlhs (.ofBase .ofFalseE))
       apply LamEquiv.congrArg (.ofApp _ (.ofBase (.ofEq _)) Hlhs)
       apply LamEquiv.not_false_equiv_true
 
-theorem LamThmEquiv.ne_false_equiv_eq_true?
-  (wft : LamThmWF lval lctx s t)
-  (heq : LamTerm.ne_false_equiv_eq_true? t = .some t') :
-  LamThmEquiv lval lctx (.base .prop) t t' :=
-  fun lctx' => LamEquiv.ne_false_equiv_eq_true? (wft lctx') heq
+theorem LamGenConv.ne_false_equiv_eq_true? : LamGenConv lval LamTerm.ne_false_equiv_eq_true? := by
+  intros t₁ t₂ heq lctx rty wf
+  have ⟨heq, hequiv⟩ := LamEquiv.ne_false_equiv_eq_true? wf heq
+  cases heq; apply hequiv
 
 /-- ((¬ a) = True) ↔ (a = False) -/
 def LamTerm.not_eq_true_equiv_eq_false? (t : LamTerm) : Option LamTerm :=
@@ -359,23 +387,24 @@ def LamTerm.maxEVarSucc_not_eq_true_equiv_eq_false?
 theorem LamEquiv.not_eq_true_equiv_eq_false?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
   (heq : LamTerm.not_eq_true_equiv_eq_false? t = .some t') :
-  LamEquiv lval lctx (.base .prop) t t' :=
+  s = .base .prop ∧ LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.app _ (.base (.eq _)) (.app _ (.base .not) lhs)) (.base .trueE), Eq.refl _ => by
     cases wft.getFn.getFn.getBase; cases wft.getFn.getArg.getFn.getBase
     match wft with
     | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) (.ofApp _ (.ofBase .ofNot) Hlhs)) (.ofBase .ofTrueE) =>
+      apply And.intro rfl
       apply trans (eqSymm? wft rfl)
       apply trans (symm (prop_ne_equiv_eq_not (.ofBase .ofTrueE) Hlhs))
-      apply trans _ (ne_true_equiv_eq_false? (LamWF.mkNot (.mkEq Hlhs (.ofBase .ofTrueE))) rfl)
+      apply trans _ (ne_true_equiv_eq_false? (LamWF.mkNot (.mkEq Hlhs (.ofBase .ofTrueE))) rfl).right
       apply congrArg (.ofBase .ofNot); apply eqSymm? (.mkEq (.ofBase .ofTrueE) Hlhs) rfl
 
-theorem LamThmEquiv.not_eq_true_equiv_eq_false?
-  (wft : LamThmWF lval lctx s t)
-  (heq : LamTerm.not_eq_true_equiv_eq_false? t = .some t') :
-  LamThmEquiv lval lctx (.base .prop) t t' :=
-  fun lctx' => LamEquiv.not_eq_true_equiv_eq_false? (wft lctx') heq
+theorem LamGenConv.not_eq_true_equiv_eq_false? : LamGenConv lval LamTerm.not_eq_true_equiv_eq_false? := by
+  intros t₁ t₂ heq lctx rty wf
+  have ⟨heq, hequiv⟩ := LamEquiv.not_eq_true_equiv_eq_false? wf heq
+  cases heq; apply hequiv
 
+/-- ((¬ a) = False) ↔ (a = True) -/
 def LamTerm.not_eq_false_equiv_eq_true? (t : LamTerm) : Option LamTerm :=
   match t with
   | .app _ (.app _ (.base (.eq _)) (.app _ (.base .not) lhs)) (.base .falseE) =>
@@ -392,22 +421,22 @@ def LamTerm.maxEVarSucc_not_eq_false_equiv_eq_true?
 theorem LamEquiv.not_eq_false_equiv_eq_true?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
   (heq : LamTerm.not_eq_false_equiv_eq_true? t = .some t') :
-  LamEquiv lval lctx (.base .prop) t t' :=
+  s = .base .prop ∧ LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.app _ (.base (.eq _)) (.app _ (.base .not) lhs)) (.base .falseE), Eq.refl _ => by
     cases wft.getFn.getFn.getBase; cases wft.getFn.getArg.getFn.getBase
     match wft with
     | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) (.ofApp _ (.ofBase .ofNot) Hlhs)) (.ofBase .ofFalseE) =>
+      apply And.intro rfl
       apply trans (eqSymm? wft rfl)
       apply trans (symm (prop_ne_equiv_eq_not (.ofBase .ofFalseE) Hlhs))
-      apply trans _ (ne_false_equiv_eq_true? (LamWF.mkNot (.mkEq Hlhs (.ofBase .ofFalseE))) rfl)
+      apply trans _ (ne_false_equiv_eq_true? (LamWF.mkNot (.mkEq Hlhs (.ofBase .ofFalseE))) rfl).right
       apply congrArg (.ofBase .ofNot); apply eqSymm? (.mkEq (.ofBase .ofFalseE) Hlhs) rfl
 
-theorem LamThmEquiv.not_eq_false_equiv_eq_true?
-  (wft : LamThmWF lval lctx s t)
-  (heq : LamTerm.not_eq_false_equiv_eq_true? t = .some t') :
-  LamThmEquiv lval lctx (.base .prop) t t' :=
-  fun lctx' => LamEquiv.not_eq_false_equiv_eq_true? (wft lctx') heq
+theorem LamGenConv.not_eq_false_equiv_eq_true? : LamGenConv lval LamTerm.not_eq_false_equiv_eq_true? := by
+  intros t₁ t₂ heq lctx rty wf
+  have ⟨heq, hequiv⟩ := LamEquiv.not_eq_false_equiv_eq_true? wf heq
+  cases heq; apply hequiv
 
 /-- (¬¬a) ↔ a -/
 theorem LamEquiv.not_not_equiv
@@ -418,10 +447,30 @@ theorem LamEquiv.not_not_equiv
   apply GLift.down.inj; dsimp
   apply propext (Iff.intro Classical.byContradiction (fun a b => b a))
 
-theorem LamThmEquiv.not_not_equiv
-  (wft : LamThmWF lval lctx (.base .prop) t) :
-  LamThmEquiv lval lctx (.base .prop) (.mkNot (.mkNot t)) t :=
-  fun lctx' => LamEquiv.not_not_equiv (wft lctx')
+def LamTerm.not_not_equiv? (t : LamTerm) : Option LamTerm :=
+  match t with
+  | .app _ (.base .not) (.app _ (.base .not) t') => .some t'
+  | _ => .none
+
+theorem LamTerm.maxEVarSucc_not_not_equiv? (heq : not_not_equiv? t = .some t') :
+  t'.maxEVarSucc = t.maxEVarSucc := by
+  match t, heq with
+  | .app _ (.base .not) (.app _ (.base .not) t'), Eq.refl _ =>
+    simp [maxEVarSucc, Nat.max, Nat.max_zero_left]
+
+theorem LamEquiv.not_not_equiv?
+  (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
+  (heq : t.not_not_equiv? = .some t') :
+  s = .base .prop ∧ LamEquiv lval lctx (.base .prop) t t' := by
+  match t, heq with
+  | .app _ (.base .not) (.app _ (.base .not) t'), Eq.refl _ =>
+    cases wft.getFn.getBase; cases wft.getArg.getFn.getBase
+    apply And.intro rfl (LamEquiv.not_not_equiv wft.getArg.getArg)
+
+theorem LamGenConv.not_not_equiv? : LamGenConv lval LamTerm.not_not_equiv? := by
+  intros t₁ t₂ heq lctx rty wf
+  have ⟨heq, hequiv⟩ := LamEquiv.not_not_equiv? wf heq
+  cases heq; apply hequiv
 
 /-- ((¬ a) = b) ↔ (a = (¬ b)) -/
 def LamTerm.not_eq_equiv_eq_not? (t : LamTerm) : Option LamTerm :=
@@ -432,7 +481,7 @@ def LamTerm.not_eq_equiv_eq_not? (t : LamTerm) : Option LamTerm :=
 
 theorem LamTerm.maxEVarSucc_not_eq_equiv_eq_not?
   (heq : LamTerm.not_eq_equiv_eq_not? t = .some t') :
-  t.maxEVarSucc = t'.maxEVarSucc :=
+  t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
   | .app _ (.app _ (.base (.eq _)) (.app _ (.base .not) lhs)) rhs, Eq.refl _ => by
     simp [maxEVarSucc, Nat.max, Nat.max_zero_left]
@@ -440,14 +489,20 @@ theorem LamTerm.maxEVarSucc_not_eq_equiv_eq_not?
 theorem LamEquiv.not_eq_equiv_eq_not?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
   (heq : LamTerm.not_eq_equiv_eq_not? t = .some t') :
-  LamEquiv lval lctx (.base .prop) t t' :=
+  s = .base .prop ∧ LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.app _ (.base (.eq _)) (.app _ (.base .not) lhs)) rhs, Eq.refl _ => by
     cases wft.getFn.getFn.getBase; cases wft.getFn.getArg.getFn.getBase
     match wft with
     | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) (.ofApp _ (.ofBase .ofNot) Hlhs)) Hrhs =>
+      apply And.intro rfl
       apply trans (eqSymm? (.mkEq (.mkNot Hlhs) Hrhs) rfl) (trans _ (prop_ne_equiv_eq_not Hlhs Hrhs))
       apply trans (symm (prop_ne_equiv_eq_not Hrhs Hlhs)) (neSymm? (.mkNot (.mkEq Hrhs Hlhs)) rfl)
+
+theorem LamGenConv.not_eq_equiv_eq_not? : LamGenConv lval LamTerm.not_eq_equiv_eq_not? := by
+  intros t₁ t₂ heq lctx rty wf
+  have ⟨heq, hequiv⟩ := LamEquiv.not_eq_equiv_eq_not? wf heq
+  cases heq; apply hequiv
 
 /-- ((¬ a) = (¬ b)) ↔ (a = b) -/
 def LamTerm.not_eq_not_equiv_eq? (t : LamTerm) : Option LamTerm :=
@@ -458,7 +513,7 @@ def LamTerm.not_eq_not_equiv_eq? (t : LamTerm) : Option LamTerm :=
 
 theorem LamTerm.maxEVarSucc_not_eq_not_equiv_eq?
   (heq : LamTerm.not_eq_not_equiv_eq? t = .some t') :
-  t.maxEVarSucc = t'.maxEVarSucc :=
+  t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
   | .app _ (.app _ (.base (.eq _)) (.app _ (.base .not) lhs)) (.app _ (.base .not) rhs), Eq.refl _ => by
     simp [maxEVarSucc, Nat.max, Nat.max_zero_left]
@@ -466,20 +521,20 @@ theorem LamTerm.maxEVarSucc_not_eq_not_equiv_eq?
 theorem LamEquiv.not_eq_not_equiv_eq?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
   (heq : LamTerm.not_eq_not_equiv_eq? t = .some t') :
-  LamEquiv lval lctx (.base .prop) t t' :=
+  s = .base .prop ∧ LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.app _ (.base (.eq _)) (.app _ (.base .not) lhs)) (.app _ (.base .not) rhs), Eq.refl _ => by
     cases wft.getFn.getFn.getBase; cases wft.getArg.getFn.getBase; cases wft.getFn.getArg.getFn.getBase
     match wft with
     | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) (.ofApp _ (.ofBase .ofNot) Hlhs)) (.ofApp _ (.ofBase .ofNot) Hrhs) =>
-      apply trans (symm (not_eq_equiv_eq_not? (.mkEq (.mkNot (.mkNot Hlhs)) Hrhs) rfl))
+      apply And.intro rfl
+      apply trans (symm (not_eq_equiv_eq_not? (.mkEq (.mkNot (.mkNot Hlhs)) Hrhs) rfl).right)
       apply congrFun (congrArg (.ofBase (.ofEq _)) (not_not_equiv Hlhs)) Hrhs
 
-theorem LamThmEquiv.not_eq_not_equiv_eq?
-  (wft : LamThmWF lval lctx s t)
-  (heq : LamTerm.not_eq_not_equiv_eq? t = .some t') :
-  LamThmEquiv lval lctx (.base .prop) t t' :=
-  fun lctx' => LamEquiv.not_eq_not_equiv_eq? (wft lctx') heq
+theorem LamGenConv.not_eq_not_equiv_eq? : LamGenConv lval LamTerm.not_eq_not_equiv_eq? := by
+  intros t₁ t₂ heq lctx rty wf
+  have ⟨heq, hequiv⟩ := LamEquiv.not_eq_not_equiv_eq? wf heq
+  cases heq; apply hequiv
 
 /-- (a ↔ b) ↔ (a = b) -/
 def LamTerm.propext? (t : LamTerm) : Option LamTerm :=

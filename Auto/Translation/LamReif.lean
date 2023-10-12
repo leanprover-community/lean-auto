@@ -798,6 +798,72 @@ section Checker
       | throwError "validOfPropNeEquivEqNot :: Unexpected evaluation result"
     return re
 
+  def validOfTrueEqFalseEquivFalse (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.p .validOfTrueEqFalseEquivFalse p occ) .none
+      | throwError "validOfTrueEqFalseEquivFalse :: Unexpected evaluation result"
+    return re
+
+  def validOfFalseEqTrueEquivFalse (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.p .validOfFalseEqTrueEquivFalse p occ) .none
+      | throwError "validOfFalseEqTrueEquivFalse :: Unexpected evaluation result"
+    return re
+
+  def validOfEqTrueEquiv (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.p .validOfEqTrueEquiv p occ) .none
+      | throwError "validOfEqTrueEquiv :: Unexpected evaluation result"
+    return re
+
+  def validOfEqFalseEquiv (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.p .validOfEqFalseEquiv p occ) .none
+      | throwError "validOfEqFalseEquiv :: Unexpected evaluation result"
+    return re
+
+  def validOfNeTrueEquivEqFalse (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.p .validOfNeTrueEquivEqFalse p occ) .none
+      | throwError "validOfNeTrueEquivEqFalse :: Unexpected evaluation result"
+    return re
+
+  def validOfNeFalseEquivEqTrue (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.p .validOfNeFalseEquivEqTrue p occ) .none
+      | throwError "validOfNeFalseEquivEqTrue :: Unexpected evaluation result"
+    return re
+
+  def validOfNotEqTrueEquivEqFalse (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.p .validOfNotEqTrueEquivEqFalse p occ) .none
+      | throwError "validOfNotEqTrueEquivEqFalse :: Unexpected evaluation result"
+    return re
+
+  def validOfNotEqFalseEquivEqTrue (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.p .validOfNotEqFalseEquivEqTrue p occ) .none
+      | throwError "validOfNotEqFalseEquivEqTrue :: Unexpected evaluation result"
+    return re
+
+  def validOfNotNotEquiv (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.p .validOfNotNotEquiv p occ) .none
+      | throwError "validOfNotNotEquiv :: Unexpected evaluation result"
+    return re
+
+  def validOfNotEqEquivEqNot (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.p .validOfNotEqEquivEqNot p occ) .none
+      | throwError "validOfNotEqEquivEqNot :: Unexpected evaluation result"
+    return re
+
+  def validOfNotEqNotEquivEq (v : REntry) (occ : List Bool) : ReifM REntry := do
+    let p ← lookupREntryPos! v
+    let (_, .addEntry re) ← newChkStep (.p .validOfNotEqNotEquivEq p occ) .none
+      | throwError "validOfNotEqNotEquivEq :: Unexpected evaluation result"
+    return re
+
   def validOfPropext (v : REntry) (occ : List Bool) : ReifM REntry := do
     let p ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.p .validOfPropext p occ) .none
@@ -1554,6 +1620,7 @@ open Embedding.Lam LamReif
       | .validOfInstantiate1 pos arg => return .validOfInstantiate1 (← transPos ref pos) (← transLamTerm ref arg)
       | .validOfInstantiate pos args => return .validOfInstantiate (← transPos ref pos) (← args.mapM (transLamTerm ref))
       | .validOfInstantiateRev pos args => return .validOfInstantiateRev (← transPos ref pos) (← args.mapM (transLamTerm ref))
+      | .validOfEqualize pos occ => return .validOfEqualize (← transPos ref pos) occ
       | .validOfAndLeft pos occ => return .validOfAndLeft (← transPos ref pos) occ
       | .validOfAndRight pos occ => return .validOfAndRight (← transPos ref pos) occ
     | .l cs => ChkStep.l <$>

@@ -531,6 +531,7 @@ inductive InferenceStep where
       instantiate bound variables occurring in `args.reverse[i]`
   -/
   | validOfInstantiateRev (pos : Nat) (args : List LamTerm) : InferenceStep
+  | validOfEqualize (pos : Nat) (occ : List Bool) : InferenceStep
   | validOfAndLeft (pos : Nat) (occ : List Bool) : InferenceStep
   | validOfAndRight (pos : Nat) (occ : List Bool) : InferenceStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
@@ -554,6 +555,17 @@ inductive NonemptyStep where
 
 inductive PrepConvStep where
   | validOfPropNeEquivEqNot : PrepConvStep
+  | validOfTrueEqFalseEquivFalse : PrepConvStep
+  | validOfFalseEqTrueEquivFalse : PrepConvStep
+  | validOfEqTrueEquiv : PrepConvStep
+  | validOfEqFalseEquiv : PrepConvStep
+  | validOfNeTrueEquivEqFalse : PrepConvStep
+  | validOfNeFalseEquivEqTrue : PrepConvStep
+  | validOfNotEqTrueEquivEqFalse : PrepConvStep
+  | validOfNotEqFalseEquivEqTrue : PrepConvStep
+  | validOfNotNotEquiv : PrepConvStep
+  | validOfNotEqEquivEqNot : PrepConvStep
+  | validOfNotEqNotEquivEq : PrepConvStep
   | validOfPropext : PrepConvStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
@@ -617,6 +629,7 @@ def InferenceStep.toString : InferenceStep → String
 | .validOfInstantiate1 pos arg => s!"validOfInstantiate1 {pos} {arg}"
 | .validOfInstantiate pos args => s!"validOfInstantiate {pos} {args}"
 | .validOfInstantiateRev pos args => s!"validOfInstantiateRev {pos} {args}"
+| .validOfEqualize pos occ => s!"validOfEqualize {pos} {occ}"
 | .validOfAndLeft pos occ => s!"validOfAndLeft {pos} {occ}"
 | .validOfAndRight pos occ => s!"validOfAndRight {pos} {occ}"
 
@@ -635,6 +648,17 @@ def NonemptyStep.toString : NonemptyStep → String
 
 def PrepConvStep.toString : PrepConvStep → String
 | .validOfPropNeEquivEqNot => s!"validOfPropNeEquivEqNot"
+| .validOfTrueEqFalseEquivFalse => s!"validOfTrueEqFalseEquivFalse"
+| .validOfFalseEqTrueEquivFalse => s!"validOfFalseEqTrueEquivFalse"
+| .validOfEqTrueEquiv => s!"validOfEqTrueEquiv"
+| .validOfEqFalseEquiv => s!"validOfEqFalseEquiv"
+| .validOfNeTrueEquivEqFalse => s!"validOfNeTrueEquivEqFalse"
+| .validOfNeFalseEquivEqTrue => s!"validOfNeFalseEquivEqTrue"
+| .validOfNotEqTrueEquivEqFalse => s!"validOfNotEqTrueEquivEqFalse"
+| .validOfNotEqFalseEquivEqTrue => s!"validOfNotEqFalseEquivEqTrue"
+| .validOfNotNotEquiv => s!"validOfNotNotEquiv"
+| .validOfNotEqEquivEqNot => s!"validOfNotEqEquivEqNot"
+| .validOfNotEqNotEquivEq => s!"validOfNotEqNotEquivEq"
 | .validOfPropext => s!"validOfPropext"
 
 def WFStep.toString : WFStep → String
@@ -988,6 +1012,13 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
   | .some (lctx, t) =>
     evalValidOfInstantiate r.maxEVarSucc ⟨lvt, lit, r.toLamEVarTy⟩ lctx t args.reverse
   | .none => .fail
+| .validOfEqualize pos occ =>
+  match r.getValid pos with
+  | .some (lctx, t) =>
+    match LamTerm.rwGenAtWith occ LamTerm.equalize? (.base .prop) t with
+    | .some t' => .addEntry (.valid lctx t')
+    | .none => .fail
+  | .none => .fail
 | .validOfAndLeft pos occ =>
   match r.getValid pos with
   | .some (lctx, t) =>
@@ -1051,6 +1082,17 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
 
 @[reducible] def PrepConvStep.eval : (cs : PrepConvStep) → LamTerm → Option LamTerm
 | .validOfPropNeEquivEqNot => LamTerm.prop_ne_equiv_eq_not?
+| .validOfTrueEqFalseEquivFalse => LamTerm.true_eq_false_equiv_false?
+| .validOfFalseEqTrueEquivFalse => LamTerm.false_eq_true_equiv_false?
+| .validOfEqTrueEquiv => LamTerm.eq_true_equiv?
+| .validOfEqFalseEquiv => LamTerm.eq_false_equiv?
+| .validOfNeTrueEquivEqFalse => LamTerm.ne_true_equiv_eq_false?
+| .validOfNeFalseEquivEqTrue => LamTerm.ne_false_equiv_eq_true?
+| .validOfNotEqTrueEquivEqFalse => LamTerm.not_eq_true_equiv_eq_false?
+| .validOfNotEqFalseEquivEqTrue => LamTerm.not_eq_false_equiv_eq_true?
+| .validOfNotNotEquiv => LamTerm.not_not_equiv?
+| .validOfNotEqEquivEqNot => LamTerm.not_eq_equiv_eq_not?
+| .validOfNotEqNotEquivEq => LamTerm.not_eq_not_equiv_eq?
 | .validOfPropext => LamTerm.propext?
 
 @[reducible] def WFStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : WFStep) → EvalResult
@@ -1642,6 +1684,26 @@ theorem InferenceStep.eval_correct
     let h' := RTable.getValid_correct inv h
     apply evalValidOfInstantiate_correct _ h'
   | .none => exact True.intro
+| .validOfEqualize pos occ => by
+  dsimp [eval]
+  match h₁ : r.getValid pos with
+  | .some (lctx, t) =>
+    dsimp
+    match h₂ : LamTerm.rwGenAtWith occ LamTerm.equalize? (.base .prop) t with
+    | .some t' =>
+      dsimp; have h₁' := RTable.getValid_correct inv h₁
+      apply ChkStep.eval_correct_validAux h₁'
+      case vimp =>
+        intro hv lctx'
+        have hv' := hv lctx'; apply LamValid.mpLamEquiv hv'
+        apply LamGenConvWith.rwGenAtWith LamGenConv.equalize? _ _ _ h₂
+        apply LamThmWF.ofLamThmValid hv
+      case condimp =>
+        intro hcond
+        rw [LamTerm.evarEquiv_rwGenAtWith @LamTerm.maxEVarSucc_equalize? _ _ _ h₂]
+        exact hcond
+    | .none => exact True.intro
+  | .none => exact True.intro
 | .validOfAndLeft pos occ => by
   dsimp [eval]
   match h₁ : r.getValid pos with
@@ -1939,6 +2001,39 @@ theorem PrepConvStep.eval_correct (lval : LamValuation) :
 | .validOfPropNeEquivEqNot => And.intro
   LamGenConv.prop_ne_equiv_eq_not?
   (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_prop_ne_equiv_eq_not?)
+| .validOfTrueEqFalseEquivFalse => And.intro
+  LamGenConv.true_eq_false_equiv_false?
+  (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_true_eq_false_equiv_false?)
+| .validOfFalseEqTrueEquivFalse => And.intro
+  LamGenConv.false_eq_true_equiv_false?
+  (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_false_eq_true_equiv_false?)
+| .validOfEqTrueEquiv => And.intro
+  LamGenConv.eq_true_equiv?
+  (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_eq_true_equiv?)
+| .validOfEqFalseEquiv => And.intro
+  LamGenConv.eq_false_equiv?
+  (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_eq_false_equiv?)
+| .validOfNeTrueEquivEqFalse => And.intro
+  LamGenConv.ne_true_equiv_eq_false?
+  (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_ne_true_equiv_eq_false?)
+| .validOfNeFalseEquivEqTrue => And.intro
+  LamGenConv.ne_false_equiv_eq_true?
+  (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_ne_false_equiv_eq_true?)
+| .validOfNotEqTrueEquivEqFalse => And.intro
+  LamGenConv.not_eq_true_equiv_eq_false?
+  (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_not_eq_true_equiv_eq_false?)
+| .validOfNotEqFalseEquivEqTrue => And.intro
+  LamGenConv.not_eq_false_equiv_eq_true?
+  (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_not_eq_false_equiv_eq_true?)
+| .validOfNotNotEquiv => And.intro
+  LamGenConv.not_not_equiv?
+  (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_not_not_equiv?)
+| .validOfNotEqEquivEqNot => And.intro
+  LamGenConv.not_eq_equiv_eq_not?
+  (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_not_eq_equiv_eq_not?)
+| .validOfNotEqNotEquivEq => And.intro
+  LamGenConv.not_eq_not_equiv_eq?
+  (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_not_eq_not_equiv_eq?)
 | .validOfPropext => And.intro
   LamGenConv.propext?
   (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_propext?)
