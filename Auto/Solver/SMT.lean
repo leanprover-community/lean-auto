@@ -7,6 +7,11 @@ initialize
   registerTraceClass `auto.smt.printCommands
   registerTraceClass `auto.smt.result
 
+register_option auto.smt : Bool := {
+  defValue := false
+  descr := "Enable/Disable SMT Solver"
+}
+
 namespace Auto
 
 open IR.SMT
@@ -34,7 +39,7 @@ instance : Lean.KVMap.Value SolverName where
   | "cvc5" => some .cvc5
   | _      => none
 
-register_option smt.solver.name : SolverName := {
+register_option auto.smt.solver.name : SolverName := {
   defValue := SolverName.z3
   descr := "Name of the designated SMT solver"
 }
@@ -48,25 +53,11 @@ private def emitCommand (p : SolverProc) (c : IR.SMT.Command) : IO Unit := do
 private def emitCommands (p : SolverProc) (c : Array IR.SMT.Command) : IO Unit := do
   let _ ← c.mapM (emitCommand p)
 
-private def getSexp (sp : SolverProc) : MetaM Sexp := do
-  let mut s ← sp.stdout.getLine
-  let mut partialRes : PartialResult := {}
-  while true do
-    match parseSexp s ⟨0⟩ partialRes with
-    | .complete se p =>
-      if p != s.endPos then
-        let redundant := Substring.toString ⟨s, p, s.endPos⟩
-        if redundant.toList.any (fun c => !Lexer.SMTSexp.whitespace.contains c) then
-          IO.println s!"getSexp :: Warning, redundant input {repr redundant}"
-      return se
-    | .incomplete pr p =>
-      let remain := Substring.toString ⟨s, p, s.endPos⟩
-      let new ← sp.stdout.getLine
-      s := remain ++ "\n" ++ new
-      partialRes := pr
-    | .malformed =>
-      throwError s!"getSexp :: Malformed (prefix of) input {s}"
-  throwError "getSexp :: Unexpected error"
+private def getSexp (s : String) : MetaM (Sexp × String) :=
+  match parseSexp s ⟨0⟩ {} with
+  | .complete se p => return (se, Substring.toString ⟨s, p, s.endPos⟩)
+  | .incomplete _ _ => throwError s!"getSexp :: Incomplete input {s}"
+  | .malformed => throwError s!"getSexp :: Malformed (prefix of) input {s}"
 
 def createSolver (name : SolverName) : MetaM SolverProc := do
   match name with
@@ -80,23 +71,32 @@ where
 
 /-- Only put declarations in the query -/
 def querySolver (query : Array IR.SMT.Command) : MetaM Unit := do
-  let name := smt.solver.name.get (← getOptions)
+  if !(auto.smt.get (← getOptions)) then
+    throwError "querySolver :: Unexpected error"
+  let name := auto.smt.solver.name.get (← getOptions)
   let solver ← createSolver name
   emitCommand solver (.setOption (.produceProofs true))
   emitCommands solver query
   emitCommand solver .checkSat
-  let checkSatResponse ← getSexp solver
+  let stdout ← solver.stdout.getLine
+  let (checkSatResponse, _) ← getSexp stdout
   match checkSatResponse with
   | .atom (.symb "sat") =>
     emitCommand solver .getModel
-    let model ← getSexp solver
+    let (_, solver) ← solver.takeStdin
+    let stdout ← solver.stdout.readToEnd
+    let stderr ← solver.stderr.readToEnd
+    let model ← getSexp stdout
     solver.kill
-    trace[auto.smt.result] "{name} says Sat, model:\n {model}"
+    trace[auto.smt.result] "{name} says Sat, model:\n {model}\nstderr: {stderr}"
   | .atom (.symb "unsat") =>
     emitCommand solver .getProof
-    let proof ← getSexp solver
+    let (_, solver) ← solver.takeStdin
+    let stdout ← solver.stdout.readToEnd
+    let stderr ← solver.stderr.readToEnd
+    let proof ← getSexp stdout
     solver.kill
-    trace[auto.smt.result] "{name} says Unsat, proof:\n {proof}"
+    trace[auto.smt.result] "{name} says Unsat, proof:\n {proof}\nstderr: {stderr}"
   | _ => trace[auto.smt.result] "{name} produces unexpected check-sat response\n {checkSatResponse}"
 
 end Solver.SMT

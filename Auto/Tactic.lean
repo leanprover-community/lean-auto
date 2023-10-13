@@ -229,31 +229,9 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
       let exportFacts ← LamReif.preprocess exportFacts
       let exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)
       -- ! tptp
-      try
-        let lamVarTy := (← LamReif.getVarVal).map Prod.snd
-        let lamEVarTy ← LamReif.getLamEVarTy
-        let exportLamTerms ← exportFacts.mapM (fun re => do
-          match re with
-          | .valid [] t => return t
-          | _ => throwError "runAuto :: Unexpected error")
-        let query ← lam2TH0 lamVarTy lamEVarTy exportLamTerms
-        trace[auto.tptp.printQuery] "Query:\n{query}"
-        Solver.TPTP.querySolver query
-      catch e =>
-        trace[auto.tptp.result] "TPTP invocation failed with {e.toMessageData}"
+      if (auto.tptp.get (← getOptions)) then queryTPTP exportFacts
       -- ! smt
-      -- try
-      --   let lamVarTy := (← LamReif.getVarVal).map Prod.snd
-      --   let lamEVarTy ← LamReif.getLamEVarTy
-      --   let exportLamTerms ← exportFacts.mapM (fun re => do
-      --     match re.getValid? with
-      --     | .some ([], t) => return t | _ => throwError "runAuto :: Unexpected error")
-      --   let commands ← (lamFOL2SMT lamVarTy lamEVarTy exportLamTerms).run'
-      --   for cmd in commands do
-      --     trace[auto.smt.printCommands] "Command: {cmd}"
-      --   Solver.SMT.querySolver commands
-      -- catch e =>
-      --   trace[auto.smt.result] "SMT invocation failed with {e.toMessageData}"
+      if (auto.smt.get (← getOptions)) then querySMT exportFacts
       -- reconstruction
       let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ← Lam2D.callDuper exportInhs exportFacts
       trace[auto.printProof] "Duper found proof of {← Meta.inferType proof}"
@@ -276,6 +254,35 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
     trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
     return .unsat proof
   | .useSorry => return .unsat (← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []])
+where
+  queryTPTP exportFacts : LamReif.ReifM Unit :=
+    try
+      let lamVarTy := (← LamReif.getVarVal).map Prod.snd
+      let lamEVarTy ← LamReif.getLamEVarTy
+      let exportLamTerms ← exportFacts.mapM (fun re => do
+        match re with
+        | .valid [] t => return t
+        | _ => throwError "runAuto :: Unexpected error")
+      let query ← lam2TH0 lamVarTy lamEVarTy exportLamTerms
+      trace[auto.tptp.printQuery] "Query:\n{query}"
+      Solver.TPTP.querySolver query
+    catch e =>
+      trace[auto.tptp.result] "TPTP invocation failed with {e.toMessageData}"
+  querySMT exportFacts : LamReif.ReifM Unit :=
+    try
+      let lamVarTy := (← LamReif.getVarVal).map Prod.snd
+      let lamEVarTy ← LamReif.getLamEVarTy
+      let exportLamTerms ← exportFacts.mapM (fun re => do
+        match re with
+        | .valid [] t => return t
+        | _ => throwError "runAuto :: Unexpected error")
+      let commands ← (lamFOL2SMT lamVarTy lamEVarTy exportLamTerms).run'
+      for cmd in commands do
+        trace[auto.smt.printCommands] "Command: {cmd}"
+      Solver.SMT.querySolver commands
+    catch e =>
+      trace[auto.smt.result] "SMT invocation failed with {e.toMessageData}"
+
 
 @[tactic auto]
 def evalAuto : Tactic

@@ -260,6 +260,7 @@ inductive Command where
                   (resTy : SSort) → (body : STerm) → Command
   | defSort   : (name : String) → (args : Array String) → (body : SSort) → Command
   | declDtype : (name : String) → (params : Array String) → (cstrDecls : Array ConstrDecl) → Command
+  | exit      : Command
 
 def Command.toString : Command → String
 | .assert prop                         => s!"(assert {prop})"
@@ -296,6 +297,7 @@ def Command.toString : Command → String
   let scstrDecls := cstrDecls.map (fun d => ConstrDecl.toString d (params.map SIdent.symb))
   let scstrDecls := "(" ++ String.intercalate " " scstrDecls.data ++ ")))"
   pre ++ sparams ++ scstrDecls
+| .exit                                => "(exit)"
 
 instance : ToString Command where
   toString := Command.toString

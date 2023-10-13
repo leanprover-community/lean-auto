@@ -7,8 +7,8 @@ open Set
 set_option trace.auto.lamReif.printValuation true
 set_option trace.auto.tptp.printQuery true
 set_option trace.auto.tptp.result true
-set_option tptp.solver.name "zeport"
-set_option tptp.zeport.path "/home/indprinciple/Programs/zipperposition/portfolio/portfolio.fo.parallel.py"
+set_option auto.tptp.solver.name "zeport"
+set_option auto.tptp.zeport.path "/home/indprinciple/Programs/zipperposition/portfolio/portfolio.fo.parallel.py"
 
 #check subset_def
 #check mem_Icc

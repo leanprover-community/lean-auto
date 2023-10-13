@@ -6,13 +6,17 @@ initialize
   registerTraceClass `auto.tptp.printQuery
   registerTraceClass `auto.tptp.result
 
+register_option auto.tptp : Bool := {
+  defValue := false
+  descr := "Enable/Disable TPTP Solver"
+}
+
 namespace Auto
 
 namespace Solver.TPTP
 
 inductive SolverName where
   -- Disable TPTP prover
-  | none
   | zipperposition
   -- zipperposition + E theorem prover, portfolio
   | zeport
@@ -20,24 +24,22 @@ deriving BEq, Hashable, Inhabited
 
 instance : ToString SolverName where
   toString : SolverName → String
-  | .none => "none"
   | .zipperposition => "zipperposition"
   | .zeport => "zeport"
 
 instance : Lean.KVMap.Value SolverName where
   toDataValue n := toString n
   ofDataValue?
-  | "none" => some .none
   | "zipperposition" => some .zipperposition
   | "zeport" => some .zeport
   | _ => none
 
-register_option tptp.solver.name : SolverName := {
+register_option auto.tptp.solver.name : SolverName := {
   defValue := SolverName.zipperposition
   descr := "Name of the designated TPTP solver"
 }
 
-register_option tptp.zeport.path : String := {
+register_option auto.tptp.zeport.path : String := {
   defValue := "zeport"
   descr := "Path to the zipperposition-E portfolio"
 }
@@ -60,7 +62,7 @@ def queryZipperposition (query : String) : MetaM Unit := do
   solver.kill
 
 def queryZEPort (query : String) : MetaM Unit := do
-  let path := tptp.zeport.path.get (← getOptions)
+  let path := auto.tptp.zeport.path.get (← getOptions)
   -- To avoid concurrency issue, use `attempt`
   attempt <| IO.FS.createDir "./.zeport_ignore"
   let mut idx := 0
@@ -87,8 +89,9 @@ def queryZEPort (query : String) : MetaM Unit := do
 where attempt (action : MetaM Unit) := try action catch _ => pure ()
 
 def querySolver (query : String) : MetaM Unit := do
-  match tptp.solver.name.get (← getOptions) with
-  | .none => queryNone
+  if !(auto.tptp.get (← getOptions)) then
+    throwError "querySolver :: Unexpected error"
+  match auto.tptp.solver.name.get (← getOptions) with
   | .zipperposition => queryZipperposition query
   | .zeport => queryZEPort query
 

@@ -3,6 +3,7 @@ These are examples borrowed from the SMT Lean tests,
 `https://github.com/ufmg-smite/lean-smt/blob/main/Test/Int`
 -/
 import Mathlib.Data.Real.Basic
+import Auto.Tactic
 
 -- Arith
 
@@ -21,7 +22,7 @@ example (n m k l : Int) (hN : n ≤ m) (hK : k ≤ l) : n + k ≤ m + l := by
 -- Cong
 
 theorem cong (x y : Int) (f : Int → Int) : x = y → f x = f y := by
-  sorry
+  auto
 
 -- DefineSort
 
@@ -73,34 +74,13 @@ section
 variable (f : Int → Int)
 
 example (h : f 10 = 10) : let y := 10; f y = 10 := by
-  --smt [h]
-  sorry
+  auto
 
 example (h : let y := 10; f y = 10) : f 10 = 10 := by
-  --smt [h]
-  sorry
+  auto
 
 example (h : f 10 = 10) : f 10 = 10 := by
-  let z : Int := 10
-  have : 10 = z := rfl
-  rw [this]
-  -- smt [h, z]
-  exact h
-
-example (h : f 10 = 10) : f 10 = 10 := by
-  let z : Int := 10
-  let y : Int := z
-  have : 10 = y := rfl
-  rw [this]
-  -- smt [h, y, z]
-  exact h
-
-example (h : f 10 = 10) : f 10 = 10 := by
-  let z (_ : Int) : Int := f 10
-  have : f 10 = z 3 := rfl
-  rw [this]
-  -- smt [h, z]
-  exact h
+  auto
 
 theorem neg (x : Int) : - -x = x := by
   sorry

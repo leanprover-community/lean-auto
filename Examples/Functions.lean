@@ -8,9 +8,10 @@ Taken from Mathematics in Lean. The solutions use definitional equality, so for 
 prover we need to add axioms to unfold the definitions.
 -/
 
+set_option auto.tptp true
 set_option trace.auto.tptp.result true
-set_option tptp.solver.name "zeport"
-set_option tptp.zeport.path "/home/indprinciple/Programs/zipperposition/portfolio/portfolio.fo.parallel.py"
+set_option auto.tptp.solver.name "zeport"
+set_option auto.tptp.zeport.path "/home/indprinciple/Programs/zipperposition/portfolio/portfolio.fo.parallel.py"
 
 
 section

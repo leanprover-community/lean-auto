@@ -5,13 +5,15 @@ import Auto.Tactic
 
 -- From TPIL
 
+set_option auto.smt true
+set_option auto.smt.solver.name "cvc5"
+set_option trace.auto.smt.result true
+
 section
 open Classical
 
 variable (α : Type) (p q : α → Prop)
 variable (r : Prop)
-
-set_option smt.solver.name "cvc5"
 
 set_option trace.auto.tactic true
 example : (∃ x : α, r) → r := by
