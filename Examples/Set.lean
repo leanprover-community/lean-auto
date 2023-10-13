@@ -10,6 +10,10 @@ import Auto.Tactic
 
 open Set
 
+set_option auto.smt true
+set_option trace.auto.smt.printCommands true
+set_option trace.auto.smt.result true
+
 set_option trace.auto.tptp.printQuery true
 set_option trace.auto.tptp.result true
 set_option auto.tptp.solver.name "zeport"

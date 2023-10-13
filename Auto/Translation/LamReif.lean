@@ -1,4 +1,5 @@
 import Lean
+import Std.Data.Array.Basic
 import Auto.Lib.MonadUtils
 import Auto.Lib.ExprExtra
 import Auto.Lib.MetaExtra
@@ -117,16 +118,16 @@ def printCheckerStats : ReifM Unit := do
 
 def printValuation : ReifM Unit := do
   let tyVal ← getTyVal
-  for ((e, lvl), idx) in tyVal.zip ⟨List.range tyVal.size⟩ do
+  for ((e, lvl), idx) in tyVal.zipWithIndex do
     trace[auto.lamReif.printValuation] "Type Atom {idx} := {e} : {Expr.sort lvl}"
   let varVal ← getVarVal
-  for ((e, s), idx) in varVal.zip ⟨List.range varVal.size⟩ do
+  for ((e, s), idx) in varVal.zipWithIndex do
     trace[auto.lamReif.printValuation] "Term Atom {idx} : {toString s} := {e}"
   let lamEVarTy ← getLamEVarTy
-  for (s, idx) in lamEVarTy.zip ⟨List.range lamEVarTy.size⟩ do
+  for (s, idx) in lamEVarTy.zipWithIndex do
     trace[auto.lamReif.printValuation] "Etom {idx} : {toString s}"
   let lamIl ← getLamILTy
-  for (s, idx) in lamIl.zip ⟨List.range lamIl.size⟩ do
+  for (s, idx) in lamIl.zipWithIndex do
     trace[auto.lamReif.printValuation] "LamILTy {idx} := {s}"
 
 def printProofs : ReifM Unit := do
@@ -1723,7 +1724,7 @@ def buildOptimizedCheckerExprFor (re : REntry) : ReifM Expr := do
 
 register_option auto.optimizeCheckerProof : Bool := {
   defValue := true
-  descr := "Whether to optimize checker proof"
+  descr := "Enable/Disable checker proof optimization"
 }
 
 /-- Decide whether to optimize based on option -/

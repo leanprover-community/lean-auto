@@ -10,6 +10,11 @@ initialize
   registerTraceClass `auto.printLemmas
   registerTraceClass `auto.printProof
 
+register_option auto.proofReconstruction : Bool := {
+  defValue := false,
+  descr := "Enable/Disable proof reconstruction"
+}
+
 namespace Auto
 
 syntax hintelem := term <|> "*"
@@ -226,25 +231,18 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
       let _ ← LamReif.reifInhabitations uinhs
       let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
         (fun (s, _) => Embedding.Lam.REntry.nonempty s)
+      -- **Auto Preprocess**
       let exportFacts ← LamReif.preprocess exportFacts
       let exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)
-      -- ! tptp
+      -- **TPTP**
       if (auto.tptp.get (← getOptions)) then queryTPTP exportFacts
-      -- ! smt
+      -- **SMT**
       if (auto.smt.get (← getOptions)) then querySMT exportFacts
-      -- reconstruction
-      let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ← Lam2D.callDuper exportInhs exportFacts
-      trace[auto.printProof] "Duper found proof of {← Meta.inferType proof}"
-      LamReif.newAssertion proof proofLamTerm
-      let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
-      let forallElimed ← LamReif.validOfElimForalls etomInstantiated usedInhs
-      let contra ← LamReif.validOfImps forallElimed unsatCore
-      LamReif.printValuation
-      LamReif.printProofs
-      Reif.setDeclName? declName?
-      let checker ← LamReif.buildCheckerExprFor contra
-      let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
-      Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra
+      -- **Proof Reconstruction**
+      if (auto.proofReconstruction.get (← getOptions)) then
+        reconstruct declName? exportFacts exportInhs
+      else
+        return ← Meta.mkAppM ``sorryAx #[.const ``False []]
       )
     let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
       let uvalids ← liftM <| Reif.getFacts
@@ -282,7 +280,19 @@ where
       Solver.SMT.querySolver commands
     catch e =>
       trace[auto.smt.result] "SMT invocation failed with {e.toMessageData}"
-
+  reconstruct declName? exportFacts exportInhs : LamReif.ReifM Expr := do
+    let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ← Lam2D.callDuper exportInhs exportFacts
+    trace[auto.printProof] "Duper found proof of {← Meta.inferType proof}"
+    LamReif.newAssertion proof proofLamTerm
+    let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
+    let forallElimed ← LamReif.validOfElimForalls etomInstantiated usedInhs
+    let contra ← LamReif.validOfImps forallElimed unsatCore
+    LamReif.printValuation
+    LamReif.printProofs
+    Reif.setDeclName? declName?
+    let checker ← LamReif.buildCheckerExprFor contra
+    let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
+    Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra
 
 @[tactic auto]
 def evalAuto : Tactic

@@ -210,7 +210,7 @@ def ConstInst.ofExpr? (params : Array Name) (bvars : Array Expr) (e : Expr) : Me
   let mut argsIdx := #[]
   let mut argsInst := #[]
   -- Check that all dependent and instance arguments are instantiated
-  for (arg, idx) in args.zip ⟨List.range args.size⟩ do
+  for (arg, idx) in args.zipWithIndex do
     headType ← Core.betaReduce headType
     let .forallE _ ty body bi := headType
       | throwError "ConstInst.ofExpr? :: {headType} is not a `∀`"
@@ -506,7 +506,7 @@ def saturate : MonoM Unit := do
       let ci ← lookupActiveCi! name cisIdx
       let lisArr ← getLisArr
       trace[auto.mono.match] "Matching against {ci}"
-      for (lis, idx) in lisArr.zip ⟨List.range lisArr.size⟩ do
+      for (lis, idx) in lisArr.zipWithIndex do
         cnt := cnt + 1
         let mut newLis := lis
         for li in lis do

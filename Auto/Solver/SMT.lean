@@ -86,17 +86,17 @@ def querySolver (query : Array IR.SMT.Command) : MetaM Unit := do
     let (_, solver) ← solver.takeStdin
     let stdout ← solver.stdout.readToEnd
     let stderr ← solver.stderr.readToEnd
-    let model ← getSexp stdout
+    let (model, _) ← getSexp stdout
     solver.kill
-    trace[auto.smt.result] "{name} says Sat, model:\n {model}\nstderr: {stderr}"
+    trace[auto.smt.result] "{name} says Sat, model:\n{model}\nstderr:\n{stderr}"
   | .atom (.symb "unsat") =>
     emitCommand solver .getProof
     let (_, solver) ← solver.takeStdin
     let stdout ← solver.stdout.readToEnd
     let stderr ← solver.stderr.readToEnd
-    let proof ← getSexp stdout
+    let (proof, _) ← getSexp stdout
     solver.kill
-    trace[auto.smt.result] "{name} says Unsat, proof:\n {proof}\nstderr: {stderr}"
+    trace[auto.smt.result] "{name} says Unsat, proof:\n {proof}\nstderr:\n{stderr}"
   | _ => trace[auto.smt.result] "{name} produces unexpected check-sat response\n {checkSatResponse}"
 
 end Solver.SMT

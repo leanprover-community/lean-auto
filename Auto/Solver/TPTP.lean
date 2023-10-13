@@ -81,7 +81,7 @@ def queryZEPort (query : String) : MetaM Unit := do
   let solver ← createAux "python3" #[path, s!"./.zeport_ignore/problem{idx}.p", "10", s!"./.zeport_ignore/tmp{idx}"]
   let stderr ← solver.stderr.readToEnd
   let stdout ← solver.stdout.readToEnd
-  trace[auto.tptp.result] "Result: \nstderr: {stderr}\nstdout: {stdout}"
+  trace[auto.tptp.result] "Result: \nstderr:\n{stderr}\nstdout:\n{stdout}"
   solver.kill
   IO.FS.removeFile s!"./.zeport_ignore/problem{idx}.p"
   -- For synchronization, remove directory in the end

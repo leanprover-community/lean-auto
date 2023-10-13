@@ -12,7 +12,7 @@ initialize
 
 register_option auto.dunif.oracleInstOn : Bool := {
   defValue := true
-  descr := "Whether to use instantiation oracle, which attempts to " ++
+  descr := "Enable/Disable instantiation oracle, which attempts to " ++
            "instantiate a side of the equation if it's a metavariable"
 }
 
@@ -44,7 +44,7 @@ def oracleInst (p : UnifProblem) (eq : UnifEq) : MetaM (Option UnifProblem) := d
 
 register_option oracleOccursOn : Bool := {
   defValue := true
-  descr := "Whether to use the occurs check oracle, which is the generalization" ++
+  descr := "Enable/Disable occurs check oracle, which is the generalization" ++
            " of first-order occurs check to dependent type theory. It only checks metavariables" ++
            " which will always be in the term even after β-reduction and further metavariable instantiations."
 }

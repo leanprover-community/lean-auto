@@ -1,4 +1,5 @@
 import Lean
+import Std.Data.Array.Basic
 import Auto.Lib.MessageData
 import Auto.Lib.ExprExtra
 import Auto.Lib.Containers
@@ -76,7 +77,7 @@ def Lemma.reorderForallInstDep (lem : Lemma) : MetaM Lemma := do
   Meta.forallTelescope lem.type fun xs body => do
     let mut prec := #[]
     let mut trail := #[]
-    for (fvar, i) in xs.data.zip (List.range xs.size) do
+    for (fvar, i) in xs.zipWithIndex do
       if depargs.contains i || !(← Meta.isProp (← Meta.inferType fvar)) then
         prec := prec.push fvar
       else

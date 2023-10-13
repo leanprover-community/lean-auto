@@ -12,7 +12,7 @@ register_option auto.dunif.dbgOn : Bool := {
   defValue := false
   -- This might be important because the debugging facilities
   --   may slow down the unification procedure
-  descr := "Whether to turn on debugging functionalities in dependently typed unification"
+  descr := "Enable/Disable debugging functionalities in dependently typed unification"
 }
 
 @[inline] def getDUnifDbgOn : CoreM Bool := do
