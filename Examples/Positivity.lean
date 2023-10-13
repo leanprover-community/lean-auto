@@ -7,6 +7,7 @@ import Mathlib.Data.Complex.Exponential
 import Mathlib.Data.Real.Sqrt
 import Mathlib.Analysis.Normed.Group.Basic
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Auto.Tactic
 
 /-! # Tests for the `positivity` tactic
 
@@ -14,6 +15,10 @@ This tactic proves goals of the form `0 ≤ a` and `0 < a`.
 -/
 
 open Function Nat NNReal ENNReal
+set_option auto.smt true
+set_option trace.auto.smt.printCommands true
+set_option trace.auto.smt.result true
+set_option auto.proofReconstruction false
 
 variable {ι α β : Type _}
 
@@ -28,47 +33,47 @@ example : 0 < 3 := by positivity
 /- ## Goals working directly from a hypothesis -/
 -- set_option trace.Meta.debug true
 -- sudo set_option trace.Tactic.positivity true
-example {a : ℤ} (ha : 0 < a) : 0 < a := by positivity
-example {a : ℤ} (ha : 0 < a) : 0 ≤ a := by positivity
-example {a : ℤ} (ha : 0 < a) : a ≠ 0 := by positivity
-example {a : ℤ} (ha : 0 ≤ a) : 0 ≤ a := by positivity
-example {a : ℤ} (ha : a ≠ 0) : a ≠ 0 := by positivity
-example {a : ℤ} (ha : a = 0) : 0 ≤ a := by positivity
+example {a : ℤ} (ha : 0 < a) : 0 < a := by auto
+example {a : ℤ} (ha : 0 < a) : 0 ≤ a := by auto
+example {a : ℤ} (ha : 0 < a) : a ≠ 0 := by auto
+example {a : ℤ} (ha : 0 ≤ a) : 0 ≤ a := by auto
+example {a : ℤ} (ha : a ≠ 0) : a ≠ 0 := by auto
+example {a : ℤ} (ha : a = 0) : 0 ≤ a := by auto
 
 /- ### Reversing hypotheses -/
 
-example {a : ℤ} (ha : a > 0) : 0 < a := by positivity
-example {a : ℤ} (ha : a > 0) : 0 ≤ a := by positivity
-example {a : ℤ} (ha : a > 0) : a ≠ 0 := by positivity
-example {a : ℤ} (ha : a ≥ 0) : 0 ≤ a := by positivity
-example {a : ℤ} (ha : 0 ≠ a) : a ≠ 0 := by positivity
-example {a : ℤ} (ha : 0 < a) : a > 0 := by positivity
-example {a : ℤ} (ha : 0 < a) : a ≥ 0 := by positivity
-example {a : ℤ} (ha : 0 < a) : 0 ≠ a := by positivity
-example {a : ℤ} (ha : 0 ≤ a) : a ≥ 0 := by positivity
-example {a : ℤ} (ha : a ≠ 0) : 0 ≠ a := by positivity
-example {a : ℤ} (ha : a = 0) : a ≥ 0 := by positivity
-example {a : ℤ} (ha : 0 = a) : 0 ≤ a := by positivity
-example {a : ℤ} (ha : 0 = a) : a ≥ 0 := by positivity
+example {a : ℤ} (ha : a > 0) : 0 < a := by auto
+example {a : ℤ} (ha : a > 0) : 0 ≤ a := by auto
+example {a : ℤ} (ha : a > 0) : a ≠ 0 := by auto
+example {a : ℤ} (ha : a ≥ 0) : 0 ≤ a := by auto
+example {a : ℤ} (ha : 0 ≠ a) : a ≠ 0 := by auto
+example {a : ℤ} (ha : 0 < a) : a > 0 := by auto
+example {a : ℤ} (ha : 0 < a) : a ≥ 0 := by auto
+example {a : ℤ} (ha : 0 < a) : 0 ≠ a := by auto
+example {a : ℤ} (ha : 0 ≤ a) : a ≥ 0 := by auto
+example {a : ℤ} (ha : a ≠ 0) : 0 ≠ a := by auto
+example {a : ℤ} (ha : a = 0) : a ≥ 0 := by auto
+example {a : ℤ} (ha : 0 = a) : 0 ≤ a := by auto
+example {a : ℤ} (ha : 0 = a) : a ≥ 0 := by auto
 
 /- ### Calling `norm_num` -/
 
-example {a : ℤ} (ha : 3 = a) : 0 ≤ a := by positivity
-example {a : ℤ} (ha : 3 = a) : a ≠ 0 := by positivity
-example {a : ℤ} (ha : 3 = a) : 0 < a := by positivity
-example {a : ℤ} (ha : a = -1) : a ≠ 0 := by positivity
+example {a : ℤ} (ha : 3 = a) : 0 ≤ a := by auto
+example {a : ℤ} (ha : 3 = a) : a ≠ 0 := by auto
+example {a : ℤ} (ha : 3 = a) : 0 < a := by auto
+example {a : ℤ} (ha : a = -1) : a ≠ 0 := by auto
 
-example {a : ℤ} (ha : 3 ≤ a) : 0 ≤ a := by positivity
-example {a : ℤ} (ha : 3 ≤ a) : a ≠ 0 := by positivity
-example {a : ℤ} (ha : 3 ≤ a) : 0 < a := by positivity
+example {a : ℤ} (ha : 3 ≤ a) : 0 ≤ a := by auto
+example {a : ℤ} (ha : 3 ≤ a) : a ≠ 0 := by auto
+example {a : ℤ} (ha : 3 ≤ a) : 0 < a := by auto
 
-example {a : ℤ} (ha : 3 < a) : 0 ≤ a := by positivity
-example {a : ℤ} (ha : 3 < a) : a ≠ 0 := by positivity
-example {a : ℤ} (ha : 3 < a) : 0 < a := by positivity
+example {a : ℤ} (ha : 3 < a) : 0 ≤ a := by auto
+example {a : ℤ} (ha : 3 < a) : a ≠ 0 := by auto
+example {a : ℤ} (ha : 3 < a) : 0 < a := by auto
 
-example {a b : ℤ} (h : 0 ≤ a + b) : 0 ≤ a + b := by positivity
+example {a b : ℤ} (h : 0 ≤ a + b) : 0 ≤ a + b := by auto
 
-example {a : ℤ} (hlt : 0 ≤ a) (hne : a ≠ 0) : 0 < a := by positivity
+example {a : ℤ} (hlt : 0 ≤ a) (hne : a ≠ 0) : 0 < a := by auto
 
 section
 
@@ -89,12 +94,12 @@ end
 section ite
 variable {p : Prop} [Decidable p] {a b : ℤ}
 
-example (ha : 0 < a) (hb : 0 < b) : 0 < ite p a b := by positivity
-example (ha : 0 < a) (hb : 0 ≤ b) : 0 ≤ ite p a b := by positivity
-example (ha : 0 ≤ a) (hb : 0 < b) : 0 ≤ ite p a b := by positivity
-example (ha : 0 < a) (hb : b ≠ 0) : ite p a b ≠ 0 := by positivity
-example (ha : a ≠ 0) (hb : 0 < b) : ite p a b ≠ 0 := by positivity
-example (ha : a ≠ 0) (hb : b ≠ 0) : ite p a b ≠ 0 := by positivity
+example (ha : 0 < a) (hb : 0 < b) : 0 < ite p a b := by auto
+example (ha : 0 < a) (hb : 0 ≤ b) : 0 ≤ ite p a b := by auto
+example (ha : 0 ≤ a) (hb : 0 < b) : 0 ≤ ite p a b := by auto
+example (ha : 0 < a) (hb : b ≠ 0) : ite p a b ≠ 0 := by auto
+example (ha : a ≠ 0) (hb : 0 < b) : ite p a b ≠ 0 := by auto
+example (ha : a ≠ 0) (hb : b ≠ 0) : ite p a b ≠ 0 := by auto
 
 end ite
 
@@ -127,11 +132,11 @@ example {a b : ℚ} (ha : 0 < a) (hb : b ≠ 0) : a / b ≠ 0 := by positivity
 example {a b : ℚ} (ha : a ≠ 0) (hb : 0 < b) : a / b ≠ 0 := by positivity
 example {a b : ℚ} (ha : a ≠ 0) (hb : b ≠ 0) : a / b ≠ 0 := by positivity
 
-example {a b : ℤ} (ha : 0 < a) (hb : 0 < b) : 0 ≤ a / b := by positivity
-example {a : ℤ} (ha : 0 < a) : 0 < a / a := by positivity
-example {a b : ℤ} (ha : 0 < a) (hb : 0 ≤ b) : 0 ≤ a / b := by positivity
-example {a b : ℤ} (ha : 0 ≤ a) (hb : 0 < b) : 0 ≤ a / b := by positivity
-example {a b : ℤ} (ha : 0 ≤ a) (hb : 0 ≤ b) : 0 ≤ a / b := by positivity
+example {a b : ℤ} (ha : 0 < a) (hb : 0 < b) : 0 ≤ a / b := by auto
+example {a : ℤ} (ha : 0 < a) : 0 < a / a := by auto
+example {a b : ℤ} (ha : 0 < a) (hb : 0 ≤ b) : 0 ≤ a / b := by auto
+example {a b : ℤ} (ha : 0 ≤ a) (hb : 0 < b) : 0 ≤ a / b := by auto
+example {a b : ℤ} (ha : 0 ≤ a) (hb : 0 ≤ b) : 0 ≤ a / b := by auto
 
 example {a : ℚ} (ha : 0 < a) : 0 < a⁻¹ := by positivity
 example {a : ℚ} (ha : 0 ≤ a) : 0 ≤ a⁻¹ := by positivity
@@ -154,15 +159,15 @@ example (a : ℚ) : 0 ≤ |a| := by positivity
 -- example {a : ℤ} {b : ℚ} (ha : a ≠ 0) (hb : 0 < b) : a • b ≠ 0 := by positivity
 -- example {a : ℤ} {b : ℚ} (ha : a ≠ 0) (hb : b ≠ 0) : a • b ≠ 0 := by positivity
 
-example {a : ℤ} (ha : 3 < a) : 0 ≤ a + a := by positivity
+example {a : ℤ} (ha : 3 < a) : 0 ≤ a + a := by auto
 
-example {a b : ℤ} (ha : 3 < a) (hb : 4 ≤ b) : 0 ≤ 3 + a + b + b + 14 := by positivity
+example {a b : ℤ} (ha : 3 < a) (hb : 4 ≤ b) : 0 ≤ 3 + a + b + b + 14 := by auto
 
 -- example {H : Type _} [LinearOrderedAddCommGroup H] {a b : H} (ha : 0 < a) (hb : 0 ≤ b) :
 --   0 ≤ a + a + b :=
 -- by positivity
 
-example {a : ℤ} (ha : 3 < a) : 0 < a + a := by positivity
+example {a : ℤ} (ha : 3 < a) : 0 < a + a := by auto
 
 example {a b : ℚ} (ha : 3 < a) (hb : 4 ≤ b) : 0 < 3 + a * b / 7 + b + 7 + 14 := by positivity
 
