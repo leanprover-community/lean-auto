@@ -97,6 +97,8 @@ inductive STerm where
   | existE  : (name : String) → (binderType : SSort) → (body : STerm) → STerm
   | matchE  : (matchTerm : STerm) → Array (MatchCase STerm) → STerm
 
+def STerm.qStrApp (s : String) (arr : Array STerm) := STerm.qIdApp (.ofString s) arr
+
 private def STerm.toStringAux : STerm → List SIdent → String
   | .sConst c, _         => SpecConst.toString c
   | .bvar i, binders   =>

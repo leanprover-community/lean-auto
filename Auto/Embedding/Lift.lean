@@ -1,3 +1,4 @@
+import Std.Data.Int.Basic
 import Auto.Lib.IsomType
 
 namespace Auto.Embedding
@@ -47,6 +48,12 @@ def idivLift.{u} (m n : GLift.{1, u} Int) :=
 
 def imodLift.{u} (m n : GLift.{1, u} Int) :=
   GLift.up (Int.mod m.down n.down)
+
+def iedivLift.{u} (m n : GLift.{1, u} Int) :=
+  GLift.up (Int.ediv m.down n.down)
+
+def iemodLift.{u} (m n : GLift.{1, u} Int) :=
+  GLift.up (Int.emod m.down n.down)
 
 def ileLift.{u} (m n : GLift.{1, u} Int) :=
   GLift.up (Int.le m.down n.down)

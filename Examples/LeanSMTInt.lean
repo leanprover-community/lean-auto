@@ -9,9 +9,48 @@ set_option auto.smt true
 set_option trace.auto.smt.printCommands true
 set_option trace.auto.smt.result true
 set_option trace.auto.lamReif.printResult true
+set_option auto.proofReconstruction false
+set_option auto.smt.solver.name "cvc5"
 
 -- Arith
+example (n m : Int) : (n % m) + (n / m) * m = n := by
+  auto
+
+example (m : Int) : m % 0 = m := by
+  auto
+
+example (n m : Int) : m ≠ 0 → n % m ≥ 0 := by
+  auto
+
 example (n m : Int) (h : 0 < m) : n % m < m := by
+  auto
+
+#eval (-11) % (-4)
+example : ((-11) % (-4)) = 1 := by
+  auto
+
+#eval ((-11) / (-4))
+example : ((-11) / (-4)) = 3 := by
+  auto
+
+example (n m : Int) : (Int.mod n m) + (Int.div n m) * m = n := by
+  auto
+
+example (m : Int) : Int.mod m 0 = m := by
+  auto
+
+example (n m : Int) : (m > 0 → Int.mod n m < m) ∧ (m < 0 → Int.mod n m > m) := by
+  auto
+
+example (n m : Int) (h₁ : 0 < m) (h₂ : 0 < n) : Int.div n m ≤ n := by
+  auto
+
+#eval (Int.mod (-11) (-4))
+example : (Int.mod (-11) (-4)) = -3 := by
+  auto
+
+#eval Int.div (-14) (-4)
+example : Int.div (-14) (-4) = 3 := by
   auto
 
 example (n m k l : Int) : (n - m) * k + l = n*k - m*k + l := by
@@ -73,7 +112,5 @@ example (h : f 10 = 10) : f 10 = 10 := by
 
 theorem neg (x : Int) : - -x = x := by
   auto
-
-
 
 end

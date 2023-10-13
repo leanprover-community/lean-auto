@@ -512,7 +512,7 @@ partial def LamTerm.toStringLCtx (lctx : Nat) : LamTerm → String
       match b.beq .and || b.beq .or || b.beq .imp || b.beq .iff ||
             b.beq .andb' || b.beq .orb' ||
             b.beq .iadd' || b.beq .isub' || b.beq .imul' || b.beq .idiv' || b.beq .imod' ||
-            b.beq .ile' || b.beq .ige' || b.beq .ilt' || b.beq .igt' ||
+            b.beq .iediv' || b.beq .iemod' || b.beq .ile' || b.beq .ige' || b.beq .ilt' || b.beq .igt' ||
             b.isEq || b.isEqI with
       | true =>
         match args with

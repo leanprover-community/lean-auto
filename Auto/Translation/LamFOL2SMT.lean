@@ -56,36 +56,38 @@ private def CstrReal2STerm : CstrReal → STerm
 | .one  => .sConst (.num 1)
 
 private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → TransM LamAtom STerm
-| .and        => return .qIdApp (QualIdent.ofString "and") #[arg1, arg2]
-| .or         => return .qIdApp (QualIdent.ofString "or") #[arg1, arg2]
-| .imp        => return .qIdApp (QualIdent.ofString "=>") #[arg1, arg2]
-| .iff        => return .qIdApp (QualIdent.ofString "not") #[.qIdApp (QualIdent.ofString "xor") #[arg1, arg2]]
-| .bcst .andb => return .qIdApp (QualIdent.ofString "and") #[arg1, arg2]
-| .bcst .orb  => return .qIdApp (QualIdent.ofString "or") #[arg1, arg2]
-| .icst .iadd => return .qIdApp (QualIdent.ofString "+") #[arg1, arg2]
-| .icst .isub => return .qIdApp (QualIdent.ofString "-") #[arg1, arg2]
-| .icst .imul => return .qIdApp (QualIdent.ofString "*") #[arg1, arg2]
-| .icst .idiv => return .qIdApp (QualIdent.ofString "div") #[arg1, arg2]
-| .icst .imod => return .qIdApp (QualIdent.ofString "mod") #[arg1, arg2]
-| .icst .ile  => return .qIdApp (QualIdent.ofString "<=") #[arg1, arg2]
-| .icst .ige  => return .qIdApp (QualIdent.ofString ">=") #[arg1, arg2]
-| .icst .ilt  => return .qIdApp (QualIdent.ofString "<") #[arg1, arg2]
-| .icst .igt  => return .qIdApp (QualIdent.ofString ">") #[arg1, arg2]
+| .and        => return .qStrApp "and" #[arg1, arg2]
+| .or         => return .qStrApp "or" #[arg1, arg2]
+| .imp        => return .qStrApp "=>" #[arg1, arg2]
+| .iff        => return .qStrApp "not" #[.qStrApp "xor" #[arg1, arg2]]
+| .bcst .andb => return .qStrApp "and" #[arg1, arg2]
+| .bcst .orb  => return .qStrApp "or" #[arg1, arg2]
+| .icst .iadd => return .qStrApp "+" #[arg1, arg2]
+| .icst .isub => return .qStrApp "-" #[arg1, arg2]
+| .icst .imul => return .qStrApp "*" #[arg1, arg2]
+| .icst .idiv => return .qStrApp "itdiv" #[arg1, arg2]
+| .icst .imod => return .qStrApp "itmod" #[arg1, arg2]
+| .icst .iediv => return .qStrApp "iediv" #[arg1, arg2]
+| .icst .iemod => return .qStrApp "iemod" #[arg1, arg2]
+| .icst .ile  => return .qStrApp "<=" #[arg1, arg2]
+| .icst .ige  => return .qStrApp ">=" #[arg1, arg2]
+| .icst .ilt  => return .qStrApp "<" #[arg1, arg2]
+| .icst .igt  => return .qStrApp ">" #[arg1, arg2]
 | t           => throwError "lamTerm2STerm :: The arity of {repr t} is not 2"
 
 private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamAtom STerm
-| .not        => return .qIdApp (QualIdent.ofString "not") #[arg]
-| .bcst .notb => return .qIdApp (QualIdent.ofString "not") #[arg]
-| .icst .ineg => return .qIdApp (QualIdent.ofString "-") #[Int2STerm 0, arg]
+| .not        => return .qStrApp "not" #[arg]
+| .bcst .notb => return .qStrApp "not" #[arg]
+| .icst .ineg => return .qStrApp "-" #[Int2STerm 0, arg]
 | t           => throwError "lamTerm2STerm :: The arity of {repr t} is not 1"
 
 private def Bitvec2STerm (bv : List Bool) : STerm := .sConst (.binary bv)
 
 private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtom STerm
-| .trueE            => return .qIdApp (QualIdent.ofString "true") #[]
-| .falseE           => return .qIdApp (QualIdent.ofString "false") #[]
-| .bcst .trueb      => return .qIdApp (QualIdent.ofString "true") #[]
-| .bcst .falseb     => return .qIdApp (QualIdent.ofString "false") #[]
+| .trueE            => return .qStrApp "true" #[]
+| .falseE           => return .qStrApp "false" #[]
+| .bcst .trueb      => return .qStrApp "true" #[]
+| .bcst .falseb     => return .qStrApp "false" #[]
 | .icst (.intVal n) => return Int2STerm n
 | .realVal c        => return CstrReal2STerm c
 | .bvVal bv         => return Bitvec2STerm bv
@@ -156,9 +158,27 @@ where
     (ts.push arg, t)
   | t => (#[], t)
 
+def intAuxDefs : Array IR.SMT.Command :=
+  #[.defFun false "itdiv" #[("x", .app (.symb "Int") #[]), ("y", .app (.symb "Int") #[])] (.app (.symb "Int") #[])
+      (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "y" #[], .sConst (.num 0)], .qStrApp "x" #[],
+        .qStrApp "ite" #[.qStrApp ">=" #[.qStrApp "x" #[], .sConst (.num 0)],
+          .qStrApp "div" #[.qStrApp "x" #[], .qStrApp "y" #[]],
+          .qStrApp "-" #[.qStrApp "div" #[.qStrApp "-" #[.qStrApp "x" #[]], .qStrApp "y" #[]]]]]),
+    .defFun false "itmod" #[("x", .app (.symb "Int") #[]), ("y", .app (.symb "Int") #[])] (.app (.symb "Int") #[])
+      (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "y" #[], .sConst (.num 0)], .qStrApp "x" #[],
+        .qStrApp "ite" #[.qStrApp ">=" #[.qStrApp "x" #[], .sConst (.num 0)],
+          .qStrApp "mod" #[.qStrApp "x" #[], .qStrApp "y" #[]],
+          .qStrApp "-" #[.qStrApp "mod" #[.qStrApp "-" #[.qStrApp "x" #[]], .qStrApp "y" #[]]]]]),
+    .defFun false "iediv" #[("x", .app (.symb "Int") #[]), ("y", .app (.symb "Int") #[])] (.app (.symb "Int") #[])
+      (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "y" #[], .sConst (.num 0)], .sConst (.num 0), .qStrApp "div" #[.qStrApp "x" #[], .qStrApp "y" #[]]]),
+    .defFun false "iemod" #[("x", .app (.symb "Int") #[]), ("y", .app (.symb "Int") #[])] (.app (.symb "Int") #[])
+      (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "y" #[], .sConst (.num 0)], .qStrApp "x" #[], .qStrApp "mod" #[.qStrApp "x" #[], .qStrApp "y" #[]]])
+   ]
+
 /-- `facts` should not contain import versions of `eq, ∀` or `∃` -/
 def lamFOL2SMT (lamVarTy lamEVarTy : Array LamSort)
   (facts : Array LamTerm) : TransM LamAtom (Array IR.SMT.Command) := do
+  let _ ← intAuxDefs.mapM addCommand
   for t in facts do
     let sterm ← lamTerm2STerm lamVarTy lamEVarTy t
     trace[auto.lamFOL2SMT] "λ term {repr t} translated to SMT term {sterm}"

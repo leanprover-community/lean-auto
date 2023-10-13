@@ -63,7 +63,7 @@ def createSolver (name : SolverName) : MetaM SolverProc := do
   match name with
   | .z3   => createAux "z3" #["-in", "-smt2", "-T:10"]
   | .cvc4 => throwError "cvc4 is not supported"
-  | .cvc5 => createAux "cvc5" #["--tlimit=10000"]
+  | .cvc5 => createAux "cvc5" #["--tlimit=10000", "--produce-models"]
 where
   createAux (path : String) (args : Array String) : MetaM SolverProc :=
     IO.Process.spawn {stdin := .piped, stdout := .piped, stderr := .piped,

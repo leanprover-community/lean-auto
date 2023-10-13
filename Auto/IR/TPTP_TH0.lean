@@ -56,6 +56,8 @@ def transIntConst : IntConst → String
 | .imul     => "t_imul"
 | .idiv     => "t_idiv"
 | .imod     => "t_imod"
+| .iediv    => "t_iediv"
+| .iemod    => "t_iemod"
 | .ile      => "t_ile"
 | .ilt      => "t_ilt"
 | .ige      => "t_ige"
@@ -69,6 +71,8 @@ def transIntConstSort : IntConst → String
 | .imul     => transLamSort (.func (.base .int) (.func (.base .int) (.base .int)))
 | .idiv     => transLamSort (.func (.base .int) (.func (.base .int) (.base .int)))
 | .imod     => transLamSort (.func (.base .int) (.func (.base .int) (.base .int)))
+| .iediv    => transLamSort (.func (.base .int) (.func (.base .int) (.base .int)))
+| .iemod    => transLamSort (.func (.base .int) (.func (.base .int) (.base .int)))
 | .ile      => transLamSort (.func (.base .int) (.func (.base .int) (.base .prop)))
 | .ilt      => transLamSort (.func (.base .int) (.func (.base .int) (.base .prop)))
 | .ige      => transLamSort (.func (.base .int) (.func (.base .int) (.base .prop)))

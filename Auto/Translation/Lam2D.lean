@@ -144,6 +144,8 @@ def interpIntConstAsUnlifted : IntConst → Expr
 | .imul     => .const ``Int.mul []
 | .idiv     => .const ``Int.div []
 | .imod     => .const ``Int.mod []
+| .iediv    => .const ``Int.ediv []
+| .iemod    => .const ``Int.emod []
 | .ile      => .const ``Int.le []
 | .ige      => .const ``Int.ge []
 | .ilt      => .const ``Int.lt []

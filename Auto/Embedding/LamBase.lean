@@ -489,6 +489,8 @@ inductive IntConst
   | imul
   | idiv
   | imod
+  | iediv
+  | iemod
   | ile
   | ige
   | ilt
@@ -505,6 +507,8 @@ def IntConst.reprPrec (i : IntConst) (n : Nat) :=
     | .imul     => f!".imul"
     | .idiv     => f!".idiv"
     | .imod     => f!".imod"
+    | .iediv    => f!".iediv"
+    | .iemod    => f!".iemod"
     | .ile      => f!".ile"
     | .ige      => f!".ige"
     | .ilt      => f!".ilt"
@@ -525,6 +529,8 @@ def IntConst.toString : IntConst → String
 | .imul     => "*"
 | .idiv     => "/"
 | .imod     => "%"
+| .iediv    => "/?"
+| .iemod    => "%?"
 | .ile      => "≤"
 | .ige      => "≥"
 | .ilt      => "<"
@@ -541,6 +547,8 @@ def IntConst.beq : IntConst → IntConst → Bool
 | .imul,     .imul  => true
 | .idiv,     .idiv  => true
 | .imod,     .imod  => true
+| .iediv,    .iediv => true
+| .iemod,    .iemod => true
 | .ile,      .ile   => true
 | .ige,      .ige   => true
 | .ilt,      .ilt   => true
@@ -569,6 +577,8 @@ def IntConst.lamCheck : IntConst → LamSort
 | .imul     => .func (.base .int) (.func (.base .int) (.base .int))
 | .idiv     => .func (.base .int) (.func (.base .int) (.base .int))
 | .imod     => .func (.base .int) (.func (.base .int) (.base .int))
+| .iediv     => .func (.base .int) (.func (.base .int) (.base .int))
+| .iemod     => .func (.base .int) (.func (.base .int) (.base .int))
 | .ile      => .func (.base .int) (.func (.base .int) (.base .prop))
 | .ige      => .func (.base .int) (.func (.base .int) (.base .prop))
 | .ilt      => .func (.base .int) (.func (.base .int) (.base .prop))
@@ -582,6 +592,8 @@ inductive IntConst.LamWF : IntConst → LamSort → Type
   | ofImul     : LamWF .imul (.func (.base .int) (.func (.base .int) (.base .int)))
   | ofIdiv     : LamWF .idiv (.func (.base .int) (.func (.base .int) (.base .int)))
   | ofImod     : LamWF .imod (.func (.base .int) (.func (.base .int) (.base .int)))
+  | ofIediv    : LamWF .iediv (.func (.base .int) (.func (.base .int) (.base .int)))
+  | ofIemod    : LamWF .iemod (.func (.base .int) (.func (.base .int) (.base .int)))
   | ofIle      : LamWF .ile (.func (.base .int) (.func (.base .int) (.base .prop)))
   | ofIge      : LamWF .ige (.func (.base .int) (.func (.base .int) (.base .prop)))
   | ofIlt      : LamWF .ilt (.func (.base .int) (.func (.base .int) (.base .prop)))
@@ -599,6 +611,8 @@ def IntConst.LamWF.ofIntConst : (i : IntConst) → (s : LamSort) × IntConst.Lam
 | .imul     => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofImul⟩
 | .idiv     => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofIdiv⟩
 | .imod     => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofImod⟩
+| .iediv    => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofIediv⟩
+| .iemod    => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofIemod⟩
 | .ile      => ⟨.func (.base .int) (.func (.base .int) (.base .prop)), .ofIle⟩
 | .ige      => ⟨.func (.base .int) (.func (.base .int) (.base .prop)), .ofIge⟩
 | .ilt      => ⟨.func (.base .int) (.func (.base .int) (.base .prop)), .ofIlt⟩
@@ -679,6 +693,10 @@ def LamBaseTerm.imul' := LamBaseTerm.icst .imul
 def LamBaseTerm.idiv' := LamBaseTerm.icst .idiv
 
 def LamBaseTerm.imod' := LamBaseTerm.icst .imod
+
+def LamBaseTerm.iediv' := LamBaseTerm.icst .iediv
+
+def LamBaseTerm.iemod' := LamBaseTerm.icst .iemod
 
 def LamBaseTerm.ile' := LamBaseTerm.icst .ile
 
@@ -931,6 +949,10 @@ def LamBaseTerm.LamWF.ofIdiv' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIdi
 
 def LamBaseTerm.LamWF.ofImod' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofImod
 
+def LamBaseTerm.LamWF.ofIediv' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIediv
+
+def LamBaseTerm.LamWF.ofIemod' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIemod
+
 def LamBaseTerm.LamWF.ofIle' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIle
 
 def LamBaseTerm.LamWF.ofIlt' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIlt
@@ -1028,6 +1050,8 @@ def IntConst.interp (tyVal : Nat → Type u) : (b : IntConst) → b.lamCheck.int
 | .imul     => imulLift
 | .idiv     => idivLift
 | .imod     => imodLift
+| .iediv    => iedivLift
+| .iemod    => iemodLift
 | .ile      => ileLift
 | .ige      => igeLift
 | .ilt      => iltLift
@@ -1041,6 +1065,8 @@ def IntConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF i s) → s.int
 | .ofImul     => imulLift
 | .ofIdiv     => idivLift
 | .ofImod     => imodLift
+| .ofIediv    => iedivLift
+| .ofIemod    => iemodLift
 | .ofIle      => ileLift
 | .ofIge      => igeLift
 | .ofIlt      => iltLift

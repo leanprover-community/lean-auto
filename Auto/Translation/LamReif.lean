@@ -1112,6 +1112,8 @@ def processLam0Arg4 (e fn arg₁ arg₂ arg₃ arg₄ : Expr) : MetaM (Option La
     | .const ``Int _ =>
       if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.div [])) then
         return .some (.base .idiv')
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.ediv [])) then
+        return .some (.base .iediv')
       return .none
     | _ => return .none
   | .const ``HMod.hMod _ =>
@@ -1119,6 +1121,8 @@ def processLam0Arg4 (e fn arg₁ arg₂ arg₃ arg₄ : Expr) : MetaM (Option La
     | .const ``Int _ =>
       if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.mod [])) then
         return .some (.base .imod')
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.emod [])) then
+        return .some (.base .iemod')
       return .none
     | _ => return .none
   | _ => return .none
@@ -1164,6 +1168,8 @@ def processNewTermExpr (e : Expr) : ReifM LamTerm :=
   | .const ``Int.mul [] => return .base .imul'
   | .const ``Int.div [] => return .base .idiv'
   | .const ``Int.mod [] => return .base .imod'
+  | .const ``Int.ediv [] => return .base .iediv'
+  | .const ``Int.emod [] => return .base .iemod'
   | .const ``Int.le [] => return .base .ile'
   | .const ``Int.lt [] => return .base .ilt'
   -- `α` is the original (un-lifted) type
