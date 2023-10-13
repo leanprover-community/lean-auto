@@ -5,9 +5,100 @@ Authors: Johan Commelin
 -/
 import Mathlib.Data.Complex.Exponential
 import Mathlib.Data.Complex.Module
+import Mathlib.Data.Real.Basic
+import Mathlib.Data.Set.Intervals.Basic
+import Mathlib.Data.Set.Lattice
+import Mathlib.Data.Set.Function
 import Mathlib.Data.Polynomial.AlgebraMap
+import Mathlib.Order.Basic
 import Mathlib.RingTheory.Polynomial.Chebyshev
 import Auto.Tactic
+
+
+
+set_option profiler true
+set_option auto.proofReconstruction false
+set_option trace.auto.tptp.printQuery true
+set_option trace.auto.tptp.result true
+set_option auto.tptp.solver.name "zeport"
+set_option auto.tptp.zeport.path "/home/indprinciple/Programs/zipperposition/portfolio/portfolio.fo.parallel.py"
+
+set_option auto.tptp true
+
+
+
+section SimpleClass
+
+set_option auto.prep.redMode "instances"
+set_option trace.auto.lamReif.printResult true
+set_option trace.auto.lamReif.printValuation true
+
+example (as bs cs ds : List β) : (as ++ bs) ++ (cs ++ ds) = as ++ (bs ++ (cs ++ ds)) := by
+  auto [List.append_assoc]
+
+example (as bs cs : List α) (f : α → β) :
+  ((as ++ bs) ++ cs).map f = as.map f ++ (bs.map f ++ cs.map f) := by
+  auto [List.append_assoc, List.map_append]
+
+set_option auto.prep.redMode "reducible"
+
+set_option trace.auto.printLemmas true in
+example (as bs cs ds : List β) : (as ++ bs) ++ (cs ++ ds) = as ++ (bs ++ (cs ++ ds)) := by
+  auto [List.append_assoc]
+
+set_option trace.auto.tactic true in
+example (as bs cs : List α) (f : α → β) :
+  ((as ++ bs) ++ cs).map f = as.map f ++ (bs.map f ++ cs.map f) := by
+  auto [List.append_assoc, List.map_append]
+
+end SimpleClass
+
+
+section SimpleMathlib
+
+set_option auto.prep.redMode "reducible"
+set_option trace.auto.lamReif.printResult true
+set_option trace.auto.lamReif.printValuation true
+
+-- Testing SynthArg
+set_option trace.auto.printLemmas true in
+set_option trace.auto.mono.printLemmaInst true in
+example (a b : ℝ) (h1 : a < b) : (∃ c, a < c ∧ c < b) := by
+  auto [DenselyOrdered.dense, h1]
+
+-- Testing SynthArg
+example (a e : ℝ) (h1 : a < e) : (∃ b c d, a < b ∧ b < c ∧ c < d ∧ d < e) := by
+  auto [DenselyOrdered.dense, h1]
+
+set_option trace.auto.printLemmas true in
+example (a b c d : ℝ) (h1 : a < b) :
+  Set.Icc a b ⊆ Set.Ico c d ↔ c ≤ a ∧ b < d := by
+  rw [Set.subset_def]
+  auto [Set.mem_Icc, Set.mem_Ico, @le_trans, @le_total, @lt_iff_not_le, h1]
+
+set_option trace.auto.smt.result true in
+example (a b c d : ℝ) (h1 : a < b) : Set.Icc a b ⊆ Set.Ico c d ↔ c ≤ a ∧ b < d := by
+  rw [Set.subset_def]
+  auto [Set.mem_Icc, Set.mem_Ico, @le_trans, @le_total, @lt_iff_not_le, h1]
+
+set_option trace.auto.lamReif.printValuation true in
+example : f '' s ⊆ v ↔ s ⊆ f ⁻¹' v := by
+  auto [Set.subset_def, Set.mem_image, Set.mem_preimage]
+
+example (h : Function.Injective f) : f ⁻¹' (f '' s) ⊆ s := by
+  auto [Set.subset_def, Set.mem_preimage, Function.Injective.mem_set_image, h]
+
+example : f '' (f ⁻¹' u) ⊆ u := by
+  auto [Set.subset_def, Set.mem_image, Set.mem_preimage]
+
+example (h : Function.Surjective f) : u ⊆ f '' (f ⁻¹' u) := by
+  auto [Set.subset_def, Set.mem_image, Set.mem_preimage, h] d[Function.Surjective]
+
+end SimpleMathlib
+
+
+
+section Chebyshev
 
 /-!
 # Multiple angle formulas in terms of Chebyshev polynomials
@@ -135,3 +226,55 @@ theorem U_real_cos : (U ℝ n).eval (cos θ) * sin θ = sin ((n + 1) * θ) := by
 end Real
 
 end Polynomial.Chebyshev
+
+end Chebyshev
+
+
+
+section ShortFive
+
+open Function
+
+structure is_short_exact {A B C : Type _} [AddCommGroup A] [AddCommGroup B] [AddCommGroup C]
+    (f : A → B) (g : B → C) :=
+  (inj       : Injective f)
+  (im_in_ker : ∀ a : A, g (f a) = 0)
+  (ker_in_im : ∀ b : B, g b = 0 → ∃ a : A, f a = b)
+  (surj      : Surjective g)
+
+variable {A₀ B₀ C₀ A₁ B₁ C₁ : Type _}
+variable [AddCommGroup A₀] [AddCommGroup B₀] [AddCommGroup C₀]
+variable [AddCommGroup A₁] [AddCommGroup B₁] [AddCommGroup C₁]
+
+variable {f₀ : A₀ →+ B₀} {g₀ : B₀ →+ C₀}
+variable {f₁ : A₁ →+ B₁} {g₁ : B₁ →+ C₁}
+variable {h  : A₀ →+ A₁} {k  : B₀ →+ B₁} {l  : C₀ →+C₁}
+
+variable (short_exact₀ : is_short_exact f₀ g₀)
+variable (short_exact₁ : is_short_exact f₁ g₁)
+variable (square₀      : ∀ a, k (f₀ a) = f₁ (h a))
+variable (square₁      : ∀ b, l (g₀ b) = g₁ (k b))
+
+open is_short_exact
+
+set_option auto.prep.redMode "reducible"
+set_option trace.auto.lamReif.printProofs true
+set_option trace.auto.lamReif.printValuation true
+
+set_option auto.mono.saturationThreshold 500
+theorem short_five_mono (injh : Injective h) (injl : Injective l) :
+    Injective k := by
+  auto [injective_iff_map_eq_zero, injl, injh, short_exact₁.inj,
+       square₀, square₁, short_exact₀.ker_in_im, map_zero] u[Injective]
+
+theorem short_five_epi (surjh : Surjective h) (surjl : Surjective l) :
+    Surjective k := by
+  intro b₁
+  rcases surjl (g₁ b₁) with ⟨c₀, hlc₀⟩
+  rcases short_exact₀.surj c₀ with ⟨b₀, hg₀b₀⟩
+  have : g₁ (k b₀ - b₁) = 0 := by
+    auto [map_sub, square₁, hg₀b₀, hlc₀, sub_self]
+  rcases short_exact₁.ker_in_im _ this with ⟨a₁, hf₁a₁⟩
+  auto [map_sub, square₀, surjh a₁, hf₁a₁, sub_sub_cancel]
+
+end ShortFive

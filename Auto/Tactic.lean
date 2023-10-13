@@ -11,7 +11,7 @@ initialize
   registerTraceClass `auto.printProof
 
 register_option auto.proofReconstruction : Bool := {
-  defValue := false,
+  defValue := true,
   descr := "Enable/Disable proof reconstruction"
 }
 
@@ -242,7 +242,7 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
       if (auto.proofReconstruction.get (← getOptions)) then
         reconstruct declName? exportFacts exportInhs
       else
-        return ← Meta.mkAppM ``sorryAx #[.const ``False []]
+        return ← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []]
       )
     let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
       let uvalids ← liftM <| Reif.getFacts
