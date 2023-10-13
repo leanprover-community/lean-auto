@@ -1786,11 +1786,11 @@ theorem LamGenModify.rwGenAtIfSign {modify} (H : LamGenModify lval modify weaken
 
 -- Boolean theorems
 def LamTerm.emb : LamTerm := .mkForallEF (.base .bool) (.mkOr
-  (.mkEq (.base .bool) (.bvar 0) (.base .trueb))
-  (.mkEq (.base .bool) (.bvar 0) (.base .falseb)))
+  (.mkEq (.base .bool) (.bvar 0) (.base .trueb'))
+  (.mkEq (.base .bool) (.bvar 0) (.base .falseb')))
 
 def LamWF.emb : LamWF ltv ⟨lctx, LamTerm.emb, .base .prop⟩ :=
-  .mkForallEF (.mkOr (.mkEq (.ofBVar 0) (.ofBase .ofTrueB)) (.mkEq (.ofBVar 0) (.ofBase .ofFalseB)))
+  .mkForallEF (.mkOr (.mkEq (.ofBVar 0) (.ofBase .ofTrueB')) (.mkEq (.ofBVar 0) (.ofBase .ofFalseB')))
 
 theorem LamThmValid.emb : LamThmValid lval [] LamTerm.emb := by
   intro lctx'; rw [pushLCtxs_nil]; exists LamWF.emb; intro lctxTerm
@@ -1800,65 +1800,65 @@ theorem LamThmValid.emb : LamThmValid lval [] LamTerm.emb := by
     case false => apply Or.inr; rfl
     case true => apply Or.inl; rfl
 
-def LamTerm.false_ne_true : LamTerm := .mkNot (.mkEq (.base .bool) (.base .falseb) (.base .trueb))
+def LamTerm.false_ne_true : LamTerm := .mkNot (.mkEq (.base .bool) (.base .falseb') (.base .trueb'))
 
 def LamWF.false_ne_true : LamWF ltv ⟨lctx, LamTerm.false_ne_true, .base .prop⟩ :=
-  .mkNot (.mkEq (.ofBase .ofFalseB) (.ofBase .ofTrueB))
+  .mkNot (.mkEq (.ofBase .ofFalseB') (.ofBase .ofTrueB'))
 
 theorem LamThmValid.false_ne_true : LamThmValid lval [] LamTerm.false_ne_true := by
   intro lctx'; rw [pushLCtxs_nil]; exists LamWF.false_ne_true; intro lctxTerm
   intro h; cases h
 
 def LamTerm.not_true_eq_false : LamTerm := .mkEq (.base .bool)
-  (.app (.base .bool) (.base .notb) (.base .trueb)) (.base .falseb)
+  (.app (.base .bool) (.base .notb') (.base .trueb')) (.base .falseb')
 
 def LamWF.not_true_eq_false : LamWF ltv ⟨lctx, LamTerm.not_true_eq_false, .base .prop⟩ :=
-  .mkEq (.ofApp _ (.ofBase .ofNotB) (.ofBase .ofTrueB)) (.ofBase .ofFalseB)
+  .mkEq (.ofApp _ (.ofBase .ofNotB') (.ofBase .ofTrueB')) (.ofBase .ofFalseB')
 
 theorem LamThmValid.not_true_eq_false : LamThmValid lval [] LamTerm.not_true_eq_false := by
   intro lctx'; rw [pushLCtxs_nil]; exists LamWF.not_true_eq_false; intro _; rfl
 
 def LamTerm.not_false_eq_true : LamTerm := .mkEq (.base .bool)
-  (.app (.base .bool) (.base .notb) (.base .falseb)) (.base .trueb)
+  (.app (.base .bool) (.base .notb') (.base .falseb')) (.base .trueb')
 
 def LamWF.not_false_eq_true : LamWF ltv ⟨lctx, LamTerm.not_false_eq_true, .base .prop⟩ :=
-  .mkEq (.ofApp _ (.ofBase .ofNotB) (.ofBase .ofFalseB)) (.ofBase .ofTrueB)
+  .mkEq (.ofApp _ (.ofBase .ofNotB') (.ofBase .ofFalseB')) (.ofBase .ofTrueB')
 
 theorem LamThmValid.not_false_eq_true : LamThmValid lval [] LamTerm.not_false_eq_true := by
   intro lctx'; rw [pushLCtxs_nil]; exists LamWF.not_false_eq_true; intro _; rfl
 
 def LamTerm.false_and_eq_false : LamTerm := .mkForallEF (.base .bool) (.mkEq (.base .bool)
-  (.app (.base .bool) (.app (.base .bool) (.base .andb) (.base .falseb)) (.bvar 0)) (.base .falseb))
+  (.app (.base .bool) (.app (.base .bool) (.base .andb') (.base .falseb')) (.bvar 0)) (.base .falseb'))
 
 def LamWF.false_and_eq_false : LamWF ltv ⟨lctx, LamTerm.false_and_eq_false, .base .prop⟩ :=
-  .mkForallEF (.mkEq (.ofApp _ (.ofApp _ (.ofBase .ofAndB) (.ofBase .ofFalseB)) (.ofBVar 0)) (.ofBase .ofFalseB))
+  .mkForallEF (.mkEq (.ofApp _ (.ofApp _ (.ofBase .ofAndB') (.ofBase .ofFalseB')) (.ofBVar 0)) (.ofBase .ofFalseB'))
 
 theorem LamThmValid.false_and_eq_false : LamThmValid lval [] LamTerm.false_and_eq_false := by
   intro lctx'; rw [pushLCtxs_nil]; exists LamWF.false_and_eq_false; intro _ b; rfl
 
 def LamTerm.true_and_eq_id : LamTerm := .mkForallEF (.base .bool) (.mkEq (.base .bool)
-  (.app (.base .bool) (.app (.base .bool) (.base .andb) (.base .trueb)) (.bvar 0)) (.bvar 0))
+  (.app (.base .bool) (.app (.base .bool) (.base .andb') (.base .trueb')) (.bvar 0)) (.bvar 0))
 
 def LamWF.true_and_eq_id : LamWF ltv ⟨lctx, LamTerm.true_and_eq_id, .base .prop⟩ :=
-  .mkForallEF (.mkEq (.ofApp _ (.ofApp _ (.ofBase .ofAndB) (.ofBase .ofTrueB)) (.ofBVar 0)) (.ofBVar 0))
+  .mkForallEF (.mkEq (.ofApp _ (.ofApp _ (.ofBase .ofAndB') (.ofBase .ofTrueB')) (.ofBVar 0)) (.ofBVar 0))
 
 theorem LamThmValid.true_and_eq_id : LamThmValid lval [] LamTerm.true_and_eq_id := by
   intro lctx'; rw [pushLCtxs_nil]; exists LamWF.true_and_eq_id; intro _ b; rfl
 
 def LamTerm.false_or_eq_id : LamTerm := .mkForallEF (.base .bool) (.mkEq (.base .bool)
-  (.app (.base .bool) (.app (.base .bool) (.base .orb) (.base .falseb)) (.bvar 0)) (.bvar 0))
+  (.app (.base .bool) (.app (.base .bool) (.base .orb') (.base .falseb')) (.bvar 0)) (.bvar 0))
 
 def LamWF.false_or_eq_id : LamWF ltv ⟨lctx, LamTerm.false_or_eq_id, .base .prop⟩ :=
-  .mkForallEF (.mkEq (.ofApp _ (.ofApp _ (.ofBase .ofOrB) (.ofBase .ofFalseB)) (.ofBVar 0)) (.ofBVar 0))
+  .mkForallEF (.mkEq (.ofApp _ (.ofApp _ (.ofBase .ofOrB') (.ofBase .ofFalseB')) (.ofBVar 0)) (.ofBVar 0))
 
 theorem LamThmValid.false_or_eq_id : LamThmValid lval [] LamTerm.false_or_eq_id := by
   intro lctx'; rw [pushLCtxs_nil]; exists LamWF.false_or_eq_id; intro _ b; rfl
 
 def LamTerm.true_or_eq_true : LamTerm := .mkForallEF (.base .bool) (.mkEq (.base .bool)
-  (.app (.base .bool) (.app (.base .bool) (.base .orb) (.base .trueb)) (.bvar 0)) (.base .trueb))
+  (.app (.base .bool) (.app (.base .bool) (.base .orb') (.base .trueb')) (.bvar 0)) (.base .trueb'))
 
 def LamWF.true_or_eq_true : LamWF ltv ⟨lctx, LamTerm.true_or_eq_true, .base .prop⟩ :=
-  .mkForallEF (.mkEq (.ofApp _ (.ofApp _ (.ofBase .ofOrB) (.ofBase .ofTrueB)) (.ofBVar 0)) (.ofBase .ofTrueB))
+  .mkForallEF (.mkEq (.ofApp _ (.ofApp _ (.ofBase .ofOrB') (.ofBase .ofTrueB')) (.ofBVar 0)) (.ofBase .ofTrueB'))
 
 theorem LamThmValid.true_or_eq_true : LamThmValid lval [] LamTerm.true_or_eq_true := by
   intro lctx'; rw [pushLCtxs_nil]; exists LamWF.true_or_eq_true; intro _ b; rfl

@@ -1,4 +1,5 @@
 import Lean
+import Auto.MathlibEmulator
 open Lean
 
 namespace Auto
@@ -7,6 +8,14 @@ attribute [-instance] Lean.instToExprNat
 instance : ToExpr Nat where
   toExpr := fun n => .lit (.natVal n)
   toTypeExpr := .const ``Nat []
+
+attribute [-instance] instToExprInt
+instance : ToExpr Int where
+  toExpr := fun n =>
+    match n with
+    | .ofNat n => .app (.const ``Int.ofNat []) (.lit (.natVal n))
+    | .negSucc n => .app (.const ``Int.negSucc []) (.lit (.natVal n))
+  toTypeExpr := .const ``Int []
 
 /--
   Used when the elements of a container are already expressions

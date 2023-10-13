@@ -47,20 +47,6 @@ private def lamSort2SSort : LamSort → TransM LamAtom (List SSort × SSort)
   return (smarg :: smargs, smres)
 | s => return ([], ← lamSort2SSortAux s)
 
-private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → TransM LamAtom STerm
-| .and    => return .qIdApp (QualIdent.ofString "and") #[arg1, arg2]
-| .or     => return .qIdApp (QualIdent.ofString "or") #[arg1, arg2]
-| .imp    => return .qIdApp (QualIdent.ofString "=>") #[arg1, arg2]
-| .iff    => return .qIdApp (QualIdent.ofString "not") #[.qIdApp (QualIdent.ofString "xor") #[arg1, arg2]]
-| .andb   => return .qIdApp (QualIdent.ofString "and") #[arg1, arg2]
-| .orb    => return .qIdApp (QualIdent.ofString "or") #[arg1, arg2]
-| t       => throwError "lamTerm2STerm :: The arity of {repr t} is not 2"
-
-private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamAtom STerm
-| .not => return .qIdApp (QualIdent.ofString "not") #[arg]
-| .notb => return .qIdApp (QualIdent.ofString "not") #[arg]
-| t    => throwError "lamTerm2STerm :: The arity of {repr t} is not 1"
-
 private def Int2STerm : Int → STerm
 | .ofNat n   => .sConst (.num n)
 | .negSucc n => .qIdApp (QualIdent.ofString "-") #[.sConst (.num (Nat.succ n))]
@@ -69,17 +55,41 @@ private def CstrReal2STerm : CstrReal → STerm
 | .zero => .sConst (.num 0)
 | .one  => .sConst (.num 1)
 
+private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → TransM LamAtom STerm
+| .and        => return .qIdApp (QualIdent.ofString "and") #[arg1, arg2]
+| .or         => return .qIdApp (QualIdent.ofString "or") #[arg1, arg2]
+| .imp        => return .qIdApp (QualIdent.ofString "=>") #[arg1, arg2]
+| .iff        => return .qIdApp (QualIdent.ofString "not") #[.qIdApp (QualIdent.ofString "xor") #[arg1, arg2]]
+| .bcst .andb => return .qIdApp (QualIdent.ofString "and") #[arg1, arg2]
+| .bcst .orb  => return .qIdApp (QualIdent.ofString "or") #[arg1, arg2]
+| .icst .iadd => return .qIdApp (QualIdent.ofString "+") #[arg1, arg2]
+| .icst .isub => return .qIdApp (QualIdent.ofString "-") #[arg1, arg2]
+| .icst .imul => return .qIdApp (QualIdent.ofString "*") #[arg1, arg2]
+| .icst .idiv => return .qIdApp (QualIdent.ofString "div") #[arg1, arg2]
+| .icst .imod => return .qIdApp (QualIdent.ofString "mod") #[arg1, arg2]
+| .icst .ile  => return .qIdApp (QualIdent.ofString "<=") #[arg1, arg2]
+| .icst .ige  => return .qIdApp (QualIdent.ofString ">=") #[arg1, arg2]
+| .icst .ilt  => return .qIdApp (QualIdent.ofString "<") #[arg1, arg2]
+| .icst .igt  => return .qIdApp (QualIdent.ofString ">") #[arg1, arg2]
+| t           => throwError "lamTerm2STerm :: The arity of {repr t} is not 2"
+
+private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamAtom STerm
+| .not        => return .qIdApp (QualIdent.ofString "not") #[arg]
+| .bcst .notb => return .qIdApp (QualIdent.ofString "not") #[arg]
+| .icst .ineg => return .qIdApp (QualIdent.ofString "-") #[Int2STerm 0, arg]
+| t           => throwError "lamTerm2STerm :: The arity of {repr t} is not 1"
+
 private def Bitvec2STerm (bv : List Bool) : STerm := .sConst (.binary bv)
 
 private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtom STerm
-| .trueE     => return .qIdApp (QualIdent.ofString "true") #[]
-| .falseE    => return .qIdApp (QualIdent.ofString "false") #[]
-| .trueb     => return .qIdApp (QualIdent.ofString "true") #[]
-| .falseb    => return .qIdApp (QualIdent.ofString "false") #[]
-| .intVal n  => return Int2STerm n
-| .realVal c => return CstrReal2STerm c
-| .bvVal bv  => return Bitvec2STerm bv
-| t          => throwError "lamTerm2STerm :: The arity of {repr t} is not 0"
+| .trueE            => return .qIdApp (QualIdent.ofString "true") #[]
+| .falseE           => return .qIdApp (QualIdent.ofString "false") #[]
+| .bcst .trueb      => return .qIdApp (QualIdent.ofString "true") #[]
+| .bcst .falseb     => return .qIdApp (QualIdent.ofString "false") #[]
+| .icst (.intVal n) => return Int2STerm n
+| .realVal c        => return CstrReal2STerm c
+| .bvVal bv         => return Bitvec2STerm bv
+| t                 => throwError "lamTerm2STerm :: The arity of {repr t} is not 0"
 
 private def lamTerm2STermAux (lamVarTy lamEVarTy : Array LamSort) (args : Array STerm) :
   LamTerm → TransM LamAtom STerm

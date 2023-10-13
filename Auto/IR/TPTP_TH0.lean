@@ -4,11 +4,23 @@ namespace Auto.Lam2TH0
 open Embedding.Lam
 
 -- Identifier mapping
--- Sort : bv n     => s_bv{n}
---        atom n   => s_a{n}
--- Term : bvVal xs => t_bv{0-1 string representation of xs}
---        atom n   => t_a{n}
---        etom n   => t_e{n}
+-- Sort : bv n      => s_bv{n}
+--        atom n    => s_a{n}
+--        int       => s_int
+-- Term : bvVal xs  => t_bv{0-1 string representation of xs}
+--        atom n    => t_a{n}
+--        etom n    => t_e{n}
+--        intVal' n => t_int{n}
+--        ineg'     => t_ineg
+--        iadd'     => t_iadd
+--        isub'     => t_isub
+--        imul'     => t_imul
+--        idiv'     => t_idiv
+--        imod'     => t_imod
+--        ile'      => t_ile
+--        ilt'      => t_ilt
+--        ige'      => t_ige
+--        igt'      => t_ige
 
 def transLamBaseSort : LamBaseSort → String
 | .prop => "$o"
@@ -29,6 +41,39 @@ def transCstrReal : CstrReal → String
 def transBitvec (bv : List Bool) : String :=
   String.join (bv.map (fun x => if x then "1" else "0"))
 
+def transBoolConst : BoolConst → String
+| .trueb      => "$true"
+| .falseb     => "$false"
+| .notb       => "(~)"
+| .andb       => "(&)"
+| .orb        => "(|)"
+
+def transIntConst : IntConst → String
+| .intVal n => s!"t_int{n}"
+| .ineg     => "t_ineg"
+| .iadd     => "t_iadd"
+| .isub     => "t_isub"
+| .imul     => "t_imul"
+| .idiv     => "t_idiv"
+| .imod     => "t_imod"
+| .ile      => "t_ile"
+| .ilt      => "t_ilt"
+| .ige      => "t_ige"
+| .igt      => "t_igt"
+
+def transIntConstSort : IntConst → String
+| .intVal _ => transLamSort (.base .int)
+| .ineg     => transLamSort (.func (.base .int) (.base .int))
+| .iadd     => transLamSort (.func (.base .int) (.func (.base .int) (.base .int)))
+| .isub     => transLamSort (.func (.base .int) (.func (.base .int) (.base .int)))
+| .imul     => transLamSort (.func (.base .int) (.func (.base .int) (.base .int)))
+| .idiv     => transLamSort (.func (.base .int) (.func (.base .int) (.base .int)))
+| .imod     => transLamSort (.func (.base .int) (.func (.base .int) (.base .int)))
+| .ile      => transLamSort (.func (.base .int) (.func (.base .int) (.base .prop)))
+| .ilt      => transLamSort (.func (.base .int) (.func (.base .int) (.base .prop)))
+| .ige      => transLamSort (.func (.base .int) (.func (.base .int) (.base .prop)))
+| .igt      => transLamSort (.func (.base .int) (.func (.base .int) (.base .prop)))
+
 def transLamBaseTerm : LamBaseTerm → Except String String
 | .trueE      => .ok s!"$true"
 | .falseE     => .ok s!"$false"
@@ -37,12 +82,8 @@ def transLamBaseTerm : LamBaseTerm → Except String String
 | .or         => .ok s!"(|)"
 | .imp        => .ok s!"(=>)"
 | .iff        => .ok s!"(=)" -- Zipperposition seems buggy on (<=>)
-| .trueb      => .ok s!"$true"
-| .falseb     => .ok s!"$false"
-| .notb       => .ok s!"(~)"
-| .andb       => .ok s!"(&)"
-| .orb        => .ok s!"(|)"
-| .intVal n   => .ok s!"{n}"
+| .bcst bc    => .ok (transBoolConst bc)
+| .icst ic    => .ok (transIntConst ic)
 | .realVal cr => .ok s!"{transCstrReal cr}"
 | .bvVal v    => .ok s!"t_bv{transBitvec v}"
 | .eqI _      => .error "transLamBaseTerm :: eqI should not occur here"

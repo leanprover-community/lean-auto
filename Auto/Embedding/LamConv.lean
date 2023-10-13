@@ -1021,7 +1021,7 @@ def LamBaseTerm.resolveImport (ltv : LamTyVal) : LamBaseTerm → LamBaseTerm
 
 def LamBaseTerm.LamWF.resolveImport {ltv : LamTyVal} {b : LamBaseTerm} {ty : LamSort}
   (wfB : LamBaseTerm.LamWF ltv b ty) : LamBaseTerm.LamWF ltv (b.resolveImport ltv) ty := by
-  cases wfB <;> constructor
+  cases wfB <;> constructor <;> assumption
 
 theorem LamBaseTerm.LamWF.interp_resolveImport
   (lval : LamValuation.{u}) {b : LamBaseTerm} {ty : LamSort}

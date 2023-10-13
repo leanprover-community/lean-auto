@@ -1032,8 +1032,115 @@ def reifType : Expr → ReifM LamSort
     return .func (← reifType ty) (← reifType body)
 | e => processTypeExpr e
 
-def processTermExprAux (e : Expr) : ReifM LamTerm :=
-  match e with
+def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
+  match fn with
+  | .const ``Neg.neg _ =>
+    match arg₁ with
+    | .const ``Int _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.neg [])) then
+        return .some (.base .ineg')
+      return .none
+    | _ => return .none
+  | .const ``LE.le _ =>
+    match arg₁ with
+    | .const ``Int _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.le [])) then
+        return .some (.base .ile')
+      return .none
+    | _ => return .none
+  | .const ``GE.ge _ =>
+    match arg₁ with
+    | .const ``Int _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.ge [])) then
+        return .some (.base .ige')
+      return .none
+    | _ => return .none
+  | .const ``LT.lt _ =>
+    match arg₁ with
+    | .const ``Int _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.lt [])) then
+        return .some (.base .ilt')
+      return .none
+    | _ => return .none
+  | .const ``GT.gt _ =>
+    match arg₁ with
+    | .const ``Int _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.gt [])) then
+        return .some (.base .igt')
+      return .none
+    | _ => return .none
+  | _ => return .none
+
+def processLam0Arg3 (e fn arg₁ arg₂ arg₃ : Expr) : MetaM (Option LamTerm) := do
+  match fn with
+  | .const ``OfNat.ofNat _ =>
+    match arg₁ with
+    | .const ``Int _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.app (.const ``Int.ofNat []) arg₂)) then
+        let .lit (.natVal nv) := arg₂
+          | throwError "processLam0Arg3 :: OfNat.ofNat instance is not based on a nat literal"
+        return .some (.base (.intVal' nv))
+      return .none
+    | _ => return .none
+  | _ => return .none
+
+def processLam0Arg4 (e fn arg₁ arg₂ arg₃ arg₄ : Expr) : MetaM (Option LamTerm) := do
+  match fn with
+  | .const ``HAdd.hAdd _ =>
+    match arg₁ with
+    | .const ``Int _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.add [])) then
+        return .some (.base .iadd')
+      return .none
+    | _ => return .none
+  | .const ``HSub.hSub _ =>
+    match arg₁ with
+    | .const ``Int _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.sub [])) then
+        return .some (.base .isub')
+      return .none
+    | _ => return .none
+  | .const ``HMul.hMul _ =>
+    match arg₁ with
+    | .const ``Int _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.mul [])) then
+        return .some (.base .imul')
+      return .none
+    | _ => return .none
+  | .const ``HDiv.hDiv _ =>
+    match arg₁ with
+    | .const ``Int _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.div [])) then
+        return .some (.base .idiv')
+      return .none
+    | _ => return .none
+  | .const ``HMod.hMod _ =>
+    match arg₁ with
+    | .const ``Int _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.mod [])) then
+        return .some (.base .imod')
+      return .none
+    | _ => return .none
+  | _ => return .none
+
+def processComplexTermExpr (e : Expr) : MetaM (Option LamTerm) := do
+  let e := Expr.eta e
+  let lams := (Expr.lambdaBinders e).size
+  match lams with
+  | 0 =>
+    let fn := e.getAppFn
+    let args := e.getAppArgs
+    match args.data with
+    | [] => return .none
+    | [_] => return .none
+    | [arg₁, arg₂] => processLam0Arg2 e fn arg₁ arg₂
+    | [arg₁, arg₂, arg₃] => processLam0Arg3 e fn arg₁ arg₂ arg₃
+    | [arg₁, arg₂, arg₃, arg₄] => processLam0Arg4 e fn arg₁ arg₂ arg₃ arg₄
+    | _ => return .none
+  | _ => return .none
+
+def processNewTermExpr (e : Expr) : ReifM LamTerm :=
+  match e.eta with
   | .const ``True [] => return .base .trueE
   | .const ``False [] => return .base .falseE
   | .const ``Not [] => return .base .not
@@ -1045,13 +1152,21 @@ def processTermExprAux (e : Expr) : ReifM LamTerm :=
     else
       throwError "processTermExpr :: Non-propositional implication is not supported"
   | .const ``Iff [] => return .base .iff
-  -- **TODO: Integer, Real number, Bit vector**
+  -- **TODO: Real number, Bit vector**
+  | .const ``true [] => return .base .trueb'
+  | .const ``false [] => return .base .falseb'
+  | .const ``not [] => return .base .notb'
+  | .const ``and [] => return .base .andb'
+  | .const ``or [] => return .base .orb'
+  | .const ``Int.neg [] => return .base .ineg'
+  | .const ``Int.add [] => return .base .iadd'
+  | .const ``Int.sub [] => return .base .isub'
+  | .const ``Int.mul [] => return .base .imul'
+  | .const ``Int.div [] => return .base .idiv'
+  | .const ``Int.mod [] => return .base .imod'
+  | .const ``Int.le [] => return .base .ile'
+  | .const ``Int.lt [] => return .base .ilt'
   -- `α` is the original (un-lifted) type
-  | .const ``true [] => return .base .trueb
-  | .const ``false [] => return .base .falseb
-  | .const ``not [] => return .base .notb
-  | .const ``and [] => return .base .andb
-  | .const ``or [] => return .base .orb
   | .app (.const ``Eq _) α =>
     return .base (.eq (← reifType α))
   | .app (.const ``Embedding.forallF _) α =>
@@ -1059,6 +1174,8 @@ def processTermExprAux (e : Expr) : ReifM LamTerm :=
   | .app (.const ``Exists _) α =>
     return .base (.existE (← reifType α))
   | e => do
+    if let .some res ← processComplexTermExpr e then
+      return res
     let eTy ← instantiateMVars (← Meta.inferType e)
     let lamTy ← reifType eTy
     newTermExpr e lamTy
@@ -1078,7 +1195,7 @@ def processTermExpr (lctx : HashMap FVarId Nat) (e : Expr) : ReifM LamTerm := do
   if let .some id := varMap.find? e then
     return .atom id
   -- If the expression has not been processed
-  processTermExprAux e
+  processNewTermExpr e
 
 partial def reifTerm (lctx : HashMap FVarId Nat) : Expr → ReifM LamTerm
 | .app fn arg => do
@@ -1174,8 +1291,6 @@ section BuildChecker
       Expr.app (.const ``Embedding.GLift [lvl, u]) e)
     -- `tyValExpr : Nat → Type u`
     let tyValExpr := exprListToLCtx tyVal (.succ u) (.sort (.succ u)) (.sort u)
-    -- if !(← Meta.isTypeCorrectCore tyValExpr) then
-    --   throwError "buildLamValuation :: Malformed tyVal"
     return tyValExpr
 
   /-- **Build `LamVarTy` and `varVal`** -/
@@ -1445,6 +1560,15 @@ section ExportUtils
       let (tyHs', aHs', eHs') ← collectLamTermAtoms lamVarTy lamEVarTy t
       return (mergeHashSet tyHs tyHs', mergeHashSet aHs aHs', mergeHashSet eHs eHs'))
       (HashSet.empty, HashSet.empty, HashSet.empty)
+
+  def collectLamTermIntConsts : LamTerm → HashSet IntConst
+  | .base (.icst ic) => HashSet.empty.insert ic
+  | .lam _ body => collectLamTermIntConsts body
+  | .app _ fn arg => mergeHashSet (collectLamTermIntConsts fn) (collectLamTermIntConsts arg)
+  | _ => HashSet.empty
+
+  def collectLamTermsIntConsts (ts : Array LamTerm) : HashSet IntConst :=
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermIntConsts t)) HashSet.empty
 
   def collectLamTermBitvecs : LamTerm → HashSet (List Bool)
   | .base b =>

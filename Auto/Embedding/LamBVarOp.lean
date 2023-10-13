@@ -363,63 +363,6 @@ def LamWF.pushLCtx_ofBVar :
   LamWF lamVarTy ⟨pushLCtx s lctx, .bvar 0, s⟩ :=
   Eq.mp (by rw [pushLCtx_zero]) (@LamWF.ofBVar lamVarTy (pushLCtx s lctx) 0)
 
-private def getILSortString : LamBaseTerm → String
-| .eq s => s!"{s}"
-| .forallE s => s!"{s}"
-| .existE s => s!"{s}"
-| _ => "❌"
-
--- Unfortunately, we have to define `bvarLift` before defining `toStringLCtx`
-partial def LamTerm.toStringLCtx (lctx : Nat) : LamTerm → String
-| .atom n => s!"!{n}"
-| .etom n => s!"?{n}"
-| .base b =>
-  match b.beq .trueE || b.beq .falseE with
-  | true => s!"{b}"
-  | false => s!"({b})"
-| .bvar m =>
-  if m < lctx then
-    s!"x{lctx - m - 1}"
-  else
-    s!"⟨{m - lctx}⟩"
-| .lam s t => s!"(λx{lctx} : {s}, {toStringLCtx (.succ lctx) t})"
-| t@(.app ..) =>
-  let fn := t.getAppFn
-  let args := t.getAppArgs
-  match fn with
-  | .base b =>
-    match b.beq .not || b.beq .notb with
-    | true =>
-      match args with
-      | [(_, arg)] => s!"(¬ {toStringLCtx lctx arg})"
-      | _ => "❌"
-    | false =>
-      match b.beq .and || b.beq .or || b.beq .imp || b.beq .iff ||
-            b.beq .andb || b.beq .orb || b.isEq || b.isEqI with
-      | true =>
-        match args with
-        | [(_, arg)] => s!"({toStringLCtx lctx arg} {b})"
-        | [(_, arg₁), (_, arg₂)] => s!"({toStringLCtx lctx arg₁} {b} {toStringLCtx lctx arg₂})"
-        | _ => "❌"
-      | false =>
-        match b.isForallE || b.isForallEI || b.isExistE || b.isExistEI with
-        | true =>
-          match args with
-          | [(_, arg)] =>
-            match arg with
-            | .lam s t => s!"({b} x{lctx} : {s}, {toStringLCtx (.succ lctx) t})"
-            | arg =>
-              let arg's := toStringLCtx (.succ lctx) arg.bvarLift
-              s!"({b}x{lctx} : {getILSortString b}, {arg's} x{lctx})"
-          | _ => "❌"
-        | false => "❌"
-  | fn => "(" ++ toStringLCtx lctx fn ++ " " ++ String.intercalate " " (args.map (fun x => toStringLCtx lctx x.snd)) ++ ")"
-
-def LamTerm.toString := LamTerm.toStringLCtx 0
-
-instance : ToString LamTerm where
-  toString := LamTerm.toString
-
 def LamTerm.bvarLowersIdx? (idx : Nat) (lvl : Nat) : LamTerm → Option LamTerm
 | .atom n => .some (.atom n)
 | .etom n => .some (.etom n)
@@ -534,5 +477,65 @@ theorem LamTerm.bvarLower?_spec : bvarLower? t = .some t' ↔ bvarLift t' = t :=
 theorem LamTerm.maxEVarSucc_bvarLower?
   (heq : LamTerm.bvarLower? t = .some t') : t'.maxEVarSucc = t.maxEVarSucc :=
   LamTerm.maxEVarSucc_bvarLowersIdx? heq
+
+private def getILSortString : LamBaseTerm → String
+| .eq s => s!"{s}"
+| .forallE s => s!"{s}"
+| .existE s => s!"{s}"
+| _ => "❌"
+
+-- Unfortunately, we have to define `bvarLift` before defining `toStringLCtx`
+partial def LamTerm.toStringLCtx (lctx : Nat) : LamTerm → String
+| .atom n => s!"!{n}"
+| .etom n => s!"?{n}"
+| .base b =>
+  match b.beq .trueE || b.beq .falseE with
+  | true => s!"{b}"
+  | false => s!"({b})"
+| .bvar m =>
+  if m < lctx then
+    s!"x{lctx - m - 1}"
+  else
+    s!"⟨{m - lctx}⟩"
+| .lam s t => s!"(λx{lctx} : {s}, {toStringLCtx (.succ lctx) t})"
+| t@(.app ..) =>
+  let fn := t.getAppFn
+  let args := t.getAppArgs
+  match fn with
+  | .base b =>
+    match b.beq .not || b.beq .notb' || b.beq .ineg' with
+    | true =>
+      match args with
+      | [(_, arg)] => s!"(¬ {toStringLCtx lctx arg})"
+      | _ => "❌"
+    | false =>
+      match b.beq .and || b.beq .or || b.beq .imp || b.beq .iff ||
+            b.beq .andb' || b.beq .orb' ||
+            b.beq .iadd' || b.beq .isub' || b.beq .imul' || b.beq .idiv' || b.beq .imod' ||
+            b.beq .ile' || b.beq .ige' || b.beq .ilt' || b.beq .igt' ||
+            b.isEq || b.isEqI with
+      | true =>
+        match args with
+        | [(_, arg)] => s!"({toStringLCtx lctx arg} {b})"
+        | [(_, arg₁), (_, arg₂)] => s!"({toStringLCtx lctx arg₁} {b} {toStringLCtx lctx arg₂})"
+        | _ => "❌"
+      | false =>
+        match b.isForallE || b.isForallEI || b.isExistE || b.isExistEI with
+        | true =>
+          match args with
+          | [(_, arg)] =>
+            match arg with
+            | .lam s t => s!"({b} x{lctx} : {s}, {toStringLCtx (.succ lctx) t})"
+            | arg =>
+              let arg's := toStringLCtx (.succ lctx) arg.bvarLift
+              s!"({b}x{lctx} : {getILSortString b}, {arg's} x{lctx})"
+          | _ => "❌"
+        | false => "❌"
+  | fn => "(" ++ toStringLCtx lctx fn ++ " " ++ String.intercalate " " (args.map (fun x => toStringLCtx lctx x.snd)) ++ ")"
+
+def LamTerm.toString := LamTerm.toStringLCtx 0
+
+instance : ToString LamTerm where
+  toString := LamTerm.toString
 
 end Auto.Embedding.Lam

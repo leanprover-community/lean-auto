@@ -30,6 +30,36 @@ def andbLift.{u} (p q : GLift.{1, u} Bool) :=
 def orbLift.{u} (p q : GLift.{1, u} Bool) :=
   GLift.up (p.down || q.down)
 
+def inegLift.{u} (m : GLift.{1, u} Int) :=
+  GLift.up (Int.neg m.down)
+
+def iaddLift.{u} (m n : GLift.{1, u} Int) :=
+  GLift.up (Int.add m.down n.down)
+
+def isubLift.{u} (m n : GLift.{1, u} Int) :=
+  GLift.up (Int.sub m.down n.down)
+
+def imulLift.{u} (m n : GLift.{1, u} Int) :=
+  GLift.up (Int.mul m.down n.down)
+
+def idivLift.{u} (m n : GLift.{1, u} Int) :=
+  GLift.up (Int.div m.down n.down)
+
+def imodLift.{u} (m n : GLift.{1, u} Int) :=
+  GLift.up (Int.mod m.down n.down)
+
+def ileLift.{u} (m n : GLift.{1, u} Int) :=
+  GLift.up (Int.le m.down n.down)
+
+def iltLift.{u} (m n : GLift.{1, u} Int) :=
+  GLift.up (Int.lt m.down n.down)
+
+def igeLift.{u} (m n : GLift.{1, u} Int) :=
+  GLift.up (Int.le n.down m.down)
+
+def igtLift.{u} (m n : GLift.{1, u} Int) :=
+  GLift.up (Int.lt n.down m.down)
+
 @[reducible] def ImpF.{u, v} (p : Sort u) (q : Sort v) := p → q
 
 def impLift.{u}

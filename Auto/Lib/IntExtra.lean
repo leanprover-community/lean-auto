@@ -26,4 +26,8 @@ instance : LawfulBEq Int where
   eq_of_beq := Int.eq_of_beq_eq_true
   rfl := Int.beq_refl
 
+def Int.ge (a b : Int) := Int.le b a
+
+def Int.gt (a b : Int) := Int.lt b a
+
 end Auto

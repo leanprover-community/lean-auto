@@ -457,6 +457,16 @@ section Adhoc
 
   example : ∀ b, !(b = false) ↔ b = true := by auto
 
+  -- Integer
+  -- Just testing whether the verified checker is correct
+  example
+    (a b : Int)
+    (mul_comm : ∀ (a b : Int), a * b = b * a) : a * b + 1 = b * a + 1 := by auto
+
+  example
+    (a b : Int)
+    : a * b - a = a * b - a := by auto
+
 end Adhoc
 
 -- Issues

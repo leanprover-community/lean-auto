@@ -3,6 +3,7 @@ import Duper.Tactic
 import Auto.Lib.ExprExtra
 import Auto.Lib.MetaExtra
 import Auto.Lib.MetaState
+import Auto.Lib.ToExprExtra
 import Auto.Embedding.LamBase
 import Auto.Translation.LamReif
 open Lean
@@ -127,6 +128,28 @@ def interpCstrRealAsUnlifted (c : CstrReal) : Expr :=
   | .one => .app (.app (.const ``One.one [lvl₁]) real) real
 
 open Embedding in
+def interpBoolConstAsUnlifted : BoolConst → Expr
+| .trueb  => .const ``true []
+| .falseb => .const ``false []
+| .notb   => .const ``not []
+| .andb   => .const ``and []
+| .orb    => .const ``or []
+
+open Embedding in
+def interpIntConstAsUnlifted : IntConst → Expr
+| .intVal n => Lean.toExpr n
+| .ineg     => .const ``Int.neg []
+| .iadd     => .const ``Int.add []
+| .isub     => .const ``Int.sub []
+| .imul     => .const ``Int.mul []
+| .idiv     => .const ``Int.div []
+| .imod     => .const ``Int.mod []
+| .ile      => .const ``Int.le []
+| .ige      => .const ``Int.ge []
+| .ilt      => .const ``Int.lt []
+| .igt      => .const ``Int.gt []
+
+open Embedding in
 def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
 | .trueE      => return .const ``True []
 | .falseE     => return .const ``False []
@@ -138,12 +161,8 @@ def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
     | throwError "interpLamBaseTermAsUnlifted :: Unexpected error"
   return impVal.value.instantiateLevelParams impVal.levelParams [.zero, .zero]
 | .iff        => return .const ``Iff []
-| .trueb      => return .const ``true []
-| .falseb     => return .const ``false []
-| .notb       => return .const ``not []
-| .andb       => return .const ``and []
-| .orb        => return .const ``or []
-| .intVal _   => throwError "Not implemented"
+| .bcst bc    => return interpBoolConstAsUnlifted bc
+| .icst ic    => return interpIntConstAsUnlifted ic
 | .realVal c  => return interpCstrRealAsUnlifted c
 | .bvVal _    => throwError "Not implemented"
 | .eqI _      => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
