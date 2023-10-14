@@ -1,5 +1,6 @@
 import Std.Data.Int.Basic
 import Auto.Lib.IsomType
+import Auto.Lib.StringExtra
 
 namespace Auto.Embedding
 
@@ -34,6 +35,9 @@ def orbLift.{u} (p q : GLift.{1, u} Bool) :=
 def inegLift.{u} (m : GLift.{1, u} Int) :=
   GLift.up (Int.neg m.down)
 
+def iabsLift.{u} (m : GLift.{1, u} Int) :=
+  GLift.up (ite (m.down < -m.down) (-m.down) m.down)
+
 def iaddLift.{u} (m n : GLift.{1, u} Int) :=
   GLift.up (Int.add m.down n.down)
 
@@ -58,14 +62,30 @@ def iemodLift.{u} (m n : GLift.{1, u} Int) :=
 def ileLift.{u} (m n : GLift.{1, u} Int) :=
   GLift.up (Int.le m.down n.down)
 
-def iltLift.{u} (m n : GLift.{1, u} Int) :=
-  GLift.up (Int.lt m.down n.down)
-
 def igeLift.{u} (m n : GLift.{1, u} Int) :=
   GLift.up (Int.le n.down m.down)
 
+def iltLift.{u} (m n : GLift.{1, u} Int) :=
+  GLift.up (Int.lt m.down n.down)
+
 def igtLift.{u} (m n : GLift.{1, u} Int) :=
   GLift.up (Int.lt n.down m.down)
+
+def sappLift.{u} (m n : GLift.{1, u} String) :=
+  GLift.up (String.append m.down n.down)
+
+-- **TODO**
+def sleLift.{u} (m n : GLift.{1, u} String) : GLift.{1, u} Prop :=
+  GLift.up (String.le m.down n.down)
+
+def sgeLift.{u} (m n : GLift.{1, u} String) : GLift.{1, u} Prop :=
+  GLift.up (String.ge m.down n.down)
+
+def sltLift.{u} (m n : GLift.{1, u} String) : GLift.{1, u} Prop :=
+  GLift.up (String.lt m.down n.down)
+
+def sgtLift.{u} (m n : GLift.{1, u} String) : GLift.{1, u} Prop :=
+  GLift.up (String.gt m.down n.down)
 
 @[reducible] def ImpF.{u, v} (p : Sort u) (q : Sort v) := p → q
 

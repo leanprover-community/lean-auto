@@ -465,12 +465,19 @@ section Adhoc
 
   example
     (a b : Int)
-    : a * b - a = a * b - a := by auto
+    : a * b - a % (Int.mod b a) = a * b - a % (Int.mod b a) := by auto
+  
+  example (a : Int)
+    (h₁ : a ≥ 0) (h₂ : -a ≤ 0) (h₃ : 0 < 1) (h₄ : 2 > 0)
+    : (a ≥ 0) ∧ (-a ≤ 0) ∧ (0 < 1) ∧ (2 > 0) := by auto
+
+  -- String
+  example (a b : String)
+    : "asdf" = "asdf" ∧ a ++ b = a ++ b ∧ (a < b) = (a < b) ∧ (a > b) = (a > b) := by auto
 
 end Adhoc
 
 -- Issues
-
 section Issues
 
   set_option auto.tptp.solver.name "none"
@@ -483,6 +490,8 @@ section Issues
   example (x : Nat) (primeset : Nat → Prop) (dvd : Nat → Nat → Prop) :
     ((∃ (i : _) (i_1 : primeset i), dvd i x) ↔ (∃ p, primeset p ∧ dvd p x)) := by
     auto
+
+  example (h : ¬ (∀ b, !(b = true) ↔ b = false)) : False := by auto
 
   -- Brute force example
   -- This must be fixed

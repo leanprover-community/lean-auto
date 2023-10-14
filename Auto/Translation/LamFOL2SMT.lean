@@ -24,11 +24,12 @@ private inductive LamAtom where
 deriving Inhabited, Hashable, BEq
 
 private def lamBaseSort2SSort : LamBaseSort → SSort
-| .prop => .app (.symb "Bool") #[]
-| .bool => .app (.symb "Bool") #[]
-| .int  => .app (.symb "Int") #[]
-| .real => .app (.symb "Real") #[]
-| .bv n => .app (.indexed "BitVec" (.inr n)) #[]
+| .prop   => .app (.symb "Bool") #[]
+| .bool   => .app (.symb "Bool") #[]
+| .int    => .app (.symb "Int") #[]
+| .string => .app (.symb "String") #[]
+| .real   => .app (.symb "Real") #[]
+| .bv n   => .app (.indexed "BitVec" (.inr n)) #[]
 
 private def lamSort2SSortAux : LamSort → TransM LamAtom SSort
 | .atom n => do
@@ -59,7 +60,7 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .and        => return .qStrApp "and" #[arg1, arg2]
 | .or         => return .qStrApp "or" #[arg1, arg2]
 | .imp        => return .qStrApp "=>" #[arg1, arg2]
-| .iff        => return .qStrApp "not" #[.qStrApp "xor" #[arg1, arg2]]
+| .iff        => return .qStrApp "=" #[arg1, arg2]
 | .bcst .andb => return .qStrApp "and" #[arg1, arg2]
 | .bcst .orb  => return .qStrApp "or" #[arg1, arg2]
 | .icst .iadd => return .qStrApp "+" #[arg1, arg2]
@@ -73,11 +74,17 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .icst .ige  => return .qStrApp ">=" #[arg1, arg2]
 | .icst .ilt  => return .qStrApp "<" #[arg1, arg2]
 | .icst .igt  => return .qStrApp ">" #[arg1, arg2]
+| .scst .sapp => return .qStrApp "str.++" #[arg1, arg2]
+| .scst .sle  => return .qStrApp "str.<=" #[arg1, arg2]
+| .scst .sge  => return .qStrApp "str.<=" #[arg2, arg1]
+| .scst .slt  => return .qStrApp "str.<" #[arg1, arg2]
+| .scst .sgt  => return .qStrApp "str.<" #[arg2, arg1]
 | t           => throwError "lamTerm2STerm :: The arity of {repr t} is not 2"
 
 private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamAtom STerm
 | .not        => return .qStrApp "not" #[arg]
 | .bcst .notb => return .qStrApp "not" #[arg]
+| .icst .iabs => return .qStrApp "abs" #[arg]
 | .icst .ineg => return .qStrApp "-" #[Int2STerm 0, arg]
 | t           => throwError "lamTerm2STerm :: The arity of {repr t} is not 1"
 
@@ -89,6 +96,7 @@ private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtom STerm
 | .bcst .trueb      => return .qStrApp "true" #[]
 | .bcst .falseb     => return .qStrApp "false" #[]
 | .icst (.intVal n) => return Int2STerm n
+| .scst (.strVal s) => return .sConst (.str s)
 | .realVal c        => return CstrReal2STerm c
 | .bvVal bv         => return Bitvec2STerm bv
 | t                 => throwError "lamTerm2STerm :: The arity of {repr t} is not 0"

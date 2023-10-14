@@ -214,9 +214,9 @@ example {a b : ℤ} (ha : 3 < a) (hb : b ≥ 4) : 0 ≤ 3 * a ^ 2 * b + b * 7 + 
 
 example {a b : ℤ} (ha : 3 < a) (hb : b ≥ 4) : 0 < 3 * a ^ 2 * b + b * 7 + 14 := by positivity
 
-example {a : ℤ} : 0 ≤ |a| := by positivity
+example {a : ℤ} : 0 ≤ |a| := by auto
 
-example {a : ℤ} : 0 < |a| + 3 := by positivity
+example {a : ℤ} : 0 < |a| + 3 := by auto
 
 example {n : ℤ} (hn : 0 < n) : 0 < n.natAbs := by positivity
 example {n : ℤ} (hn : n ≠ 0) : 0 < n.natAbs := by positivity

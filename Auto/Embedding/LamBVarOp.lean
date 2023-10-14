@@ -503,16 +503,17 @@ partial def LamTerm.toStringLCtx (lctx : Nat) : LamTerm → String
   let args := t.getAppArgs
   match fn with
   | .base b =>
-    match b.beq .not || b.beq .notb' || b.beq .ineg' with
+    match b.beq .not || b.beq .notb' || b.beq .ineg' || b.beq .iabs' with
     | true =>
       match args with
-      | [(_, arg)] => s!"(¬ {toStringLCtx lctx arg})"
+      | [(_, arg)] => s!"({b} {toStringLCtx lctx arg})"
       | _ => "❌"
     | false =>
       match b.beq .and || b.beq .or || b.beq .imp || b.beq .iff ||
             b.beq .andb' || b.beq .orb' ||
             b.beq .iadd' || b.beq .isub' || b.beq .imul' || b.beq .idiv' || b.beq .imod' ||
             b.beq .iediv' || b.beq .iemod' || b.beq .ile' || b.beq .ige' || b.beq .ilt' || b.beq .igt' ||
+            b.beq .sapp' || b.beq .sle' || b.beq .sge' || b.beq .slt' || b.beq .sgt' ||
             b.isEq || b.isEqI with
       | true =>
         match args with

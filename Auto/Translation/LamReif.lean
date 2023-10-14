@@ -432,6 +432,9 @@ partial def updownFunc (s : LamSort) : ReifM (Expr × Expr × Expr × Expr) :=
     | .int =>
       let ty := Expr.const ``Int []
       return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
+    | .string =>
+      let ty := Expr.const ``String []
+      return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
     | .real =>
       let ty := Expr.const ``Real []
       return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
@@ -1018,6 +1021,7 @@ def processTypeExpr (e : Expr) : ReifM LamSort := do
       newTypeExpr e
   | .const ``Bool [] => return .base .bool
   | .const ``Int [] => return .base .int
+  | .const ``String [] => return .base .string
   | .const ``Real [] => return .base .real
   | .app (.const ``Bitvec []) (.lit (.natVal n)) => return .base (.bv n)
   | _ => newTypeExpr e
@@ -1041,6 +1045,13 @@ def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
         return .some (.base .ineg')
       return .none
     | _ => return .none
+  | .const `Abs.abs _ =>
+    match arg₁ with
+    | .const ``Int _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.abs [])) then
+        return .some (.base .iabs')
+      return .none
+    | _ => return .none
   | .const ``LE.le _ =>
     match arg₁ with
     | .const ``Int _ =>
@@ -1061,12 +1072,20 @@ def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
       if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.lt [])) then
         return .some (.base .ilt')
       return .none
+    | .const ``String _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``String.lt [])) then
+        return .some (.base .slt')
+      return .none
     | _ => return .none
   | .const ``GT.gt _ =>
     match arg₁ with
     | .const ``Int _ =>
       if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.gt [])) then
         return .some (.base .igt')
+      return .none
+    | .const ``String _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``String.gt [])) then
+        return .some (.base .sgt')
       return .none
     | _ => return .none
   | _ => return .none
@@ -1125,6 +1144,13 @@ def processLam0Arg4 (e fn arg₁ arg₂ arg₃ arg₄ : Expr) : MetaM (Option La
         return .some (.base .iemod')
       return .none
     | _ => return .none
+  | .const ``HAppend.hAppend _ =>
+    match arg₁ with
+    | .const ``String _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``String.append [])) then
+        return .some (.base .sapp')
+      return .none
+    | _ => return .none
   | _ => return .none
 
 def processComplexTermExpr (e : Expr) : MetaM (Option LamTerm) := do
@@ -1145,6 +1171,7 @@ def processComplexTermExpr (e : Expr) : MetaM (Option LamTerm) := do
 
 def processNewTermExpr (e : Expr) : ReifM LamTerm :=
   match e.eta with
+  | .lit (.strVal s) => return .base (.strVal' s)
   | .const ``True [] => return .base .trueE
   | .const ``False [] => return .base .falseE
   | .const ``Not [] => return .base .not
@@ -1156,7 +1183,7 @@ def processNewTermExpr (e : Expr) : ReifM LamTerm :=
     else
       throwError "processTermExpr :: Non-propositional implication is not supported"
   | .const ``Iff [] => return .base .iff
-  -- **TODO: Real number, Bit vector**
+  -- **TODO: Natural number, Real number, Bit vector**
   | .const ``true [] => return .base .trueb'
   | .const ``false [] => return .base .falseb'
   | .const ``not [] => return .base .notb'
@@ -1172,6 +1199,7 @@ def processNewTermExpr (e : Expr) : ReifM LamTerm :=
   | .const ``Int.emod [] => return .base .iemod'
   | .const ``Int.le [] => return .base .ile'
   | .const ``Int.lt [] => return .base .ilt'
+  | .const ``String.append [] => return .base .sapp'
   -- `α` is the original (un-lifted) type
   | .app (.const ``Eq _) α =>
     return .base (.eq (← reifType α))
@@ -1575,6 +1603,15 @@ section ExportUtils
 
   def collectLamTermsIntConsts (ts : Array LamTerm) : HashSet IntConst :=
     ts.foldl (fun hs t => mergeHashSet hs (collectLamTermIntConsts t)) HashSet.empty
+
+  def collectLamTermStringConsts : LamTerm → HashSet StringConst
+  | .base (.scst sc) => HashSet.empty.insert sc
+  | .lam _ body => collectLamTermStringConsts body
+  | .app _ fn arg => mergeHashSet (collectLamTermStringConsts fn) (collectLamTermStringConsts arg)
+  | _ => HashSet.empty
+
+  def collectLamTermsStringConsts (ts : Array LamTerm) : HashSet StringConst :=
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermStringConsts t)) HashSet.empty
 
   def collectLamTermBitvecs : LamTerm → HashSet (List Bool)
   | .base b =>

@@ -88,11 +88,12 @@ def interpLamSortAsUnlifted : LamSort → ExternM Expr
   return .fvar fid
 | .base b =>
   match b with
-  | .prop => return .sort .zero
-  | .bool => return .const ``Bool []
-  | .int  => return .const ``Int []
-  | .real => return .const ``Real []
-  | .bv n => return .app (.const ``Bitvec []) (.lit (.natVal n))
+  | .prop   => return .sort .zero
+  | .bool   => return .const ``Bool []
+  | .int    => return .const ``Int []
+  | .string => return .const ``String []
+  | .real   => return .const ``Real []
+  | .bv n   => return .app (.const ``Bitvec []) (.lit (.natVal n))
 | .func s₁ s₂ => do
   return .forallE `_ (← interpLamSortAsUnlifted s₁) (← interpLamSortAsUnlifted s₂) .default
 
@@ -139,6 +140,7 @@ open Embedding in
 def interpIntConstAsUnlifted : IntConst → Expr
 | .intVal n => Lean.toExpr n
 | .ineg     => .const ``Int.neg []
+| .iabs     => .const ``Int.abs []
 | .iadd     => .const ``Int.add []
 | .isub     => .const ``Int.sub []
 | .imul     => .const ``Int.mul []
@@ -150,6 +152,15 @@ def interpIntConstAsUnlifted : IntConst → Expr
 | .ige      => .const ``Int.ge []
 | .ilt      => .const ``Int.lt []
 | .igt      => .const ``Int.gt []
+
+open Embedding in
+def interpStringConstAsUnlifted : StringConst → Expr
+| .strVal s => Lean.toExpr s
+| .sapp     => .const ``String.append []
+| .sle      => .const ``String.le []
+| .sge      => .const ``String.ge []
+| .slt      => .const ``String.lt []
+| .sgt      => .const ``String.gt []
 
 open Embedding in
 def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
@@ -165,6 +176,7 @@ def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
 | .iff        => return .const ``Iff []
 | .bcst bc    => return interpBoolConstAsUnlifted bc
 | .icst ic    => return interpIntConstAsUnlifted ic
+| .scst sc    => return interpStringConstAsUnlifted sc
 | .realVal c  => return interpCstrRealAsUnlifted c
 | .bvVal _    => throwError "Not implemented"
 | .eqI _      => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)

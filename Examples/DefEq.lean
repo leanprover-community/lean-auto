@@ -9,6 +9,7 @@ import Auto.Tactic
 
 open Set
 
+set_option auto.proofReconstruction false
 set_option trace.auto.tptp.printQuery true
 set_option trace.auto.tptp.result true
 set_option trace.auto.lamReif.printResult true
