@@ -15,3 +15,6 @@ __Lean Issues:__
 * Slow reduction: Using the interpreter to evaluate checker table is significantly faster than using reduction.
 * Slow compilation: Compiling [ChkSteps]/[Checker table] sometimes exhibits superlinear behaviour.
 * Pretty printer: **TODO**
+
+__Solver Issues:__
+* It seems that Z3 does not recognize ``https://smtlib.cs.uiowa.edu/theories-UnicodeStrings.shtml`` unicode escape sequences, and prints ``sat`` on ``Test/Smt/String_Escape.smt``

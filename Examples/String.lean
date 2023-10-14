@@ -7,6 +7,8 @@ set_option trace.auto.smt.result true
 
 example : "|,\\|" = "|,\\|" := by auto
 
+example : "&" = "&" := by auto
+
 example (a b c : String) : (a ++ b) ++ c = a ++ (b ++ c) := by auto
 
 example (a b c : String) (_ : a < b) : c ++ a < c ++ b := by auto

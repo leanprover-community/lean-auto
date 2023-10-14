@@ -84,9 +84,11 @@ inductive SpecConst where
   | num    : Nat → SpecConst
 
 def SpecConst.toString : SpecConst → String
-| .str s     => ToString.toString (repr s)
+| .str s     => "\"" ++ String.join (s.toList.map specCharRepr) ++ "\""
 | .binary bs => bs.foldl (fun acc b => acc.push (if b then '1' else '0')) "#b"
 | .num n     => ToString.toString (repr n)
+where specCharRepr (c : Char) : String :=
+  "\\u{" ++ String.mk (Nat.toDigits 16 c.toNat) ++ "}"
 
 inductive STerm where
   | sConst  : SpecConst → STerm
