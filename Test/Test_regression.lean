@@ -451,11 +451,23 @@ section Adhoc
     (a b : α) [inst : Decidable (a = b)]
     (h : if (a = b) then True else a = b) : a = b := by
     auto
-  
+
   -- Decide
   example : ∀ b, !(b = true) ↔ b = false := by auto
 
   example : ∀ b, !(b = false) ↔ b = true := by auto
+
+  -- Nat
+  example (a b : Nat) : 3 = nat_lit 3 ∧ (a = b ↔ b = a) := by auto
+
+  example (a b : Nat) : a % b + a - b + (a / b) * b = a % b + a - b + (a / b) * b := by auto
+
+  example (a b c d : Nat) (h₁ : a < b) (h₂ : c > d) : b > a ∧ d < c := by auto
+
+  example (a b c d : Nat) (h₁ : a ≤ b) (h₂ : c ≥ d) : b ≥ a ∧ d ≤ c := by auto
+
+  open Auto in
+  example (a b c d : Nat) (h₁ : Nat.ge a b) (h₂ : Nat.gt c d) : Nat.ge a b ∧ Nat.gt c d := by auto
 
   -- Integer
   -- Just testing whether the verified checker is correct

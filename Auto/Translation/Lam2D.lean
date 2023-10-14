@@ -90,6 +90,7 @@ def interpLamSortAsUnlifted : LamSort → ExternM Expr
   match b with
   | .prop   => return .sort .zero
   | .bool   => return .const ``Bool []
+  | .nat    => return .const ``Nat []
   | .int    => return .const ``Int []
   | .string => return .const ``String []
   | .real   => return .const ``Real []
@@ -121,13 +122,6 @@ def withEtomsAsFVar (etoms : Array Nat) : ExternM Unit :=
     setEtomsToAbstract ((← getEtomsToAbstract).push (newFVarId, etom))
     setEtomFVars ((← getEtomFVars).insert etom newFVarId)
 
-def interpCstrRealAsUnlifted (c : CstrReal) : Expr :=
-  let lvl₁ := Level.succ .zero
-  let real := Expr.const ``Real []
-  match c with
-  | .zero => .app (.app (.const ``Zero.zero [lvl₁]) real) real
-  | .one => .app (.app (.const ``One.one [lvl₁]) real) real
-
 open Embedding in
 def interpBoolConstAsUnlifted : BoolConst → Expr
 | .trueb  => .const ``true []
@@ -135,6 +129,19 @@ def interpBoolConstAsUnlifted : BoolConst → Expr
 | .notb   => .const ``not []
 | .andb   => .const ``and []
 | .orb    => .const ``or []
+
+open Embedding in
+def interpNatConstAsUnlifted : NatConst → Expr
+| .natVal n => Lean.toExpr n
+| .nadd     => .const ``Nat.add []
+| .nsub     => .const ``Nat.sub []
+| .nmul     => .const ``Nat.mul []
+| .ndiv     => .const ``Nat.div []
+| .nmod     => .const ``Nat.mod []
+| .nle      => .const ``Nat.le []
+| .nge      => .const ``Nat.ge []
+| .nlt      => .const ``Nat.lt []
+| .ngt      => .const ``Nat.gt []
 
 open Embedding in
 def interpIntConstAsUnlifted : IntConst → Expr
@@ -175,9 +182,9 @@ def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
   return impVal.value.instantiateLevelParams impVal.levelParams [.zero, .zero]
 | .iff        => return .const ``Iff []
 | .bcst bc    => return interpBoolConstAsUnlifted bc
+| .ncst nc    => return interpNatConstAsUnlifted nc
 | .icst ic    => return interpIntConstAsUnlifted ic
 | .scst sc    => return interpStringConstAsUnlifted sc
-| .realVal c  => return interpCstrRealAsUnlifted c
 | .bvVal _    => throwError "Not implemented"
 | .eqI _      => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
 | .forallEI _ => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)

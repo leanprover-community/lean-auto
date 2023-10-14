@@ -429,6 +429,9 @@ partial def updownFunc (s : LamSort) : ReifM (Expr × Expr × Expr × Expr) :=
     | .bool =>
       let ty := Expr.const ``Bool []
       return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
+    | .nat =>
+      let ty := Expr.const ``Nat []
+      return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
     | .int =>
       let ty := Expr.const ``Int []
       return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
@@ -1020,6 +1023,7 @@ def processTypeExpr (e : Expr) : ReifM LamSort := do
     else
       newTypeExpr e
   | .const ``Bool [] => return .base .bool
+  | .const ``Nat [] => return .base .nat
   | .const ``Int [] => return .base .int
   | .const ``String [] => return .base .string
   | .const ``Real [] => return .base .real
@@ -1054,6 +1058,10 @@ def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
     | _ => return .none
   | .const ``LE.le _ =>
     match arg₁ with
+    | .const ``Nat _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Nat.le [])) then
+        return .some (.base .nle')
+      return .none
     | .const ``Int _ =>
       if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.le [])) then
         return .some (.base .ile')
@@ -1061,6 +1069,10 @@ def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
     | _ => return .none
   | .const ``GE.ge _ =>
     match arg₁ with
+    | .const ``Nat _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Nat.ge [])) then
+        return .some (.base .nge')
+      return .none
     | .const ``Int _ =>
       if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.ge [])) then
         return .some (.base .ige')
@@ -1068,6 +1080,10 @@ def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
     | _ => return .none
   | .const ``LT.lt _ =>
     match arg₁ with
+    | .const ``Nat _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Nat.lt [])) then
+        return .some (.base .nlt')
+      return .none
     | .const ``Int _ =>
       if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.lt [])) then
         return .some (.base .ilt')
@@ -1079,6 +1095,10 @@ def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
     | _ => return .none
   | .const ``GT.gt _ =>
     match arg₁ with
+    | .const ``Nat _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Nat.gt [])) then
+        return .some (.base .ngt')
+      return .none
     | .const ``Int _ =>
       if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.gt [])) then
         return .some (.base .igt')
@@ -1094,6 +1114,12 @@ def processLam0Arg3 (e fn arg₁ arg₂ arg₃ : Expr) : MetaM (Option LamTerm) 
   match fn with
   | .const ``OfNat.ofNat _ =>
     match arg₁ with
+    | .const ``Nat _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e arg₂) then
+        let .lit (.natVal nv) := arg₂
+          | throwError "processLam0Arg3 :: OfNat.ofNat instance is not based on a nat literal"
+        return .some (.base (.natVal' nv))
+      return .none
     | .const ``Int _ =>
       if (← Meta.withDefault <| Meta.isDefEq e (.app (.const ``Int.ofNat []) arg₂)) then
         let .lit (.natVal nv) := arg₂
@@ -1107,6 +1133,10 @@ def processLam0Arg4 (e fn arg₁ arg₂ arg₃ arg₄ : Expr) : MetaM (Option La
   match fn with
   | .const ``HAdd.hAdd _ =>
     match arg₁ with
+    | .const ``Nat _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Nat.add [])) then
+        return .some (.base .nadd')
+      return .none
     | .const ``Int _ =>
       if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.add [])) then
         return .some (.base .iadd')
@@ -1114,6 +1144,10 @@ def processLam0Arg4 (e fn arg₁ arg₂ arg₃ arg₄ : Expr) : MetaM (Option La
     | _ => return .none
   | .const ``HSub.hSub _ =>
     match arg₁ with
+    | .const ``Nat _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Nat.sub [])) then
+        return .some (.base .nsub')
+      return .none
     | .const ``Int _ =>
       if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.sub [])) then
         return .some (.base .isub')
@@ -1121,6 +1155,10 @@ def processLam0Arg4 (e fn arg₁ arg₂ arg₃ arg₄ : Expr) : MetaM (Option La
     | _ => return .none
   | .const ``HMul.hMul _ =>
     match arg₁ with
+    | .const ``Nat _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Nat.mul [])) then
+        return .some (.base .nmul')
+      return .none
     | .const ``Int _ =>
       if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.mul [])) then
         return .some (.base .imul')
@@ -1128,6 +1166,10 @@ def processLam0Arg4 (e fn arg₁ arg₂ arg₃ arg₄ : Expr) : MetaM (Option La
     | _ => return .none
   | .const ``HDiv.hDiv _ =>
     match arg₁ with
+    | .const ``Nat _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Nat.div [])) then
+        return .some (.base .ndiv')
+      return .none
     | .const ``Int _ =>
       if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.div [])) then
         return .some (.base .idiv')
@@ -1137,6 +1179,10 @@ def processLam0Arg4 (e fn arg₁ arg₂ arg₃ arg₄ : Expr) : MetaM (Option La
     | _ => return .none
   | .const ``HMod.hMod _ =>
     match arg₁ with
+    | .const ``Nat _ =>
+      if (← Meta.withDefault <| Meta.isDefEq e (.const ``Nat.mod [])) then
+        return .some (.base .nmod')
+      return .none
     | .const ``Int _ =>
       if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.mod [])) then
         return .some (.base .imod')
@@ -1171,6 +1217,7 @@ def processComplexTermExpr (e : Expr) : MetaM (Option LamTerm) := do
 
 def processNewTermExpr (e : Expr) : ReifM LamTerm :=
   match e.eta with
+  | .lit (.natVal n) => return .base (.natVal' n)
   | .lit (.strVal s) => return .base (.strVal' s)
   | .const ``True [] => return .base .trueE
   | .const ``False [] => return .base .falseE
@@ -1189,6 +1236,15 @@ def processNewTermExpr (e : Expr) : ReifM LamTerm :=
   | .const ``not [] => return .base .notb'
   | .const ``and [] => return .base .andb'
   | .const ``or [] => return .base .orb'
+  | .const ``Nat.add [] => return .base .nadd'
+  | .const ``Nat.sub [] => return .base .nsub'
+  | .const ``Nat.mul [] => return .base .nmul'
+  | .const ``Nat.div [] => return .base .ndiv'
+  | .const ``Nat.mod [] => return .base .nmod'
+  | .const ``Nat.le [] => return .base .nle'
+  | .const ``Nat.ge [] => return .base .nge'
+  | .const ``Nat.lt [] => return .base .nlt'
+  | .const ``Nat.gt [] => return .base .ngt'
   | .const ``Int.neg [] => return .base .ineg'
   | .const ``Int.add [] => return .base .iadd'
   | .const ``Int.sub [] => return .base .isub'
@@ -1594,6 +1650,15 @@ section ExportUtils
       let (tyHs', aHs', eHs') ← collectLamTermAtoms lamVarTy lamEVarTy t
       return (mergeHashSet tyHs tyHs', mergeHashSet aHs aHs', mergeHashSet eHs eHs'))
       (HashSet.empty, HashSet.empty, HashSet.empty)
+
+  def collectLamTermNatConsts : LamTerm → HashSet NatConst
+  | .base (.ncst nc) => HashSet.empty.insert nc
+  | .lam _ body => collectLamTermNatConsts body
+  | .app _ fn arg => mergeHashSet (collectLamTermNatConsts fn) (collectLamTermNatConsts arg)
+  | _ => HashSet.empty
+
+  def collectLamTermsNatConsts (ts : Array LamTerm) : HashSet NatConst :=
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermNatConsts t)) HashSet.empty
 
   def collectLamTermIntConsts : LamTerm → HashSet IntConst
   | .base (.icst ic) => HashSet.empty.insert ic

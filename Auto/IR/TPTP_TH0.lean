@@ -6,6 +6,7 @@ open Embedding.Lam
 -- Identifier mapping
 -- Sort : bv n      => s_bv{n}
 --        atom n    => s_a{n}
+--        nat       => s_nat
 --        int       => s_int
 --        string    => s_string
 -- Term : bvVal xs  => t_bv{0-1 string representation of xs}
@@ -28,6 +29,7 @@ open Embedding.Lam
 def transLamBaseSort : LamBaseSort → String
 | .prop   => "$o"
 | .bool   => "$o"
+| .nat    => "s_nat"
 | .int    => "s_int"
 | .string => "s_string"
 | .real   => "$real"
@@ -38,10 +40,6 @@ def transLamSort : LamSort → String
 | .base b => transLamBaseSort b
 | .func s1 s2 => s!"({transLamSort s1} > {transLamSort s2})"
 
-def transCstrReal : CstrReal → String
-| .zero => "0.0"
-| .one  => "1.0"
-
 def transBitvec (bv : List Bool) : String :=
   String.join (bv.map (fun x => if x then "1" else "0"))
 
@@ -51,6 +49,30 @@ def transBoolConst : BoolConst → String
 | .notb       => "(~)"
 | .andb       => "(&)"
 | .orb        => "(|)"
+
+def transNatConst : NatConst → String
+| .natVal n => s!"t_nat{n}"
+| .nadd     => "t_nadd"
+| .nsub     => "t_nsub"
+| .nmul     => "t_nmul"
+| .ndiv     => "t_ndiv"
+| .nmod     => "t_nmod"
+| .nle      => "t_nle"
+| .nlt      => "t_nlt"
+| .nge      => "t_nge"
+| .ngt      => "t_ngt"
+
+def transNatConstSort : NatConst → String
+| .natVal _ => transLamSort (.base .nat)
+| .nadd     => transLamSort (.func (.base .nat) (.func (.base .nat) (.base .nat)))
+| .nsub     => transLamSort (.func (.base .nat) (.func (.base .nat) (.base .nat)))
+| .nmul     => transLamSort (.func (.base .nat) (.func (.base .nat) (.base .nat)))
+| .ndiv     => transLamSort (.func (.base .nat) (.func (.base .nat) (.base .nat)))
+| .nmod     => transLamSort (.func (.base .nat) (.func (.base .nat) (.base .nat)))
+| .nle      => transLamSort (.func (.base .nat) (.func (.base .nat) (.base .prop)))
+| .nlt      => transLamSort (.func (.base .nat) (.func (.base .nat) (.base .prop)))
+| .nge      => transLamSort (.func (.base .nat) (.func (.base .nat) (.base .prop)))
+| .ngt      => transLamSort (.func (.base .nat) (.func (.base .nat) (.base .prop)))
 
 def transIntConst : IntConst → String
 | .intVal n => s!"t_int{n}"
@@ -115,9 +137,9 @@ def transLamBaseTerm : LamBaseTerm → Except String String
 | .imp        => .ok s!"(=>)"
 | .iff        => .ok s!"(=)" -- Zipperposition seems buggy on (<=>)
 | .bcst bc    => .ok (transBoolConst bc)
+| .ncst nc    => .ok (transNatConst nc)
 | .icst ic    => .ok (transIntConst ic)
 | .scst sc    => .ok (transStringConst sc)
-| .realVal cr => .ok s!"{transCstrReal cr}"
 | .bvVal v    => .ok s!"t_bv{transBitvec v}"
 | .eqI _      => .error "transLamBaseTerm :: eqI should not occur here"
 | .forallEI _ => .error "transLamBaseTerm :: forallEI should not occur here"

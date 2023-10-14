@@ -129,4 +129,8 @@ theorem Nat.max_assoc {a : Nat} : max a (max b c) = max (max a b) c := by
       rw [Nat.max_def (m:=c)]; simp [h']
       rw [Nat.max_def]; simp [Nat.le_trans h h']
 
+def Nat.ge (x y : Nat) := Nat.le y x
+
+def Nat.gt (x y : Nat) := Nat.lt y x
+
 end Auto

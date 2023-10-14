@@ -32,6 +32,33 @@ def andbLift.{u} (p q : GLift.{1, u} Bool) :=
 def orbLift.{u} (p q : GLift.{1, u} Bool) :=
   GLift.up (p.down || q.down)
 
+def naddLift.{u} (m n : GLift.{1, u} Nat) :=
+  GLift.up (Nat.add m.down n.down)
+
+def nsubLift.{u} (m n : GLift.{1, u} Nat) :=
+  GLift.up (Nat.sub m.down n.down)
+
+def nmulLift.{u} (m n : GLift.{1, u} Nat) :=
+  GLift.up (Nat.mul m.down n.down)
+
+def ndivLift.{u} (m n : GLift.{1, u} Nat) :=
+  GLift.up (Nat.div m.down n.down)
+
+def nmodLift.{u} (m n : GLift.{1, u} Nat) :=
+  GLift.up (Nat.mod m.down n.down)
+
+def nleLift.{u} (m n : GLift.{1, u} Nat) :=
+  GLift.up (Nat.le m.down n.down)
+
+def ngeLift.{u} (m n : GLift.{1, u} Nat) :=
+  GLift.up (Nat.le n.down m.down)
+
+def nltLift.{u} (m n : GLift.{1, u} Nat) :=
+  GLift.up (Nat.lt m.down n.down)
+
+def ngtLift.{u} (m n : GLift.{1, u} Nat) :=
+  GLift.up (Nat.lt n.down m.down)
+
 def inegLift.{u} (m : GLift.{1, u} Int) :=
   GLift.up (Int.neg m.down)
 

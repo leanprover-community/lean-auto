@@ -26,6 +26,8 @@ deriving Inhabited, Hashable, BEq
 private def lamBaseSort2SSort : LamBaseSort → SSort
 | .prop   => .app (.symb "Bool") #[]
 | .bool   => .app (.symb "Bool") #[]
+-- `Nat ≅ {x : Int | x ≥ 0}`
+| .nat    => .app (.symb "Int") #[]
 | .int    => .app (.symb "Int") #[]
 | .string => .app (.symb "String") #[]
 | .real   => .app (.symb "Real") #[]
@@ -52,10 +54,6 @@ private def Int2STerm : Int → STerm
 | .ofNat n   => .sConst (.num n)
 | .negSucc n => .qIdApp (QualIdent.ofString "-") #[.sConst (.num (Nat.succ n))]
 
-private def CstrReal2STerm : CstrReal → STerm
-| .zero => .sConst (.num 0)
-| .one  => .sConst (.num 1)
-
 private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → TransM LamAtom STerm
 | .and        => return .qStrApp "and" #[arg1, arg2]
 | .or         => return .qStrApp "or" #[arg1, arg2]
@@ -63,6 +61,15 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .iff        => return .qStrApp "=" #[arg1, arg2]
 | .bcst .andb => return .qStrApp "and" #[arg1, arg2]
 | .bcst .orb  => return .qStrApp "or" #[arg1, arg2]
+| .ncst .nadd => return .qStrApp "+" #[arg1, arg2]
+| .ncst .nsub => return .qStrApp "-" #[arg1, arg2]
+| .ncst .nmul => return .qStrApp "*" #[arg1, arg2]
+| .ncst .ndiv => return .qStrApp "iediv" #[arg1, arg2]
+| .ncst .nmod => return .qStrApp "iemod" #[arg1, arg2]
+| .ncst .nle  => return .qStrApp "<=" #[arg1, arg2]
+| .ncst .nge  => return .qStrApp ">=" #[arg1, arg2]
+| .ncst .nlt  => return .qStrApp "<" #[arg1, arg2]
+| .ncst .ngt  => return .qStrApp ">" #[arg1, arg2]
 | .icst .iadd => return .qStrApp "+" #[arg1, arg2]
 | .icst .isub => return .qStrApp "-" #[arg1, arg2]
 | .icst .imul => return .qStrApp "*" #[arg1, arg2]
@@ -95,9 +102,9 @@ private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtom STerm
 | .falseE           => return .qStrApp "false" #[]
 | .bcst .trueb      => return .qStrApp "true" #[]
 | .bcst .falseb     => return .qStrApp "false" #[]
+| .ncst (.natVal n) => return .sConst (.num n)
 | .icst (.intVal n) => return Int2STerm n
 | .scst (.strVal s) => return .sConst (.str s)
-| .realVal c        => return CstrReal2STerm c
 | .bvVal bv         => return Bitvec2STerm bv
 | t                 => throwError "lamTerm2STerm :: The arity of {repr t} is not 0"
 

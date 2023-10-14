@@ -8,13 +8,17 @@ def lam2TH0 (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort) (facts : Arra
   let (typeHs, termHs, etomHs) ← LamReif.collectLamTermsAtoms lamVarTy lamEVarTy facts
   let bvHs := LamReif.collectLamTermsBitvecs facts
   let bvLengthHs := HashSet.empty.insertMany (bvHs.toList.map List.length)
+  let ncHs := LamReif.collectLamTermsNatConsts facts
   let icHs := LamReif.collectLamTermsIntConsts facts
   let scHs := LamReif.collectLamTermsStringConsts facts
   let sorts :=
-    ["thf(sortdecl_int, type, s_int: $tType).", "thf(sortdecl_string, type, s_string: $tType)."] ++
+    ["thf(sortdecl_nat, type, s_nat: $tType).",
+     "thf(sortdecl_int, type, s_int: $tType).",
+     "thf(sortdecl_string, type, s_string: $tType)."] ++
     bvLengthHs.toList.map (fun l => s!"thf(sortdecl_bv{l}, type, s_bv{l}: $tType).") ++ 
     typeHs.toList.map (fun i => s!"thf(sortdecl_{i}, type, s_a{i}: $tType).")
   let types :=
+    ncHs.toList.map (fun nc => s!"thf(typedecl_icst_{transNatConst nc}, type, {transNatConst nc}: {transNatConstSort nc}).") ++
     icHs.toList.map (fun ic => s!"thf(typedecl_icst_{transIntConst ic}, type, {transIntConst ic}: {transIntConstSort ic}).") ++
     scHs.toList.map (fun sc => s!"thf(typedecl_icst_{transStringConst sc}, type, {transStringConst sc}: {transStringConstSort sc}).") ++
     bvHs.toList.map (fun l => s!"thf(typedecl_bv{transBitvec l}, type, t_bv{transBitvec l}: s_bv{l.length}).") ++
