@@ -5,12 +5,10 @@ open Auto Embedding
 set_option auto.optimizeCheckerProof false
 
 set_option trace.auto.tactic true in
-set_option trace.auto.lamReif true in
 example (H : (fun x : Nat => x) = (fun x => x)) : True := by
   auto [H]
 
 set_option trace.auto.tactic true in
-set_option trace.auto.lamReif true in
 example (H : (fun (x y z t : Nat) => x) = (fun x y z t => x)) : True := by
   auto [H]
 
@@ -31,7 +29,6 @@ example (f : Nat → Nat → Nat)
          (f (f (f x24 x25) (f x26 x27)) (f (f x28 x29) (f x30 x31)))))) : True := by
   auto [H]
 
-set_option trace.auto.lamReif true in
 set_option trace.auto.buildChecker true in
 example
   {α : Sort u}

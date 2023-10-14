@@ -231,7 +231,7 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
       let _ ← LamReif.reifInhabitations uinhs
       let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
         (fun (s, _) => Embedding.Lam.REntry.nonempty s)
-      -- **Auto Preprocess**
+      -- **Preprocessing in Verified Checker**
       let exportFacts ← LamReif.preprocess exportFacts
       let exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)
       -- **TPTP**

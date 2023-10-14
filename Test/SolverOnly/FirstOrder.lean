@@ -6,7 +6,6 @@ set_option profiler true
 set_option auto.optimizeCheckerProof false
 
 set_option pp.universes true in
-set_option trace.auto.lamReif true in
 example : True := by
   auto [True.intro];
 
@@ -23,14 +22,12 @@ example (a b : Nat) (f : Nat → Nat)
 set_option trace.auto.tactic true in
 set_option trace.auto.buildChecker true in
 set_option trace.auto.printLemmas true in
-set_option trace.auto.lamReif true in
 example {α β : Type} (a : α) (b : β) (H : b = b) : a = a := by
   auto [H]
 
 set_option pp.raw true in
 set_option trace.auto.buildChecker true in
 set_option trace.auto.tactic true in
-set_option trace.auto.lamReif true in
 example (a : Nat) (f : Nat → Nat) (H : ∀ x, f x = x) :
   f x = f (f (f (f (f (f (f (f (f x)))))))) := by
   auto [H]
