@@ -146,6 +146,8 @@ def interpNatConstAsUnlifted : NatConst → Expr
 open Embedding in
 def interpIntConstAsUnlifted : IntConst → Expr
 | .intVal n => Lean.toExpr n
+| .iofNat   => .const ``Int.ofNat []
+| .inegSucc => .const ``Int.negSucc []
 | .ineg     => .const ``Int.neg []
 | .iabs     => .const ``Int.abs []
 | .iadd     => .const ``Int.add []
@@ -163,6 +165,7 @@ def interpIntConstAsUnlifted : IntConst → Expr
 open Embedding in
 def interpStringConstAsUnlifted : StringConst → Expr
 | .strVal s => Lean.toExpr s
+| .slength  => .const ``String.length []
 | .sapp     => .const ``String.append []
 | .sle      => .const ``String.le []
 | .sge      => .const ``String.ge []

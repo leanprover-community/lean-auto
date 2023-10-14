@@ -13,6 +13,8 @@ open Embedding.Lam
 --        atom n    => t_a{n}
 --        etom n    => t_e{n}
 --        intVal' n => t_int{n}
+--        iofNat'   => t_iofNat
+--        inegSucc' => t_inegSucc
 --        ineg'     => t_ineg
 --        iabs'     => t_iabs
 --        iadd'     => t_iadd
@@ -25,6 +27,11 @@ open Embedding.Lam
 --        ige'      => t_ige
 --        igt'      => t_ige
 --        strVal' s => t_str{tptp-friendly representation of s}
+--        slength'  => t_slength
+--        sle'      => t_sle
+--        sge'      => t_sge
+--        slt'      => t_slt
+--        sgt'      => t_sgt
 
 def transLamBaseSort : LamBaseSort → String
 | .prop   => "$o"
@@ -76,6 +83,8 @@ def transNatConstSort : NatConst → String
 
 def transIntConst : IntConst → String
 | .intVal n => s!"t_int{n}"
+| .iofNat   => "t_iofNat"
+| .inegSucc => "t_inegSucc"
 | .ineg     => "t_ineg"
 | .iabs     => "t_iabs"
 | .iadd     => "t_iadd"
@@ -92,6 +101,8 @@ def transIntConst : IntConst → String
 
 def transIntConstSort : IntConst → String
 | .intVal _ => transLamSort (.base .int)
+| .iofNat   => transLamSort (.func (.base .nat) (.base .int))
+| .inegSucc => transLamSort (.func (.base .nat) (.base .int))
 | .ineg     => transLamSort (.func (.base .int) (.base .int))
 | .iabs     => transLamSort (.func (.base .int) (.base .int))
 | .iadd     => transLamSort (.func (.base .int) (.func (.base .int) (.base .int)))
@@ -114,6 +125,7 @@ def transString (s : String) : String :=
 
 def transStringConst : StringConst → String
 | .strVal s => transString s
+| .slength => "t_slength"
 | .sapp => "t_sapp"
 | .sle => "t_sle"
 | .sge => "t_sge"
@@ -122,6 +134,7 @@ def transStringConst : StringConst → String
 
 def transStringConstSort : StringConst → String
 | .strVal _ => transLamSort (.base .string)
+| .slength => transLamSort (.func (.base .string) (.base .nat))
 | .sapp => transLamSort (.func (.base .string) (.func (.base .string) (.base .string)))
 | .sle => transLamSort (.func (.base .string) (.func (.base .string) (.base .prop)))
 | .sge => transLamSort (.func (.base .string) (.func (.base .string) (.base .prop)))

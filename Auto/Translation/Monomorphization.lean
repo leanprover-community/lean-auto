@@ -566,6 +566,7 @@ namespace FVarRep
     processType ty
     processType body
   | e => do
+    let e := Expr.eraseMData e
     if (← getTyCanMap).contains e then
       return
     for (e', ec) in (← getTyCanMap).toList do

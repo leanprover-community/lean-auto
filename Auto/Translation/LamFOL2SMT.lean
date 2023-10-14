@@ -50,6 +50,19 @@ private def lamSort2SSort : LamSort → TransM LamAtom (List SSort × SSort)
   return (smarg :: smargs, smres)
 | s => return ([], ← lamSort2SSortAux s)
 
+private def addNatConstraint? (name : String) (s : LamSort) : TransM LamAtom Unit := do
+  let resTy := s.getResTy
+  if !(resTy == .base .nat) then
+    return
+  let args ← (Array.mk s.getArgTys).mapM (fun s => do return (s, ← IR.SMT.disposableName))
+  let fnApp := STerm.qStrApp name (args.zipWithIndex.map (fun (_, n) => .bvar (args.size - 1 - n)))
+  let mut fnConstr := STerm.qStrApp ">=" #[fnApp, .sConst (.num 0)]
+  for (argTy, argName) in args.reverse do
+    if argTy == .base .nat then
+      fnConstr := .qStrApp "=>" #[.qStrApp ">=" #[.bvar 0, .sConst (.num 0)], fnConstr]
+    fnConstr := .forallE argName (← lamSort2SSortAux argTy) fnConstr
+  addCommand (.assert fnConstr)
+
 private def Int2STerm : Int → STerm
 | .ofNat n   => .sConst (.num n)
 | .negSucc n => .qIdApp (QualIdent.ofString "-") #[.sConst (.num (Nat.succ n))]
@@ -62,7 +75,7 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .bcst .andb => return .qStrApp "and" #[arg1, arg2]
 | .bcst .orb  => return .qStrApp "or" #[arg1, arg2]
 | .ncst .nadd => return .qStrApp "+" #[arg1, arg2]
-| .ncst .nsub => return .qStrApp "-" #[arg1, arg2]
+| .ncst .nsub => return .qStrApp "nsub" #[arg1, arg2]
 | .ncst .nmul => return .qStrApp "*" #[arg1, arg2]
 | .ncst .ndiv => return .qStrApp "iediv" #[arg1, arg2]
 | .ncst .nmod => return .qStrApp "iemod" #[arg1, arg2]
@@ -89,11 +102,14 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | t           => throwError "lamTerm2STerm :: The arity of {repr t} is not 2"
 
 private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamAtom STerm
-| .not        => return .qStrApp "not" #[arg]
-| .bcst .notb => return .qStrApp "not" #[arg]
-| .icst .iabs => return .qStrApp "abs" #[arg]
-| .icst .ineg => return .qStrApp "-" #[Int2STerm 0, arg]
-| t           => throwError "lamTerm2STerm :: The arity of {repr t} is not 1"
+| .not            => return .qStrApp "not" #[arg]
+| .bcst .notb     => return .qStrApp "not" #[arg]
+| .icst .iofNat   => return arg
+| .icst .inegSucc => return .qStrApp "-" #[Int2STerm (-1), arg]
+| .icst .iabs     => return .qStrApp "abs" #[arg]
+| .icst .ineg     => return .qStrApp "-" #[Int2STerm 0, arg]
+| .scst .slength  => return .qStrApp "str.len" #[arg]
+| t               => throwError "lamTerm2STerm :: The arity of {repr t} is not 1"
 
 private def Bitvec2STerm (bv : List Bool) : STerm := .sConst (.binary bv)
 
@@ -119,6 +135,7 @@ private def lamTerm2STermAux (lamVarTy lamEVarTy : Array LamSort) (args : Array 
     if args.size != argSorts.length then
       throwError "lamTerm2STerm :: Argument number mismatch. Higher order input?"
     addCommand (.declFun name ⟨argSorts⟩ resSort)
+    addNatConstraint? name s
   return .qIdApp (QualIdent.ofString (← h2Symb (.term n))) args
 | .etom n => do
   if !(← hIn (.etom n)) then
@@ -129,6 +146,7 @@ private def lamTerm2STermAux (lamVarTy lamEVarTy : Array LamSort) (args : Array 
     if args.size != argSorts.length then
       throwError "lamTerm2STerm :: Argument number mismatch. Higher order input?"
     addCommand (.declFun name ⟨argSorts⟩ resSort)
+    addNatConstraint? name s
   return .qIdApp (QualIdent.ofString (← h2Symb (.etom n))) args
 | .base b =>
   match args with
@@ -155,12 +173,16 @@ private partial def lamTerm2STerm (lamVarTy lamEVarTy : Array LamSort) :
 | .app _ (.base (.forallE _)) (.lam s body) => do
   let s' ← lamSort2SSortAux s
   let dname ← disposableName
-  let body' ← lamTerm2STerm lamVarTy lamEVarTy body
+  let mut body' ← lamTerm2STerm lamVarTy lamEVarTy body
+  if s == .base .nat then
+    body' := .qStrApp "=>" #[.qStrApp ">=" #[.bvar 0, .sConst (.num 0)], body']
   return .forallE dname s' body'
 | .app _ (.base (.existE _)) (.lam s body) => do
   let s' ← lamSort2SSortAux s
   let dname ← disposableName
-  let body' ← lamTerm2STerm lamVarTy lamEVarTy body
+  let mut body' ← lamTerm2STerm lamVarTy lamEVarTy body
+  if s == .base .nat then
+    body' := .qStrApp "=>" #[.qStrApp ">=" #[.bvar 0, .sConst (.num 0)], body']
   return .existE dname s' body'
 | t => do
   let (ts, t) := splitApp t
@@ -174,7 +196,9 @@ where
   | t => (#[], t)
 
 def intAuxDefs : Array IR.SMT.Command :=
-  #[.defFun false "itdiv" #[("x", .app (.symb "Int") #[]), ("y", .app (.symb "Int") #[])] (.app (.symb "Int") #[])
+  #[.defFun false "nsub" #[("x", .app (.symb "Int") #[]), ("y", .app (.symb "Int") #[])] (.app (.symb "Int") #[])
+      (.qStrApp "ite" #[.qStrApp ">=" #[.qStrApp "x" #[], .qStrApp "y" #[]], .qStrApp "-" #[.qStrApp "x" #[], .qStrApp "y" #[]], .sConst (.num 0)]),
+    .defFun false "itdiv" #[("x", .app (.symb "Int") #[]), ("y", .app (.symb "Int") #[])] (.app (.symb "Int") #[])
       (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "y" #[], .sConst (.num 0)], .qStrApp "x" #[],
         .qStrApp "ite" #[.qStrApp ">=" #[.qStrApp "x" #[], .sConst (.num 0)],
           .qStrApp "div" #[.qStrApp "x" #[], .qStrApp "y" #[]],

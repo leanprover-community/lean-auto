@@ -47,7 +47,7 @@ abbrev ReifM := StateT State MetaM
   | _ => return e
 
 @[inline] def resolveTy (e : Expr) : ReifM Expr := do
-  match (← getTyCanMap).find? e with
+  match (← getTyCanMap).find? (Expr.eraseMData e) with
   | .some id => return id
   | .none => throwError "resolveTy :: Unable to resolve {e}"
 

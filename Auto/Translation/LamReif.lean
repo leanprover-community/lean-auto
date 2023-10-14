@@ -1245,6 +1245,8 @@ def processNewTermExpr (e : Expr) : ReifM LamTerm :=
   | .const ``Nat.ge [] => return .base .nge'
   | .const ``Nat.lt [] => return .base .nlt'
   | .const ``Nat.gt [] => return .base .ngt'
+  | .const ``Int.ofNat [] => return .base .iofNat'
+  | .const ``Int.negSucc [] => return .base .inegSucc'
   | .const ``Int.neg [] => return .base .ineg'
   | .const ``Int.add [] => return .base .iadd'
   | .const ``Int.sub [] => return .base .isub'
@@ -1255,6 +1257,7 @@ def processNewTermExpr (e : Expr) : ReifM LamTerm :=
   | .const ``Int.emod [] => return .base .iemod'
   | .const ``Int.le [] => return .base .ile'
   | .const ``Int.lt [] => return .base .ilt'
+  | .const ``String.length [] => return .base .slength'
   | .const ``String.append [] => return .base .sapp'
   -- `α` is the original (un-lifted) type
   | .app (.const ``Eq _) α =>

@@ -600,6 +600,8 @@ def NatConst.LamWF.ofCheck (H : n.lamCheck = s) : LamWF n s := by
 
 inductive IntConst
   | intVal (n : Int)
+  | iofNat
+  | inegSucc
   | ineg
   | iabs
   | iadd
@@ -619,6 +621,8 @@ def IntConst.reprPrec (i : IntConst) (n : Nat) :=
   let s :=
     match i with
     | .intVal n => f!".intVal {n}"
+    | .iofNat   => f!".iofNat"
+    | .inegSucc => f!".inegSucc"
     | .ineg     => f!".ineg"
     | .iabs     => f!".iabs"
     | .iadd     => f!".iadd"
@@ -642,6 +646,8 @@ instance : Repr IntConst where
 
 def IntConst.toString : IntConst → String
 | .intVal n => s!"{n} : Int"
+| .iofNat   => "iofNat"
+| .inegSucc => "inegSucc"
 | .ineg     => "-"
 | .iabs     => "iabs"
 | .iadd     => "+"
@@ -661,20 +667,22 @@ instance : ToString IntConst where
 
 def IntConst.beq : IntConst → IntConst → Bool
 | .intVal n, .intVal m => Int.beq n m
-| .ineg,     .ineg  => true
-| .iabs,     .iabs  => true
-| .iadd,     .iadd  => true
-| .isub,     .isub  => true
-| .imul,     .imul  => true
-| .idiv,     .idiv  => true
-| .imod,     .imod  => true
-| .iediv,    .iediv => true
-| .iemod,    .iemod => true
-| .ile,      .ile   => true
-| .ige,      .ige   => true
-| .ilt,      .ilt   => true
-| .igt,      .igt   => true
-| _,         _      => false
+| .iofNat,   .iofNat   => true
+| .inegSucc, .inegSucc => true
+| .ineg,     .ineg     => true
+| .iabs,     .iabs     => true
+| .iadd,     .iadd     => true
+| .isub,     .isub     => true
+| .imul,     .imul     => true
+| .idiv,     .idiv     => true
+| .imod,     .imod     => true
+| .iediv,    .iediv    => true
+| .iemod,    .iemod    => true
+| .ile,      .ile      => true
+| .ige,      .ige      => true
+| .ilt,      .ilt      => true
+| .igt,      .igt      => true
+| _,         _         => false
 
 instance : BEq IntConst where
   beq := IntConst.beq
@@ -692,6 +700,8 @@ instance : LawfulBEq IntConst where
 
 def IntConst.lamCheck : IntConst → LamSort
 | .intVal _ => .base .int
+| .iofNat   => .func (.base .nat) (.base .int)
+| .inegSucc => .func (.base .nat) (.base .int)
 | .ineg     => .func (.base .int) (.base .int)
 | .iabs     => .func (.base .int) (.base .int)
 | .iadd     => .func (.base .int) (.func (.base .int) (.base .int))
@@ -708,6 +718,8 @@ def IntConst.lamCheck : IntConst → LamSort
 
 inductive IntConst.LamWF : IntConst → LamSort → Type
   | ofIntVal n : LamWF (.intVal n) (.base .int)
+  | ofIOfNat   : LamWF .iofNat (.func (.base .nat) (.base .int))
+  | ofINegSucc : LamWF .inegSucc (.func (.base .nat) (.base .int))
   | ofIneg     : LamWF .ineg (.func (.base .int) (.base .int))
   | ofIabs     : LamWF .iabs (.func (.base .int) (.base .int))
   | ofIadd     : LamWF .iadd (.func (.base .int) (.func (.base .int) (.base .int)))
@@ -728,6 +740,8 @@ def IntConst.LamWF.unique {i : IntConst} {s₁ s₂ : LamSort}
 
 def IntConst.LamWF.ofIntConst : (i : IntConst) → (s : LamSort) × IntConst.LamWF i s
 | .intVal n => ⟨.base .int, .ofIntVal n⟩
+| .iofNat   => ⟨.func (.base .nat) (.base .int), .ofIOfNat⟩
+| .inegSucc => ⟨.func (.base .nat) (.base .int), .ofINegSucc⟩
 | .ineg     => ⟨.func (.base .int) (.base .int), .ofIneg⟩
 | .iabs     => ⟨.func (.base .int) (.base .int), .ofIabs⟩
 | .iadd     => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofIadd⟩
@@ -753,6 +767,7 @@ def IntConst.LamWF.ofCheck (H : i.lamCheck = s) : LamWF i s := by
 
 inductive StringConst
   | strVal (s : String)
+  | slength
   | sapp
   | sle
   | sge
@@ -764,6 +779,7 @@ def StringConst.reprPrec (sc : StringConst) (n : Nat) :=
   let s :=
     match sc with
     | strVal s => f!".strVal {s}"
+    | slength => f!".slength"
     | sapp => f!".sapp"
     | sle => f!".sle"
     | sge => f!".sge"
@@ -779,6 +795,7 @@ instance : Repr StringConst where
 
 def StringConst.toString : StringConst → String
 | .strVal s => s!"({s} : String)"
+| .slength => "length"
 | .sapp => "++"
 | .sle => "≤"
 | .sge => "≥"
@@ -790,6 +807,7 @@ instance : ToString StringConst where
 
 def StringConst.beq : StringConst → StringConst → Bool
 | .strVal m, .strVal n => m == n
+| .slength,  .slength  => true
 | .sapp,     .sapp     => true
 | .sle,      .sle      => true
 | .sge,      .sge      => true
@@ -814,6 +832,7 @@ instance : LawfulBEq StringConst where
 
 def StringConst.lamCheck : StringConst → LamSort
 | strVal _ => .base .string
+| slength  => .func (.base .string) (.base .nat)
 | sapp     => .func (.base .string) (.func (.base .string) (.base .string))
 | sle      => .func (.base .string) (.func (.base .string) (.base .prop))
 | sge      => .func (.base .string) (.func (.base .string) (.base .prop))
@@ -822,6 +841,7 @@ def StringConst.lamCheck : StringConst → LamSort
 
 inductive StringConst.LamWF : StringConst → LamSort → Type
   | ofStrVal s : LamWF (.strVal s) (.base .string)
+  | ofSlength  : LamWF .slength (.func (.base .string) (.base .nat))
   | ofSapp     : LamWF .sapp (.func (.base .string) (.func (.base .string) (.base .string)))
   | ofSle      : LamWF .sle (.func (.base .string) (.func (.base .string) (.base .prop)))
   | ofSge      : LamWF .sge (.func (.base .string) (.func (.base .string) (.base .prop)))
@@ -834,6 +854,7 @@ def StringConst.LamWF.unique {s : StringConst} {s₁ s₂ : LamSort}
 
 def StringConst.LamWF.ofStringConst : (sc : StringConst) → (s : LamSort) × StringConst.LamWF sc s
 | .strVal s => ⟨.base .string, .ofStrVal s⟩
+| .slength  => ⟨.func (.base .string) (.base .nat), .ofSlength⟩
 | .sapp     => ⟨.func (.base .string) (.func (.base .string) (.base .string)), .ofSapp⟩
 | .sle      => ⟨.func (.base .string) (.func (.base .string) (.base .prop)), .ofSle⟩
 | .sge      => ⟨.func (.base .string) (.func (.base .string) (.base .prop)), .ofSge⟩
@@ -925,6 +946,10 @@ def LamBaseTerm.ngt' := LamBaseTerm.ncst .ngt
 
 def LamBaseTerm.intVal' (i : Int) := LamBaseTerm.icst (.intVal i)
 
+def LamBaseTerm.iofNat' := LamBaseTerm.icst .iofNat
+
+def LamBaseTerm.inegSucc' := LamBaseTerm.icst .inegSucc
+
 def LamBaseTerm.ineg' := LamBaseTerm.icst .ineg
 
 def LamBaseTerm.iabs' := LamBaseTerm.icst .iabs
@@ -952,6 +977,8 @@ def LamBaseTerm.ige' := LamBaseTerm.icst .ige
 def LamBaseTerm.igt' := LamBaseTerm.icst .igt
 
 def LamBaseTerm.strVal' s := LamBaseTerm.scst (.strVal s)
+
+def LamBaseTerm.slength' := LamBaseTerm.scst .slength
 
 def LamBaseTerm.sapp' := LamBaseTerm.scst .sapp
 
@@ -1210,6 +1237,10 @@ def LamBaseTerm.LamWF.ofOrB' {ltv : LamTyVal} := LamWF.ofBcst (ltv:=ltv) .ofOrB
 
 def LamBaseTerm.LamWF.ofIntVal' {ltv : LamTyVal} (n : Nat) := LamWF.ofIcst (ltv:=ltv) (.ofIntVal n)
 
+def LamBaseTerm.LamWF.ofIOfNat' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIOfNat
+
+def LamBaseTerm.LamWF.ofINegSucc' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofINegSucc
+
 def LamBaseTerm.LamWF.ofIneg' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIneg
 
 def LamBaseTerm.LamWF.ofIabs' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIabs
@@ -1237,6 +1268,8 @@ def LamBaseTerm.LamWF.ofIge' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIge
 def LamBaseTerm.LamWF.ofIgt' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIgt
 
 def LamBaseTerm.LamWF.ofStrVal' {ltv : LamTyVal} (s : String) := LamWF.ofScst (ltv:=ltv) (.ofStrVal s)
+
+def LamBaseTerm.LamWF.ofSlength {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSlength
 
 def LamBaseTerm.LamWF.ofSapp' {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSapp
 
@@ -1378,6 +1411,8 @@ def NatConst.interp_equiv (tyVal : Nat → Type u) (ncwf : LamWF n s) :
 
 def IntConst.interp (tyVal : Nat → Type u) : (i : IntConst) → i.lamCheck.interp tyVal
 | .intVal n => GLift.up n
+| .iofNat   => iofNatLift
+| .inegSucc => inegSuccLift
 | .ineg     => inegLift
 | .iabs     => iabsLift
 | .iadd     => iaddLift
@@ -1394,6 +1429,8 @@ def IntConst.interp (tyVal : Nat → Type u) : (i : IntConst) → i.lamCheck.int
 
 def IntConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF i s) → s.interp tyVal
 | .ofIntVal n => GLift.up n
+| .ofIOfNat   => iofNatLift
+| .ofINegSucc => inegSuccLift
 | .ofIneg     => inegLift
 | .ofIabs     => iabsLift
 | .ofIadd     => iaddLift
@@ -1420,6 +1457,7 @@ def IntConst.interp_equiv (tyVal : Nat → Type u) (icwf : LamWF i s) :
 
 def StringConst.interp (tyVal : Nat → Type u) : (b : StringConst) → b.lamCheck.interp tyVal
 | .strVal s => GLift.up s
+| .slength  => slengthLift
 | .sapp     => sappLift
 | .sle      => sleLift
 | .sge      => sgeLift
@@ -1428,6 +1466,7 @@ def StringConst.interp (tyVal : Nat → Type u) : (b : StringConst) → b.lamChe
 
 def StringConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF i s) → s.interp tyVal
 | .ofStrVal s => GLift.up s
+| .ofSlength  => slengthLift
 | .ofSapp     => sappLift
 | .ofSle      => sleLift
 | .ofSge      => sgeLift

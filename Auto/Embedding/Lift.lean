@@ -59,6 +59,12 @@ def nltLift.{u} (m n : GLift.{1, u} Nat) :=
 def ngtLift.{u} (m n : GLift.{1, u} Nat) :=
   GLift.up (Nat.lt n.down m.down)
 
+def iofNatLift.{u} (m : GLift.{1, u} Nat) :=
+  GLift.up (Int.ofNat m.down)
+
+def inegSuccLift.{u} (m : GLift.{1, u} Nat) :=
+  GLift.up (Int.negSucc m.down)
+
 def inegLift.{u} (m : GLift.{1, u} Int) :=
   GLift.up (Int.neg m.down)
 
@@ -102,6 +108,9 @@ def sappLift.{u} (m n : GLift.{1, u} String) :=
   GLift.up (String.append m.down n.down)
 
 -- **TODO**
+def slengthLift.{u} (m : GLift.{1, u} String) : GLift.{1, u} Nat :=
+  GLift.up (String.length m.down)
+
 def sleLift.{u} (m n : GLift.{1, u} String) : GLift.{1, u} Prop :=
   GLift.up (String.le m.down n.down)
 
