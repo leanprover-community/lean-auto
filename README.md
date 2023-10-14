@@ -8,6 +8,20 @@ Currently, lean-auto is still under development, but it's already able to solve 
 
 <img src="Doc/pics/shortfive.png" alt="drawing" width="500"/>
 
+## Usage
+* ``auto [<term>,*] u[<ident>,*] d[<ident>,*]``
+  * ``u[<ident>,*]``: Unfold identifiers
+  * ``d[<ident>,*]``: Add definitional equality related to identifiers
+* Currently, auto supports
+  * SMT solver invocation: ``set_option auto.smt true``, but without proof reconstruction
+  * TPTP Solver invocation: ``set_option auto.tptp true``, but without proof reconstruction
+  * Proof search by duper. To disable proof search by duper, use ``set_option auto.proofReconstruction false``
+
+## Installing Lean-auto
+* ``z3`` version >= 4.12.2
+* ``cvc5``
+* ``zipperposition`` portfolio mode
+
 ## Coding Style
 * ``Array``/``List``: In computational code, we only use ``Array``, functions whose signature contains ``List`` should be declared as ``private``. In verification code, we only use ```List```?
 * IR: Logic-oriented IR can be found in ```TRanslation/ReifTerm.lean```, and Solver-oriented IR can be found in ```Auto/IR/..```. Each IR should be equipped with its ``TransM``.
