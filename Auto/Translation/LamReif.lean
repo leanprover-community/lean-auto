@@ -435,8 +435,11 @@ partial def updownFunc (s : LamSort) : ReifM (Expr × Expr × Expr × Expr) :=
     | .int =>
       let ty := Expr.const ``Int []
       return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
-    | .string =>
-      let ty := Expr.const ``String []
+    | .isto0 p =>
+      let ty :=
+        match p with
+        | .xH => Expr.const ``String []
+        | _   => Expr.const ``Empty []
       return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
     | .bv n =>
       let ty := Expr.app (.const ``Bitvec []) (.lit (.natVal n))

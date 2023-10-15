@@ -14,7 +14,8 @@ def lam2TH0 (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort) (facts : Arra
   let sorts :=
     ["thf(sortdecl_nat, type, s_nat: $tType).",
      "thf(sortdecl_int, type, s_int: $tType).",
-     "thf(sortdecl_string, type, s_string: $tType)."] ++
+     "thf(sortdecl_string, type, s_string: $tType).",
+     "thf(sortdecl_empty, type, s_empty: $tType)."] ++
     bvLengthHs.toList.map (fun l => s!"thf(sortdecl_bv{l}, type, s_bv{l}: $tType).") ++ 
     typeHs.toList.map (fun i => s!"thf(sortdecl_{i}, type, s_a{i}: $tType).")
   let types :=

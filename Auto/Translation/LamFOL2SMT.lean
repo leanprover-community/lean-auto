@@ -29,7 +29,10 @@ private def lamBaseSort2SSort : LamBaseSort → SSort
 -- `Nat ≅ {x : Int | x ≥ 0}`
 | .nat    => .app (.symb "Int") #[]
 | .int    => .app (.symb "Int") #[]
-| .string => .app (.symb "String") #[]
+| .isto0 p =>
+  match p with
+  | .xH => .app (.symb "String") #[]
+  | _   => .app (.symb "Empty") #[]
 | .bv n   => .app (.indexed "BitVec" (.inr n)) #[]
 
 private def lamSort2SSortAux : LamSort → TransM LamAtom SSort
@@ -194,6 +197,9 @@ where
     (ts.push arg, t)
   | t => (#[], t)
 
+def sortAuxDefs : Array IR.SMT.Command :=
+  #[.declSort "Empty" 0]
+
 def intAuxDefs : Array IR.SMT.Command :=
   #[.defFun false "nsub" #[("x", .app (.symb "Int") #[]), ("y", .app (.symb "Int") #[])] (.app (.symb "Int") #[])
       (.qStrApp "ite" #[.qStrApp ">=" #[.qStrApp "x" #[], .qStrApp "y" #[]], .qStrApp "-" #[.qStrApp "x" #[], .qStrApp "y" #[]], .sConst (.num 0)]),
@@ -216,6 +222,7 @@ def intAuxDefs : Array IR.SMT.Command :=
 /-- `facts` should not contain import versions of `eq, ∀` or `∃` -/
 def lamFOL2SMT (lamVarTy lamEVarTy : Array LamSort)
   (facts : Array LamTerm) : TransM LamAtom (Array IR.SMT.Command) := do
+  let _ ← sortAuxDefs.mapM addCommand
   let _ ← intAuxDefs.mapM addCommand
   for t in facts do
     let sterm ← lamTerm2STerm lamVarTy lamEVarTy t

@@ -702,10 +702,10 @@ theorem allpPos_insert (p : α → Prop) (bt : BinTree α) (q : Pos) (x : α) :
   case mpr =>
     intro ⟨hx, ht⟩ q'; cases h : q.beq q'
     case false =>
-      have hne : q ≠ q' := Pos.beq_eq_false_ne _ _ h
+      have hne : q ≠ q' := Pos.ne_of_beq_eq_false h
       rw [insertPos.correct₂ _ _ _ _ hne]; apply ht _ hne
     case true =>
-      have he : q = q' := Pos.beq_eq _ _ h
+      have he : q = q' := Pos.eq_of_beq_eq_true h
       rw [he]; rw [insertPos.correct₁]; exact hx
 
 theorem mapOpt_allpPos (f : α → Option β) (p : β → Prop) :

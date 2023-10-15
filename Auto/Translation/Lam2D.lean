@@ -88,12 +88,15 @@ def interpLamSortAsUnlifted : LamSort → ExternM Expr
   return .fvar fid
 | .base b =>
   match b with
-  | .prop   => return .sort .zero
-  | .bool   => return .const ``Bool []
-  | .nat    => return .const ``Nat []
-  | .int    => return .const ``Int []
-  | .string => return .const ``String []
-  | .bv n   => return .app (.const ``Bitvec []) (.lit (.natVal n))
+  | .prop    => return .sort .zero
+  | .bool    => return .const ``Bool []
+  | .nat     => return .const ``Nat []
+  | .int     => return .const ``Int []
+  | .isto0 p =>
+    match p with
+    | .xH => return .const ``String []
+    | _   => return .const ``Empty []
+  | .bv n    => return .app (.const ``Bitvec []) (.lit (.natVal n))
 | .func s₁ s₂ => do
   return .forallE `_ (← interpLamSortAsUnlifted s₁) (← interpLamSortAsUnlifted s₂) .default
 

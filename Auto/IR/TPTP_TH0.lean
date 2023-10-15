@@ -9,6 +9,7 @@ open Embedding.Lam
 --        nat       => s_nat
 --        int       => s_int
 --        string    => s_string
+--        empty     => s_empty
 -- Term : bvVal xs  => t_bv{0-1 string representation of xs}
 --        atom n    => t_a{n}
 --        etom n    => t_e{n}
@@ -34,12 +35,15 @@ open Embedding.Lam
 --        sgt'      => t_sgt
 
 def transLamBaseSort : LamBaseSort → String
-| .prop   => "$o"
-| .bool   => "$o"
-| .nat    => "s_nat"
-| .int    => "s_int"
-| .string => "s_string"
-| .bv n   => s!"s_bv{n}"
+| .prop    => "$o"
+| .bool    => "$o"
+| .nat     => "s_nat"
+| .int     => "s_int"
+| .isto0 p =>
+  match p with
+  | .xH => "s_string"
+  | _   => "s_empty"
+| .bv n    => s!"s_bv{n}"
 
 def transLamSort : LamSort → String
 | .atom n => s!"s_a{n}"

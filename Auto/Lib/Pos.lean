@@ -201,30 +201,34 @@ def beq : (p q : Pos) → Bool
 | xI p', xI q' => p'.beq q'
 | _,     _     => false
 
-theorem beq_refl (p : Pos) : p.beq p = true := by
+theorem beq_refl {p : Pos} : p.beq p = true := by
   induction p
   case xH => rfl
   case xO p' IH => simp [beq, IH]
   case xI p' IH => simp [beq, IH]
 
-theorem beq_eq : (p q : Pos) → p.beq q = true → p = q
+theorem eq_of_beq_eq_true : {p q : Pos} → p.beq q = true → p = q
 | xH,    xH    => fun _ => rfl
 | xH,    xO  _ => fun H => by cases H
 | xH,    xI _  => fun H => by cases H
 | xO _,  xH    => fun H => by cases H
-| xO p', xO q' => fun H => by simp [beq, beq_eq p' q' H]
+| xO p', xO q' => fun H => by dsimp [beq] at H; rw [eq_of_beq_eq_true H]
 | xO p', xI q' => fun H => by cases H
 | xI _,  xH    => fun H => by cases H
 | xI _,  xO _  => fun H => by cases H
-| xI p', xI q' => fun H => by simp [beq, beq_eq p' q' H]
+| xI p', xI q' => fun H => by dsimp [beq] at H; rw [eq_of_beq_eq_true H]
 
-theorem beq_eq_false_ne (p q : Pos) : p.beq q = false → p ≠ q :=
+theorem ne_of_beq_eq_false {p q : Pos} : p.beq q = false → p ≠ q :=
   match he : p.beq q with
   | true => fun h => by cases h
   | false => fun _ he' => by cases he'; rw [beq_refl] at he; cases he
 
 instance : BEq Pos where
   beq := beq
+
+instance : LawfulBEq Pos where
+  eq_of_beq := eq_of_beq_eq_true
+  rfl := beq_refl
 
 def succ (p : Pos) : Pos :=
   match p with
