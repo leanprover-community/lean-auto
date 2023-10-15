@@ -102,6 +102,55 @@ namespace Fast
 end Fast
 
 
+-- Compared to `namespace fast`, the only difference is that
+--   we switched the second and third field in `LamJudge`.
+-- However, notice that `Fast.non_general_match` is able to compile,
+--   while `Switch.non_general_match` fails.
+-- It would be great if the behaviour of equational compiler
+--   does not depend on the order of constructors/fields in
+--   the inductive type.
+namespace Switch
+
+  inductive LamSort
+  | atom : Nat → LamSort
+  | func : LamSort → LamSort → LamSort
+  deriving Inhabited, Hashable
+
+  structure LamTyVal where
+    lamVarTy     : Nat → LamSort
+    lamILTy      : Nat → LamSort
+    lamEVarTy    : Nat → LamSort
+
+  inductive LamTerm
+    | atom    : Nat → LamTerm
+    -- Existential atoms. Supports definition and skolemization
+    | etom    : Nat → LamTerm
+    | bvar    : Nat → LamTerm
+    | lam     : LamSort → LamTerm → LamTerm
+    -- The `LamSort` is here so that both the type of
+    --   the function and argument can be inferred directly
+    --   when we know the type of the application
+    | app     : LamSort → LamTerm → LamTerm → LamTerm
+  deriving Inhabited, Hashable
+
+  structure LamJudge where
+    lctx   : Nat → LamSort
+    rty    : LamSort
+    rterm  : LamTerm
+  deriving Inhabited
+
+  -- **Note: Branches irrelevant to the issue are deleted**
+  inductive LamWF (ltv : LamTyVal) : LamJudge → Type
+    | ofAtom
+        {lctx : Nat → LamSort} (n : Nat) :
+      LamWF ltv ⟨lctx, ltv.lamVarTy n, .atom n⟩
+
+  def non_general_match (hwf : LamWF ltv ⟨lctx, .func a b, .lam argTy body⟩) : True := by
+    cases hwf; exact True.intro
+
+end Switch
+
+
 -- Issues:
 -- 1. Compilation of `LamWF.fromMapBVarAtAux` is unexpectedly slow
 --    Compared to `Fast`, we only added one extra constructor to
@@ -361,55 +410,6 @@ namespace Slow
     | .ofApp _ HFn HArg => sorry
 
 end Slow
-
-
--- Compared to `namespace fast`, the only difference is that
---   we switched the second and third field in `LamJudge`.
--- However, notice that `Fast.non_general_match` is able to compile,
---   while `Switch.non_general_match` fails.
--- It would be great if the behaviour of equational compiler
---   does not depend on the order of constructors/fields in
---   the inductive type.
-namespace Switch
-
-  inductive LamSort
-  | atom : Nat → LamSort
-  | func : LamSort → LamSort → LamSort
-  deriving Inhabited, Hashable
-
-  structure LamTyVal where
-    lamVarTy     : Nat → LamSort
-    lamILTy      : Nat → LamSort
-    lamEVarTy    : Nat → LamSort
-
-  inductive LamTerm
-    | atom    : Nat → LamTerm
-    -- Existential atoms. Supports definition and skolemization
-    | etom    : Nat → LamTerm
-    | bvar    : Nat → LamTerm
-    | lam     : LamSort → LamTerm → LamTerm
-    -- The `LamSort` is here so that both the type of
-    --   the function and argument can be inferred directly
-    --   when we know the type of the application
-    | app     : LamSort → LamTerm → LamTerm → LamTerm
-  deriving Inhabited, Hashable
-
-  structure LamJudge where
-    lctx   : Nat → LamSort
-    rty    : LamSort
-    rterm  : LamTerm
-  deriving Inhabited
-
-  -- **Note: Branches irrelevant to the issue are deleted**
-  inductive LamWF (ltv : LamTyVal) : LamJudge → Type
-    | ofAtom
-        {lctx : Nat → LamSort} (n : Nat) :
-      LamWF ltv ⟨lctx, ltv.lamVarTy n, .atom n⟩
-
-  def non_general_match (hwf : LamWF ltv ⟨lctx, .func a b, .lam argTy body⟩) : True := by
-    cases hwf; exact True.intro
-
-end Switch
 
 
 -- If the target contains `match h : term with` where `term` is not
