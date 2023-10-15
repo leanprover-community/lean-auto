@@ -123,6 +123,12 @@ def sltLift.{u} (m n : GLift.{1, u} String) : GLift.{1, u} Prop :=
 def sgtLift.{u} (m n : GLift.{1, u} String) : GLift.{1, u} Prop :=
   GLift.up (String.gt m.down n.down)
 
+def sprefixofLift.{u} (m n : GLift.{1, u} String) : GLift.{1, u} Bool :=
+  GLift.up (String.isPrefixOf m.down n.down)
+
+def srepallLift.{u} (s patt rep: GLift.{1, u} String) : GLift.{1, u} String :=
+  GLift.up (String.replace s.down patt.down rep.down)
+
 @[reducible] def ImpF.{u, v} (p : Sort u) (q : Sort v) := p → q
 
 def impLift.{u}

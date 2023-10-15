@@ -69,6 +69,10 @@ private def Int2STerm : Int → STerm
 | .ofNat n   => .sConst (.num n)
 | .negSucc n => .qIdApp (QualIdent.ofString "-") #[.sConst (.num (Nat.succ n))]
 
+private def lamBaseTerm2STerm_Arity3 (arg1 arg2 arg3 : STerm) : LamBaseTerm → TransM LamAtom STerm
+| .scst .srepall => return .qStrApp "str.replace_all" #[arg1, arg2, arg3]
+| t              => throwError "lamTerm2STerm :: The arity of {repr t} is not 3"
+
 private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → TransM LamAtom STerm
 | .and        => return .qStrApp "and" #[arg1, arg2]
 | .or         => return .qStrApp "or" #[arg1, arg2]
@@ -101,6 +105,7 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .scst .sge  => return .qStrApp "str.<=" #[arg2, arg1]
 | .scst .slt  => return .qStrApp "str.<" #[arg1, arg2]
 | .scst .sgt  => return .qStrApp "str.<" #[arg2, arg1]
+| .scst .sprefixof => return .qStrApp "str.prefixof" #[arg1, arg2]
 | t           => throwError "lamTerm2STerm :: The arity of {repr t} is not 2"
 
 private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamAtom STerm
@@ -152,9 +157,10 @@ private def lamTerm2STermAux (lamVarTy lamEVarTy : Array LamSort) (args : Array 
   return .qIdApp (QualIdent.ofString (← h2Symb (.etom n))) args
 | .base b =>
   match args with
-  | #[]       => lamBaseTerm2STerm_Arity0 b
-  | #[u₁]     => lamBaseTerm2STerm_Arity1 u₁ b
-  | #[u₁, u₂] => lamBaseTerm2STerm_Arity2 u₁ u₂ b
+  | #[]           => lamBaseTerm2STerm_Arity0 b
+  | #[u₁]         => lamBaseTerm2STerm_Arity1 u₁ b
+  | #[u₁, u₂]     => lamBaseTerm2STerm_Arity2 u₁ u₂ b
+  | #[u₁, u₂, u₃] => lamBaseTerm2STerm_Arity3 u₁ u₂ u₃ b
   | _         => throwError "lamTerm2STerm :: Argument number mismatch. Higher order input?"
 | t => throwError "lamTerm2STerm :: Unexpected head term {repr t}"
 

@@ -14,3 +14,9 @@ example (a b c : String) : (a ++ b) ++ c = a ++ (b ++ c) := by auto
 example (a b c : String) (_ : a < b) : c ++ a < c ++ b := by auto
 
 example (a b c : String) (_ : Auto.String.le a b) (_ : a ≠ b) : a < b := by auto
+
+example : String.length "abc" = 3 := by auto
+
+example : String.isPrefixOf "ab" "abcd" := by auto
+
+example : String.replace "aaaaa" "aa" "ba" = "babaa" := by auto

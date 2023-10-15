@@ -489,7 +489,7 @@ partial def LamTerm.toStringLCtx (lctx : Nat) : LamTerm → String
 | .atom n => s!"!{n}"
 | .etom n => s!"?{n}"
 | .base b =>
-  match b.beq .trueE || b.beq .falseE with
+  match b.beq .trueE || b.beq .falseE || b.beq .srepall' with
   | true => s!"{b}"
   | false => s!"({b})"
 | .bvar m =>
@@ -515,7 +515,7 @@ partial def LamTerm.toStringLCtx (lctx : Nat) : LamTerm → String
             b.beq .nle' || b.beq .nge' || b.beq .nlt' || b.beq .ngt' ||
             b.beq .iadd' || b.beq .isub' || b.beq .imul' || b.beq .idiv' || b.beq .imod' ||
             b.beq .iediv' || b.beq .iemod' || b.beq .ile' || b.beq .ige' || b.beq .ilt' || b.beq .igt' ||
-            b.beq .sapp' || b.beq .sle' || b.beq .sge' || b.beq .slt' || b.beq .sgt' ||
+            b.beq .sapp' || b.beq .sle' || b.beq .sge' || b.beq .slt' || b.beq .sgt' || b.beq .sprefixof' ||
             b.isEq || b.isEqI with
       | true =>
         match args with
@@ -533,7 +533,10 @@ partial def LamTerm.toStringLCtx (lctx : Nat) : LamTerm → String
               let arg's := toStringLCtx (.succ lctx) arg.bvarLift
               s!"({b}x{lctx} : {getILSortString b}, {arg's} x{lctx})"
           | _ => "❌"
-        | false => "❌"
+        | false =>
+          match b.beq .srepall' with
+          | true => s!"({b}" ++ String.join (args.map (fun (_, arg) => " " ++ toStringLCtx lctx arg)) ++ ")"
+          | false => "❌"
   | fn => "(" ++ toStringLCtx lctx fn ++ " " ++ String.intercalate " " (args.map (fun x => toStringLCtx lctx x.snd)) ++ ")"
 
 def LamTerm.toString := LamTerm.toStringLCtx 0

@@ -33,6 +33,8 @@ open Embedding.Lam
 --        sge'      => t_sge
 --        slt'      => t_slt
 --        sgt'      => t_sgt
+--        sprefixof => t_sprefixof
+--        srepall   => t_srepall
 
 def transLamBaseSort : LamBaseSort → String
 | .prop    => "$o"
@@ -134,6 +136,8 @@ def transStringConst : StringConst → String
 | .sge => "t_sge"
 | .slt => "t_slt"
 | .sgt => "t_sgt"
+| .sprefixof => "t_sprefixof"
+| .srepall => "t_srepall"
 
 def transStringConstSort : StringConst → String
 | .strVal _ => transLamSort (.base .string)
@@ -143,6 +147,8 @@ def transStringConstSort : StringConst → String
 | .sge => transLamSort (.func (.base .string) (.func (.base .string) (.base .prop)))
 | .slt => transLamSort (.func (.base .string) (.func (.base .string) (.base .prop)))
 | .sgt => transLamSort (.func (.base .string) (.func (.base .string) (.base .prop)))
+| .sprefixof => transLamSort (.func (.base .string) (.func (.base .string) (.base .bool)))
+| .srepall => transLamSort (.func (.base .string) (.func (.base .string) (.func (.base .string) (.base .string))))
 
 def transLamBaseTerm : LamBaseTerm → Except String String
 | .trueE      => .ok s!"$true"

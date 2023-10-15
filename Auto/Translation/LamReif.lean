@@ -1258,6 +1258,8 @@ def processNewTermExpr (e : Expr) : ReifM LamTerm :=
   | .const ``Int.lt [] => return .base .ilt'
   | .const ``String.length [] => return .base .slength'
   | .const ``String.append [] => return .base .sapp'
+  | .const ``String.isPrefixOf [] => return .base .sprefixof'
+  | .const ``String.replace [] => return .base .srepall'
   -- `α` is the original (un-lifted) type
   | .app (.const ``Eq _) α =>
     return .base (.eq (← reifType α))

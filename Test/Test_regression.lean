@@ -492,6 +492,10 @@ section Adhoc
     : "asdf" = "asdf" ∧ a ++ b = a ++ b ∧ (a < b) = (a < b) ∧
       (a > b) = (a > b) ∧ a.length = a.length := by auto
 
+  example (a b : String)
+    : String.isPrefixOf a b = String.isPrefixOf a b ∧
+      String.replace a b a = String.replace a b a := by auto
+
 end Adhoc
 
 -- Issues

@@ -772,18 +772,22 @@ inductive StringConst
   | sge
   | slt
   | sgt
+  | sprefixof
+  | srepall
 deriving Inhabited, Hashable, Lean.ToExpr
 
 def StringConst.reprPrec (sc : StringConst) (n : Nat) :=
   let s :=
     match sc with
-    | strVal s => f!".strVal {s}"
-    | slength => f!".slength"
-    | sapp => f!".sapp"
-    | sle => f!".sle"
-    | sge => f!".sge"
-    | slt => f!".slt"
-    | sgt => f!".sgt"
+    | .strVal s => f!".strVal {s}"
+    | .slength => f!".slength"
+    | .sapp => f!".sapp"
+    | .sle => f!".sle"
+    | .sge => f!".sge"
+    | .slt => f!".slt"
+    | .sgt => f!".sgt"
+    | .sprefixof => f!".sprefixof"
+    | .srepall => f!".srepall"
   if n == 0 then
     f!"Auto.Embedding.Lam.StrConst" ++ s
   else
@@ -800,19 +804,23 @@ def StringConst.toString : StringConst → String
 | .sge => "≥"
 | .slt => "<"
 | .sgt => ">"
+| .sprefixof => "is_prefix_of"
+| .srepall => "replace_all"
 
 instance : ToString StringConst where
   toString := StringConst.toString
 
 def StringConst.beq : StringConst → StringConst → Bool
-| .strVal m, .strVal n => m == n
-| .slength,  .slength  => true
-| .sapp,     .sapp     => true
-| .sle,      .sle      => true
-| .sge,      .sge      => true
-| .slt,      .slt      => true
-| .sgt,      .sgt      => true
-| _,         _         => false
+| .strVal m,  .strVal n  => m == n
+| .slength,   .slength   => true
+| .sapp,      .sapp      => true
+| .sle,       .sle       => true
+| .sge,       .sge       => true
+| .slt,       .slt       => true
+| .sgt,       .sgt       => true
+| .sprefixof, .sprefixof => true
+| .srepall,   .srepall   => true
+| _,          _          => false
 
 instance : BEq StringConst where
   beq := StringConst.beq
@@ -830,35 +838,41 @@ instance : LawfulBEq StringConst where
   rfl := StringConst.beq_refl
 
 def StringConst.lamCheck : StringConst → LamSort
-| strVal _ => .base .string
-| slength  => .func (.base .string) (.base .nat)
-| sapp     => .func (.base .string) (.func (.base .string) (.base .string))
-| sle      => .func (.base .string) (.func (.base .string) (.base .prop))
-| sge      => .func (.base .string) (.func (.base .string) (.base .prop))
-| slt      => .func (.base .string) (.func (.base .string) (.base .prop))
-| sgt      => .func (.base .string) (.func (.base .string) (.base .prop))
+| .strVal _  => .base .string
+| .slength   => .func (.base .string) (.base .nat)
+| .sapp      => .func (.base .string) (.func (.base .string) (.base .string))
+| .sle       => .func (.base .string) (.func (.base .string) (.base .prop))
+| .sge       => .func (.base .string) (.func (.base .string) (.base .prop))
+| .slt       => .func (.base .string) (.func (.base .string) (.base .prop))
+| .sgt       => .func (.base .string) (.func (.base .string) (.base .prop))
+| .sprefixof => .func (.base .string) (.func (.base .string) (.base .bool))
+| .srepall   => .func (.base .string) (.func (.base .string) (.func (.base .string) (.base .string)))
 
 inductive StringConst.LamWF : StringConst → LamSort → Type
-  | ofStrVal s : LamWF (.strVal s) (.base .string)
-  | ofSlength  : LamWF .slength (.func (.base .string) (.base .nat))
-  | ofSapp     : LamWF .sapp (.func (.base .string) (.func (.base .string) (.base .string)))
-  | ofSle      : LamWF .sle (.func (.base .string) (.func (.base .string) (.base .prop)))
-  | ofSge      : LamWF .sge (.func (.base .string) (.func (.base .string) (.base .prop)))
-  | ofSlt      : LamWF .slt (.func (.base .string) (.func (.base .string) (.base .prop)))
-  | ofSgt      : LamWF .sgt (.func (.base .string) (.func (.base .string) (.base .prop)))
+  | ofStrVal s  : LamWF (.strVal s) (.base .string)
+  | ofSlength   : LamWF .slength (.func (.base .string) (.base .nat))
+  | ofSapp      : LamWF .sapp (.func (.base .string) (.func (.base .string) (.base .string)))
+  | ofSle       : LamWF .sle (.func (.base .string) (.func (.base .string) (.base .prop)))
+  | ofSge       : LamWF .sge (.func (.base .string) (.func (.base .string) (.base .prop)))
+  | ofSlt       : LamWF .slt (.func (.base .string) (.func (.base .string) (.base .prop)))
+  | ofSgt       : LamWF .sgt (.func (.base .string) (.func (.base .string) (.base .prop)))
+  | ofSprefixof : LamWF .sprefixof (.func (.base .string) (.func (.base .string) (.base .bool)))
+  | ofSrepall   : LamWF .srepall (.func (.base .string) (.func (.base .string) (.func (.base .string) (.base .string))))
 
 def StringConst.LamWF.unique {s : StringConst} {s₁ s₂ : LamSort}
   (iwf₁ : LamWF s s₁) (iwf₂ : LamWF s s₂) : s₁ = s₂ ∧ HEq iwf₁ iwf₂ := by
   cases iwf₁ <;> cases iwf₂ <;> trivial
 
 def StringConst.LamWF.ofStringConst : (sc : StringConst) → (s : LamSort) × StringConst.LamWF sc s
-| .strVal s => ⟨.base .string, .ofStrVal s⟩
-| .slength  => ⟨.func (.base .string) (.base .nat), .ofSlength⟩
-| .sapp     => ⟨.func (.base .string) (.func (.base .string) (.base .string)), .ofSapp⟩
-| .sle      => ⟨.func (.base .string) (.func (.base .string) (.base .prop)), .ofSle⟩
-| .sge      => ⟨.func (.base .string) (.func (.base .string) (.base .prop)), .ofSge⟩
-| .slt      => ⟨.func (.base .string) (.func (.base .string) (.base .prop)), .ofSlt⟩
-| .sgt      => ⟨.func (.base .string) (.func (.base .string) (.base .prop)), .ofSgt⟩
+| .strVal s  => ⟨.base .string, .ofStrVal s⟩
+| .slength   => ⟨.func (.base .string) (.base .nat), .ofSlength⟩
+| .sapp      => ⟨.func (.base .string) (.func (.base .string) (.base .string)), .ofSapp⟩
+| .sle       => ⟨.func (.base .string) (.func (.base .string) (.base .prop)), .ofSle⟩
+| .sge       => ⟨.func (.base .string) (.func (.base .string) (.base .prop)), .ofSge⟩
+| .slt       => ⟨.func (.base .string) (.func (.base .string) (.base .prop)), .ofSlt⟩
+| .sgt       => ⟨.func (.base .string) (.func (.base .string) (.base .prop)), .ofSgt⟩
+| .sprefixof => ⟨.func (.base .string) (.func (.base .string) (.base .bool)), .ofSprefixof⟩
+| .srepall   => ⟨.func (.base .string) (.func (.base .string) (.func (.base .string) (.base .string))), .ofSrepall⟩
 
 def StringConst.lamWF_complete (wf : LamWF sc s) : LamWF.ofStringConst sc = ⟨s, wf⟩ := by
   cases wf <;> rfl
@@ -988,6 +1002,10 @@ def LamBaseTerm.sge' := LamBaseTerm.scst .sge
 def LamBaseTerm.slt' := LamBaseTerm.scst .slt
 
 def LamBaseTerm.sgt' := LamBaseTerm.scst .sgt
+
+def LamBaseTerm.sprefixof' := LamBaseTerm.scst .sprefixof
+
+def LamBaseTerm.srepall' := LamBaseTerm.scst .srepall
 
 def LamBaseTerm.isBcst : LamBaseTerm → Bool
 | .bcst _ => true
@@ -1280,6 +1298,10 @@ def LamBaseTerm.LamWF.ofSlt' {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSlt
 
 def LamBaseTerm.LamWF.ofSgt' {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSgt
 
+def LamBaseTerm.LamWF.ofSprefixof' {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSprefixof
+
+def LamBaseTerm.LamWF.ofSrepall' {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSrepall
+
 def LamBaseTerm.LamWF.getBcst (wf : LamWF ltv (.bcst bc) s) : BoolConst.LamWF bc s :=
   match wf with | .ofBcst bcwf => bcwf
 
@@ -1455,22 +1477,26 @@ def IntConst.interp_equiv (tyVal : Nat → Type u) (icwf : LamWF i s) :
   cases icwf <;> rfl
 
 def StringConst.interp (tyVal : Nat → Type u) : (b : StringConst) → b.lamCheck.interp tyVal
-| .strVal s => GLift.up s
-| .slength  => slengthLift
-| .sapp     => sappLift
-| .sle      => sleLift
-| .sge      => sgeLift
-| .slt      => sltLift
-| .sgt      => sgtLift
+| .strVal s  => GLift.up s
+| .slength   => slengthLift
+| .sapp      => sappLift
+| .sle       => sleLift
+| .sge       => sgeLift
+| .slt       => sltLift
+| .sgt       => sgtLift
+| .sprefixof => sprefixofLift
+| .srepall   => srepallLift
 
 def StringConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF i s) → s.interp tyVal
-| .ofStrVal s => GLift.up s
-| .ofSlength  => slengthLift
-| .ofSapp     => sappLift
-| .ofSle      => sleLift
-| .ofSge      => sgeLift
-| .ofSlt      => sltLift
-| .ofSgt      => sgtLift
+| .ofStrVal s  => GLift.up s
+| .ofSlength   => slengthLift
+| .ofSapp      => sappLift
+| .ofSle       => sleLift
+| .ofSge       => sgeLift
+| .ofSlt       => sltLift
+| .ofSgt       => sgtLift
+| .ofSprefixof => sprefixofLift
+| .ofSrepall   => srepallLift
 
 theorem StringConst.LamWF.interp_lvalIrrelevance
   (tyVal₁ tyVal₂ : Nat → Type u) (scwf₁ : LamWF sc₁ s₁) (scwf₂ : LamWF sc₂ s₂)

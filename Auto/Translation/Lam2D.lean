@@ -166,13 +166,15 @@ def interpIntConstAsUnlifted : IntConst → Expr
 
 open Embedding in
 def interpStringConstAsUnlifted : StringConst → Expr
-| .strVal s => Lean.toExpr s
-| .slength  => .const ``String.length []
-| .sapp     => .const ``String.append []
-| .sle      => .const ``String.le []
-| .sge      => .const ``String.ge []
-| .slt      => .const ``String.lt []
-| .sgt      => .const ``String.gt []
+| .strVal s  => Lean.toExpr s
+| .slength   => .const ``String.length []
+| .sapp      => .const ``String.append []
+| .sle       => .const ``String.le []
+| .sge       => .const ``String.ge []
+| .slt       => .const ``String.lt []
+| .sgt       => .const ``String.gt []
+| .sprefixof => .const ``String.isPrefixOf []
+| .srepall   => .const ``String.replace []
 
 open Embedding in
 def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
