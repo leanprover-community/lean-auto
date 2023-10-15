@@ -497,7 +497,6 @@ end Adhoc
 -- Issues
 section Issues
 
-  set_option auto.tptp.solver.name "none"
   set_option trace.auto.mono true
   set_option trace.auto.mono.printConstInst true
   set_option trace.auto.lamReif.printResult true

@@ -22,7 +22,6 @@ inductive LamBaseSort
   | nat    : LamBaseSort             -- GLift `Nat`
   | int    : LamBaseSort             -- GLift `Int`
   | string : LamBaseSort             -- GLift `String`
-  | real   : LamBaseSort             -- GLift `Real`
   | bv     : (n : Nat) → LamBaseSort -- GLift `BitVec n`
 deriving Hashable, Inhabited, Lean.ToExpr
 
@@ -34,7 +33,6 @@ def LamBaseSort.reprPrec (b : LamBaseSort) (n : Nat) :=
     | .nat  => ".nat"
     | .int  => ".int"
     | .string => ".string"
-    | .real => ".real"
     | .bv n => s!".bv {n}"
   if n == 0 then
     f!"LamBaseSort." ++ str
@@ -50,7 +48,6 @@ def LamBaseSort.toString : LamBaseSort → String
 | .nat    => "Nat"
 | .int    => "Int"
 | .string => "String"
-| .real   => "Real"
 | .bv n   => s!"Bitvec {n}"
 
 instance : ToString LamBaseSort where
@@ -62,7 +59,6 @@ def LamBaseSort.beq : LamBaseSort → LamBaseSort → Bool
 | .nat,    .nat  => true
 | .int,    .int  => true
 | .string, .string => true
-| .real,   .real => true
 | .bv n,   .bv m => n.beq m
 | _,       _     => false
 
@@ -77,7 +73,6 @@ theorem LamBaseSort.beq_refl : {b : LamBaseSort} → (b.beq b) = true
 | .nat    => rfl
 | .int    => rfl
 | .string => rfl
-| .real   => rfl
 | .bv n   => Nat.beq_refl' n
 
 theorem LamBaseSort.eq_of_beq_eq_true {b₁ b₂ : LamBaseSort} : b₁.beq b₂ → b₁ = b₂ :=
@@ -87,50 +82,37 @@ theorem LamBaseSort.eq_of_beq_eq_true {b₁ b₂ : LamBaseSort} : b₁.beq b₂ 
   | .nat,    .nat    => fun _ => rfl
   | .int,    .int    => fun _ => rfl
   | .string, .string => fun _ => rfl
-  | .real,   .real   => fun _ => rfl
   | .bv n,   .bv m   => fun H => Nat.eq_of_beq_eq_true H ▸ rfl
   | .prop,   .bool   => fun H => by cases H
   | .prop,   .nat    => fun H => by cases H
   | .prop,   .int    => fun H => by cases H
   | .prop,   .string => fun H => by cases H
-  | .prop,   .real   => fun H => by cases H
   | .prop,   .bv m   => fun H => by cases H
   | .bool,   .prop   => fun H => by cases H
   | .bool,   .nat    => fun H => by cases H
   | .bool,   .int    => fun H => by cases H
   | .bool,   .string => fun H => by cases H
-  | .bool,   .real   => fun H => by cases H
   | .bool,   .bv m   => fun H => by cases H
   | .nat,    .prop   => fun H => by cases H
   | .nat,    .bool   => fun H => by cases H
   | .nat,    .int    => fun H => by cases H
   | .nat,    .string => fun H => by cases H
-  | .nat,    .real   => fun H => by cases H
   | .nat,    .bv m   => fun H => by cases H
   | .int,    .prop   => fun H => by cases H
   | .int,    .bool   => fun H => by cases H
   | .int,    .nat    => fun H => by cases H
   | .int,    .string => fun H => by cases H
-  | .int,    .real   => fun H => by cases H
   | .int,    .bv m   => fun H => by cases H
   | .string, .prop   => fun H => by cases H
   | .string, .bool   => fun H => by cases H
   | .string, .nat    => fun H => by cases H
   | .string, .int    => fun H => by cases H
-  | .string, .real   => fun H => by cases H
   | .string, .bv m   => fun H => by cases H
-  | .real,   .prop   => fun H => by cases H
-  | .real,   .bool   => fun H => by cases H
-  | .real,   .nat    => fun H => by cases H
-  | .real,   .int    => fun H => by cases H
-  | .real,   .string => fun H => by cases H
-  | .real,   .bv m   => fun H => by cases H
   | .bv n,   .prop   => fun H => by cases H
   | .bv n,   .bool   => fun H => by cases H
   | .bv n,   .nat    => fun H => by cases H
   | .bv n,   .int    => fun H => by cases H
   | .bv n,   .string => fun H => by cases H
-  | .bv n,   .real   => fun H => by cases H
 
 instance : LawfulBEq LamBaseSort where
   eq_of_beq := LamBaseSort.eq_of_beq_eq_true
@@ -142,7 +124,6 @@ instance : LawfulBEq LamBaseSort where
 | .nat    => GLift Nat
 | .int    => GLift Int
 | .string => GLift String
-| .real   => GLift Real
 | .bv n   => GLift (Bitvec n)
 
 inductive LamSort

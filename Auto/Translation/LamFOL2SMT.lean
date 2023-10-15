@@ -30,7 +30,6 @@ private def lamBaseSort2SSort : LamBaseSort → SSort
 | .nat    => .app (.symb "Int") #[]
 | .int    => .app (.symb "Int") #[]
 | .string => .app (.symb "String") #[]
-| .real   => .app (.symb "Real") #[]
 | .bv n   => .app (.indexed "BitVec" (.inr n)) #[]
 
 private def lamSort2SSortAux : LamSort → TransM LamAtom SSort

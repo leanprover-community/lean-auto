@@ -18,7 +18,7 @@ Currently, lean-auto is still under development, but it's already able to solve 
   * Proof search by duper. To disable proof search by duper, use ``set_option auto.proofReconstruction false``
 
 ## Installing Lean-auto
-* ``z3`` version >= 4.12.2
+* ``z3`` version >= 4.12.2. Lower versions may not be able to deal with smt-lib 2.6 string escape sequence.
 * ``cvc5``
 * ``zipperposition`` portfolio mode
 

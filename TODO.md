@@ -3,7 +3,8 @@ __Auto Issues:__
 * When we matched against ``Eq`` in monomorphization, we found that some type arguments of other constants got unified with ``Prop``, which created a bunch of junk lemma. Find out whether something similar happened in Duper.
 * Implement native interpretation and native proof reconstruction
 * Improve portfolio mode script. Download E and zipperposition from the web.
-* SMT String Constants
+* Floating point numbers
+* String: Some string operations missing in Lean
 
 __Lean Issues:__
 * ``cases`` fails on some simple examples. E.g, ``cases h : a.beq b`` fails if the goal contains term

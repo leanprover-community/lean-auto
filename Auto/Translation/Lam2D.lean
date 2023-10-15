@@ -93,7 +93,6 @@ def interpLamSortAsUnlifted : LamSort → ExternM Expr
   | .nat    => return .const ``Nat []
   | .int    => return .const ``Int []
   | .string => return .const ``String []
-  | .real   => return .const ``Real []
   | .bv n   => return .app (.const ``Bitvec []) (.lit (.natVal n))
 | .func s₁ s₂ => do
   return .forallE `_ (← interpLamSortAsUnlifted s₁) (← interpLamSortAsUnlifted s₂) .default

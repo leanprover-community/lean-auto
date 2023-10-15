@@ -39,7 +39,6 @@ def transLamBaseSort : LamBaseSort → String
 | .nat    => "s_nat"
 | .int    => "s_int"
 | .string => "s_string"
-| .real   => "$real"
 | .bv n   => s!"s_bv{n}"
 
 def transLamSort : LamSort → String
