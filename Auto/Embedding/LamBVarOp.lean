@@ -41,38 +41,26 @@ def LamWF.fromMapBVarAtAux
   (covP : coPair f restore) (idx : Nat) {lamVarTy lctx} (rterm : LamTerm)
   (hLCtx : lctx' = restoreAt idx restore lctx)
   (hRTerm : rterm' = rterm.mapBVarAt idx f)
-  (HWF : LamWF lamVarTy ⟨lctx', rterm', rty⟩) : LamWF lamVarTy ⟨lctx, rterm, rty⟩ :=
-  match rterm with
-  | .atom n =>
-    match HWF with
-    | .ofAtom _ => by rw [LamTerm.atom.inj hRTerm]; apply ofAtom
-  | .etom n =>
-    match HWF with
-    | .ofEtom _ => by rw [LamTerm.etom.inj hRTerm]; apply ofEtom
-  | .base b =>
-    match HWF with
-    | .ofBase H => by rw [← LamTerm.base.inj hRTerm]; apply ofBase H
-  | .bvar n =>
-    match HWF with
-    | .ofBVar _ => by
-      rw [LamTerm.bvar.inj hRTerm, hLCtx]
-      rw [coPairAt.ofcoPair covP idx lctx n]
-      apply ofBVar
-  | .lam argTy body =>
-    match HWF with
-    | .ofLam bodyTy wfBody => by
-      have ⟨argTyEq, bodyEq⟩ := LamTerm.lam.inj hRTerm
-      rw [argTyEq, bodyEq, hLCtx] at wfBody
-      rw [← restoreAt_succ_pushLCtx_Fn restore _ _ _] at wfBody
-      rw [argTyEq]; apply LamWF.ofLam bodyTy
-      apply LamWF.fromMapBVarAtAux covP (.succ idx) _ rfl rfl wfBody
-  | .app argTy' fn arg =>
-    match HWF with
-    | .ofApp _ HFn HArg =>
-      have ⟨sEq, fnEq, argEq⟩ := LamTerm.app.inj hRTerm
-      LamWF.ofApp argTy'
-        (LamWF.fromMapBVarAtAux covP idx _ hLCtx fnEq (sEq ▸ HFn))
-        (LamWF.fromMapBVarAtAux covP idx _ hLCtx argEq (sEq ▸ HArg))
+  (HWF : LamWF lamVarTy ⟨lctx', rterm', rty⟩) : LamWF lamVarTy ⟨lctx, rterm, rty⟩ := by
+  revert hRTerm
+  match HWF with
+  | .ofAtom _ => intro hRTerm; cases rterm <;> try cases hRTerm <;> apply ofAtom
+  | .ofEtom _ => intro hRTerm; cases rterm <;> try cases hRTerm <;> apply ofEtom
+  | .ofBase H => intro hRTerm; cases rterm <;> try cases hRTerm <;> apply ofBase H
+  | .ofBVar _ =>
+    intro hRTerm; cases rterm <;> try cases hRTerm
+    rw [hLCtx, coPairAt.ofcoPair covP idx lctx]
+    apply ofBVar
+  | .ofLam bodyTy wfBody =>
+    intro hRTerm; cases rterm <;> try cases hRTerm
+    rw [hLCtx, ← restoreAt_succ_pushLCtx_Fn restore _ _ _] at wfBody
+    apply LamWF.ofLam bodyTy
+    apply LamWF.fromMapBVarAtAux covP (.succ idx) _ rfl rfl wfBody
+  | .ofApp _ HFn HArg =>
+    intro hRTerm; cases rterm <;> try cases hRTerm
+    exact LamWF.ofApp _
+      (LamWF.fromMapBVarAtAux covP idx _ hLCtx rfl HFn)
+      (LamWF.fromMapBVarAtAux covP idx _ hLCtx rfl HArg)
 
 def LamWF.fromMapBVarAt
   (covP : coPair f restore) (idx : Nat) {lamVarTy lctx} (rterm : LamTerm)
