@@ -25,6 +25,12 @@ end Enum
 
 section NonRecursive
 
+  example (x y : α) (_ : Option.some x = Option.some y) : x = y := by auto
+
+  -- **TODO**:
+  -- Requires higher-order to first-order translation
+  example (x : Option α) : Option.orElse x (fun _ => Option.none) = x := by auto
+
   -- **TODO**:
   -- · Recognize projections for structures
   -- · Better control over input??
@@ -69,6 +75,22 @@ section Recursive
     auto
 
 end Recursive
+
+section Mixed
+
+  example (x y : α) : List.get? [x, y] 1 = .some y := by
+    auto d[List.get?]
+
+  example (x : α) : List.head? [x] = .some x := by
+    have h₁ : List.head? (α := α) [] = .none := rfl
+    have h₂ : ∀ (x : α) (ys : _), List.head? (x :: ys) = .some x := fun _ _ => rfl
+    auto
+
+  -- **TODO**: Did not get desired definitional equation
+  example (x : α) : List.head? [x] = .some x := by
+    auto d[List.head?]
+
+end Mixed
 
 /- Issues to be solved:
   1. Unable to deal with inductive families, like `Vector`

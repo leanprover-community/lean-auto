@@ -458,7 +458,7 @@ section Adhoc
   example : ∀ b, !(b = false) ↔ b = true := by auto
 
   -- Nat
-  example (a b : Nat) : 3 = nat_lit 3 ∧ (a = b ↔ b = a) := by auto
+  example (a b c : Nat) : Nat.zero = 0 ∧ 3 = nat_lit 3 ∧ (a = b ↔ b = a) ∧ Nat.succ c = c + 1 := by auto
 
   example (a b : Nat) : a % b + a - b + (a / b) * b = a % b + a - b + (a / b) * b := by auto
 

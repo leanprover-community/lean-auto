@@ -19,5 +19,7 @@ example {α : Type} (f : α → Nat → Nat → α → Nat) :
 
 example (a b : Nat) (_ : a ≤ b) : a - b = 0 := by auto
 
+example : Nat.succ x = x + 1 := by auto
+
 set_option auto.smt.solver.name "cvc5" in
 example : String.length "abc" = 3 := by auto

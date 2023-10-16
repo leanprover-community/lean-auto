@@ -1235,6 +1235,9 @@ def processNewTermExpr (e : Expr) : ReifM LamTerm :=
   | .const ``not [] => return .base .notb'
   | .const ``and [] => return .base .andb'
   | .const ``or [] => return .base .orb'
+  | .const ``Nat.zero [] => return .base (.natVal' 0)
+  | .const ``Nat.succ [] =>
+    return .lam (.base .nat) (.app (.base .nat) (.app (.base .nat) (.base .nadd') (.bvar 0)) (.base (.natVal' 1)))
   | .const ``Nat.add [] => return .base .nadd'
   | .const ``Nat.sub [] => return .base .nsub'
   | .const ``Nat.mul [] => return .base .nmul'
