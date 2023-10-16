@@ -150,6 +150,18 @@ inductive LamSort
 | func : LamSort → LamSort → LamSort
 deriving Inhabited, Hashable, Lean.ToExpr
 
+def LamSort.isAtom : LamSort → Bool
+| .atom _ => true
+| _       => false
+
+def LamSort.isBase : LamSort → Bool
+| .base _ => true
+| _       => false
+
+def LamSort.isFunc : LamSort → Bool
+| .func _ _ => true
+| _         => false
+
 def LamSort.reprPrec (s : LamSort) (n : Nat) :=
   let str :=
     match s with

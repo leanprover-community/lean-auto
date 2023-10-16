@@ -1,5 +1,6 @@
 import Lean
 import Auto.Lib.ExprExtra
+import Auto.Lib.MessageData
 import Auto.Lib.MetaExtra
 import Auto.Lib.MonadUtils
 open Lean
@@ -7,7 +8,7 @@ open Lean
 initialize
   registerTraceClass `auto.collectInd
 
-namespace Auto.Inductive
+namespace Auto
 
 /--
   Test whether a given inductive type is explicitly and inductive family.
@@ -18,6 +19,16 @@ def isFamily (tyctorname : Name) : CoreM Bool := do
   let .some (.inductInfo val) := (← getEnv).find? tyctorname
     | throwError "isFamily :: {tyctorname} is not a type constructor"
   return (Expr.forallBinders val.type).size != val.numParams
+
+/--
+  Test whether a given inductive type is an inductively defined proposition
+-/
+def isIndProp (tyctorname : Name) : CoreM Bool := do
+  let .some (.inductInfo val) := (← getEnv).find? tyctorname
+    | throwError "isIndProp :: {tyctorname} is not a type constructor"
+  (Meta.withTransparency (n := MetaM) .all <|
+    Meta.forallTelescopeReducing val.type fun _ body =>
+      Meta.isDefEq body (.sort .zero)).run' {}
 
 /--
   Whether the constructor is monomorphic after all parameters are instantiated.
@@ -32,38 +43,49 @@ def isSimpleCtor (ctorname : Name) : CoreM Bool := do
   Returns true iff the inductive type is not explicitly an inductive family,
     and all constructors of this inductive type are simple (refer to `isSimpleCtor`)
 -/
-def isSimple (tyctorname : Name) : CoreM Bool := do
+def isSimpleInductive (tyctorname : Name) : CoreM Bool := do
   let .some (.inductInfo val) := (← getEnv).find? tyctorname
     | throwError "isSimple :: {tyctorname} is not a type constructor"
   return (← val.ctors.allM isSimpleCtor) && !(← isFamily tyctorname)
 
-structure SimpleInductVal where
+structure SimpleIndVal where
+  /-- Name of type constructor -/
+  name : Name
   /-- Instantiated type constructor -/
   type : Expr
   /-- Array of `(instantiated_ctor, type_of_instantiated_constructor)` -/
   ctors : Array (Expr × Expr)
 
+instance : ToMessageData SimpleIndVal where
+  toMessageData siv :=
+    m!"SimpleIndVal ⦗⦗ {siv.type} " ++ MessageData.array siv.ctors (fun (e₁, e₂) => m!"{e₁} : {e₂}") ++ m!" ⦘⦘"
+
+def SimpleIndVal.zetaReduce (si : SimpleIndVal) : MetaM SimpleIndVal := do
+  let ⟨name, type, ctors⟩ := si
+  let ctors ← ctors.mapM (fun (val, ty) => do return (← Meta.zetaReduce val, ← Meta.zetaReduce ty))
+  return ⟨name, ← Meta.zetaReduce type, ctors⟩
+
 /--
   For a given type constructor `tyctor`, `CollectIndState[tyctor]`
-    is an array of `(instantiated_tyctor, [simpleinductval associated to tyctor])`
+    is an array of `(instantiated_tyctor, [SimpleIndVal associated to tyctor])`
 -/
-structure State where
+structure CollectInduct.State where
   recorded : HashMap Name (Array Expr)     := {}
-  sis      : Array (Array SimpleInductVal) := #[]
+  sis      : Array (Array SimpleIndVal) := #[]
 
-abbrev IndCollectM := StateRefT State MetaM
+abbrev IndCollectM := StateRefT CollectInduct.State MetaM
 
 #genMonadState IndCollectM
 
 private def collectSimpleInduct
-  (tyctor : Name) (lvls : List Level) (args : Array Expr) : MetaM SimpleInductVal := do
+  (tyctor : Name) (lvls : List Level) (args : Array Expr) : MetaM SimpleIndVal := do
   let .some (.inductInfo val) := (← getEnv).find? tyctor
     | throwError "collectSimpleInduct :: Unexpected error"
   let ctors ← (Array.mk val.ctors).mapM (fun ctorname => do
     let instctor := mkAppN (Expr.const ctorname lvls) args
     let type ← Meta.inferType instctor
     return (instctor, type))
-  return ⟨mkAppN (Expr.const tyctor lvls) args, ctors⟩
+  return ⟨tyctor, mkAppN (Expr.const tyctor lvls) args, ctors⟩
 
 mutual
 
@@ -72,10 +94,14 @@ mutual
       | return
     let .some (.inductInfo val) := (← getEnv).find? tyctor
       | return
-    if !(← isSimple tyctor) then
-      trace[auto.collectInd] "Warning : {tyctor} is not a simple inductive type. Ignoring it ..."
+    if !(← @id (CoreM _) (val.all.allM isSimpleInductive)) then
+      trace[auto.collectInd] ("Warning : {tyctor} or some type within the " ++
+        "same mutual block is not a simple inductive type. Ignoring it ...")
       return
-    -- Do not translate typeclasses as inductive types
+    /-
+      Do not translate typeclasses as inductive types
+      Mathlib has a complex typeclass hierarchy, so translating typeclasses might make a mess
+    -/
     if Lean.isClass (← getEnv) tyctor then
       return
     let args := e.getAppArgs
@@ -115,17 +141,19 @@ mutual
 
 end
 
-end Auto.Inductive
+def collectExprsSimpleInduct (es : Array Expr) : MetaM (Array (Array SimpleIndVal)) := do
+  let (_, st) ← (es.mapM collectExprSimpleInduct).run {}
+  return st.sis
 
-namespace Test
+end Auto
 
-  def skd (e : Expr) : Elab.Term.TermElabM Unit := do
-    let (_, st) ← (Auto.Inductive.collectExprSimpleInduct (Auto.Expr.eraseMData e)).run {}
+section Test
+
+  private def skd (e : Expr) : Elab.Term.TermElabM Unit := do
+    let (_, st) ← (Auto.collectExprSimpleInduct (Auto.Expr.eraseMData e)).run {}
     for siw in st.sis do
-      IO.println "New"
       for si in siw do
-        IO.println ("  " ++ si.type.dbgToString ++ " ||" ++ String.join (si.ctors.data.map (fun a => s!" ({Expr.dbgToString (Prod.fst a)}, {Expr.dbgToString (Prod.snd a)})")))
-  
+        IO.println <| ← MessageData.format m!"{si}"
 
   #check Meta.isClass?
   #getExprAndApply[List.cons 2|skd]
@@ -133,16 +161,30 @@ namespace Test
 
   mutual
     
-    inductive tree where
+    private inductive tree where
       | leaf : Nat → tree
       | node : treelist → tree
 
-    inductive treelist where
+    private inductive treelist where
       | nil : treelist
       | cons : tree → treelist → treelist
 
   end
 
   #getExprAndApply[tree|skd]
+
+  mutual
+  
+    private inductive Tree (α : Type u) where
+      | leaf : α → Tree α
+      | node : TreeList α → Tree α
+
+    private inductive TreeList (α : Type u) where
+      | nil : TreeList α
+      | cons : Tree α → TreeList α → TreeList α
+
+  end
+
+  #getExprAndApply[Tree Int|skd]
 
 end Test

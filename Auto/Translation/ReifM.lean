@@ -1,6 +1,7 @@
 import Lean
 import Auto.Lib.MonadUtils
 import Auto.Translation.Assumptions
+import Auto.Translation.Inductive
 open Lean
 
 namespace Auto.Reif
@@ -27,6 +28,7 @@ structure State where
   -- The second `Expr` should be of the form `ty₁ → ty₂ → ⋯ → tyₙ`,
   --   where `ty₁, ty₂, ⋯, tyₙ` are canonicalized types within `tyCanMap`
   inhTys          : Array UMonoFact     := {}
+  inds            : Array (Array SimpleIndVal) := {}
   declName?       : Option Name
 
 abbrev ReifM := StateT State MetaM

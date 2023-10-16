@@ -1323,13 +1323,42 @@ def reifFacts (facts : Array UMonoFact) : ReifM (Array LamTerm) :=
     newAssertion proof lamty
     return lamty)
 
-def reifInhabitations (inh : Array UMonoFact) : ReifM (Array LamSort) :=
-  inh.mapM (fun (inhTy, ty) => do
+def reifInhabitations (inhs : Array UMonoFact) : ReifM (Array LamSort) :=
+  inhs.mapM (fun (inhTy, ty) => do
     let s ← reifType ty
     newInhabitation inhTy s
     trace[auto.lamReif.printResult] "Successfully reified inhabitation proof of {ty} to λsort `{s}`"
-    return s
-  )
+    return s)
+
+def reifInd (ind : SimpleIndVal) : ReifM (Option IndInfo) := do
+  let ⟨name, type, ctors⟩ := ind
+  if name == ``Nat || name == ``Int || name == ``Bool ||
+     name == ``String || name == ``String.Pos || name == ``Empty then
+    return .none
+  -- For now, do not reify inductively defined proposition
+  if ← isIndProp name then
+    return .none
+  let rty ← reifType type
+  let rctors ← ctors.mapM (fun (e, _) => reifTermCheckType e)
+  let ret := ⟨rty, rctors.data⟩
+  trace[auto.lamReif.printResult] "Successfully reified inductive info {← ind.zetaReduce} to {ret}"
+  return .some ret
+
+def reifMutInd (mind : Array SimpleIndVal) : ReifM (Option MutualIndInfo) := do
+  let mut ret := #[]
+  for ind in mind do
+    let .some ii ← reifInd ind
+      | return .none
+    ret := ret.push ii
+  return ret.data
+
+def reifMutInds (minds : Array (Array SimpleIndVal)) : ReifM (Array MutualIndInfo) := do
+  let mut ret := #[]
+  for mind in minds do
+    let .some mi ← reifMutInd mind
+      | continue
+    ret := ret.push mi
+  return ret
 
 section BuildChecker
 

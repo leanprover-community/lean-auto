@@ -163,7 +163,7 @@ def STerm.toString (s : STerm) (binders : Array SIdent) : String :=
 instance : ToString STerm where
   toString s := STerm.toString s #[]
 
-/-
+/--
  〈selector_dec〉 ::= ( 〈symbol〉 〈sort〉 )
  〈constructor_dec〉 ::= ( 〈symbol〉 〈selector_dec〉∗ )
 -/
@@ -174,8 +174,23 @@ structure ConstrDecl where
 private def ConstrDecl.toString : ConstrDecl → Array SIdent → String
 | ⟨name, selDecls⟩, binders =>
   let pre := s!"({SIdent.symb name}"
-  let selDecls := selDecls.map (fun (name, sort) => s!"({SIdent.symb name}" ++ SSort.toString sort binders ++ ")")
+  let selDecls := selDecls.map (fun (name, sort) => s!"({SIdent.symb name} " ++ SSort.toString sort binders ++ ")")
   String.intercalate " " (pre :: selDecls.data) ++ ")"
+
+/--
+ 〈datatype_dec〉 ::= ( 〈constructor_dec〉+ ) | ( par ( 〈symbol 〉+ ) ( 〈constructor_dec〉+ ) )
+-/
+structure DatatypeDecl where
+  params : Array String
+  cstrDecls : Array ConstrDecl
+
+private def DatatypeDecl.toString : DatatypeDecl → String := fun ⟨params, cstrDecls⟩ =>
+  let scstrDecls := cstrDecls.map (fun d => ConstrDecl.toString d (params.map SIdent.symb))
+  let scstrDecls := "(" ++ String.intercalate " " scstrDecls.data ++ ")"
+  if params.size == 0 then
+    scstrDecls
+  else
+    "(par ("  ++ String.intercalate " " params.data ++ ") " ++ scstrDecls ++ ")"
 
 -- **TODO**: Complete?
 inductive Attribute where
@@ -249,22 +264,26 @@ instance : ToString SMTOption where
                 ( set-logic 〈symbol 〉 )
 -/
 inductive Command where
-  | assert    : (prop : STerm) → Command
-  | setLogic  : String → Command
-  | setOption : SMTOption → Command
-  | getModel  : Command
-  | getOption : String → Command
-  | getProof  : Command
+  | assert     : (prop : STerm) → Command
+  | setLogic   : String → Command
+  | setOption  : SMTOption → Command
+  | getModel   : Command
+  | getOption  : String → Command
+  | getProof   : Command
   | getUnsatAssumptions : Command
   | getUnsatCore        : Command
-  | checkSat  : Command
-  | declFun   : (name : String) → (argSorts : Array SSort) → (resSort : SSort) → Command
-  | declSort  : (name : String) → (arity : Nat) → Command
-  | defFun    : (isRec : Bool) → (name : String) → (args : Array (String × SSort)) →
-                  (resTy : SSort) → (body : STerm) → Command
-  | defSort   : (name : String) → (args : Array String) → (body : SSort) → Command
-  | declDtype : (name : String) → (params : Array String) → (cstrDecls : Array ConstrDecl) → Command
-  | exit      : Command
+  | checkSat   : Command
+  | declFun    : (name : String) → (argSorts : Array SSort) → (resSort : SSort) → Command
+  | declSort   : (name : String) → (arity : Nat) → Command
+  | defFun     : (isRec : Bool) → (name : String) → (args : Array (String × SSort)) →
+                   (resTy : SSort) → (body : STerm) → Command
+  | defSort    : (name : String) → (args : Array String) → (body : SSort) → Command
+  | declDtype  : (name : String) → DatatypeDecl → Command
+  -- String × Nat : sort_dec
+  -- String : Name of datatype
+  -- Nat    : Number of parameters of the datatype
+  | declDtypes : Array (String × Nat × DatatypeDecl) → Command
+  | exit       : Command
 
 def Command.toString : Command → String
 | .assert prop                         => s!"(assert {prop})"
@@ -293,14 +312,12 @@ def Command.toString : Command → String
   let sargs := String.intercalate " " args.data ++ ") "
   let trail := SSort.toString body (args.map SIdent.symb) ++ ")"
   pre ++ sargs ++ trail
-| .declDtype name params cstrDecls     =>
-  let pre := s!"(decare-datatype {SIdent.symb name} ("
-  let sparams :=
-    if params.size == 0 then ""
-    else "par ("  ++ String.intercalate " " params.data ++ ") "
-  let scstrDecls := cstrDecls.map (fun d => ConstrDecl.toString d (params.map SIdent.symb))
-  let scstrDecls := "(" ++ String.intercalate " " scstrDecls.data ++ ")))"
-  pre ++ sparams ++ scstrDecls
+| .declDtype name ddecl                =>
+  s!"(declare-datatype {SIdent.symb name} {ddecl.toString})"
+| .declDtypes infos               =>
+  let sort_decs := String.intercalate " " (infos.data.map (fun (name, args, _) => s!"({name} {args})"))
+  let datatype_decs := String.intercalate " " (infos.data.map (fun (_, _, ddecl) => ddecl.toString))
+  s!"(declare-datatypes ({sort_decs}) ({datatype_decs}))"
 | .exit                                => "(exit)"
 
 instance : ToString Command where
@@ -377,8 +394,8 @@ section
   partial def h2Symb (cstr : ω) : TransM ω String := do
     let l2hMap ← getL2hMap
     let h2lMap ← getH2lMap
-    if h2lMap.contains cstr then
-      return h2lMap.find! cstr
+    if let .some name := h2lMap.find? cstr then
+      return name
     let idx ← getIdx
     let currName : String := s!"smti_{idx}"
     if l2hMap.contains currName then

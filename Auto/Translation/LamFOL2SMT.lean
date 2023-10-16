@@ -35,12 +35,14 @@ private def lamBaseSort2SSort : LamBaseSort → SSort
   | _   => .app (.symb "Empty") #[]
 | .bv n   => .app (.indexed "BitVec" (.inr n)) #[]
 
-private def lamSort2SSortAux : LamSort → TransM LamAtom SSort
-| .atom n => do
+private def lamSortAtom2String (n : Nat) : TransM LamAtom String := do
   if !(← hIn (.sort n)) then
     let name ← h2Symb (.sort n)
     addCommand (.declSort name 0)
-  return .app (.symb (← h2Symb (.sort n))) #[]
+  return ← h2Symb (.sort n)
+
+private def lamSort2SSortAux : LamSort → TransM LamAtom SSort
+| .atom n => do return .app (.symb (← lamSortAtom2String n)) #[]
 | .base b => return lamBaseSort2SSort b
 | .func _ _ => throwError "lamSort2STermAux :: Unexpected error. Higher order input?"
 
@@ -131,30 +133,38 @@ private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtom STerm
 | .bvVal bv         => return Bitvec2STerm bv
 | t                 => throwError "lamTerm2STerm :: The arity of {repr t} is not 0"
 
+def lamTermAtom2String (lamVarTy : Array LamSort) (n : Nat) : TransM LamAtom (LamSort × String) := do
+  let .some s := lamVarTy[n]?
+    | throwError "lamTermAtom2String :: Unexpected term atom {repr (LamTerm.atom n)}"
+  if !(← hIn (.term n)) then
+    let name ← h2Symb (.term n)
+    let (argSorts, resSort) ← lamSort2SSort s
+    addCommand (.declFun name ⟨argSorts⟩ resSort)
+    addNatConstraint? name s
+  return (s, ← h2Symb (.term n))
+
+def lamTermEtom2String (lamEVarTy : Array LamSort) (n : Nat) : TransM LamAtom (LamSort × String) := do
+  let .some s := lamEVarTy[n]?
+    | throwError "lamTerm2STerm :: Unexpected etom {repr (LamTerm.etom n)}"
+  if !(← hIn (.etom n)) then
+    let name ← h2Symb (.etom n)
+    let (argSorts, resSort) ← lamSort2SSort s
+    addCommand (.declFun name ⟨argSorts⟩ resSort)
+    addNatConstraint? name s
+  return (s, ← h2Symb (.etom n))
+
 private def lamTerm2STermAux (lamVarTy lamEVarTy : Array LamSort) (args : Array STerm) :
   LamTerm → TransM LamAtom STerm
 | .atom n => do
-  if !(← hIn (.term n)) then
-    let name ← h2Symb (.term n)
-    let .some s := lamVarTy[n]?
-      | throwError "lamTerm2STerm :: Unexpected term atom {repr (LamTerm.atom n)}"
-    let (argSorts, resSort) ← lamSort2SSort s
-    if args.size != argSorts.length then
-      throwError "lamTerm2STerm :: Argument number mismatch. Higher order input?"
-    addCommand (.declFun name ⟨argSorts⟩ resSort)
-    addNatConstraint? name s
-  return .qIdApp (QualIdent.ofString (← h2Symb (.term n))) args
+  let (s, name) ← lamTermAtom2String lamVarTy n
+  if args.size != s.getArgTys.length then
+    throwError "lamTerm2STerm :: Argument number mismatch. Higher order input?"
+  return .qIdApp (QualIdent.ofString name) args
 | .etom n => do
-  if !(← hIn (.etom n)) then
-    let name ← h2Symb (.etom n)
-    let .some s := lamEVarTy[n]?
-      | throwError "lamTerm2STerm :: Unexpected etom {repr (LamTerm.etom n)}"
-    let (argSorts, resSort) ← lamSort2SSort s
-    if args.size != argSorts.length then
-      throwError "lamTerm2STerm :: Argument number mismatch. Higher order input?"
-    addCommand (.declFun name ⟨argSorts⟩ resSort)
-    addNatConstraint? name s
-  return .qIdApp (QualIdent.ofString (← h2Symb (.etom n))) args
+  let (s, name) ← lamTermEtom2String lamEVarTy n
+  if args.size != s.getArgTys.length then
+    throwError "lamTerm2STerm :: Argument number mismatch. Higher order input?"
+  return .qIdApp (QualIdent.ofString name) args
 | .base b =>
   match args with
   | #[]           => lamBaseTerm2STerm_Arity0 b
@@ -203,6 +213,35 @@ where
     (ts.push arg, t)
   | t => (#[], t)
 
+private def lamMutualIndInfo2STerm (mind : MutualIndInfo) : TransM LamAtom IR.SMT.Command := do
+  let mut infos := #[]
+  -- Go through `type` and call `h2Symb` on all the atoms so that there won't
+  --   be declared during the following `lamSort2SSort`
+  for ⟨type, _⟩ in mind do
+    let .atom sn := type
+      | throwError "lamMutualIndInfo2STerm :: Inductive type {type} is not a sort atom"
+    -- Do not use `lamSortAtom2String` because we don't want to `declare-sort`
+    let _ ← h2Symb (.sort sn)
+  for ⟨type, ctors⟩ in mind do
+    let .atom sn := type
+      | throwError "lamMutualIndInfo2STerm :: Unexpected error"
+    let sname ← h2Symb (.sort sn)
+    let mut cstrDecls : Array ConstrDecl := #[]
+    for (s, t) in ctors do
+      let ctorname ← (do
+        match t with
+        -- Do not use `lamSortAtom2String` because we don't want to `declare-fun`
+        | .atom n => h2Symb (.term n)
+        -- Do not use `lamSortEtom2String` because we don't want to `declare-fun`
+        | .etom n => h2Symb (.etom n)
+        | _ => throwError "")
+      let (argTys, _) ← lamSort2SSort s
+      let selDecls := (Array.mk argTys).zipWithIndex.map (fun (argTy, idx) =>
+        (ctorname ++ s!"_sel{idx}", argTy))
+      cstrDecls := cstrDecls.push ⟨ctorname, selDecls⟩
+    infos := infos.push (sname, 0, ⟨#[], cstrDecls⟩)
+  return .declDtypes infos
+
 def sortAuxDefs : Array IR.SMT.Command :=
   #[.declSort "Empty" 0]
 
@@ -226,10 +265,16 @@ def intAuxDefs : Array IR.SMT.Command :=
    ]
 
 /-- `facts` should not contain import versions of `eq, ∀` or `∃` -/
-def lamFOL2SMT (lamVarTy lamEVarTy : Array LamSort)
-  (facts : Array LamTerm) : TransM LamAtom (Array IR.SMT.Command) := do
+def lamFOL2SMT
+  (lamVarTy lamEVarTy : Array LamSort)
+  (facts : Array LamTerm) (minds : Array MutualIndInfo) :
+  TransM LamAtom (Array IR.SMT.Command) := do
   let _ ← sortAuxDefs.mapM addCommand
   let _ ← intAuxDefs.mapM addCommand
+  for mind in minds do
+    let ddecls ← lamMutualIndInfo2STerm mind
+    trace[auto.lamFOL2SMT] "MutualIndInfo translated to command {ddecls}"
+    addCommand ddecls
   for t in facts do
     let sterm ← lamTerm2STerm lamVarTy lamEVarTy t
     trace[auto.lamFOL2SMT] "λ term {repr t} translated to SMT term {sterm}"

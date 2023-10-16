@@ -225,7 +225,7 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
   let lemmas := lemmas.append (← auxLemmas lemmas)
   match instr with
   | .none =>
-    let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) : LamReif.ReifM Expr := (do
+    let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) (inds : Array (Array SimpleIndVal)) : LamReif.ReifM Expr := (do
       let exportFacts ← LamReif.reifFacts uvalids
       let exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
       let _ ← LamReif.reifInhabitations uinhs
@@ -237,7 +237,7 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
       -- **TPTP**
       if (auto.tptp.get (← getOptions)) then queryTPTP exportFacts
       -- **SMT**
-      if (auto.smt.get (← getOptions)) then querySMT exportFacts
+      if (auto.smt.get (← getOptions)) then querySMT exportFacts inds
       -- **Proof Reconstruction**
       if (auto.proofReconstruction.get (← getOptions)) then
         reconstruct declName? exportFacts exportInhs
@@ -247,8 +247,9 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
     let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
       let uvalids ← liftM <| Reif.getFacts
       let uinhs ← liftM <| Reif.getInhTys
+      let inds ← liftM <| Reif.getInds
       let u ← computeMaxLevel uvalids
-      (afterReify uvalids uinhs).run' {u := u})
+      (afterReify uvalids uinhs inds).run' {u := u})
     trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
     return .unsat proof
   | .useSorry => return .unsat (← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []])
@@ -266,15 +267,16 @@ where
       Solver.TPTP.querySolver query
     catch e =>
       trace[auto.tptp.result] "TPTP invocation failed with {e.toMessageData}"
-  querySMT exportFacts : LamReif.ReifM Unit :=
+  querySMT exportFacts inds : LamReif.ReifM Unit :=
     try
+      let inds ← LamReif.reifMutInds inds
       let lamVarTy := (← LamReif.getVarVal).map Prod.snd
       let lamEVarTy ← LamReif.getLamEVarTy
       let exportLamTerms ← exportFacts.mapM (fun re => do
         match re with
         | .valid [] t => return t
         | _ => throwError "runAuto :: Unexpected error")
-      let commands ← (lamFOL2SMT lamVarTy lamEVarTy exportLamTerms).run'
+      let commands ← (lamFOL2SMT lamVarTy lamEVarTy exportLamTerms inds).run'
       for cmd in commands do
         trace[auto.smt.printCommands] "Command: {cmd}"
       Solver.SMT.querySolver commands

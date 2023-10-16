@@ -3,6 +3,7 @@ import Auto.Embedding.LamConv
 import Auto.Embedding.LamInference
 import Auto.Embedding.LamLCtx
 import Auto.Embedding.LamPrep
+import Auto.Embedding.LamInductive
 import Auto.Lib.BinTree
 open Lean
 

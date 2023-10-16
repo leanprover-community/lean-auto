@@ -536,6 +536,24 @@ def postprocessSaturate : MonoM Unit := do
   let lisArr ← liftM <| lisArr.mapM (fun lis => lis.filterMapM LemmaInst.monomorphic?)
   setLisArr lisArr
 
+/-- Collect inductive types -/
+def collectMonoMutInds : MonoM (Array (Array SimpleIndVal)) := do
+  let cis := (Array.mk ((← getCiMap).toList.map Prod.snd)).concatMap id
+  let citys ← cis.mapM (fun ci => do
+    let cie ← ci.toExpr
+    let ty ← Meta.inferType cie
+    return Expr.eraseMData ty)
+  let minds ← collectExprsSimpleInduct citys
+  let cis ← (minds.concatMap id).mapM (fun ⟨_, type, ctors⟩ => do
+    let cis₁ ← collectConstInsts #[] #[] type
+    let cis₂ ← ctors.mapM (fun (val, ty) => do
+      let cis₁ ← collectConstInsts #[] #[] val
+      let cis₂ ← collectConstInsts #[] #[] ty
+      return cis₁ ++ cis₂)
+    return cis₁ ++ cis₂.concatMap id)
+  let _ ← (cis.concatMap id).mapM processConstInst
+  return minds
+
 namespace FVarRep
   
   structure State where
@@ -701,27 +719,36 @@ def intromono (lemmas : Array Lemma) (mvarId : MVarId) : MetaM MVarId := do
     return mvar.mvarId!)
 
 def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State → MetaM α) : MetaM α := do
-  let monoMAction : MonoM Unit := (do
+  let monoMAction : MonoM (Array (Array SimpleIndVal)) := (do
     let startTime ← IO.monoMsNow
     initializeMonoM lemmas
     saturate
     postprocessSaturate
-    trace[auto.mono] "Monomorphization took {(← IO.monoMsNow) - startTime}ms")
-  let (_, monoSt) ← monoMAction.run {}
+    trace[auto.mono] "Monomorphization took {(← IO.monoMsNow) - startTime}ms"
+    collectMonoMutInds)
+  let (inductiveVals, monoSt) ← monoMAction.run {}
   -- Lemma instances
   let lis := monoSt.lisArr.concatMap id
-  let fvarRepMAction : FVarRep.FVarRepM (Array UMonoFact) :=
+  let fvarRepMFactAction : FVarRep.FVarRepM (Array UMonoFact) :=
     lis.mapM (fun li => do return ⟨li.proof, ← FVarRep.replacePolyWithFVar li.type⟩)
+  let fvarRepMInductAction (ivals : Array (Array SimpleIndVal)) : FVarRep.FVarRepM (Array (Array SimpleIndVal)) :=
+    ivals.mapM (fun svals => svals.mapM (fun ⟨name, type, ctors⟩ => do
+      FVarRep.processType type
+      let ctors ← ctors.mapM (fun (val, ty) => do
+        FVarRep.processType ty
+        let val' ← FVarRep.replacePolyWithFVar val
+        return (val', ty))
+      return ⟨name, type, ctors⟩))
   let metaStateMAction : MetaState.MetaStateM (Array FVarId × Reif.State) := (do
-    let (uvalids, s) ← fvarRepMAction.run { ciMap := monoSt.ciMap }
+    let (uvalids, s) ← fvarRepMFactAction.run { ciMap := monoSt.ciMap }
     for (proof, ty) in uvalids do
       trace[auto.mono.printResult] "Monomorphized :: {proof} : {ty}"
     let exlis := s.exprMap.toList.map (fun (e, id) => (id, e))
     let cilis ← s.ciIdMap.toList.mapM (fun (ci, id) => do return (id, ← MetaState.runMetaM ci.toExpr))
     let polyVal := HashMap.ofList (exlis ++ cilis)
+    let tyCans := s.tyCanMap.toArray.map Prod.snd
     -- Inhabited types
     let startTime ← IO.monoMsNow
-    let tyCans := s.tyCanMap.toArray.map Prod.snd
     let mut tyCanInhs := #[]
     for e in tyCans do
       if let .some inh ← MetaState.runMetaM <| Meta.withNewMCtxDepth <| Meta.trySynthInhabited e then
@@ -729,7 +756,11 @@ def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State
     let inhMatches ← MetaState.runMetaM (Inhabitation.inhFactMatchAtomTys inhFacts tyCans)
     let inhs := tyCanInhs ++ inhMatches
     trace[auto.mono] "Monomorphizing inhabitation facts took {(← IO.monoMsNow) - startTime}ms"
-    return (s.ffvars, Reif.State.mk s.ffvars uvalids polyVal s.tyCanMap inhs none))
+    -- Inductive types
+    let startTime ← IO.monoMsNow
+    trace[auto.mono] "Monomorphizing inductive types took {(← IO.monoMsNow) - startTime}ms"
+    let (inductiveVals, s) ← (fvarRepMInductAction inductiveVals).run s
+    return (s.ffvars, Reif.State.mk s.ffvars uvalids polyVal s.tyCanMap inhs inductiveVals none))
   MetaState.runWithIntroducedFVars metaStateMAction k
 
 end Auto.Monomorphization

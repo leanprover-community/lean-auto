@@ -268,10 +268,9 @@ partial def collectUniverseLevels : Expr → MetaM (HashSet Level)
 abbrev UMonoFact := Expr × Expr
 
 def computeMaxLevel (facts : Array UMonoFact) : MetaM Level := do
-  let levels ← facts.foldlM (fun hs (proof, ty) => do
-    let proofUs ← collectUniverseLevels proof
+  let levels ← facts.foldlM (fun hs (_, ty) => do
     let tyUs ← collectUniverseLevels ty
-    return mergeHashSet (mergeHashSet proofUs tyUs) hs) HashSet.empty
+    return mergeHashSet tyUs hs) HashSet.empty
   -- Compute the universe level that we need to lift to
   -- Use `.succ` two times to reveal bugs
   let level := Level.succ (.succ (levels.fold (fun l l' => Level.max l l') Level.zero))
