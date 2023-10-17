@@ -195,41 +195,31 @@ def LamTerm.etaReduce1? (t : LamTerm) : Option LamTerm :=
 
 theorem LamTerm.maxEVarSucc_etaReduce1? (heq : etaReduce1? t = .some t') :
   t'.maxEVarSucc = t.maxEVarSucc := by
-  cases t <;> try cases heq
-  case lam s body =>
-    cases body <;> try cases heq
-    case app s' body bvar₀ =>
-      cases bvar₀ <;> try cases heq
-      case bvar n =>
-        cases n <;> try cases heq
-        dsimp [etaReduce1?] at heq; dsimp [maxEVarSucc]
-        rw [Nat.max, Nat.max_zero_right]; revert heq
-        match h : bvarLower? body with
-        | .some body' =>
-          dsimp; intro h'; cases h'
-          rw [maxEVarSucc_bvarLower? h]
-        | .none => intro h'; cases h'
+  match t, heq with
+  | .lam s (.app s' body (.bvar 0)), heq =>
+    dsimp [etaReduce1?] at heq; dsimp [maxEVarSucc]
+    rw [Nat.max, Nat.max_zero_right]; revert heq
+    match h : bvarLower? body with
+    | .some body' =>
+      dsimp; intro h'; cases h'
+      rw [maxEVarSucc_bvarLower? h]
+    | .none => intro h'; cases h'
 
 theorem LamEquiv.etaReduce1?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, rty⟩) (heq : LamTerm.etaReduce1? t = .some t') :
   LamEquiv lval lctx rty t t' := by
-  cases t <;> try cases heq
-  case lam s body =>
-    cases body <;> try cases heq
-    case app s' body bvar₀ =>
-      cases bvar₀ <;> try cases heq
-      case bvar n =>
-        cases n <;> try cases heq
-        dsimp [LamTerm.etaReduce1?] at heq; revert heq
-        match h : body.bvarLower? with
-        | .some body' =>
-          dsimp; intro h'; cases h'
-          cases (LamTerm.bvarLower?_spec.mp h); clear h
-          match wft with
-          | .ofLam argTy (.ofApp _ HBody HBVar) =>
-            cases (show s = s' by cases HBVar; rfl); clear HBVar
-            apply symm (LamEquiv.etaExpand1 (.fromBVarLift _ HBody))
-        | .none => intro h; cases h
+  match t, heq with
+  | .lam s (.app s' body (.bvar 0)), heq =>
+    dsimp [LamTerm.etaReduce1?] at heq; revert heq
+    match h : body.bvarLower? with
+    | .some body' =>
+      dsimp; intro h'; cases h'
+      cases (LamTerm.bvarLower?_spec.mp h); clear h
+      match wft with
+      | .ofLam argTy (.ofApp _ HBody HBVar) =>
+        cases (show s = s' by cases HBVar; rfl); clear HBVar
+        apply symm (LamEquiv.etaExpand1 (.fromBVarLift _ HBody))
+    | .none => intro h; cases h
 
 theorem LamGenConv.etaReduce1? : LamGenConv lval LamTerm.etaReduce1? := by
   intros t₁ t₂ heq lctx rty wf; apply LamEquiv.etaReduce1? wf heq
@@ -433,58 +423,34 @@ def LamTerm.extensionalizeEq?FN? (n : Nat) (t : LamTerm) : Option LamTerm :=
 
 theorem LamTerm.maxEVarSucc_extensionalizeEq?FN?
   (heq : extensionalizeEq?FN? n t = .some t') : t'.maxEVarSucc = t.maxEVarSucc := by
-  cases t <;> try cases heq
-  case app s fn rhs =>
-    cases fn <;> try cases heq
-    case app s' b lhs =>
-      cases b <;> try cases heq
-      case base b =>
-        cases b <;> try cases heq
-        case eq s =>
-          dsimp [maxEVarSucc]; rw [maxEVarSucc_extensionalizeEqFN? heq]
-          rw [Nat.max, Nat.max, Nat.max_zero_left]
+  match t, heq with
+  | .app s (.app _ (.base (.eq _)) lhs) rhs, heq =>
+    dsimp [maxEVarSucc]; rw [maxEVarSucc_extensionalizeEqFN? heq]
+    rw [Nat.max, Nat.max, Nat.max_zero_left]
 
 def LamWF.extensionalizeEq?FN?
   (wft : LamWF ltv ⟨lctx, t, s⟩) (heq : t.extensionalizeEq?FN? n = .some t') :
   LamWF ltv ⟨lctx, t', .base .prop⟩ := by
-  cases t <;> try cases heq
-  case app s fn rhs =>
-    cases fn <;> try cases heq
-    case app s' b lhs =>
-      cases b <;> try cases heq
-      case base b =>
-        cases b <;> try cases heq
-        case eq s =>
-          cases wft.getFn.getFn.getBase
-          apply LamWF.extensionalizeEqFN? wft heq
+  match t, heq with
+  | .app s (.app _ (.base (.eq _)) lhs) rhs, heq =>
+    cases wft.getFn.getFn.getBase
+    apply LamWF.extensionalizeEqFN? wft heq
 
 theorem LamWF.s_eq_prop_of_extensionalizeEq?FN?_eq_some
   (wft : LamWF ltv ⟨lctx, t, s⟩) (heq : t.extensionalizeEq?FN? n = .some t') :
   s = .base .prop := by
-  cases t <;> try cases heq
-  case app s fn rhs =>
-    cases fn <;> try cases heq
-    case app s' b lhs =>
-      cases b <;> try cases heq
-      case base b =>
-        cases b <;> try cases heq
-        case eq s =>
-          cases wft.getFn.getFn.getBase; rfl
+  match t, heq with
+  | .app s (.app _ (.base (.eq _)) lhs) rhs, heq =>
+    cases wft.getFn.getFn.getBase; rfl
 
 theorem LamEquiv.ofExtensionalizeEq?FN?
   {lval : LamValuation.{u}} (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
   (heq : t.extensionalizeEq?FN? n = .some t') :
   LamEquiv lval lctx (.base .prop) t t' := by
-  cases t <;> try cases heq
-  case app s fn rhs =>
-    cases fn <;> try cases heq
-    case app s' b lhs =>
-      cases b <;> try cases heq
-      case base b =>
-        cases b <;> try cases heq
-        case eq s =>
-          cases wft.getFn.getFn.getBase
-          apply LamEquiv.ofExtensionalizeEqFN? wft heq
+  match t, heq with
+  | .app s (.app _ (.base (.eq _)) lhs) rhs, heq =>
+    cases wft.getFn.getFn.getBase
+    apply LamEquiv.ofExtensionalizeEqFN? wft heq
 
 theorem LamGenConv.ofExtensionalizeEq?FN? : LamGenConv lval (LamTerm.extensionalizeEq?FN? n) := by
   intro t₁ t₂ heq lctx rty wf
@@ -1586,44 +1552,32 @@ def LamTerm.mp? (rw : LamTerm) (t : LamTerm) : Option LamTerm :=
 
 theorem LamTerm.maxEVarSucc_mp?
   (heq : LamTerm.mp? rw t = .some t') : t'.maxEVarSucc ≤ rw.maxEVarSucc := by
-  cases rw <;> try cases heq
-  case app s fn arg =>
-    cases fn <;> try cases heq
-    case app s' fn' arg' =>
-      cases fn' <;> try cases heq
-      case base b =>
-        cases b <;> try cases heq
-        dsimp [mp?] at heq
-        cases h : t.beq arg'
-        case true =>
-          rw [h] at heq; cases heq; dsimp [maxEVarSucc]; apply Nat.le_max_right
-        case false =>
-          rw [h] at heq; cases heq
+  match rw, heq with
+  | .app s (.app _ (base (.eq _)) arg') res, heq =>
+    dsimp [mp?] at heq
+    cases h : t.beq arg'
+    case true =>
+      rw [h] at heq; cases heq; dsimp [maxEVarSucc]; apply Nat.le_max_right
+    case false =>
+      rw [h] at heq; cases heq
 
 theorem LamEquiv.mp?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, rty⟩) (Hrw : LamValid lval lctx rw)
   (heq : LamTerm.mp? rw t = .some t') : LamEquiv lval lctx rty t t' := by
-  dsimp [LamTerm.mp?] at heq
-  cases rw <;> try cases heq
-  case app _ eqap res =>
-    cases eqap <;> try cases heq
-    case app _ eqT arg' =>
-      cases eqT <;> try cases heq
-      case base b =>
-        cases b <;> try cases heq
-        case eq s' =>
-          dsimp at heq
-          match h : t.beq arg' with
-          | true =>
-            rw [h] at heq; dsimp at heq; cases heq
-            cases (LamTerm.eq_of_beq_eq_true h)
-            have ⟨wfrw, _⟩ := Hrw
-            have ⟨seq₁, seq₂, _⟩ := LamWF.mkEq_sortEq wfrw
-            cases seq₁; cases seq₂
-            have ⟨wft', _⟩ := LamEquiv.ofLamValid Hrw
-            rcases LamWF.unique wft wft' with ⟨⟨⟩, _⟩
-            apply LamEquiv.ofLamValid Hrw
-          | false => rw [h] at heq; cases heq
+  match rw, heq with
+  | .app s (.app _ (.base (.eq _)) arg') res, heq =>
+    dsimp [LamTerm.mp?] at heq
+    match h : t.beq arg' with
+    | true =>
+      rw [h] at heq; dsimp at heq; cases heq
+      cases (LamTerm.eq_of_beq_eq_true h)
+      have ⟨wfrw, _⟩ := Hrw
+      have ⟨seq₁, seq₂, _⟩ := LamWF.mkEq_sortEq wfrw
+      cases seq₁; cases seq₂
+      have ⟨wft', _⟩ := LamEquiv.ofLamValid Hrw
+      rcases LamWF.unique wft wft' with ⟨⟨⟩, _⟩
+      apply LamEquiv.ofLamValid Hrw
+    | false => rw [h] at heq; cases heq
 
 theorem LamThmEquiv.mp?
   (wft : LamThmWF lval lctx rty t) (Hrw : LamThmValid lval lctx rw)
@@ -1686,58 +1640,39 @@ def LamTerm.congrArg? (t : LamTerm) (rw : LamTerm) : Option LamTerm :=
 theorem LamTerm.maxEVarSucc_congrArg?
   (ht : t.maxEVarSucc ≤ n) (hrw : rw.maxEVarSucc ≤ n)
   (heq : LamTerm.congrArg? t rw = .some t') : t'.maxEVarSucc ≤ n := by
-  cases t <;> try cases heq
-  case app s fn arg =>
-    cases rw <;> try cases heq
-    case app s' fn' res =>
-      cases fn' <;> try cases heq
-      case app s'' fn'' arg' =>
-        cases fn'' <;> try cases heq
-        case base b =>
-          cases b <;> try cases heq
-          case eq s''' =>
-            dsimp [congrArg?] at heq
-            cases h : arg.beq arg'
-            case true =>
-              rw [h] at heq; cases heq; dsimp [maxEVarSucc]; rw [Nat.max_le]
-              dsimp [maxEVarSucc] at ht; rw [Nat.max_le] at ht
-              apply And.intro ht.left
-              dsimp [maxEVarSucc] at hrw; rw [Nat.max_le] at hrw
-              apply hrw.right
-            case false =>
-              rw [h] at heq; cases heq
+  match t, rw, heq with
+  | .app s fn arg, .app s' (.app _ (.base (.eq _)) arg') res, heq =>
+    dsimp [congrArg?] at heq
+    cases h : arg.beq arg' <;> rw [h] at heq <;> cases heq
+    case true =>
+      dsimp [maxEVarSucc]; rw [Nat.max_le]
+      dsimp [maxEVarSucc] at ht; rw [Nat.max_le] at ht
+      apply And.intro ht.left
+      dsimp [maxEVarSucc] at hrw; rw [Nat.max_le] at hrw
+      apply hrw.right
 
 theorem LamEquiv.congrArg?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, rty⟩) (Hrw : LamValid lval lctx rw)
   (heq : t.congrArg? rw = .some t') : LamEquiv lval lctx rty t t' := by
   dsimp [LamTerm.congrArg?] at heq
-  cases t <;> try cases heq
-  case app s fn arg =>
-    dsimp at heq
-    cases rw <;> try cases heq
-    case app _ eqap res =>
-      cases eqap <;> try cases heq
-      case app _ eqT arg' =>
-        cases eqT <;> try cases heq
-        case base b =>
-          cases b <;> try cases heq
-          case eq sfn =>
-            dsimp at heq
-            match h : arg.beq arg' with
-            | true =>
-              rw [h] at heq; dsimp at heq
-              cases (LamTerm.eq_of_beq_eq_true h)
-              cases heq; cases wft;
-              case ofApp s heqAp hres =>
-                apply LamEquiv.congrArg hres
-                have ⟨wfrw, _⟩ := Hrw
-                have ⟨seq₁, seq₂, _⟩ := LamWF.mkEq_sortEq wfrw
-                cases seq₁; cases seq₂
-                have ⟨argwf, _⟩ := LamEquiv.ofLamValid Hrw
-                rcases LamWF.unique argwf heqAp with ⟨⟨⟩, _⟩
-                apply LamEquiv.ofLamValid Hrw
-            | false =>
-              rw [h] at heq; cases heq
+  match t, rw, heq with
+  | .app s fn arg, .app s' (.app _ (.base (.eq _)) arg') res, heq =>
+    dsimp [LamTerm.congrArg?] at heq
+    match h : arg.beq arg' with
+    | true =>
+      rw [h] at heq; dsimp at heq
+      cases (LamTerm.eq_of_beq_eq_true h)
+      cases heq; cases wft;
+      case ofApp s heqAp hres =>
+        apply LamEquiv.congrArg hres
+        have ⟨wfrw, _⟩ := Hrw
+        have ⟨seq₁, seq₂, _⟩ := LamWF.mkEq_sortEq wfrw
+        cases seq₁; cases seq₂
+        have ⟨argwf, _⟩ := LamEquiv.ofLamValid Hrw
+        rcases LamWF.unique argwf heqAp with ⟨⟨⟩, _⟩
+        apply LamEquiv.ofLamValid Hrw
+    | false =>
+      rw [h] at heq; cases heq
 
 theorem LamThmEquiv.congrArg?
   (wft : LamThmWF lval lctx rty t) (Hrw : LamThmValid lval lctx rw)
@@ -1758,58 +1693,38 @@ def LamTerm.congrFun? (t : LamTerm) (rw : LamTerm) : Option LamTerm :=
 theorem LamTerm.maxEVarSucc_congrFun?
   (ht : t.maxEVarSucc ≤ n) (hrw : rw.maxEVarSucc ≤ n)
   (heq : LamTerm.congrFun? t rw = .some t') : t'.maxEVarSucc ≤ n := by
-  cases t <;> try cases heq
-  case app s fn arg =>
-    cases rw <;> try cases heq
-    case app s' fn' res =>
-      cases fn' <;> try cases heq
-      case app s'' fn'' arg' =>
-        cases fn'' <;> try cases heq
-        case base b =>
-          cases b <;> try cases heq
-          case eq s''' =>
-            dsimp [congrFun?] at heq
-            cases h : fn.beq arg'
-            case true =>
-              rw [h] at heq; cases heq; dsimp [maxEVarSucc]; rw [Nat.max_le]
-              dsimp [maxEVarSucc] at hrw; rw [Nat.max_le] at hrw
-              apply And.intro hrw.right
-              dsimp [maxEVarSucc] at ht; rw [Nat.max_le] at ht
-              apply ht.right
-            case false =>
-              rw [h] at heq; cases heq
+  match t, rw, heq with
+  | .app s fn arg, .app s' (.app _ (.base (.eq _)) arg') res, heq =>
+    dsimp [congrFun?] at heq
+    cases h : fn.beq arg' <;> rw [h] at heq <;> cases heq 
+    case true =>
+      dsimp [maxEVarSucc]; rw [Nat.max_le]
+      dsimp [maxEVarSucc] at hrw; rw [Nat.max_le] at hrw
+      apply And.intro hrw.right
+      dsimp [maxEVarSucc] at ht; rw [Nat.max_le] at ht
+      apply ht.right
 
 theorem LamEquiv.congrFun?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, rty⟩) (Hrw : LamValid lval lctx rw)
   (heq : t.congrFun? rw = .some t') : LamEquiv lval lctx rty t t' := by
-  dsimp [LamTerm.congrFun?] at heq
-  cases t <;> try cases heq
-  case app s fn arg =>
-    dsimp at heq
-    cases rw <;> try cases heq
-    case app _ eqap res =>
-      cases eqap <;> try cases heq
-      case app _ eqT fn' =>
-        cases eqT <;> try cases heq
-        case base b =>
-          cases b <;> try cases heq
-          case eq sfn =>
-            dsimp at heq
-            match h : fn.beq fn' with
-            | true =>
-              rw [h] at heq; dsimp at heq
-              cases (LamTerm.eq_of_beq_eq_true h)
-              cases heq; cases wft
-              case ofApp heqAp hres =>
-                apply LamEquiv.congrFun _ heqAp
-                have ⟨wfrw, _⟩ := Hrw
-                have ⟨seq₁, seq₂, _⟩ := LamWF.mkEq_sortEq wfrw
-                cases seq₁; cases seq₂
-                have ⟨argwf, _⟩ := LamEquiv.ofLamValid Hrw
-                rcases LamWF.unique argwf hres with ⟨⟨⟩, _⟩;
-                apply LamEquiv.ofLamValid Hrw
-            | false =>
-              rw [h] at heq; cases heq
+  match t, rw, heq with
+  | .app s fn arg, .app s' (.app _ (.base (.eq _)) arg') res, heq =>
+    dsimp [LamTerm.congrFun?] at heq
+    match h : fn.beq arg' with
+    | true =>
+      rw [h] at heq; dsimp at heq
+      cases (LamTerm.eq_of_beq_eq_true h)
+      cases heq; cases wft
+      case ofApp heqAp hres =>
+        apply LamEquiv.congrFun _ heqAp
+        have ⟨wfrw, _⟩ := Hrw
+        have ⟨seq₁, seq₂, _⟩ := LamWF.mkEq_sortEq wfrw
+        cases seq₁; cases seq₂
+        have ⟨argwf, _⟩ := LamEquiv.ofLamValid Hrw
+        rcases LamWF.unique argwf hres with ⟨⟨⟩, _⟩;
+        apply LamEquiv.ofLamValid Hrw
+    | false =>
+      rw [h] at heq; cases heq
 
 theorem LamThmEquiv.congrFun?
   (wft : LamThmWF lval lctx rty t) (Hrw : LamThmValid lval lctx rw)
