@@ -1047,14 +1047,18 @@ def processTypeExpr (e : Expr) : ReifM LamSort := do
   | _ => newTypeExpr e
 
 -- At this point, there should only be non-dependent `∀`s in the type.
-def reifType : Expr → ReifM LamSort
-| .mdata _ e => reifType e
+private def reifTypeAux : Expr → ReifM LamSort
+| .mdata _ e => reifTypeAux e
 | e@(.forallE _ ty body _) => do
   if body.hasLooseBVar 0 then
     throwError "reifType :: Type {e} has dependent ∀"
   else
-    return .func (← reifType ty) (← reifType body)
+    return .func (← reifTypeAux ty) (← reifTypeAux body)
 | e => processTypeExpr e
+
+def reifType (e : Expr) : ReifM LamSort := do
+  let e ← prepReduceExpr e
+  reifTypeAux e
 
 def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
   match fn with

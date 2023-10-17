@@ -1,6 +1,6 @@
 import Auto.Tactic
 
-set_option auto.prep.redMode "reducible"
+set_option auto.redMode "reducible"
 set_option trace.auto.lamReif.printResult true
 set_option trace.auto.lamReif.printValuation true
 
@@ -83,7 +83,7 @@ end Inhabitation
 
 -- Monomorphization
 
-set_option auto.prep.redMode "instances" in
+set_option auto.redMode "instances" in
 example (as bs cs : List α) (f : α → β) :
   ((as ++ bs) ++ cs).map f = as.map f ++ (bs.map f ++ cs.map f) := by
   intromono [List.append_assoc, List.map_append];
@@ -144,11 +144,11 @@ example : True := by auto 👎
 section CollectLemma
 
   set_option trace.auto.printLemmas true
-  set_option auto.prep.redMode "instances"
+  set_option auto.redMode "instances"
   example : (∀ (xs ys zs : List α), xs ++ ys ++ zs = xs ++ (ys ++ zs)) := by
     intro xs; induction xs <;> auto [*] d[List.append]
 
-  set_option auto.prep.redMode "instances" in
+  set_option auto.redMode "instances" in
   example : (∀ (m n k : Nat), m + n + k = m + (n + k)) := by
     intros m n k; revert m n; induction k <;> auto [*] d[Nat.add]
 
@@ -302,11 +302,11 @@ example
 
 -- Polymorphic Constant
 
-set_option auto.prep.redMode "instances" in
+set_option auto.redMode "instances" in
 example (as bs cs ds : List β) : (as ++ bs) ++ (cs ++ ds) = as ++ (bs ++ (cs ++ ds)) := by
   auto [List.append_assoc]
 
-set_option auto.prep.redMode "instances" in
+set_option auto.redMode "instances" in
 example (as bs cs : List α) (f : α → β) :
   ((as ++ bs) ++ cs).map f = as.map f ++ (bs.map f ++ cs.map f) := by
   auto [List.append_assoc, List.map_append]
@@ -526,7 +526,7 @@ section Issues
 
   -- Brute force example
   -- This must be fixed
-  set_option auto.prep.redMode "instances" in
+  set_option auto.redMode "instances" in
   example : (∀ (m n k : Nat), m + n + k = m + (n + k)) := by
     intros m n k; revert m n; induction k
     case zero => auto u[Nat.add] d[Nat.rec]

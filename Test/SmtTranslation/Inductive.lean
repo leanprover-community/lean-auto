@@ -7,6 +7,8 @@ set_option auto.proofReconstruction false
 
 section Enum
 
+  set_option trace.auto.printLemmas true in
+  set_option trace.auto.mono.printResult true in
   example (x y : Unit) : x = y := by auto
 
   example (x y : Empty) : x = y := by auto
@@ -54,7 +56,7 @@ section Recursive
     auto [h] d[List.append]
 
   -- SMT solver times out on the following problem:
-  -- set_option auto.prep.redMode "all" in
+  -- set_option auto.redMode "all" in
   -- example (x y z : List Nat) : (x ++ y) ++ z = x ++ (y ++ z) := by
   --   auto d[List.append]
 
@@ -101,6 +103,4 @@ end Mixed
   1. Unable to deal with inductive families, like `Vector`
   2. Fails if constructor is dependent/polymorphic after monomorphization,
      for example `Fin`
-  3. Change `leaf : Nat → tree` into `leaf : Unit → Tree`,
-     and `(∃ y, x = .leaf y)` into `x = ()`, the above example will fail
 -/

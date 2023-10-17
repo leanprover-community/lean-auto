@@ -24,7 +24,7 @@ set_option auto.tptp true
 
 section SimpleClass
 
-set_option auto.prep.redMode "instances"
+set_option auto.redMode "instances"
 set_option trace.auto.lamReif.printResult true
 set_option trace.auto.lamReif.printValuation true
 
@@ -35,7 +35,7 @@ example (as bs cs : List α) (f : α → β) :
   ((as ++ bs) ++ cs).map f = as.map f ++ (bs.map f ++ cs.map f) := by
   auto [List.append_assoc, List.map_append]
 
-set_option auto.prep.redMode "reducible"
+set_option auto.redMode "reducible"
 
 set_option trace.auto.printLemmas true in
 example (as bs cs ds : List β) : (as ++ bs) ++ (cs ++ ds) = as ++ (bs ++ (cs ++ ds)) := by
@@ -51,7 +51,7 @@ end SimpleClass
 
 section SimpleMathlib
 
-set_option auto.prep.redMode "reducible"
+set_option auto.redMode "reducible"
 set_option trace.auto.lamReif.printResult true
 set_option trace.auto.lamReif.printValuation true
 
@@ -253,7 +253,7 @@ variable (square₁      : ∀ b, l (g₀ b) = g₁ (k b))
 open is_short_exact
 
 set_option auto.proofReconstruction true
-set_option auto.prep.redMode "reducible"
+set_option auto.redMode "reducible"
 set_option trace.auto.lamReif.printProofs true
 set_option trace.auto.lamReif.printValuation true
 

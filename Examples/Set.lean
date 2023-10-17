@@ -69,18 +69,18 @@ def evens : Set ℕ :=
 def odds : Set ℕ :=
   { n | ¬Even n }
 
-set_option auto.prep.redMode "all" in
+set_option auto.redMode "all" in
 example : evens ∪ odds = univ := by
   auto
 
 #check mem_empty_iff_false
 #check mem_univ
 
-set_option auto.prep.redMode "all" in
+set_option auto.redMode "all" in
 example (x : ℕ) (h : x ∈ (∅ : Set ℕ)) : False := by
   auto
 
-set_option auto.prep.redMode "all" in
+set_option auto.redMode "all" in
 example (x : ℕ) : x ∈ (univ : Set ℕ) := by
   auto
 

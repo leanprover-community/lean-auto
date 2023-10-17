@@ -577,12 +577,12 @@ namespace FVarRep
     trace[auto.mono.printConstInst] "New {ci}"
     setCiMap ((← getCiMap).insert ci.fingerPrint (insts.push ci))
 
-  def processType : Expr → FVarRepM Unit
+  def processTypeAux : Expr → FVarRepM Unit
   | .forallE _ ty body _ => do
     if body.hasLooseBVar 0 then
       return
-    processType ty
-    processType body
+    processTypeAux ty
+    processTypeAux body
   | e => do
     let e := Expr.eraseMData e
     if (← getTyCanMap).contains e then
@@ -592,6 +592,10 @@ namespace FVarRep
         setTyCanMap ((← getTyCanMap).insert e ec)
         return
     setTyCanMap ((← getTyCanMap).insert e e)
+
+  def processType (e : Expr) : FVarRepM Unit := do
+    let e ← MetaState.runMetaM <| prepReduceExpr e
+    processTypeAux e
 
   def ConstInst2FVarId (ci : ConstInst) : FVarRepM FVarId := do
     let ciMap ← FVarRep.getCiMap

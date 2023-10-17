@@ -3,6 +3,7 @@ import Auto.Lib.ExprExtra
 import Auto.Lib.MessageData
 import Auto.Lib.MetaExtra
 import Auto.Lib.MonadUtils
+import Auto.Translation.Reduction
 open Lean
 
 initialize
@@ -84,6 +85,7 @@ private def collectSimpleInduct
   let ctors ← (Array.mk val.ctors).mapM (fun ctorname => do
     let instctor := mkAppN (Expr.const ctorname lvls) args
     let type ← Meta.inferType instctor
+    let type ← prepReduceExpr type
     return (instctor, type))
   return ⟨tyctor, mkAppN (Expr.const tyctor lvls) args, ctors⟩
 
@@ -113,7 +115,7 @@ mutual
     let .some arr := (← getRecorded).find? tyctor
       | throwError "collectAppInstSimpleInduct :: Unexpected error"
     for e' in arr do
-      if ← Meta.withDefault <| Meta.isDefEq e e' then
+      if ← Meta.isDefEq e e' then
         return
     for tyctor' in val.all do
       setRecorded ((← getRecorded).insert tyctor' (arr.push (mkAppN (.const tyctor' lvls) args)))

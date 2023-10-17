@@ -152,7 +152,7 @@ def collectDefeqLemmas (names : Array Name) : TacticM (Array Lemma) :=
       return ⟨proof, type, params⟩)
 
 def unfoldConstAndPreprocessLemma (unfolds : Array Prep.ConstUnfoldInfo) (lem : Lemma) : MetaM Lemma := do
-  let type ← Prep.preprocessExpr (← instantiateMVars lem.type)
+  let type ← prepReduceExpr (← instantiateMVars lem.type)
   let type := Prep.unfoldConsts unfolds type
   let type ← Core.betaReduce (← instantiateMVars type)
   let lem := {lem with type := type}
@@ -163,14 +163,14 @@ def unfoldConstAndPreprocessLemma (unfolds : Array Prep.ConstUnfoldInfo) (lem : 
   We assume that all defeq facts have the form
     `∀ (x₁ : ⋯) ⋯ (xₙ : ⋯), c ... = ...`
   where `c` is a constant. To avoid `whnf` from reducing
-  `c`, we call `forallTelescope`, then call `Prep.preprocessExpr`
+  `c`, we call `forallTelescope`, then call `prepReduceExpr`
   on
   · All the arguments of `c`, and
   · The right-hand side of the equation
 -/
-def unfoldConstAndPreprocessDefeq (unfolds : Array Prep.ConstUnfoldInfo) (lem : Lemma) : MetaM Lemma := do
-  let .some type ← Prep.preprocessDefeq (← instantiateMVars lem.type)
-    | throwError "unfoldConstAndPreprocessDefeq :: Unrecognized definitional equation {lem.type}"
+def unfoldConstAndprepReduceDefeq (unfolds : Array Prep.ConstUnfoldInfo) (lem : Lemma) : MetaM Lemma := do
+  let .some type ← prepReduceDefeq (← instantiateMVars lem.type)
+    | throwError "unfoldConstAndprepReduceDefeq :: Unrecognized definitional equation {lem.type}"
   let type := Prep.unfoldConsts unfolds type
   let type ← Core.betaReduce (← instantiateMVars type)
   let lem := {lem with type := type}
@@ -209,7 +209,7 @@ def collectAllLemmas (hintstx : TSyntax ``hints) (unfolds : TSyntax `Auto.unfold
   let userLemmas ← userLemmas.mapM (m:=MetaM) (unfoldConstAndPreprocessLemma unfoldInfos)
   traceLemmas "Lemmas collected from user-provided terms:" userLemmas
   let defeqLemmas ← collectDefeqLemmas defeqNames
-  let defeqLemmas ← defeqLemmas.mapM (m:=MetaM) (unfoldConstAndPreprocessDefeq unfoldInfos)
+  let defeqLemmas ← defeqLemmas.mapM (m:=MetaM) (unfoldConstAndprepReduceDefeq unfoldInfos)
   traceLemmas "Lemmas collected from user-provided defeq hints:" defeqLemmas
   trace[auto.tactic] "Preprocessing took {(← IO.monoMsNow) - startTime}ms"
   let inhFacts ← Inhabitation.getInhFactsFromLCtx
