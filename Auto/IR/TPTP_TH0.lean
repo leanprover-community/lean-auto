@@ -44,6 +44,7 @@ def transLamBaseSort : LamBaseSort → String
 | .isto0 p =>
   match p with
   | .xH => "s_string"
+  | .xO .xH => "s_empty"
   | _   => "s_empty"
 | .bv n    => s!"s_bv{n}"
 
@@ -167,8 +168,16 @@ def transLamBaseTerm : LamBaseTerm → Except String String
 | .forallEI _ => .error "transLamBaseTerm :: forallEI should not occur here"
 | .existEI _  => .error "transLamBaseTerm :: existEI should not occur here"
 | .eq _       => .ok s!"(=)"
-| .forallE _  => .ok s!"!!"
-| .existE _   => .ok s!"??"
+| .forallE s  =>
+  if s == .base .empty then
+    .ok s!"(^ [EPF : {transLamSort (.func s (.base .prop))}] : $true)"
+  else
+    .ok s!"!!"
+| .existE s   =>
+  if s == .base .empty then
+    .ok s!"(^ [EPF : {transLamSort (.func s (.base .prop))}] : $false)"
+  else
+    .ok s!"??"
 
 partial def transLamTerm (t : LamTerm) (lctx := 0) : Except String String :=
   match t with
@@ -201,9 +210,15 @@ where
       | _ => .error "transLamTerm :: Unexpected error"
     match info with
     | .ok (qs, s) =>
-      match transLamTerm (expandQuantBody s body) (lctx + 1) with
-      | .ok bs => .ok s!"({qs} [X{lctx} : {transLamSort s}] : {bs})"
-      | .error e => .error e
+      if s == .base .empty then
+        match quant with
+        | .base (.forallE _) => .ok "$true"
+        | .base (.existE _) => .ok "$false"
+        | _ => .error "transLamTerm :: Unexpected error"
+      else
+        match transLamTerm (expandQuantBody s body) (lctx + 1) with
+        | .ok bs => .ok s!"({qs} [X{lctx} : {transLamSort s}] : {bs})"
+        | .error e => .error e
     | .error e => .error e
 
 end Auto.Lam2TH0

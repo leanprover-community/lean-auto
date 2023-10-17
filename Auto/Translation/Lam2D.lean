@@ -95,6 +95,7 @@ def interpLamSortAsUnlifted : LamSort → ExternM Expr
   | .isto0 p =>
     match p with
     | .xH => return .const ``String []
+    | .xO .xH => return .const ``Empty []
     | _   => return .const ``Empty []
   | .bv n    => return .app (.const ``Bitvec []) (.lit (.natVal n))
 | .func s₁ s₂ => do

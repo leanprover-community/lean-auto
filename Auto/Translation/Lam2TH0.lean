@@ -31,6 +31,9 @@ def lam2TH0 (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort) (facts : Arra
       let .some s := lamEVarTy.get? i
         | throwError "lam2TH0 :: Unexpected error"
       return s!"thf(typedecl_t_e{i}, type, t_e{i}: {transLamSort s})."))
+  -- Empty type is not inhabited
+  if (lamVarTy ++ lamEVarTy).any (fun s => s == .base .empty) then
+    return "thf(empty_inhabited, axiom, $false)."
   let facts ← facts.zipWithIndex.mapM (fun (t, i) =>
     match transLamTerm t with
     | .ok ts => return s!"thf(fact{i}, axiom, {ts})."

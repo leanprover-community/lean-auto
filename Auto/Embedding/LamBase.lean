@@ -25,6 +25,7 @@ inductive LamBaseSort
     For each `p : Pos`, `isto0 p` is an interpreted sort
     `p`       `isto0 p`
     .xH        String
+    .xO .xH    Empty
     _          Empty
   -/
   | isto0  : Pos → LamBaseSort
@@ -32,6 +33,8 @@ inductive LamBaseSort
 deriving Hashable, Inhabited, Lean.ToExpr
 
 def LamBaseSort.string := LamBaseSort.isto0 .xH
+
+def LamBaseSort.empty := LamBaseSort.isto0 (.xO .xH)
 
 def LamBaseSort.reprPrec (b : LamBaseSort) (n : Nat) :=
   let str :=
@@ -133,8 +136,9 @@ instance : LawfulBEq LamBaseSort where
   rfl := LamBaseSort.beq_refl
 
 @[reducible] def LamBaseSort.isto0_interp.{u} : Pos → Type u
-| .xH => GLift String
-| _   => GLift Empty
+| .xH     => GLift String
+| .xO .xH => GLift Empty
+| _       => GLift Empty
 
 @[reducible] def LamBaseSort.interp.{u} : LamBaseSort → Type u
 | .prop    => GLift Prop

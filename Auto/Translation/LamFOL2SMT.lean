@@ -32,6 +32,7 @@ private def lamBaseSort2SSort : LamBaseSort → SSort
 | .isto0 p =>
   match p with
   | .xH => .app (.symb "String") #[]
+  | .xO .xH => .app (.symb "Empty") #[]
   | _   => .app (.symb "Empty") #[]
 | .bv n   => .app (.indexed "BitVec" (.inr n)) #[]
 
@@ -136,6 +137,9 @@ private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtom STerm
 def lamTermAtom2String (lamVarTy : Array LamSort) (n : Nat) : TransM LamAtom (LamSort × String) := do
   let .some s := lamVarTy[n]?
     | throwError "lamTermAtom2String :: Unexpected term atom {repr (LamTerm.atom n)}"
+  -- Empty type is not inhabited
+  if s == .base .empty then
+    addCommand (.assert (.qStrApp "false" #[]))
   if !(← hIn (.term n)) then
     let name ← h2Symb (.term n)
     let (argSorts, resSort) ← lamSort2SSort s
@@ -146,6 +150,9 @@ def lamTermAtom2String (lamVarTy : Array LamSort) (n : Nat) : TransM LamAtom (La
 def lamTermEtom2String (lamEVarTy : Array LamSort) (n : Nat) : TransM LamAtom (LamSort × String) := do
   let .some s := lamEVarTy[n]?
     | throwError "lamTerm2STerm :: Unexpected etom {repr (LamTerm.etom n)}"
+  -- Empty type is not inhabited
+  if s == .base .empty then
+    addCommand (.assert (.qStrApp "false" #[]))
   if !(← hIn (.etom n)) then
     let name ← h2Symb (.etom n)
     let (argSorts, resSort) ← lamSort2SSort s
@@ -189,6 +196,9 @@ private partial def lamTerm2STerm (lamVarTy lamEVarTy : Array LamSort) :
   let arg₂' ← lamTerm2STerm lamVarTy lamEVarTy arg₂
   return .qIdApp (QualIdent.ofString "=") #[arg₁', arg₂']
 | .app _ (.base (.forallE _)) (.lam s body) => do
+  -- Empty type is not inhabited
+  if s == .base .empty then
+    return .qStrApp "true" #[]
   let s' ← lamSort2SSortAux s
   let dname ← disposableName
   let mut body' ← lamTerm2STerm lamVarTy lamEVarTy body
@@ -196,6 +206,9 @@ private partial def lamTerm2STerm (lamVarTy lamEVarTy : Array LamSort) :
     body' := .qStrApp "=>" #[.qStrApp ">=" #[.bvar 0, .sConst (.num 0)], body']
   return .forallE dname s' body'
 | .app _ (.base (.existE _)) (.lam s body) => do
+  -- Empty type is not inhabited
+  if s == .base .empty then
+    return .qStrApp "false" #[]
   let s' ← lamSort2SSortAux s
   let dname ← disposableName
   let mut body' ← lamTerm2STerm lamVarTy lamEVarTy body

@@ -496,6 +496,15 @@ section Adhoc
     : String.isPrefixOf a b = String.isPrefixOf a b ∧
       String.replace a b a = String.replace a b a := by auto
 
+  -- TPTP/SMT support for `Empty`
+  set_option auto.tptp true in
+  example (f : ((Empty → Prop) → Prop) → Prop) :
+    f Auto.Embedding.forallF = f Auto.Embedding.forallF := by auto
+
+  set_option auto.tptp true in
+  example (f : ((Empty → Prop) → Prop) → Prop) :
+    f Exists = f Exists := by auto
+
 end Adhoc
 
 -- Issues

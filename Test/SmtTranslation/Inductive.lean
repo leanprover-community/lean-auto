@@ -9,10 +9,9 @@ section Enum
 
   example (x y : Unit) : x = y := by auto
 
-  -- **TODO**:
-  -- SMT solver does not understand empty type,
-  -- This can be fixed by translating `∀ x : Empty` as `True`, `∃ x : Empty` as `False`, and any `fvar : Empty` as `False`
   example (x y : Empty) : x = y := by auto
+
+  example (_ : ¬ (∀ x y : Empty, False)) : False := by auto
 
   private inductive Color where
     | red
