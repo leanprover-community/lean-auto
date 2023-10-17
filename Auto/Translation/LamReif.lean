@@ -936,9 +936,18 @@ section CheckerUtils
     let v ← validOfEtaReduceNAt v m.size [false, true]
     return .some v
 
-  def recognizeDefsAndUnfold (vs : Array REntry) : ReifM (Array REntry) := do
+  /--
+    Recognize all definitions-like facts within `vs`, exhaustively
+      rewrite using them and remove them in the end
+    Meanwhile, all λterms in the `ts` are rewritten using the
+      recognied definitions
+  -/
+  def recognizeDefsAndUnfold
+    (vs : Array REntry) (minds : Array MutualIndInfo) :
+    ReifM (Array REntry × Array MutualIndInfo) := do
     let mut active := vs.reverse
     let mut passive := #[]
+    let mut minds := minds
     while true do
       let .some back := active.back?
         | break
@@ -946,7 +955,7 @@ section CheckerUtils
       let .some v' ← toDefinition? back
         | passive := passive.push back; continue
       trace[auto.lamReif.prep.def] "Entry {back} is def-like and is turned into {v'}"
-      let .valid [] (.app _ (.app _ (.base (.eq _)) lhs) rhs) := v'
+      let .valid [] rw@(.app _ (.app _ (.base (.eq _)) lhs) rhs) := v'
         | throwError "recognizeDefsAndUnfold :: Unexpected definition entry {v'}"
       -- If the left-hand-side occurs inside the right-hand-side,
       --   then this definition is recursive and we will not unfold it
@@ -954,27 +963,33 @@ section CheckerUtils
         passive := passive.push back; continue
       passive ← passive.mapM (validOfMpAll · v')
       active ← active.mapM (validOfMpAll · v')
-    return passive
+      minds ← minds.mapM (fun mind => do
+        let .some mind := mind.mpAll? rw
+          | throwError "recognizeDefsAndUnfold :: Unexpected error"
+        return mind)
+    return (passive, minds)
 
   register_option auto.lamReif.prep.def : Bool := {
     defValue := true
     descr := "Recognize and unfold definitions"
   }
 
-  def preprocess (vs : Array REntry) : ReifM (Array REntry) := do
+  def preprocess
+    (vs : Array REntry) (minds : Array MutualIndInfo) :
+    ReifM (Array REntry × Array MutualIndInfo) := do
     let vs ← vs.mapM skolemizeMostIntoForall
     let vs ← vs.mapM validOfExtensionalize
     let vs ← vs.mapM validOfBetaReduce
-    let vs :=
-      (if auto.lamReif.prep.def.get (← getOptions) then
-        ← recognizeDefsAndUnfold vs
-       else
-        vs)
+    let (vs, minds) ← (do
+      if auto.lamReif.prep.def.get (← getOptions) then
+        recognizeDefsAndUnfold vs minds
+      else
+        return (vs, minds))
     let vs ← vs.mapM validOfBetaReduce
     let vs ← vs.mapM validOfRevertAll
     for v in vs do
       trace[auto.lamReif.prep.printResult] "{v}"
-    return vs
+    return (vs, minds)
 
   def auxLemmas (vs : Array REntry) : ReifM (Array REntry) := do
     let mut ret := #[]

@@ -28,6 +28,7 @@ section NonRecursive
 
   -- **TODO**:
   -- Requires higher-order to first-order translation
+  set_option trace.auto.printLemmas true in
   example (x : Option α) : Option.orElse x (fun _ => Option.none) = x := by auto
 
   -- **TODO**:
@@ -81,6 +82,11 @@ section Mixed
     auto d[List.get?]
 
   example (x : α) : List.head? [x] = .some x := by
+    have h₁ : List.head? (α := α) [] = .none := rfl
+    have h₂ : ∀ (x : α) (ys : _), List.head? (x :: ys) = .some x := fun _ _ => rfl
+    auto
+
+  example (x : α) (y : List α) : List.head? (x :: y) = .some x := by
     have h₁ : List.head? (α := α) [] = .none := rfl
     have h₂ : ∀ (x : α) (ys : _), List.head? (x :: ys) = .some x := fun _ _ => rfl
     auto

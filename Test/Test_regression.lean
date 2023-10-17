@@ -13,6 +13,8 @@ set_option auto.tptp.zeport.path "/home/indprinciple/Programs/zipperposition/por
 
 section ManualCheck
 
+  set_option auto.lamReif.prep.def false
+
   -- In `Checker Statistics`, check that the `assertions` field is `1`
   set_option auto.optimizeCheckerProof true in
   set_option trace.auto.buildChecker true in

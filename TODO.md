@@ -5,6 +5,15 @@ __Auto Issues:__
 * Improve portfolio mode script. Download E and zipperposition from the web.
 * Floating point numbers
 * String: Some string operations missing in Lean
+* UnfoldProj does not work with non-struct inductive types. For example, suppose we have
+  ```lean
+  inductive Nonstruct where
+    | mk : Nat → Bool → Nonstruct
+  ```
+  we can still do projection:
+  ```
+  #check (fun (x : Nonstruct) => x.1)
+  ```
 
 __Lean Issues:__
 * ``cases`` fails on some simple examples. E.g, ``cases h : a.beq b`` fails if the goal contains term

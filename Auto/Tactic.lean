@@ -225,19 +225,20 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
   let lemmas := lemmas.append (← auxLemmas lemmas)
   match instr with
   | .none =>
-    let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) (inds : Array (Array SimpleIndVal)) : LamReif.ReifM Expr := (do
+    let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) (minds : Array (Array SimpleIndVal)) : LamReif.ReifM Expr := (do
       let exportFacts ← LamReif.reifFacts uvalids
       let exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
       let _ ← LamReif.reifInhabitations uinhs
       let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
         (fun (s, _) => Embedding.Lam.REntry.nonempty s)
+      let exportInds ← LamReif.reifMutInds minds
       -- **Preprocessing in Verified Checker**
-      let exportFacts ← LamReif.preprocess exportFacts
+      let (exportFacts, exportInds) ← LamReif.preprocess exportFacts exportInds
       let exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)
       -- **TPTP**
       if (auto.tptp.get (← getOptions)) then queryTPTP exportFacts
       -- **SMT**
-      if (auto.smt.get (← getOptions)) then querySMT exportFacts inds
+      if (auto.smt.get (← getOptions)) then querySMT exportFacts exportInds
       -- **Proof Reconstruction**
       if (auto.proofReconstruction.get (← getOptions)) then
         reconstruct declName? exportFacts exportInhs
@@ -267,16 +268,15 @@ where
       Solver.TPTP.querySolver query
     catch e =>
       trace[auto.tptp.result] "TPTP invocation failed with {e.toMessageData}"
-  querySMT exportFacts inds : LamReif.ReifM Unit :=
+  querySMT exportFacts exportInds : LamReif.ReifM Unit :=
     try
-      let inds ← LamReif.reifMutInds inds
       let lamVarTy := (← LamReif.getVarVal).map Prod.snd
       let lamEVarTy ← LamReif.getLamEVarTy
       let exportLamTerms ← exportFacts.mapM (fun re => do
         match re with
         | .valid [] t => return t
         | _ => throwError "runAuto :: Unexpected error")
-      let commands ← (lamFOL2SMT lamVarTy lamEVarTy exportLamTerms inds).run'
+      let commands ← (lamFOL2SMT lamVarTy lamEVarTy exportLamTerms exportInds).run'
       for cmd in commands do
         trace[auto.smt.printCommands] "Command: {cmd}"
       Solver.SMT.querySolver commands
