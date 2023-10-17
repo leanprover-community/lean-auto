@@ -7,9 +7,7 @@ set_option auto.proofReconstruction false
 
 section Enum
 
-  set_option trace.auto.printLemmas true in
-  set_option trace.auto.mono.printResult true in
-  example (x y : Unit) : x = y := by auto
+  example (x y : Unit) : x = y ∧ x = () := by auto
 
   example (x y : Empty) : x = y := by auto
 
