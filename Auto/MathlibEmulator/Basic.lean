@@ -51,15 +51,4 @@ section Real
 
 end Real
 
-section Bitvec
-
-  def Vector (α : Type u) (n : Nat) :=
-    { l : List α // l.length = n }
-
-  @[reducible]
-  def Bitvec (n : Nat) :=
-    Vector Bool n
-
-end Bitvec
-
 end Auto
