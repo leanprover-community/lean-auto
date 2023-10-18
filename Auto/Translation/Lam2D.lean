@@ -97,7 +97,7 @@ def interpLamSortAsUnlifted : LamSort → ExternM Expr
     | .xH => return .const ``String []
     | .xO .xH => return .const ``Empty []
     | _   => return .const ``Empty []
-  | .bv n    => return .app (.const ``Bitvec []) (.lit (.natVal n))
+  | .bv n    => return .app (.const ``Std.BitVec []) (.lit (.natVal n))
 | .func s₁ s₂ => do
   return .forallE `_ (← interpLamSortAsUnlifted s₁) (← interpLamSortAsUnlifted s₂) .default
 
@@ -142,9 +142,7 @@ def interpNatConstAsUnlifted : NatConst → Expr
 | .ndiv     => .const ``Nat.div []
 | .nmod     => .const ``Nat.mod []
 | .nle      => .const ``Nat.le []
-| .nge      => .const ``Nat.ge []
 | .nlt      => .const ``Nat.lt []
-| .ngt      => .const ``Nat.gt []
 
 open Embedding in
 def interpIntConstAsUnlifted : IntConst → Expr
@@ -161,9 +159,7 @@ def interpIntConstAsUnlifted : IntConst → Expr
 | .iediv    => .const ``Int.ediv []
 | .iemod    => .const ``Int.emod []
 | .ile      => .const ``Int.le []
-| .ige      => .const ``Int.ge []
 | .ilt      => .const ``Int.lt []
-| .igt      => .const ``Int.gt []
 
 open Embedding in
 def interpStringConstAsUnlifted : StringConst → Expr
@@ -171,11 +167,45 @@ def interpStringConstAsUnlifted : StringConst → Expr
 | .slength   => .const ``String.length []
 | .sapp      => .const ``String.append []
 | .sle       => .const ``String.le []
-| .sge       => .const ``String.ge []
 | .slt       => .const ``String.lt []
-| .sgt       => .const ``String.gt []
 | .sprefixof => .const ``String.isPrefixOf []
 | .srepall   => .const ``String.replace []
+
+open Embedding in
+def interpBitVecConstAsUnlifted : BitVecConst → Expr
+| .bvlit n i         => mkApp2 (.const ``Std.BitVec.ofNat []) (.lit (.natVal n)) (.lit (.natVal i))
+| .bvofNat n         => .app (.const ``Std.BitVec.ofNat []) (.lit (.natVal n))
+| .bvtoNat n         => .app (.const ``Std.BitVec.toNat []) (.lit (.natVal n))
+| .bvofInt n         => .app (.const ``Std.BitVec.ofInt []) (.lit (.natVal n))
+| .bvtoInt n         => .app (.const ``Std.BitVec.toInt []) (.lit (.natVal n))
+| .bvadd n           => .app (.const ``Std.BitVec.add []) (.lit (.natVal n))
+| .bvsub n           => .app (.const ``Std.BitVec.sub []) (.lit (.natVal n))
+| .bvneg n           => .app (.const ``Std.BitVec.neg []) (.lit (.natVal n))
+| .bvabs n           => .app (.const ``Std.BitVec.abs []) (.lit (.natVal n))
+| .bvmul n           => .app (.const ``Std.BitVec.mul []) (.lit (.natVal n))
+| .bvudiv n          => .app (.const ``Std.BitVec.udiv []) (.lit (.natVal n))
+| .bvurem n          => .app (.const ``Std.BitVec.umod []) (.lit (.natVal n))
+| .bvsdiv n          => .app (.const ``Std.BitVec.sdiv []) (.lit (.natVal n))
+| .bvsrem n          => .app (.const ``Std.BitVec.srem []) (.lit (.natVal n))
+| .bvsmod n          => .app (.const ``Std.BitVec.smod []) (.lit (.natVal n))
+| .bvult n           => .app (.const ``Std.BitVec.ult []) (.lit (.natVal n))
+| .bvule n           => .app (.const ``Std.BitVec.ule []) (.lit (.natVal n))
+| .bvslt n           => .app (.const ``Std.BitVec.slt []) (.lit (.natVal n))
+| .bvsle n           => .app (.const ``Std.BitVec.sle []) (.lit (.natVal n))
+| .bvand n           => .app (.const ``Std.BitVec.and []) (.lit (.natVal n))
+| .bvor n            => .app (.const ``Std.BitVec.or []) (.lit (.natVal n))
+| .bvxor n           => .app (.const ``Std.BitVec.xor []) (.lit (.natVal n))
+| .bvnot n           => .app (.const ``Std.BitVec.not []) (.lit (.natVal n))
+| .bvshl n           => .app (.const ``Std.BitVec.shiftLeft []) (.lit (.natVal n))
+| .bvlshr n          => .app (.const ``Std.BitVec.ushiftRight []) (.lit (.natVal n))
+| .bvashr n          => .app (.const ``Std.BitVec.sshiftRight []) (.lit (.natVal n))
+| .bvrotateLeft w    => .app (.const ``Std.BitVec.rotateLeft []) (.lit (.natVal w))
+| .bvrotateRight w   => .app (.const ``Std.BitVec.rotateRight []) (.lit (.natVal w))
+| .bvappend n m      => mkApp2 (.const ``Std.BitVec.append []) (.lit (.natVal n)) (.lit (.natVal m))
+| .bvextract n h l   => mkApp3 (.const ``Std.BitVec.extractLsb []) (.lit (.natVal n)) (.lit (.natVal h)) (.lit (.natVal l))
+| .bvrepeat w i      => mkApp2 (.const ``Std.BitVec.replicate []) (.lit (.natVal w)) (.lit (.natVal i))
+| .bvzeroExtend w v  => mkApp2 (.const ``Std.BitVec.zeroExtend []) (.lit (.natVal w)) (.lit (.natVal v))
+| .bvsignExtend w v  => mkApp2 (.const ``Std.BitVec.signExtend []) (.lit (.natVal w)) (.lit (.natVal v))
 
 open Embedding in
 def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
@@ -193,7 +223,7 @@ def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
 | .ncst nc    => return interpNatConstAsUnlifted nc
 | .icst ic    => return interpIntConstAsUnlifted ic
 | .scst sc    => return interpStringConstAsUnlifted sc
-| .bvVal _    => throwError "Not implemented"
+| .bvcst bvc  => return interpBitVecConstAsUnlifted bvc
 | .eqI _      => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
 | .forallEI _ => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
 | .existEI _  => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)

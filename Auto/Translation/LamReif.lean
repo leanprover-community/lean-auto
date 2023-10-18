@@ -443,7 +443,7 @@ partial def updownFunc (s : LamSort) : ReifM (Expr × Expr × Expr × Expr) :=
         | _   => Expr.const ``Empty []
       return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
     | .bv n =>
-      let ty := Expr.app (.const ``Bitvec []) (.lit (.natVal n))
+      let ty := Expr.app (.const ``Std.BitVec []) (.lit (.natVal n))
       return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
   | .func s₁ s₂ => do
     let (uf₁, df₁, ty₁, tyUp₁) ← updownFunc s₁
@@ -977,6 +977,7 @@ section CheckerUtils
   def preprocess
     (vs : Array REntry) (minds : Array MutualIndInfo) :
     ReifM (Array REntry × Array MutualIndInfo) := do
+    let vs ← vs.mapM validOfBetaReduce
     let vs ← vs.mapM skolemizeMostIntoForall
     let vs ← vs.mapM validOfExtensionalize
     let vs ← vs.mapM validOfBetaReduce
@@ -1043,7 +1044,11 @@ def processTypeExpr (e : Expr) : ReifM LamSort := do
   | .const ``Int [] => return .base .int
   | .const ``String [] => return .base .string
   | .const ``Empty [] => return .base .empty
-  | .app (.const ``Bitvec []) (.lit (.natVal n)) => return .base (.bv n)
+  | .app (.const ``Std.BitVec []) natExpr =>
+    if let .some n ← @id (MetaM _) (Meta.evalNat natExpr) then
+      return .base (.bv n)
+    else
+      newTypeExpr e
   | _ => newTypeExpr e
 
 -- At this point, there should only be non-dependent `∀`s in the type.
@@ -1059,6 +1064,18 @@ private def reifTypeAux : Expr → ReifM LamSort
 def reifType (e : Expr) : ReifM LamSort := do
   let e ← prepReduceExpr e
   reifTypeAux e
+
+-- Auxiliary definitions for reification
+abbrev Nat.ge (x y : Nat) := Nat.le y x
+abbrev Nat.gt (x y : Nat) := Nat.lt y x
+abbrev Int.ge (a b : Int) := Int.le b a
+abbrev Int.gt (a b : Int) := Int.lt b a
+abbrev String.ge (a b : String) : Prop := b = a ∨ b < a
+abbrev String.gt (a b : String) : Prop := b < a
+abbrev BitVec.bvuge (a b : Std.BitVec n) : Bool := Std.BitVec.ule b a
+abbrev BitVec.bvugt (a b : Std.BitVec n) : Bool := Std.BitVec.ult b a
+abbrev BitVec.bvsge (a b : Std.BitVec n) : Bool := Std.BitVec.sle b a
+abbrev BitVec.bvsgt (a b : Std.BitVec n) : Bool := Std.BitVec.slt b a
 
 def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
   match fn with
@@ -1091,11 +1108,11 @@ def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
     match arg₁ with
     | .const ``Nat _ =>
       if (← Meta.withDefault <| Meta.isDefEq e (.const ``Nat.ge [])) then
-        return .some (.base .nge')
+        return .some .nge'
       return .none
     | .const ``Int _ =>
       if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.ge [])) then
-        return .some (.base .ige')
+        return .some .ige'
       return .none
     | _ => return .none
   | .const ``LT.lt _ =>
@@ -1117,15 +1134,15 @@ def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
     match arg₁ with
     | .const ``Nat _ =>
       if (← Meta.withDefault <| Meta.isDefEq e (.const ``Nat.gt [])) then
-        return .some (.base .ngt')
+        return .some .ngt'
       return .none
     | .const ``Int _ =>
       if (← Meta.withDefault <| Meta.isDefEq e (.const ``Int.gt [])) then
-        return .some (.base .igt')
+        return .some .igt'
       return .none
     | .const ``String _ =>
       if (← Meta.withDefault <| Meta.isDefEq e (.const ``String.gt [])) then
-        return .some (.base .sgt')
+        return .some .sgt'
       return .none
     | _ => return .none
   | _ => return .none
@@ -1250,7 +1267,6 @@ def processNewTermExpr (e : Expr) : ReifM LamTerm :=
     else
       throwError "processTermExpr :: Non-propositional implication is not supported"
   | .const ``Iff [] => return .base .iff
-  -- **TODO: Natural number, Real number, Bit vector**
   | .const ``true [] => return .base .trueb'
   | .const ``false [] => return .base .falseb'
   | .const ``not [] => return .base .notb'
@@ -1265,9 +1281,7 @@ def processNewTermExpr (e : Expr) : ReifM LamTerm :=
   | .const ``Nat.div [] => return .base .ndiv'
   | .const ``Nat.mod [] => return .base .nmod'
   | .const ``Nat.le [] => return .base .nle'
-  | .const ``Nat.ge [] => return .base .nge'
   | .const ``Nat.lt [] => return .base .nlt'
-  | .const ``Nat.gt [] => return .base .ngt'
   | .const ``Int.ofNat [] => return .base .iofNat'
   | .const ``Int.negSucc [] => return .base .inegSucc'
   | .const ``Int.neg [] => return .base .ineg'
@@ -1652,6 +1666,14 @@ section ExportUtils
   def collectLamSortsAtoms (ss : Array LamSort) : HashSet Nat :=
     ss.foldl (fun hs s => hs.insertMany (collectLamSortAtoms s)) HashSet.empty
 
+  def collectLamSortBitVecLengths : LamSort → HashSet Nat
+  | .base (.bv n) => HashSet.empty.insert n
+  | .func a b => (collectLamSortBitVecLengths a).insertMany (collectLamSortBitVecLengths b)
+  | _ => HashSet.empty
+
+  def collectLamSortsBitVecLengths (ss : Array LamSort) : HashSet Nat :=
+    ss.foldl (fun hs s => hs.insertMany (collectLamSortBitVecLengths s)) HashSet.empty
+
   /-- Collect type atoms in a LamBaseTerm -/
   def collectLamBaseTermAtoms (b : LamBaseTerm) : CoreM (HashSet Nat) := do
     let s? : Option LamSort ← (do
@@ -1735,16 +1757,13 @@ section ExportUtils
   def collectLamTermsStringConsts (ts : Array LamTerm) : HashSet StringConst :=
     ts.foldl (fun hs t => mergeHashSet hs (collectLamTermStringConsts t)) HashSet.empty
 
-  def collectLamTermBitvecs : LamTerm → HashSet (List Bool)
-  | .base b =>
-    match b with
-    | .bvVal l => HashSet.empty.insert l
-    | _ => HashSet.empty
+  def collectLamTermBitvecs : LamTerm → HashSet BitVecConst
+  | .base (.bvcst bvc) => HashSet.empty.insert bvc
   | .lam _ body => collectLamTermBitvecs body
   | .app _ fn arg => mergeHashSet (collectLamTermBitvecs fn) (collectLamTermBitvecs arg)
   | _ => HashSet.empty
 
-  def collectLamTermsBitvecs (ts : Array LamTerm) : HashSet (List Bool) :=
+  def collectLamTermsBitvecs (ts : Array LamTerm) : HashSet BitVecConst :=
     ts.foldl (fun hs t => mergeHashSet hs (collectLamTermBitvecs t)) HashSet.empty
 
 end ExportUtils

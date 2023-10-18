@@ -18,15 +18,16 @@ private instance : Hashable (String ⊕ Nat) where
 
 inductive SIdent where
   | symb    : String → SIdent
-  | indexed : String → (String ⊕ Nat) → SIdent
+  | indexed : String → Array (String ⊕ Nat) → SIdent
 deriving BEq, Hashable, Inhabited
 
 def SIdent.toString : SIdent → String
 | .symb s => "|" ++ s ++ "|"
 | .indexed s idx =>
-  match idx with
-  | .inl idx => s!"(_ {s} {idx})"
-  | .inr idx => s!"(_ {s} {idx})"
+  s!"(_ {s} " ++ String.intercalate " " (idx.data.map (fun idx =>
+    match idx with
+    | .inl idx => s!"{idx}"
+    | .inr idx => s!"{idx}")) ++ ")"
 
 instance : ToString SIdent where
   toString := SIdent.toString
@@ -80,6 +81,7 @@ structure MatchCase (α : Sort u) where
 -- **TODO**: Float-point numbers?
 inductive SpecConst where
   | str    : String → SpecConst
+  -- `.binary [xₖ₋₁, ⋯, x₁, x₀]` represents `xₖ₋₁⋯x₁x₀`
   | binary : List Bool → SpecConst
   | num    : Nat → SpecConst
 

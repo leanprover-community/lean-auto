@@ -21,6 +21,8 @@ private inductive LamAtom where
   | sort : Nat → LamAtom
   | term : Nat → LamAtom
   | etom : Nat → LamAtom
+  | bvOfInt : Nat → LamAtom
+  | bvToInt : Nat → LamAtom
 deriving Inhabited, Hashable, BEq
 
 private def lamBaseSort2SSort : LamBaseSort → SSort
@@ -34,7 +36,7 @@ private def lamBaseSort2SSort : LamBaseSort → SSort
   | .xH => .app (.symb "String") #[]
   | .xO .xH => .app (.symb "Empty") #[]
   | _   => .app (.symb "Empty") #[]
-| .bv n   => .app (.indexed "BitVec" (.inr n)) #[]
+| .bv n   => .app (.indexed "BitVec" #[.inr n]) #[]
 
 private def lamSortAtom2String (n : Nat) : TransM LamAtom String := do
   if !(← hIn (.sort n)) then
@@ -72,6 +74,20 @@ private def Int2STerm : Int → STerm
 | .ofNat n   => .sConst (.num n)
 | .negSucc n => .qIdApp (QualIdent.ofString "-") #[.sConst (.num (Nat.succ n))]
 
+private def lamBvOfInt2String (n : Nat) : TransM LamAtom String := do
+  if !(← hIn (.bvOfInt n)) then
+    let name ← h2Symb (.bvOfInt n)
+    let (argSorts, resSort) ← lamSort2SSort (.func (.base .int) (.base (.bv n)))
+    addCommand (.declFun name ⟨argSorts⟩ resSort)
+  return ← h2Symb (.bvOfInt n)
+
+private def lamBvToInt2String (n : Nat) : TransM LamAtom String := do
+  if !(← hIn (.bvToInt n)) then
+    let name ← h2Symb (.bvToInt n)
+    let (argSorts, resSort) ← lamSort2SSort (.func (.base (.bv n)) (.base .int))
+    addCommand (.declFun name ⟨argSorts⟩ resSort)
+  return ← h2Symb (.bvToInt n)
+
 private def lamBaseTerm2STerm_Arity3 (arg1 arg2 arg3 : STerm) : LamBaseTerm → TransM LamAtom STerm
 | .scst .srepall => return .qStrApp "str.replace_all" #[arg1, arg2, arg3]
 | t              => throwError "lamTerm2STerm :: The arity of {repr t} is not 3"
@@ -89,9 +105,7 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .ncst .ndiv => return .qStrApp "iediv" #[arg1, arg2]
 | .ncst .nmod => return .qStrApp "iemod" #[arg1, arg2]
 | .ncst .nle  => return .qStrApp "<=" #[arg1, arg2]
-| .ncst .nge  => return .qStrApp ">=" #[arg1, arg2]
 | .ncst .nlt  => return .qStrApp "<" #[arg1, arg2]
-| .ncst .ngt  => return .qStrApp ">" #[arg1, arg2]
 | .icst .iadd => return .qStrApp "+" #[arg1, arg2]
 | .icst .isub => return .qStrApp "-" #[arg1, arg2]
 | .icst .imul => return .qStrApp "*" #[arg1, arg2]
@@ -100,15 +114,46 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .icst .iediv => return .qStrApp "iediv" #[arg1, arg2]
 | .icst .iemod => return .qStrApp "iemod" #[arg1, arg2]
 | .icst .ile  => return .qStrApp "<=" #[arg1, arg2]
-| .icst .ige  => return .qStrApp ">=" #[arg1, arg2]
 | .icst .ilt  => return .qStrApp "<" #[arg1, arg2]
-| .icst .igt  => return .qStrApp ">" #[arg1, arg2]
 | .scst .sapp => return .qStrApp "str.++" #[arg1, arg2]
 | .scst .sle  => return .qStrApp "str.<=" #[arg1, arg2]
-| .scst .sge  => return .qStrApp "str.<=" #[arg2, arg1]
 | .scst .slt  => return .qStrApp "str.<" #[arg1, arg2]
-| .scst .sgt  => return .qStrApp "str.<" #[arg2, arg1]
 | .scst .sprefixof => return .qStrApp "str.prefixof" #[arg1, arg2]
+| .bvcst (.bvadd _) => return .qStrApp "bvadd" #[arg1, arg2]
+| .bvcst (.bvsub _) => return .qStrApp "bvadd" #[arg1, .qStrApp "bvneg" #[arg2]]
+| .bvcst (.bvudiv _) => return .qStrApp "bvudiv" #[arg1, arg2]
+| .bvcst (.bvurem _) => return .qStrApp "bvurem" #[arg1, arg2]
+-- **Not in SMT-Lib 2.6?**
+| .bvcst (.bvsdiv _) => return .qStrApp "bvsdiv" #[arg1, arg2]
+-- **Not in SMT-Lib 2.6?**
+| .bvcst (.bvsrem _) => return .qStrApp "bvsrem" #[arg1, arg2]
+-- **Not in SMT-Lib 2.6?**
+| .bvcst (.bvsmod _) => return .qStrApp "bvsmod" #[arg1, arg2]
+| .bvcst (.bvult _) => return .qStrApp "bvult" #[arg1, arg2]
+-- **Not in SMT-Lib 2.6?**
+| .bvcst (.bvule _) => return .qStrApp "bvule" #[arg1, arg2]
+-- **Not in SMT-Lib 2.6?**
+| .bvcst (.bvslt _) => return .qStrApp "bvslt" #[arg1, arg2]
+-- **Not in SMT-Lib 2.6?**
+| .bvcst (.bvsle _) => return .qStrApp "bvsle" #[arg1, arg2]
+| .bvcst (.bvand _) => return .qStrApp "bvand" #[arg1, arg2]
+| .bvcst (.bvor _) => return .qStrApp "bvor" #[arg1, arg2]
+-- **Not in SMT-Lib 2.6?**
+| .bvcst (.bvxor _) => return .qStrApp "bvxor" #[arg1, arg2]
+| .bvcst (.bvshl _) => throwError "std type mismatches smt-lib"
+| .bvcst (.bvlshr _) => throwError "std type mismatches smt-lib"
+| .bvcst (.bvashr _) => throwError "std type mismatches smt-lib"
+| .bvcst (.bvrotateLeft _) => throwError "std type mismatches smt-lib"
+| .bvcst (.bvrotateRight _) => throwError "std type mismatches smt-lib"
+| .bvcst (.bvappend _ _) => return .qStrApp "concat" #[arg1, arg2]
+| .bvcst (.bvextract _ h l) => do
+  let l := min h l
+  return .qIdApp (.ident (.indexed "extract" #[.inr h, .inr l])) #[arg1, arg2]
+| .bvcst (.bvrepeat _ _) => throwError "don't know how to deal with bvrepeat"
+-- **Not in SMT-Lib 2.6?**
+| .bvcst (.bvzeroExtend _ _) => return .qStrApp "zero_extend" #[arg1, arg2]
+-- **Not in SMT-Lib 2.6?**
+| .bvcst (.bvsignExtend _ _) => return .qStrApp "sign_extend" #[arg1, arg2]
 | t           => throwError "lamTerm2STerm :: The arity of {repr t} is not 2"
 
 private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamAtom STerm
@@ -119,20 +164,30 @@ private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamA
 | .icst .iabs     => return .qStrApp "abs" #[arg]
 | .icst .ineg     => return .qStrApp "-" #[Int2STerm 0, arg]
 | .scst .slength  => return .qStrApp "str.len" #[arg]
+| .bvcst (.bvofNat n) => do return .qStrApp (← lamBvOfInt2String n) #[arg]
+| .bvcst (.bvtoNat n) => do return .qStrApp (← lamBvToInt2String n) #[arg]
+| .bvcst (.bvofInt n) => do return .qStrApp (← lamBvOfInt2String n) #[arg]
+| .bvcst (.bvtoInt n) => do return .qStrApp (← lamBvToInt2String n) #[arg]
+| .bvcst (.bvneg _) => return .qStrApp "bvneg" #[arg]
+-- **Not in SMT-Lib 2.6?**
+| .bvcst (.bvabs _) => return .qStrApp "bvabs" #[arg]
 | t               => throwError "lamTerm2STerm :: The arity of {repr t} is not 1"
 
-private def Bitvec2STerm (bv : List Bool) : STerm := .sConst (.binary bv)
+private def BitVec2STerm (n i : Nat) : STerm :=
+  let digs := (Nat.toDigits 2 (i % (2^n))).map (fun c => c == '1')
+  let digs := (List.range (n - digs.length)).map (fun _ => false) ++ digs
+  .sConst (.binary digs)
 
 private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtom STerm
-| .trueE            => return .qStrApp "true" #[]
-| .falseE           => return .qStrApp "false" #[]
-| .bcst .trueb      => return .qStrApp "true" #[]
-| .bcst .falseb     => return .qStrApp "false" #[]
-| .ncst (.natVal n) => return .sConst (.num n)
-| .icst (.intVal n) => return Int2STerm n
-| .scst (.strVal s) => return .sConst (.str s)
-| .bvVal bv         => return Bitvec2STerm bv
-| t                 => throwError "lamTerm2STerm :: The arity of {repr t} is not 0"
+| .trueE              => return .qStrApp "true" #[]
+| .falseE             => return .qStrApp "false" #[]
+| .bcst .trueb        => return .qStrApp "true" #[]
+| .bcst .falseb       => return .qStrApp "false" #[]
+| .ncst (.natVal n)   => return .sConst (.num n)
+| .icst (.intVal n)   => return Int2STerm n
+| .scst (.strVal s)   => return .sConst (.str s)
+| .bvcst (.bvlit n i) => return BitVec2STerm n i
+| t                   => throwError "lamTerm2STerm :: The arity of {repr t} is not 0"
 
 def lamTermAtom2String (lamVarTy : Array LamSort) (n : Nat) : TransM LamAtom (LamSort × String) := do
   let .some s := lamVarTy[n]?

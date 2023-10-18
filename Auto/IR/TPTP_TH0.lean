@@ -3,38 +3,23 @@ import Auto.Embedding.LamConv
 namespace Auto.Lam2TH0
 open Embedding.Lam
 
--- Identifier mapping
--- Sort : bv n      => s_bv{n}
---        atom n    => s_a{n}
---        nat       => s_nat
---        int       => s_int
---        string    => s_string
---        empty     => s_empty
--- Term : bvVal xs  => t_bv{0-1 string representation of xs}
---        atom n    => t_a{n}
---        etom n    => t_e{n}
---        intVal' n => t_int{n}
---        iofNat'   => t_iofNat
---        inegSucc' => t_inegSucc
---        ineg'     => t_ineg
---        iabs'     => t_iabs
---        iadd'     => t_iadd
---        isub'     => t_isub
---        imul'     => t_imul
---        idiv'     => t_idiv
---        imod'     => t_imod
---        ile'      => t_ile
---        ilt'      => t_ilt
---        ige'      => t_ige
---        igt'      => t_ige
---        strVal' s => t_str{tptp-friendly representation of s}
---        slength'  => t_slength
---        sle'      => t_sle
---        sge'      => t_sge
---        slt'      => t_slt
---        sgt'      => t_sgt
---        sprefixof => t_sprefixof
---        srepall   => t_srepall
+/-
+  Identifier mapping
+  Sort : bv n      => s_bv{n}
+         atom n    => s_a{n}
+         nat       => s_nat
+         int       => s_int
+         string    => s_string
+         empty     => s_empty
+  Term : atom n    => t_a{n}
+         etom n    => t_e{n}
+         Refer to
+         · transBoolConst
+         · transNatConst
+         · transIntConst
+         · transStringConst
+         · transBitVecConst
+-/
 
 def transLamBaseSort : LamBaseSort → String
 | .prop    => "$o"
@@ -53,9 +38,6 @@ def transLamSort : LamSort → String
 | .base b => transLamBaseSort b
 | .func s1 s2 => s!"({transLamSort s1} > {transLamSort s2})"
 
-def transBitvec (bv : List Bool) : String :=
-  String.join (bv.map (fun x => if x then "1" else "0"))
-
 def transBoolConst : BoolConst → String
 | .trueb      => "$true"
 | .falseb     => "$false"
@@ -72,20 +54,8 @@ def transNatConst : NatConst → String
 | .nmod     => "t_nmod"
 | .nle      => "t_nle"
 | .nlt      => "t_nlt"
-| .nge      => "t_nge"
-| .ngt      => "t_ngt"
 
-def transNatConstSort : NatConst → String
-| .natVal _ => transLamSort (.base .nat)
-| .nadd     => transLamSort (.func (.base .nat) (.func (.base .nat) (.base .nat)))
-| .nsub     => transLamSort (.func (.base .nat) (.func (.base .nat) (.base .nat)))
-| .nmul     => transLamSort (.func (.base .nat) (.func (.base .nat) (.base .nat)))
-| .ndiv     => transLamSort (.func (.base .nat) (.func (.base .nat) (.base .nat)))
-| .nmod     => transLamSort (.func (.base .nat) (.func (.base .nat) (.base .nat)))
-| .nle      => transLamSort (.func (.base .nat) (.func (.base .nat) (.base .prop)))
-| .nlt      => transLamSort (.func (.base .nat) (.func (.base .nat) (.base .prop)))
-| .nge      => transLamSort (.func (.base .nat) (.func (.base .nat) (.base .prop)))
-| .ngt      => transLamSort (.func (.base .nat) (.func (.base .nat) (.base .prop)))
+def transNatConstSort (nc : NatConst) := transLamSort nc.lamCheck
 
 def transIntConst : IntConst → String
 | .intVal n => s!"t_int{n}"
@@ -102,26 +72,8 @@ def transIntConst : IntConst → String
 | .iemod    => "t_iemod"
 | .ile      => "t_ile"
 | .ilt      => "t_ilt"
-| .ige      => "t_ige"
-| .igt      => "t_igt"
 
-def transIntConstSort : IntConst → String
-| .intVal _ => transLamSort (.base .int)
-| .iofNat   => transLamSort (.func (.base .nat) (.base .int))
-| .inegSucc => transLamSort (.func (.base .nat) (.base .int))
-| .ineg     => transLamSort (.func (.base .int) (.base .int))
-| .iabs     => transLamSort (.func (.base .int) (.base .int))
-| .iadd     => transLamSort (.func (.base .int) (.func (.base .int) (.base .int)))
-| .isub     => transLamSort (.func (.base .int) (.func (.base .int) (.base .int)))
-| .imul     => transLamSort (.func (.base .int) (.func (.base .int) (.base .int)))
-| .idiv     => transLamSort (.func (.base .int) (.func (.base .int) (.base .int)))
-| .imod     => transLamSort (.func (.base .int) (.func (.base .int) (.base .int)))
-| .iediv    => transLamSort (.func (.base .int) (.func (.base .int) (.base .int)))
-| .iemod    => transLamSort (.func (.base .int) (.func (.base .int) (.base .int)))
-| .ile      => transLamSort (.func (.base .int) (.func (.base .int) (.base .prop)))
-| .ilt      => transLamSort (.func (.base .int) (.func (.base .int) (.base .prop)))
-| .ige      => transLamSort (.func (.base .int) (.func (.base .int) (.base .prop)))
-| .igt      => transLamSort (.func (.base .int) (.func (.base .int) (.base .prop)))
+def transIntConstSort (ic : IntConst) := transLamSort ic.lamCheck
 
 def transChar (c : Char) : String :=
   "x" ++ String.mk (Nat.toDigits 16 c.toNat)
@@ -130,26 +82,52 @@ def transString (s : String) : String :=
   String.join (s.data.map transChar)
 
 def transStringConst : StringConst → String
-| .strVal s => transString s
-| .slength => "t_slength"
-| .sapp => "t_sapp"
-| .sle => "t_sle"
-| .sge => "t_sge"
-| .slt => "t_slt"
-| .sgt => "t_sgt"
+| .strVal s  => transString s
+| .slength   => "t_slength"
+| .sapp      => "t_sapp"
+| .sle       => "t_sle"
+| .slt       => "t_slt"
 | .sprefixof => "t_sprefixof"
-| .srepall => "t_srepall"
+| .srepall   => "t_srepall"
 
-def transStringConstSort : StringConst → String
-| .strVal _ => transLamSort (.base .string)
-| .slength => transLamSort (.func (.base .string) (.base .nat))
-| .sapp => transLamSort (.func (.base .string) (.func (.base .string) (.base .string)))
-| .sle => transLamSort (.func (.base .string) (.func (.base .string) (.base .prop)))
-| .sge => transLamSort (.func (.base .string) (.func (.base .string) (.base .prop)))
-| .slt => transLamSort (.func (.base .string) (.func (.base .string) (.base .prop)))
-| .sgt => transLamSort (.func (.base .string) (.func (.base .string) (.base .prop)))
-| .sprefixof => transLamSort (.func (.base .string) (.func (.base .string) (.base .bool)))
-| .srepall => transLamSort (.func (.base .string) (.func (.base .string) (.func (.base .string) (.base .string))))
+def transStringConstSort (sc : StringConst) := transLamSort sc.lamCheck
+
+def transBitVecConst : BitVecConst → String
+| .bvlit n i        => s!"t_bvlit_{n}_{i}"
+| .bvofNat n        => s!"t_bvofNat_{n}"
+| .bvtoNat n        => s!"t_bvtoNat_{n}"
+| .bvofInt n        => s!"t_bvofInt_{n}"
+| .bvtoInt n        => s!"t_bvtoInt_{n}"
+| .bvadd n          => s!"t_bvadd_{n}"
+| .bvsub n          => s!"t_bvsub_{n}"
+| .bvneg n          => s!"t_bvneg_{n}"
+| .bvabs n          => s!"t_bvabs_{n}"
+| .bvmul n          => s!"t_bvmul_{n}"
+| .bvudiv n         => s!"t_bvudiv_{n}"
+| .bvurem n         => s!"t_bvurem_{n}"
+| .bvsdiv n         => s!"t_bvsdiv_{n}"
+| .bvsrem n         => s!"t_bvsrem_{n}"
+| .bvsmod n         => s!"t_bvsmod_{n}"
+| .bvult n          => s!"t_bvult_{n}"
+| .bvule n          => s!"t_bvule_{n}"
+| .bvslt n          => s!"t_bvslt_{n}"
+| .bvsle n          => s!"t_bvsle_{n}"
+| .bvand n          => s!"t_bvand_{n}"
+| .bvor n           => s!"t_bvor_{n}"
+| .bvxor n          => s!"t_bvxor_{n}"
+| .bvnot n          => s!"t_bvnot_{n}"
+| .bvshl n          => s!"t_bvshl_{n}"
+| .bvlshr n         => s!"t_bvlshr_{n}"
+| .bvashr n         => s!"t_bvashr_{n}"
+| .bvrotateLeft w   => s!"t_bvrotateLeft_{w}"
+| .bvrotateRight w  => s!"t_bvrotateRight_{w}"
+| .bvappend n m     => s!"t_bvappend_{n}_{m}"
+| .bvextract n h l  => s!"t_bvextract_{n}_{h}_{l}"
+| .bvrepeat w i     => s!"t_bvrepeat_{w}_{i}"
+| .bvzeroExtend w v => s!"t_bvzeroExtend_{w}_{v}"
+| .bvsignExtend w v => s!"t_bvsignExtend_{w}_{v}"
+
+def transBitVecConstSort (bvc : BitVecConst) := transLamSort bvc.lamCheck
 
 def transLamBaseTerm : LamBaseTerm → Except String String
 | .trueE      => .ok s!"$true"
@@ -163,7 +141,7 @@ def transLamBaseTerm : LamBaseTerm → Except String String
 | .ncst nc    => .ok (transNatConst nc)
 | .icst ic    => .ok (transIntConst ic)
 | .scst sc    => .ok (transStringConst sc)
-| .bvVal v    => .ok s!"t_bv{transBitvec v}"
+| .bvcst bvc  => .ok (transBitVecConst bvc)
 | .eqI _      => .error "transLamBaseTerm :: eqI should not occur here"
 | .forallEI _ => .error "transLamBaseTerm :: forallEI should not occur here"
 | .existEI _  => .error "transLamBaseTerm :: existEI should not occur here"

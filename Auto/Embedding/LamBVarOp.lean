@@ -477,7 +477,7 @@ partial def LamTerm.toStringLCtx (lctx : Nat) : LamTerm → String
 | .atom n => s!"!{n}"
 | .etom n => s!"?{n}"
 | .base b =>
-  match b.beq .trueE || b.beq .falseE || b.beq .srepall' with
+  match b.beq .trueE || b.beq .falseE with
   | true => s!"{b}"
   | false => s!"({b})"
 | .bvar m =>
@@ -491,40 +491,31 @@ partial def LamTerm.toStringLCtx (lctx : Nat) : LamTerm → String
   let args := t.getAppArgs
   match fn with
   | .base b =>
-    match b.beq .not || b.beq .notb' || b.beq .iofNat' || b.beq .inegSucc' || b.beq .ineg' || b.beq .iabs' || b.beq .slength' with
-    | true =>
+    -- Nice trick
+    match (b.lamCheck Inhabited.default).getArgTys.length with
+    | 0 => "❌"
+    | 1 =>
       match args with
-      | [(_, arg)] => s!"({b} {toStringLCtx lctx arg})"
-      | _ => "❌"
-    | false =>
-      match b.beq .and || b.beq .or || b.beq .imp || b.beq .iff ||
-            b.beq .andb' || b.beq .orb' ||
-            b.beq .nadd' || b.beq .nsub' || b.beq .nmul' || b.beq .ndiv' || b.beq .nmod' ||
-            b.beq .nle' || b.beq .nge' || b.beq .nlt' || b.beq .ngt' ||
-            b.beq .iadd' || b.beq .isub' || b.beq .imul' || b.beq .idiv' || b.beq .imod' ||
-            b.beq .iediv' || b.beq .iemod' || b.beq .ile' || b.beq .ige' || b.beq .ilt' || b.beq .igt' ||
-            b.beq .sapp' || b.beq .sle' || b.beq .sge' || b.beq .slt' || b.beq .sgt' || b.beq .sprefixof' ||
-            b.isEq || b.isEqI with
-      | true =>
-        match args with
-        | [(_, arg)] => s!"({toStringLCtx lctx arg} {b})"
-        | [(_, arg₁), (_, arg₂)] => s!"({toStringLCtx lctx arg₁} {b} {toStringLCtx lctx arg₂})"
-        | _ => "❌"
-      | false =>
+      | [(_, arg)] =>
         match b.isForallE || b.isForallEI || b.isExistE || b.isExistEI with
         | true =>
-          match args with
-          | [(_, arg)] =>
-            match arg with
-            | .lam s t => s!"({b} x{lctx} : {s}, {toStringLCtx (.succ lctx) t})"
-            | arg =>
-              let arg's := toStringLCtx (.succ lctx) arg.bvarLift
-              s!"({b}x{lctx} : {getILSortString b}, {arg's} x{lctx})"
-          | _ => "❌"
+          match arg with
+          | .lam s t => s!"({b} x{lctx} : {s}, {toStringLCtx (.succ lctx) t})"
+          | arg =>
+            let arg's := toStringLCtx (.succ lctx) arg.bvarLift
+            s!"({b}x{lctx} : {getILSortString b}, {arg's} x{lctx})"
         | false =>
-          match b.beq .srepall' with
-          | true => s!"({b}" ++ String.join (args.map (fun (_, arg) => " " ++ toStringLCtx lctx arg)) ++ ")"
-          | false => "❌"
+          match b with
+          | .icst .iabs => s!"|{toStringLCtx lctx arg}|ᵢ"
+          | .bvcst (.bvabs _) => s!"|{toStringLCtx lctx arg}|ᵇᵥ"
+          | _ => s!"({b} {toStringLCtx lctx arg})"
+      | _ => "❌"
+    | 2 =>
+      match args with
+      | [(_, arg)] => s!"({toStringLCtx lctx arg} {b})"
+      | [(_, arg₁), (_, arg₂)] => s!"({toStringLCtx lctx arg₁} {b} {toStringLCtx lctx arg₂})"
+      | _ => "❌"
+    | _ => s!"({b}" ++ String.join (args.map (fun (_, arg) => " " ++ toStringLCtx lctx arg)) ++ ")"
   | fn => "(" ++ toStringLCtx lctx fn ++ " " ++ String.intercalate " " (args.map (fun x => toStringLCtx lctx x.snd)) ++ ")"
 
 def LamTerm.toString := LamTerm.toStringLCtx 0
