@@ -264,7 +264,7 @@ where
         | .valid [] t => return t
         | _ => throwError "runAuto :: Unexpected error")
       let query ← lam2TH0 lamVarTy lamEVarTy exportLamTerms
-      trace[auto.tptp.printQuery] "Query:\n{query}"
+      trace[auto.tptp.printQuery] "\n{query}"
       Solver.TPTP.querySolver query
     catch e =>
       trace[auto.tptp.result] "TPTP invocation failed with {e.toMessageData}"
@@ -278,7 +278,7 @@ where
         | _ => throwError "runAuto :: Unexpected error")
       let commands ← (lamFOL2SMT lamVarTy lamEVarTy exportLamTerms exportInds).run'
       for cmd in commands do
-        trace[auto.smt.printCommands] "Command: {cmd}"
+        trace[auto.smt.printCommands] "{cmd}"
       Solver.SMT.querySolver commands
     catch e =>
       trace[auto.smt.result] "SMT invocation failed with {e.toMessageData}"

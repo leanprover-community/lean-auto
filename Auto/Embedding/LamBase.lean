@@ -856,6 +856,9 @@ def StringConst.lamCheck_of_LamWF (H : LamWF sc s) : sc.lamCheck = s := by
 def StringConst.LamWF.ofCheck (H : sc.lamCheck = s) : LamWF sc s := by
   cases H; cases sc <;> constructor
 
+/--
+  Following `https://smtlib.cs.uiowa.edu/logics-all.shtml#QF_BV`
+-/
 inductive BitVecConst
   -- `Std.BitVec.ofNat n i, but requires both arguments to be nat literals`
   | bvval (n : Nat) (i : Nat)
