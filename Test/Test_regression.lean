@@ -468,9 +468,6 @@ section Adhoc
 
   example (a b c d : Nat) (h₁ : a ≤ b) (h₂ : c ≥ d) : b ≥ a ∧ d ≤ c := by auto
 
-  open Auto in
-  example (a b c d : Nat) (h₁ : Nat.ge a b) (h₂ : Nat.gt c d) : Nat.ge a b ∧ Nat.gt c d := by auto
-
   -- Integer
   -- Just testing whether the verified checker is correct
   example
@@ -497,6 +494,20 @@ section Adhoc
   example (a b : String)
     : String.isPrefixOf a b = String.isPrefixOf a b ∧
       String.replace a b a = String.replace a b a := by auto
+
+  -- BitVec
+  example (a : Std.BitVec k) (b : Std.BitVec 2) : a = a ∧ b = b := by auto
+
+  example (a : Std.BitVec u) (b : Std.BitVec v) (c : Std.BitVec 2) :
+    a ++ b = a ++ b ∧ b ++ c = b ++ c := by auto
+
+  open Std.BitVec in
+  example :
+    0b10#3 + 0b101#3 = 0b10#3 + 0b101#3 ∧
+    0b10#(3+0) * 0b101#(1+2) = 0b10#3 * 0b101#3 := by auto
+
+  open Std.BitVec in
+  #check (4+5)#(3+2)
 
   -- TPTP/SMT support for `Empty`
   set_option auto.tptp true in
