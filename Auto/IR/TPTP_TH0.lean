@@ -93,7 +93,7 @@ def transStringConst : StringConst → String
 def transStringConstSort (sc : StringConst) := transLamSort sc.lamCheck
 
 def transBitVecConst : BitVecConst → String
-| .bvlit n i        => s!"t_bvlit_{n}_{i}"
+| .bvval n i        => s!"t_bvval_{n}_{i}"
 | .bvofNat n        => s!"t_bvofNat_{n}"
 | .bvtoNat n        => s!"t_bvtoNat_{n}"
 | .bvofInt n        => s!"t_bvofInt_{n}"

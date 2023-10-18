@@ -186,7 +186,7 @@ private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtom STerm
 | .ncst (.natVal n)   => return .sConst (.num n)
 | .icst (.intVal n)   => return Int2STerm n
 | .scst (.strVal s)   => return .sConst (.str s)
-| .bvcst (.bvlit n i) => return BitVec2STerm n i
+| .bvcst (.bvval n i) => return BitVec2STerm n i
 | t                   => throwError "lamTerm2STerm :: The arity of {repr t} is not 0"
 
 def lamTermAtom2String (lamVarTy : Array LamSort) (n : Nat) : TransM LamAtom (LamSort × String) := do

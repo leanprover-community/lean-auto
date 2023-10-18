@@ -173,7 +173,7 @@ def interpStringConstAsUnlifted : StringConst → Expr
 
 open Embedding in
 def interpBitVecConstAsUnlifted : BitVecConst → Expr
-| .bvlit n i         => mkApp2 (.const ``Std.BitVec.ofNat []) (.lit (.natVal n)) (.lit (.natVal i))
+| .bvval n i         => mkApp2 (.const ``Std.BitVec.ofNat []) (.lit (.natVal n)) (.lit (.natVal i))
 | .bvofNat n         => .app (.const ``Std.BitVec.ofNat []) (.lit (.natVal n))
 | .bvtoNat n         => .app (.const ``Std.BitVec.toNat []) (.lit (.natVal n))
 | .bvofInt n         => .app (.const ``Std.BitVec.ofInt []) (.lit (.natVal n))
@@ -183,9 +183,9 @@ def interpBitVecConstAsUnlifted : BitVecConst → Expr
 | .bvneg n           => .app (.const ``Std.BitVec.neg []) (.lit (.natVal n))
 | .bvabs n           => .app (.const ``Std.BitVec.abs []) (.lit (.natVal n))
 | .bvmul n           => .app (.const ``Std.BitVec.mul []) (.lit (.natVal n))
-| .bvudiv n          => .app (.const ``Std.BitVec.udiv []) (.lit (.natVal n))
+| .bvudiv n          => .app (.const ``Std.BitVec.smtUDiv []) (.lit (.natVal n))
 | .bvurem n          => .app (.const ``Std.BitVec.umod []) (.lit (.natVal n))
-| .bvsdiv n          => .app (.const ``Std.BitVec.sdiv []) (.lit (.natVal n))
+| .bvsdiv n          => .app (.const ``Std.BitVec.smtSDiv []) (.lit (.natVal n))
 | .bvsrem n          => .app (.const ``Std.BitVec.srem []) (.lit (.natVal n))
 | .bvsmod n          => .app (.const ``Std.BitVec.smod []) (.lit (.natVal n))
 | .bvult n           => .app (.const ``Std.BitVec.ult []) (.lit (.natVal n))

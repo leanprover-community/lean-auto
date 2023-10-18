@@ -140,13 +140,13 @@ def bvmulLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (
   GLift.up (Std.BitVec.mul x.down y.down)
 
 def bvudivLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.udiv x.down y.down)
+  GLift.up (Std.BitVec.smtUDiv x.down y.down)
 
 def bvuremLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
   GLift.up (Std.BitVec.umod x.down y.down)
 
 def bvsdivLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.sdiv x.down y.down)
+  GLift.up (Std.BitVec.smtSDiv x.down y.down)
 
 def bvsremLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
   GLift.up (Std.BitVec.srem x.down y.down)

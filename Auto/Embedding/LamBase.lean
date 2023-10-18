@@ -858,7 +858,7 @@ def StringConst.LamWF.ofCheck (H : sc.lamCheck = s) : LamWF sc s := by
 
 inductive BitVecConst
   -- `Std.BitVec.ofNat n i, but requires both arguments to be nat literals`
-  | bvlit (n : Nat) (i : Nat)
+  | bvval (n : Nat) (i : Nat)
   | bvofNat (n : Nat)
   | bvtoNat (n : Nat)
   | bvofInt (n : Nat)
@@ -901,7 +901,7 @@ deriving Inhabited, Hashable, Lean.ToExpr
 def BitVecConst.reprPrec (b : BitVecConst) (n : Nat) :=
   let s :=
     match b with
-    | .bvlit n i => f!".bvlit {n} {i}"
+    | .bvval n i => f!".bvval {n} {i}"
     | .bvofNat n => f!".bvofNat {n}"
     | .bvtoNat n => f!".bvtoNat {n}"
     | .bvofInt n => f!".bvofInt {n}"
@@ -943,7 +943,7 @@ instance : Repr BitVecConst where
   reprPrec := BitVecConst.reprPrec
 
 def BitVecConst.toString : BitVecConst → String
-| .bvlit n i => ToString.toString <| repr (Std.BitVec.ofNat n i)
+| .bvval n i => ToString.toString <| repr (Std.BitVec.ofNat n i)
 | .bvofNat n => s!"bvofNat {n}"
 | .bvtoNat n => s!"bvtoNat {n}"
 | .bvofInt n => s!"bvofInt {n}"
@@ -981,7 +981,7 @@ instance : ToString BitVecConst where
   toString := BitVecConst.toString
 
 def BitVecConst.beq : BitVecConst → BitVecConst → Bool
-| .bvlit n₁ i₁,        .bvlit n₂ i₂        => n₁.beq n₂ && i₁.beq i₂
+| .bvval n₁ i₁,        .bvval n₂ i₂        => n₁.beq n₂ && i₁.beq i₂
 | .bvofNat n₁,         .bvofNat n₂         => n₁.beq n₂
 | .bvtoNat n₁,         .bvtoNat n₂         => n₁.beq n₂
 | .bvofInt n₁,         .bvofInt n₂         => n₁.beq n₂
@@ -1034,7 +1034,7 @@ instance : LawfulBEq BitVecConst where
   rfl := BitVecConst.beq_refl
 
 def BitVecConst.lamCheck : BitVecConst → LamSort
-| .bvlit n _        => .base (.bv n)
+| .bvval n _        => .base (.bv n)
 | .bvofNat n        => .func (.base .nat) (.base (.bv n))
 | .bvtoNat n        => .func (.base (.bv n)) (.base .nat)
 | .bvofInt n        => .func (.base .int) (.base (.bv n))
@@ -1069,7 +1069,7 @@ def BitVecConst.lamCheck : BitVecConst → LamSort
 | .bvsignExtend w v => .func (.base (.bv w)) (.base (.bv (Nat.add w v)))
 
 inductive BitVecConst.LamWF : BitVecConst → LamSort → Type
-  | ofBvlit n i        : LamWF (.bvlit n i) (.base (.bv n))
+  | ofBvval n i        : LamWF (.bvval n i) (.base (.bv n))
   | ofBvofNat n        : LamWF (.bvofNat n) (.func (.base .nat) (.base (.bv n)))
   | ofBvtoNat n        : LamWF (.bvtoNat n) (.func (.base (.bv n)) (.base .nat))
   | ofBvofInt n        : LamWF (.bvofInt n) (.func (.base .int) (.base (.bv n)))
@@ -1108,7 +1108,7 @@ def BitVecConst.LamWF.unique {b : BitVecConst} {s₁ s₂ : LamSort}
   cases bcwf₁ <;> cases bcwf₂ <;> trivial
 
 def BitVecConst.LamWF.ofBitVecConst : (b : BitVecConst) → (s : LamSort) × BitVecConst.LamWF b s
-| .bvlit n i        => ⟨.base (.bv n), .ofBvlit n i⟩
+| .bvval n i        => ⟨.base (.bv n), .ofBvval n i⟩
 | .bvofNat n        => ⟨.func (.base .nat) (.base (.bv n)), .ofBvofNat n⟩
 | .bvtoNat n        => ⟨.func (.base (.bv n)) (.base .nat), .ofBvtoNat n⟩
 | .bvofInt n        => ⟨.func (.base .int) (.base (.bv n)), .ofBvofInt n⟩
@@ -1229,7 +1229,7 @@ def LamBaseTerm.sle' := LamBaseTerm.scst .sle
 def LamBaseTerm.slt' := LamBaseTerm.scst .slt
 def LamBaseTerm.sprefixof' := LamBaseTerm.scst .sprefixof
 def LamBaseTerm.srepall' := LamBaseTerm.scst .srepall
-def LamBaseTerm.bvlit' (n i : Nat) := LamBaseTerm.bvcst (.bvlit n i)
+def LamBaseTerm.bvval' (n i : Nat) := LamBaseTerm.bvcst (.bvval n i)
 def LamBaseTerm.bvofNat' (n : Nat) := LamBaseTerm.bvcst (.bvofNat n)
 def LamBaseTerm.bvtoNat' (n : Nat) := LamBaseTerm.bvcst (.bvtoNat n)
 def LamBaseTerm.bvofInt' (n : Nat) := LamBaseTerm.bvcst (.bvofInt n)
@@ -1534,7 +1534,7 @@ def LamBaseTerm.LamWF.ofSle' {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSle
 def LamBaseTerm.LamWF.ofSlt' {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSlt
 def LamBaseTerm.LamWF.ofSprefixof' {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSprefixof
 def LamBaseTerm.LamWF.ofSrepall' {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSrepall
-def LamBaseTerm.LamWF.ofBvlit' {ltv : LamTyVal} (n i : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvlit n i)
+def LamBaseTerm.LamWF.ofBvval' {ltv : LamTyVal} (n i : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvval n i)
 def LamBaseTerm.LamWF.ofBvofNat' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvofNat n)
 def LamBaseTerm.LamWF.ofBvtoNat' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvtoNat n)
 def LamBaseTerm.LamWF.ofBvofInt' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvofInt n)
@@ -1769,7 +1769,7 @@ def StringConst.interp_equiv (tyVal : Nat → Type u) (scwf : LamWF sc s) :
   cases scwf <;> rfl
 
 def BitVecConst.interp (tyVal : Nat → Type u) : (b : BitVecConst) → b.lamCheck.interp tyVal
-| .bvlit n i        => GLift.up (Std.BitVec.ofNat n i)
+| .bvval n i        => GLift.up (Std.BitVec.ofNat n i)
 | .bvofNat n        => bvofNatLift n
 | .bvtoNat n        => bvtoNatLift n
 | .bvofInt n        => bvofIntLift n
@@ -1804,7 +1804,7 @@ def BitVecConst.interp (tyVal : Nat → Type u) : (b : BitVecConst) → b.lamChe
 | .bvsignExtend w v => bvsignExtendLift w v
 
 def BitVecConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF b s) → s.interp tyVal
-| .ofBvlit n i        => GLift.up (Std.BitVec.ofNat n i)
+| .ofBvval n i        => GLift.up (Std.BitVec.ofNat n i)
 | .ofBvofNat n        => bvofNatLift n
 | .ofBvtoNat n        => bvtoNatLift n
 | .ofBvofInt n        => bvofIntLift n

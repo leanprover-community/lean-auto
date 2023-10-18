@@ -7,6 +7,8 @@ initialize
 
 namespace Auto
 
+def Meta.isDefEqD (t s : Expr) : MetaM Bool := Meta.withDefault <| Meta.isDefEq t s
+
 def Meta.withoutMVarAssignments (m : MetaM α) : MetaM α := do
   let mctx ← getMCtx
   Meta.withMCtx {mctx with eAssignment := {}, lAssignment := {}} m
