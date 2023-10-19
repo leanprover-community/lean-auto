@@ -25,6 +25,9 @@ def orLift.{u} (p q : GLift.{1, u} Prop) :=
 def iffLift.{u} (p q : GLift.{1, u} Prop) :=
   GLift.up (Iff p.down q.down)
 
+noncomputable def ofPropLift.{u} (p : GLift.{1, u} Prop) :=
+  GLift.up (Bool.ofProp p.down)
+
 def notbLift.{u} (p : GLift.{1, u} Bool) :=
   GLift.up (not p.down)
 

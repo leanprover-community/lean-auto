@@ -62,18 +62,19 @@ theorem Bool.ite_eq_false (p : Prop) [inst : Decidable p] (a b : α) : ¬ p → 
   case isTrue hp => apply False.elim (hnp hp)
 
 /--
-  Invoke `simp_only` at the beginning of `auto`
+  Invoke `rw` at the beginning of `auto`
 -/
-theorem Bool.ite_simp {α : Sort u} (p : Prop) [Decidable p] (x y : α) :
-  ite p x y = cond' (Bool.ofProp p) x y := by
+theorem Bool.ite_simp.{u} : @ite = fun (α : Sort u) p _ => @cond' α (Bool.ofProp p) := by
+  funext α p _ x y
   cases h : Bool.ofProp p
   case false => rw [Bool.ite_eq_false]; rfl; apply (Bool.ofProp_spec' _).mp h
   case true  => rw [Bool.ite_eq_true]; rfl; apply (Bool.ofProp_spec _).mp h
 
 /--
-  Invoke `simp_only` at the beginning of `auto`
+  Invoke `rw` at the beginning of `auto`
 -/
-theorem Bool.decide_simp (p : Prop) [Decidable p] : decide p = Bool.ofProp p := by
+theorem Bool.decide_simp : @decide = fun p _ => Bool.ofProp p := by
+  funext p _
   cases h : Bool.ofProp p
   case false => rw [decide_eq_false]; apply (Bool.ofProp_spec' _).mp h
   case true  => rw [decide_eq_true]; apply (Bool.ofProp_spec _).mp h

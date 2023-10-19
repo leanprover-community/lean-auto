@@ -39,6 +39,7 @@ def transLamSort : LamSort → String
 | .func s1 s2 => s!"({transLamSort s1} > {transLamSort s2})"
 
 def transBoolConst : BoolConst → String
+| .ofProp     => s!"(^ [X : {transLamSort (.base .prop)}] : X)"
 | .trueb      => "$true"
 | .falseb     => "$false"
 | .notb       => "(~)"

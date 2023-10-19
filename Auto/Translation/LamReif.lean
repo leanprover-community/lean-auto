@@ -1552,6 +1552,7 @@ def processNewTermExpr (e : Expr) : ReifM LamTerm :=
     else
       throwError "processTermExpr :: Non-propositional implication is not supported"
   | .const ``Iff [] => return .base .iff
+  | .const ``Bool.ofProp [] => return .base .ofProp'
   | .const ``true [] => return .base .trueb'
   | .const ``false [] => return .base .falseb'
   | .const ``not [] => return .base .notb'

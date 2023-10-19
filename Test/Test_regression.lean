@@ -533,7 +533,8 @@ section Issues
     ((∃ (i : _) (i_1 : primeset i), dvd i x) ↔ (∃ p, primeset p ∧ dvd p x)) := by
     auto
 
-  example (h : ¬ (∀ b, !(b = true) ↔ b = false)) : False := by auto
+  example (h : ¬ (∀ b, !(b = true) ↔ b = false)) : False := by
+    auto
 
   -- Brute force example
   -- This must be fixed

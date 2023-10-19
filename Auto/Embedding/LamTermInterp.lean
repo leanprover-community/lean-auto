@@ -10,7 +10,7 @@ namespace Auto.Embedding.Lam
     typecheck at some point, return `⟨.base .prop, GLift.up False⟩`
     as a default value.
 -/
-def LamTerm.interp.{u} (lval : LamValuation.{u}) (lctxTy : Nat → LamSort) :
+noncomputable def LamTerm.interp.{u} (lval : LamValuation.{u}) (lctxTy : Nat → LamSort) :
   (t : LamTerm) → (s : LamSort) ×
     ((lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal) → s.interp lval.tyVal)
 | .atom n => ⟨lval.lamVarTy n, fun _ => lval.varVal n⟩
@@ -50,7 +50,7 @@ theorem LamTerm.interp_substLCtxTerm
   HEq ((interp lval lctxTy t).snd lctxTerm) ((interp lval lctxTy' t).snd lctxTerm') := by
   cases HLCtxTyEq; cases HLCtxTermEq; apply HEq.refl
 
-def LamTerm.interpAsProp.{u}
+noncomputable def LamTerm.interpAsProp.{u}
   (lval : LamValuation.{u}) (lctxTy : Nat → LamSort)
   (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal) (t : LamTerm) : GLift.{1, u} Prop :=
   match t.interp lval lctxTy with

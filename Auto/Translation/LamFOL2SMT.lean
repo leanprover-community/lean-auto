@@ -170,6 +170,7 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 
 private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamAtom STerm
 | .not            => return .qStrApp "not" #[arg]
+| .bcst .ofProp   => return arg
 | .bcst .notb     => return .qStrApp "not" #[arg]
 | .icst .iofNat   => return arg
 | .icst .inegSucc => return .qStrApp "-" #[Int2STerm (-1), arg]

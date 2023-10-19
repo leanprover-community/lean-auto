@@ -127,6 +127,7 @@ def withEtomsAsFVar (etoms : Array Nat) : ExternM Unit :=
 
 open Embedding in
 def interpBoolConstAsUnlifted : BoolConst → Expr
+| .ofProp => .const ``Bool.ofProp []
 | .trueb  => .const ``true []
 | .falseb => .const ``false []
 | .notb   => .const ``not []

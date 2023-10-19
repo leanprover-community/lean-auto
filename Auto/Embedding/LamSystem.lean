@@ -1863,23 +1863,40 @@ def LamWF.true_or_eq_true : LamWF ltv ⟨lctx, LamTerm.true_or_eq_true, .base .p
 theorem LamThmValid.true_or_eq_true : LamThmValid lval [] LamTerm.true_or_eq_true := by
   intro lctx'; rw [pushLCtxs_nil]; exists LamWF.true_or_eq_true; intro _ b; rfl
 
-def LamTerm.boolFacts : LamTerm := .mkAnd
-  (.mkAnd (.mkAnd emb false_ne_true) (.mkAnd not_true_eq_false not_false_eq_true))
-  (.mkAnd (.mkAnd false_and_eq_false true_and_eq_id) (.mkAnd false_or_eq_id true_or_eq_true))
+def LamTerm.ofPropSpec : LamTerm := .mkForallEF (.base .prop) (.mkEq (.base .prop)
+  (.mkEq (.base .bool) (.app (.base .prop) (.base .ofProp') (.bvar 0)) (.base .trueb')) (.bvar 0))
 
-def LamWF.boolFacts : LamWF ltv ⟨lctx, LamTerm.boolFacts, .base .prop⟩ := .mkAnd
+def LamWF.ofPropSpec : LamWF ltv ⟨lctx, LamTerm.ofPropSpec, .base .prop⟩ :=
+  .mkForallEF (.mkEq (.mkEq (.ofApp _ (.ofBase .ofOfProp') (.ofBVar 0)) (.ofBase .ofTrueB')) (.ofBVar 0))
+
+theorem LamThmValid.ofPropSpec : LamThmValid lval [] LamTerm.ofPropSpec := by
+  intro lctx'; rw [pushLCtxs_nil]; exists LamWF.ofPropSpec; intro _ x
+  apply GLift.down.inj; apply propext (Iff.intro ?mp ?mpr)
+  case mp =>
+    intro h; apply (Bool.ofProp_spec x.down).mp (_root_.congrArg (f:=GLift.down) h)
+  case mpr =>
+    intro h; apply GLift.down.inj; apply (Bool.ofProp_spec x.down).mpr h
+
+def LamTerm.boolFacts : LamTerm := .mkAnd (.mkAnd
   (.mkAnd (.mkAnd emb false_ne_true) (.mkAnd not_true_eq_false not_false_eq_true))
-  (.mkAnd (.mkAnd false_and_eq_false true_and_eq_id) (.mkAnd false_or_eq_id true_or_eq_true))
+  (.mkAnd (.mkAnd false_and_eq_false true_and_eq_id) (.mkAnd false_or_eq_id true_or_eq_true)))
+  LamTerm.ofPropSpec
+
+def LamWF.boolFacts : LamWF ltv ⟨lctx, LamTerm.boolFacts, .base .prop⟩ := .mkAnd (.mkAnd
+  (.mkAnd (.mkAnd emb false_ne_true) (.mkAnd not_true_eq_false not_false_eq_true))
+  (.mkAnd (.mkAnd false_and_eq_false true_and_eq_id) (.mkAnd false_or_eq_id true_or_eq_true)))
+  ofPropSpec
 
 theorem LamTerm.maxEVarSucc_boolFacts : maxEVarSucc boolFacts = 0 := rfl
 
 theorem LamThmValid.boolFacts : LamThmValid lval [] LamTerm.boolFacts := by
   intro lctx'; rw [pushLCtxs_nil]; dsimp [LamTerm.boolFacts]
-  rw [LamValid.and_equiv, LamValid.and_equiv, LamValid.and_equiv]
   rw [LamValid.and_equiv, LamValid.and_equiv, LamValid.and_equiv, LamValid.and_equiv]
-  apply And.intro
+  rw [LamValid.and_equiv, LamValid.and_equiv, LamValid.and_equiv, LamValid.and_equiv]
+  apply And.intro (And.intro
     (And.intro (And.intro (emb _) (false_ne_true _)) (And.intro (not_true_eq_false _) (not_false_eq_true _)))
-    (And.intro (And.intro (false_and_eq_false _) (true_and_eq_id _)) (And.intro (false_or_eq_id _) (true_or_eq_true _)))
+    (And.intro (And.intro (false_and_eq_false _) (true_and_eq_id _)) (And.intro (false_or_eq_id _) (true_or_eq_true _))))
+    (ofPropSpec _)
 
 def LamTerm.condSpec (s : LamSort) : LamTerm :=
   .mkForallEF s (.mkForallEF s (.mkAnd
