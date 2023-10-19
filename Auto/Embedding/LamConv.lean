@@ -983,6 +983,7 @@ def LamBaseTerm.resolveImport (ltv : LamTyVal) : LamBaseTerm → LamBaseTerm
 | .eqI n      => .eq (ltv.lamILTy n)
 | .forallEI n => .forallE (ltv.lamILTy n)
 | .existEI n  => .existE (ltv.lamILTy n)
+| .condI n    => .cond (ltv.lamILTy n)
 | t           => t
 
 def LamBaseTerm.LamWF.resolveImport {ltv : LamTyVal} {b : LamBaseTerm} {ty : LamSort}
@@ -998,24 +999,29 @@ theorem LamBaseTerm.LamWF.interp_resolveImport
   case ofEqI n =>
     generalize LamValuation.ilVal lval n = ilVal
     cases ilVal
-    case mk eqL _ _ =>
+    case mk eqL _ _ _ =>
       apply funext; intros a; apply funext; intros b;
       apply GLift.down.inj; apply propext;
       apply Iff.intro (eqL.down _ _) (eqL.up _ _)
   case ofForallEI n =>
     generalize LamValuation.ilVal lval n = ilVal
     cases ilVal
-    case mk _ forallL _ =>
+    case mk _ forallL _ _ =>
       apply funext; intros p;
       apply GLift.down.inj; apply propext;
       apply Iff.intro (forallL.down _) (forallL.up _)
   case ofExistEI n =>
     generalize LamValuation.ilVal lval n = ilVal
     cases ilVal
-    case mk _ _ existL =>
+    case mk _ _ existL _ =>
       apply funext; intros p;
       apply GLift.down.inj; apply propext;
       apply Iff.intro (existL.down _) (existL.up _)
+  case ofCondI n =>
+    generalize LamValuation.ilVal lval n = ilVal
+    cases ilVal
+    case mk _ _ _ condL =>
+      funext b x y; apply condL.wf
 
 def LamTerm.resolveImport (ltv : LamTyVal) : LamTerm → LamTerm
 | .atom n       => .atom n
@@ -1972,6 +1978,14 @@ section UnsafeOps
   
   /-- Turn `.bvar i` into `args[i]` -/
   def LamTerm.instantiatesImp := LamTerm.instantiatesAtImp 0
+
+  def LamTerm.findTerm? (p : LamTerm → Bool) (t : LamTerm) : Option LamTerm :=
+    if p t then
+      some t
+    else match t with
+      | .lam _ body => findTerm? p body
+      | .app _ fn arg => findTerm? p fn <|> findTerm? p arg
+      | _ => none
 
   /--
     Determine whether a λ term `t` (within `LamThmValid lval lctx t`) is of the form

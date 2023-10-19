@@ -77,6 +77,12 @@ def REntry.containsSort (re : REntry) (s : LamSort) : Bool :=
   | .valid ss t => ss.any (fun s' => s'.contains s) || t.containsSort s
   | .nonempty s' => s'.contains s
 
+def REntry.allLamTerms (re : REntry) : List LamTerm :=
+  match re with
+  | .wf _ _ t   => [t]
+  | .valid _  t => [t]
+  | .nonempty _ => []
+
 /--
   Table of valid propositions and well-formed formulas
   Note that `Auto.BinTree α` is equivalent to `Nat → Option α`,
@@ -502,6 +508,7 @@ inductive EtomStep where
 
 inductive FactStep where
   | boolFacts : FactStep
+  | condSpec  : LamSort → FactStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
 inductive InferenceStep where
@@ -621,6 +628,7 @@ def EtomStep.toString : EtomStep → String
 
 def FactStep.toString : FactStep → String
 | .boolFacts => s!"boolFacts"
+| .condSpec s => s!"condSpec {s}"
 
 def InferenceStep.toString : InferenceStep → String
 | .validOfBVarLower pv pn => s!"validOfBVarLower {pv} {pn}"
@@ -942,6 +950,7 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
 
 @[reducible] def FactStep.eval : (cs : FactStep) → EvalResult
 | .boolFacts => .addEntry (.valid [] LamTerm.boolFacts)
+| .condSpec s => .addEntry (.valid [] (LamTerm.condSpec s))
 
 @[reducible] def InferenceStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : InferenceStep) → EvalResult
 | .validOfBVarLower pv pn =>
@@ -1552,6 +1561,9 @@ theorem FactStep.eval_correct
 | .boolFacts => by
   dsimp [eval]; apply And.intro LamThmValid.boolFacts
   rw [LamTerm.maxEVarSucc_boolFacts]; apply Nat.zero_le
+| .condSpec s => by
+  dsimp [eval]; apply And.intro (LamThmValid.condSpec _)
+  rw [LamTerm.maxEVarSucc_condSpec]; apply Nat.zero_le
 
 theorem InferenceStep.eval_correct
   (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :

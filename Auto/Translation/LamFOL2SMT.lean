@@ -198,7 +198,7 @@ private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtom STerm
 | .ncst (.natVal n)   => return .sConst (.num n)
 | .icst (.intVal n)   => return Int2STerm n
 | .scst (.strVal s)   => return .sConst (.str s)
-| .bvcst (.bvval n i) => return BitVec2STerm n i
+| .bvcst (.bvVal n i) => return BitVec2STerm n i
 | t                   => throwError "lamTerm2STerm :: The arity of {repr t} is not 0"
 
 def lamTermAtom2String (lamVarTy : Array LamSort) (n : Nat) : TransM LamAtom (LamSort × String) := do
@@ -258,6 +258,8 @@ private partial def lamTerm2STerm (lamVarTy lamEVarTy : Array LamSort) :
   throwError ("lamTerm2STerm :: " ++ LamReif.exportError.ImpPolyLog)
 | .app _ (.base (.existEI _)) (.lam _ _) =>
   throwError ("lamTerm2STerm :: " ++ LamReif.exportError.ImpPolyLog)
+| .app _ (.app _ (.app _ (.base (.condI _)) _) _) _ =>
+  throwError ("lamTerm2STerm :: " ++ LamReif.exportError.ImpPolyLog)
 | .app _ (.app _ (.base (.eq _)) arg₁) arg₂ => do
   let arg₁' ← lamTerm2STerm lamVarTy lamEVarTy arg₁
   let arg₂' ← lamTerm2STerm lamVarTy lamEVarTy arg₂
@@ -282,6 +284,11 @@ private partial def lamTerm2STerm (lamVarTy lamEVarTy : Array LamSort) :
   if s == .base .nat then
     body' := .qStrApp "=>" #[.qStrApp ">=" #[.bvar 0, .sConst (.num 0)], body']
   return .existE dname s' body'
+| .app _ (.app _ (.app _ (.base (.cond _)) cond) arg₁) arg₂ => do
+  let cond' ← lamTerm2STerm lamVarTy lamEVarTy cond
+  let arg₁' ← lamTerm2STerm lamVarTy lamEVarTy arg₁
+  let arg₂' ← lamTerm2STerm lamVarTy lamEVarTy arg₂
+  return .qStrApp "ite" #[cond', arg₁', arg₂']
 | t => do
   let (ts, t) := splitApp t
   let ts' ← ts.mapM (lamTerm2STerm lamVarTy lamEVarTy)

@@ -2,6 +2,7 @@ import Std.Data.Int.Basic
 import Std.Data.Bitvec.Basic
 import Auto.Lib.IsomType
 import Auto.Lib.StringExtra
+import Auto.Lib.BoolExtra
 
 namespace Auto.Embedding
 
@@ -243,7 +244,7 @@ structure EqLift (β : Sort u) where
 def EqLift.ofIsomTy {α : Sort u} {β : Sort v} (I : IsomType α β) : EqLift.{v, w} β :=
   ⟨eqLift.{u, v, w} I, eqLift.down.{u, v, w} I, eqLift.up.{u, v, w} I⟩
 
-def eqLiftFn.{u} {β : Type u} (x y : β) := GLift.up.{1, u} (@Eq β x y)
+def eqLiftFn.{u} (β : Type u) (x y : β) := GLift.up.{1, u} (@Eq β x y)
 
 def EqLift.default (β : Sort u) : EqLift β :=
   ⟨fun x y => GLift.up (@Eq β x y), fun _ _ => id, fun _ _ => id⟩
@@ -280,6 +281,7 @@ def forallLiftFn.{u} (β : Type u) (p : β → GLift.{1, u} Prop) := GLift.up.{1
 def ForallLift.default (β : Sort v') : ForallLift.{v', v, w, imax v' w} β :=
   ⟨fun (p : β → GLift.{w + 1, v} (Sort w)) => GLift.up (∀ (x : β), GLift.down (p x)), fun _ => id, fun _ => id⟩
 
+set_option pp.universes true
 -- Isomorphic domain, β is the lifted one
 def existLift {α : Sort u} {β : Sort v} (I : IsomType α β)
   (p : β → GLift.{1, x} Prop) :=
@@ -309,6 +311,27 @@ def existLiftFn.{u} (β : Type u) (p : β → GLift.{1, u} Prop) := GLift.up.{1,
 
 def ExistLift.default (β : Sort v') : ExistLift.{v', w} β :=
   ⟨fun (p : β → GLift.{1, w} Prop) => GLift.up (∃ (x : β), GLift.down (p x)), fun _ => id, fun _ => id⟩
+
+-- Isomorphic domain, β is the lifted one
+def condLift {α : Sort u} {β : Sort v} (I : IsomType α β) (b : GLift.{_, x} Bool) (x y : β) :=
+  I.f (Bool.cond' b.down (I.g x) (I.g y))
+
+def condLift.wf
+  {α : Sort u} {β : Sort v} (I : IsomType α β)
+  (b : GLift.{_, x} Bool) (x y : β) : condLift I b x y = Bool.cond' b.down x y := by
+  cases b; case up b => cases b <;> dsimp [condLift, Bool.cond'] <;> rw [IsomType.eq₂ I]
+
+structure CondLift (β : Sort v') where
+  condF : GLift.{1, v} Bool → β → β → β
+  wf    : ∀ (b : GLift.{1, v} Bool) (x y : β), condF b x y = Bool.cond' b.down x y 
+
+def CondLift.ofIsomTy.{u, v, x} {α : Sort u} {β : Sort v} (I : IsomType α β) : CondLift.{v, x} β :=
+  ⟨condLift.{u, v, x} I, condLift.wf I⟩
+
+def condLiftFn.{u} (β : Type u) (b : GLift.{1, u} Bool) (x y : β) := Bool.cond' b.down x y
+
+def CondLift.default (β : Sort v') : CondLift.{v', w} β :=
+  ⟨fun b x y => Bool.cond' b.down x y, fun _ _ _ => rfl⟩
 
 -- !! First generalization (of `EqLift`)
 --

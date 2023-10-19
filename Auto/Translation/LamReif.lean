@@ -277,6 +277,7 @@ def resolveLamBaseTermImport : LamBaseTerm → ReifM LamBaseTerm
 | .eqI n      => do return .eq (← lookupLamILTy! n)
 | .forallEI n => do return .forallE (← lookupLamILTy! n)
 | .existEI n  => do return .existE (← lookupLamILTy! n)
+| .condI n    => do return .cond (← lookupLamILTy! n)
 | t           => pure t
 
 /-- Models `resolveImport` on the `meta` level -/
@@ -292,13 +293,13 @@ def resolveImport : LamTerm → ReifM LamTerm
   This is the inverse of `resolveImport`
   · When importing external proof `H : α`, we will reify `α`
     into `t : LamTerm` using `reifTerm`. The `t` returned
-    by `reifTerm` has `eq` for `Eq`, `forallE` for `∀` and
-    `existE` for `∃`.
+    by `reifTerm` has `eq` for `Eq`, `forallE` for `∀`,
+    `existE` for `∃` and `cond` for `Auto.Bool.cond'`
   · It's easy to see that `t.interp` will not be definitionally
-    equal to `α` because `=, ∀, ∃` within `α` operates on the
-    original domain, while `=, ∀, ∃` in `t.interp` operates on
+    equal to `α` because `=, ∀, ∃, cond'` within `α` operates on the
+    original domain, while `=, ∀, ∃, cond'` in `t.interp` operates on
     the lifted domain
-  · Therefore, we need to turn `=, ∀, ∃` in `t` into import
+  · Therefore, we need to turn `=, ∀, ∃, cond'` in `t` into import
     version to get `t'`, and design an appropriate `ilVal`,
     such that `GLift.down t'.interp` is definitionally equal to `α`  
 -/ 
@@ -310,6 +311,7 @@ def mkImportVersion : LamTerm → ReifM LamTerm
   | .eq s      => return .base (.eqI (← sort2LamILTyIdx s))
   | .forallE s => return .base (.forallEI (← sort2LamILTyIdx s))
   | .existE s  => return .base (.existEI (← sort2LamILTyIdx s))
+  | .cond s    => return .base (.condI (← sort2LamILTyIdx s))
   | b => return .base b
 | .bvar n => return (.bvar n)
 | .lam s t => do
@@ -489,6 +491,134 @@ section ILLifting
     return ilLift
 
 end ILLifting
+
+-- This section should only be used when exporting terms to external provers
+section ExportUtils
+
+  def exportError.ImpPolyLog :=
+    "Import versions of polymorphic logical " ++
+    "constants should have been eliminated"
+
+  def collectLamSortAtoms : LamSort → HashSet Nat
+  | .atom n => HashSet.empty.insert n
+  | .base _ => HashSet.empty
+  | .func a b => (collectLamSortAtoms a).insertMany (collectLamSortAtoms b)
+
+  def collectLamSortsAtoms (ss : Array LamSort) : HashSet Nat :=
+    ss.foldl (fun hs s => hs.insertMany (collectLamSortAtoms s)) HashSet.empty
+
+  def collectLamSortBitVecLengths : LamSort → HashSet Nat
+  | .base (.bv n) => HashSet.empty.insert n
+  | .func a b => (collectLamSortBitVecLengths a).insertMany (collectLamSortBitVecLengths b)
+  | _ => HashSet.empty
+
+  def collectLamSortsBitVecLengths (ss : Array LamSort) : HashSet Nat :=
+    ss.foldl (fun hs s => hs.insertMany (collectLamSortBitVecLengths s)) HashSet.empty
+
+  /-- Collect type atoms in a LamBaseTerm -/
+  def collectLamBaseTermAtoms (b : LamBaseTerm) : CoreM (HashSet Nat) := do
+    let s? : Option LamSort ← (do
+      match b with
+      | .eqI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
+      | .forallEI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
+      | .existEI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
+      | .condI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
+      | .eq s => return .some s
+      | .forallE s => return .some s
+      | .existE s => return .some s
+      | .cond s => return .some s
+      | _ => return none)
+    if let .some s := s? then
+      return collectLamSortAtoms s
+    else
+      return HashSet.empty
+
+  /--
+    The first hashset is the type atoms
+    The second hashset is the term atoms
+    The third hashset is the term etoms
+    This function is called when we're trying to export terms
+      from `λ` to external provers, e.g. Lean/Duper
+    Therefore, we expect that `eqI, forallEI, existEI` and ``cond'`
+      does not occur in the `LamTerm`
+  -/
+  def collectLamTermAtoms (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort) :
+    LamTerm → CoreM (HashSet Nat × HashSet Nat × HashSet Nat)
+  | .atom n => do
+    let .some s := lamVarTy[n]?
+      | throwError "collectAtoms :: Unknown term atom {n}"
+    return (collectLamSortAtoms s, HashSet.empty.insert n, HashSet.empty)
+  | .etom n => do
+    let .some s := lamEVarTy[n]?
+      | throwError "collectAtoms :: Unknown etom {n}"
+    return (collectLamSortAtoms s, HashSet.empty, HashSet.empty.insert n)
+  | .base b => do
+    return (← collectLamBaseTermAtoms b, HashSet.empty, HashSet.empty)
+  | .bvar _ => pure (HashSet.empty, HashSet.empty, HashSet.empty)
+  | .lam s t => do
+    let (typeHs, termHs, etomHs) ← collectLamTermAtoms lamVarTy lamEVarTy t
+    let sHs := collectLamSortAtoms s
+    return (mergeHashSet typeHs sHs, termHs, etomHs)
+  | .app _ t₁ t₂ => do
+    let (typeHs₁, termHs₁, etomHs₁) ← collectLamTermAtoms lamVarTy lamEVarTy t₁
+    let (typeHs₂, termHs₂, etomHs₂) ← collectLamTermAtoms lamVarTy lamEVarTy t₂
+    return (mergeHashSet typeHs₁ typeHs₂,
+            mergeHashSet termHs₁ termHs₂,
+            mergeHashSet etomHs₁ etomHs₂)
+
+  def collectLamTermsAtoms (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort)
+    (ts : Array LamTerm) : CoreM (HashSet Nat × HashSet Nat × HashSet Nat) :=
+    ts.foldlM (fun (tyHs, aHs, eHs) t => do
+      let (tyHs', aHs', eHs') ← collectLamTermAtoms lamVarTy lamEVarTy t
+      return (mergeHashSet tyHs tyHs', mergeHashSet aHs aHs', mergeHashSet eHs eHs'))
+      (HashSet.empty, HashSet.empty, HashSet.empty)
+
+  def collectLamTermNatConsts : LamTerm → HashSet NatConst
+  | .base (.ncst nc) => HashSet.empty.insert nc
+  | .lam _ body => collectLamTermNatConsts body
+  | .app _ fn arg => mergeHashSet (collectLamTermNatConsts fn) (collectLamTermNatConsts arg)
+  | _ => HashSet.empty
+
+  def collectLamTermsNatConsts (ts : Array LamTerm) : HashSet NatConst :=
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermNatConsts t)) HashSet.empty
+
+  def collectLamTermIntConsts : LamTerm → HashSet IntConst
+  | .base (.icst ic) => HashSet.empty.insert ic
+  | .lam _ body => collectLamTermIntConsts body
+  | .app _ fn arg => mergeHashSet (collectLamTermIntConsts fn) (collectLamTermIntConsts arg)
+  | _ => HashSet.empty
+
+  def collectLamTermsIntConsts (ts : Array LamTerm) : HashSet IntConst :=
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermIntConsts t)) HashSet.empty
+
+  def collectLamTermStringConsts : LamTerm → HashSet StringConst
+  | .base (.scst sc) => HashSet.empty.insert sc
+  | .lam _ body => collectLamTermStringConsts body
+  | .app _ fn arg => mergeHashSet (collectLamTermStringConsts fn) (collectLamTermStringConsts arg)
+  | _ => HashSet.empty
+
+  def collectLamTermsStringConsts (ts : Array LamTerm) : HashSet StringConst :=
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermStringConsts t)) HashSet.empty
+
+  def collectLamTermBitvecs : LamTerm → HashSet BitVecConst
+  | .base (.bvcst bvc) => HashSet.empty.insert bvc
+  | .lam _ body => collectLamTermBitvecs body
+  | .app _ fn arg => mergeHashSet (collectLamTermBitvecs fn) (collectLamTermBitvecs arg)
+  | _ => HashSet.empty
+
+  def collectLamTermsBitvecs (ts : Array LamTerm) : HashSet BitVecConst :=
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermBitvecs t)) HashSet.empty
+
+  def collectLamTermCondSorts : LamTerm → HashSet LamSort
+  | .base (.cond s) => HashSet.empty.insert s
+  | .lam _ body => collectLamTermCondSorts body
+  | .app _ fn arg => mergeHashSet (collectLamTermCondSorts fn) (collectLamTermCondSorts arg)
+  | _ => HashSet.empty
+
+  def collectLamTermsCondSorts (ts : Array LamTerm) : HashSet LamSort :=
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermCondSorts t)) HashSet.empty
+
+end ExportUtils
 
 -- Functions that operates on the checker table
 section Checker
@@ -766,6 +896,11 @@ section Checker
       | throwError "boolFacts :: Unexpected evaluation result"
     return re
 
+  def condSpec (s : LamSort) : ReifM REntry := do
+    let (_, .addEntry re) ← newChkStep (.f (.condSpec s)) .none
+      | throwError "condSpec :: Unexpected evaluation result"
+    return re
+
   def skolemize (exV : REntry) : ReifM REntry := do
     let eidx ← getMaxEVarSucc
     let ex ← lookupREntryPos! exV
@@ -998,6 +1133,10 @@ section CheckerUtils
     if vs.any (fun re => re.containsSort (.base .bool)) then
       let factsConj ← boolFacts
       ret := ret.append (← decomposeAnd factsConj [])
+    -- Cond specification
+    let allLamTerms := (vs.map (fun re => Array.mk (REntry.allLamTerms re))).concatMap id
+    let condSorts := collectLamTermsCondSorts allLamTerms
+    let _ ← condSorts.toArray.mapM condSpec
     return ret
 
 end CheckerUtils
@@ -1227,7 +1366,7 @@ def processLam0Arg3 (e fn arg₁ arg₂ arg₃ : Expr) : MetaM (Option LamTerm) 
         if (← Meta.isDefEqD e (mkApp2 (.const ``Std.BitVec.ofNat []) (.lit (.natVal n)) arg₂)) then
           let .lit (.natVal nv) := arg₂
             | throwError "processLam0Arg3 :: OfNat.ofNat instance is not based on a nat literal"
-          return .some (.base (.bvval' n nv))
+          return .some (.base (.bvVal' n nv))
       return .none
     | _ => return .none
   | _ => return .none
@@ -1585,6 +1724,8 @@ def processNewTermExpr (e : Expr) : ReifM LamTerm :=
     return .base (.forallE (← reifType α))
   | .app (.const ``Exists _) α =>
     return .base (.existE (← reifType α))
+  | .app (.const ``Bool.cond' _) α =>
+    return .base (.cond (← reifType α))
   | e => do
     if let .some res ← processComplexTermExpr e then
       return res
@@ -1930,123 +2071,6 @@ section BuildChecker
 
 end BuildChecker
 
--- This section should only be used when exporting terms to external provers
-section ExportUtils
-
-  def exportError.ImpPolyLog :=
-    "Import versions of polymorphic logical " ++
-    "constants should have been eliminated"
-
-  def collectLamSortAtoms : LamSort → HashSet Nat
-  | .atom n => HashSet.empty.insert n
-  | .base _ => HashSet.empty
-  | .func a b => (collectLamSortAtoms a).insertMany (collectLamSortAtoms b)
-
-  def collectLamSortsAtoms (ss : Array LamSort) : HashSet Nat :=
-    ss.foldl (fun hs s => hs.insertMany (collectLamSortAtoms s)) HashSet.empty
-
-  def collectLamSortBitVecLengths : LamSort → HashSet Nat
-  | .base (.bv n) => HashSet.empty.insert n
-  | .func a b => (collectLamSortBitVecLengths a).insertMany (collectLamSortBitVecLengths b)
-  | _ => HashSet.empty
-
-  def collectLamSortsBitVecLengths (ss : Array LamSort) : HashSet Nat :=
-    ss.foldl (fun hs s => hs.insertMany (collectLamSortBitVecLengths s)) HashSet.empty
-
-  /-- Collect type atoms in a LamBaseTerm -/
-  def collectLamBaseTermAtoms (b : LamBaseTerm) : CoreM (HashSet Nat) := do
-    let s? : Option LamSort ← (do
-      match b with
-      | .eqI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
-      | .forallEI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
-      | .existEI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
-      | .eq s => return .some s
-      | .forallE s => return .some s
-      | .existE s => return .some s
-      | _ => return none)
-    if let .some s := s? then
-      return collectLamSortAtoms s
-    else
-      return HashSet.empty
-
-  /--
-    The first hashset is the type atoms
-    The second hashset is the term atoms
-    The third hashset is the term etoms
-    This function is called when we're trying to export terms
-      from `λ` to external provers, e.g. Lean/Duper
-    Therefore, we expect that `eqI, forallEI` and `existEI`
-      does not occur in the `LamTerm`
-  -/
-  def collectLamTermAtoms (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort) :
-    LamTerm → CoreM (HashSet Nat × HashSet Nat × HashSet Nat)
-  | .atom n => do
-    let .some s := lamVarTy[n]?
-      | throwError "collectAtoms :: Unknown term atom {n}"
-    return (collectLamSortAtoms s, HashSet.empty.insert n, HashSet.empty)
-  | .etom n => do
-    let .some s := lamEVarTy[n]?
-      | throwError "collectAtoms :: Unknown etom {n}"
-    return (collectLamSortAtoms s, HashSet.empty, HashSet.empty.insert n)
-  | .base b => do
-    return (← collectLamBaseTermAtoms b, HashSet.empty, HashSet.empty)
-  | .bvar _ => pure (HashSet.empty, HashSet.empty, HashSet.empty)
-  | .lam s t => do
-    let (typeHs, termHs, etomHs) ← collectLamTermAtoms lamVarTy lamEVarTy t
-    let sHs := collectLamSortAtoms s
-    return (mergeHashSet typeHs sHs, termHs, etomHs)
-  | .app _ t₁ t₂ => do
-    let (typeHs₁, termHs₁, etomHs₁) ← collectLamTermAtoms lamVarTy lamEVarTy t₁
-    let (typeHs₂, termHs₂, etomHs₂) ← collectLamTermAtoms lamVarTy lamEVarTy t₂
-    return (mergeHashSet typeHs₁ typeHs₂,
-            mergeHashSet termHs₁ termHs₂,
-            mergeHashSet etomHs₁ etomHs₂)
-
-  def collectLamTermsAtoms (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort)
-    (ts : Array LamTerm) : CoreM (HashSet Nat × HashSet Nat × HashSet Nat) :=
-    ts.foldlM (fun (tyHs, aHs, eHs) t => do
-      let (tyHs', aHs', eHs') ← collectLamTermAtoms lamVarTy lamEVarTy t
-      return (mergeHashSet tyHs tyHs', mergeHashSet aHs aHs', mergeHashSet eHs eHs'))
-      (HashSet.empty, HashSet.empty, HashSet.empty)
-
-  def collectLamTermNatConsts : LamTerm → HashSet NatConst
-  | .base (.ncst nc) => HashSet.empty.insert nc
-  | .lam _ body => collectLamTermNatConsts body
-  | .app _ fn arg => mergeHashSet (collectLamTermNatConsts fn) (collectLamTermNatConsts arg)
-  | _ => HashSet.empty
-
-  def collectLamTermsNatConsts (ts : Array LamTerm) : HashSet NatConst :=
-    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermNatConsts t)) HashSet.empty
-
-  def collectLamTermIntConsts : LamTerm → HashSet IntConst
-  | .base (.icst ic) => HashSet.empty.insert ic
-  | .lam _ body => collectLamTermIntConsts body
-  | .app _ fn arg => mergeHashSet (collectLamTermIntConsts fn) (collectLamTermIntConsts arg)
-  | _ => HashSet.empty
-
-  def collectLamTermsIntConsts (ts : Array LamTerm) : HashSet IntConst :=
-    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermIntConsts t)) HashSet.empty
-
-  def collectLamTermStringConsts : LamTerm → HashSet StringConst
-  | .base (.scst sc) => HashSet.empty.insert sc
-  | .lam _ body => collectLamTermStringConsts body
-  | .app _ fn arg => mergeHashSet (collectLamTermStringConsts fn) (collectLamTermStringConsts arg)
-  | _ => HashSet.empty
-
-  def collectLamTermsStringConsts (ts : Array LamTerm) : HashSet StringConst :=
-    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermStringConsts t)) HashSet.empty
-
-  def collectLamTermBitvecs : LamTerm → HashSet BitVecConst
-  | .base (.bvcst bvc) => HashSet.empty.insert bvc
-  | .lam _ body => collectLamTermBitvecs body
-  | .app _ fn arg => mergeHashSet (collectLamTermBitvecs fn) (collectLamTermBitvecs arg)
-  | _ => HashSet.empty
-
-  def collectLamTermsBitvecs (ts : Array LamTerm) : HashSet BitVecConst :=
-    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermBitvecs t)) HashSet.empty
-
-end ExportUtils
-
 end LamReif
 
 
@@ -2129,9 +2153,11 @@ open Embedding.Lam LamReif
   | .eqI _ => throwError transLamBaseTermILErr
   | .forallEI _ => throwError transLamBaseTermILErr
   | .existEI _ => throwError transLamBaseTermILErr
+  | .condI _ => throwError transLamBaseTermILErr
   | .eq s => .eq <$> transLamSort ref s
   | .forallE s => .forallE <$> transLamSort ref s
   | .existE s => .existE <$> transLamSort ref s
+  | .cond s => .cond <$> transLamSort ref s
   | b => return b
 
   mutual
@@ -2199,6 +2225,7 @@ open Embedding.Lam LamReif
     | .f cs => ChkStep.f <$>
       match cs with
       | .boolFacts => return .boolFacts
+      | .condSpec s => do return .condSpec (← transLamSort ref s)
     | .i cs => ChkStep.i <$>
       match cs with
       | .validOfBVarLower pv pn => return .validOfBVarLower (← transPos ref pv) (← transPos ref pn)

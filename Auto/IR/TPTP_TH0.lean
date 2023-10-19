@@ -93,7 +93,7 @@ def transStringConst : StringConst → String
 def transStringConstSort (sc : StringConst) := transLamSort sc.lamCheck
 
 def transBitVecConst : BitVecConst → String
-| .bvval n i        => s!"t_bvval_{n}_{i}"
+| .bvVal n i        => s!"t_bvVal_{n}_{i}"
 | .bvofNat n        => s!"t_bvofNat_{n}"
 | .bvtoNat n        => s!"t_bvtoNat_{n}"
 | .bvofInt n        => s!"t_bvofInt_{n}"
@@ -145,6 +145,7 @@ def transLamBaseTerm : LamBaseTerm → Except String String
 | .eqI _      => .error "transLamBaseTerm :: eqI should not occur here"
 | .forallEI _ => .error "transLamBaseTerm :: forallEI should not occur here"
 | .existEI _  => .error "transLamBaseTerm :: existEI should not occur here"
+| .condI _    => .error "transLamBaseTerm :: condI should not occur here"
 | .eq _       => .ok s!"(=)"
 | .forallE s  =>
   if s == .base .empty then
@@ -156,6 +157,7 @@ def transLamBaseTerm : LamBaseTerm → Except String String
     .ok s!"(^ [EPF : {transLamSort (.func s (.base .prop))}] : $false)"
   else
     .ok s!"??"
+| .cond s     => .ok s!"(^ [b : {transLamSort (.base .prop)}] : ^ [x : {transLamSort s}] : ^ [y : {transLamSort s}] : $ite(b, x, y))"
 
 partial def transLamTerm (t : LamTerm) (lctx := 0) : Except String String :=
   match t with

@@ -467,9 +467,10 @@ theorem LamTerm.maxEVarSucc_bvarLower?
   LamTerm.maxEVarSucc_bvarLowersIdx? heq
 
 private def getILSortString : LamBaseTerm → String
-| .eq s => s!"{s}"
+| .eq s      => s!"{s}"
 | .forallE s => s!"{s}"
-| .existE s => s!"{s}"
+| .existE s  => s!"{s}"
+| .cond s    => s!"{s}"
 | _ => "❌"
 
 -- Unfortunately, we have to define `bvarLift` before defining `toStringLCtx`
@@ -515,7 +516,18 @@ partial def LamTerm.toStringLCtx (lctx : Nat) : LamTerm → String
       | [(_, arg)] => s!"({toStringLCtx lctx arg} {b})"
       | [(_, arg₁), (_, arg₂)] => s!"({toStringLCtx lctx arg₁} {b} {toStringLCtx lctx arg₂})"
       | _ => "❌"
-    | _ => s!"({b}" ++ String.join (args.map (fun (_, arg) => " " ++ toStringLCtx lctx arg)) ++ ")"
+    | _ =>
+      match b with
+      | .cond _ =>
+        match args with
+        | [] => "❌"
+        | [(_, arg)] => s!"({toStringLCtx lctx arg} ? · : ·)"
+        | [(_, arg₁), (_, arg₂)] => s!"({toStringLCtx lctx arg₁} ? {toStringLCtx lctx arg₂} : ·)"
+        | [(_, arg₁), (_, arg₂), (_, arg₃)] => s!"({toStringLCtx lctx arg₁} ? {toStringLCtx lctx arg₂} : {toStringLCtx lctx arg₃})"
+        | (_, arg₁) :: (_, arg₂) :: (_, arg₃) :: tail@(_::_) =>
+          let head := s!"({toStringLCtx lctx arg₁} ? {toStringLCtx lctx arg₂} : {toStringLCtx lctx arg₃})"
+          "(" ++ head ++ String.join (tail.map (fun (_, arg) => " " ++ toStringLCtx lctx arg)) ++ ")"
+      | _ => s!"({b}" ++ String.join (args.map (fun (_, arg) => " " ++ toStringLCtx lctx arg)) ++ ")"
   | fn => "(" ++ toStringLCtx lctx fn ++ " " ++ String.intercalate " " (args.map (fun x => toStringLCtx lctx x.snd)) ++ ")"
 
 def LamTerm.toString := LamTerm.toStringLCtx 0

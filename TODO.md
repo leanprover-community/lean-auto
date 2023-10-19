@@ -15,6 +15,7 @@ __Auto Issues:__
   #check (fun (x : Nonstruct) => x.1)
   ```
 * Bitwise operation for ``Nat``
+* Implement simplification for bitvectors
 
 __Lean Issues:__
 * ``cases`` fails on some simple examples. E.g, ``cases h : a.beq b`` fails if the goal contains term

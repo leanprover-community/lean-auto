@@ -1874,11 +1874,26 @@ def LamWF.boolFacts : LamWF ltv ⟨lctx, LamTerm.boolFacts, .base .prop⟩ := .m
 theorem LamTerm.maxEVarSucc_boolFacts : maxEVarSucc boolFacts = 0 := rfl
 
 theorem LamThmValid.boolFacts : LamThmValid lval [] LamTerm.boolFacts := by
-  intro lctxTerm; rw [pushLCtxs_nil]; dsimp [LamTerm.boolFacts]
+  intro lctx'; rw [pushLCtxs_nil]; dsimp [LamTerm.boolFacts]
   rw [LamValid.and_equiv, LamValid.and_equiv, LamValid.and_equiv]
   rw [LamValid.and_equiv, LamValid.and_equiv, LamValid.and_equiv, LamValid.and_equiv]
   apply And.intro
     (And.intro (And.intro (emb _) (false_ne_true _)) (And.intro (not_true_eq_false _) (not_false_eq_true _)))
     (And.intro (And.intro (false_and_eq_false _) (true_and_eq_id _)) (And.intro (false_or_eq_id _) (true_or_eq_true _)))
+
+def LamTerm.condSpec (s : LamSort) : LamTerm :=
+  .mkForallEF s (.mkForallEF s (.mkAnd
+      (.mkEq s (.mkCond s (.base .trueb') (.bvar 0) (.bvar 1)) (.bvar 0))
+      (.mkEq s (.mkCond s (.base .falseb') (.bvar 0) (.bvar 1)) (.bvar 1))))
+
+def LamWF.condSpec (s : LamSort) : LamWF ltv ⟨lctx, .condSpec s, .base .prop⟩ :=
+  .mkForallEF (.mkForallEF (.mkAnd
+    (.mkEq (.mkCond (.ofBase .ofTrueB') (.ofBVar 0) (.ofBVar 1)) (.ofBVar 0))
+    (.mkEq (.mkCond (.ofBase .ofFalseB') (.ofBVar 0) (.ofBVar 1)) (.ofBVar 1))))
+
+theorem LamTerm.maxEVarSucc_condSpec (s : LamSort) : maxEVarSucc (condSpec s) = 0 := rfl
+
+theorem LamThmValid.condSpec (s : LamSort) : LamThmValid lval [] (LamTerm.condSpec s) := by
+  intro lctx'; rw [pushLCtxs_nil]; exists LamWF.condSpec s; intro _ x y; apply And.intro rfl rfl
 
 end Auto.Embedding.Lam

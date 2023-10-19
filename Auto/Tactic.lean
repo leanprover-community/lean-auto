@@ -221,8 +221,6 @@ def collectAllLemmas (hintstx : TSyntax ``hints) (unfolds : TSyntax `Auto.unfold
 def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : Array Lemma) : TacticM Result := do
   let instr ← parseInstr instrstx
   let declName? ← Elab.Term.getDeclName?
-  -- Add auxiliary lemmas
-  let lemmas := lemmas.append (← auxLemmas lemmas)
   match instr with
   | .none =>
     let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) (minds : Array (Array SimpleIndVal)) : LamReif.ReifM Expr := (do

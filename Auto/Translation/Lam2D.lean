@@ -12,7 +12,7 @@ initialize
   registerTraceClass `auto.lam2D
 
 /-
-  Lam2D : Simply-typed lambda calculus to Lean
+  Lam2D : Simply-typed lambda calculus to Lean expression
   The reason we need this is that, sometimes we need external
     provers (e.g. duper) to help us construct proofs.
   Note that external provers does not work with things like
@@ -173,7 +173,7 @@ def interpStringConstAsUnlifted : StringConst → Expr
 
 open Embedding in
 def interpBitVecConstAsUnlifted : BitVecConst → Expr
-| .bvval n i         => mkApp2 (.const ``Std.BitVec.ofNat []) (.lit (.natVal n)) (.lit (.natVal i))
+| .bvVal n i         => mkApp2 (.const ``Std.BitVec.ofNat []) (.lit (.natVal n)) (.lit (.natVal i))
 | .bvofNat n         => .app (.const ``Std.BitVec.ofNat []) (.lit (.natVal n))
 | .bvtoNat n         => .app (.const ``Std.BitVec.toNat []) (.lit (.natVal n))
 | .bvofInt n         => .app (.const ``Std.BitVec.ofInt []) (.lit (.natVal n))
@@ -227,6 +227,7 @@ def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
 | .eqI _      => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
 | .forallEI _ => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
 | .existEI _  => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
+| .condI _    => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
 | .eq s       => do
   return ← runMetaM <| Meta.mkAppOptM ``Eq #[← interpLamSortAsUnlifted s]
 | .forallE s  => do
@@ -240,6 +241,8 @@ def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
   return mkAppN forallFExpr #[← interpLamSortAsUnlifted s]
 | .existE s  => do
   return ← runMetaM <| Meta.mkAppOptM ``Exists #[← interpLamSortAsUnlifted s]
+| .cond s    => do
+  return ← runMetaM <| Meta.mkAppOptM ``Bool.cond' #[← interpLamSortAsUnlifted s]
 
 /--
   Takes a `t : LamTerm` and produces the `un-lifted` version of `t.interp`.
