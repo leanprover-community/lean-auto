@@ -1136,7 +1136,7 @@ section CheckerUtils
     -- Cond specification
     let allLamTerms := (vs.map (fun re => Array.mk (REntry.allLamTerms re))).concatMap id
     let condSorts := collectLamTermsCondSorts allLamTerms
-    let _ ← condSorts.toArray.mapM condSpec
+    ret := ret.append (← condSorts.toArray.mapM condSpec)
     return ret
 
 end CheckerUtils

@@ -436,6 +436,9 @@ end DefinitionRecognition
 section Adhoc
 
   -- If-then-else
+  example (h : if true then False else True) : False := by
+    auto
+
   example (h₁ : if 2 < 3 then False else True) (h₂ : 2 < 3) : False := by
     auto
 

@@ -16,6 +16,7 @@ __Auto Issues:__
   ```
 * Bitwise operation for ``Nat``
 * Implement simplification for bitvectors
+* Better support for ``ite``
 
 __Lean Issues:__
 * ``cases`` fails on some simple examples. E.g, ``cases h : a.beq b`` fails if the goal contains term

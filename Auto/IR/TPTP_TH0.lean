@@ -158,7 +158,7 @@ def transLamBaseTerm : LamBaseTerm → Except String String
     .ok s!"(^ [EPF : {transLamSort (.func s (.base .prop))}] : $false)"
   else
     .ok s!"??"
-| .cond s     => .ok s!"(^ [b : {transLamSort (.base .prop)}] : ^ [x : {transLamSort s}] : ^ [y : {transLamSort s}] : $ite(b, x, y))"
+| .cond s     => .ok s!"(^ [IB : {transLamSort (.base .prop)}] : ^ [IX : {transLamSort s}] : ^ [IY : {transLamSort s}] : $ite(IB, IX, IY))"
 
 partial def transLamTerm (t : LamTerm) (lctx := 0) : Except String String :=
   match t with
