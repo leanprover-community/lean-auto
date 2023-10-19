@@ -43,14 +43,6 @@ theorem Bool.ofProp_spec' (c : Prop) : Bool.ofProp c = false ↔ ¬ c := by
   conv => enter [2, 1]; rw [← Bool.ofProp_spec c]
   simp
 
-/--
-  Similar to `Bool.cond`, but allows `Prop` argument
--/
-def Bool.cond' {α : Sort u} (b : Bool) (x y : α) :=
-  match b with
-  | true => x
-  | false => y
-
 theorem Bool.ite_eq_true (p : Prop) [inst : Decidable p] (a b : α) : p → ite p a b = a := by
   intro hp; dsimp [ite]; cases inst
   case isFalse hnp => apply False.elim (hnp hp)
@@ -62,13 +54,27 @@ theorem Bool.ite_eq_false (p : Prop) [inst : Decidable p] (a b : α) : ¬ p → 
   case isTrue hp => apply False.elim (hnp hp)
 
 /--
+  Similar to `ite`, but does not have complicated dependent types
+-/
+noncomputable def Bool.ite' {α : Sort u} (p : Prop) (x y : α) :=
+  match Bool.ofProp p with
+  | true => x
+  | false => y
+
+/--
   Invoke `rw` at the beginning of `auto`
 -/
-theorem Bool.ite_simp.{u} : @ite = fun (α : Sort u) p _ => @cond' α (Bool.ofProp p) := by
+theorem Bool.ite_simp.{u} : @ite = fun (α : Sort u) p _ => @ite' α p := by
   funext α p _ x y
-  cases h : Bool.ofProp p
-  case false => rw [Bool.ite_eq_false]; rfl; apply (Bool.ofProp_spec' _).mp h
-  case true  => rw [Bool.ite_eq_true]; rfl; apply (Bool.ofProp_spec _).mp h
+  dsimp [ite']; cases h : Bool.ofProp p
+  case false => rw [Bool.ite_eq_false]; apply (Bool.ofProp_spec' _).mp h
+  case true  => rw [Bool.ite_eq_true]; apply (Bool.ofProp_spec _).mp h
+
+theorem Bool.ite'_eq_true (p : Prop) (a b : α) : p → ite' p a b = a := by
+  intro hp; apply Bool.ite_simp ▸ @Bool.ite_eq_true _ p (Classical.propDecidable _) a b hp
+
+theorem Bool.ite'_eq_false (p : Prop) (a b : α) : ¬ p → ite' p a b = b := by
+  intro hp; apply Bool.ite_simp ▸ @Bool.ite_eq_false _ p (Classical.propDecidable _) a b hp
 
 /--
   Invoke `rw` at the beginning of `auto`

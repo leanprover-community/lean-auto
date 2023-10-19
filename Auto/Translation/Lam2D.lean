@@ -228,7 +228,7 @@ def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
 | .eqI _      => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
 | .forallEI _ => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
 | .existEI _  => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
-| .condI _    => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
+| .iteI _     => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
 | .eq s       => do
   return ← runMetaM <| Meta.mkAppOptM ``Eq #[← interpLamSortAsUnlifted s]
 | .forallE s  => do
@@ -242,8 +242,8 @@ def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
   return mkAppN forallFExpr #[← interpLamSortAsUnlifted s]
 | .existE s  => do
   return ← runMetaM <| Meta.mkAppOptM ``Exists #[← interpLamSortAsUnlifted s]
-| .cond s    => do
-  return ← runMetaM <| Meta.mkAppOptM ``Bool.cond' #[← interpLamSortAsUnlifted s]
+| .ite s     => do
+  return ← runMetaM <| Meta.mkAppOptM ``Bool.ite' #[← interpLamSortAsUnlifted s]
 
 /--
   Takes a `t : LamTerm` and produces the `un-lifted` version of `t.interp`.

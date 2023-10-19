@@ -470,7 +470,7 @@ private def getILSortString : LamBaseTerm → String
 | .eq s      => s!"{s}"
 | .forallE s => s!"{s}"
 | .existE s  => s!"{s}"
-| .cond s    => s!"{s}"
+| .ite s     => s!"{s}"
 | _ => "❌"
 
 -- Unfortunately, we have to define `bvarLift` before defining `toStringLCtx`
@@ -518,7 +518,7 @@ partial def LamTerm.toStringLCtx (lctx : Nat) : LamTerm → String
       | _ => "❌"
     | _ =>
       match b with
-      | .cond _ =>
+      | .ite _ =>
         match args with
         | [] => "❌"
         | [(_, arg)] => s!"({toStringLCtx lctx arg} ? · : ·)"

@@ -316,25 +316,28 @@ def ExistLift.default (β : Sort v') : ExistLift.{v', w} β :=
   ⟨fun (p : β → GLift.{1, w} Prop) => GLift.up (∃ (x : β), GLift.down (p x)), fun _ => id, fun _ => id⟩
 
 -- Isomorphic domain, β is the lifted one
-def condLift {α : Sort u} {β : Sort v} (I : IsomType α β) (b : GLift.{_, x} Bool) (x y : β) :=
-  I.f (Bool.cond' b.down (I.g x) (I.g y))
+noncomputable def iteLift {α : Sort u} {β : Sort v} (I : IsomType α β) (b : GLift.{_, x} Prop) (x y : β) :=
+  I.f (Bool.ite' b.down (I.g x) (I.g y))
 
-def condLift.wf
+def iteLift.wf
   {α : Sort u} {β : Sort v} (I : IsomType α β)
-  (b : GLift.{_, x} Bool) (x y : β) : condLift I b x y = Bool.cond' b.down x y := by
-  cases b; case up b => cases b <;> dsimp [condLift, Bool.cond'] <;> rw [IsomType.eq₂ I]
+  (p : GLift.{_, x} Prop) (x y : β) : iteLift I p x y = Bool.ite' p.down x y := by
+  cases p; case up p =>
+    cases Classical.em p <;> dsimp [iteLift]
+    case inl hp => simp [Bool.ite'_eq_true _ _ _ hp, IsomType.eq₂ I]
+    case inr hp => simp [Bool.ite'_eq_false _ _ _ hp, IsomType.eq₂ I]
 
-structure CondLift (β : Sort v') where
-  condF : GLift.{1, v} Bool → β → β → β
-  wf    : ∀ (b : GLift.{1, v} Bool) (x y : β), condF b x y = Bool.cond' b.down x y 
+structure IteLift (β : Sort v') where
+  iteF : GLift.{1, v} Prop → β → β → β
+  wf    : ∀ (b : GLift.{1, v} Prop) (x y : β), iteF b x y = Bool.ite' b.down x y 
 
-def CondLift.ofIsomTy.{u, v, x} {α : Sort u} {β : Sort v} (I : IsomType α β) : CondLift.{v, x} β :=
-  ⟨condLift.{u, v, x} I, condLift.wf I⟩
+noncomputable def IteLift.ofIsomTy.{u, v, x} {α : Sort u} {β : Sort v} (I : IsomType α β) : IteLift.{v, x} β :=
+  ⟨iteLift.{u, v, x} I, iteLift.wf I⟩
 
-def condLiftFn.{u} (β : Type u) (b : GLift.{1, u} Bool) (x y : β) := Bool.cond' b.down x y
+noncomputable def iteLiftFn.{u} (β : Type u) (b : GLift.{1, u} Prop) (x y : β) := Bool.ite' b.down x y
 
-def CondLift.default (β : Sort v') : CondLift.{v', w} β :=
-  ⟨fun b x y => Bool.cond' b.down x y, fun _ _ _ => rfl⟩
+noncomputable def IteLift.default (β : Sort v') : IteLift.{v', w} β :=
+  ⟨fun b x y => Bool.ite' b.down x y, fun _ _ _ => rfl⟩
 
 -- !! First generalization (of `EqLift`)
 --
@@ -350,7 +353,7 @@ def CondLift.default (β : Sort v') : CondLift.{v', w} β :=
 --   down : ∀ (x y : β), fF ⟨x, y⟩ → f β ⟨x, y⟩
 --   up   : ∀ (x y : β), f β ⟨x, y⟩ → fF ⟨x, y⟩
 --
--- !!Second Generalization (of the above `FLift`)
+-- !!Seite Generalization (of the above `FLift`)
 --
 -- structure FLift (β : Sort u) (γ : Sort u → Sort u) (f : ∀ (α : Sort u), γ α → Prop) where
 --   fF   : γ β → Prop

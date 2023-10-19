@@ -146,7 +146,7 @@ def transLamBaseTerm : LamBaseTerm → Except String String
 | .eqI _      => .error "transLamBaseTerm :: eqI should not occur here"
 | .forallEI _ => .error "transLamBaseTerm :: forallEI should not occur here"
 | .existEI _  => .error "transLamBaseTerm :: existEI should not occur here"
-| .condI _    => .error "transLamBaseTerm :: condI should not occur here"
+| .iteI _     => .error "transLamBaseTerm :: iteI should not occur here"
 | .eq _       => .ok s!"(=)"
 | .forallE s  =>
   if s == .base .empty then
@@ -158,7 +158,7 @@ def transLamBaseTerm : LamBaseTerm → Except String String
     .ok s!"(^ [EPF : {transLamSort (.func s (.base .prop))}] : $false)"
   else
     .ok s!"??"
-| .cond s     => .ok s!"(^ [IB : {transLamSort (.base .prop)}] : ^ [IX : {transLamSort s}] : ^ [IY : {transLamSort s}] : $ite(IB, IX, IY))"
+| .ite s      => .ok s!"(^ [IB : {transLamSort (.base .prop)}] : ^ [IX : {transLamSort s}] : ^ [IY : {transLamSort s}] : $ite(IB, IX, IY))"
 
 partial def transLamTerm (t : LamTerm) (lctx := 0) : Except String String :=
   match t with

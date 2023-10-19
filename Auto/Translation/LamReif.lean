@@ -277,7 +277,7 @@ def resolveLamBaseTermImport : LamBaseTerm → ReifM LamBaseTerm
 | .eqI n      => do return .eq (← lookupLamILTy! n)
 | .forallEI n => do return .forallE (← lookupLamILTy! n)
 | .existEI n  => do return .existE (← lookupLamILTy! n)
-| .condI n    => do return .cond (← lookupLamILTy! n)
+| .iteI n     => do return .ite (← lookupLamILTy! n)
 | t           => pure t
 
 /-- Models `resolveImport` on the `meta` level -/
@@ -294,12 +294,12 @@ def resolveImport : LamTerm → ReifM LamTerm
   · When importing external proof `H : α`, we will reify `α`
     into `t : LamTerm` using `reifTerm`. The `t` returned
     by `reifTerm` has `eq` for `Eq`, `forallE` for `∀`,
-    `existE` for `∃` and `cond` for `Auto.Bool.cond'`
+    `existE` for `∃` and `ite` for `Auto.Bool.ite'`
   · It's easy to see that `t.interp` will not be definitionally
-    equal to `α` because `=, ∀, ∃, cond'` within `α` operates on the
-    original domain, while `=, ∀, ∃, cond'` in `t.interp` operates on
+    equal to `α` because `=, ∀, ∃, ite'` within `α` operates on the
+    original domain, while `=, ∀, ∃, ite'` in `t.interp` operates on
     the lifted domain
-  · Therefore, we need to turn `=, ∀, ∃, cond'` in `t` into import
+  · Therefore, we need to turn `=, ∀, ∃, ite'` in `t` into import
     version to get `t'`, and design an appropriate `ilVal`,
     such that `GLift.down t'.interp` is definitionally equal to `α`  
 -/ 
@@ -311,7 +311,7 @@ def mkImportVersion : LamTerm → ReifM LamTerm
   | .eq s      => return .base (.eqI (← sort2LamILTyIdx s))
   | .forallE s => return .base (.forallEI (← sort2LamILTyIdx s))
   | .existE s  => return .base (.existEI (← sort2LamILTyIdx s))
-  | .cond s    => return .base (.condI (← sort2LamILTyIdx s))
+  | .ite s     => return .base (.iteI (← sort2LamILTyIdx s))
   | b => return .base b
 | .bvar n => return (.bvar n)
 | .lam s t => do
@@ -522,11 +522,11 @@ section ExportUtils
       | .eqI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
       | .forallEI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
       | .existEI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
-      | .condI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
+      | .iteI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
       | .eq s => return .some s
       | .forallE s => return .some s
       | .existE s => return .some s
-      | .cond s => return .some s
+      | .ite s => return .some s
       | _ => return none)
     if let .some s := s? then
       return collectLamSortAtoms s
@@ -539,7 +539,7 @@ section ExportUtils
     The third hashset is the term etoms
     This function is called when we're trying to export terms
       from `λ` to external provers, e.g. Lean/Duper
-    Therefore, we expect that `eqI, forallEI, existEI` and ``cond'`
+    Therefore, we expect that `eqI, forallEI, existEI` and ``ite'`
       does not occur in the `LamTerm`
   -/
   def collectLamTermAtoms (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort) :
@@ -609,14 +609,14 @@ section ExportUtils
   def collectLamTermsBitvecs (ts : Array LamTerm) : HashSet BitVecConst :=
     ts.foldl (fun hs t => mergeHashSet hs (collectLamTermBitvecs t)) HashSet.empty
 
-  def collectLamTermCondSorts : LamTerm → HashSet LamSort
-  | .base (.cond s) => HashSet.empty.insert s
-  | .lam _ body => collectLamTermCondSorts body
-  | .app _ fn arg => mergeHashSet (collectLamTermCondSorts fn) (collectLamTermCondSorts arg)
+  def collectLamTermIteSorts : LamTerm → HashSet LamSort
+  | .base (.ite s) => HashSet.empty.insert s
+  | .lam _ body => collectLamTermIteSorts body
+  | .app _ fn arg => mergeHashSet (collectLamTermIteSorts fn) (collectLamTermIteSorts arg)
   | _ => HashSet.empty
 
-  def collectLamTermsCondSorts (ts : Array LamTerm) : HashSet LamSort :=
-    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermCondSorts t)) HashSet.empty
+  def collectLamTermsIteSorts (ts : Array LamTerm) : HashSet LamSort :=
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermIteSorts t)) HashSet.empty
 
 end ExportUtils
 
@@ -896,9 +896,9 @@ section Checker
       | throwError "boolFacts :: Unexpected evaluation result"
     return re
 
-  def condSpec (s : LamSort) : ReifM REntry := do
-    let (_, .addEntry re) ← newChkStep (.f (.condSpec s)) .none
-      | throwError "condSpec :: Unexpected evaluation result"
+  def iteSpec (s : LamSort) : ReifM REntry := do
+    let (_, .addEntry re) ← newChkStep (.f (.iteSpec s)) .none
+      | throwError "iteSpec :: Unexpected evaluation result"
     return re
 
   def skolemize (exV : REntry) : ReifM REntry := do
@@ -1133,10 +1133,10 @@ section CheckerUtils
     if vs.any (fun re => re.containsSort (.base .bool)) then
       let factsConj ← boolFacts
       ret := ret.append (← decomposeAnd factsConj [])
-    -- Cond specification
+    -- ite specification
     let allLamTerms := (vs.map (fun re => Array.mk (REntry.allLamTerms re))).concatMap id
-    let condSorts := collectLamTermsCondSorts allLamTerms
-    ret := ret.append (← condSorts.toArray.mapM condSpec)
+    let iteSorts := collectLamTermsIteSorts allLamTerms
+    ret := ret.append (← iteSorts.toArray.mapM iteSpec)
     return ret
 
 end CheckerUtils
@@ -1725,8 +1725,8 @@ def processNewTermExpr (e : Expr) : ReifM LamTerm :=
     return .base (.forallE (← reifType α))
   | .app (.const ``Exists _) α =>
     return .base (.existE (← reifType α))
-  | .app (.const ``Bool.cond' _) α =>
-    return .base (.cond (← reifType α))
+  | .app (.const ``Bool.ite' _) α =>
+    return .base (.ite (← reifType α))
   | e => do
     if let .some res ← processComplexTermExpr e then
       return res
@@ -2154,11 +2154,11 @@ open Embedding.Lam LamReif
   | .eqI _ => throwError transLamBaseTermILErr
   | .forallEI _ => throwError transLamBaseTermILErr
   | .existEI _ => throwError transLamBaseTermILErr
-  | .condI _ => throwError transLamBaseTermILErr
+  | .iteI _ => throwError transLamBaseTermILErr
   | .eq s => .eq <$> transLamSort ref s
   | .forallE s => .forallE <$> transLamSort ref s
   | .existE s => .existE <$> transLamSort ref s
-  | .cond s => .cond <$> transLamSort ref s
+  | .ite s => .ite <$> transLamSort ref s
   | b => return b
 
   mutual
@@ -2226,7 +2226,7 @@ open Embedding.Lam LamReif
     | .f cs => ChkStep.f <$>
       match cs with
       | .boolFacts => return .boolFacts
-      | .condSpec s => do return .condSpec (← transLamSort ref s)
+      | .iteSpec s => do return .iteSpec (← transLamSort ref s)
     | .i cs => ChkStep.i <$>
       match cs with
       | .validOfBVarLower pv pn => return .validOfBVarLower (← transPos ref pv) (← transPos ref pn)

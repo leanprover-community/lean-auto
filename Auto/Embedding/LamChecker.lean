@@ -152,7 +152,7 @@ section CVal
   abbrev ilSigmaMk.{u} (tyVal : Nat → Type u) :=
     @Sigma.mk LamSort (ilβ.{u} tyVal)
   
-  def ilVal.default (lamILTy : Nat → LamSort) (tyVal : Nat → Type u) :
+  noncomputable def ilVal.default (lamILTy : Nat → LamSort) (tyVal : Nat → Type u) :
     ∀ (n : Nat), ILLift.{u} ((lamILTy n).interp tyVal) :=
     fun n => ILLift.default ((lamILTy n).interp tyVal)
 
@@ -161,7 +161,7 @@ section CVal
      fun n => ((cv.il.get? n).getD ⟨.base .prop, ILLift.default _⟩).fst,
      fun n => (levt.get? n).getD (.base .prop)⟩
   
-  def CVal.toLamValuation (cv : CVal.{u} levt) : LamValuation :=
+  noncomputable def CVal.toLamValuation (cv : CVal.{u} levt) : LamValuation :=
     ⟨cv.toLamTyVal, cv.tyVal,
      fun n => ((cv.var.get? n).getD ⟨.base .prop, GLift.up False⟩).snd,
      fun n => ((cv.il.get? n).getD ⟨.base .prop, ILLift.default _⟩).snd,
@@ -183,13 +183,13 @@ section CVal
      fun n => ((cpv.il.get? n).getD ⟨.base .prop, ILLift.default _⟩).fst,
      fun _ => .base .prop⟩
   
-  def CPVal.toLamValuationEraseEtom (cpv : CPVal.{u}) : LamValuation :=
+  noncomputable def CPVal.toLamValuationEraseEtom (cpv : CPVal.{u}) : LamValuation :=
     ⟨cpv.toLamTyValEraseEtom, cpv.tyVal,
      fun n => ((cpv.var.get? n).getD ⟨.base .prop, GLift.up False⟩).snd,
      fun n => ((cpv.il.get? n).getD ⟨.base .prop, ILLift.default _⟩).snd,
      fun _ => GLift.up False⟩
 
-  def CPVal.toLamValuationWithEVar (cpv : CPVal.{u}) (letv : Nat → LamSort)
+  noncomputable def CPVal.toLamValuationWithEVar (cpv : CPVal.{u}) (letv : Nat → LamSort)
     (eVarVal : ∀ (n : Nat), (letv n).interp cpv.tyVal) : LamValuation :=
     ⟨cpv.toLamTyValWithLamEVarTy letv, cpv.tyVal,
      fun n => ((cpv.var.get? n).getD ⟨.base .prop, GLift.up False⟩).snd,
@@ -508,7 +508,7 @@ inductive EtomStep where
 
 inductive FactStep where
   | boolFacts : FactStep
-  | condSpec  : LamSort → FactStep
+  | iteSpec  : LamSort → FactStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
 inductive InferenceStep where
@@ -628,7 +628,7 @@ def EtomStep.toString : EtomStep → String
 
 def FactStep.toString : FactStep → String
 | .boolFacts => s!"boolFacts"
-| .condSpec s => s!"condSpec {s}"
+| .iteSpec s => s!"iteSpec {s}"
 
 def InferenceStep.toString : InferenceStep → String
 | .validOfBVarLower pv pn => s!"validOfBVarLower {pv} {pn}"
@@ -950,7 +950,7 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
 
 @[reducible] def FactStep.eval : (cs : FactStep) → EvalResult
 | .boolFacts => .addEntry (.valid [] LamTerm.boolFacts)
-| .condSpec s => .addEntry (.valid [] (LamTerm.condSpec s))
+| .iteSpec s => .addEntry (.valid [] (LamTerm.iteSpec s))
 
 @[reducible] def InferenceStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : InferenceStep) → EvalResult
 | .validOfBVarLower pv pn =>
@@ -1561,9 +1561,9 @@ theorem FactStep.eval_correct
 | .boolFacts => by
   dsimp [eval]; apply And.intro LamThmValid.boolFacts
   rw [LamTerm.maxEVarSucc_boolFacts]; apply Nat.zero_le
-| .condSpec s => by
-  dsimp [eval]; apply And.intro (LamThmValid.condSpec _)
-  rw [LamTerm.maxEVarSucc_condSpec]; apply Nat.zero_le
+| .iteSpec s => by
+  dsimp [eval]; apply And.intro (LamThmValid.iteSpec _)
+  rw [LamTerm.maxEVarSucc_iteSpec]; apply Nat.zero_le
 
 theorem InferenceStep.eval_correct
   (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :

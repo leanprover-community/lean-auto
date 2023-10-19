@@ -1191,20 +1191,20 @@ inductive LamBaseTerm
   | icst     : IntConst → LamBaseTerm
   | scst     : StringConst → LamBaseTerm
   | bvcst    : BitVecConst → LamBaseTerm
-  -- Versions of `eq, ∀, ∃, cond'` when we're importing external facts
-  -- Note that the [import versions] of `eq, ∀, ∃, cond'` should only be used when
+  -- Versions of `eq, ∀, ∃, ite'` when we're importing external facts
+  -- Note that the [import versions] of `eq, ∀, ∃, ite'` should only be used when
   --   we're importing external facts. When facts are imported, we call
   --   `resolveImport` on them and these [import versions] are turned into
   --   [non-import versions]
   | eqI      : Nat → LamBaseTerm
   | forallEI : Nat → LamBaseTerm
   | existEI  : Nat → LamBaseTerm
-  | condI    : Nat → LamBaseTerm
+  | iteI     : Nat → LamBaseTerm
   -- Non-import versions of `eq, ∀, ∃`
   | eq       : LamSort → LamBaseTerm
   | forallE  : LamSort → LamBaseTerm
   | existE   : LamSort → LamBaseTerm
-  | cond     : LamSort → LamBaseTerm
+  | ite      : LamSort → LamBaseTerm
 deriving Inhabited, Hashable, Lean.ToExpr
 
 def LamBaseTerm.ofProp' := LamBaseTerm.bcst .ofProp
@@ -1308,9 +1308,9 @@ def LamBaseTerm.isExistEI : LamBaseTerm → Bool
 | .existEI _ => true
 | _          => false
 
-def LamBaseTerm.isCondI : LamBaseTerm → Bool
-| .condI _ => true
-| _        => false
+def LamBaseTerm.isIteI : LamBaseTerm → Bool
+| .iteI _ => true
+| _       => false
 
 def LamBaseTerm.isEq : LamBaseTerm → Bool
 | .eq _ => true
@@ -1324,9 +1324,9 @@ def LamBaseTerm.isExistE : LamBaseTerm → Bool
 | .existE _ => true
 | _         => false
 
-def LamBaseTerm.isCond : LamBaseTerm → Bool
-| .cond _ => true
-| _       => false
+def LamBaseTerm.isIte : LamBaseTerm → Bool
+| .ite _ => true
+| _      => false
 
 def LamBaseTerm.reprPrec (l : LamBaseTerm) (n : Nat) :=
   let s :=
@@ -1346,11 +1346,11 @@ def LamBaseTerm.reprPrec (l : LamBaseTerm) (n : Nat) :=
     | .eqI n      => f!".eqI {n}"
     | .forallEI n => f!".forallEI {n}"
     | .existEI n  => f!".existEI {n}"
-    | .condI n    => f!".condI {n}"
+    | .iteI n     => f!".iteI {n}"
     | .eq s       => f!".eq {LamSort.reprPrec s 1}"
     | .forallE s  => f!".forallE {LamSort.reprPrec s 1}"
     | .existE s   => f!".existE {LamSort.reprPrec s 1}"
-    | .cond n     => f!".cond {n}"
+    | .ite n      => f!".ite {n}"
   if n == 0 then
     f!"Auto.Embedding.Lam.LamBaseTerm" ++ s
   else
@@ -1375,11 +1375,11 @@ def LamBaseTerm.toString : LamBaseTerm → String
 | .eqI _      => "="
 | .forallEI _ => "∀"
 | .existEI _  => "∃"
-| .condI _    => "cond"
+| .iteI _     => "ite"
 | .eq _       => "="
 | .forallE _  => "∀"
 | .existE _   => "∃"
-| .cond _     => "cond"
+| .ite _      => "ite"
 
 instance : ToString LamBaseTerm where
   toString := LamBaseTerm.toString
@@ -1400,11 +1400,11 @@ def LamBaseTerm.beq : LamBaseTerm → LamBaseTerm → Bool
 | .eqI n₁,      .eqI n₂      => n₁.beq n₂
 | .forallEI n₁, .forallEI n₂ => n₁.beq n₂
 | .existEI n₁,  .existEI n₂  => n₁.beq n₂
-| .condI n₁,    .condI n₂    => n₁.beq n₂
+| .iteI n₁,     .iteI n₂     => n₁.beq n₂
 | .eq s₁,       .eq s₂       => s₁.beq s₂
 | .forallE s₁,  .forallE s₂  => s₁.beq s₂
 | .existE s₁,   .existE s₂   => s₁.beq s₂
-| .cond s₁,     .cond s₂     => s₁.beq s₂
+| .ite s₁,      .ite s₂      => s₁.beq s₂
 | _,            _            => false
 
 instance : BEq LamBaseTerm where
@@ -1448,11 +1448,11 @@ def LamBaseTerm.containsSort (b : LamBaseTerm) (s : LamSort) : Bool :=
   | .eqI _      => false
   | .forallEI _ => false
   | .existEI _  => false
-  | .condI _    => false
+  | .iteI _     => false
   | .eq s'      => s'.contains s
   | .forallE s' => s'.contains s
   | .existE s'  => s'.contains s
-  | .cond s'    => s'.contains s
+  | .ite s'     => s'.contains s
 
 structure LamTyVal where
   lamVarTy     : Nat → LamSort
@@ -1484,13 +1484,13 @@ def LamBaseTerm.lamCheck (ltv : LamTyVal) : LamBaseTerm → LamSort
 | .existEI n  =>
   let s := ltv.lamILTy n
   .func (.func s (.base .prop)) (.base .prop)
-| .condI n =>
+| .iteI n     =>
   let s := ltv.lamILTy n
-  .func (.base .bool) (.func s (.func s s))
+  .func (.base .prop) (.func s (.func s s))
 | .eq s       => .func s (.func s (.base .prop))
 | .forallE s  => .func (.func s (.base .prop)) (.base .prop)
 | .existE s   => .func (.func s (.base .prop)) (.base .prop)
-| .cond s     => .func (.base .bool) (.func s (.func s s))
+| .ite s      => .func (.base .prop) (.func s (.func s s))
 
 inductive LamBaseTerm.LamWF (ltv : LamTyVal) : LamBaseTerm → LamSort → Type
   | ofTrueE      : LamWF ltv .trueE (.base .prop)
@@ -1508,11 +1508,11 @@ inductive LamBaseTerm.LamWF (ltv : LamTyVal) : LamBaseTerm → LamSort → Type
   | ofEqI n      : LamWF ltv (.eqI n) (.func (ltv.lamILTy n) (.func (ltv.lamILTy n) (.base .prop)))
   | ofForallEI n : LamWF ltv (.forallEI n) (.func (.func (ltv.lamILTy n) (.base .prop)) (.base .prop))
   | ofExistEI n  : LamWF ltv (.existEI n) (.func (.func (ltv.lamILTy n) (.base .prop)) (.base .prop))
-  | ofCondI n    : LamWF ltv (.condI n) (.func (.base .bool) (.func (ltv.lamILTy n) (.func (ltv.lamILTy n) (ltv.lamILTy n))))
+  | ofIteI n     : LamWF ltv (.iteI n) (.func (.base .prop) (.func (ltv.lamILTy n) (.func (ltv.lamILTy n) (ltv.lamILTy n))))
   | ofEq s       : LamWF ltv (.eq s) (.func s (.func s (.base .prop)))
   | ofForallE s  : LamWF ltv (.forallE s) (.func (.func s (.base .prop)) (.base .prop))
   | ofExistE s   : LamWF ltv (.existE s) (.func (.func s (.base .prop)) (.base .prop))
-  | ofCond s     : LamWF ltv (.cond s) (.func (.base .bool) (.func s (.func s s)))
+  | ofIte s      : LamWF ltv (.ite s) (.func (.base .prop) (.func s (.func s s)))
 
 def LamBaseTerm.LamWF.unique {ltv : LamTyVal} {b : LamBaseTerm} {s₁ s₂ : LamSort}
   (lbwf₁ : LamWF ltv b s₁) (lbwf₂ : LamWF ltv b s₂) : s₁ = s₂ ∧ HEq lbwf₁ lbwf₂ := by
@@ -1635,11 +1635,11 @@ def LamBaseTerm.LamWF.ofLamBaseTerm (ltv : LamTyVal) : (b : LamBaseTerm) → (s 
 | .eqI n      => ⟨.func _ (.func _ (.base .prop)), .ofEqI n⟩
 | .forallEI n => ⟨.func (.func _ (.base .prop)) (.base .prop), .ofForallEI n⟩
 | .existEI n  => ⟨.func (.func _ (.base .prop)) (.base .prop), .ofExistEI n⟩
-| .condI n    => ⟨.func (.base .bool) (.func _ (.func _ _)), .ofCondI n⟩
+| .iteI n     => ⟨.func (.base .prop) (.func _ (.func _ _)), .ofIteI n⟩
 | .eq s       => ⟨.func _ (.func _ (.base .prop)), .ofEq s⟩
 | .forallE s  => ⟨.func (.func _ (.base .prop)) (.base .prop), .ofForallE s⟩
 | .existE s   => ⟨.func (.func _ (.base .prop)) (.base .prop), .ofExistE s⟩
-| .cond s     => ⟨.func (.base .bool) (.func _ (.func _ _)), .ofCond s⟩
+| .ite s      => ⟨.func (.base .prop) (.func _ (.func _ _)), .ofIte s⟩
 
 def LamBaseTerm.lamWF_complete (wf : LamWF ltv b s) : LamWF.ofLamBaseTerm ltv b = ⟨s, wf⟩ := by
   cases wf <;> try rfl
@@ -1669,13 +1669,13 @@ structure ILLift (β : Type u) where
   eqL     : EqLift.{u + 1, u} β
   forallL : ForallLift.{u + 1, u, 0, 0} β
   existL  : ExistLift.{u + 1, u} β
-  condL   : CondLift.{u + 1, u} β
+  iteL    : IteLift.{u + 1, u} β
 
-def ILLift.ofIsomTy {α : Sort u} {β : Type v} (I : IsomType α β) : ILLift β :=
-  ⟨EqLift.ofIsomTy I, ForallLift.ofIsomTy I, ExistLift.ofIsomTy I, CondLift.ofIsomTy I⟩
+noncomputable def ILLift.ofIsomTy {α : Sort u} {β : Type v} (I : IsomType α β) : ILLift β :=
+  ⟨EqLift.ofIsomTy I, ForallLift.ofIsomTy I, ExistLift.ofIsomTy I, IteLift.ofIsomTy I⟩
 
-def ILLift.default (β : Type u) : ILLift β :=
-  ⟨EqLift.default β, ForallLift.default β, ExistLift.default β, CondLift.default β⟩
+noncomputable def ILLift.default (β : Type u) : ILLift β :=
+  ⟨EqLift.default β, ForallLift.default β, ExistLift.default β, IteLift.default β⟩
 
 structure LamValuation extends LamTyVal where
   tyVal    : Nat → Type u
@@ -1905,11 +1905,11 @@ noncomputable def LamBaseTerm.interp (lval : LamValuation.{u}) : (b : LamBaseTer
 | .eqI n      => (lval.ilVal n).eqL.eqF
 | .forallEI n => (lval.ilVal n).forallL.forallF
 | .existEI n  => (lval.ilVal n).existL.existF
-| .condI n    => (lval.ilVal n).condL.condF
+| .iteI n     => (lval.ilVal n).iteL.iteF
 | .eq s       => eqLiftFn (s.interp lval.tyVal)
 | .forallE s  => forallLiftFn (s.interp lval.tyVal)
 | .existE s   => existLiftFn (s.interp lval.tyVal)
-| .cond s     => condLiftFn (s.interp lval.tyVal)
+| .ite s      => iteLiftFn (s.interp lval.tyVal)
 
 noncomputable def LamBaseTerm.LamWF.interp (lval : LamValuation.{u}) : (lwf : LamWF lval.toLamTyVal b s) → s.interp lval.tyVal
 | .ofTrueE      => GLift.up True
@@ -1927,11 +1927,11 @@ noncomputable def LamBaseTerm.LamWF.interp (lval : LamValuation.{u}) : (lwf : La
 | .ofEqI n      => (lval.ilVal n).eqL.eqF
 | .ofForallEI n => (lval.ilVal n).forallL.forallF
 | .ofExistEI n  => (lval.ilVal n).existL.existF
-| .ofCondI n    => (lval.ilVal n).condL.condF
+| .ofIteI n     => (lval.ilVal n).iteL.iteF
 | .ofEq s       => @eqLiftFn (s.interp lval.tyVal)
 | .ofForallE s  => @forallLiftFn (s.interp lval.tyVal)
 | .ofExistE s   => @existLiftFn (s.interp lval.tyVal)
-| .ofCond s     => condLiftFn (s.interp lval.tyVal)
+| .ofIte s      => iteLiftFn (s.interp lval.tyVal)
 
 theorem LamBaseTerm.LamWF.interp_heq (lval : LamValuation.{u})
   (lwf₁ : LamWF lval.toLamTyVal b₁ s₁)
@@ -2299,15 +2299,15 @@ theorem LamTerm.maxEVarSucc_mkExistEF :
   (mkExistEF s p).maxEVarSucc = p.maxEVarSucc := by
   dsimp [maxEVarSucc]; apply Nat.max_zero_left
 
-def LamTerm.mkCond (s : LamSort) (b x y : LamTerm) : LamTerm :=
-  .app s (.app s (.app (.base .bool) (.base (.cond s)) b) x) y
+def LamTerm.mkIte (s : LamSort) (b x y : LamTerm) : LamTerm :=
+  .app s (.app s (.app (.base .prop) (.base (.ite s)) b) x) y
 
-theorem LamTerm.maxLooseBVarSucc_mkCond :
-  (mkCond s b x y).maxLooseBVarSucc = max (max b.maxLooseBVarSucc x.maxLooseBVarSucc) y.maxLooseBVarSucc := by
+theorem LamTerm.maxLooseBVarSucc_mkIte :
+  (mkIte s b x y).maxLooseBVarSucc = max (max b.maxLooseBVarSucc x.maxLooseBVarSucc) y.maxLooseBVarSucc := by
   dsimp [maxLooseBVarSucc, Nat.max]; rw [Nat.max_zero_left]
 
-theorem LamTerm.maxEVarSucc_mkCond :
-  (mkCond s b x y).maxEVarSucc = max (max b.maxEVarSucc x.maxEVarSucc) y.maxEVarSucc := by
+theorem LamTerm.maxEVarSucc_mkIte :
+  (mkIte s b x y).maxEVarSucc = max (max b.maxEVarSucc x.maxEVarSucc) y.maxEVarSucc := by
   dsimp [maxEVarSucc, Nat.max]; rw [Nat.max_zero_left]
 
 def LamTerm.mkNatVal (n : Nat) : LamTerm := .base (.natVal' n)
@@ -3099,10 +3099,10 @@ def LamWF.fromMkExistEF {ltv : LamTyVal}
   (wf : LamWF ltv ⟨lctx, .mkExistEF s p, .base .prop⟩) :
   LamWF ltv ⟨pushLCtx s lctx, p, .base .prop⟩ := wf.getArg.getLam
 
-def LamWF.mkCond {ltv : LamTyVal}
-  (wfb : LamWF ltv ⟨lctx, b, .base .bool⟩)
+def LamWF.mkIte {ltv : LamTyVal}
+  (wfp : LamWF ltv ⟨lctx, p, .base .prop⟩)
   (wfx : LamWF ltv ⟨lctx, x, s⟩) (wfy : LamWF ltv ⟨lctx, y, s⟩) :
-  LamWF ltv ⟨lctx, .mkCond s b x y, s⟩ := LamWF.ofApp _ (.ofApp _ (.ofApp _ (.ofBase (.ofCond _)) wfb) wfx) wfy
+  LamWF ltv ⟨lctx, .mkIte s p x y, s⟩ := LamWF.ofApp _ (.ofApp _ (.ofApp _ (.ofBase (.ofIte _)) wfp) wfx) wfy
 
 def LamWF.mkNatVal {ltv : LamTyVal} : LamWF ltv ⟨lctx, .mkNatVal n, .base .nat⟩ := .ofBase (.ofNatVal' n)
 

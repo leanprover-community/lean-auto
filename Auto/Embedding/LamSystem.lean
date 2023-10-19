@@ -1898,19 +1898,21 @@ theorem LamThmValid.boolFacts : LamThmValid lval [] LamTerm.boolFacts := by
     (And.intro (And.intro (false_and_eq_false _) (true_and_eq_id _)) (And.intro (false_or_eq_id _) (true_or_eq_true _))))
     (ofPropSpec _)
 
-def LamTerm.condSpec (s : LamSort) : LamTerm :=
+def LamTerm.iteSpec (s : LamSort) : LamTerm :=
   .mkForallEF s (.mkForallEF s (.mkAnd
-      (.mkEq s (.mkCond s (.base .trueb') (.bvar 0) (.bvar 1)) (.bvar 0))
-      (.mkEq s (.mkCond s (.base .falseb') (.bvar 0) (.bvar 1)) (.bvar 1))))
+      (.mkEq s (.mkIte s (.base .trueE) (.bvar 0) (.bvar 1)) (.bvar 0))
+      (.mkEq s (.mkIte s (.base .falseE) (.bvar 0) (.bvar 1)) (.bvar 1))))
 
-def LamWF.condSpec (s : LamSort) : LamWF ltv ⟨lctx, .condSpec s, .base .prop⟩ :=
+def LamWF.iteSpec (s : LamSort) : LamWF ltv ⟨lctx, .iteSpec s, .base .prop⟩ :=
   .mkForallEF (.mkForallEF (.mkAnd
-    (.mkEq (.mkCond (.ofBase .ofTrueB') (.ofBVar 0) (.ofBVar 1)) (.ofBVar 0))
-    (.mkEq (.mkCond (.ofBase .ofFalseB') (.ofBVar 0) (.ofBVar 1)) (.ofBVar 1))))
+    (.mkEq (.mkIte (.ofBase .ofTrueE) (.ofBVar 0) (.ofBVar 1)) (.ofBVar 0))
+    (.mkEq (.mkIte (.ofBase .ofFalseE) (.ofBVar 0) (.ofBVar 1)) (.ofBVar 1))))
 
-theorem LamTerm.maxEVarSucc_condSpec (s : LamSort) : maxEVarSucc (condSpec s) = 0 := rfl
+theorem LamTerm.maxEVarSucc_iteSpec (s : LamSort) : maxEVarSucc (iteSpec s) = 0 := rfl
 
-theorem LamThmValid.condSpec (s : LamSort) : LamThmValid lval [] (LamTerm.condSpec s) := by
-  intro lctx'; rw [pushLCtxs_nil]; exists LamWF.condSpec s; intro _ x y; apply And.intro rfl rfl
+theorem LamThmValid.iteSpec (s : LamSort) : LamThmValid lval [] (LamTerm.iteSpec s) := by
+  intro lctx'; rw [pushLCtxs_nil]; exists LamWF.iteSpec s; intro _ x y; apply And.intro
+  case left => apply Bool.ite'_eq_true; exact True.intro
+  case right => apply Bool.ite'_eq_false; exact id
 
 end Auto.Embedding.Lam

@@ -259,7 +259,7 @@ private partial def lamTerm2STerm (lamVarTy lamEVarTy : Array LamSort) :
   throwError ("lamTerm2STerm :: " ++ LamReif.exportError.ImpPolyLog)
 | .app _ (.base (.existEI _)) (.lam _ _) =>
   throwError ("lamTerm2STerm :: " ++ LamReif.exportError.ImpPolyLog)
-| .app _ (.app _ (.app _ (.base (.condI _)) _) _) _ =>
+| .app _ (.app _ (.app _ (.base (.iteI _)) _) _) _ =>
   throwError ("lamTerm2STerm :: " ++ LamReif.exportError.ImpPolyLog)
 | .app _ (.app _ (.base (.eq _)) arg₁) arg₂ => do
   let arg₁' ← lamTerm2STerm lamVarTy lamEVarTy arg₁
@@ -285,7 +285,7 @@ private partial def lamTerm2STerm (lamVarTy lamEVarTy : Array LamSort) :
   if s == .base .nat then
     body' := .qStrApp "=>" #[.qStrApp ">=" #[.bvar 0, .sConst (.num 0)], body']
   return .existE dname s' body'
-| .app _ (.app _ (.app _ (.base (.cond _)) cond) arg₁) arg₂ => do
+| .app _ (.app _ (.app _ (.base (.ite _)) cond) arg₁) arg₂ => do
   let cond' ← lamTerm2STerm lamVarTy lamEVarTy cond
   let arg₁' ← lamTerm2STerm lamVarTy lamEVarTy arg₁
   let arg₂' ← lamTerm2STerm lamVarTy lamEVarTy arg₂

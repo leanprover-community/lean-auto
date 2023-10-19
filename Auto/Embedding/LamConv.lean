@@ -983,7 +983,7 @@ def LamBaseTerm.resolveImport (ltv : LamTyVal) : LamBaseTerm → LamBaseTerm
 | .eqI n      => .eq (ltv.lamILTy n)
 | .forallEI n => .forallE (ltv.lamILTy n)
 | .existEI n  => .existE (ltv.lamILTy n)
-| .condI n    => .cond (ltv.lamILTy n)
+| .iteI n    => .ite (ltv.lamILTy n)
 | t           => t
 
 def LamBaseTerm.LamWF.resolveImport {ltv : LamTyVal} {b : LamBaseTerm} {ty : LamSort}
@@ -1017,11 +1017,11 @@ theorem LamBaseTerm.LamWF.interp_resolveImport
       apply funext; intros p;
       apply GLift.down.inj; apply propext;
       apply Iff.intro (existL.down _) (existL.up _)
-  case ofCondI n =>
+  case ofIteI n =>
     generalize LamValuation.ilVal lval n = ilVal
     cases ilVal
-    case mk _ _ _ condL =>
-      funext b x y; apply condL.wf
+    case mk _ _ _ iteL =>
+      funext b x y; apply iteL.wf
 
 def LamTerm.resolveImport (ltv : LamTyVal) : LamTerm → LamTerm
 | .atom n       => .atom n
@@ -2003,7 +2003,7 @@ section UnsafeOps
       · Finally, remove the original equation (i.e. `lhs = rhs`) from the set of input formulas
       It's easy to see that the above procedure is sound and complete if
         `rhs` does not contains `lhs`.
-    · Note that the above procedure will not be complete if we relax the condition
+    · Note that the above procedure will not be complete if we relax the iteition
         `` `i₀, i₁, ⋯, iₖ₋₁` is a permutation of `0, 1, 2, ⋯, k - 1` ``
         to
         `` `i₀, i₁, ⋯, iₖ₋₁` is a permutation of a subsequence of `0, 1, 2, ⋯, k - 1` ``
