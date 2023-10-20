@@ -221,6 +221,12 @@ def collectAllLemmas (hintstx : TSyntax ``hints) (unfolds : TSyntax `Auto.unfold
 def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : Array Lemma) : TacticM Result := do
   let instr ← parseInstr instrstx
   let declName? ← Elab.Term.getDeclName?
+  -- Simplify `ite`
+  let ite_simp_lem ← Lemma.ofConst ``Auto.Bool.ite_simp
+  let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem ite_simp_lem)
+  -- Simplify `decide`
+  let decide_simp_lem ← Lemma.ofConst ``Auto.Bool.decide_simp
+  let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem decide_simp_lem)
   match instr with
   | .none =>
     let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) (minds : Array (Array SimpleIndVal)) : LamReif.ReifM Expr := (do

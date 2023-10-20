@@ -455,10 +455,12 @@ section Adhoc
     auto
 
   -- Decide
-  example : ∀ b, !(b = true) ↔ b = false := by
-    auto
+  example : ∀ b, !(b = true) ↔ b = false := by auto
 
   example : ∀ b, !(b = false) ↔ b = true := by auto
+
+  example (h : ¬ (∀ b, !(b = true) ↔ b = false)) : False := by
+    auto
 
   -- Nat
   example (a b c : Nat) : Nat.zero = 0 ∧ 3 = nat_lit 3 ∧ (a = b ↔ b = a) ∧ Nat.succ c = c + 1 := by auto
@@ -532,9 +534,6 @@ section Issues
   -- Non-dependent ∃, but whose domain type is a `Prop`
   example (x : Nat) (primeset : Nat → Prop) (dvd : Nat → Nat → Prop) :
     ((∃ (i : _) (i_1 : primeset i), dvd i x) ↔ (∃ p, primeset p ∧ dvd p x)) := by
-    auto
-
-  example (h : ¬ (∀ b, !(b = true) ↔ b = false)) : False := by
     auto
 
   -- Brute force example

@@ -1,5 +1,6 @@
 import Lean
 import Std.Data.Array.Basic
+import Auto.Lib.BoolExtra
 import Auto.Lib.MessageData
 import Auto.Lib.ExprExtra
 import Auto.Lib.Containers
@@ -17,6 +18,41 @@ deriving Inhabited, Hashable, BEq
 instance : ToMessageData Lemma where
   toMessageData lem := MessageData.compose
     m!"⦗⦗ {lem.proof} : {lem.type} @@ " (.compose (MessageData.array lem.params toMessageData) m!" ⦘⦘")
+
+/--
+  Universe monomprphic facts
+  User-supplied facts should have their universe level parameters
+    instantiated before being put into `Reif.State.facts`
+  The first `Expr` is the proof, and the second `Expr` is the fact
+-/
+abbrev UMonoFact := Expr × Expr
+
+def Lemma.ofUMonoFact (fact : UMonoFact) : Lemma := ⟨fact.fst, fact.snd, #[]⟩
+
+def Lemma.toUMonoFact? (lem : Lemma) : Option UMonoFact :=
+  match lem.params with
+  | ⟨.nil⟩ => .some ⟨lem.proof, lem.type⟩
+  | ⟨_::_⟩ => .none
+
+def Lemma.instantiateLevelParamsArray (lem : Lemma) (lvls : Array Level) : Lemma :=
+  let ⟨proof, type, params⟩ := lem
+  ⟨proof.instantiateLevelParamsArray params lvls,
+   type.instantiateLevelParamsArray params lvls,
+   params[lvls.size:]⟩
+
+def Lemma.instantiateLevelParams (lem : Lemma) (lvls : List Level) : Lemma :=
+  Lemma.instantiateLevelParamsArray lem ⟨lvls⟩
+
+def Lemma.instantiateMVars (lem : Lemma) : MetaM Lemma := do
+  let ⟨proof, type, params⟩ := lem
+  let proof ← Lean.instantiateMVars proof
+  let type ← Lean.instantiateMVars type
+  return ⟨proof, type, params⟩
+
+def Lemma.betaReduceType (lem : Lemma) : CoreM Lemma := do
+  let ⟨proof, type, params⟩ := lem
+  let type ← Core.betaReduce type
+  return ⟨proof, type, params⟩
 
 /-- Create a `Lemma` out of a constant, given the name of the constant -/
 def Lemma.ofConst (name : Name) : CoreM Lemma := do
@@ -86,6 +122,59 @@ def Lemma.reorderForallInstDep (lem : Lemma) : MetaM Lemma := do
     let proof ← Meta.mkLambdaFVars prec (← Meta.mkLambdaFVars trail proof)
     let type ← Meta.mkForallFVars prec (← Meta.mkForallFVars trail body)
     return ⟨proof, type, lem.params⟩
+
+/--
+  Rewrite using a universe-monomorphic rigid equality
+  `rw.snd` should have the form `lhs = rhs`, where both sides are rigid
+  · If `lhs` occurs in `lem.type`, perform rewrite and return result
+  · If `lhs` does not occur in `lem.type`, return `.none`
+-/
+def Lemma.rewriteUMonoRigid? (lem : Lemma) (rw : UMonoFact) : MetaM (Option Lemma) := do
+  let (rwproof, rwtype) := rw
+  let .some (α, lhs, rhs) ← Meta.matchEq? rwtype
+    | throwError "Lemma.rewriteUMonoRigid :: {rwtype} is not an equality"
+  let ⟨proof, e, params⟩ := lem
+  let eAbst ← Meta.kabstract e lhs
+  unless eAbst.hasLooseBVars do
+    return .none
+  let eNew := eAbst.instantiate1 rhs
+  let motive := mkLambda `_a BinderInfo.default α eAbst
+  unless (← Meta.isTypeCorrect motive) do
+    throwError "Lemma.rewriteUMonoRigid :: Motive {motive} is not type correct"
+  let eqPrf ← Meta.mkEqNDRec motive proof rwproof
+  return .some ⟨eqPrf, eNew, params⟩
+
+/--
+  Exhaustively rewrite using a universe-polymorphic rigid equality
+  · If there are multiple instances of `lhs` with different universe
+    level instantiations, all of these instances will be replaced with `rhs`
+  · `rw.snd` should have the form `lhs = rhs`, where both sides are rigid
+    and `rhs` should not contain `lhs`
+-/
+def Lemma.rewriteUPolyRigid (lem : Lemma) (rw : Lemma) : MetaM Lemma := do
+  let mut lem := lem
+  let s ← saveState
+  -- Test whether `rhs` contains `lhs
+  let .some (_, lhs, rhs) ← Meta.matchEq? rw.type
+    | throwError "Lemma.rewriteUMonoRigid :: {rw.type} is not an equality"
+  let lhs' := lhs.instantiateLevelParamsArray rw.params (← rw.params.mapM (fun _ => Meta.mkFreshLevelMVar))
+  let rhs' := rhs.instantiateLevelParamsArray rw.params (← rw.params.mapM (fun _ => Meta.mkFreshLevelMVar))
+  if (← Meta.kabstract rhs' lhs').hasLooseBVars then
+    throwError "Lemma.rewriteUPolyRigid :: Right-hand side {rhs} of equality contains left-hand side {lhs}"
+  restoreState s
+  while true do
+    let umvars ← rw.params.mapM (fun _ => Meta.mkFreshLevelMVar)
+    let .some urw := (rw.instantiateLevelParamsArray umvars).toUMonoFact?
+      | throwError "Lemma.rewriteUPolyRigid :: Unexpected error"
+    let .some lem' ← Lemma.rewriteUMonoRigid? lem urw
+      | break
+    let restmvars := (← umvars.mapM Level.collectLevelMVars).concatMap id
+    for lmvar in restmvars do
+      if !(← Meta.isLevelDefEq (.mvar lmvar) .zero) then
+        break
+    lem ← lem'.instantiateMVars
+  restoreState s
+  return ← lem.betaReduceType
 
 /-
   An instance of a `Lemma`. If a lemma has proof `H`,
@@ -258,14 +347,6 @@ partial def collectUniverseLevels : Expr → MetaM (HashSet Level)
 | .lit _ => return HashSet.empty.insert (.succ .zero)
 | .mdata _ e' => collectUniverseLevels e'
 | .proj .. => throwError "Please unfold projections before collecting universe levels"
-
-/--
-  Universe monomprphic facts
-  User-supplied facts should have their universe level parameters
-    instantiated before being put into `Reif.State.facts`
-  The first `Expr` is the proof, and the second `Expr` is the fact
--/
-abbrev UMonoFact := Expr × Expr
 
 def computeMaxLevel (facts : Array UMonoFact) : MetaM Level := do
   let levels ← facts.foldlM (fun hs (_, ty) => do
