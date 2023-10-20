@@ -484,7 +484,7 @@ section Adhoc
   example (a : Int)
     (h₁ : a ≥ 0) (h₂ : -a ≤ 0) (h₃ : 0 < 1) (h₄ : 2 > 0)
     : (a ≥ 0) ∧ (-a ≤ 0) ∧ (0 < 1) ∧ (2 > 0) := by auto
-  
+
   example : (3 : Int) = ((nat_lit 3) : Int) := by auto
   
   example : (-3 : Int) = (-(nat_lit 3) : Int) := by auto

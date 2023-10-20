@@ -3,6 +3,7 @@ import Auto.Embedding.LamConv
 import Auto.Embedding.LamInference
 import Auto.Embedding.LamLCtx
 import Auto.Embedding.LamPrep
+import Auto.Embedding.LamBitVec
 import Auto.Embedding.LamInductive
 import Auto.Lib.BinTree
 open Lean
@@ -575,6 +576,7 @@ inductive PrepConvStep where
   | validOfNotEqEquivEqNot : PrepConvStep
   | validOfNotEqNotEquivEq : PrepConvStep
   | validOfPropext : PrepConvStep
+  | validOfPushBVCast : PrepConvStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
 inductive WFStep where
@@ -669,6 +671,7 @@ def PrepConvStep.toString : PrepConvStep → String
 | .validOfNotEqEquivEqNot => s!"validOfNotEqEquivEqNot"
 | .validOfNotEqNotEquivEq => s!"validOfNotEqNotEquivEq"
 | .validOfPropext => s!"validOfPropext"
+| .validOfPushBVCast => s!"validOfPushBVCast"
 
 def WFStep.toString : WFStep → String
 | .wfOfCheck lctx t => s!"wfOfCheck {lctx} {t}"
@@ -1104,6 +1107,7 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
 | .validOfNotEqEquivEqNot => LamTerm.not_eq_equiv_eq_not?
 | .validOfNotEqNotEquivEq => LamTerm.not_eq_not_equiv_eq?
 | .validOfPropext => LamTerm.propext?
+| .validOfPushBVCast => fun t => LamTerm.pushBVCast .none t
 
 @[reducible] def WFStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : WFStep) → EvalResult
 | .wfOfCheck lctx t =>
@@ -2050,6 +2054,9 @@ theorem PrepConvStep.eval_correct (lval : LamValuation) :
 | .validOfPropext => And.intro
   LamGenConv.propext?
   (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_propext?)
+| .validOfPushBVCast => And.intro
+  LamGenConv.pushBVCast
+  (LamTerm.evarBounded_of_evarEquiv LamTerm.evarEquiv_pushBVCast)
 
 theorem WFStep.eval_correct
   (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :

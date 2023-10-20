@@ -935,82 +935,10 @@ section Checker
       let _ ← nonemptyOfEtom eidx
     return .valid [] t
 
-  def validOfPropNeEquivEqNot (v : REntry) (occ : List Bool) : ReifM REntry := do
+  def validOfPrepConv (pc : PrepConvStep) (v : REntry) (occ : List Bool) : ReifM REntry := do
     let p ← lookupREntryPos! v
-    let (_, .addEntry re) ← newChkStep (.p .validOfPropNeEquivEqNot p occ) .none
-      | throwError "validOfPropNeEquivEqNot :: Unexpected evaluation result"
-    return re
-
-  def validOfTrueEqFalseEquivFalse (v : REntry) (occ : List Bool) : ReifM REntry := do
-    let p ← lookupREntryPos! v
-    let (_, .addEntry re) ← newChkStep (.p .validOfTrueEqFalseEquivFalse p occ) .none
-      | throwError "validOfTrueEqFalseEquivFalse :: Unexpected evaluation result"
-    return re
-
-  def validOfFalseEqTrueEquivFalse (v : REntry) (occ : List Bool) : ReifM REntry := do
-    let p ← lookupREntryPos! v
-    let (_, .addEntry re) ← newChkStep (.p .validOfFalseEqTrueEquivFalse p occ) .none
-      | throwError "validOfFalseEqTrueEquivFalse :: Unexpected evaluation result"
-    return re
-
-  def validOfEqTrueEquiv (v : REntry) (occ : List Bool) : ReifM REntry := do
-    let p ← lookupREntryPos! v
-    let (_, .addEntry re) ← newChkStep (.p .validOfEqTrueEquiv p occ) .none
-      | throwError "validOfEqTrueEquiv :: Unexpected evaluation result"
-    return re
-
-  def validOfEqFalseEquiv (v : REntry) (occ : List Bool) : ReifM REntry := do
-    let p ← lookupREntryPos! v
-    let (_, .addEntry re) ← newChkStep (.p .validOfEqFalseEquiv p occ) .none
-      | throwError "validOfEqFalseEquiv :: Unexpected evaluation result"
-    return re
-
-  def validOfNeTrueEquivEqFalse (v : REntry) (occ : List Bool) : ReifM REntry := do
-    let p ← lookupREntryPos! v
-    let (_, .addEntry re) ← newChkStep (.p .validOfNeTrueEquivEqFalse p occ) .none
-      | throwError "validOfNeTrueEquivEqFalse :: Unexpected evaluation result"
-    return re
-
-  def validOfNeFalseEquivEqTrue (v : REntry) (occ : List Bool) : ReifM REntry := do
-    let p ← lookupREntryPos! v
-    let (_, .addEntry re) ← newChkStep (.p .validOfNeFalseEquivEqTrue p occ) .none
-      | throwError "validOfNeFalseEquivEqTrue :: Unexpected evaluation result"
-    return re
-
-  def validOfNotEqTrueEquivEqFalse (v : REntry) (occ : List Bool) : ReifM REntry := do
-    let p ← lookupREntryPos! v
-    let (_, .addEntry re) ← newChkStep (.p .validOfNotEqTrueEquivEqFalse p occ) .none
-      | throwError "validOfNotEqTrueEquivEqFalse :: Unexpected evaluation result"
-    return re
-
-  def validOfNotEqFalseEquivEqTrue (v : REntry) (occ : List Bool) : ReifM REntry := do
-    let p ← lookupREntryPos! v
-    let (_, .addEntry re) ← newChkStep (.p .validOfNotEqFalseEquivEqTrue p occ) .none
-      | throwError "validOfNotEqFalseEquivEqTrue :: Unexpected evaluation result"
-    return re
-
-  def validOfNotNotEquiv (v : REntry) (occ : List Bool) : ReifM REntry := do
-    let p ← lookupREntryPos! v
-    let (_, .addEntry re) ← newChkStep (.p .validOfNotNotEquiv p occ) .none
-      | throwError "validOfNotNotEquiv :: Unexpected evaluation result"
-    return re
-
-  def validOfNotEqEquivEqNot (v : REntry) (occ : List Bool) : ReifM REntry := do
-    let p ← lookupREntryPos! v
-    let (_, .addEntry re) ← newChkStep (.p .validOfNotEqEquivEqNot p occ) .none
-      | throwError "validOfNotEqEquivEqNot :: Unexpected evaluation result"
-    return re
-
-  def validOfNotEqNotEquivEq (v : REntry) (occ : List Bool) : ReifM REntry := do
-    let p ← lookupREntryPos! v
-    let (_, .addEntry re) ← newChkStep (.p .validOfNotEqNotEquivEq p occ) .none
-      | throwError "validOfNotEqNotEquivEq :: Unexpected evaluation result"
-    return re
-
-  def validOfPropext (v : REntry) (occ : List Bool) : ReifM REntry := do
-    let p ← lookupREntryPos! v
-    let (_, .addEntry re) ← newChkStep (.p .validOfPropext p occ) .none
-      | throwError "validOfPropext :: Unexpected evaluation result"
+    let (_, .addEntry re) ← newChkStep (.p pc p occ) .none
+      | throwError "validOfPrepConv :: Unexpected evaluation result"
     return re
 
 end Checker
@@ -1060,7 +988,7 @@ section CheckerUtils
       | throwError "toDefinition? :: Unexpected error"
     let v ← validOfBetaReduce v
     let v ← validOfIntroMost v
-    let v ← (do if (head == .iff) then validOfPropext v [] else pure v)
+    let v ← (do if (head == .iff) then validOfPrepConv .validOfPropext v [] else pure v)
     let v ← (do if ml.isNone then validOfEqSymm v else pure v)
     let v ← validOfExtensionalizeEqFNAt v (m.size - lctx'.length) []
     let v ← validOfBetaReduce v
@@ -1122,6 +1050,7 @@ section CheckerUtils
       else
         return (vs, minds))
     let vs ← vs.mapM validOfBetaReduce
+    let vs ← vs.mapM (fun re => validOfPrepConv .validOfPushBVCast re [])
     let vs ← vs.mapM validOfRevertAll
     for v in vs do
       trace[auto.lamReif.prep.printResult] "{v}"
@@ -1223,6 +1152,13 @@ abbrev BitVec.sgt (a b : Std.BitVec n) : Bool := Std.BitVec.slt b a
 
 def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
   match fn with
+  | .const ``NatCast.natCast _ =>
+    match arg₁ with
+    | .const ``Int _ =>
+      if (← Meta.isDefEqD e (.const ``Int.ofNat [])) then
+        return .some (.base .iofNat')
+      return .none
+    | _ => return .none
   | .const ``Neg.neg _ =>
     match arg₁ with
     | .const ``Int _ =>

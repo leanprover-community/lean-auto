@@ -2076,20 +2076,35 @@ def LamTerm.size : LamTerm → Nat
 | .lam _ t => t.size + 1
 | .app _ t₁ t₂ => t₁.size + t₂.size
 
-theorem LamTerm.size_ne_zero : size t > 0 := by
+theorem LamTerm.size_gt_zero : size t > 0 := by
   induction t <;> try (dsimp [size]; apply Nat.le_refl)
   case lam s body IH =>
     dsimp [size]; apply Nat.le_trans IH (Nat.le_succ _)
   case app s fn arg _ IHArg =>
     dsimp [size]; apply Nat.le_trans IHArg (Nat.le_add_left _ _)
 
+theorem LamTerm.size_ne_zero : size t ≠ 0 := by
+  cases h : size t
+  case zero =>
+    have contra := LamTerm.size_gt_zero (t:=t)
+    rw [h] at contra; cases contra
+  case succ _ => intro h; cases h
+
 theorem LamTerm.size_lam_gt_size_body : size (.lam s t) > size t := Nat.le_refl _
 
+theorem LamTerm.size_lam_ge_size_body : size (.lam s t) ≥ size t := Nat.le_succ _
+
 theorem LamTerm.size_app_gt_size_fn : size (.app s fn arg) > size fn :=
-  Nat.add_le_add_left size_ne_zero _
+  Nat.add_le_add_left size_gt_zero _
+
+theorem LamTerm.size_app_ge_size_fn : size (.app s fn arg) ≥ size fn :=
+  Nat.le_add_right _ _
 
 theorem LamTerm.size_app_gt_size_arg : size (.app s fn arg) > size arg := by
-  dsimp [size]; rw [Nat.add_comm]; apply Nat.add_le_add_left size_ne_zero
+  dsimp [size]; rw [Nat.add_comm]; apply Nat.add_le_add_left size_gt_zero
+
+theorem LamTerm.size_app_ge_size_arg : size (.app s fn arg) ≥ size arg :=
+  Nat.le_add_left _ _
 
 /--
   Check whether the term contains loose bound variables `idx` levels
@@ -2734,7 +2749,7 @@ theorem LamTerm.maxEVarSucc_getForallEFBody : (LamTerm.getForallEFBody t).maxEVa
   generalize hsize' : t.size = n
   have hsize : t.size ≤ n := by cases hsize'; apply Nat.le_refl
   clear hsize'; induction n generalizing t
-  case zero => have hnz := @size_ne_zero t; rw [Nat.le_zero.mp hsize] at hnz; cases hnz
+  case zero => have hnz := @size_gt_zero t; rw [Nat.le_zero.mp hsize] at hnz; cases hnz
   case succ n IH =>
     cases t <;> try rfl
     case app s fn arg =>
@@ -3812,7 +3827,7 @@ theorem LamTerm.forallEFBody_forallEFTys_eq (wft : LamWF ltv ⟨lctx, t, s⟩) :
   generalize hsize' : t.size = n
   have hsize : t.size ≤ n := by cases hsize'; apply Nat.le_refl
   clear hsize'; induction n generalizing lctx t s
-  case zero => have hnz := @size_ne_zero t; rw [Nat.le_zero.mp hsize] at hnz; cases hnz
+  case zero => have hnz := @size_gt_zero t; rw [Nat.le_zero.mp hsize] at hnz; cases hnz
   case succ n IH =>
     cases t <;> try rfl
     case app s fn arg =>

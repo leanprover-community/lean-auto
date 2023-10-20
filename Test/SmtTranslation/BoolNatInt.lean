@@ -23,3 +23,13 @@ example : Nat.succ x = x + 1 := by auto
 
 set_option auto.smt.solver.name "cvc5" in
 example : String.length "abc" = 3 := by auto
+
+example (_ : ∃ b, !(!b) ≠ b) : False := by auto
+
+-- Mixed integer-bool
+example {a b c d : Bool} (h : if (if (2 < 3) then a else b) then c else d) :
+  (a → c) ∧ (¬ a → d) := by auto
+
+example {a : Bool} : decide a = a := by auto
+
+#check Lean.Elab.Command.elabStructure
