@@ -12,7 +12,7 @@
   {"git":
    {"url": "https://github.com/leanprover-community/duper.git",
     "subDir?": null,
-    "rev": "09f6fef71bad834c9c4f0682b154d1f82135911f",
+    "rev": "ba9b551e68694e7f53ceb2e10f2afb730748dac0",
     "opts": {},
     "name": "Duper",
     "inputRev?": null,
@@ -28,7 +28,7 @@
   {"git":
    {"url": "https://github.com/leanprover-community/mathlib4.git",
     "subDir?": null,
-    "rev": "e5d58e8575d25956bd93387c08127b02c86606f3",
+    "rev": "afc570346f75ad8aae9921c491333a8e4d26f986",
     "opts": {},
     "name": "mathlib",
     "inputRev?": null,
@@ -44,7 +44,7 @@
   {"git":
    {"url": "https://github.com/JLimperg/aesop",
     "subDir?": null,
-    "rev": "0bd8465d8a5cfdd53c1ff0fd57ca5eaa53eb455c",
+    "rev": "b601328752091a1cfcaebdd6b6b7c30dc5ffd946",
     "opts": {},
     "name": "aesop",
     "inputRev?": "master",
@@ -52,7 +52,7 @@
   {"git":
    {"url": "https://github.com/leanprover/std4",
     "subDir?": null,
-    "rev": "a4b2584dd4468489d14e9731ff303ec6d674873f",
+    "rev": "e3f238c972c1b747e0b7605ff568017e6a5107c5",
     "opts": {},
     "name": "std",
     "inputRev?": "main",

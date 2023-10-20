@@ -27,6 +27,14 @@ example : (2 : BitVec 7).rotateRight 3 = (0x20 : BitVec 7) := by
 example (x : BitVec 15) : x.rotateLeft 3 = x.rotateRight 12 := by
   auto
 
+open BitVec in
+example :
+  Std.BitVec.zeroExtend 20 5#10 = 5#20 ∧
+  Std.BitVec.zeroExtend 3 5#10 = 5#3 ∧
+  Std.BitVec.signExtend 20 645#10 = 1048197#20 ∧
+  Std.BitVec.signExtend 9 645#10 = 133#9 := by
+  auto
+
 -- Permutation
 open BitVec in
 example : (2 : BitVec 7).rotateLeft 3 = 0b10000#7 := by
@@ -38,6 +46,11 @@ example (x : Nat) : (2+x)#10 = BitVec.ofNat 10 x + (2 : BitVec 10) := by
 
 open BitVec in
 example (x : Nat) : (2*x)#10 = BitVec.ofNat 10 x * (2 : BitVec 10) := by
+  auto
+
+-- Issue: `toNat` `ofNat`
+open BitVec in
+example : (Std.BitVec.toNat x + Std.BitVec.toNat y)#10 = x + y := by
   auto
 
 example :

@@ -165,8 +165,6 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .bvcst (.bvextract _ h l) => do
   let l := min h l
   return .qIdApp (.ident (.indexed "extract" #[.inr h, .inr l])) #[arg1, arg2]
-| .bvcst (.bvzeroExtend _ _) => throwError "std type mismatches smt-lib"
-| .bvcst (.bvsignExtend _ v) => return .qIdApp (.ident (.indexed "sign_extend" #[.inr v])) #[arg1, arg2]
 | t           => throwError "lamTerm2STerm :: The arity of {repr t} is not 2"
 
 private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamAtom STerm
@@ -185,6 +183,16 @@ private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamA
 | .bvcst (.bvneg _) => return .qStrApp "bvneg" #[arg]
 | .bvcst (.bvabs _) => return .qStrApp "bvabs" #[arg]
 | .bvcst (.bvrepeat _ i) => return .qIdApp (.ident (.indexed "repeat" #[.inr i])) #[arg]
+| .bvcst (.bvzeroExtend w v) =>
+  if v ≥ w then
+    return .qIdApp (.ident (.indexed "zero_extend" #[.inr (v - w)])) #[arg]
+  else
+    return .qIdApp (.ident (.indexed "extract" #[.inr (v - 1), .inr 0])) #[arg]
+| .bvcst (.bvsignExtend w v) =>
+  if v ≥ w then
+    return .qIdApp (.ident (.indexed "sign_extend" #[.inr (v - w)])) #[arg]
+  else
+    return .qIdApp (.ident (.indexed "extract" #[.inr (v - 1), .inr 0])) #[arg]
 | t               => throwError "lamTerm2STerm :: The arity of {repr t} is not 1"
 
 private def BitVec2STerm (n i : Nat) : STerm :=

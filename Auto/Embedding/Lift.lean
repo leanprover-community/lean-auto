@@ -209,7 +209,7 @@ def bvrepeatLift.{u} (w i : Nat) (x : GLift.{1, u} (Std.BitVec w)) : GLift.{1, u
 def bvzeroExtendLift.{u} (w v : Nat) (x : GLift.{1, u} (Std.BitVec w)) : GLift.{1, u} (Std.BitVec v) :=
   GLift.up (Std.BitVec.zeroExtend v x.down)
 
-def bvsignExtendLift.{u} (w i : Nat) (x : GLift.{1, u} (Std.BitVec w)) : GLift.{1, u} (Std.BitVec (Nat.add w i)) :=
+def bvsignExtendLift.{u} (w i : Nat) (x : GLift.{1, u} (Std.BitVec w)) : GLift.{1, u} (Std.BitVec i) :=
   GLift.up (Std.BitVec.signExtend i x.down)
 
 @[reducible] def ImpF.{u, v} (p : Sort u) (q : Sort v) := p → q

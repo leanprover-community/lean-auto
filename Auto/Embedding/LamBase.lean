@@ -1076,7 +1076,7 @@ def BitVecConst.lamCheck : BitVecConst → LamSort
 | .bvextract n h l  => .func (.base (.bv n)) (.base (.bv (Nat.add (Nat.sub h l) 1)))
 | .bvrepeat w i     => .func (.base (.bv w)) (.base (.bv (Nat.mul w i)))
 | .bvzeroExtend w v => .func (.base (.bv w)) (.base (.bv v))
-| .bvsignExtend w v => .func (.base (.bv w)) (.base (.bv (Nat.add w v)))
+| .bvsignExtend w v => .func (.base (.bv w)) (.base (.bv v))
 
 inductive BitVecConst.LamWF : BitVecConst → LamSort → Type
   | ofBvVal n i        : LamWF (.bvVal n i) (.base (.bv n))
@@ -1111,7 +1111,7 @@ inductive BitVecConst.LamWF : BitVecConst → LamSort → Type
   | ofBvextract n h l  : LamWF (.bvextract n h l) (.func (.base (.bv n)) (.base (.bv (Nat.add (Nat.sub h l) 1))))
   | ofBvrepeat w i     : LamWF (.bvrepeat w i) (.func (.base (.bv w)) (.base (.bv (Nat.mul w i))))
   | ofBvzeroExtend w v : LamWF (.bvzeroExtend w v) (.func (.base (.bv w)) (.base (.bv v)))
-  | ofBvsignExtend w v : LamWF (.bvsignExtend w v) (.func (.base (.bv w)) (.base (.bv (Nat.add w v))))
+  | ofBvsignExtend w v : LamWF (.bvsignExtend w v) (.func (.base (.bv w)) (.base (.bv v)))
 
 def BitVecConst.LamWF.unique {b : BitVecConst} {s₁ s₂ : LamSort}
   (bcwf₁ : LamWF b s₁) (bcwf₂ : LamWF b s₂) : s₁ = s₂ ∧ HEq bcwf₁ bcwf₂ := by
@@ -1150,7 +1150,7 @@ def BitVecConst.LamWF.ofBitVecConst : (b : BitVecConst) → (s : LamSort) × Bit
 | .bvextract n h l  => ⟨.func (.base (.bv n)) (.base (.bv (Nat.add (Nat.sub h l) 1))), .ofBvextract n h l⟩
 | .bvrepeat w i     => ⟨.func (.base (.bv w)) (.base (.bv (Nat.mul w i))), .ofBvrepeat w i⟩
 | .bvzeroExtend w v => ⟨.func (.base (.bv w)) (.base (.bv v)), .ofBvzeroExtend w v⟩
-| .bvsignExtend w v => ⟨.func (.base (.bv w)) (.base (.bv (Nat.add w v))), .ofBvsignExtend w v⟩
+| .bvsignExtend w v => ⟨.func (.base (.bv w)) (.base (.bv v)), .ofBvsignExtend w v⟩
 
 def BitVecConst.lamWF_complete (wf : LamWF b s) : LamWF.ofBitVecConst b = ⟨s, wf⟩ := by
   cases wf <;> rfl
