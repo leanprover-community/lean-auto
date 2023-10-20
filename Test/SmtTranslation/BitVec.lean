@@ -48,7 +48,6 @@ open BitVec in
 example (x : Nat) : (2*x)#10 = BitVec.ofNat 10 x * (2 : BitVec 10) := by
   auto
 
--- Issue: `toNat` `ofNat`
 open BitVec in
 example : (Std.BitVec.toNat x + Std.BitVec.toNat y)#10 = x + y := by
   auto
