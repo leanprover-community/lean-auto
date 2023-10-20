@@ -137,6 +137,7 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .scst .sprefixof => return .qStrApp "str.prefixof" #[arg1, arg2]
 | .bvcst (.bvadd _) => return .qStrApp "bvadd" #[arg1, arg2]
 | .bvcst (.bvsub _) => return .qStrApp "bvadd" #[arg1, .qStrApp "bvneg" #[arg2]]
+| .bvcst (.bvmul _) => return .qStrApp "bvmul" #[arg1, arg2]
 | .bvcst (.bvudiv _) => return .qStrApp "bvudiv" #[arg1, arg2]
 | .bvcst (.bvurem _) => return .qStrApp "bvurem" #[arg1, arg2]
 | .bvcst (.bvsdiv _) => return .qStrApp "bvsdiv" #[arg1, arg2]

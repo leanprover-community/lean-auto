@@ -27,9 +27,17 @@ example : (2 : BitVec 7).rotateRight 3 = (0x20 : BitVec 7) := by
 example (x : BitVec 15) : x.rotateLeft 3 = x.rotateRight 12 := by
   auto
 
--- Issue: Permute!
+-- Permutation
 open BitVec in
 example : (2 : BitVec 7).rotateLeft 3 = 0b10000#7 := by
+  auto
+
+open BitVec in
+example (x : Nat) : (2+x)#10 = BitVec.ofNat 10 x + (2 : BitVec 10) := by
+  auto
+
+open BitVec in
+example (x : Nat) : (2*x)#10 = BitVec.ofNat 10 x * (2 : BitVec 10) := by
   auto
 
 example :
