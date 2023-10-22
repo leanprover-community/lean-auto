@@ -863,6 +863,35 @@ def StringConst.lamCheck_of_LamWF (H : LamWF sc s) : sc.lamCheck = s := by
 def StringConst.LamWF.ofCheck (H : sc.lamCheck = s) : LamWF sc s := by
   cases H; cases sc <;> constructor
 
+inductive BVShOp where
+  | shl
+  | lshr
+  | ashr
+  | rotateLeft
+  | rotateRight
+  deriving Inhabited, Hashable, Lean.ToExpr
+
+def BVShOp.beq : BVShOp → BVShOp → Bool
+| shl,         shl         => true
+| lshr,        lshr        => true
+| ashr,        ashr        => true
+| rotateLeft,  rotateLeft  => true
+| rotateRight, rotateRight => true
+| _,           _           => false
+
+instance : BEq BVShOp where
+  beq := BVShOp.beq
+
+def BVShOp.beq_refl {s : BVShOp} : (s.beq s) = true := by
+  cases s <;> rfl
+
+def BVShOp.eq_of_beq_eq_true {s₁ s₂ : BVShOp} (H : s₁.beq s₂) : s₁ = s₂ := by
+  cases s₁ <;> cases s₂ <;> first | contradiction | rfl
+
+instance : LawfulBEq BVShOp where
+  eq_of_beq := BVShOp.eq_of_beq_eq_true
+  rfl := BVShOp.beq_refl
+
 /--
   Following `https://smtlib.cs.uiowa.edu/logics-all.shtml#QF_BV`
 -/
@@ -895,11 +924,9 @@ inductive BitVecConst
   | bvor (n : Nat)
   | bvxor (n : Nat)
   | bvnot (n : Nat)
-  | bvshl (n : Nat)
-  | bvlshr (n : Nat)
-  | bvashr (n : Nat)
-  | bvrotateLeft (w : Nat)
-  | bvrotateRight (w : Nat)
+  -- `smt? = true => smt version (BitVec n → BitVec n → BitVec n)`
+  -- `smt? = false => Lean version (BitVec n → Nat → BitVec n)`
+  | bvshOp (n : Nat) (smt? : Bool) (op : BVShOp)
   | bvappend (n m : Nat)
   | bvextract (n hi lo : Nat)
   -- `Std.BitVec.replicate`
@@ -907,6 +934,26 @@ inductive BitVecConst
   | bvzeroExtend (w v : Nat)
   | bvsignExtend (w v : Nat)
 deriving Inhabited, Hashable, Lean.ToExpr
+
+def BitVecConst.bvshl (n : Nat) := BitVecConst.bvshOp n false .shl
+
+def BitVecConst.bvlshr (n : Nat) := BitVecConst.bvshOp n false .lshr
+
+def BitVecConst.bvashr (n : Nat) := BitVecConst.bvshOp n false .ashr
+
+def BitVecConst.bvrotateLeft (n : Nat) := BitVecConst.bvshOp n false .rotateLeft
+
+def BitVecConst.bvrotateRight (n : Nat) := BitVecConst.bvshOp n false .rotateRight
+
+def BitVecConst.bvsmtshl (n : Nat) := BitVecConst.bvshOp n true .shl
+
+def BitVecConst.bvsmtlshr (n : Nat) := BitVecConst.bvshOp n true .lshr
+
+def BitVecConst.bvsmtashr (n : Nat) := BitVecConst.bvshOp n true .ashr
+
+def BitVecConst.bvsmtrotateLeft (n : Nat) := BitVecConst.bvshOp n true .rotateLeft
+
+def BitVecConst.bvsmtrotateRight (n : Nat) := BitVecConst.bvshOp n true .rotateRight
 
 def BitVecConst.reprPrec (b : BitVecConst) (n : Nat) :=
   let s :=
@@ -934,11 +981,14 @@ def BitVecConst.reprPrec (b : BitVecConst) (n : Nat) :=
     | .bvor n => f!".bvor {n}"
     | .bvxor n => f!".bvxor {n}"
     | .bvnot n => f!".bvnot {n}"
-    | .bvshl n => f!".bvshl {n}"
-    | .bvlshr n => f!".bvlshr {n}"
-    | .bvashr n => f!".bvashr {n}"
-    | .bvrotateLeft w => f!".bvrotateLeft {w}"
-    | .bvrotateRight w => f!".bvrotateRight {w}"
+    | .bvshOp n smt? shOp =>
+      let smtStr := if smt? then "smt" else ""
+      match shOp with
+      | .shl => f!".bv{smtStr}shl {n}"
+      | .lshr => f!".bv{smtStr}lshr {n}"
+      | .ashr => f!".bv{smtStr}ashr {n}"
+      | .rotateLeft => f!".bv{smtStr}rotateLeft {n}"
+      | .rotateRight => f!".bv{smtStr}rotateRight {n}"
     | .bvappend n m => f!".bvappend {n} {m}"
     | .bvextract n hi lo => f!".bvextract {n} {hi} {lo}"
     | .bvrepeat w i => f!".bvrepeat {w} {i}"
@@ -976,11 +1026,14 @@ def BitVecConst.toString : BitVecConst → String
 | .bvor _ => s!"|||"
 | .bvxor _ => s!"^^^"
 | .bvnot _ => s!"!"
-| .bvshl _ => s!"<<<"
-| .bvlshr _ => s!">>>"
-| .bvashr _ => s!">>>ₐ"
-| .bvrotateLeft _ => s!"<<<ᵣ"
-| .bvrotateRight _ => s!">>>ᵣ"
+| .bvshOp _ smt? shOp =>
+  let smtStr := if smt? then "ₛ" else ""
+  match shOp with
+  | .shl => s!"<<<{smtStr}"
+  | .lshr => s!">>>{smtStr}"
+  | .ashr => s!">>>ₐ{smtStr}"
+  | .rotateLeft => s!"<<<ᵣ{smtStr}"
+  | .rotateRight => s!">>>ᵣ{smtStr}"
 | .bvappend _ _ => s!"++"
 | .bvextract _ hi lo => s!"bvextract {hi} {lo}"
 | .bvrepeat _ i => s!"bvrepeat {i}"
@@ -1014,11 +1067,7 @@ def BitVecConst.beq : BitVecConst → BitVecConst → Bool
 | .bvor n₁,            .bvor n₂            => n₁.beq n₂
 | .bvxor n₁,           .bvxor n₂           => n₁.beq n₂
 | .bvnot n₁,           .bvnot n₂           => n₁.beq n₂
-| .bvshl n₁,           .bvshl n₂           => n₁.beq n₂
-| .bvlshr n₁,          .bvlshr n₂          => n₁.beq n₂
-| .bvashr n₁,          .bvashr n₂          => n₁.beq n₂
-| .bvrotateLeft w₁,    .bvrotateLeft w₂    => w₁.beq w₂
-| .bvrotateRight w₁,   .bvrotateRight w₂   => w₁.beq w₂
+| .bvshOp n₁ s₁ op₁,   .bvshOp n₂ s₂ op₂   => n₁.beq n₂ && s₁ == s₂ && op₁.beq op₂
 | .bvappend n₁ m₁,     .bvappend n₂ m₂     => n₁.beq n₂ && m₁.beq m₂
 | .bvextract n₁ h₁ l₁, .bvextract n₂ h₂ l₂ => n₁.beq n₂ && h₁.beq h₂ && l₁.beq l₂
 | .bvrepeat w₁ i₁,     .bvrepeat w₂ i₂     => w₁.beq w₂ && i₁.beq i₂
@@ -1030,14 +1079,19 @@ instance : BEq BitVecConst where
   beq := BitVecConst.beq
 
 def BitVecConst.beq_refl {b : BitVecConst} : (b.beq b) = true := by
-  cases b <;> dsimp [beq] <;> rw [Nat.beq_refl] <;> rw [Nat.beq_refl] <;> (try rfl) <;>
-    rw [Nat.beq_refl]; rfl
+  cases b <;> dsimp [beq] <;> rw [Nat.beq_refl] <;> (try rw [Nat.beq_refl]) <;> (try rfl) <;>
+    (try rw [Nat.beq_refl]) <;> (try rfl)
+  case bvshOp => rw [LawfulBEq.rfl (α := Bool)]; rw [BVShOp.beq_refl]; rfl
 
 def BitVecConst.eq_of_beq_eq_true {b₁ b₂ : BitVecConst} (H : b₁.beq b₂) : b₁ = b₂ := by
   cases b₁ <;> cases b₂ <;> (try contradiction) <;> (try rw [Nat.eq_of_beq_eq_true H]) <;>
     dsimp [beq] at H <;> rw [Bool.and_eq_true] at H <;> (try rw [Bool.and_eq_true] at H) <;>
-    rw [Nat.eq_of_beq_eq_true H.right] <;> (try rw [Nat.eq_of_beq_eq_true H.left])
-  rw [Nat.eq_of_beq_eq_true H.left.left, Nat.eq_of_beq_eq_true H.left.right]
+    (try rw [Nat.eq_of_beq_eq_true H.right]) <;> (try rw [Nat.eq_of_beq_eq_true H.left]) <;>
+    rw [Nat.eq_of_beq_eq_true H.left.left]
+  case bvshOp.bvshOp =>
+    rw [LawfulBEq.eq_of_beq H.left.right, BVShOp.eq_of_beq_eq_true H.right]
+  case bvextract.bvextract =>
+    rw [Nat.eq_of_beq_eq_true H.left.right]
 
 instance : LawfulBEq BitVecConst where
   eq_of_beq := BitVecConst.eq_of_beq_eq_true
@@ -1067,11 +1121,10 @@ def BitVecConst.lamCheck : BitVecConst → LamSort
 | .bvor n           => .func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n)))
 | .bvxor n          => .func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n)))
 | .bvnot n          => .func (.base (.bv n)) (.base (.bv n))
-| .bvshl n          => .func (.base (.bv n)) (.func (.base .nat) (.base (.bv n)))
-| .bvlshr n         => .func (.base (.bv n)) (.func (.base .nat) (.base (.bv n)))
-| .bvashr n         => .func (.base (.bv n)) (.func (.base .nat) (.base (.bv n)))
-| .bvrotateLeft w   => .func (.base (.bv w)) (.func (.base .nat) (.base (.bv w)))
-| .bvrotateRight w  => .func (.base (.bv w)) (.func (.base .nat) (.base (.bv w)))
+| .bvshOp n smt? _ =>
+  match smt? with
+  | false => .func (.base (.bv n)) (.func (.base .nat) (.base (.bv n)))
+  | true  => .func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n)))
 | .bvappend n m     => .func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv (Nat.add n m))))
 | .bvextract n h l  => .func (.base (.bv n)) (.base (.bv (Nat.add (Nat.sub h l) 1)))
 | .bvrepeat w i     => .func (.base (.bv w)) (.base (.bv (Nat.mul w i)))
@@ -1102,16 +1155,33 @@ inductive BitVecConst.LamWF : BitVecConst → LamSort → Type
   | ofBvor n           : LamWF (.bvor n) (.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))))
   | ofBvxor n          : LamWF (.bvxor n) (.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))))
   | ofBvnot n          : LamWF (.bvnot n) (.func (.base (.bv n)) (.base (.bv n)))
-  | ofBvshl n          : LamWF (.bvshl n) (.func (.base (.bv n)) (.func (.base .nat) (.base (.bv n))))
-  | ofBvlshr n         : LamWF (.bvlshr n) (.func (.base (.bv n)) (.func (.base .nat) (.base (.bv n))))
-  | ofBvashr n         : LamWF (.bvashr n) (.func (.base (.bv n)) (.func (.base .nat) (.base (.bv n))))
-  | ofBvrotateLeft w   : LamWF (.bvrotateLeft w) (.func (.base (.bv w)) (.func (.base .nat) (.base (.bv w))))
-  | ofBvrotateRight w  : LamWF (.bvrotateRight w) (.func (.base (.bv w)) (.func (.base .nat) (.base (.bv w))))
+  | ofBvshOp n op      : LamWF (.bvshOp n false op) (.func (.base (.bv n)) (.func (.base .nat) (.base (.bv n))))
+  | ofBvsmtshOp n op   : LamWF (.bvshOp n true op) (.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))))
   | ofBvappend n m     : LamWF (.bvappend n m) (.func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv (Nat.add n m)))))
   | ofBvextract n h l  : LamWF (.bvextract n h l) (.func (.base (.bv n)) (.base (.bv (Nat.add (Nat.sub h l) 1))))
   | ofBvrepeat w i     : LamWF (.bvrepeat w i) (.func (.base (.bv w)) (.base (.bv (Nat.mul w i))))
   | ofBvzeroExtend w v : LamWF (.bvzeroExtend w v) (.func (.base (.bv w)) (.base (.bv v)))
   | ofBvsignExtend w v : LamWF (.bvsignExtend w v) (.func (.base (.bv w)) (.base (.bv v)))
+
+def BitVecConst.LamWF.ofBvshl (n : Nat) := LamWF.ofBvshOp n .shl
+
+def BitVecConst.LamWF.ofBvlshr (n : Nat) := LamWF.ofBvshOp n .lshr
+
+def BitVecConst.LamWF.ofBvashr (n : Nat) := LamWF.ofBvshOp n .ashr
+
+def BitVecConst.LamWF.ofBvrotateLeft (n : Nat) := LamWF.ofBvshOp n .rotateLeft
+
+def BitVecConst.LamWF.ofBvrotateRight (n : Nat) := LamWF.ofBvshOp n .rotateRight
+
+def BitVecConst.LamWF.ofBvsmtshl (n : Nat) := LamWF.ofBvsmtshOp n .shl
+
+def BitVecConst.LamWF.ofBvsmtlshr (n : Nat) := LamWF.ofBvsmtshOp n .lshr
+
+def BitVecConst.LamWF.ofBvsmtashr (n : Nat) := LamWF.ofBvsmtshOp n .ashr
+
+def BitVecConst.LamWF.ofBvsmtrotateLeft (n : Nat) := LamWF.ofBvsmtshOp n .rotateLeft
+
+def BitVecConst.LamWF.ofBvsmtrotateRight (n : Nat) := LamWF.ofBvsmtshOp n .rotateRight
 
 def BitVecConst.LamWF.unique {b : BitVecConst} {s₁ s₂ : LamSort}
   (bcwf₁ : LamWF b s₁) (bcwf₂ : LamWF b s₂) : s₁ = s₂ ∧ HEq bcwf₁ bcwf₂ := by
@@ -1141,11 +1211,10 @@ def BitVecConst.LamWF.ofBitVecConst : (b : BitVecConst) → (s : LamSort) × Bit
 | .bvor n           => ⟨.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))), .ofBvor n⟩
 | .bvxor n          => ⟨.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))), .ofBvxor n⟩
 | .bvnot n          => ⟨.func (.base (.bv n)) (.base (.bv n)), .ofBvnot n⟩
-| .bvshl n          => ⟨.func (.base (.bv n)) (.func (.base .nat) (.base (.bv n))), .ofBvshl n⟩
-| .bvlshr n         => ⟨.func (.base (.bv n)) (.func (.base .nat) (.base (.bv n))), .ofBvlshr n⟩
-| .bvashr n         => ⟨.func (.base (.bv n)) (.func (.base .nat) (.base (.bv n))), .ofBvashr n⟩
-| .bvrotateLeft w   => ⟨.func (.base (.bv w)) (.func (.base .nat) (.base (.bv w))), .ofBvrotateLeft w⟩
-| .bvrotateRight w  => ⟨.func (.base (.bv w)) (.func (.base .nat) (.base (.bv w))), .ofBvrotateRight w⟩
+| .bvshOp n smt? op =>
+  match smt? with
+  | false => ⟨.func (.base (.bv n)) (.func (.base .nat) (.base (.bv n))), .ofBvshOp n op⟩
+  | true  => ⟨.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))), .ofBvsmtshOp n op⟩
 | .bvappend n m     => ⟨.func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv (Nat.add n m)))), .ofBvappend n m⟩
 | .bvextract n h l  => ⟨.func (.base (.bv n)) (.base (.bv (Nat.add (Nat.sub h l) 1))), .ofBvextract n h l⟩
 | .bvrepeat w i     => ⟨.func (.base (.bv w)) (.base (.bv (Nat.mul w i))), .ofBvrepeat w i⟩
@@ -1159,7 +1228,8 @@ def BitVecConst.lamCheck_of_LamWF (H : LamWF b s) : b.lamCheck = s := by
   cases H <;> rfl
 
 def BitVecConst.LamWF.ofCheck (H : b.lamCheck = s) : LamWF b s := by
-  cases H; cases b <;> constructor
+  cases H; cases b <;> try constructor
+  case bvshOp n smt? op => cases smt? <;> constructor
 
 /--
   Interpreted constants
@@ -1270,6 +1340,11 @@ def LamBaseTerm.bvlshr' (n : Nat) := LamBaseTerm.bvcst (.bvlshr n)
 def LamBaseTerm.bvashr' (n : Nat) := LamBaseTerm.bvcst (.bvashr n)
 def LamBaseTerm.bvrotateLeft' (w : Nat) := LamBaseTerm.bvcst (.bvrotateLeft w)
 def LamBaseTerm.bvrotateRight' (w : Nat) := LamBaseTerm.bvcst (.bvrotateRight w)
+def LamBaseTerm.bvsmtshl' (n : Nat) := LamBaseTerm.bvcst (.bvsmtshl n)
+def LamBaseTerm.bvsmtlshr' (n : Nat) := LamBaseTerm.bvcst (.bvsmtlshr n)
+def LamBaseTerm.bvsmtashr' (n : Nat) := LamBaseTerm.bvcst (.bvsmtashr n)
+def LamBaseTerm.bvsmtrotateLeft' (w : Nat) := LamBaseTerm.bvcst (.bvsmtrotateLeft w)
+def LamBaseTerm.bvsmtrotateRight' (w : Nat) := LamBaseTerm.bvcst (.bvsmtrotateRight w)
 def LamBaseTerm.bvappend' (n m : Nat) := LamBaseTerm.bvcst (.bvappend n m)
 def LamBaseTerm.bvextract' (n h l : Nat) := LamBaseTerm.bvcst (.bvextract n h l)
 def LamBaseTerm.bvrepeat' (w i : Nat) := LamBaseTerm.bvcst (.bvrepeat w i)
@@ -1598,6 +1673,11 @@ def LamBaseTerm.LamWF.ofBvlshr' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv
 def LamBaseTerm.LamWF.ofBvashr' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvashr n)
 def LamBaseTerm.LamWF.ofBvrotateLeft' {ltv : LamTyVal} (w : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvrotateLeft w)
 def LamBaseTerm.LamWF.ofBvrotateRight' {ltv : LamTyVal} (w : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvrotateRight w)
+def LamBaseTerm.LamWF.ofBvsmtshl' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsmtshl n)
+def LamBaseTerm.LamWF.ofBvsmtlshr' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsmtlshr n)
+def LamBaseTerm.LamWF.ofBvsmtashr' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsmtashr n)
+def LamBaseTerm.LamWF.ofBvsmtrotateLeft' {ltv : LamTyVal} (w : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsmtrotateLeft w)
+def LamBaseTerm.LamWF.ofBvsmtrotateRight' {ltv : LamTyVal} (w : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsmtrotateRight w)
 def LamBaseTerm.LamWF.ofBvappend' {ltv : LamTyVal} (n m : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvappend n m)
 def LamBaseTerm.LamWF.ofBvextract' {ltv : LamTyVal} (n h l : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvextract n h l)
 def LamBaseTerm.LamWF.ofBvrepeat' {ltv : LamTyVal} (w i : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvrepeat w i)
@@ -1809,6 +1889,22 @@ def StringConst.interp_equiv (tyVal : Nat → Type u) (scwf : LamWF sc s) :
   HEq (LamWF.interp tyVal scwf) (interp tyVal sc) := by
   cases scwf <;> rfl
 
+def BVShOp.interp (n : Nat) : (op : BVShOp) → 
+  GLift.{1, u} (Std.BitVec n) → GLift.{1, u} Nat → GLift.{1, u} (Std.BitVec n)
+| .shl         => bvshlLift n
+| .lshr        => bvlshrLift n
+| .ashr        => bvashrLift n
+| .rotateLeft  => bvrotateLeftLift n
+| .rotateRight => bvrotateRightLift n
+
+def BVShOp.smtinterp (n : Nat) : (op : BVShOp) → 
+  GLift.{1, u} (Std.BitVec n) → GLift.{1, u} (Std.BitVec n) → GLift.{1, u} (Std.BitVec n)
+| .shl         => bvsmtshlLift n
+| .lshr        => bvsmtlshrLift n
+| .ashr        => bvsmtashrLift n
+| .rotateLeft  => bvsmtrotateLeftLift n
+| .rotateRight => bvsmtrotateRightLift n
+
 def BitVecConst.interp (tyVal : Nat → Type u) : (b : BitVecConst) → b.lamCheck.interp tyVal
 | .bvVal n i        => GLift.up (Std.BitVec.ofNat n i)
 | .bvofNat n        => bvofNatLift n
@@ -1833,11 +1929,10 @@ def BitVecConst.interp (tyVal : Nat → Type u) : (b : BitVecConst) → b.lamChe
 | .bvor n           => bvorLift n
 | .bvxor n          => bvxorLift n
 | .bvnot n          => bvnotLift n
-| .bvshl n          => bvshlLift n
-| .bvlshr n         => bvlshrLift n
-| .bvashr n         => bvashrLift n
-| .bvrotateLeft w   => bvrotateLeftLift w
-| .bvrotateRight w  => bvrotateRightLift w
+| .bvshOp n smt? op =>
+  match smt? with
+  | false => op.interp n
+  | true  => op.smtinterp n
 | .bvappend n m     => bvappendLift n m
 | .bvextract n h l  => bvextractLift n h l
 | .bvrepeat w i     => bvrepeatLift w i
@@ -1868,11 +1963,8 @@ def BitVecConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF b s) → s.
 | .ofBvor n           => bvorLift n
 | .ofBvxor n          => bvxorLift n
 | .ofBvnot n          => bvnotLift n
-| .ofBvshl n          => bvshlLift n
-| .ofBvlshr n         => bvlshrLift n
-| .ofBvashr n         => bvashrLift n
-| .ofBvrotateLeft w   => bvrotateLeftLift w
-| .ofBvrotateRight w  => bvrotateRightLift w
+| .ofBvshOp n op      => op.interp n
+| .ofBvsmtshOp n op   => op.smtinterp n
 | .ofBvappend n m     => bvappendLift n m
 | .ofBvextract n h l  => bvextractLift n h l
 | .ofBvrepeat w i     => bvrepeatLift w i
@@ -2223,6 +2315,31 @@ abbrev LamTerm.bvugt' (n : Nat) : LamTerm := .flipApp (.base (.bvult' n)) (.base
 abbrev LamTerm.bvsge' (n : Nat) : LamTerm := .flipApp (.base (.bvsle' n)) (.base (.bv n)) (.base (.bv n)) (.base .bool)
 
 abbrev LamTerm.bvsgt' (n : Nat) : LamTerm := .flipApp (.base (.bvslt' n)) (.base (.bv n)) (.base (.bv n)) (.base .bool)
+
+abbrev LamTerm.bvsmtHshl' (n m : Nat) : LamTerm :=
+  .lam (.base (.bv n)) (.lam (.base (.bv m)) (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvshl' n)) (.bvar 1)) (.app (.base (.bv m)) (.base (.bvtoNat' m)) (.bvar 0))))
+
+theorem LamTerm.maxEVarSucc_bvsmtHshl' : maxEVarSucc (bvsmtHshl' n m) = 0 := rfl
+
+abbrev LamTerm.bvsmtHlshr' (n m : Nat) : LamTerm :=
+  .lam (.base (.bv n)) (.lam (.base (.bv m)) (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvlshr' n)) (.bvar 1)) (.app (.base (.bv m)) (.base (.bvtoNat' m)) (.bvar 0))))
+
+theorem LamTerm.maxEVarSucc_bvsmtlshr' : maxEVarSucc (bvsmtHlshr' n m) = 0 := rfl
+
+abbrev LamTerm.bvsmtHashr' (n m : Nat) : LamTerm :=
+  .lam (.base (.bv n)) (.lam (.base (.bv m)) (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvashr' n)) (.bvar 1)) (.app (.base (.bv m)) (.base (.bvtoNat' m)) (.bvar 0))))
+
+theorem LamTerm.maxEVarSucc_bvsmtashr' : maxEVarSucc (bvsmtHashr' n m) = 0 := rfl
+
+abbrev LamTerm.bvsmtHrotateLeft' (n m : Nat) : LamTerm :=
+  .lam (.base (.bv n)) (.lam (.base (.bv m)) (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvrotateLeft' n)) (.bvar 1)) (.app (.base (.bv m)) (.base (.bvtoNat' m)) (.bvar 0))))
+
+theorem LamTerm.maxEVarSucc_bvsmtrotateLeft' : maxEVarSucc (bvsmtHrotateLeft' n m) = 0 := rfl
+
+abbrev LamTerm.bvsmtHrotateRight' (n m : Nat) : LamTerm :=
+  .lam (.base (.bv n)) (.lam (.base (.bv m)) (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvrotateRight' n)) (.bvar 1)) (.app (.base (.bv m)) (.base (.bvtoNat' m)) (.bvar 0))))
+
+theorem LamTerm.maxEVarSucc_bvsmtrotateRight' : maxEVarSucc (bvsmtHrotateRight' n m) = 0 := rfl
 
 def LamTerm.mkNot (t : LamTerm) : LamTerm :=
   .app (.base .prop) (.base .not) t
@@ -3055,6 +3172,21 @@ def LamWF.ofBvsge' (n : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsge' n, .func (.base
 
 def LamWF.ofBvsgt' (n : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsgt' n, .func (.base (.bv n)) (.func (.base (.bv n)) (.base .bool))⟩ :=
   .flipApp (.ofBase (.ofBvslt' n))
+
+def LamWF.bvsmtHshl' (n m : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsmtHshl' n m, .func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv n)))⟩ :=
+  .ofLam _ (.ofLam _ (.ofApp _ (.ofApp _ (.ofBase (.ofBvshl' _)) (.ofBVar 1)) (.ofApp _ (.ofBase (.ofBvtoNat' _)) (.ofBVar 0))))
+
+def LamWF.bvsmtHlshr' (n m : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsmtHlshr' n m, .func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv n)))⟩ :=
+  .ofLam _ (.ofLam _ (.ofApp _ (.ofApp _ (.ofBase (.ofBvlshr' _)) (.ofBVar 1)) (.ofApp _ (.ofBase (.ofBvtoNat' _)) (.ofBVar 0))))
+
+def LamWF.bvsmtHashr' (n m : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsmtHashr' n m, .func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv n)))⟩ :=
+  .ofLam _ (.ofLam _ (.ofApp _ (.ofApp _ (.ofBase (.ofBvashr' _)) (.ofBVar 1)) (.ofApp _ (.ofBase (.ofBvtoNat' _)) (.ofBVar 0))))
+
+def LamWF.bvsmtHrotateLeft' (n m : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsmtHrotateLeft' n m, .func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv n)))⟩ :=
+  .ofLam _ (.ofLam _ (.ofApp _ (.ofApp _ (.ofBase (.ofBvrotateLeft' _)) (.ofBVar 1)) (.ofApp _ (.ofBase (.ofBvtoNat' _)) (.ofBVar 0))))
+
+def LamWF.bvsmtHrotateRight' (n m : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsmtHrotateRight' n m, .func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv n)))⟩ :=
+  .ofLam _ (.ofLam _ (.ofApp _ (.ofApp _ (.ofBase (.ofBvrotateRight' _)) (.ofBVar 1)) (.ofApp _ (.ofBase (.ofBvtoNat' _)) (.ofBVar 0))))
 
 def LamWF.mkNot {ltv : LamTyVal}
   (wft : LamWF ltv ⟨lctx, t, .base .prop⟩) : LamWF ltv ⟨lctx, .mkNot t, .base .prop⟩ :=

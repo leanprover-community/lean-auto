@@ -1149,6 +1149,11 @@ abbrev BitVec.uge (a b : Std.BitVec n) : Bool := Std.BitVec.ule b a
 abbrev BitVec.ugt (a b : Std.BitVec n) : Bool := Std.BitVec.ult b a
 abbrev BitVec.sge (a b : Std.BitVec n) : Bool := Std.BitVec.sle b a
 abbrev BitVec.sgt (a b : Std.BitVec n) : Bool := Std.BitVec.slt b a
+abbrev BitVec.smtHshiftLeft (a : Std.BitVec n) (b : Std.BitVec m) := Std.BitVec.shiftLeft a b.toNat
+abbrev BitVec.smtHushiftRight (a : Std.BitVec n) (b : Std.BitVec m) := Std.BitVec.ushiftRight a b.toNat
+abbrev BitVec.smtHsshiftRight (a : Std.BitVec n) (b : Std.BitVec m) := Std.BitVec.sshiftRight a b.toNat
+abbrev BitVec.smtHrotateLeft (a : Std.BitVec n) (b : Std.BitVec m) := Std.BitVec.rotateLeft a b.toNat
+abbrev BitVec.smtHrotateRight (a : Std.BitVec n) (b : Std.BitVec m) := Std.BitVec.rotateRight a b.toNat
 
 def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
   match fn with
@@ -1437,22 +1442,38 @@ def processLam0Arg4 (e fn arg₁ arg₂ arg₃ arg₄ : Expr) : MetaM (Option La
         return .none
       | _,       _       => return .none
     | _, _ => return .none
-  | .const ``HShiftLeft.hShiftLeft [] =>
+  | .const ``HShiftLeft.hShiftLeft _ =>
     match arg₁ with
     | .app (.const ``Std.BitVec []) nExpr =>
       if let .some n ← Meta.evalNat nExpr then
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.shiftLeft []) (.lit (.natVal n)))) then
-          return .some (.base (.bvshl' n))
+        match arg₂ with
+        | .const ``Nat [] =>
+          if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.shiftLeft []) (.lit (.natVal n)))) then
+            return .some (.base (.bvshl' n))
+        | .app (.const ``Std.BitVec []) mExpr =>
+          if let .some m ← Meta.evalNat mExpr then
+            if (← Meta.isDefEqD e (mkApp2 (.const ``BitVec.smtHshiftLeft []) (.lit (.natVal n)) (.lit (.natVal m)))) then
+              return .some (.bvsmtHshl' n m)
+        | _ => pure .unit
       return .none
     | _ => return .none
-  | .const ``HShiftRight.hShiftRight [] =>
+  | .const ``HShiftRight.hShiftRight _ =>
     match arg₁ with
     | .app (.const ``Std.BitVec []) nExpr =>
       if let .some n ← Meta.evalNat nExpr then
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.ushiftRight []) (.lit (.natVal n)))) then
-          return .some (.base (.bvlshr' n))
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.sshiftRight []) (.lit (.natVal n)))) then
-          return .some (.base (.bvashr' n))
+        match arg₂ with
+        | .const ``Nat [] =>
+          if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.ushiftRight []) (.lit (.natVal n)))) then
+            return .some (.base (.bvlshr' n))
+          if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.sshiftRight []) (.lit (.natVal n)))) then
+            return .some (.base (.bvashr' n))
+        | .app (.const ``Std.BitVec []) mExpr =>
+          if let .some m ← Meta.evalNat mExpr then
+            if (← Meta.isDefEqD e (mkApp2 (.const ``BitVec.smtHushiftRight []) (.lit (.natVal n)) (.lit (.natVal m)))) then
+              return .some (.bvsmtHlshr' n m)
+            if (← Meta.isDefEqD e (mkApp2 (.const ``BitVec.smtHsshiftRight []) (.lit (.natVal n)) (.lit (.natVal m)))) then
+              return .some (.bvsmtHashr' n m)
+        | _ => pure .unit
       return .none
     | _ => return .none
   | _ => return .none
@@ -1469,7 +1490,8 @@ def processComplexTermExpr (e : Expr) : MetaM (Option LamTerm) := do
     | [_] => return .none
     | [arg₁, arg₂] => processLam0Arg2 e fn arg₁ arg₂
     | [arg₁, arg₂, arg₃] => processLam0Arg3 e fn arg₁ arg₂ arg₃
-    | [arg₁, arg₂, arg₃, arg₄] => processLam0Arg4 e fn arg₁ arg₂ arg₃ arg₄
+    | [arg₁, arg₂, arg₃, arg₄] =>
+      processLam0Arg4 e fn arg₁ arg₂ arg₃ arg₄
     | _ => return .none
   | _ => return .none
 

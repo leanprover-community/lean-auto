@@ -23,8 +23,7 @@ private inductive LamAtom where
   | etom : Nat → LamAtom
   | bvOfInt : Nat → LamAtom
   | bvToInt : Nat → LamAtom
-  | bvRotLeft : Nat → LamAtom
-  | bvRotRight : Nat → LamAtom
+  | bvshOp : Nat → Embedding.Lam.BVShOp → LamAtom
 deriving Inhabited, Hashable, BEq
 
 private def lamBaseSort2SSort : LamBaseSort → SSort
@@ -90,19 +89,13 @@ private def lamBvToInt2String (n : Nat) : TransM LamAtom String := do
     addCommand (.declFun name ⟨argSorts⟩ resSort)
   return ← h2Symb (.bvToInt n)
 
-private def lamBvRotLeft2String (n : Nat) : TransM LamAtom String := do
-  if !(← hIn (.bvRotLeft n)) then
-    let name ← h2Symb (.bvRotLeft n)
+/-- Turn non-smt shift operation into uninterpreted function -/
+private def lamBvshOp2String (n : Nat) (op : Embedding.Lam.BVShOp) : TransM LamAtom String := do
+  if !(← hIn (.bvshOp n op)) then
+    let name ← h2Symb (.bvshOp n op)
     let (argSorts, resSort) ← lamSort2SSort (.func (.base (.bv n)) (.func (.base .int) (.base (.bv n))))
     addCommand (.declFun name ⟨argSorts⟩ resSort)
-  return ← h2Symb (.bvRotLeft n)
-
-private def lamBvRotRight2String (n : Nat) : TransM LamAtom String := do
-  if !(← hIn (.bvRotRight n)) then
-    let name ← h2Symb (.bvRotRight n)
-    let (argSorts, resSort) ← lamSort2SSort (.func (.base (.bv n)) (.func (.base .int) (.base (.bv n))))
-    addCommand (.declFun name ⟨argSorts⟩ resSort)
-  return ← h2Symb (.bvRotRight n)
+  return ← h2Symb (.bvshOp n op)
 
 private def lamBaseTerm2STerm_Arity3 (arg1 arg2 arg3 : STerm) : LamBaseTerm → TransM LamAtom STerm
 | .scst .srepall => return .qStrApp "str.replace_all" #[arg1, arg2, arg3]
@@ -150,17 +143,36 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .bvcst (.bvand _) => return .qStrApp "bvand" #[arg1, arg2]
 | .bvcst (.bvor _) => return .qStrApp "bvor" #[arg1, arg2]
 | .bvcst (.bvxor _) => return .qStrApp "bvxor" #[arg1, arg2]
-| .bvcst (.bvshl _) => throwError "std type mismatches smt-lib"
-| .bvcst (.bvlshr _) => throwError "std type mismatches smt-lib"
-| .bvcst (.bvashr _) => throwError "std type mismatches smt-lib"
-| .bvcst (.bvrotateLeft w) =>
-  match arg2 with
-  | .sConst (.num n) => return .qIdApp (.ident (.indexed "rotate_left" #[.inr n])) #[arg1]
-  | _ => return .qStrApp (← lamBvRotLeft2String w) #[arg1, arg2]
-| .bvcst (.bvrotateRight w) =>
-  match arg2 with
-  | .sConst (.num n) => return .qIdApp (.ident (.indexed "rotate_right" #[.inr n])) #[arg1]
-  | _ => return .qStrApp (← lamBvRotRight2String w) #[arg1, arg2]
+| .bvcst (.bvshOp n smt? op) =>
+  match smt? with
+  | false =>
+    match op with
+    | .shl => return .qStrApp (← lamBvshOp2String n .shl) #[arg1, arg2]
+    | .lshr => return .qStrApp (← lamBvshOp2String n .lshr) #[arg1, arg2]
+    | .ashr => return .qStrApp (← lamBvshOp2String n .ashr) #[arg1, arg2]
+    | .rotateLeft =>
+      match arg2 with
+      | .sConst (.num m) =>
+        if m ≤ n then
+          return .qIdApp (.ident (.indexed "rotate_left" #[.inr m])) #[arg1]
+        else
+          return arg1
+      | _ => return .qStrApp (← lamBvshOp2String n .rotateLeft) #[arg1, arg2]
+    | .rotateRight =>
+      match arg2 with
+      | .sConst (.num m) =>
+        if m ≤ n then
+          return .qIdApp (.ident (.indexed "rotate_right" #[.inr m])) #[arg1]
+        else
+          return arg1
+      | _ => return .qStrApp (← lamBvshOp2String n .rotateRight) #[arg1, arg2]
+  | true =>
+    match op with
+    | .shl => return .qStrApp "bvshl" #[arg1, arg2]
+    | .lshr => return .qStrApp "bvlshr" #[arg1, arg2]
+    | .ashr => return .qStrApp "bvashr" #[arg1, arg2]
+    | .rotateLeft => throwError "Suspicious semantics :: argument to rotate_left is not a nat_lit"
+    | .rotateRight => throwError "Suspicious semantics :: argument to rotate_right is not a nat_lit"
 | .bvcst (.bvappend _ _) => return .qStrApp "concat" #[arg1, arg2]
 | .bvcst (.bvextract _ h l) => do
   let l := min h l

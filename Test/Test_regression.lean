@@ -441,6 +441,10 @@ section Adhoc
 
   example (h₁ : if 2 > 3 then True else False) (h₂ : ¬ 2 > 3) : False := by
     auto
+  
+  example {α : Sort u} {β : Sort v} (x y : α) (z t : β) :
+    (if True then x else y) = x ∧ (if False then z else t) = t := by
+    auto
 
   -- Boolean
   example : true ≠ false := by

@@ -197,11 +197,22 @@ def interpBitVecConstAsUnlifted : BitVecConst → Expr
 | .bvor n            => .app (.const ``Std.BitVec.or []) (.lit (.natVal n))
 | .bvxor n           => .app (.const ``Std.BitVec.xor []) (.lit (.natVal n))
 | .bvnot n           => .app (.const ``Std.BitVec.not []) (.lit (.natVal n))
-| .bvshl n           => .app (.const ``Std.BitVec.shiftLeft []) (.lit (.natVal n))
-| .bvlshr n          => .app (.const ``Std.BitVec.ushiftRight []) (.lit (.natVal n))
-| .bvashr n          => .app (.const ``Std.BitVec.sshiftRight []) (.lit (.natVal n))
-| .bvrotateLeft w    => .app (.const ``Std.BitVec.rotateLeft []) (.lit (.natVal w))
-| .bvrotateRight w   => .app (.const ``Std.BitVec.rotateRight []) (.lit (.natVal w))
+| .bvshOp n smt? op  =>
+  match smt? with
+  | false =>
+    match op with
+    | .shl           => .app (.const ``Std.BitVec.shiftLeft []) (.lit (.natVal n))
+    | .lshr          => .app (.const ``Std.BitVec.ushiftRight []) (.lit (.natVal n))
+    | .ashr          => .app (.const ``Std.BitVec.sshiftRight []) (.lit (.natVal n))
+    | .rotateLeft    => .app (.const ``Std.BitVec.rotateLeft []) (.lit (.natVal n))
+    | .rotateRight   => .app (.const ``Std.BitVec.rotateRight []) (.lit (.natVal n))
+  | true =>
+    match op with
+    | .shl           => mkApp2 (.const ``BitVec.smtHshiftLeft []) (.lit (.natVal n)) (.lit (.natVal n))
+    | .lshr          => mkApp2 (.const ``BitVec.smtHushiftRight []) (.lit (.natVal n)) (.lit (.natVal n))
+    | .ashr          => mkApp2 (.const ``BitVec.smtHsshiftRight []) (.lit (.natVal n)) (.lit (.natVal n))
+    | .rotateLeft    => mkApp2 (.const ``BitVec.smtHrotateLeft []) (.lit (.natVal n)) (.lit (.natVal n))
+    | .rotateRight   => mkApp2 (.const ``BitVec.smtHrotateRight []) (.lit (.natVal n)) (.lit (.natVal n))
 | .bvappend n m      => mkApp2 (.const ``Std.BitVec.append []) (.lit (.natVal n)) (.lit (.natVal m))
 | .bvextract n h l   => mkApp3 (.const ``Std.BitVec.extractLsb []) (.lit (.natVal n)) (.lit (.natVal h)) (.lit (.natVal l))
 | .bvrepeat w i      => mkApp2 (.const ``Std.BitVec.replicate []) (.lit (.natVal w)) (.lit (.natVal i))

@@ -51,6 +51,12 @@ theorem Nat.tricotomy {m n : Nat} : m < n ∨ m = n ∨ m > n := by
     case inl h => exact Or.inr (Or.inr h)
     case inr h => exact Or.inr (Or.inl h.symm)
 
+theorem Nat.dichotomy {m n : Nat} : m ≤ n ∨ m > n :=
+  match @Nat.tricotomy m n with
+  | .inl hlt => Or.inl (Nat.le_of_lt hlt)
+  | .inr (.inl heq) => Or.inl (Nat.le_of_eq heq)
+  | .inr (.inr hgt) => Or.inr hgt
+
 theorem Nat.lt_or_gt_of_ne {m n : Nat} (H : m ≠ n) : m < n ∨ m > n :=
   match @Nat.tricotomy m n with
   | .inl h => Or.inl h
@@ -128,5 +134,19 @@ theorem Nat.max_assoc {a : Nat} : max a (max b c) = max (max a b) c := by
     case isTrue h' =>
       rw [Nat.max_def (m:=c)]; simp [h']
       rw [Nat.max_def]; simp [Nat.le_trans h h']
+
+theorem Nat.gt_zero_of_ne_zero (h : n ≠ 0) : n > 0 := by
+  cases n <;> try contradiction
+  apply Nat.succ_le_succ (Nat.zero_le _)
+
+theorem Nat.le_pow (h : b ≥ 2) : a < b ^ a := by
+  induction a
+  case zero => apply Nat.le_refl
+  case succ a IH =>
+    rw [Nat.pow_succ]
+    apply Nat.le_trans _ (Nat.mul_le_mul_right b IH)
+    apply Nat.le_trans _ (Nat.mul_le_mul_left (Nat.succ a) h)
+    rw [Nat.mul_two, Nat.succ_add]
+    apply Nat.succ_le_succ; apply Nat.succ_le_succ; apply Nat.le_add_left
 
 end Auto

@@ -1,4 +1,5 @@
 import Auto.Embedding.LamConv
+import Auto.Lib.NatExtra
 import Std.Data.Int.Lemmas
 import Std.Data.Fin.Lemmas
 
@@ -7,7 +8,46 @@ namespace Auto.Embedding.Lam
 namespace BitVec
 
   open Std.BitVec
-  
+
+  theorem toNat_ofNat (n a : Nat) : (Std.BitVec.ofNat n a).toNat = a % (2 ^ n) := rfl
+
+  theorem eq_of_val_eq {a b : Std.BitVec n} (h : a.toNat = b.toNat) : a = b := by
+    rcases a with ⟨⟨a, isLta⟩⟩; rcases b with ⟨⟨b, isLtb⟩⟩
+    dsimp [Std.BitVec.toNat] at h; cases h; rfl
+    
+  theorem val_eq_of_eq {a b : Std.BitVec n} (h : a = b) : a.toNat = b.toNat := by
+    cases h; rfl
+
+  theorem ne_of_val_ne {a b : Std.BitVec n} (h : a.toNat ≠ b.toNat) : a ≠ b := by
+    intro h'; cases h'; apply False.elim (h rfl)
+
+  theorem val_ne_of_ne {a b : Std.BitVec n} (h : a ≠ b) : a.toNat ≠ b.toNat := by
+    intro h'; apply h; apply eq_of_val_eq h'
+
+  theorem shiftLeft_def (a : Std.BitVec n) (i : Nat) : a <<< i = a.shiftLeft i := rfl
+
+  theorem smtshiftLeft_def (a : Std.BitVec n) (b : Std.BitVec m) : a <<< b = a.shiftLeft b.toNat := rfl
+
+  theorem ushiftRight_def (a : Std.BitVec n) (i : Nat) : a >>> i = a.ushiftRight i := rfl
+
+  theorem smtushiftRight_def (a : Std.BitVec n) (b : Std.BitVec m) : a >>> b = a.ushiftRight b.toNat := rfl
+
+  theorem shiftLeft_eq_zero (a : Std.BitVec n) (i : Nat) : i ≥ n → a <<< i = 0#n := by
+    intro h; rw [shiftLeft_def]; apply eq_of_val_eq
+    dsimp [Std.BitVec.shiftLeft, Std.BitVec.toNat, Std.BitVec.ofNat, Fin.ofNat']
+    rw [Nat.shiftLeft_eq]; rw [Nat.zero_mod]; rw [Nat.mod_eq_zero_of_dvd]
+    have poweq : 2 ^ i = 2 ^ (i - n) * 2 ^ n := by rw [← Nat.pow_add, Nat.sub_add_cancel h]
+    rw [poweq, ← Nat.mul_assoc]; apply Nat.dvd_mul_left
+
+  theorem toNat_ushiftRight {a : Std.BitVec n} (i : Nat) : (a >>> i).toNat = (a.toNat) / (2 ^ i) := by
+    rw [ushiftRight_def]; rcases a with ⟨⟨a, isLt⟩⟩
+    dsimp [ushiftRight, Std.BitVec.toNat, Std.BitVec.ofNat, Fin.ofNat']
+    rw [Nat.mod_eq_of_lt, Nat.shiftRight_eq_div_pow];
+    apply Nat.le_trans (Nat.succ_le_succ _) isLt
+    rw [Nat.shiftRight_eq_div_pow]; apply Nat.div_le_self
+
+  theorem toNat_zeroExtend {a : Std.BitVec n} (i : Nat) : (a.zeroExtend i).toNat = a.toNat % (2 ^ i) := rfl
+
   theorem ofNat_add (n a b : Nat) : (a + b)#n = a#n + b#n := by
     apply congrArg (f:=Std.BitVec.ofFin); apply Fin.eq_of_val_eq
     dsimp [Fin.ofNat']; rw [Nat.add_mod]; rfl
@@ -19,6 +59,41 @@ namespace BitVec
   theorem ofNat_mul (n a b : Nat) : (a * b)#n = a#n * b#n := by
     apply congrArg (f:=Std.BitVec.ofFin); apply Fin.eq_of_val_eq
     dsimp [Fin.ofNat']; rw [Nat.mul_mod]; rfl
+
+  theorem shl_equiv_short (a : Std.BitVec n) (b : Std.BitVec m) (h : m ≤ n) : a <<< b.toNat = a <<< (zeroExtend n b) := by
+    rw [shiftLeft_def, smtshiftLeft_def]; dsimp [Std.BitVec.shiftLeft]
+    rw [Nat.shiftLeft_eq, Nat.shiftLeft_eq]; apply eq_of_val_eq
+    rcases a with ⟨⟨a, isLta⟩⟩; rcases b with ⟨⟨b, isLtb⟩⟩
+    dsimp [Std.BitVec.toNat, Std.BitVec.ofNat, Fin.ofNat', zeroExtend]
+    have hpowle : 2 ^ m ≤ 2 ^ n := Nat.pow_le_pow_of_le_right (.step .refl) h
+    rw [Nat.mod_eq_of_lt (a := b) (Nat.le_trans isLtb hpowle)]
+
+  theorem shl_equiv_long (a : Std.BitVec n) (b : Std.BitVec m) (h : m > n) : a <<< b.toNat =
+    if (b >>> (n#m)) = 0#m then a <<< (zeroExtend n b) else 0 := by
+    have eqof : Std.BitVec.toNat n#m = n := by
+      rw [toNat_ofNat]; apply Nat.mod_eq_of_lt
+      apply Nat.le_trans (Nat.succ_le_succ (Nat.le_of_lt h)) (Nat.le_pow (Nat.le_refl _))
+    have equr : Std.BitVec.toNat (ushiftRight b n) = b.toNat / (2 ^ n) := toNat_ushiftRight n
+    have eqzero : Std.BitVec.toNat 0#m = 0 := rfl
+    cases hdec : decide ((b >>> (n#m)) = 0#m)
+    case false =>
+      have hne := of_decide_eq_false hdec
+      rw [Bool.ite_eq_false _ _ _ (of_decide_eq_false hdec)]
+      rw [smtushiftRight_def, eqof] at hne; have hne' := val_ne_of_ne hne
+      rw [equr, eqzero] at hne'; rw [shiftLeft_eq_zero]; rfl
+      apply Nat.le_trans (m:=2^n) (Nat.le_of_lt (Nat.le_pow (Nat.le_refl _)))
+      rw [← Nat.div_add_mod (m:=b.toNat) (n:=2^n)]
+      apply Nat.le_trans (Nat.le_trans (m:=(2^n)*1)
+        (by rw [Nat.mul_one]; apply Nat.le_refl) _) (Nat.le_add_right _ _)
+      apply Nat.mul_le_mul_left; apply Nat.gt_zero_of_ne_zero hne'      
+    case true =>
+      have heq := of_decide_eq_true hdec
+      rw [Bool.ite_eq_true _ _ _ heq]; apply congrArg
+      rw [smtushiftRight_def, eqof] at heq; have heq' := val_eq_of_eq heq
+      rw [equr, eqzero] at heq'
+      rw [toNat_zeroExtend, Nat.mod_eq_of_lt]
+      rw [← Nat.div_add_mod (m:=b.toNat) (n:=2^n)]; rw [heq', Nat.mul_zero, Nat.zero_add]
+      apply Nat.mod_lt; apply Nat.le_trans (Nat.succ_le_succ (Nat.zero_le _)) (Nat.le_pow (Nat.le_refl _))
 
 end BitVec
 

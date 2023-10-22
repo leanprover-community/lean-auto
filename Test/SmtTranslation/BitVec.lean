@@ -6,6 +6,8 @@ set_option trace.auto.smt.printCommands true
 set_option trace.auto.smt.result true
 set_option auto.proofReconstruction false
 
+open Std.BitVec
+
 example : (2 : BitVec 7) + (3 : BitVec 7) = (5 : BitVec 7) := by
   auto
 
@@ -27,7 +29,6 @@ example : (2 : BitVec 7).rotateRight 3 = (0x20 : BitVec 7) := by
 example (x : BitVec 15) : x.rotateLeft 3 = x.rotateRight 12 := by
   auto
 
-open BitVec in
 example :
   Std.BitVec.zeroExtend 20 5#10 = 5#20 ∧
   Std.BitVec.zeroExtend 3 5#10 = 5#3 ∧
@@ -36,19 +37,15 @@ example :
   auto
 
 -- Permutation
-open BitVec in
 example : (2 : BitVec 7).rotateLeft 3 = 0b10000#7 := by
   auto
 
-open BitVec in
 example (x : Nat) : (2+x)#10 = BitVec.ofNat 10 x + (2 : BitVec 10) := by
   auto
 
-open BitVec in
 example (x : Nat) : (2*x)#10 = BitVec.ofNat 10 x * (2 : BitVec 10) := by
   auto
 
-open BitVec in
 example : (Std.BitVec.toNat x + Std.BitVec.toNat y)#10 = x + y := by
   auto
 
@@ -57,3 +54,8 @@ example :
   (3 : BitVec 7).rotateRight n = (3 : BitVec 7).rotateRight n ∧
   (w : BitVec 8).rotateRight n = (w : BitVec 8).rotateRight n := by
   auto
+
+set_option trace.auto.lamReif.printResult true in
+example : 101#32 <<< 2#32 = 404#32 := by auto
+
+#check (rfl : (fun (x y : BitVec 32) => x <<< y) = (fun (x y : BitVec 32) => x.shiftLeft y.toNat))
