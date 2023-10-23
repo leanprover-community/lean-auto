@@ -135,9 +135,31 @@ theorem Nat.max_assoc {a : Nat} : max a (max b c) = max (max a b) c := by
       rw [Nat.max_def (m:=c)]; simp [h']
       rw [Nat.max_def]; simp [Nat.le_trans h h']
 
-theorem Nat.gt_zero_of_ne_zero (h : n ≠ 0) : n > 0 := by
+theorem Nat.zero_lt_of_ne_zero {n : Nat} (h : n ≠ 0) : n > 0 := by
   cases n <;> try contradiction
   apply Nat.succ_le_succ (Nat.zero_le _)
+
+theorem Nat.ne_zero_of_zero_lt {n : Nat} (h : n > 0) : n ≠ 0 := by
+  cases n <;> try contradiction
+  intro h; cases h
+
+theorem Nat.eq_zero_of_mul_right_lt {a : Nat} (h : a * b < a) : b = 0 := by
+  cases b <;> try rfl
+  rw [Nat.mul_succ] at h
+  have h' := Nat.le_trans (Nat.succ_le_succ (Nat.le_add_left _ _)) h
+  apply False.elim (Nat.not_le_of_lt h' (Nat.le_refl _))
+
+theorem Nat.eq_zero_of_mul_left_lt {a : Nat} (h : b * a < a) : b = 0 := by
+  rw [Nat.mul_comm] at h; apply Nat.eq_zero_of_mul_right_lt h
+
+theorem Nat.le_iff_div_eq_zero {a b : Nat} (h : b > 0) : a / b = 0 ↔ a < b := by
+  conv => enter [2]; rw [← Nat.div_add_mod a b]
+  apply Iff.intro
+  case mp => intro h'; rw [h']; rw [Nat.mul_zero, Nat.zero_add]; apply Nat.mod_lt _ h
+  case mpr =>
+    cases (a / b) <;> intro h' <;> try rfl
+    rw [Nat.mul_succ] at h'; have h' := Nat.le_trans (Nat.succ_le_succ (Nat.le_trans (Nat.le_add_left _ _) (Nat.le_add_right _ _))) h'
+    apply False.elim (Nat.not_lt_of_le h' (Nat.le_refl _))
 
 theorem Nat.le_pow (h : b ≥ 2) : a < b ^ a := by
   induction a

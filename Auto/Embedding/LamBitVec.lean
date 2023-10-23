@@ -11,6 +11,9 @@ namespace BitVec
 
   theorem toNat_ofNat (n a : Nat) : (Std.BitVec.ofNat n a).toNat = a % (2 ^ n) := rfl
 
+  theorem toNat_le (a : Std.BitVec n) : a.toNat < 2 ^ n := by
+    rcases a with ⟨⟨_, isLt⟩⟩; exact isLt
+
   theorem eq_of_val_eq {a b : Std.BitVec n} (h : a.toNat = b.toNat) : a = b := by
     rcases a with ⟨⟨a, isLta⟩⟩; rcases b with ⟨⟨b, isLtb⟩⟩
     dsimp [Std.BitVec.toNat] at h; cases h; rfl
@@ -18,35 +21,63 @@ namespace BitVec
   theorem val_eq_of_eq {a b : Std.BitVec n} (h : a = b) : a.toNat = b.toNat := by
     cases h; rfl
 
+  theorem eq_iff_val_eq {a b : Std.BitVec n} : a = b ↔ a.toNat = b.toNat :=
+    Iff.intro val_eq_of_eq eq_of_val_eq
+
   theorem ne_of_val_ne {a b : Std.BitVec n} (h : a.toNat ≠ b.toNat) : a ≠ b := by
     intro h'; cases h'; apply False.elim (h rfl)
 
   theorem val_ne_of_ne {a b : Std.BitVec n} (h : a ≠ b) : a.toNat ≠ b.toNat := by
     intro h'; apply h; apply eq_of_val_eq h'
+  
+  theorem ne_iff_val_ne {a b : Std.BitVec n} : a ≠ b ↔ a.toNat ≠ b.toNat :=
+    Iff.intro val_ne_of_ne ne_of_val_ne
 
   theorem shiftLeft_def (a : Std.BitVec n) (i : Nat) : a <<< i = a.shiftLeft i := rfl
 
-  theorem smtshiftLeft_def (a : Std.BitVec n) (b : Std.BitVec m) : a <<< b = a.shiftLeft b.toNat := rfl
+  theorem smtshiftLeft_def (a : Std.BitVec n) (b : Std.BitVec m) : a <<< b = a <<< b.toNat := rfl
 
   theorem ushiftRight_def (a : Std.BitVec n) (i : Nat) : a >>> i = a.ushiftRight i := rfl
 
-  theorem smtushiftRight_def (a : Std.BitVec n) (b : Std.BitVec m) : a >>> b = a.ushiftRight b.toNat := rfl
+  theorem smtushiftRight_def (a : Std.BitVec n) (b : Std.BitVec m) : a >>> b = a >>> b.toNat := rfl
 
-  theorem shiftLeft_eq_zero (a : Std.BitVec n) (i : Nat) : i ≥ n → a <<< i = 0#n := by
-    intro h; rw [shiftLeft_def]; apply eq_of_val_eq
+  theorem toNat_shiftLeft {a : Std.BitVec n} (i : Nat) : (a <<< i).toNat = (a.toNat * (2 ^ i)) % (2 ^ n) := by
+    rw [shiftLeft_def]; rcases a with ⟨⟨a, isLt⟩⟩
     dsimp [Std.BitVec.shiftLeft, Std.BitVec.toNat, Std.BitVec.ofNat, Fin.ofNat']
-    rw [Nat.shiftLeft_eq]; rw [Nat.zero_mod]; rw [Nat.mod_eq_zero_of_dvd]
-    have poweq : 2 ^ i = 2 ^ (i - n) * 2 ^ n := by rw [← Nat.pow_add, Nat.sub_add_cancel h]
-    rw [poweq, ← Nat.mul_assoc]; apply Nat.dvd_mul_left
+    rw [Nat.shiftLeft_eq]
 
   theorem toNat_ushiftRight {a : Std.BitVec n} (i : Nat) : (a >>> i).toNat = (a.toNat) / (2 ^ i) := by
     rw [ushiftRight_def]; rcases a with ⟨⟨a, isLt⟩⟩
     dsimp [ushiftRight, Std.BitVec.toNat, Std.BitVec.ofNat, Fin.ofNat']
-    rw [Nat.mod_eq_of_lt, Nat.shiftRight_eq_div_pow];
+    rw [Nat.mod_eq_of_lt, Nat.shiftRight_eq_div_pow]
     apply Nat.le_trans (Nat.succ_le_succ _) isLt
     rw [Nat.shiftRight_eq_div_pow]; apply Nat.div_le_self
 
   theorem toNat_zeroExtend {a : Std.BitVec n} (i : Nat) : (a.zeroExtend i).toNat = a.toNat % (2 ^ i) := rfl
+
+  theorem shiftLeft_ge_length_eq_zero (a : Std.BitVec n) (i : Nat) : i ≥ n → a <<< i = 0#n := by
+    intro h; apply eq_of_val_eq; rw [toNat_shiftLeft, toNat_ofNat]; apply Nat.mod_eq_zero_of_dvd
+    have poweq : 2 ^ i = 2 ^ (i - n) * 2 ^ n := by rw [← Nat.pow_add, Nat.sub_add_cancel h]
+    rw [poweq, ← Nat.mul_assoc, Nat.mul_comm _ (2^n)]; exact ⟨_, rfl⟩
+
+  theorem shiftRight_ge_length_eq_zero (a : Std.BitVec n) (i : Nat) : i ≥ n → a >>> i = 0#n := by
+    intro h; apply eq_of_val_eq; rw [toNat_ushiftRight, toNat_ofNat]; apply (Nat.le_iff_div_eq_zero ?l).mpr ?r
+    case l => apply Nat.pow_two_pos
+    case r => apply Nat.le_trans (toNat_le _) (Nat.pow_le_pow_of_le_right (.step .refl) h)
+
+  theorem shiftRight_eq_zero_iff (a : Std.BitVec n) (b : Nat) : a >>> b = 0#n ↔ a.toNat < 2 ^ b := by
+    rw [ushiftRight_def]; rcases a with ⟨⟨a, isLt⟩⟩; dsimp [ushiftRight, Std.BitVec.toNat]
+    rw [eq_iff_val_eq, toNat_ofNat, toNat_ofNat, Nat.zero_mod, Nat.shiftRight_eq_div_pow]
+    apply Iff.intro <;> intro h
+    case mp =>
+      rw [← Nat.dvd_iff_mod_eq_zero] at h; rcases h with ⟨cst, hdvd⟩
+      rw [← Nat.div_add_mod a (2^b)] at isLt; rw [hdvd] at isLt
+      rw [← Nat.mul_assoc, Nat.mul_comm _ (2^n), Nat.mul_assoc] at isLt
+      have isLt' := Nat.eq_zero_of_mul_right_lt (Nat.le_trans (Nat.succ_le_succ (Nat.le_add_right _ _)) isLt)
+      rw [Nat.mul_eq_zero] at isLt'; cases isLt'
+      case inl h => apply False.elim (Nat.ne_zero_of_zero_lt (Nat.pow_two_pos _) h)
+      case inr h => cases h; rw [Nat.mul_zero] at hdvd; apply (Nat.le_iff_div_eq_zero (Nat.pow_two_pos _)).mp hdvd
+    case mpr => rw [(Nat.le_iff_div_eq_zero (Nat.pow_two_pos _)).mpr h]; rfl
 
   theorem ofNat_add (n a b : Nat) : (a + b)#n = a#n + b#n := by
     apply congrArg (f:=Std.BitVec.ofFin); apply Fin.eq_of_val_eq
@@ -61,39 +92,50 @@ namespace BitVec
     dsimp [Fin.ofNat']; rw [Nat.mul_mod]; rfl
 
   theorem shl_equiv_short (a : Std.BitVec n) (b : Std.BitVec m) (h : m ≤ n) : a <<< b.toNat = a <<< (zeroExtend n b) := by
-    rw [shiftLeft_def, smtshiftLeft_def]; dsimp [Std.BitVec.shiftLeft]
-    rw [Nat.shiftLeft_eq, Nat.shiftLeft_eq]; apply eq_of_val_eq
-    rcases a with ⟨⟨a, isLta⟩⟩; rcases b with ⟨⟨b, isLtb⟩⟩
-    dsimp [Std.BitVec.toNat, Std.BitVec.ofNat, Fin.ofNat', zeroExtend]
-    have hpowle : 2 ^ m ≤ 2 ^ n := Nat.pow_le_pow_of_le_right (.step .refl) h
-    rw [Nat.mod_eq_of_lt (a := b) (Nat.le_trans isLtb hpowle)]
+    apply eq_of_val_eq; rw [toNat_shiftLeft, smtshiftLeft_def, toNat_shiftLeft, toNat_zeroExtend, Nat.mod_eq_of_lt (a:=Std.BitVec.toNat b)]
+    apply Nat.le_trans (toNat_le _) (Nat.pow_le_pow_of_le_right (.step .refl) h)
 
   theorem shl_equiv_long (a : Std.BitVec n) (b : Std.BitVec m) (h : m > n) : a <<< b.toNat =
     if (b >>> (n#m)) = 0#m then a <<< (zeroExtend n b) else 0 := by
     have eqof : Std.BitVec.toNat n#m = n := by
       rw [toNat_ofNat]; apply Nat.mod_eq_of_lt
       apply Nat.le_trans (Nat.succ_le_succ (Nat.le_of_lt h)) (Nat.le_pow (Nat.le_refl _))
-    have equr : Std.BitVec.toNat (ushiftRight b n) = b.toNat / (2 ^ n) := toNat_ushiftRight n
-    have eqzero : Std.BitVec.toNat 0#m = 0 := rfl
     cases hdec : decide ((b >>> (n#m)) = 0#m)
     case false =>
       have hne := of_decide_eq_false hdec
       rw [Bool.ite_eq_false _ _ _ (of_decide_eq_false hdec)]
-      rw [smtushiftRight_def, eqof] at hne; have hne' := val_ne_of_ne hne
-      rw [equr, eqzero] at hne'; rw [shiftLeft_eq_zero]; rfl
+      rw [smtushiftRight_def, eqof, shiftRight_eq_zero_iff] at hne
+      rw [shiftLeft_ge_length_eq_zero]; rfl
       apply Nat.le_trans (m:=2^n) (Nat.le_of_lt (Nat.le_pow (Nat.le_refl _)))
-      rw [← Nat.div_add_mod (m:=b.toNat) (n:=2^n)]
-      apply Nat.le_trans (Nat.le_trans (m:=(2^n)*1)
-        (by rw [Nat.mul_one]; apply Nat.le_refl) _) (Nat.le_add_right _ _)
-      apply Nat.mul_le_mul_left; apply Nat.gt_zero_of_ne_zero hne'      
+      apply Nat.le_of_not_lt hne
     case true =>
       have heq := of_decide_eq_true hdec
       rw [Bool.ite_eq_true _ _ _ heq]; apply congrArg
-      rw [smtushiftRight_def, eqof] at heq; have heq' := val_eq_of_eq heq
-      rw [equr, eqzero] at heq'
-      rw [toNat_zeroExtend, Nat.mod_eq_of_lt]
-      rw [← Nat.div_add_mod (m:=b.toNat) (n:=2^n)]; rw [heq', Nat.mul_zero, Nat.zero_add]
-      apply Nat.mod_lt; apply Nat.le_trans (Nat.succ_le_succ (Nat.zero_le _)) (Nat.le_pow (Nat.le_refl _))
+      rw [smtushiftRight_def, eqof, shiftRight_eq_zero_iff] at heq
+      rw [toNat_zeroExtend, Nat.mod_eq_of_lt heq]
+
+  theorem ushr_equiv_short (a : Std.BitVec n) (b : Std.BitVec m) (h : m ≤ n) : a >>> b.toNat = a >>> (zeroExtend n b) := by
+    apply eq_of_val_eq; rw [toNat_ushiftRight, smtushiftRight_def, toNat_ushiftRight, toNat_zeroExtend, Nat.mod_eq_of_lt]
+    apply Nat.le_trans (toNat_le _) (Nat.pow_le_pow_of_le_right (.step .refl) h)
+
+  theorem ushr_equiv_long (a : Std.BitVec n) (b : Std.BitVec m) (h : m > n) : a >>> b.toNat =
+    if (b >>> (n#m)) = 0#m then a >>> (zeroExtend n b) else 0 := by
+    have eqof : Std.BitVec.toNat n#m = n := by
+      rw [toNat_ofNat]; apply Nat.mod_eq_of_lt
+      apply Nat.le_trans (Nat.succ_le_succ (Nat.le_of_lt h)) (Nat.le_pow (Nat.le_refl _))
+    cases hdec : decide ((b >>> (n#m)) = 0#m)
+    case false =>
+      have hne := of_decide_eq_false hdec
+      rw [Bool.ite_eq_false _ _ _ (of_decide_eq_false hdec)]
+      rw [smtushiftRight_def, eqof, shiftRight_eq_zero_iff] at hne
+      rw [shiftRight_ge_length_eq_zero]; rfl
+      apply Nat.le_trans (m:=2^n) (Nat.le_of_lt (Nat.le_pow (Nat.le_refl _)))
+      apply Nat.le_of_not_lt hne
+    case true =>
+      have heq := of_decide_eq_true hdec
+      rw [Bool.ite_eq_true _ _ _ heq]; apply congrArg
+      rw [smtushiftRight_def, eqof, shiftRight_eq_zero_iff] at heq
+      rw [toNat_zeroExtend, Nat.mod_eq_of_lt heq]
 
 end BitVec
 
