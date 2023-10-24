@@ -119,11 +119,24 @@ namespace BitVec
     apply congrArg (f:=Std.BitVec.ofFin); apply Fin.eq_of_val_eq
     dsimp [Fin.ofNat']; rw [Nat.mul_mod]; rfl
 
-  theorem shl_equiv_short (a : Std.BitVec n) (b : Std.BitVec m) (h : m ≤ n) : a <<< b.toNat = a <<< (zeroExtend n b) := by
+  theorem shl_equiv (a : Std.BitVec n) (b : Nat) : a <<< b = if (b < n) then (a <<< b#n) else 0 := by
+    cases hdec : decide (b < n)
+    case false =>
+      have hnle := of_decide_eq_false hdec
+      rw [Bool.ite_eq_false _ _ _ hnle, shiftLeft_ge_length_eq_zero _ _ (Nat.le_of_not_lt hnle)]; rfl
+    case true =>
+      have hle := of_decide_eq_true hdec
+      rw [Bool.ite_eq_true _ _ _ hle, smtshiftLeft_def, toNat_ofNat, Nat.mod_eq_of_lt]
+      apply Nat.le_trans hle (Nat.le_of_lt (Nat.le_pow .refl))
+
+  theorem shl_equiv' (a : Std.BitVec n) (b : Nat) : a <<< b = Bool.ite' (b < n) (a <<< b#n) 0 := by
+    have h := shl_equiv a b; rw [Bool.ite_simp] at h; exact h
+
+  theorem shl_toNat_equiv_short (a : Std.BitVec n) (b : Std.BitVec m) (h : m ≤ n) : a <<< b.toNat = a <<< (zeroExtend n b) := by
     apply eq_of_val_eq; rw [toNat_shiftLeft, smtshiftLeft_def, toNat_shiftLeft, toNat_zeroExtend, Nat.mod_eq_of_lt (a:=Std.BitVec.toNat b)]
     apply Nat.le_trans (toNat_le _) (Nat.pow_le_pow_of_le_right (.step .refl) h)
 
-  theorem shl_equiv_long (a : Std.BitVec n) (b : Std.BitVec m) (h : m > n) : a <<< b.toNat =
+  theorem shl_toNat_equiv_long (a : Std.BitVec n) (b : Std.BitVec m) (h : m > n) : a <<< b.toNat =
     if (b >>> (n#m)) = 0#m then a <<< (zeroExtend n b) else 0 := by
     have eqof : Std.BitVec.toNat n#m = n := by
       rw [toNat_ofNat]; apply Nat.mod_eq_of_lt
@@ -131,7 +144,7 @@ namespace BitVec
     cases hdec : decide ((b >>> (n#m)) = 0#m)
     case false =>
       have hne := of_decide_eq_false hdec
-      rw [Bool.ite_eq_false _ _ _ (of_decide_eq_false hdec)]
+      rw [Bool.ite_eq_false _ _ _ hne]
       rw [smtushiftRight_def, eqof, shiftRight_eq_zero_iff] at hne
       rw [shiftLeft_ge_length_eq_zero]; rfl
       apply Nat.le_trans (m:=2^n) (Nat.le_of_lt (Nat.le_pow (Nat.le_refl _)))
@@ -142,11 +155,28 @@ namespace BitVec
       rw [smtushiftRight_def, eqof, shiftRight_eq_zero_iff] at heq
       rw [toNat_zeroExtend, Nat.mod_eq_of_lt heq]
 
-  theorem ushr_equiv_short (a : Std.BitVec n) (b : Std.BitVec m) (h : m ≤ n) : a >>> b.toNat = a >>> (zeroExtend n b) := by
+  theorem shl_toNat_equiv_long' (a : Std.BitVec n) (b : Std.BitVec m) (h : m > n) : a <<< b.toNat =
+    Bool.ite' ((b >>> (n#m)) = 0#m) (a <<< (zeroExtend n b)) 0 := by
+    have h := shl_toNat_equiv_long a b h; rw [Bool.ite_simp] at h; exact h
+
+  theorem ushr_equiv (a : Std.BitVec n) (b : Nat) : a >>> b = if (b < n) then (a >>> b#n) else 0 := by
+    cases hdec : decide (b < n)
+    case false =>
+      have hnle := of_decide_eq_false hdec
+      rw [Bool.ite_eq_false _ _ _ hnle, ushiftRight_ge_length_eq_zero _ _ (Nat.le_of_not_lt hnle)]; rfl
+    case true =>
+      have hle := of_decide_eq_true hdec
+      rw [Bool.ite_eq_true _ _ _ hle, smtushiftRight_def, toNat_ofNat, Nat.mod_eq_of_lt]
+      apply Nat.le_trans hle (Nat.le_of_lt (Nat.le_pow .refl))
+
+  theorem ushr_equiv' (a : Std.BitVec n) (b : Nat) : a >>> b = Bool.ite' (b < n) (a >>> b#n) 0 := by
+    have h := ushr_equiv a b; rw [Bool.ite_simp] at h; exact h
+
+  theorem ushr_toNat_equiv_short (a : Std.BitVec n) (b : Std.BitVec m) (h : m ≤ n) : a >>> b.toNat = a >>> (zeroExtend n b) := by
     apply eq_of_val_eq; rw [toNat_ushiftRight, smtushiftRight_def, toNat_ushiftRight, toNat_zeroExtend, Nat.mod_eq_of_lt]
     apply Nat.le_trans (toNat_le _) (Nat.pow_le_pow_of_le_right (.step .refl) h)
 
-  theorem ushr_equiv_long (a : Std.BitVec n) (b : Std.BitVec m) (h : m > n) : a >>> b.toNat =
+  theorem ushr_toNat_equiv_long (a : Std.BitVec n) (b : Std.BitVec m) (h : m > n) : a >>> b.toNat =
     if (b >>> (n#m)) = 0#m then a >>> (zeroExtend n b) else 0 := by
     have eqof : Std.BitVec.toNat n#m = n := by
       rw [toNat_ofNat]; apply Nat.mod_eq_of_lt
@@ -165,11 +195,25 @@ namespace BitVec
       rw [smtushiftRight_def, eqof, shiftRight_eq_zero_iff] at heq
       rw [toNat_zeroExtend, Nat.mod_eq_of_lt heq]
 
-  theorem sshr_equiv_short (a : Std.BitVec n) (b : Std.BitVec m) (h : m ≤ n) : a.sshiftRight b.toNat = a.sshiftRight (zeroExtend n b).toNat := by
+  theorem ushr_toNat_equiv_long' (a : Std.BitVec n) (b : Std.BitVec m) (h : m > n) : a >>> b.toNat =
+    Bool.ite' ((b >>> (n#m)) = 0#m) (a >>> (zeroExtend n b)) 0 := by
+    have h := ushr_toNat_equiv_long a b h; rw [Bool.ite_simp] at h; exact h
+
+  theorem sshr_equiv (a : Std.BitVec n) (b : Nat) : a.sshiftRight b = if (b < n) then (a.sshiftRight (b#n).toNat) else (if a.msb then (1#n).neg else 0#n) := by
+    cases hdec : decide (b < n)
+    case false =>
+      have hnle := of_decide_eq_false hdec
+      rw [Bool.ite_eq_false _ _ _ hnle, sshiftRight_ge_length_eq_msb _ _ (Nat.le_of_not_lt hnle)]
+    case true =>
+      have hle := of_decide_eq_true hdec
+      rw [Bool.ite_eq_true _ _ _ hle, toNat_ofNat, Nat.mod_eq_of_lt]
+      apply Nat.le_trans hle (Nat.le_of_lt (Nat.le_pow .refl))
+
+  theorem sshr_toNat_equiv_short (a : Std.BitVec n) (b : Std.BitVec m) (h : m ≤ n) : a.sshiftRight b.toNat = a.sshiftRight (zeroExtend n b).toNat := by
     apply eq_of_val_eq; rw [toNat_zeroExtend, Nat.mod_eq_of_lt]
     apply Nat.le_trans (toNat_le _) (Nat.pow_le_pow_of_le_right (.step .refl) h)
 
-  theorem sshr_equiv_long (a : Std.BitVec n) (b : Std.BitVec m) (h : m > n) : a.sshiftRight b.toNat =
+  theorem sshr_toNat_equiv_long (a : Std.BitVec n) (b : Std.BitVec m) (h : m > n) : a.sshiftRight b.toNat =
     if (b >>> (n#m)) = 0#m then a.sshiftRight (zeroExtend n b).toNat else (if a.msb then (1#n).neg else 0#n) := by
     have eqof : Std.BitVec.toNat n#m = n := by
       rw [toNat_ofNat]; apply Nat.mod_eq_of_lt
@@ -187,6 +231,10 @@ namespace BitVec
       rw [Bool.ite_eq_true _ _ _ heq]; apply congrArg
       rw [smtushiftRight_def, eqof, shiftRight_eq_zero_iff] at heq
       rw [toNat_zeroExtend, Nat.mod_eq_of_lt heq]
+
+  theorem sshr_toNat_equiv_long' (a : Std.BitVec n) (b : Std.BitVec m) (h : m > n) : a.sshiftRight b.toNat =
+    Bool.ite' ((b >>> (n#m)) = 0#m) (a.sshiftRight (zeroExtend n b).toNat) (Bool.ite' a.msb (1#n).neg 0#n) := by
+    have h := sshr_toNat_equiv_long a b h; rw [Bool.ite_simp] at h; exact h
 
 end BitVec
 
@@ -274,6 +322,8 @@ theorem LamTerm.maxEVarSucc_pushBVCast : maxEVarSucc (pushBVCast ct t) = maxEVar
         dsimp [pushBVCast, maxEVarSucc]; apply IH
         apply Nat.le_of_succ_le_succ tl
     case app s fn arg =>
+      have leFn : LamTerm.size fn ≤ l := Nat.le_of_succ_le_succ (Nat.le_trans LamTerm.size_app_gt_size_fn tl)
+      have leArg : LamTerm.size arg ≤ l := Nat.le_of_succ_le_succ (Nat.le_trans LamTerm.size_app_gt_size_arg tl)
       cases ct
       case ofNat m =>
         cases fn <;> try apply Nat.max_zero_left
@@ -282,8 +332,7 @@ theorem LamTerm.maxEVarSucc_pushBVCast : maxEVarSucc (pushBVCast ct t) = maxEVar
           case bvcst bvc =>
             cases bvc <;> try apply Nat.max_zero_left
             case bvtoNat =>
-              dsimp [pushBVCast, maxEVarSucc]; rw [IH (t:=arg)]
-              apply Nat.le_of_succ_le_succ (Nat.le_trans LamTerm.size_app_gt_size_arg tl)
+              dsimp [pushBVCast, maxEVarSucc]; rw [IH leArg]
         case app s fn arg₁ =>
           cases fn <;> try apply Nat.max_zero_left
           case base b =>
@@ -291,33 +340,24 @@ theorem LamTerm.maxEVarSucc_pushBVCast : maxEVarSucc (pushBVCast ct t) = maxEVar
             case ncst nc =>
               cases nc <;> (try apply Nat.max_zero_left) <;> (
                 dsimp [pushBVCast, maxEVarSucc]
-                rw [IH (t:=arg₁) (Nat.le_of_succ_le_succ (Nat.le_trans (Nat.le_trans
-                  LamTerm.size_app_gt_size_arg LamTerm.size_app_ge_size_fn) tl))]
-                rw [IH (t:=arg) (Nat.le_of_succ_le_succ (Nat.le_trans
-                  LamTerm.size_app_gt_size_arg tl))])
+                rw [IH (Nat.le_trans LamTerm.size_app_ge_size_arg leFn), IH leArg])
       case ofInt m => apply Nat.max_zero_left
       case none =>
         dsimp [pushBVCast]
+        have fneq : ∀ ct, maxEVarSucc (pushBVCast ct fn) = maxEVarSucc fn := by
+          intro ct; apply IH leFn
         have argeq : ∀ ct, maxEVarSucc (pushBVCast ct arg) = maxEVarSucc arg := by
-          intro ct; apply IH; apply Nat.le_of_succ_le_succ (Nat.le_trans _ tl)
-          apply LamTerm.size_app_gt_size_arg
-        cases fn <;> dsimp [maxEVarSucc] <;> (try rw [argeq])
+          intro ct; apply IH leArg
+        have hbr : maxEVarSucc (app s (pushBVCast BVCastType.none fn) (pushBVCast BVCastType.none arg))
+          = maxEVarSucc (app s fn arg) := by
+          rw [maxEVarSucc_app, fneq, argeq]; rfl
+        cases fn <;> rw [maxEVarSucc_app] <;> try apply hbr
         case base b =>
-          cases b <;> try (
-            dsimp [maxEVarSucc, pushBVCast]; rw [IH (t:=arg) (Nat.le_of_succ_le_succ (
-              Nat.le_trans LamTerm.size_app_gt_size_arg tl))])
+          cases b <;> try (dsimp [maxEVarSucc, pushBVCast]; rw [IH leArg])
           case bvcst bvc =>
-            cases bvc <;> dsimp [maxEVarSucc, pushBVCast] <;> rw [IH (t:=arg) (Nat.le_of_succ_le_succ (
-                Nat.le_trans LamTerm.size_app_gt_size_arg tl))]
-            case bvofNat => rw [Nat.max, Nat.max_zero_left]
-            case bvofInt => rw [Nat.max, Nat.max_zero_left]
-        case lam s body =>
-          rw [IH (t:=body)]; apply Nat.le_of_succ_le_succ (Nat.le_trans _ tl)
-          apply LamTerm.size_app_ge_size_fn (fn:=.lam s body)
-        case app s fn arg =>
-          rw [IH (t:=.app s fn arg)]; rfl
-          apply Nat.le_of_succ_le_succ (Nat.le_trans _ tl)
-          apply LamTerm.size_app_gt_size_fn (fn:=.app s fn arg)
+            cases bvc <;> dsimp [maxEVarSucc, pushBVCast] <;> rw [IH leArg]
+            case bvofNat => rw [Nat.max_zero_left]
+            case bvofInt => rw [Nat.max_zero_left]
 
 theorem LamTerm.evarEquiv_pushBVCast : evarEquiv (fun t => pushBVCast ct t) := by
   intro t t' heq; cases heq; apply maxEVarSucc_pushBVCast
@@ -330,22 +370,18 @@ theorem LamEquiv.pushBVCast
   induction l generalizing t s ct lctx <;>
     try apply False.elim (LamTerm.size_ne_zero (Nat.le_zero.mp tl))
   case succ l IH =>
-    cases t
-    case atom n =>
-      cases ct <;> dsimp [LamTerm.pushBVCast] <;> apply LamEquiv.refl wft
-    case etom n =>
-      cases ct <;> dsimp [LamTerm.pushBVCast] <;> apply LamEquiv.refl wft
+    have hequivRefl : LamEquiv lval lctx s (LamTerm.applyBVCast ct t) (LamTerm.applyBVCast ct t) := by
+      cases ct <;> apply LamEquiv.refl wft
+    cases t <;> try (cases ct <;> apply hequivRefl)
     case base b =>
-      cases ct <;> try (dsimp [LamTerm.pushBVCast]; apply LamEquiv.refl wft)
+      cases ct <;> try apply hequivRefl
       case ofNat m =>
-        cases b <;> try (dsimp [LamTerm.pushBVCast]; apply LamEquiv.refl wft)
+        cases b <;> try apply hequivRefl
         case ncst nc =>
           cases nc <;> dsimp [LamTerm.pushBVCast, LamTerm.applyBVCast] <;> try apply LamEquiv.refl wft
           cases wft.getFn.getBase.getBvcst; apply LamEquiv.bvofNat
-    case bvar n =>
-      cases ct <;> dsimp [LamTerm.pushBVCast] <;> apply LamEquiv.refl wft
     case lam s' body =>
-      cases ct <;> try (dsimp [LamTerm.pushBVCast]; apply LamEquiv.refl wft)
+      cases ct <;> try apply hequivRefl
       case none =>
         dsimp [LamTerm.pushBVCast, LamTerm.applyBVCast]
         cases wft
@@ -353,97 +389,58 @@ theorem LamEquiv.pushBVCast
           apply LamEquiv.ofLam; apply IH (ct:=.none) (t:=body) wfBody
           apply Nat.le_of_succ_le_succ tl
     case app s' fn arg =>
+      have leFn : LamTerm.size fn ≤ l := Nat.le_of_succ_le_succ (Nat.le_trans LamTerm.size_app_gt_size_fn tl)
+      have leArg : LamTerm.size arg ≤ l := Nat.le_of_succ_le_succ (Nat.le_trans LamTerm.size_app_gt_size_arg tl)
       cases ct
       case ofNat m =>
-        cases fn <;> try (dsimp [LamTerm.pushBVCast]; apply LamEquiv.refl wft)
+        cases wft.getFn.getBase.getBvcst
+        have wfapp' := wft.getArg
+        cases fn <;> try apply hequivRefl
         case base b =>
-          cases b <;> try (dsimp [LamTerm.pushBVCast]; apply LamEquiv.refl wft)
+          cases b <;> try apply hequivRefl
           case bvcst bvc =>
-            cases bvc <;> try (dsimp [LamTerm.pushBVCast]; apply LamEquiv.refl wft)
+            cases bvc <;> try apply hequivRefl
             case bvtoNat =>
-              cases wft.getFn.getBase.getBvcst
-              have wfn := wft.getArg
-              cases wfn.getFn.getBase.getBvcst
-              have wfbv := wfn.getArg
+              cases wfapp'.getFn.getBase.getBvcst
+              have wfbv := wfapp'.getArg
               dsimp [LamTerm.applyBVCast, LamTerm.pushBVCast]
               apply LamEquiv.trans (LamEquiv.bvofNat_bvtoNat wfbv)
               apply LamEquiv.congrArg (.ofBase (.ofBvzeroExtend' _ _))
-              apply IH (ct:=.none) (t:=arg) wfbv
-              apply Nat.le_of_succ_le_succ (Nat.le_trans LamTerm.size_app_gt_size_arg tl)
+              apply IH (ct:=.none) (t:=arg) wfbv leArg
         case app s'' fn arg₁ =>
           cases fn <;> try (dsimp [LamTerm.pushBVCast]; apply LamEquiv.refl wft)
+          have wfl := wfapp'.getFn.getArg; have wfr := wfapp'.getArg
+          have leArg₁ := Nat.le_trans LamTerm.size_app_ge_size_arg leFn
           case base b =>
             cases b <;> try (dsimp [LamTerm.pushBVCast]; apply LamEquiv.refl wft)
             case ncst nc =>
-              cases nc <;> dsimp [LamTerm.pushBVCast] <;> try apply LamEquiv.refl wft
+              cases nc <;> dsimp [LamTerm.pushBVCast] <;> (try apply LamEquiv.refl wft) <;>
+                (try cases wfapp'.getFn.getFn.getBase.getNcst; dsimp [LamTerm.applyBVCast])
               case nadd =>
-                cases wft.getFn.getBase.getBvcst
-                have wfnadd := wft.getArg
-                cases wfnadd.getFn.getFn.getBase.getNcst
-                have wfl := wfnadd.getFn.getArg; have wfr := wfnadd.getArg
-                dsimp [LamTerm.applyBVCast]
                 apply LamEquiv.trans (LamEquiv.bvofNat_nadd wfl wfr)
                 apply LamEquiv.congr (LamEquiv.congrArg (.ofBase (.ofBvadd' _)) ?eql) ?eqr
-                case eql =>
-                  apply IH (ct:=.ofNat m) (t:=arg₁) (.mkBvofNat wfl)
-                  apply Nat.le_of_succ_le_succ (Nat.le_trans (Nat.le_trans
-                    LamTerm.size_app_gt_size_arg LamTerm.size_app_ge_size_fn) tl)
-                case eqr =>
-                  apply IH (ct:=.ofNat m) (t:=arg) (.mkBvofNat wfr)
-                  apply Nat.le_of_succ_le_succ (Nat.le_trans LamTerm.size_app_gt_size_arg tl)
+                case eql => apply IH (ct:=.ofNat m) (t:=arg₁) (.mkBvofNat wfl) leArg₁
+                case eqr => apply IH (ct:=.ofNat m) (t:=arg) (.mkBvofNat wfr) leArg
               case nmul =>
-                cases wft.getFn.getBase.getBvcst
-                have wfnadd := wft.getArg
-                cases wfnadd.getFn.getFn.getBase.getNcst
-                have wfl := wfnadd.getFn.getArg; have wfr := wfnadd.getArg
-                dsimp [LamTerm.applyBVCast]
                 apply LamEquiv.trans (LamEquiv.bvofNat_nmul wfl wfr)
                 apply LamEquiv.congr (LamEquiv.congrArg (.ofBase (.ofBvmul' _)) ?eql) ?eqr
-                case eql =>
-                  apply IH (ct:=.ofNat m) (t:=arg₁) (.mkBvofNat wfl)
-                  apply Nat.le_of_succ_le_succ (Nat.le_trans (Nat.le_trans
-                    LamTerm.size_app_gt_size_arg LamTerm.size_app_ge_size_fn) tl)
-                case eqr =>
-                  apply IH (ct:=.ofNat m) (t:=arg) (.mkBvofNat wfr)
-                  apply Nat.le_of_succ_le_succ (Nat.le_trans LamTerm.size_app_gt_size_arg tl)
+                case eql => apply IH (ct:=.ofNat m) (t:=arg₁) (.mkBvofNat wfl) leArg₁
+                case eqr => apply IH (ct:=.ofNat m) (t:=arg) (.mkBvofNat wfr) leArg
       case ofInt m => dsimp [LamTerm.pushBVCast]; apply LamEquiv.refl wft
       case none =>
-        cases fn <;> try (
-          dsimp [LamTerm.pushBVCast]; apply LamEquiv.congrArg wft.getFn
-          apply IH (ct:=.none) wft.getArg; apply Nat.le_of_succ_le_succ (Nat.le_trans
-            LamTerm.size_app_gt_size_arg tl))
+        have eFn := IH (ct:=.none) wft.getFn leFn
+        have eArg := IH (ct:=.none) wft.getArg leArg
+        have h_none_app := LamEquiv.congr eFn eArg
+        cases fn <;> try apply h_none_app
         case base b =>
-          cases b <;> try (
-            apply LamEquiv.congrArg wft.getFn (IH (ct:=.none) wft.getArg _)
-            apply Nat.le_of_succ_le_succ (Nat.le_trans LamTerm.size_app_gt_size_arg tl))
+          have h_none_app_base := LamEquiv.congrArg wft.getFn eArg
+          cases b <;> try apply h_none_app_base
           case bvcst bvc =>
-            cases bvc <;> try (
-              apply LamEquiv.congrArg wft.getFn (IH (ct:=.none) wft.getArg _)
-              apply Nat.le_of_succ_le_succ (Nat.le_trans LamTerm.size_app_gt_size_arg tl))
+            cases bvc <;> try apply h_none_app_base
             case bvofNat m =>
-              cases wft.getFn.getBase.getBvcst
-              apply IH (ct:=.ofNat m) (t:=arg) wft
-              apply Nat.le_of_succ_le_succ (Nat.le_trans LamTerm.size_app_gt_size_arg tl)
+              cases wft.getFn.getBase.getBvcst; apply IH (ct:=.ofNat m) (t:=arg) wft leArg
             case bvofInt m =>
-              cases wft.getFn.getBase.getBvcst
-              apply IH (ct:=.ofInt m) (t:=arg) wft
-              apply Nat.le_of_succ_le_succ (Nat.le_trans LamTerm.size_app_gt_size_arg tl)
-        case lam s' body =>
-          dsimp [LamTerm.applyBVCast]; apply LamEquiv.congr
-          case eFn =>
-            apply IH (ct:=.none) (t:=.lam s' body) wft.getFn
-            apply Nat.le_of_succ_le_succ (Nat.le_trans LamTerm.size_app_gt_size_fn tl)
-          case eArg =>
-            apply IH (ct:=.none) (t:=arg) wft.getArg
-            apply Nat.le_of_succ_le_succ (Nat.le_trans LamTerm.size_app_gt_size_arg tl)
-        case app s'' fn arg₁ =>
-          dsimp [LamTerm.applyBVCast]; apply LamEquiv.congr
-          case eFn =>
-            apply IH (ct:=.none) (t:=.app s'' fn arg₁) wft.getFn
-            apply Nat.le_of_succ_le_succ (Nat.le_trans LamTerm.size_app_gt_size_fn tl)
-          case eArg =>
-            apply IH (ct:=.none) (t:=arg) wft.getArg
-            apply Nat.le_of_succ_le_succ (Nat.le_trans LamTerm.size_app_gt_size_arg tl)
+              cases wft.getFn.getBase.getBvcst; apply IH (ct:=.ofInt m) (t:=arg) wft leArg
 
 theorem LamGenConv.pushBVCast : LamGenConv lval (fun t => LamTerm.pushBVCast .none t) := by
   intros t₁ t₂ heq lctx rty wf; cases heq
