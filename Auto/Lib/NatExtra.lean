@@ -88,10 +88,15 @@ theorem Nat.le_max_iff (m n k : Nat) : k ≤ max m n ↔ k ≤ m ∨ k ≤ n := 
 
 theorem Nat.gt_eq_succ_le {m n : Nat} : m > n ↔ .succ n ≤ m := by rfl
 
-theorem Nat.le_pred_of_succ_le {n m : Nat} : m ≠ 0 → Nat.succ n ≤ m → n ≤ Nat.pred m :=
+theorem Nat.le_pred_of_succ_le {n m : Nat} : m > 0 → Nat.succ n ≤ m → n ≤ Nat.pred m :=
   match m with
   | 0 => fun h _ => by contradiction
   | _+1 => fun _ h => Nat.le_of_succ_le_succ h
+
+theorem Nat.pred_lt_iff_le {n m : Nat} : m > 0 → (Nat.pred n < m ↔ n ≤ m) := by
+  intro h; cases n
+  case zero => simp [h]
+  case succ n => rfl
 
 theorem Nat.max_add {a b c : Nat} : max a b + c = max (a + c) (b + c) := by
   rw [Nat.max_def, Nat.max_def];

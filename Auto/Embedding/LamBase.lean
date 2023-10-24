@@ -7,7 +7,6 @@ import Auto.Lib.IntExtra
 import Auto.Lib.HEqExtra
 import Auto.Lib.ListExtra
 -- import Mathlib.Data.Real.Basic
--- import Mathlib.Data.Int.Basic
 import Auto.MathlibEmulator
 
 -- Embedding Simply Typed Lambda Calculus into Dependent Type Theory
@@ -177,7 +176,7 @@ def LamSort.reprPrec (s : LamSort) (n : Nat) :=
     f!"({str})"
 
 instance : Repr LamSort where
-  reprPrec s n := s.reprPrec n 
+  reprPrec s n := s.reprPrec n
 
 def LamSort.toString : LamSort → String
 | .atom n => s!"#{n}"
@@ -1889,7 +1888,7 @@ def StringConst.interp_equiv (tyVal : Nat → Type u) (scwf : LamWF sc s) :
   HEq (LamWF.interp tyVal scwf) (interp tyVal sc) := by
   cases scwf <;> rfl
 
-def BVShOp.interp (n : Nat) : (op : BVShOp) → 
+def BVShOp.interp (n : Nat) : (op : BVShOp) →
   GLift.{1, u} (Std.BitVec n) → GLift.{1, u} Nat → GLift.{1, u} (Std.BitVec n)
 | .shl         => bvshlLift n
 | .lshr        => bvlshrLift n
@@ -1897,7 +1896,7 @@ def BVShOp.interp (n : Nat) : (op : BVShOp) →
 | .rotateLeft  => bvrotateLeftLift n
 | .rotateRight => bvrotateRightLift n
 
-def BVShOp.smtinterp (n : Nat) : (op : BVShOp) → 
+def BVShOp.smtinterp (n : Nat) : (op : BVShOp) →
   GLift.{1, u} (Std.BitVec n) → GLift.{1, u} (Std.BitVec n) → GLift.{1, u} (Std.BitVec n)
 | .shl         => bvsmtshlLift n
 | .lshr        => bvsmtlshrLift n
@@ -2763,7 +2762,7 @@ theorem LamTerm.maxEVarSucc_getAppFnN (heq : LamTerm.getAppFnN n t = .some t') :
 
 def LamTerm.getAppArgsNAux (n : Nat) (args : List (LamSort × LamTerm)) (t : LamTerm) : Option (List (LamSort × LamTerm)) :=
   match n with
-  | .zero => args 
+  | .zero => args
   | .succ n =>
     match t with
     | .app s fn arg => getAppArgsNAux n ((s, arg) :: args) fn
@@ -2981,7 +2980,7 @@ def LamTerm.lamCheck? (ltv : LamTyVal) :
   match fn.lamCheck? ltv lctx, arg.lamCheck? ltv lctx with
   | .some (.func ty₁ ty₂), .some argTy =>
     match ty₁.beq argTy, ty₁.beq s with
-    | true, true => .some ty₂ 
+    | true, true => .some ty₂
     | _,    _    => none
   | _, _ => .none
 
@@ -2998,7 +2997,7 @@ theorem LamTerm.lamCheck?_irrelevence
     case succ n =>
       dsimp [pushLCtx]; rw [hirr]; dsimp [maxLooseBVarSucc]
       apply Nat.le_pred_of_succ_le _ hlt;
-      apply Nat.not_eq_zero_of_lt hlt
+      apply Nat.le_trans (Nat.succ_le_succ (Nat.zero_le _)) hlt
   case app s fn arg IHFn IHArg =>
     rw [IHFn]; rw [IHArg];
     intros n hlt; rw [hirr n (Nat.le_trans hlt (Nat.le_max_right _ _))]
@@ -3046,7 +3045,7 @@ def LamWF.unique {ltv : LamTyVal} :
   s₁ = s₂ ∧ HEq lwf₁ lwf₂
 | .ofAtom _,  .ofAtom _  => And.intro rfl HEq.rfl
 | .ofEtom _,  .ofEtom _  => And.intro rfl HEq.rfl
-| .ofBase H₁, .ofBase H₂ => 
+| .ofBase H₁, .ofBase H₂ =>
   have ⟨.refl _, .refl _⟩ := LamBaseTerm.LamWF.unique H₁ H₂
   And.intro rfl HEq.rfl
 | .ofBVar _,  .ofBVar _  => And.intro rfl HEq.rfl
@@ -3071,7 +3070,7 @@ def LamWF.lctxIrrelevance
   case succ n =>
     apply hirr;
     apply Nat.le_pred_of_succ_le _ hlt
-    apply Nat.not_eq_zero_of_lt hlt
+    apply Nat.le_trans (Nat.succ_le_succ (Nat.zero_le _)) hlt
 | .ofApp argTy HFn HArg => .ofApp argTy
   (lctxIrrelevance (fun n H => hirr _ (Nat.le_trans H (Nat.le_max_left _ _))) HFn)
   (lctxIrrelevance (fun n H => hirr _ (Nat.le_trans H (Nat.le_max_right _ _))) HArg)
@@ -3518,7 +3517,7 @@ def LamWF.complete {ltv : LamTyVal} :
 def LamTerm.lamCheck?_of_lamWF
   {ltv : LamTyVal} {lctx : Nat → LamSort} {t : LamTerm} {ty : LamSort} :
   LamWF ltv ⟨lctx, t, ty⟩ → t.lamCheck? ltv lctx = .some ty := by
-  generalize JudgeEq : { lctx := lctx, rterm := t, rty := ty : LamJudge} = Judge 
+  generalize JudgeEq : { lctx := lctx, rterm := t, rty := ty : LamJudge} = Judge
   intro HWf; induction HWf generalizing lctx t ty <;>
     injection JudgeEq with lctx_eq rterm_eq rty_eq <;>
     rw [rterm_eq, rty_eq] <;> try rfl
@@ -3638,7 +3637,7 @@ theorem LamWF.interp_substLCtxTerm
   {lctxTerm' : ∀ n, (lctxTy' n).interp lval.tyVal}
   (HLCtxTyEq : lctxTy = lctxTy') (HLCtxTermEq : HEq lctxTerm lctxTerm') :
   LamWF.interp lval lctxTy lctxTerm wf = LamWF.interp lval lctxTy' lctxTerm' wf' := by
-  cases HLCtxTyEq; cases HLCtxTermEq; rcases (LamWF.unique wf wf') with ⟨_, ⟨⟩⟩; rfl 
+  cases HLCtxTyEq; cases HLCtxTermEq; rcases (LamWF.unique wf wf') with ⟨_, ⟨⟩⟩; rfl
 
 -- In most use cases, we would have `b = .prop`
 theorem LamWF.interp_substLCtxTerm_rec
@@ -3917,7 +3916,7 @@ theorem LamWF.interp_lctxIrrelevance
   {t : LamTerm} {rty : LamSort}
   (lwf₁ : LamWF lval.toLamTyVal ⟨lctxTy₁, t, rty⟩)
   (lwf₂ : LamWF lval.toLamTyVal ⟨lctxTy₂, t, rty⟩)
-  (hirr : ∀ n, n < t.maxLooseBVarSucc → 
+  (hirr : ∀ n, n < t.maxLooseBVarSucc →
     lctxTy₁ n = lctxTy₂ n ∧ HEq (lctxTerm₁ n) (lctxTerm₂ n)) :
   HEq (LamWF.interp lval lctxTy₁ lctxTerm₁ lwf₁) (LamWF.interp lval lctxTy₂ lctxTerm₂ lwf₂) := by
   induction t generalizing lctxTy₁ lctxTy₂ rty <;> try (cases lwf₁; cases lwf₂; rfl)
@@ -3942,7 +3941,7 @@ theorem LamWF.interp_lctxIrrelevance
         case succ n =>
           apply hirr;
           apply Nat.le_pred_of_succ_le _ hlt
-          apply Nat.not_eq_zero_of_lt hlt
+          apply Nat.le_trans (Nat.succ_le_succ (Nat.zero_le _)) hlt
   case app s fn arg IHFn IHArg =>
     cases lwf₁; case ofApp HArg₁ HFn₁ =>
       cases lwf₂; case ofApp HArg₂ HFn₂ =>

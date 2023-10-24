@@ -1,4 +1,5 @@
 import Auto.Lib.NatExtra
+import Std.Data.Int.Lemmas
 namespace Auto
 
 def Int.beq : Int → Int → Bool
@@ -27,5 +28,11 @@ instance : LawfulBEq Int where
   rfl := Int.beq_refl
 
 def Int.abs (x : Int) := ite (x ≤ (-x)) (-x) x
+
+theorem Int.shiftRight_def (i : Int) (s : Nat) : i >>> s =
+  match i with
+  | Int.ofNat n => Int.ofNat (n >>> s)
+  | Int.negSucc n => Int.negSucc (n >>> s) := by
+  cases i <;> rfl
 
 end Auto
