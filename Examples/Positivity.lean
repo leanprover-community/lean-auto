@@ -18,7 +18,7 @@ open Function Nat NNReal ENNReal
 set_option auto.smt true
 set_option trace.auto.smt.printCommands true
 set_option trace.auto.smt.result true
-set_option auto.proofReconstruction false
+set_option auto.duper false
 
 variable {ι α β : Type _}
 

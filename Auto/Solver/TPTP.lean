@@ -53,15 +53,16 @@ private def createAux (path : String) (args : Array String) : MetaM SolverProc :
 def queryNone : MetaM Unit := do
   trace[auto.tptp.result] "TPTP solver is disabled. No result available."
 
-def queryZipperposition (query : String) : MetaM Unit := do
+def queryZipperposition (query : String) : MetaM (Option Expr) := do
   let solver ← createAux "zipperposition" #["-i=tptp", "--mode=ho-competitive", "-t=10"]
   solver.stdin.putStr s!"{query}\n"
   let (_, solver) ← solver.takeStdin
   let result ← solver.stdout.readToEnd
   trace[auto.tptp.result] "Result: {result}"
   solver.kill
+  return .none
 
-def queryZEPort (query : String) : MetaM Unit := do
+def queryZEPort (query : String) : MetaM (Option Expr) := do
   let path := auto.tptp.zeport.path.get (← getOptions)
   -- To avoid concurrency issue, use `attempt`
   attempt <| IO.FS.createDir "./.zeport_ignore"
@@ -86,9 +87,10 @@ def queryZEPort (query : String) : MetaM Unit := do
   IO.FS.removeFile s!"./.zeport_ignore/problem{idx}.p"
   -- For synchronization, remove directory in the end
   IO.FS.removeDir s!"./.zeport_ignore/tmp{idx}"
+  return .none
 where attempt (action : MetaM Unit) := try action catch _ => pure ()
 
-def querySolver (query : String) : MetaM Unit := do
+def querySolver (query : String) : MetaM (Option Expr) := do
   if !(auto.tptp.get (← getOptions)) then
     throwError "querySolver :: Unexpected error"
   match auto.tptp.solver.name.get (← getOptions) with

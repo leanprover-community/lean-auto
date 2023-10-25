@@ -12,7 +12,7 @@ import Auto.Tactic
 
 
 set_option profiler true
-set_option auto.proofReconstruction false
+set_option auto.duper false
 set_option trace.auto.tptp.printQuery true
 set_option trace.auto.tptp.result true
 set_option auto.tptp.solver.name "zeport"
@@ -252,7 +252,7 @@ variable (square₁      : ∀ b, l (g₀ b) = g₁ (k b))
 
 open is_short_exact
 
-set_option auto.proofReconstruction true
+set_option auto.duper true
 set_option auto.redMode "reducible"
 set_option trace.auto.lamReif.printProofs true
 set_option trace.auto.lamReif.printValuation true

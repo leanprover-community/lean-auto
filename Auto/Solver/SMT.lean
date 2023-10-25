@@ -12,6 +12,12 @@ register_option auto.smt : Bool := {
   descr := "Enable/Disable SMT Solver"
 }
 
+register_option auto.smt.trust : Bool := {
+  defValue := false
+  descr := "When this option is set to `true`, auto closes the " ++
+    "goal by `sorry` if SMT solver returns `unsat`."
+}
+
 namespace Auto
 
 open IR.SMT
@@ -70,7 +76,7 @@ where
                       cmd := path, args := args}
 
 /-- Only put declarations in the query -/
-def querySolver (query : Array IR.SMT.Command) : MetaM Unit := do
+def querySolver (query : Array IR.SMT.Command) : MetaM (Option Expr) := do
   if !(auto.smt.get (← getOptions)) then
     throwError "querySolver :: Unexpected error"
   let name := auto.smt.solver.name.get (← getOptions)
@@ -89,6 +95,7 @@ def querySolver (query : Array IR.SMT.Command) : MetaM Unit := do
     let (model, _) ← getSexp stdout
     solver.kill
     trace[auto.smt.result] "{name} says Sat, model:\n{model}\nstderr:\n{stderr}"
+    return .none
   | .atom (.symb "unsat") =>
     emitCommand solver .getProof
     let (_, solver) ← solver.takeStdin
@@ -97,7 +104,13 @@ def querySolver (query : Array IR.SMT.Command) : MetaM Unit := do
     let (proof, _) ← getSexp stdout
     solver.kill
     trace[auto.smt.result] "{name} says Unsat, proof:\n {proof}\nstderr:\n{stderr}"
-  | _ => trace[auto.smt.result] "{name} produces unexpected check-sat response\n {checkSatResponse}"
+    if (auto.smt.trust.get (← getOptions)) then
+      return ← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []]
+    else
+      return .none
+  | _ =>
+    trace[auto.smt.result] "{name} produces unexpected check-sat response\n {checkSatResponse}"
+    return .none
 
 end Solver.SMT
 

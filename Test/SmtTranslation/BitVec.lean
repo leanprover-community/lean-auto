@@ -2,9 +2,9 @@ import Auto.Tactic
 open Lean Std
 
 set_option auto.smt true
+set_option auto.smt.trust true
 set_option trace.auto.smt.printCommands true
 set_option trace.auto.smt.result true
-set_option auto.proofReconstruction false
 
 open Std.BitVec
 
@@ -55,7 +55,6 @@ example :
   (w : BitVec 8).rotateRight n = (w : BitVec 8).rotateRight n := by
   auto
 
-set_option trace.auto.lamReif.printResult true in
 example : 101#32 <<< 2#32 = 404#32 := by auto
 
 #check (rfl : (fun (x y : BitVec 32) => x <<< y) = (fun (x y : BitVec 32) => x.shiftLeft y.toNat))

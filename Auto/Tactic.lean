@@ -10,7 +10,7 @@ initialize
   registerTraceClass `auto.printLemmas
   registerTraceClass `auto.printProof
 
-register_option auto.proofReconstruction : Bool := {
+register_option auto.duper : Bool := {
   defValue := true,
   descr := "Enable/Disable proof reconstruction"
 }
@@ -108,21 +108,6 @@ def parseDefeqs : TSyntax ``defeqs → TacticM (Array Name)
 | `(defeqs|) => pure #[]
 | _ => throwUnsupportedSyntax
 
-inductive Result where
-  -- Unsatisfiable, witnessed by `e`
-  | unsat : (e : Expr) → Result
-  -- Satisfiable, witnessed by an assignment to free variables
-  | sat : (es : Array (FVarId × Expr)) → Result
-  -- Unknown
-  | unknown : Result
-
-instance : ToMessageData Result where
-  toMessageData : Result → MessageData
-  | .unsat e => m!"Result.unsat {e}"
-  | .sat es => .compose m!"Result.sat "
-    (MessageData.array es (fun (id, e) => m!"{mkFVar id} := {e}"))
-  | .unknown => m!"Result.unknown"
-
 def collectLctxLemmas (lctxhyps : Bool) (ngoalAndBinders : Array FVarId) : TacticM (Array Lemma) :=
   Meta.withNewMCtxDepth do
     let fVarIds := (if lctxhyps then (← getLCtx).getFVarIds else ngoalAndBinders)
@@ -218,7 +203,7 @@ def collectAllLemmas (hintstx : TSyntax ``hints) (unfolds : TSyntax `Auto.unfold
   return (lctxLemmas ++ userLemmas ++ defeqLemmas, inhFacts)
 
 /-- `ngoal` means `negated goal` -/
-def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : Array Lemma) : TacticM Result := do
+def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : Array Lemma) : TacticM Expr := do
   let instr ← parseInstr instrstx
   let declName? ← Elab.Term.getDeclName?
   -- Simplify `ite`
@@ -240,14 +225,18 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
       let (exportFacts, exportInds) ← LamReif.preprocess exportFacts exportInds
       let exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)
       -- **TPTP**
-      if (auto.tptp.get (← getOptions)) then queryTPTP exportFacts
+      if (auto.tptp.get (← getOptions)) then
+        if let .some proof ← queryTPTP exportFacts then
+          return proof
       -- **SMT**
-      if (auto.smt.get (← getOptions)) then querySMT exportFacts exportInds
-      -- **Proof Reconstruction**
-      if (auto.proofReconstruction.get (← getOptions)) then
-        reconstruct declName? exportFacts exportInhs
-      else
-        return ← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []]
+      if (auto.smt.get (← getOptions)) then
+        if let .some proof ← querySMT exportFacts exportInds then
+          return proof
+      -- **Duper**
+      if (auto.duper.get (← getOptions)) then
+        if let .some proof ← queryDuper declName? exportFacts exportInhs then
+          return proof
+      throwError "Auto failed to find proof"
       )
     let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
       let uvalids ← liftM <| Reif.getFacts
@@ -256,10 +245,10 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
       let u ← computeMaxLevel uvalids
       (afterReify uvalids uinhs inds).run' {u := u})
     trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
-    return .unsat proof
-  | .useSorry => return .unsat (← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []])
+    return proof
+  | .useSorry => return ← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []]
 where
-  queryTPTP exportFacts : LamReif.ReifM Unit :=
+  queryTPTP exportFacts : LamReif.ReifM (Option Expr) :=
     try
       let lamVarTy := (← LamReif.getVarVal).map Prod.snd
       let lamEVarTy ← LamReif.getLamEVarTy
@@ -272,7 +261,8 @@ where
       Solver.TPTP.querySolver query
     catch e =>
       trace[auto.tptp.result] "TPTP invocation failed with {e.toMessageData}"
-  querySMT exportFacts exportInds : LamReif.ReifM Unit :=
+      return .none
+  querySMT exportFacts exportInds : LamReif.ReifM (Option Expr) :=
     try
       let lamVarTy := (← LamReif.getVarVal).map Prod.snd
       let lamEVarTy ← LamReif.getLamEVarTy
@@ -286,19 +276,25 @@ where
       Solver.SMT.querySolver commands
     catch e =>
       trace[auto.smt.result] "SMT invocation failed with {e.toMessageData}"
-  reconstruct declName? exportFacts exportInhs : LamReif.ReifM Expr := do
-    let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ← Lam2D.callDuper exportInhs exportFacts
-    trace[auto.printProof] "Duper found proof of {← Meta.inferType proof}"
-    LamReif.newAssertion proof proofLamTerm
-    let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
-    let forallElimed ← LamReif.validOfElimForalls etomInstantiated usedInhs
-    let contra ← LamReif.validOfImps forallElimed unsatCore
-    LamReif.printValuation
-    LamReif.printProofs
-    Reif.setDeclName? declName?
-    let checker ← LamReif.buildCheckerExprFor contra
-    let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
-    Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra
+      return .none
+  queryDuper declName? exportFacts exportInhs : LamReif.ReifM (Option Expr) := do
+    try
+      let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ← Lam2D.callDuper exportInhs exportFacts
+      trace[auto.printProof] "Duper found proof of {← Meta.inferType proof}"
+      LamReif.newAssertion proof proofLamTerm
+      let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
+      let forallElimed ← LamReif.validOfElimForalls etomInstantiated usedInhs
+      let contra ← LamReif.validOfImps forallElimed unsatCore
+      LamReif.printValuation
+      LamReif.printProofs
+      Reif.setDeclName? declName?
+      let checker ← LamReif.buildCheckerExprFor contra
+      let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
+      let proof ← Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra
+      return .some proof
+    catch e =>
+      trace[auto.tactic] "Duper invocation failed with {e.toMessageData}"
+      return .none
 
 @[tactic auto]
 def evalAuto : Tactic
@@ -314,13 +310,9 @@ def evalAuto : Tactic
   replaceMainGoal [absurd]
   withMainContext do
     let (lemmas, inhFacts) ← collectAllLemmas hints unfolds defeqs (goalBinders.push ngoal)
-    let result ← runAuto instr lemmas inhFacts
-    match result with
-    | Result.unsat e => do
-      IO.println s!"Unsat. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
-      absurd.assign e
-    | Result.sat _ => throwError "Sat"
-    | Result.unknown => throwError "Unknown"
+    let proof ← runAuto instr lemmas inhFacts
+    IO.println s!"Auto found proof. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
+    absurd.assign proof
 | _ => throwUnsupportedSyntax
 
 @[tactic intromono]
