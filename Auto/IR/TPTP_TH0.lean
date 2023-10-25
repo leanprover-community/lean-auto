@@ -99,6 +99,7 @@ def transBitVecConst : BitVecConst → String
 | .bvtoNat n        => s!"t_bvtoNat_{n}"
 | .bvofInt n        => s!"t_bvofInt_{n}"
 | .bvtoInt n        => s!"t_bvtoInt_{n}"
+| .bvmsb n          => s!"t_bvmsb_{n}"
 | .bvadd n          => s!"t_bvadd_{n}"
 | .bvsub n          => s!"t_bvsub_{n}"
 | .bvneg n          => s!"t_bvneg_{n}"

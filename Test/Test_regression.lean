@@ -61,7 +61,7 @@ section Inhabitation
 
   example (a : α) (p : α → Prop) : (∃ x, p x → r) ↔ ((∀ x, p x) → r) := by
     auto
-  
+
   set_option trace.auto.lamReif.printProofs true in
   example (a : α) (p : α → Prop) : (∃ x, r → p x) ↔ (r → ∃ x, p x) := by
     auto
@@ -71,7 +71,7 @@ section Inhabitation
     (inh : ∀ (α : Type), OK α → OK α)
     (h : ∀ (x : OK Nat), x = x) : 1 = 1 := by
     auto
-  
+
   -- Either `inh₁` or `inh₂` should be blocked for being redundant
   example (OK₁ OK₂ : Type → Type)
     (inh₁ : ∀ (α : Type), OK₁ α → OK₂ α)
@@ -125,7 +125,7 @@ section DSRobust
   example (h₁ : False) (h₂ : False) : False := by auto [h₁, h₂]
   example (α : Prop) (h₁ : α) (h₂ : α) (h₃ : α) : α := by auto
   example (h₁ : ¬ True) : True := by auto [h₁]
-  
+
   -- Result of ChkStep coincides with input term
   example (h₁ : False → False) (h₂ : False) : True := by auto [h₁, h₂]
 
@@ -165,27 +165,27 @@ section Skolemization
 
   example (p q : (α → β) → Prop) (h₁ : ∃ (f : _) (g : α), p f) (h₂ : ∀ f, p f → q f) : ∃ f, q f :=
     by auto
-  
+
   example (p : α → Prop) (q : (β → γ) → Prop) (h₁ : ∃ f, p f) (h₂ : ∃ f, q f) : ∃ f g, p f ∧ q g :=
     by auto
-  
+
   example (p : α → β → Prop) (h : ∀ (x : α), ∃ y, p x y) : ∃ (f : α → β), ∀ x, p x (f x) :=
     by auto
-  
+
   example (p : α → β → γ → Prop) (h : ∀ (x : α) (y : β), ∃ z, p x y z) :
     ∃ (f : α → β → γ), ∀ x y, p x y (f x y) :=
     by auto
-  
+
   example (p : α → β → γ → δ → Prop) (h : ∀ (x : α), ∃ (y : β), ∀ (z : γ), ∃ (t : δ), p x y z t) :
     ∃ (f : α → β) (g : α → γ → δ), ∀ x z, p x (f x) z (g x z) :=
     by auto
-  
+
   example (p : α → (β → γ) → Prop) (h : ∀ x, ∃ y, p x y) : ∃ (f : _ → _), ∀ x, p x (f x) :=
     by auto
-  
+
   example (p : α → Prop) (h₁ : ∃ (_ : α), p x) (h₂ : p x) : p x :=
     by auto
-  
+
   example (p : α → Prop)
     (h₁ : ∃ (_ _ : β) (_ _ : γ), p x) (h₂ : ∃ (_ _ : β), p x) : p x :=
     by auto
@@ -332,7 +332,7 @@ example
   (ap_assoc : ∀ (α : Type u) (as bs cs : List α),
     @hap (List α) (List α) (List α) instHAppend (@hap (List α) (List α) (List α) instHAppend as bs) cs =
     @hap (List α) (List α) (List α) instHAppend as (@hap (List α) (List α) (List α) instHAppend bs cs)) :
-  @hap (List α) (List α) (List α) instHAppend (@hap (List α) (List α) (List α) instHAppend as bs) (@hap (List α) (List α) (List α) instHAppend cs ds) = 
+  @hap (List α) (List α) (List α) instHAppend (@hap (List α) (List α) (List α) instHAppend as bs) (@hap (List α) (List α) (List α) instHAppend cs ds) =
   @hap (List α) (List α) (List α) instHAppend as (@hap (List α) (List α) (List α) instHAppend bs (@hap (List α) (List α) (List α) instHAppend cs ds)) := by
   auto [ap_assoc]
 
@@ -441,7 +441,7 @@ section Adhoc
 
   example (h₁ : if 2 > 3 then True else False) (h₂ : ¬ 2 > 3) : False := by
     auto
-  
+
   example {α : Sort u} {β : Sort v} (x y : α) (z t : β) :
     (if True then x else y) = x ∧ (if False then z else t) = t := by
     auto
@@ -484,13 +484,13 @@ section Adhoc
   example
     (a b : Int)
     : a * b - a % (Int.mod b a) = a * b - a % (Int.mod b a) := by auto
-  
+
   example (a : Int)
     (h₁ : a ≥ 0) (h₂ : -a ≤ 0) (h₃ : 0 < 1) (h₄ : 2 > 0)
     : (a ≥ 0) ∧ (-a ≤ 0) ∧ (0 < 1) ∧ (2 > 0) := by auto
 
   example : (3 : Int) = ((nat_lit 3) : Int) := by auto
-  
+
   example : (-3 : Int) = (-(nat_lit 3) : Int) := by auto
 
   -- String
@@ -515,6 +515,12 @@ section Adhoc
 
   open Std.BitVec in
   #check (4+5)#(3+2)
+
+  open Std.BitVec in
+  example (a b : Nat) : (a + b)#16 = a#16 + b#16 ∧ (a * b)#16 = a#16 * b#16 := by auto
+
+  example (a : Std.BitVec 5) (b : Std.BitVec k) :
+    a.msb = a.msb ∧ b.msb = b.msb := by auto
 
   -- TPTP/SMT support for `Empty`
   set_option auto.tptp true in

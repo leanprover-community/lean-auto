@@ -158,6 +158,9 @@ def bvsremLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} 
 def bvsmodLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
   GLift.up (Std.BitVec.smod x.down y.down)
 
+def bvmsbLift.{u} (n : Nat) (x : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} Bool :=
+  GLift.up (Std.BitVec.msb x.down)
+
 def bvultLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} Bool :=
   GLift.up (Std.BitVec.ult x.down y.down)
 
@@ -245,7 +248,7 @@ def eqLift_refl.{u, v, w} {α : Sort u} {β : Sort v} (I : IsomType α β) (x : 
   GLift.down (eqLift.{u, v, w} I x x) := rfl
 
 def eqLift.down.{u, v, w} {α : Sort u} {β : Sort v} (I : IsomType α β)
-  (x y : β) (H : GLift.down (eqLift.{u, v, w} I x y)) : x = y := 
+  (x y : β) (H : GLift.down (eqLift.{u, v, w} I x y)) : x = y :=
   let H₁ : I.f (I.g x) = I.f (I.g y) := H ▸ rfl
   let H₂ : x = I.f (I.g y) := I.eq₂ x ▸ H₁
   I.eq₂ y ▸ H₂
@@ -266,6 +269,11 @@ def eqLiftFn.{u} (β : Type u) (x y : β) := GLift.up.{1, u} (@Eq β x y)
 
 def EqLift.default (β : Sort u) : EqLift β :=
   ⟨fun x y => GLift.up (@Eq β x y), fun _ _ => id, fun _ _ => id⟩
+
+theorem eqGLift_equiv (a b : α) : (GLift.up a = GLift.up b) = (a = b) := by
+  apply propext (Iff.intro ?mp ?mpr) <;> intro h
+  case mp => cases h; rfl
+  case mpr => cases h; rfl
 
 @[reducible] def forallF {α : Sort u} (p : α → Sort v) := ∀ (x : α), p x
 
@@ -290,7 +298,7 @@ structure ForallLift (β : Sort v') where
   forallF : (β → GLift.{w + 1, v} (Sort w)) → GLift.{w' + 1, v} (Sort w')
   down    : ∀ (p : β → GLift.{w + 1, v} (Sort w)), (forallF p).down → (∀ x : β, (p x).down)
   up      : ∀ (p : β → GLift.{w + 1, v} (Sort w)), (∀ x : β, (p x).down) → (forallF p).down
- 
+
 def ForallLift.ofIsomTy.{u, v, w, x} {α : Sort u} {β : Sort v} (I : IsomType α β) : ForallLift β :=
   ⟨forallLift.{u, v, w, x} I, forallLift.down I, forallLift.up I⟩
 
@@ -298,6 +306,9 @@ def forallLiftFn.{u} (β : Type u) (p : β → GLift.{1, u} Prop) := GLift.up.{1
 
 def ForallLift.default (β : Sort v') : ForallLift.{v', v, w, imax v' w} β :=
   ⟨fun (p : β → GLift.{w + 1, v} (Sort w)) => GLift.up (∀ (x : β), GLift.down (p x)), fun _ => id, fun _ => id⟩
+
+theorem forallGLift_equiv (p : β → Prop) : (∀ (x : GLift β), p x.down) = (∀ x, p x) := by
+  apply propext (Iff.intro ?mp ?mpr) <;> intros h x <;> apply h
 
 set_option pp.universes true
 -- Isomorphic domain, β is the lifted one
@@ -330,6 +341,11 @@ def existLiftFn.{u} (β : Type u) (p : β → GLift.{1, u} Prop) := GLift.up.{1,
 def ExistLift.default (β : Sort v') : ExistLift.{v', w} β :=
   ⟨fun (p : β → GLift.{1, w} Prop) => GLift.up (∃ (x : β), GLift.down (p x)), fun _ => id, fun _ => id⟩
 
+theorem existGLift_equiv (p : β → Prop) : (∃ (x : GLift β), p x.down) = (∃ x, p x) := by
+  apply propext (Iff.intro ?mp ?mpr) <;> intro ⟨x, h⟩
+  case mp => exact ⟨x.down, h⟩
+  case mpr => exact ⟨GLift.up x, h⟩
+
 -- Isomorphic domain, β is the lifted one
 noncomputable def iteLift {α : Sort u} {β : Sort v} (I : IsomType α β) (b : GLift.{_, x} Prop) (x y : β) :=
   I.f (Bool.ite' b.down (I.g x) (I.g y))
@@ -344,7 +360,7 @@ def iteLift.wf
 
 structure IteLift (β : Sort v') where
   iteF : GLift.{1, v} Prop → β → β → β
-  wf    : ∀ (b : GLift.{1, v} Prop) (x y : β), iteF b x y = Bool.ite' b.down x y 
+  wf    : ∀ (b : GLift.{1, v} Prop) (x y : β), iteF b x y = Bool.ite' b.down x y
 
 noncomputable def IteLift.ofIsomTy.{u, v, x} {α : Sort u} {β : Sort v} (I : IsomType α β) : IteLift.{v, x} β :=
   ⟨iteLift.{u, v, x} I, iteLift.wf I⟩

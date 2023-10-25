@@ -15,6 +15,7 @@ __Auto Issues:__
   #check (fun (x : Nonstruct) => x.1)
   ```
 * Bitwise operation for ``Nat``, BitVec shift operations, Permutation of ``bvofNat`` and ``Nat.sub`` (etc)
+* Unsound translation for SMT: Although we have the option ``auto.smt.trust``, the translation is unsound since types in Lean might be inhabited while SMT-LIB assumes that all types are inhabited.
 
 __Lean Issues:__
 * ``cases`` fails on some simple examples. E.g, ``cases h : a.beq b`` fails if the goal contains term

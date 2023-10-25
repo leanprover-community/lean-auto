@@ -40,7 +40,7 @@ open Embedding.Lam MetaState
     these atoms to restore the requires expression.
 -/
 structure State where
-  tyVal           : Array (Expr × Level)  
+  tyVal           : Array (Expr × Level)
   varVal          : Array (Expr × LamSort)
   lamEVarTy       : Array LamSort
   -- Type atoms and term atoms to be abstracted
@@ -179,6 +179,7 @@ def interpBitVecConstAsUnlifted : BitVecConst → Expr
 | .bvtoNat n         => .app (.const ``Std.BitVec.toNat []) (.lit (.natVal n))
 | .bvofInt n         => .app (.const ``Std.BitVec.ofInt []) (.lit (.natVal n))
 | .bvtoInt n         => .app (.const ``Std.BitVec.toInt []) (.lit (.natVal n))
+| .bvmsb n           => .app (.const ``Std.BitVec.msb []) (.lit (.natVal n))
 | .bvadd n           => .app (.const ``Std.BitVec.add []) (.lit (.natVal n))
 | .bvsub n           => .app (.const ``Std.BitVec.sub []) (.lit (.natVal n))
 | .bvneg n           => .app (.const ``Std.BitVec.neg []) (.lit (.natVal n))

@@ -1561,6 +1561,10 @@ def processNewTermExpr (e : Expr) : ReifM LamTerm :=
     if let .some n ← @id (MetaM _) (Meta.evalNat nExpr) then
       return .base (.bvtoInt' n)
     newTermExpr e
+  | .app (.const ``Std.BitVec.msb []) nExpr => do
+    if let .some n ← @id (MetaM _) (Meta.evalNat nExpr) then
+      return .base (.bvmsb' n)
+    newTermExpr e
   | .app (.const ``Std.BitVec.add []) nExpr => do
     if let .some n ← @id (MetaM _) (Meta.evalNat nExpr) then
       return .base (.bvadd' n)

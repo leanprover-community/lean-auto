@@ -85,4 +85,11 @@ theorem Bool.decide_simp : @decide = fun p _ => Bool.ofProp p := by
   case false => rw [decide_eq_false]; apply (Bool.ofProp_spec' _).mp h
   case true  => rw [decide_eq_true]; apply (Bool.ofProp_spec _).mp h
 
+theorem Bool.ite_comm [inst : Decidable p] {x y : α} (f : α → β) : f (ite p x y) = ite p (f x) (f y) := by
+  cases inst <;> rfl
+
+theorem Bool.ite'_comm {x y : α} (f : α → β) : f (Bool.ite' p x y) = Bool.ite' p (f x) (f y) := by
+  have h := @Bool.ite_comm _ _ _ (Classical.propDecidable p) x y f
+  rw [Bool.ite_simp, Bool.ite_simp] at h; exact h
+
 end Auto

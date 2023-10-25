@@ -98,6 +98,11 @@ private def lamBvshOp2String (n : Nat) (op : Embedding.Lam.BVShOp) : TransM LamA
     addCommand (.declFun name ⟨argSorts⟩ resSort)
   return ← h2Symb (.bvshOp n op)
 
+private def bitVec2STerm (n i : Nat) : STerm :=
+  let digs := (Nat.toDigits 2 (i % (2^n))).map (fun c => c == '1')
+  let digs := (List.range (n - digs.length)).map (fun _ => false) ++ digs
+  .sConst (.binary digs)
+
 private def lamBaseTerm2STerm_Arity3 (arg1 arg2 arg3 : STerm) : LamBaseTerm → TransM LamAtom STerm
 | .scst .srepall => return .qStrApp "str.replace_all" #[arg1, arg2, arg3]
 | t              => throwError "lamTerm2STerm :: The arity of {repr t} is not 3"
@@ -181,20 +186,24 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | t           => throwError "lamTerm2STerm :: The arity of {repr t} is not 2"
 
 private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamAtom STerm
-| .not            => return .qStrApp "not" #[arg]
-| .bcst .ofProp   => return arg
-| .bcst .notb     => return .qStrApp "not" #[arg]
-| .icst .iofNat   => return arg
-| .icst .inegSucc => return .qStrApp "-" #[int2STerm (-1), arg]
-| .icst .iabs     => return .qStrApp "abs" #[arg]
-| .icst .ineg     => return .qStrApp "-" #[int2STerm 0, arg]
-| .scst .slength  => return .qStrApp "str.len" #[arg]
-| .bvcst (.bvofNat n) => do return .qStrApp (← lamBvOfInt2String n) #[arg]
-| .bvcst (.bvtoNat n) => do return .qStrApp (← lamBvToInt2String n) #[arg]
-| .bvcst (.bvofInt n) => do return .qStrApp (← lamBvOfInt2String n) #[arg]
-| .bvcst (.bvtoInt n) => do return .qStrApp (← lamBvToInt2String n) #[arg]
-| .bvcst (.bvneg _) => return .qStrApp "bvneg" #[arg]
-| .bvcst (.bvabs _) => return .qStrApp "bvabs" #[arg]
+| .not                   => return .qStrApp "not" #[arg]
+| .bcst .ofProp          => return arg
+| .bcst .notb            => return .qStrApp "not" #[arg]
+| .icst .iofNat          => return arg
+| .icst .inegSucc        => return .qStrApp "-" #[int2STerm (-1), arg]
+| .icst .iabs            => return .qStrApp "abs" #[arg]
+| .icst .ineg            => return .qStrApp "-" #[int2STerm 0, arg]
+| .scst .slength         => return .qStrApp "str.len" #[arg]
+| .bvcst (.bvofNat n)    => do return .qStrApp (← lamBvOfInt2String n) #[arg]
+| .bvcst (.bvtoNat n)    => do return .qStrApp (← lamBvToInt2String n) #[arg]
+| .bvcst (.bvofInt n)    => do return .qStrApp (← lamBvOfInt2String n) #[arg]
+| .bvcst (.bvtoInt n)    => do return .qStrApp (← lamBvToInt2String n) #[arg]
+-- @Std.BitVec.msb n a = not ((a &&& (1 <<< (n - 1))) = 0)
+| .bvcst (.bvmsb n)      => do
+  let andExpr := .qStrApp "bvand" #[arg, .qStrApp "bvshl" #[bitVec2STerm n 1, bitVec2STerm n (n - 1)]]
+  return .qStrApp "not" #[.qStrApp "=" #[andExpr, .sConst (.num 0)]]
+| .bvcst (.bvneg _)      => return .qStrApp "bvneg" #[arg]
+| .bvcst (.bvabs _)      => return .qStrApp "bvabs" #[arg]
 | .bvcst (.bvrepeat _ i) => return .qIdApp (.ident (.indexed "repeat" #[.inr i])) #[arg]
 | .bvcst (.bvzeroExtend w v) =>
   if v ≥ w then
@@ -207,11 +216,6 @@ private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamA
   else
     return .qIdApp (.ident (.indexed "extract" #[.inr (v - 1), .inr 0])) #[arg]
 | t               => throwError "lamTerm2STerm :: The arity of {repr t} is not 1"
-
-private def bitVec2STerm (n i : Nat) : STerm :=
-  let digs := (Nat.toDigits 2 (i % (2^n))).map (fun c => c == '1')
-  let digs := (List.range (n - digs.length)).map (fun _ => false) ++ digs
-  .sConst (.binary digs)
 
 private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtom STerm
 | .trueE              => return .qStrApp "true" #[]
