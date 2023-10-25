@@ -18,12 +18,13 @@ open IR.SMT
 
 /-- High-level construct -/
 private inductive LamAtom where
-  | sort : Nat → LamAtom
-  | term : Nat → LamAtom
-  | etom : Nat → LamAtom
-  | bvOfInt : Nat → LamAtom
-  | bvToInt : Nat → LamAtom
-  | bvshOp : Nat → Embedding.Lam.BVShOp → LamAtom
+  | sort     : Nat → LamAtom
+  | term     : Nat → LamAtom
+  | etom     : Nat → LamAtom
+  | bvOfInt  : Nat → LamAtom
+  | bvToInt  : Nat → LamAtom
+  | bvshOp   : Nat → Embedding.Lam.BVShOp → LamAtom
+  | compCtor : LamTerm → LamAtom
 deriving Inhabited, Hashable, BEq
 
 private def lamBaseSort2SSort : LamBaseSort → SSort
@@ -71,7 +72,7 @@ private def addNatConstraint? (name : String) (s : LamSort) : TransM LamAtom Uni
     fnConstr := .forallE argName (← lamSort2SSortAux argTy) fnConstr
   addCommand (.assert fnConstr)
 
-private def Int2STerm : Int → STerm
+private def int2STerm : Int → STerm
 | .ofNat n   => .sConst (.num n)
 | .negSucc n => .qIdApp (QualIdent.ofString "-") #[.sConst (.num (Nat.succ n))]
 
@@ -184,9 +185,9 @@ private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamA
 | .bcst .ofProp   => return arg
 | .bcst .notb     => return .qStrApp "not" #[arg]
 | .icst .iofNat   => return arg
-| .icst .inegSucc => return .qStrApp "-" #[Int2STerm (-1), arg]
+| .icst .inegSucc => return .qStrApp "-" #[int2STerm (-1), arg]
 | .icst .iabs     => return .qStrApp "abs" #[arg]
-| .icst .ineg     => return .qStrApp "-" #[Int2STerm 0, arg]
+| .icst .ineg     => return .qStrApp "-" #[int2STerm 0, arg]
 | .scst .slength  => return .qStrApp "str.len" #[arg]
 | .bvcst (.bvofNat n) => do return .qStrApp (← lamBvOfInt2String n) #[arg]
 | .bvcst (.bvtoNat n) => do return .qStrApp (← lamBvToInt2String n) #[arg]
@@ -207,7 +208,7 @@ private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamA
     return .qIdApp (.ident (.indexed "extract" #[.inr (v - 1), .inr 0])) #[arg]
 | t               => throwError "lamTerm2STerm :: The arity of {repr t} is not 1"
 
-private def BitVec2STerm (n i : Nat) : STerm :=
+private def bitVec2STerm (n i : Nat) : STerm :=
   let digs := (Nat.toDigits 2 (i % (2^n))).map (fun c => c == '1')
   let digs := (List.range (n - digs.length)).map (fun _ => false) ++ digs
   .sConst (.binary digs)
@@ -218,9 +219,9 @@ private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtom STerm
 | .bcst .trueb        => return .qStrApp "true" #[]
 | .bcst .falseb       => return .qStrApp "false" #[]
 | .ncst (.natVal n)   => return .sConst (.num n)
-| .icst (.intVal n)   => return Int2STerm n
+| .icst (.intVal n)   => return int2STerm n
 | .scst (.strVal s)   => return .sConst (.str s)
-| .bvcst (.bvVal n i) => return BitVec2STerm n i
+| .bvcst (.bvVal n i) => return bitVec2STerm n i
 | t                   => throwError "lamTerm2STerm :: The arity of {repr t} is not 0"
 
 def lamTermAtom2String (lamVarTy : Array LamSort) (n : Nat) : TransM LamAtom (LamSort × String) := do
@@ -270,6 +271,19 @@ private def lamTerm2STermAux (lamVarTy lamEVarTy : Array LamSort) (args : Array 
   | _         => throwError "lamTerm2STerm :: Argument number mismatch. Higher order input?"
 | t => throwError "lamTerm2STerm :: Unexpected head term {repr t}"
 
+def lamQuantified2STerm (forall? : Bool) (s : LamSort) (body : TransM LamAtom STerm) : TransM LamAtom STerm := do
+  -- Empty type is not inhabited
+  if s == .base .empty then
+    return .qStrApp "true" #[]
+  let s' ← lamSort2SSortAux s
+  let dname ← disposableName
+  let mut body' ← body
+  if s == .base .nat then
+    body' := .qStrApp "=>" #[.qStrApp ">=" #[.bvar 0, .sConst (.num 0)], body']
+  match forall? with
+  | true => return .forallE dname s' body'
+  | false => return .existE dname s' body'
+
 private partial def lamTerm2STerm (lamVarTy lamEVarTy : Array LamSort) :
   LamTerm → TransM LamAtom STerm
 | .base b => lamBaseTerm2STerm_Arity0 b
@@ -287,25 +301,9 @@ private partial def lamTerm2STerm (lamVarTy lamEVarTy : Array LamSort) :
   let arg₂' ← lamTerm2STerm lamVarTy lamEVarTy arg₂
   return .qIdApp (QualIdent.ofString "=") #[arg₁', arg₂']
 | .app _ (.base (.forallE _)) (.lam s body) => do
-  -- Empty type is not inhabited
-  if s == .base .empty then
-    return .qStrApp "true" #[]
-  let s' ← lamSort2SSortAux s
-  let dname ← disposableName
-  let mut body' ← lamTerm2STerm lamVarTy lamEVarTy body
-  if s == .base .nat then
-    body' := .qStrApp "=>" #[.qStrApp ">=" #[.bvar 0, .sConst (.num 0)], body']
-  return .forallE dname s' body'
+  lamQuantified2STerm true s (lamTerm2STerm lamVarTy lamEVarTy body)
 | .app _ (.base (.existE _)) (.lam s body) => do
-  -- Empty type is not inhabited
-  if s == .base .empty then
-    return .qStrApp "false" #[]
-  let s' ← lamSort2SSortAux s
-  let dname ← disposableName
-  let mut body' ← lamTerm2STerm lamVarTy lamEVarTy body
-  if s == .base .nat then
-    body' := .qStrApp "=>" #[.qStrApp ">=" #[.bvar 0, .sConst (.num 0)], body']
-  return .existE dname s' body'
+  lamQuantified2STerm false s (lamTerm2STerm lamVarTy lamEVarTy body)
 | .app _ (.app _ (.app _ (.base (.ite _)) cond) arg₁) arg₂ => do
   let cond' ← lamTerm2STerm lamVarTy lamEVarTy cond
   let arg₁' ← lamTerm2STerm lamVarTy lamEVarTy arg₁
@@ -322,8 +320,9 @@ where
     (ts.push arg, t)
   | t => (#[], t)
 
-private def lamMutualIndInfo2STerm (mind : MutualIndInfo) : TransM LamAtom IR.SMT.Command := do
+private def lamMutualIndInfo2STerm (mind : MutualIndInfo) : TransM LamAtom (IR.SMT.Command × Array (LamSort × LamTerm)) := do
   let mut infos := #[]
+  let mut compCtors := #[]
   -- Go through `type` and call `h2Symb` on all the atoms so that there won't
   --   be declared during the following `lamSort2SSort`
   for ⟨type, _⟩ in mind do
@@ -337,19 +336,33 @@ private def lamMutualIndInfo2STerm (mind : MutualIndInfo) : TransM LamAtom IR.SM
     let sname ← h2Symb (.sort sn)
     let mut cstrDecls : Array ConstrDecl := #[]
     for (s, t) in ctors do
-      let ctorname ← (do
-        match t with
-        -- Do not use `lamSortAtom2String` because we don't want to `declare-fun`
-        | .atom n => h2Symb (.term n)
-        -- Do not use `lamSortEtom2String` because we don't want to `declare-fun`
-        | .etom n => h2Symb (.etom n)
-        | _ => throwError "")
+      let mut ctorname := ""
+      match t with
+      -- Do not use `lamSortAtom2String` because we don't want to `declare-fun`
+      | .atom n => ctorname ← h2Symb (.term n)
+      -- Do not use `lamSortEtom2String` because we don't want to `declare-fun`
+      | .etom n => ctorname ← h2Symb (.etom n)
+      | t       => ctorname ← h2Symb (.compCtor t); compCtors := compCtors.push (s, t)
       let (argTys, _) ← lamSort2SSort s
       let selDecls := (Array.mk argTys).zipWithIndex.map (fun (argTy, idx) =>
         (ctorname ++ s!"_sel{idx}", argTy))
       cstrDecls := cstrDecls.push ⟨ctorname, selDecls⟩
     infos := infos.push (sname, 0, ⟨#[], cstrDecls⟩)
-  return .declDtypes infos
+  return (.declDtypes infos, compCtors)
+
+private def compCtorEqn (lamVarTy lamEVarTy : Array LamSort) (ctorInfo : LamSort × LamTerm) : TransM LamAtom IR.SMT.Command := do
+  let (s, t) := ctorInfo
+  if !(← hIn (.compCtor t)) then
+    throwError "compCtorEqn :: Constructor {t} hasn't been declared"
+  let name ← h2Symb (.compCtor t)
+  let argTys := s.getArgTys
+  let sbvars := (List.range argTys.length).map (fun n => .bvar (argTys.length - 1 - n))
+  let slhs := .qStrApp name ⟨sbvars⟩
+  let srhs := ← lamTerm2STerm lamVarTy lamEVarTy (LamTerm.bvarAppsRev t argTys).headBeta
+  let mut eqn := pure (.qStrApp "=" #[slhs, srhs])
+  for s in argTys.reverse do
+    eqn := lamQuantified2STerm true s eqn
+  return .assert (← eqn)
 
 def sortAuxDecls : Array IR.SMT.Command :=
   #[.declSort "Empty" 0]
@@ -381,9 +394,11 @@ def lamFOL2SMT
   let _ ← sortAuxDecls.mapM addCommand
   let _ ← termAuxDecls.mapM addCommand
   for mind in minds do
-    let ddecls ← lamMutualIndInfo2STerm mind
-    trace[auto.lamFOL2SMT] "MutualIndInfo translated to command {ddecls}"
-    addCommand ddecls
+    let (dsdecl, compCtors) ← lamMutualIndInfo2STerm mind
+    trace[auto.lamFOL2SMT] "MutualIndInfo translated to command {dsdecl}"
+    addCommand dsdecl
+    let ctorEqns ← compCtors.mapM (compCtorEqn lamVarTy lamEVarTy)
+    let _ ← ctorEqns.mapM addCommand
   for t in facts do
     let sterm ← lamTerm2STerm lamVarTy lamEVarTy t
     trace[auto.lamFOL2SMT] "λ term {repr t} translated to SMT term {sterm}"

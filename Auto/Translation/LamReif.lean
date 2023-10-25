@@ -301,8 +301,8 @@ def resolveImport : LamTerm → ReifM LamTerm
     the lifted domain
   · Therefore, we need to turn `=, ∀, ∃, ite'` in `t` into import
     version to get `t'`, and design an appropriate `ilVal`,
-    such that `GLift.down t'.interp` is definitionally equal to `α`  
--/ 
+    such that `GLift.down t'.interp` is definitionally equal to `α`
+-/
 def mkImportVersion : LamTerm → ReifM LamTerm
 | .atom n => return (.atom n)
 | .etom _ => throwError "mkImportVersion :: etom should not occur here"
@@ -1054,6 +1054,9 @@ section CheckerUtils
     let vs ← vs.mapM validOfRevertAll
     for v in vs do
       trace[auto.lamReif.prep.printResult] "{v}"
+    for mind in minds do
+      let smind := String.intercalate "\n" ("" :: mind.map toString)
+      trace[auto.lamReif.prep.printResult] "{smind}"
     return (vs, minds)
 
   def auxLemmas (vs : Array REntry) : ReifM (Array REntry) := do
@@ -1790,7 +1793,7 @@ section BuildChecker
     | .directReduce => "directReduce"
     | .indirectReduce => "indirectReduce"
     | .indirectReduce_reflection => "indirectReduce_reflection"
-  
+
   instance : Lean.KVMap.Value BuildMode where
     toDataValue n := toString n
     ofDataValue?
@@ -2075,7 +2078,7 @@ open Embedding.Lam LamReif
       setTyVal ((← getTyVal).push val)
       setTyVarMap ((← getTyVarMap).insert val.fst idx)
       return idx
-  
+
   /--
     When translating `Lam` to `Lam` in `Lam2Lam`, make sure that
       the `LamSort` in this `val` is already translated.
@@ -2098,14 +2101,14 @@ open Embedding.Lam LamReif
 
   -- We're translating `Lam` to `Lam`. We call the first `Lam`
   --   the `high-level` one, and the second `Lam` the `low-level` one.
-  
+
   def transLamSort (ref : State) : LamSort → TransM LamSort
   | .atom n => do
     let (val, _) ← (lookupTyVal! n).run ref
     return .atom (← transTypeAtom n val)
   | .base b => return .base b
   | .func arg res => .func <$> transLamSort ref arg <*> transLamSort ref res
-  
+
   private def transLamBaseTermILErr := "transLamBaseTerm :: Import versions of logical constants should not occur here"
 
   def transLamBaseTerm (ref : State) : LamBaseTerm → TransM LamBaseTerm
@@ -2129,7 +2132,7 @@ open Embedding.Lam LamReif
       let .some n := (← getEtomH2lMap).find? e
         | throwError "transEtom :: Cannot find translation of etom {e}"
       return n
-  
+
     partial def transLamTerm (ref : State) : LamTerm → TransM LamTerm
     | .atom n => do
       let ((e, s), _) ← (lookupVarVal! n).run ref
@@ -2140,14 +2143,14 @@ open Embedding.Lam LamReif
     | .bvar n => return .bvar n
     | .lam s t => .lam <$> transLamSort ref s <*> transLamTerm ref t
     | .app s fn arg => .app <$> transLamSort ref s <*> transLamTerm ref fn <*> transLamTerm ref arg
-    
+
     partial def transREntry (ref : State) : REntry → TransM REntry
     | .wf lctx s t => do
       return .wf (← lctx.mapM (transLamSort ref)) (← transLamSort ref s) (← transLamTerm ref t)
     | .valid lctx t => do
       return .valid (← lctx.mapM (transLamSort ref)) (← transLamTerm ref t)
     | .nonempty s => .nonempty <$> transLamSort ref s
-  
+
     partial def transPos (ref : State) (n : Nat) : TransM Nat := do
       let (hre, _) ← (lookupRTable! n).run ref
       collectProofFor ref hre
@@ -2224,7 +2227,7 @@ open Embedding.Lam LamReif
       | .wfOfPrepend pos ex => return .wfOfPrepend (← transPos ref pos) (← ex.mapM (transLamSort ref))
       | .wfOfHeadBeta pos => return .wfOfHeadBeta (← transPos ref pos)
       | .wfOfBetaBounded pos bound => return .wfOfBetaBounded (← transPos ref pos) bound
-  
+
     partial def processChkStep (ref : State) (cs : ChkStep) : TransM EvalResult := do
       if let .some cs' := (← getCsH2lMap).find? cs then
         return ← LamReif.lookupChkStepResult! cs'
@@ -2274,7 +2277,7 @@ open Embedding.Lam LamReif
         trace[auto.buildChecker] "Import fact {ht} translated to {t}"
 
   end
-  
+
   /--
     Delete irrelevant Valuations and ChkSteps, but make sure that
       entries in `res` are still provable

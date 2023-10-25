@@ -223,7 +223,6 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
       let exportInds ← LamReif.reifMutInds minds
       -- **Preprocessing in Verified Checker**
       let (exportFacts, exportInds) ← LamReif.preprocess exportFacts exportInds
-      let exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)
       -- **TPTP**
       if (auto.tptp.get (← getOptions)) then
         if let .some proof ← queryTPTP exportFacts then
@@ -233,6 +232,7 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
         if let .some proof ← querySMT exportFacts exportInds then
           return proof
       -- **Duper**
+      let exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)
       if (auto.duper.get (← getOptions)) then
         if let .some proof ← queryDuper declName? exportFacts exportInhs then
           return proof

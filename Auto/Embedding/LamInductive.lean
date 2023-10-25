@@ -10,6 +10,9 @@ def IndInfo.toString (i : IndInfo) :=
   s!"IndInfo ⦗⦗ {i.type} || " ++ String.intercalate ", "
     (i.ctors.map (fun (s, t) => s!"{t} : {s}")) ++ " ⦘⦘"
 
+instance : ToString IndInfo where
+  toString := IndInfo.toString
+
 def IndInfo.mpAll?Aux (rw : LamTerm) : List (LamSort × LamTerm) → Option (List (LamSort × LamTerm))
 | [] => .some []
 | .cons (s, t) tail =>
@@ -21,9 +24,6 @@ def IndInfo.mpAll? (rw : LamTerm) (ii : IndInfo) : Option IndInfo :=
   match mpAll?Aux rw ii.ctors with
   | .some ii' => .some ⟨ii.type, ii'⟩
   | .none     => .none
-
-instance : ToString IndInfo where
-  toString := IndInfo.toString
 
 abbrev MutualIndInfo := List IndInfo
 

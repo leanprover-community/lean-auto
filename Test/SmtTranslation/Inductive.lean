@@ -1,6 +1,7 @@
 import Auto.Tactic
 
 set_option auto.smt true
+set_option auto.smt.trust true
 set_option trace.auto.smt.printCommands true
 set_option trace.auto.smt.result true
 set_option auto.duper false
@@ -95,7 +96,29 @@ section Mixed
   example (x : α) : List.head? [x] = .some x := by
     auto d[List.head?]
 
+  inductive IndCtor₁ where
+    | ctor : Nat → Bool → IndCtor₁
+
+  example
+    (f : Nat → Nat → Bool → IndCtor₁)
+    (h₁ : IndCtor₁.ctor = f 1) (h₂ : IndCtor₁.ctor = f 2) : f 1 = f 2 := by
+    auto
+
 end Mixed
+
+section Empty
+
+  def Empty' := Empty
+
+  example : (∃ (x : Empty), True) := by
+    auto
+
+  -- The translation to smt solver is unsound.
+  -- SMT-LIB assume that all types are inhabited, while in DTT it's not.
+  example : (∃ (x : Empty'), True) := by
+    auto
+
+end Empty
 
 /- Issues to be solved:
   1. Unable to deal with inductive families, like `Vector`
