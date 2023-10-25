@@ -1141,7 +1141,7 @@ inductive BitVecConst.LamWF : BitVecConst → LamSort → Type
   | ofBvtoNat n        : LamWF (.bvtoNat n) (.func (.base (.bv n)) (.base .nat))
   | ofBvofInt n        : LamWF (.bvofInt n) (.func (.base .int) (.base (.bv n)))
   | ofBvtoInt n        : LamWF (.bvtoInt n) (.func (.base (.bv n)) (.base .int))
-  | ofBvMsb n          : LamWF (.bvmsb n) (.func (.base (.bv n)) (.base .bool))
+  | ofBvmsb n          : LamWF (.bvmsb n) (.func (.base (.bv n)) (.base .bool))
   | ofBvadd n          : LamWF (.bvadd n) (.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))))
   | ofBvsub n          : LamWF (.bvsub n) (.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))))
   | ofBvneg n          : LamWF (.bvneg n) (.func (.base (.bv n)) (.base (.bv n)))
@@ -1198,7 +1198,7 @@ def BitVecConst.LamWF.ofBitVecConst : (b : BitVecConst) → (s : LamSort) × Bit
 | .bvtoNat n        => ⟨.func (.base (.bv n)) (.base .nat), .ofBvtoNat n⟩
 | .bvofInt n        => ⟨.func (.base .int) (.base (.bv n)), .ofBvofInt n⟩
 | .bvtoInt n        => ⟨.func (.base (.bv n)) (.base .int), .ofBvtoInt n⟩
-| .bvmsb n          => ⟨.func (.base (.bv n)) (.base .bool), .ofBvMsb n⟩
+| .bvmsb n          => ⟨.func (.base (.bv n)) (.base .bool), .ofBvmsb n⟩
 | .bvadd n          => ⟨.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))), .ofBvadd n⟩
 | .bvsub n          => ⟨.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))), .ofBvsub n⟩
 | .bvneg n          => ⟨.func (.base (.bv n)) (.base (.bv n)), .ofBvneg n⟩
@@ -1657,7 +1657,7 @@ def LamBaseTerm.LamWF.ofBvofNat' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (lt
 def LamBaseTerm.LamWF.ofBvtoNat' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvtoNat n)
 def LamBaseTerm.LamWF.ofBvofInt' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvofInt n)
 def LamBaseTerm.LamWF.ofBvtoInt' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvtoInt n)
-def LamBaseTerm.LamWF.ofBvMsb' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvMsb n)
+def LamBaseTerm.LamWF.ofBvmsb' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvmsb n)
 def LamBaseTerm.LamWF.ofBvadd' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvadd n)
 def LamBaseTerm.LamWF.ofBvsub' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsub n)
 def LamBaseTerm.LamWF.ofBvneg' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvneg n)
@@ -1954,7 +1954,7 @@ def BitVecConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF b s) → s.
 | .ofBvtoNat n        => bvtoNatLift n
 | .ofBvofInt n        => bvofIntLift n
 | .ofBvtoInt n        => bvtoIntLift n
-| .ofBvMsb n          => bvmsbLift n
+| .ofBvmsb n          => bvmsbLift n
 | .ofBvadd n          => bvaddLift n
 | .ofBvsub n          => bvsubLift n
 | .ofBvneg n          => bvnegLift n
