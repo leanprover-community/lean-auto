@@ -10,14 +10,13 @@ import Mathlib.RingTheory.Polynomial.Chebyshev
 import Auto.Tactic
 
 
-
 set_option profiler true
-set_option auto.duper false
 set_option trace.auto.tptp.printQuery true
 set_option trace.auto.tptp.result true
 set_option auto.tptp.solver.name "zeport"
 set_option auto.tptp.zeport.path "/home/indprinciple/Programs/zipperposition/portfolio/portfolio.fo.parallel.py"
 
+set_option auto.duper true
 set_option auto.tptp true
 
 
@@ -197,7 +196,7 @@ theorem U_complex_cos (n : ℕ) : (U ℂ n).eval (cos θ) * sin θ = sin ((n + 1
     -- Porting note: added `trans` to prevent `rw` from going on a wild goose chase applying `rfl`
     push_cast; rw [sin_add ((↑d + 1) * θ)]
     auto [add_mul, one_mul, mul_comm]
-  
+
 end Complex
 
 -- ### Real versions

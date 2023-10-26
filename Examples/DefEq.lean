@@ -9,7 +9,8 @@ import Auto.Tactic
 
 open Set
 
-set_option auto.duper false
+set_option auto.duper true
+set_option auto.tptp true
 set_option trace.auto.tptp.printQuery true
 set_option trace.auto.tptp.result true
 set_option trace.auto.lamReif.printResult true

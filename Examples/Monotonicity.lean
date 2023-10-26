@@ -14,67 +14,51 @@ import Mathlib.Algebra.Order.Ring.Defs
 -- import measure_theory.measure.lebesgue
 -- import measure_theory.function.locally_integrable
 import Mathlib.Data.List.Defs
+import Auto.Tactic
+
+set_option auto.smt true
+set_option auto.smt.trust true
+set_option trace.auto.smt.printCommands true
+set_option trace.auto.smt.result true
+set_option auto.duper false
+set_option auto.smt.solver.name "cvc5"
 
 open List Set
 
 example (x y z k : ℕ)
     (h : 3 ≤ (4 : ℕ))
     (h' : z ≤ y) :
-    (k + 3 + x) - y ≤ (k + 4 + x) - z := by
-  mono
-  -- norm_num
+    (k + 3 + x) - y ≤ (k + 4 + x) - z := by auto
 
 example (x y z k : ℤ)
     (h : 3 ≤ (4 : ℤ))
     (h' : z ≤ y) :
-    (k + 3 + x) - y ≤ (k + 4 + x) - z := by
-  mono
-  -- norm_num
+    (k + 3 + x) - y ≤ (k + 4 + x) - z := by auto
 
 example (x y z a b : ℕ)
     (h : a ≤ (b : ℕ))
     (h' : z ≤ y) :
-    (1 + a + x) - y ≤ (1 + b + x) - z := by
-  transitivity (1 + a + x - z)
-  · mono
-  · mono
-    -- mono
-    -- mono
+    (1 + a + x) - y ≤ (1 + b + x) - z := by auto
 
 example (x y z a b : ℤ)
     (h : a ≤ (b : ℤ))
     (h' : z ≤ y) :
-    (1 + a + x) - y ≤ (1 + b + x) - z := by
-  apply @le_trans ℤ _ _ (1 + a + x - z)
-  -- transitivity (1 + a + x - z)
-  · mono
-  · mono
-    -- mono
-    -- mono
+    (1 + a + x) - y ≤ (1 + b + x) - z := by auto
 
 example (x y z : ℤ)
     (h' : z ≤ y) :
-    (1 + 3 + x) - y ≤ (1 + 4 + x) - z := by
-  apply @le_trans ℤ _ _ (1 + 3 + x - z)
-  -- transitivity (1 + 3 + x - z)
-  · mono
-  · mono
-    -- mono
-    norm_num
+    (1 + 3 + x) - y ≤ (1 + 4 + x) - z := by auto
 
-example {x y z : ℕ} : true := by
-  have : y + x ≤ y + z := by
-    mono
-    guard_target = x ≤ z
-    admit
-  trivial
+example {x y z : ℕ} : true := by auto
 
+-- Can't be modeled by auto
 example {x y z : ℕ} : true := by
   suffices : x + y ≤ z + y; trivial
   mono
   guard_target = x ≤ z
   admit
 
+-- Can't be modeled by auto
 example {x y z w : ℕ} : true := by
   have : x + y ≤ z + w := by
     mono
@@ -82,49 +66,32 @@ example {x y z w : ℕ} : true := by
     guard_target = y ≤ w; admit
   trivial
 
--- example
---   (h : 3 + 6 ≤ 4 + 5)
--- : 1 + 3 + 2 + 6 ≤ 4 + 2 + 1 + 5 :=
--- begin
---   ac_mono,
--- end
+example
+  (h : 3 + 6 ≤ 4 + 5) : 1 + 3 + 2 + 6 ≤ 4 + 2 + 1 + 5 := by auto
 
--- example
---   (h : 3 ≤ (4 : ℤ))
---   (h' : 5 ≤ (6 : ℤ))
--- : (1 + 3 + 2) - 6 ≤ (4 + 2 + 1 : ℤ) - 5 :=
--- begin
---   ac_mono,
---   mono,
--- end
+example
+  (h : 3 ≤ (4 : ℤ))
+  (h' : 5 ≤ (6 : ℤ))
+  : (1 + 3 + 2) - 6 ≤ (4 + 2 + 1 : ℤ) - 5 := by auto
 
--- example
---   (h : 3 ≤ (4 : ℤ))
---   (h' : 5 ≤ (6 : ℤ))
--- : (1 + 3 + 2) - 6 ≤ (4 + 2 + 1 : ℤ) - 5 :=
--- begin
---   transitivity (1 + 3 + 2 - 5 : ℤ),
---   { ac_mono },
---   { ac_mono },
--- end
+example
+  (h : 3 ≤ (4 : ℤ))
+  (h' : 5 ≤ (6 : ℤ))
+  : (1 + 3 + 2) - 6 ≤ (4 + 2 + 1 : ℤ) - 5 := by auto
 
--- example (x y z : ℤ)
---   (h : 3 ≤ (4 : ℤ))
---   (h' : z ≤ y)
--- : (1 + 3 + x) - y ≤ (1 + 4 + x) - z :=
--- begin
---   ac_mono, mono*
--- end
+example (x y z : ℤ)
+  (h : 3 ≤ (4 : ℤ))
+  (h' : z ≤ y)
+  : (1 + 3 + x) - y ≤ (1 + 4 + x) - z := by auto
 
--- @[simp]
--- def List.le' {α : Type _} [LE α] : List α → List α → Prop
---  | (x::xs) (y::ys) => x ≤ y ∧ List.le' xs ys
---  | [] [] => true
---  | _ _ => false
+@[simp]
+def List.le' {α : Type _} [LE α] : List α → List α → Prop
+| x::xs, y::ys => x ≤ y ∧ List.le' xs ys
+| [],    []    => true
+| _,      _    => false
 
--- @[simp]
--- instance list_has_le {α : Type _} [LE α] : LE (List α) :=
--- ⟨ List.le' ⟩
+@[simp]
+instance list_has_le {α : Type _} [LE α] : LE (List α) := ⟨List.le'⟩
 
 -- lemma list.le_refl {α : Type _} [Preorder α] {xs : LE α} : xs ≤ xs := by
 --   induction' xs with x xs
@@ -204,228 +171,77 @@ example {x y z w : ℕ} : true := by
 --   ac_mono,
 -- end
 
--- def P (x : ℕ) := 7 ≤ x
--- def Q (x : ℕ) := x ≤ 7
+def P (x : ℕ) := 7 ≤ x
+def Q (x : ℕ) := x ≤ 7
 
--- @[mono]
--- lemma P_mono {x y : ℕ}
---     (h : x ≤ y) :
---     P x → P y := by
---   intro h'
---   apply le_trans h' h
+lemma P_mono {x y : ℕ}
+    (h : x ≤ y) :
+    P x → P y := by auto d[P]
 
--- @[mono]
--- lemma Q_mono {x y : ℕ}
---     (h : y ≤ x) :
---     Q x → Q y := by
---   apply le_trans h
+lemma Q_mono {x y : ℕ}
+    (h : y ≤ x) :
+    Q x → Q y := by auto d[Q]
 
--- example (x y z : ℕ)
---   (h : x ≤ y)
--- : P (x + z) → P (z + y) :=
--- begin
---   ac_mono,
---   ac_mono,
--- end
+example (x y z : ℕ)
+  (h : x ≤ y)
+  : P (x + z) → P (z + y) := by auto [h, P_mono]
 
--- example (x y z : ℕ)
---   (h : y ≤ x)
--- : Q (x + z) → Q (z + y) :=
--- begin
---   ac_mono,
---   ac_mono,
--- end
+example (x y z : ℕ)
+  (h : y ≤ x)
+  : Q (x + z) → Q (z + y) := by auto [h, Q_mono]
 
--- example (x y z k m n : ℤ)
---   (h₀ : z ≤ 0)
---   (h₁ : y ≤ x)
--- : (m + x + n) * z + k ≤ z * (y + n + m) + k :=
--- begin
---   ac_mono,
---   ac_mono,
---   ac_mono,
--- end
+example (x y z k m n : ℤ)
+  (h₀ : z ≤ 0)
+  (h₁ : y ≤ x)
+  : (m + x + n) * z + k ≤ z * (y + n + m) + k := by auto
 
--- example (x y z k m n : ℕ)
---   (h₀ : z ≥ 0)
---   (h₁ : x ≤ y)
--- : (m + x + n) * z + k ≤ z * (y + n + m) + k :=
--- begin
---   ac_mono,
---   ac_mono,
---   ac_mono,
--- end
+example (x y z k m n : ℕ)
+  (h₀ : z ≥ 0)
+  (h₁ : x ≤ y)
+  : (m + x + n) * z + k ≤ z * (y + n + m) + k := by auto
 
--- example (x y z k m n : ℕ)
---   (h₀ : z ≥ 0)
---   (h₁ : x ≤ y)
--- : (m + x + n) * z + k ≤ z * (y + n + m) + k :=
--- begin
---   ac_mono,
---   -- ⊢ (m + x + n) * z ≤ z * (y + n + m)
---   ac_mono,
---   -- ⊢ m + x + n ≤ y + n + m
---   ac_mono,
--- end
+example (x y z k m n : ℕ)
+  (h₀ : z ≥ 0)
+  (h₁ : x ≤ y)
+  : (m + x + n) * z + k ≤ z * (y + n + m) + k := by auto
 
--- example (x y z k m n : ℕ)
---   (h₀ : z ≥ 0)
---   (h₁ : x ≤ y)
--- : (m + x + n) * z + k ≤ z * (y + n + m) + k :=
--- by { ac_mono* := h₁ }
+example (x y z k m n : ℕ)
+  (h₀ : z ≥ 0)
+  (h₁ : x ≤ y)
+  : (m + x + n) * z + k ≤ z * (y + n + m) + k := by auto
 
--- example (x y z k m n : ℕ)
---   (h₀ : z ≥ 0)
---   (h₁ : m + x + n ≤ y + n + m)
--- : (m + x + n) * z + k ≤ z * (y + n + m) + k :=
--- by { ac_mono* := h₁ }
+example (x y z k m n : ℕ)
+  (h₀ : z ≥ 0)
+  (h₁ : m + x + n ≤ y + n + m)
+  : (m + x + n) * z + k ≤ z * (y + n + m) + k := by auto
 
--- example (x y z k m n : ℕ)
---   (h₀ : z ≥ 0)
---   (h₁ : n + x + m ≤ y + n + m)
--- : (m + x + n) * z + k ≤ z * (y + n + m) + k :=
--- begin
---   ac_mono* : m + x + n ≤ y + n + m,
---   transitivity; [ skip , apply h₁ ],
---   apply le_of_eq,
---   ac_refl,
--- end
+example (x y z k m n : ℕ)
+  (h₀ : z ≥ 0)
+  (h₁ : n + x + m ≤ y + n + m)
+  : (m + x + n) * z + k ≤ z * (y + n + m) + k := by auto
 
--- example (x y z k m n : ℤ)
---   (h₁ : x ≤ y)
--- : true :=
--- begin
---   have : (m + x + n) * z + k ≤ z * (y + n + m) + k,
---   { ac_mono,
---     success_if_fail { ac_mono },
---     admit },
---   trivial
--- end
+example (x y z k m n : ℤ)
+  (h₁ : x ≤ y)
+  : true := by auto
 
--- example (x y z k m n : ℕ)
---   (h₁ : x ≤ y)
--- : true :=
--- begin
---   have : (m + x + n) * z + k ≤ z * (y + n + m) + k,
---   { ac_mono*,
---     change 0 ≤ z, apply nat.zero_le, },
---   trivial
--- end
+example (x y z k m n : ℕ)
+  (h₁ : x ≤ y)
+  : true := by auto
 
--- example (x y z k m n : ℕ)
---   (h₁ : x ≤ y)
--- : true :=
--- begin
---   have : (m + x + n) * z + k ≤ z * (y + n + m) + k,
---   { ac_mono,
---     change (m + x + n) * z ≤ z * (y + n + m),
---     admit },
---   trivial,
--- end
+example (x y z k m n : ℕ)
+  (h₁ : x ≤ y)
+: true := by
+  have : (m + x + n) * z + k ≤ z * (y + n + m) + k := by auto
+  auto
 
--- example (x y z k m n i j : ℕ)
---   (h₁ : x + i = y + j)
--- : (m + x + n + i) * z + k = z * (j + n + m + y) + k :=
--- begin
---   ac_mono^3,
---   cc
--- end
+example (x y z k m n i j : ℕ)
+  (h₁ : x + i = y + j)
+  : (m + x + n + i) * z + k = z * (j + n + m + y) + k := by auto
 
--- example (x y z k m n i j : ℕ)
---     (h₁ : x + i = y + j) :
---     z * (x + i + n + m) + k = z * (y + j + n + m) + k := by
---   congr
---   -- simp [h₁]
+example (x y z k m n i j : ℕ)
+    (h₁ : x + i = y + j) :
+    z * (x + i + n + m) + k = z * (y + j + n + m) + k := by auto
 
--- example (x y z k m n i j : ℕ)
---   (h₁ : x + i = y + j)
--- : (m + x + n + i) * z + k = z * (j + n + m + y) + k :=
--- begin
---   ac_mono*,
---   cc,
--- end
-
--- example (x y : ℕ)
---   (h : x ≤ y)
--- : true :=
--- begin
---   (do v ← mk_mvar,
---       p ← to_expr ```(%%v + x ≤ y + %%v),
---       assert `h' p),
---   ac_mono := h,
---   trivial,
---   exact 1,
--- end
-
-
--- example {x y z w : ℕ} : true := by
---   have : x * y ≤ z * w := by
---     mono with [0 ≤ z,0 ≤ y]
---     · guard_target = 0 ≤ z; admit
---     · guard_target = 0 ≤ y; admit
---     guard_target' = x ≤ z; admit
---     guard_target' = y ≤ w; admit
---   trivial
-
--- example {x y z w : Prop} : true := by
---   have : x ∧ y → z ∧ w := by
---     mono
---     guard_target = x → z; admit
---     guard_target = y → w; admit
---   trivial
-
--- example {x y z w : Prop} : true := by
---   have : x ∨ y → z ∨ w := by
---     mono
---     guard_target = x → z; admit
---     guard_target = y → w; admit
---   trivial
-
--- example {x y z w : ℤ} : true := by
---   suffices : x + y < w + z; trivial
---   have : x < w; admit
---   have : y ≤ z; admit
---   mono right
-
--- example {x y z w : ℤ} : true := by
---   suffices : x * y < w * z; trivial
---   have : x < w; admit
---   have : y ≤ z; admit
---   mono right
---   · guard_target = 0 < y; admit
---   · guard_target = 0 ≤ w; admit
-
--- example (x y : ℕ)
---   (h : x ≤ y)
--- : true :=
--- begin
---   (do v ← mk_mvar,
---       p ← to_expr ```(%%v + x ≤ y + %%v),
---       assert `h' p),
---   ac_mono := h,
---   trivial,
---   exact 3
--- end
-
--- example {α} [LinearOrder α]
---     (a b c d e : α) :
---     max a b ≤ e → b ≤ e := by
---   mono
---   apply le_max_right
-
--- example (a b c d e : Prop)
---     (h : d → a) (h' : c → e) :
---     (a ∧ b → c) ∨ d → (d ∧ b → e) ∨ a := by
---   mono
---   mono
---   mono
-
--- example : ∫ x in Icc 0 1, real.exp x ≤ ∫ x in Icc 0 1, real.exp (x+1) := by
---   mono
---   · exact real.continuous_exp.locally_integrable.integrable_on_is_compact is_compact_Icc
---   · exact (real.continuous_exp.comp $ continuous_add_right 1)
---       .locally_integrable.integrable_on_is_compact is_compact_Icc
---   intro x
---   dsimp only
---   mono
---   linarith
+example (x y z k m n i j : ℕ)
+  (h₁ : x + i = y + j)
+: (m + x + n + i) * z + k = z * (j + n + m + y) + k := by auto

@@ -16,6 +16,7 @@ This tactic proves goals of the form `0 ≤ a` and `0 < a`.
 
 open Function Nat NNReal ENNReal
 set_option auto.smt true
+set_option auto.smt.trust true
 set_option trace.auto.smt.printCommands true
 set_option trace.auto.smt.result true
 set_option auto.duper false
@@ -24,11 +25,11 @@ variable {ι α β : Type _}
 
 /- ## Numeric goals -/
 
-example : 0 ≤ 0 := by positivity
+example : 0 ≤ 0 := by auto
 
-example : 0 ≤ 3 := by positivity
+example : 0 ≤ 3 := by auto
 
-example : 0 < 3 := by positivity
+example : 0 < 3 := by auto
 
 /- ## Goals working directly from a hypothesis -/
 -- set_option trace.Meta.debug true
@@ -222,7 +223,7 @@ example {n : ℤ} (hn : 0 < n) : 0 < n.natAbs := by positivity
 example {n : ℤ} (hn : n ≠ 0) : 0 < n.natAbs := by positivity
 example {n : ℤ} : 0 ≤ n.natAbs := by positivity
 
-example {a : ℤ} (ha : 1 < a) : 0 < |(3:ℤ) + a| := by positivity
+example {a : ℤ} (ha : 1 < a) : 0 < |(3:ℤ) + a| := by auto
 
 example : 0 < NNReal.sqrt 5 := by positivity
 example : 0 ≤ Real.sqrt (-5) := by positivity
@@ -279,16 +280,16 @@ example [MetricSpace α] {s : Set α} : 0 ≤ Metric.diam s := by positivity
 
 /- ### Canonical orders -/
 
-example {a : ℕ} : 0 ≤ a := by positivity
+example {a : ℕ} : 0 ≤ a := by auto
 -- example {a : ℚ≥0} : 0 ≤ a := by positivity
 example {a : ℝ≥0} : 0 ≤ a := by positivity
 example {a : ℝ≥0∞} : 0 ≤ a := by positivity
 
 /- ### Coercions -/
 
-example {a : ℕ} : (0 : ℤ) ≤ a := by positivity
+example {a : ℕ} : (0 : ℤ) ≤ a := by auto
 example {a : ℕ} : (0 : ℚ) ≤ a := by positivity
-example {a : ℕ} (ha : 0 < a) : (0 : ℤ) < a := by positivity
+example {a : ℕ} (ha : 0 < a) : (0 : ℤ) < a := by auto
 example {a : ℕ} (ha : 0 < a) : (0 : ℚ) < a := by positivity
 example {a : ℤ} (ha : a ≠ 0) : (a : ℚ) ≠ 0 := by positivity
 example {a : ℤ} (ha : 0 ≤ a) : (0 : ℚ) ≤ a := by positivity
@@ -325,11 +326,11 @@ example (x : ℝ≥0) : (0:ℝ) ≤ ↑x := by positivity
 
 /- ## Tests that the tactic is agnostic on reversed inequalities -/
 
-example {a : ℤ} (ha : a > 0) : 0 ≤ a := by positivity
+example {a : ℤ} (ha : a > 0) : 0 ≤ a := by auto
 
-example {a : ℤ} (ha : 0 < a) : a ≥ 0 := by positivity
+example {a : ℤ} (ha : 0 < a) : a ≥ 0 := by auto
 
-example {a : ℤ} (ha : a > 0) : a ≥ 0 := by positivity
+example {a : ℤ} (ha : a > 0) : a ≥ 0 := by auto
 
 /-
 ## Test for meta-variable instantiation
@@ -338,4 +339,4 @@ Reported on
 https://leanprover.zulipchat.com/#narrow/stream/239415-metaprogramming-.2F-tactics/topic/New.20tactic.3A.20.60positivity.60/near/300639970
 -/
 
-example : 0 ≤ 0 := by apply le_trans _ (le_refl _); positivity
+example : 0 ≤ 0 := by apply le_trans _ (le_refl _); auto

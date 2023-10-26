@@ -4,7 +4,7 @@
  [{"git":
    {"url": "https://github.com/EdAyers/ProofWidgets4",
     "subDir?": null,
-    "rev": "27715d1daf32b9657dc38cd52172d77b19bde4ba",
+    "rev": "5382e38eca1e2537d75d4c4705a9e744424b0037",
     "opts": {},
     "name": "proofwidgets",
     "inputRev?": "v0.0.13",
@@ -12,7 +12,7 @@
   {"git":
    {"url": "https://github.com/leanprover-community/duper.git",
     "subDir?": null,
-    "rev": "ba9b551e68694e7f53ceb2e10f2afb730748dac0",
+    "rev": "1ebe8b7d1c2f01c84924cb7b672326a576a8e1b6",
     "opts": {},
     "name": "Duper",
     "inputRev?": null,
@@ -28,7 +28,7 @@
   {"git":
    {"url": "https://github.com/leanprover-community/mathlib4.git",
     "subDir?": null,
-    "rev": "afc570346f75ad8aae9921c491333a8e4d26f986",
+    "rev": "57e4e03dd1782a74cf937835bbdb5f90955e4406",
     "opts": {},
     "name": "mathlib",
     "inputRev?": null,
@@ -44,7 +44,7 @@
   {"git":
    {"url": "https://github.com/JLimperg/aesop",
     "subDir?": null,
-    "rev": "b601328752091a1cfcaebdd6b6b7c30dc5ffd946",
+    "rev": "9dc4a1097a690216eaa7cf2d2290efd447e60d7a",
     "opts": {},
     "name": "aesop",
     "inputRev?": "master",
@@ -52,7 +52,7 @@
   {"git":
    {"url": "https://github.com/leanprover/std4",
     "subDir?": null,
-    "rev": "e3f238c972c1b747e0b7605ff568017e6a5107c5",
+    "rev": "ab21923ce1717d48a8d3d17e77bf6cdd3122eed8",
     "opts": {},
     "name": "std",
     "inputRev?": "main",
