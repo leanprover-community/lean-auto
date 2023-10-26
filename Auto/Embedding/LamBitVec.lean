@@ -288,17 +288,23 @@ theorem LamEquiv.bvofNat_nmul
    .mkBvBinOp (.ofBvmul _) (.mkBvofNat wfa) (.mkBvofNat wfb), fun lctxTerm => by
     apply GLift.down.inj; apply BitVec.ofNat_mul⟩
 
+def LamTerm.shl_equiv (n : Nat) (a b : LamTerm) :=
+  LamTerm.mkIte (.base (.bv n)) (.mkNatBinOp .nlt b (.base (.natVal' n)))
+      (.mkBvBinOp n (.bvsmtshl n) a (.mkBvofNat n b)) (.mkBvofNat n (.base (.natVal' 0)))
+
 theorem LamEquiv.shl_equiv
   (wfa : LamWF lval.toLamTyVal ⟨lctx, a, .base (.bv n)⟩)
   (wfb : LamWF lval.toLamTyVal ⟨lctx, b, .base .nat⟩) :
   LamEquiv lval lctx (.base (.bv n))
     (.mkBvNatBinOp n (.bvshl n) a b)
-    (.mkIte (.base (.bv n)) (.mkNatBinOp .nlt b (.base (.natVal' n)))
-      (.mkBvBinOp n (.bvsmtshl n) a (.mkBvofNat n b)) (.mkBvofNat n (.base (.natVal' 0)))) :=
+    (.shl_equiv n a b) :=
   ⟨.mkBvNatBinOp (.ofBvshl _) wfa wfb,
    .mkIte (.mkNatBinOp (.ofNlt) wfb (.ofBase (.ofNatVal' n)))
     (.mkBvBinOp (.ofBvsmtshl _) wfa (.mkBvofNat wfb)) (.mkBvofNat (.ofBase (.ofNatVal' 0))), fun lctxTerm => by
     apply GLift.down.inj; apply BitVec.shl_equiv'⟩
+
+abbrev LamTerm.shl_toNat_equiv_short (n : Nat) (a : LamTerm) (m : Nat) (b : LamTerm) :=
+  LamTerm.mkBvBinOp n (.bvsmtshl n) a (.mkBvUOp m (.bvzeroExtend m n) b)
 
 theorem LamEquiv.shl_toNat_equiv_short
   (wfa : LamWF lval.toLamTyVal ⟨lctx, a, .base (.bv n)⟩)
@@ -306,10 +312,15 @@ theorem LamEquiv.shl_toNat_equiv_short
   (h : m ≤ n) :
   LamEquiv lval lctx (.base (.bv n))
     (.mkBvNatBinOp n (.bvshl n) a (.mkBvUOp m (.bvtoNat m) b))
-    (.mkBvBinOp n (.bvsmtshl n) a (.mkBvUOp m (.bvzeroExtend m n) b)) :=
+    (.shl_toNat_equiv_short n a m b) :=
   ⟨.mkBvNatBinOp (.ofBvshl _) wfa (.mkBvUOp (.ofBvtoNat _) wfb),
    .mkBvBinOp (.ofBvsmtshl _) wfa (.mkBvUOp (.ofBvzeroExtend _ _) wfb), fun lctxTerm => by
     apply GLift.down.inj; apply BitVec.shl_toNat_equiv_short _ _ h⟩
+
+abbrev LamTerm.shl_toNat_equiv_long (n : Nat) (a : LamTerm) (m : Nat) (b : LamTerm) :=
+  LamTerm.mkIte (.base (.bv n))
+    (.mkEq (.base (.bv m)) (.mkBvBinOp m (.bvsmtlshr m) b (.mkBvofNat m (.base (.natVal' n)))) (.mkBvofNat m (.base (.natVal' 0))))
+    (.mkBvBinOp n (.bvsmtshl n) a (.mkBvUOp m (.bvzeroExtend m n) b)) (.mkBvofNat n (.base (.natVal' 0)))
 
 theorem LamEquiv.shl_toNat_equiv_long
   (wfa : LamWF lval.toLamTyVal ⟨lctx, a, .base (.bv n)⟩)
@@ -317,9 +328,7 @@ theorem LamEquiv.shl_toNat_equiv_long
   (h : m > n) :
   LamEquiv lval lctx (.base (.bv n))
     (.mkBvNatBinOp n (.bvshl n) a (.mkBvUOp m (.bvtoNat m) b))
-    (.mkIte (.base (.bv n))
-      (.mkEq (.base (.bv m)) (.mkBvBinOp m (.bvsmtlshr m) b (.mkBvofNat m (.base (.natVal' n)))) (.mkBvofNat m (.base (.natVal' 0))))
-      (.mkBvBinOp n (.bvsmtshl n) a (.mkBvUOp m (.bvzeroExtend m n) b)) (.mkBvofNat n (.base (.natVal' 0)))) :=
+    (.shl_toNat_equiv_long n a m b) :=
   ⟨.mkBvNatBinOp (.ofBvshl _) wfa (.mkBvUOp (.ofBvtoNat _) wfb),
     .mkIte
       (.mkEq (.mkBvBinOp (.ofBvsmtlshr _) wfb (.mkBvofNat (.ofBase (.ofNatVal' _)))) (.mkBvofNat (.ofBase (.ofNatVal' _))))
