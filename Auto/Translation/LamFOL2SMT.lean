@@ -180,10 +180,10 @@ private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamA
 | .bvcst (.bvtoNat n)    => do return .qStrApp (← lamBvToInt2String n) #[arg]
 | .bvcst (.bvofInt n)    => do return .qStrApp (← lamBvOfInt2String n) #[arg]
 | .bvcst (.bvtoInt n)    => do return .qStrApp (← lamBvToInt2String n) #[arg]
--- @Std.BitVec.msb n a = not ((a &&& (1 <<< (n - 1))) = 0)
+-- @Std.BitVec.msb n a = not ((a &&& (1 <<< (n - 1))) = 0#n)
 | .bvcst (.bvmsb n)      => do
   let andExpr := .qStrApp "bvand" #[arg, .qStrApp "bvshl" #[bitVec2STerm n 1, bitVec2STerm n (n - 1)]]
-  return .qStrApp "not" #[.qStrApp "=" #[andExpr, .sConst (.num 0)]]
+  return .qStrApp "not" #[.qStrApp "=" #[andExpr, bitVec2STerm n 0]]
 | .bvcst (.bvneg _)      => return .qStrApp "bvneg" #[arg]
 | .bvcst (.bvabs _)      => return .qStrApp "bvabs" #[arg]
 | .bvcst (.bvrepeat _ i) => return .qIdApp (.ident (.indexed "repeat" #[.inr i])) #[arg]

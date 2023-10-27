@@ -5,6 +5,7 @@ set_option auto.smt true
 set_option auto.smt.trust true
 set_option trace.auto.smt.printCommands true
 set_option trace.auto.smt.result true
+set_option auto.duper false
 
 open Std.BitVec
 
@@ -20,7 +21,6 @@ example (a b : BitVec 10) : a + b = b + a := by
 example (a b c : BitVec 1) : a = b ∨ b = c ∨ c = a := by
   auto
 
-set_option trace.auto.lamReif.prep.printResult true in
 example : (2 : BitVec 7).rotateLeft 3 = (16 : BitVec 7) := by
   auto
 
@@ -30,6 +30,12 @@ example : (2 : BitVec 7).rotateRight 3 = (0x20 : BitVec 7) := by
 example (x : BitVec 15) : x.rotateLeft 3 = x.rotateRight 12 := by
   auto
 
+example :
+  434#8 >>> 4 = 0x0b#8 ∧ 434#8 >>> 4#5 = 0x0b#8 ∧
+  34#8 >>> 4 = 0x02#8 ∧ 34#8 >>> 4#12 = 0x02#8 ∧
+  (434#8).sshiftRight 4 = 0xfb#8 ∧
+  (34#8).sshiftRight 4 = 0x02#8 := by auto
+
 example (x : BitVec 20) (y : BitVec 4) :
   (0#5).rotateLeft x.toNat = 0#5 ∧ (0#5).rotateLeft y.toNat = 0#5 := by
   auto
@@ -38,8 +44,12 @@ example (x : BitVec 20) (y : BitVec 4) :
   (0#5).rotateRight x.toNat = 0#5 ∧ (0#5).rotateRight y.toNat = 0#5 := by
   auto
 
+example : (0#5).rotateLeft n = 0#5 ∧ (0#5).rotateRight n = 0#5 := by auto
+
 example (x : BitVec 8) : x.rotateLeft (7 - 2 * 2) = x.rotateLeft (1 + 2) := by
   auto
+
+example (x : BitVec 8) : x.rotateLeft 100 = x ∧ x.rotateRight 100 = x := by auto
 
 example :
   Std.BitVec.zeroExtend 20 5#10 = 5#20 ∧
