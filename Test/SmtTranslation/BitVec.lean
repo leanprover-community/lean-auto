@@ -79,4 +79,10 @@ example :
 
 example : 101#32 <<< 2#32 = 404#32 := by auto
 
-#check (rfl : (fun (x y : BitVec 32) => x <<< y) = (fun (x y : BitVec 32) => x.shiftLeft y.toNat))
+example : (3#10).toNat = 3 := by auto
+
+example (x : Nat) (h : x > 0) : ((25 * x) / x)#3 = 1#3 := by auto
+
+example : (12#10).toInt = 12 && (686#10).toInt = -338 := by auto
+example : (12#10).toInt = 12 ∧ (686#10).toInt = -338 := by auto
+example : Std.BitVec.ofInt 4 (-6) = 10#4 ∧ Std.BitVec.ofInt 4 10 = 10#4 := by auto

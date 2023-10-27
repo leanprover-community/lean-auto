@@ -2,6 +2,7 @@ import Lean
 import Auto.Embedding.LamBase
 import Auto.Translation.LamReif
 import Auto.IR.SMT
+import Auto.Solver.SMT
 open Lean
 
 initialize
@@ -21,9 +22,13 @@ private inductive LamAtom where
   | sort     : Nat → LamAtom
   | term     : Nat → LamAtom
   | etom     : Nat → LamAtom
+  /-
+    To SMT solvers `.bvofNat` is the same as `.bvofInt`,
+      so there is no `bvOfNat`
+  -/
+  | bvToNat  : Nat → LamAtom
   | bvOfInt  : Nat → LamAtom
   | bvToInt  : Nat → LamAtom
-  | bvshOp   : Nat → Embedding.Lam.BVShOp → LamAtom
   | compCtor : LamTerm → LamAtom
 deriving Inhabited, Hashable, BEq
 
@@ -76,6 +81,13 @@ private def int2STerm : Int → STerm
 | .ofNat n   => .sConst (.num n)
 | .negSucc n => .qIdApp (QualIdent.ofString "-") #[.sConst (.num (Nat.succ n))]
 
+private def lamBvToNat2String (n : Nat) : TransM LamAtom String := do
+  if !(← hIn (.bvToNat n)) then
+    let name ← h2Symb (.bvToNat n)
+    let (argSorts, resSort) ← lamSort2SSort (.func (.base (.bv n)) (.base .int))
+    addCommand (.declFun name ⟨argSorts⟩ resSort)
+  return ← h2Symb (.bvToNat n)
+
 private def lamBvOfInt2String (n : Nat) : TransM LamAtom String := do
   if !(← hIn (.bvOfInt n)) then
     let name ← h2Symb (.bvOfInt n)
@@ -89,14 +101,6 @@ private def lamBvToInt2String (n : Nat) : TransM LamAtom String := do
     let (argSorts, resSort) ← lamSort2SSort (.func (.base (.bv n)) (.base .int))
     addCommand (.declFun name ⟨argSorts⟩ resSort)
   return ← h2Symb (.bvToInt n)
-
-/-- Turn non-smt shift operation into uninterpreted function -/
-private def lamBvshOp2String (n : Nat) (op : Embedding.Lam.BVShOp) : TransM LamAtom String := do
-  if !(← hIn (.bvshOp n op)) then
-    let name ← h2Symb (.bvshOp n op)
-    let (argSorts, resSort) ← lamSort2SSort (.func (.base (.bv n)) (.func (.base .int) (.base (.bv n))))
-    addCommand (.declFun name ⟨argSorts⟩ resSort)
-  return ← h2Symb (.bvshOp n op)
 
 private def bitVec2STerm (n i : Nat) : STerm :=
   let digs := (Nat.toDigits 2 (i % (2^n))).map (fun c => c == '1')
@@ -149,13 +153,10 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .bvcst (.bvand _) => return .qStrApp "bvand" #[arg1, arg2]
 | .bvcst (.bvor _) => return .qStrApp "bvor" #[arg1, arg2]
 | .bvcst (.bvxor _) => return .qStrApp "bvxor" #[arg1, arg2]
-| .bvcst (.bvshOp n smt? op) =>
+| .bvcst (.bvshOp _ smt? op) =>
   match smt? with
   | false =>
-    match op with
-    | .shl => return .qStrApp (← lamBvshOp2String n .shl) #[arg1, arg2]
-    | .lshr => return .qStrApp (← lamBvshOp2String n .lshr) #[arg1, arg2]
-    | .ashr => return .qStrApp (← lamBvshOp2String n .ashr) #[arg1, arg2]
+    throwError "lamTerm2STerm :: Non-smt shift operations should not occur here"
   | true =>
     match op with
     | .shl => return .qStrApp "bvshl" #[arg1, arg2]
@@ -176,14 +177,36 @@ private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamA
 | .icst .iabs            => return .qStrApp "abs" #[arg]
 | .icst .ineg            => return .qStrApp "-" #[int2STerm 0, arg]
 | .scst .slength         => return .qStrApp "str.len" #[arg]
-| .bvcst (.bvofNat n)    => do return .qStrApp (← lamBvOfInt2String n) #[arg]
-| .bvcst (.bvtoNat n)    => do return .qStrApp (← lamBvToInt2String n) #[arg]
-| .bvcst (.bvofInt n)    => do return .qStrApp (← lamBvOfInt2String n) #[arg]
-| .bvcst (.bvtoInt n)    => do return .qStrApp (← lamBvToInt2String n) #[arg]
+-- To SMT solvers `.bvofNat` is the same as `.bvofInt`
+| .bvcst (.bvofNat n)    => do
+  let name ← solverName
+  if name == .z3 || name == .cvc5 then
+    return .qIdApp (.ident (.indexed "int2bv" #[.inr n])) #[arg]
+  else
+    return .qStrApp (← lamBvOfInt2String n) #[arg]
+| .bvcst (.bvtoNat n)    => do
+  let name ← solverName
+  if name == .z3 || name == .cvc5 then
+    return .qStrApp "bv2nat" #[arg]
+  else
+    return .qStrApp (← lamBvToNat2String n) #[arg]
+| .bvcst (.bvofInt n)    => do
+  let name ← solverName
+  if name == .z3 || name == .cvc5 then
+    return .qIdApp (.ident (.indexed "int2bv" #[.inr n])) #[arg]
+  else
+    return .qStrApp (← lamBvOfInt2String n) #[arg]
+| .bvcst (.bvtoInt n)    => do
+  let name ← solverName
+  if name == .z3 || name == .cvc5 then
+    let msbExpr := mkSMTMsbExpr n arg
+    let arg1 := .qStrApp "-" #[.qStrApp "bv2nat" #[arg], .sConst (.num (2 ^ n))]
+    let arg2 := .qStrApp "bv2nat" #[arg]
+    return .qStrApp "ite" #[msbExpr, arg1, arg2]
+  else
+    return .qStrApp (← lamBvToInt2String n) #[arg]
 -- @Std.BitVec.msb n a = not ((a &&& (1 <<< (n - 1))) = 0#n)
-| .bvcst (.bvmsb n)      => do
-  let andExpr := .qStrApp "bvand" #[arg, .qStrApp "bvshl" #[bitVec2STerm n 1, bitVec2STerm n (n - 1)]]
-  return .qStrApp "not" #[.qStrApp "=" #[andExpr, bitVec2STerm n 0]]
+| .bvcst (.bvmsb n)      => return mkSMTMsbExpr n arg
 | .bvcst (.bvneg _)      => return .qStrApp "bvneg" #[arg]
 | .bvcst (.bvabs _)      => return .qStrApp "bvabs" #[arg]
 | .bvcst (.bvrepeat _ i) => return .qIdApp (.ident (.indexed "repeat" #[.inr i])) #[arg]
@@ -198,6 +221,12 @@ private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamA
   else
     return .qIdApp (.ident (.indexed "extract" #[.inr (v - 1), .inr 0])) #[arg]
 | t               => throwError "lamTerm2STerm :: The arity of {repr t} is not 1"
+where
+  solverName : MetaM Solver.SMT.SolverName := do
+    return Solver.SMT.auto.smt.solver.name.get (← getOptions)
+  mkSMTMsbExpr (n : Nat) (arg : STerm) : STerm :=
+    let andExpr := .qStrApp "bvand" #[arg, .qStrApp "bvshl" #[bitVec2STerm n 1, bitVec2STerm n (n - 1)]]
+    .qStrApp "not" #[.qStrApp "=" #[andExpr, bitVec2STerm n 0]]
 
 private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtom STerm
 | .trueE              => return .qStrApp "true" #[]
