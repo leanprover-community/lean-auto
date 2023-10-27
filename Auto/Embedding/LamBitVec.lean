@@ -451,11 +451,15 @@ def LamTerm.pushBVCast (ct : BVCastType) (t : LamTerm) : LamTerm :=
   | .none =>
     match t with
     | .lam s body => .lam s (pushBVCast .none body)
-    | .app s fn arg =>
-      match fn with
-      | .base (.bvcst (.bvofNat n)) => pushBVCast (.ofNat n) arg
-      | .base (.bvcst (.bvofInt n)) => pushBVCast (.ofInt n) arg
-      | _ => .app s (pushBVCast .none fn) (pushBVCast .none arg)
+    | .app _ (.base (.bvcst (.bvofNat n))) arg => pushBVCast (.ofNat n) arg
+    | .app _ (.base (.bvcst (.bvofInt n))) arg => pushBVCast (.ofInt n) arg
+    | .app _ (.app _ (.base (.bvcst (.bvshl n))) arg₁) (.app _ (.base (.bvcst (.bvtoNat m))) arg₂) =>
+      match m.ble n with
+      | true  => LamTerm.shl_toNat_equiv_short n (pushBVCast .none arg₁) m (pushBVCast .none arg₂)
+      | false => LamTerm.shl_toNat_equiv_long n (pushBVCast .none arg₁) m (pushBVCast .none arg₂)
+    | .app _ (.app _ (.base (.bvcst (.bvshl n))) arg₁) arg₂ =>
+      LamTerm.shl_equiv n (pushBVCast .none arg₁) (pushBVCast .none arg₂)
+    | .app s fn arg => .app s (pushBVCast .none fn) (pushBVCast .none arg)
     | _ => t
 
 theorem LamTerm.maxEVarSucc_pushBVCast : maxEVarSucc (pushBVCast ct t) = maxEVarSucc t := by
@@ -496,7 +500,6 @@ theorem LamTerm.maxEVarSucc_pushBVCast : maxEVarSucc (pushBVCast ct t) = maxEVar
                 rw [IH (Nat.le_trans LamTerm.size_app_ge_size_arg leFn), IH leArg])
       case ofInt m => apply Nat.max_zero_left
       case none =>
-        dsimp [pushBVCast]
         have fneq : ∀ ct, maxEVarSucc (pushBVCast ct fn) = maxEVarSucc fn := by
           intro ct; apply IH leFn
         have argeq : ∀ ct, maxEVarSucc (pushBVCast ct arg) = maxEVarSucc arg := by
@@ -511,6 +514,7 @@ theorem LamTerm.maxEVarSucc_pushBVCast : maxEVarSucc (pushBVCast ct t) = maxEVar
             cases bvc <;> dsimp [maxEVarSucc, pushBVCast] <;> rw [IH leArg]
             case bvofNat => rw [Nat.max_zero_left]
             case bvofInt => rw [Nat.max_zero_left]
+        case app s fn arg => sorry
 
 theorem LamTerm.evarEquiv_pushBVCast : evarEquiv (fun t => pushBVCast ct t) := by
   intro t t' heq; cases heq; apply maxEVarSucc_pushBVCast
@@ -594,6 +598,13 @@ theorem LamEquiv.pushBVCast
               cases wft.getFn.getBase.getBvcst; apply IH (ct:=.ofNat m) (t:=arg) wft leArg
             case bvofInt m =>
               cases wft.getFn.getBase.getBvcst; apply IH (ct:=.ofInt m) (t:=arg) wft leArg
+        case app s fn arg =>
+          cases fn <;> try apply h_none_app
+          case base b =>
+            cases b <;> try apply h_none_app
+            case bvcst bvc =>
+              cases bvc <;> try apply h_none_app
+              sorry
 
 theorem LamGenConv.pushBVCast : LamGenConv lval (fun t => LamTerm.pushBVCast .none t) := by
   intros t₁ t₂ heq lctx rty wf; cases heq

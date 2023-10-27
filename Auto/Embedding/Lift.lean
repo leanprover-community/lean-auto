@@ -194,12 +194,6 @@ def bvlshrLift.{u} (n : Nat) (a : GLift.{1, u} (Std.BitVec n)) (s : GLift.{1, u}
 def bvashrLift.{u} (n : Nat) (a : GLift.{1, u} (Std.BitVec n)) (s : GLift.{1, u} Nat) : GLift.{1, u} (Std.BitVec n) :=
   GLift.up (Std.BitVec.sshiftRight a.down s.down)
 
-def bvrotateLeftLift.{u} (w : Nat) (x : GLift.{1, u} (Std.BitVec w)) (n : GLift.{1, u} Nat) : GLift.{1, u} (Std.BitVec w) :=
-  GLift.up (Std.BitVec.rotateLeft x.down n.down)
-
-def bvrotateRightLift.{u} (w : Nat) (x : GLift.{1, u} (Std.BitVec w)) (n : GLift.{1, u} Nat) : GLift.{1, u} (Std.BitVec w) :=
-  GLift.up (Std.BitVec.rotateRight x.down n.down)
-
 def bvsmtshlLift.{u} (n : Nat) (a : GLift.{1, u} (Std.BitVec n)) (s : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
   GLift.up (Std.BitVec.shiftLeft a.down s.down.toNat)
 
@@ -208,12 +202,6 @@ def bvsmtlshrLift.{u} (n : Nat) (a : GLift.{1, u} (Std.BitVec n)) (s : GLift.{1,
 
 def bvsmtashrLift.{u} (n : Nat) (a : GLift.{1, u} (Std.BitVec n)) (s : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
   GLift.up (Std.BitVec.sshiftRight a.down s.down.toNat)
-
-def bvsmtrotateLeftLift.{u} (w : Nat) (x : GLift.{1, u} (Std.BitVec w)) (n : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec w) :=
-  GLift.up (Std.BitVec.rotateLeft x.down n.down.toNat)
-
-def bvsmtrotateRightLift.{u} (w : Nat) (x : GLift.{1, u} (Std.BitVec w)) (n : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec w) :=
-  GLift.up (Std.BitVec.rotateRight x.down n.down.toNat)
 
 def bvappendLift.{u} (n m : Nat) (x : GLift.{1, u} (Std.BitVec n)) (y : GLift.{1, u} (Std.BitVec m)) : GLift.{1, u} (Std.BitVec (Nat.add n m)) :=
   GLift.up (Std.BitVec.append x.down y.down)

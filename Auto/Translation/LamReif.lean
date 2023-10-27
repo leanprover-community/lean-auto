@@ -1155,8 +1155,6 @@ abbrev BitVec.sgt (a b : Std.BitVec n) : Bool := Std.BitVec.slt b a
 abbrev BitVec.smtHshiftLeft (a : Std.BitVec n) (b : Std.BitVec m) := Std.BitVec.shiftLeft a b.toNat
 abbrev BitVec.smtHushiftRight (a : Std.BitVec n) (b : Std.BitVec m) := Std.BitVec.ushiftRight a b.toNat
 abbrev BitVec.smtHsshiftRight (a : Std.BitVec n) (b : Std.BitVec m) := Std.BitVec.sshiftRight a b.toNat
-abbrev BitVec.smtHrotateLeft (a : Std.BitVec n) (b : Std.BitVec m) := Std.BitVec.rotateLeft a b.toNat
-abbrev BitVec.smtHrotateRight (a : Std.BitVec n) (b : Std.BitVec m) := Std.BitVec.rotateRight a b.toNat
 
 def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
   match fn with
@@ -1651,11 +1649,11 @@ def processNewTermExpr (e : Expr) : ReifM LamTerm :=
     newTermExpr e
   | .app (.const ``Std.BitVec.rotateLeft []) nExpr => do
     if let .some n ← @id (MetaM _) (Meta.evalNat nExpr) then
-      return .base (.bvrotateLeft' n)
+      return .bvrotateLeft' n
     newTermExpr e
   | .app (.const ``Std.BitVec.rotateRight []) nExpr => do
     if let .some n ← @id (MetaM _) (Meta.evalNat nExpr) then
-      return .base (.bvrotateRight' n)
+      return .bvrotateRight' n
     newTermExpr e
   | .app (.app (.const ``Std.BitVec.append []) nExpr) mExpr => do
     match ← @id (MetaM _) (Meta.evalNat nExpr),

@@ -520,7 +520,9 @@ section Adhoc
   example (a b : Nat) : (a + b)#16 = a#16 + b#16 ∧ (a * b)#16 = a#16 * b#16 := by auto
 
   example (a : Std.BitVec 5) (b : Std.BitVec k) :
-    a.msb = a.msb ∧ b.msb = b.msb := by auto
+    a.msb = a.msb ∧ b.msb = b.msb ∧
+    a.rotateLeft w = a.rotateLeft w ∧
+    a.rotateRight w = a.rotateRight w := by auto
 
   -- TPTP/SMT support for `Empty`
   set_option auto.tptp true in

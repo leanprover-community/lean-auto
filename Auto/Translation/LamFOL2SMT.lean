@@ -156,29 +156,11 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
     | .shl => return .qStrApp (← lamBvshOp2String n .shl) #[arg1, arg2]
     | .lshr => return .qStrApp (← lamBvshOp2String n .lshr) #[arg1, arg2]
     | .ashr => return .qStrApp (← lamBvshOp2String n .ashr) #[arg1, arg2]
-    | .rotateLeft =>
-      match arg2 with
-      | .sConst (.num m) =>
-        if m ≤ n then
-          return .qIdApp (.ident (.indexed "rotate_left" #[.inr m])) #[arg1]
-        else
-          return arg1
-      | _ => return .qStrApp (← lamBvshOp2String n .rotateLeft) #[arg1, arg2]
-    | .rotateRight =>
-      match arg2 with
-      | .sConst (.num m) =>
-        if m ≤ n then
-          return .qIdApp (.ident (.indexed "rotate_right" #[.inr m])) #[arg1]
-        else
-          return arg1
-      | _ => return .qStrApp (← lamBvshOp2String n .rotateRight) #[arg1, arg2]
   | true =>
     match op with
     | .shl => return .qStrApp "bvshl" #[arg1, arg2]
     | .lshr => return .qStrApp "bvlshr" #[arg1, arg2]
     | .ashr => return .qStrApp "bvashr" #[arg1, arg2]
-    | .rotateLeft => throwError "Suspicious semantics :: argument to rotate_left is not a nat_lit"
-    | .rotateRight => throwError "Suspicious semantics :: argument to rotate_right is not a nat_lit"
 | .bvcst (.bvappend _ _) => return .qStrApp "concat" #[arg1, arg2]
 | .bvcst (.bvextract _ h l) => do
   let l := min h l

@@ -124,8 +124,6 @@ def transBitVecConst : BitVecConst → String
   | .shl          => s!"t_bv{smtStr}shl_{n}"
   | .lshr         => s!"t_bv{smtStr}lshr_{n}"
   | .ashr         => s!"t_bv{smtStr}ashr_{n}"
-  | .rotateLeft   => s!"t_bv{smtStr}rotateLeft_{n}"
-  | .rotateRight  => s!"t_bv{smtStr}rotateRight_{n}"
 | .bvappend n m     => s!"t_bvappend_{n}_{m}"
 | .bvextract n h l  => s!"t_bvextract_{n}_{h}_{l}"
 | .bvrepeat w i     => s!"t_bvrepeat_{w}_{i}"
