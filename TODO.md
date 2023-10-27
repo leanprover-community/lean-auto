@@ -14,7 +14,8 @@ __Auto Issues:__
   ```
   #check (fun (x : Nonstruct) => x.1)
   ```
-* Bitwise operation for ``Nat``, Permutation of ``BitVec.ofNat`` with ``Nat/Int`` division.
+* Bitwise operation for ``Nat``
+* Add semantics check for ``BitVec`` operations
 * Unsound translation for SMT: Although we have the option ``auto.smt.trust``, the translation is unsound since types in Lean might be inhabited while SMT-LIB assumes that all types are inhabited.
 
 __Lean Issues:__

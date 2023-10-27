@@ -23,12 +23,11 @@ private inductive LamAtom where
   | term     : Nat → LamAtom
   | etom     : Nat → LamAtom
   /-
-    To SMT solvers `.bvofNat` is the same as `.bvofInt`,
-      so there is no `bvOfNat`
+    · To SMT solvers `.bvofNat` is the same as `.bvofInt`
+    · `.bvtoInt` can be defined using `.bvtoNat`
   -/
+  | bvOfNat  : Nat → LamAtom
   | bvToNat  : Nat → LamAtom
-  | bvOfInt  : Nat → LamAtom
-  | bvToInt  : Nat → LamAtom
   | compCtor : LamTerm → LamAtom
 deriving Inhabited, Hashable, BEq
 
@@ -81,26 +80,19 @@ private def int2STerm : Int → STerm
 | .ofNat n   => .sConst (.num n)
 | .negSucc n => .qIdApp (QualIdent.ofString "-") #[.sConst (.num (Nat.succ n))]
 
+private def lamBvOfNat2String (n : Nat) : TransM LamAtom String := do
+  if !(← hIn (.bvOfNat n)) then
+    let name ← h2Symb (.bvOfNat n)
+    let (argSorts, resSort) ← lamSort2SSort (.func (.base .int) (.base (.bv n)))
+    addCommand (.declFun name ⟨argSorts⟩ resSort)
+  return ← h2Symb (.bvOfNat n)
+
 private def lamBvToNat2String (n : Nat) : TransM LamAtom String := do
   if !(← hIn (.bvToNat n)) then
     let name ← h2Symb (.bvToNat n)
     let (argSorts, resSort) ← lamSort2SSort (.func (.base (.bv n)) (.base .int))
     addCommand (.declFun name ⟨argSorts⟩ resSort)
   return ← h2Symb (.bvToNat n)
-
-private def lamBvOfInt2String (n : Nat) : TransM LamAtom String := do
-  if !(← hIn (.bvOfInt n)) then
-    let name ← h2Symb (.bvOfInt n)
-    let (argSorts, resSort) ← lamSort2SSort (.func (.base .int) (.base (.bv n)))
-    addCommand (.declFun name ⟨argSorts⟩ resSort)
-  return ← h2Symb (.bvOfInt n)
-
-private def lamBvToInt2String (n : Nat) : TransM LamAtom String := do
-  if !(← hIn (.bvToInt n)) then
-    let name ← h2Symb (.bvToInt n)
-    let (argSorts, resSort) ← lamSort2SSort (.func (.base (.bv n)) (.base .int))
-    addCommand (.declFun name ⟨argSorts⟩ resSort)
-  return ← h2Symb (.bvToInt n)
 
 private def bitVec2STerm (n i : Nat) : STerm :=
   let digs := (Nat.toDigits 2 (i % (2^n))).map (fun c => c == '1')
@@ -183,7 +175,7 @@ private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamA
   if name == .z3 || name == .cvc5 then
     return .qIdApp (.ident (.indexed "int2bv" #[.inr n])) #[arg]
   else
-    return .qStrApp (← lamBvOfInt2String n) #[arg]
+    return .qStrApp (← lamBvOfNat2String n) #[arg]
 | .bvcst (.bvtoNat n)    => do
   let name ← solverName
   if name == .z3 || name == .cvc5 then
@@ -195,16 +187,18 @@ private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamA
   if name == .z3 || name == .cvc5 then
     return .qIdApp (.ident (.indexed "int2bv" #[.inr n])) #[arg]
   else
-    return .qStrApp (← lamBvOfInt2String n) #[arg]
+    return .qStrApp (← lamBvOfNat2String n) #[arg]
 | .bvcst (.bvtoInt n)    => do
   let name ← solverName
+  let msbExpr := mkSMTMsbExpr n arg
   if name == .z3 || name == .cvc5 then
-    let msbExpr := mkSMTMsbExpr n arg
     let arg1 := .qStrApp "-" #[.qStrApp "bv2nat" #[arg], .sConst (.num (2 ^ n))]
     let arg2 := .qStrApp "bv2nat" #[arg]
     return .qStrApp "ite" #[msbExpr, arg1, arg2]
   else
-    return .qStrApp (← lamBvToInt2String n) #[arg]
+    let arg1 := .qStrApp "-" #[.qStrApp (← lamBvToNat2String n) #[arg], .sConst (.num (2 ^ n))]
+    let arg2 := .qStrApp (← lamBvToNat2String n) #[arg]
+    return .qStrApp "ite" #[msbExpr, arg1, arg2]
 -- @Std.BitVec.msb n a = not ((a &&& (1 <<< (n - 1))) = 0#n)
 | .bvcst (.bvmsb n)      => return mkSMTMsbExpr n arg
 | .bvcst (.bvneg _)      => return .qStrApp "bvneg" #[arg]
