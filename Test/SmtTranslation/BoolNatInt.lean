@@ -1,6 +1,7 @@
 import Auto.Tactic
 
 set_option auto.smt true
+set_option auto.smt.trust true
 set_option trace.auto.smt.printCommands true
 set_option trace.auto.smt.result true
 set_option auto.duper false
@@ -21,7 +22,6 @@ example (a b : Nat) (_ : a ≤ b) : a - b = 0 := by auto
 
 example : Nat.succ x = x + 1 := by auto
 
-set_option auto.smt.solver.name "cvc5" in
 example : String.length "abc" = 3 := by auto
 
 example (_ : ∃ b, !(!b) ≠ b) : False := by auto

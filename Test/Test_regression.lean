@@ -429,6 +429,9 @@ section DefinitionRecognition
   example (H : α ↔ β) : α = β := by
     auto
 
+  example {α : Type} (f : α → Nat → Nat → α → Nat) :
+    ∀ a b c, f a 1 b c = f a 1 b c := by auto
+
 end DefinitionRecognition
 
 -- Ad-hoc support
@@ -467,7 +470,11 @@ section Adhoc
     auto
 
   -- Nat
+  example (_ : ∃ b, !(!b) ≠ b) : False := by auto
+
   example (a b c : Nat) : Nat.zero = 0 ∧ 3 = nat_lit 3 ∧ (a = b ↔ b = a) ∧ Nat.succ c = c + 1 := by auto
+
+  example : Nat.succ x = x + 1 := by auto
 
   example (a b : Nat) : a % b + a - b + (a / b) * b = a % b + a - b + (a / b) * b := by auto
 
