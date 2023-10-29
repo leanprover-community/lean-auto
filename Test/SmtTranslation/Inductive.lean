@@ -32,13 +32,11 @@ section NonRecursive
   set_option trace.auto.printLemmas true in
   example (x : Option α) : Option.orElse x (fun _ => Option.none) = x := by auto
 
-  -- **TODO**:
-  -- · Recognize projections for structures
-  -- · Better control over input??
   set_option trace.auto.lamReif.printResult true
   example (x : α × β) : x = (Prod.fst x, Prod.snd x) := by
-    have h₁ : ∀ (x : α) (y : β) (z : α × β), z = (x, y) → Prod.fst z = x := fun _ _ _ h => by cases h; rfl
-    have h₁ : ∀ (x : α) (y : β) (z : α × β), z = (x, y) → Prod.snd z = y := fun _ _ _ h => by cases h; rfl
+    auto
+
+  example (f : α × β → α) (h : f = Prod.fst) : f (a, b) = a := by
     auto
 
 end NonRecursive
