@@ -334,12 +334,12 @@ private def lamMutualIndInfo2STerm (mind : MutualIndInfo) : TransM LamAtom (IR.S
   let mut compCtors := #[]
   -- Go through `type` and call `h2Symb` on all the atoms so that there won't
   --   be declared during the following `lamSort2SSort`
-  for ⟨type, _⟩ in mind do
+  for ⟨type, _, _⟩ in mind do
     let .atom sn := type
       | throwError "lamMutualIndInfo2STerm :: Inductive type {type} is not a sort atom"
     -- Do not use `lamSortAtom2String` because we don't want to `declare-sort`
     let _ ← h2Symb (.sort sn)
-  for ⟨type, ctors⟩ in mind do
+  for ⟨type, ctors, _⟩ in mind do
     let .atom sn := type
       | throwError "lamMutualIndInfo2STerm :: Unexpected error"
     let sname ← h2Symb (.sort sn)

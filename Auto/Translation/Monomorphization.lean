@@ -100,7 +100,7 @@ def CiHead.equiv (ch₁ ch₂ : CiHead) : MetaM Bool :=
     universe levels, dependent arguments and instance
     arguments instantiated.  So, we record the instantiation
     of universe levels and dependent arguments.
-  
+
   As to monomorphization, we will not record instances of
     constants with `instance` attribute or whose type is
     a class.
@@ -402,7 +402,7 @@ def LemmaInst.monomorphic? (li : LemmaInst) : MetaM (Option LemmaInst) := do
         Try unifying `app` with `ciMap[name][n].snd`.
         If we get a new instance `i` of an assumption (which means
         that its `type` is not defeq to any existing ones in `ais`)
-        · We add `i` to `ais`. 
+        · We add `i` to `ais`.
         · We traverse `i` to collect instances of constants.
           If we find an instance `ci` of constant `name'`, we
           first look at `ciMap[name']` to see whether it's
@@ -544,18 +544,20 @@ def collectMonoMutInds : MonoM (Array (Array SimpleIndVal)) := do
     let ty ← Meta.inferType cie
     return Expr.eraseMData ty)
   let minds ← collectExprsSimpleInduct citys
-  let cis ← (minds.concatMap id).mapM (fun ⟨_, type, ctors⟩ => do
+  let cis ← (minds.concatMap id).mapM (fun ⟨_, type, ctors, projs⟩ => do
     let cis₁ ← collectConstInsts #[] #[] type
     let cis₂ ← ctors.mapM (fun (val, ty) => do
       let cis₁ ← collectConstInsts #[] #[] val
       let cis₂ ← collectConstInsts #[] #[] ty
       return cis₁ ++ cis₂)
-    return cis₁ ++ cis₂.concatMap id)
+    let projs := (match projs with | .some projs => projs | .none => #[])
+    let cis₃ ← projs.mapM (fun e => collectConstInsts #[] #[] e)
+    return cis₁ ++ cis₂.concatMap id ++ cis₃.concatMap id)
   let _ ← (cis.concatMap id).mapM processConstInst
   return minds
 
 namespace FVarRep
-  
+
   structure State where
     bfvars   : Array FVarId             := #[]
     ffvars   : Array FVarId             := #[]
@@ -564,9 +566,9 @@ namespace FVarRep
     ciIdMap  : HashMap ConstInst FVarId := {}
     -- Canonicalization map for types
     tyCanMap : HashMap Expr Expr        := {}
-  
+
   abbrev FVarRepM := StateRefT State MetaState.MetaStateM
-  
+
   #genMonadState FVarRepM
 
   /-- Similar to `Monomorphization.processConstInst` -/
@@ -615,7 +617,7 @@ namespace FVarRep
       setCiIdMap ((← getCiIdMap).insert ci fvarId)
       setFfvars ((← getFfvars).push fvarId)
       return fvarId
-  
+
   def UnknownExpr2FVarId (e : Expr) : FVarRepM FVarId := do
     trace[auto.mono] "Do not know how to deal with expression {e}. Turning it into free variable ..."
     for (e', fid) in (← getExprMap).toList do
@@ -736,13 +738,15 @@ def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State
   let fvarRepMFactAction : FVarRep.FVarRepM (Array UMonoFact) :=
     lis.mapM (fun li => do return ⟨li.proof, ← FVarRep.replacePolyWithFVar li.type⟩)
   let fvarRepMInductAction (ivals : Array (Array SimpleIndVal)) : FVarRep.FVarRepM (Array (Array SimpleIndVal)) :=
-    ivals.mapM (fun svals => svals.mapM (fun ⟨name, type, ctors⟩ => do
+    ivals.mapM (fun svals => svals.mapM (fun ⟨name, type, ctors, projs⟩ => do
       FVarRep.processType type
       let ctors ← ctors.mapM (fun (val, ty) => do
         FVarRep.processType ty
         let val' ← FVarRep.replacePolyWithFVar val
         return (val', ty))
-      return ⟨name, type, ctors⟩))
+      let projs ← projs.mapM (fun arr => arr.mapM (fun e => do
+        FVarRep.replacePolyWithFVar e))
+      return ⟨name, type, ctors, projs⟩))
   let metaStateMAction : MetaState.MetaStateM (Array FVarId × Reif.State) := (do
     let (uvalids, s) ← fvarRepMFactAction.run { ciMap := monoSt.ciMap }
     for (proof, ty) in uvalids do

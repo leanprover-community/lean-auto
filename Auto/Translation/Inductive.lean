@@ -14,7 +14,7 @@ namespace Auto
 /--
   Test whether a given inductive type is explicitly and inductive family.
   i.e., return `false` iff `numParams` match the number of arguments of
-    the type constructor 
+    the type constructor
 -/
 def isFamily (tyctorname : Name) : CoreM Bool := do
   let .some (.inductInfo val) := (← getEnv).find? tyctorname
@@ -56,15 +56,24 @@ structure SimpleIndVal where
   type : Expr
   /-- Array of `(instantiated_ctor, type_of_instantiated_constructor)` -/
   ctors : Array (Expr × Expr)
+  /-- Instantiated projections -/
+  projs : Option (Array Expr)
 
 instance : ToMessageData SimpleIndVal where
   toMessageData siv :=
-    m!"SimpleIndVal ⦗⦗ {siv.type} " ++ MessageData.array siv.ctors (fun (e₁, e₂) => m!"{e₁} : {e₂}") ++ m!" ⦘⦘"
+    m!"SimpleIndVal ⦗⦗ {siv.type}, Ctors : " ++
+      MessageData.array siv.ctors (fun (e₁, e₂) => m!"{e₁} : {e₂}") ++
+      (match siv.projs with
+       | .some arr =>
+         ", Projs : " ++ MessageData.array arr (fun e => m!"{e}")
+       | .none => m!"") ++
+      m!" ⦘⦘"
 
 def SimpleIndVal.zetaReduce (si : SimpleIndVal) : MetaM SimpleIndVal := do
-  let ⟨name, type, ctors⟩ := si
+  let ⟨name, type, ctors, projs⟩ := si
   let ctors ← ctors.mapM (fun (val, ty) => do return (← Meta.zetaReduce val, ← Meta.zetaReduce ty))
-  return ⟨name, ← Meta.zetaReduce type, ctors⟩
+  let projs ← projs.mapM (fun arr => arr.mapM Meta.zetaReduce)
+  return ⟨name, ← Meta.zetaReduce type, ctors, projs⟩
 
 /--
   For a given type constructor `tyctor`, `CollectIndState[tyctor]`
@@ -87,7 +96,13 @@ private def collectSimpleInduct
     let type ← Meta.inferType instctor
     let type ← prepReduceExpr type
     return (instctor, type))
-  return ⟨tyctor, mkAppN (Expr.const tyctor lvls) args, ctors⟩
+  let env ← getEnv
+  let projs ← (getStructureInfo? env tyctor).mapM (fun si => do
+    si.fieldNames.mapM (fun fieldName => do
+      let .some projFn := getProjFnForField? env tyctor fieldName
+        | throwError "collectSimpleInduct :: Unexpected error"
+      return mkAppN (Expr.const projFn lvls) args))
+  return ⟨tyctor, mkAppN (Expr.const tyctor lvls) args, ctors, projs⟩
 
 mutual
 
@@ -157,12 +172,11 @@ section Test
       for si in siw do
         IO.println <| ← MessageData.format m!"{si}"
 
-  #check Meta.isClass?
   #getExprAndApply[List.cons 2|skd]
   #getExprAndApply[(Array Bool × Array Nat)|skd]
 
   mutual
-    
+
     private inductive tree where
       | leaf : Nat → tree
       | node : treelist → tree
@@ -176,7 +190,7 @@ section Test
   #getExprAndApply[tree|skd]
 
   mutual
-  
+
     private inductive Tree (α : Type u) where
       | leaf : α → Tree α
       | node : TreeList α → Tree α

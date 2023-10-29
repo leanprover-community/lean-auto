@@ -1752,7 +1752,7 @@ def reifInhabitations (inhs : Array UMonoFact) : ReifM (Array LamSort) :=
     return s)
 
 def reifInd (ind : SimpleIndVal) : ReifM (Option IndInfo) := do
-  let ⟨name, type, ctors⟩ := ind
+  let ⟨name, type, ctors, projs⟩ := ind
   if name == ``Nat || name == ``Int || name == ``Bool ||
      name == ``String || name == ``String.Pos || name == ``Empty ||
      name == ``Std.BitVec then
@@ -1762,7 +1762,8 @@ def reifInd (ind : SimpleIndVal) : ReifM (Option IndInfo) := do
     return .none
   let rty ← reifType type
   let rctors ← ctors.mapM (fun (e, _) => reifTermCheckType e)
-  let ret := ⟨rty, rctors.data⟩
+  let rprojs ← projs.mapM (fun ps => ps.mapM reifTermCheckType)
+  let ret := ⟨rty, rctors.data, rprojs.bind (·.data)⟩
   trace[auto.lamReif.printResult] "Successfully reified inductive info {← ind.zetaReduce} to {ret}"
   return .some ret
 

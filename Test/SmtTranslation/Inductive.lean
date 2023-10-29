@@ -50,7 +50,6 @@ section Recursive
   set_option trace.auto.lamReif.printResult true
   example (x y : α) : [x] ++ [y] = [x, y] := by
     -- Invoke definition unfolding
-    -- **TODO**: Apply unfolding to λ inductive infos
     have h : ∀ (x y : List α), x ++ y = x.append y := fun _ _ => rfl
     auto [h] d[List.append]
 
