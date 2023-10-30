@@ -144,15 +144,15 @@ section CVal
   /-- Used in checker metacode to construct `var` -/
   abbrev varSigmaMk.{u} (tyVal : Nat → Type u) :=
     @Sigma.mk LamSort (LamSort.interp tyVal)
-  
+
   /-- Used in checker metacode to construct `il` -/
   abbrev ilβ.{u} (tyVal : Nat → Type u) (s : LamSort) : Type u :=
     ILLift.{u} (s.interp tyVal)
-  
+
   /-- Used in checker metacode to construct `il` -/
   abbrev ilSigmaMk.{u} (tyVal : Nat → Type u) :=
     @Sigma.mk LamSort (ilβ.{u} tyVal)
-  
+
   noncomputable def ilVal.default (lamILTy : Nat → LamSort) (tyVal : Nat → Type u) :
     ∀ (n : Nat), ILLift.{u} ((lamILTy n).interp tyVal) :=
     fun n => ILLift.default ((lamILTy n).interp tyVal)
@@ -161,7 +161,7 @@ section CVal
     ⟨fun n => ((cv.var.get? n).getD ⟨.base .prop, GLift.up False⟩).fst,
      fun n => ((cv.il.get? n).getD ⟨.base .prop, ILLift.default _⟩).fst,
      fun n => (levt.get? n).getD (.base .prop)⟩
-  
+
   noncomputable def CVal.toLamValuation (cv : CVal.{u} levt) : LamValuation :=
     ⟨cv.toLamTyVal, cv.tyVal,
      fun n => ((cv.var.get? n).getD ⟨.base .prop, GLift.up False⟩).snd,
@@ -183,7 +183,7 @@ section CVal
     ⟨fun n => ((cpv.var.get? n).getD ⟨.base .prop, GLift.up False⟩).fst,
      fun n => ((cpv.il.get? n).getD ⟨.base .prop, ILLift.default _⟩).fst,
      fun _ => .base .prop⟩
-  
+
   noncomputable def CPVal.toLamValuationEraseEtom (cpv : CPVal.{u}) : LamValuation :=
     ⟨cpv.toLamTyValEraseEtom, cpv.tyVal,
      fun n => ((cpv.var.get? n).getD ⟨.base .prop, GLift.up False⟩).snd,
@@ -456,7 +456,7 @@ theorem ImportTable.importFacts_correct (it : ImportTable cpv) (n : Nat) :
             intro n H; rw [LamTerm.maxEVarSucc_resolveImport, h₃] at H; cases H
           case a =>
             apply LamThmValid.resolveImport (lval:=cpv.toLamValuationEraseEtom)
-            apply LamThmValid.ofInterpAsProp cpv.toLamValuationEraseEtom _ h₁ validIe h₂    
+            apply LamThmValid.ofInterpAsProp cpv.toLamValuationEraseEtom _ h₁ validIe h₂
         case right =>
           rw [LamTerm.maxEVarSucc_resolveImport]
           rw [h₃]; apply Nat.zero_le
@@ -563,19 +563,33 @@ inductive NonemptyStep where
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
 inductive PrepConvStep where
+  /-- (a ≠ b) ↔ (a = (¬ b)) -/
   | validOfPropNeEquivEqNot : PrepConvStep
+  /-- (True = False) ↔ False -/
   | validOfTrueEqFalseEquivFalse : PrepConvStep
+  /-- (False = True) ↔ False -/
   | validOfFalseEqTrueEquivFalse : PrepConvStep
+  /-- (a = True) ↔ a -/
   | validOfEqTrueEquiv : PrepConvStep
+  /-- (a = False) ↔ (¬ a) -/
   | validOfEqFalseEquiv : PrepConvStep
+  /-- (a ≠ True) ↔ (a = False) -/
   | validOfNeTrueEquivEqFalse : PrepConvStep
+  /-- (a ≠ False) ↔ (a = True) -/
   | validOfNeFalseEquivEqTrue : PrepConvStep
+  /-- ((¬ a) = True) ↔ (a = False) -/
   | validOfNotEqTrueEquivEqFalse : PrepConvStep
+  /-- ((¬ a) = False) ↔ (a = True) -/
   | validOfNotEqFalseEquivEqTrue : PrepConvStep
+  /-- (¬¬a) ↔ a -/
   | validOfNotNotEquiv : PrepConvStep
+  /-- ((¬ a) = b) ↔ (a = (¬ b)) -/
   | validOfNotEqEquivEqNot : PrepConvStep
+  /-- ((¬ a) = (¬ b)) ↔ (a = b) -/
   | validOfNotEqNotEquivEq : PrepConvStep
+  /-- (a ↔ b) ↔ (a = b) -/
   | validOfPropext : PrepConvStep
+  /-- Basic BitVec simplification operations -/
   | validOfPushBVCast : PrepConvStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
@@ -776,7 +790,7 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
         match s.beq s' with
         | false => .none
         | true => evalValidOfBVarLowers r lctx' pns'
-    
+
 @[reducible] def ConvStep.eval (r : RTable) : (cs : ConvStep) → EvalResult
 | .validOfHeadBeta pos =>
   match r.getValid pos with
@@ -862,7 +876,7 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
   | .none => .fail
 | .validOfCongrFunN pos rwFn n =>
   match r.getValid pos with
-  | .some (lctx, t) => 
+  | .some (lctx, t) =>
     match r.getValidEnsureLCtx lctx rwFn with
     | .some rwFnt =>
       match t.congrFunN? rwFnt n with
@@ -2225,7 +2239,7 @@ def ChkSteps.runFromBeginning (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : Chk
   Note : Using this theorem directly in the checker will cause
     performance issue, especially when there are a lot of
     `etom`s. This is probably caused by the type of `eV` in
-    `∃ eV` being dependent on the result of `ChkSteps.runFromBeginning` 
+    `∃ eV` being dependent on the result of `ChkSteps.runFromBeginning`
 -/
 theorem CheckerAux
   (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) :
