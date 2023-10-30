@@ -13,6 +13,10 @@ set_option auto.tptp.zeport.path "/home/indprinciple/Programs/zipperposition/por
 
 section ManualCheck
 
+  example : True := by (fail_if_success auto 👍); auto
+  private def sorryChk : False := by auto 👎
+  #print axioms sorryChk
+
   set_option auto.lamReif.prep.def false
 
   -- In `Checker Statistics`, check that the `assertions` field is `1`

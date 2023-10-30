@@ -75,6 +75,8 @@ where
     IO.Process.spawn {stdin := .piped, stdout := .piped, stderr := .piped,
                       cmd := path, args := args}
 
+axiom autoSMTSorry.{u} (α : Sort u) : α
+
 /-- Only put declarations in the query -/
 def querySolver (query : Array IR.SMT.Command) : MetaM (Option Expr) := do
   if !(auto.smt.get (← getOptions)) then
@@ -105,7 +107,8 @@ def querySolver (query : Array IR.SMT.Command) : MetaM (Option Expr) := do
     solver.kill
     trace[auto.smt.result] "{name} says Unsat, proof:\n {proof}\nstderr:\n{stderr}"
     if (auto.smt.trust.get (← getOptions)) then
-      return ← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []]
+      logWarning "Trusting SMT solvers. `autoSMTSorry` is used to discharge the goal."
+      return ← Meta.mkAppM ``autoSMTSorry #[Expr.const ``False []]
     else
       return .none
   | _ =>
