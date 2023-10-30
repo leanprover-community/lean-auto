@@ -259,9 +259,10 @@ def EqLift.default (β : Sort u) : EqLift β :=
   ⟨fun x y => GLift.up (@Eq β x y), fun _ _ => id, fun _ _ => id⟩
 
 theorem eqGLift_equiv (a b : α) : (GLift.up a = GLift.up b) = (a = b) := by
-  apply propext (Iff.intro ?mp ?mpr) <;> intro h
-  case mp => cases h; rfl
-  case mpr => cases h; rfl
+  simp
+
+theorem neGLift_equiv (a b : α) : (GLift.up a ≠ GLift.up b) = (a ≠ b) := by
+  simp
 
 @[reducible] def forallF {α : Sort u} (p : α → Sort v) := ∀ (x : α), p x
 

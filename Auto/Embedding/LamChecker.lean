@@ -589,6 +589,10 @@ inductive PrepConvStep where
   | validOfNotEqNotEquivEq : PrepConvStep
   /-- (a ↔ b) ↔ (a = b) -/
   | validOfPropext : PrepConvStep
+  /-- (a = b) ↔ (a = true ∨ b = false) ∧ (a = false ∨ b = true) -/
+  | validOfPropEq : PrepConvStep
+  /-- (a = b) ↔ (a = true ∨ b = true) ∧ (a = false ∨ b = false) -/
+  | validOfPropNe : PrepConvStep
   /-- Basic BitVec simplification operations -/
   | validOfPushBVCast : PrepConvStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
@@ -685,6 +689,8 @@ def PrepConvStep.toString : PrepConvStep → String
 | .validOfNotEqEquivEqNot => s!"validOfNotEqEquivEqNot"
 | .validOfNotEqNotEquivEq => s!"validOfNotEqNotEquivEq"
 | .validOfPropext => s!"validOfPropext"
+| .validOfPropEq => s!"validOfPropEq"
+| .validOfPropNe => s!"validOfPropNe"
 | .validOfPushBVCast => s!"validOfPushBVCast"
 
 def WFStep.toString : WFStep → String
@@ -1121,6 +1127,8 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
 | .validOfNotEqEquivEqNot => LamTerm.not_eq_equiv_eq_not?
 | .validOfNotEqNotEquivEq => LamTerm.not_eq_not_equiv_eq?
 | .validOfPropext => LamTerm.propext?
+| .validOfPropEq => LamTerm.propeq?
+| .validOfPropNe => LamTerm.propne?
 | .validOfPushBVCast => fun t => LamTerm.pushBVCast .none t
 
 @[reducible] def WFStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : WFStep) → EvalResult
@@ -2068,6 +2076,12 @@ theorem PrepConvStep.eval_correct (lval : LamValuation) :
 | .validOfPropext => And.intro
   LamGenConv.propext?
   (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_propext?)
+| .validOfPropEq => And.intro
+  LamGenConv.propeq?
+  (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_propeq?)
+| .validOfPropNe => And.intro
+  LamGenConv.propne?
+  (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_propne?)
 | .validOfPushBVCast => And.intro
   LamGenConv.pushBVCast
   (LamTerm.evarBounded_of_evarEquiv LamTerm.evarEquiv_pushBVCast)
