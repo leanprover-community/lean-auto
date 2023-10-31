@@ -589,9 +589,17 @@ inductive PrepConvStep where
   | validOfNotEqNotEquivEq : PrepConvStep
   /-- (a ↔ b) ↔ (a = b) -/
   | validOfPropext : PrepConvStep
-  /-- (a = b) ↔ (a = true ∨ b = false) ∧ (a = false ∨ b = true) -/
+  /-- (¬ (a ∧ b)) ↔ (¬ a ∨ ¬ b) -/
+  | validOfNotAndEquivNotOrNot : PrepConvStep
+  /-- (¬ (a ∨ b)) ↔ (¬ a ∧ ¬ b) -/
+  | validOfNotOrEquivNotAndNot : PrepConvStep
+  /-- (a → b) ↔ (¬ a ∨ b) -/
+  | validOfImpEquivNotOr : PrepConvStep
+  /-- (¬ (a → b)) ↔ (a ∧ ¬ b) -/
+  | validOfNotImpEquivAndNot : PrepConvStep
+  /-- (a = b) ↔ (a ∨ ¬ b) ∧ (¬ a ∨ b) -/
   | validOfPropEq : PrepConvStep
-  /-- (a = b) ↔ (a = true ∨ b = true) ∧ (a = false ∨ b = false) -/
+  /-- (a = b) ↔ (a ∨ b) ∧ (¬ a ∨ ¬ b) -/
   | validOfPropNe : PrepConvStep
   /-- Basic BitVec simplification operations -/
   | validOfPushBVCast : PrepConvStep
@@ -689,6 +697,10 @@ def PrepConvStep.toString : PrepConvStep → String
 | .validOfNotEqEquivEqNot => s!"validOfNotEqEquivEqNot"
 | .validOfNotEqNotEquivEq => s!"validOfNotEqNotEquivEq"
 | .validOfPropext => s!"validOfPropext"
+| .validOfNotAndEquivNotOrNot => s!"validOfNotAndEquivNotOrNot"
+| .validOfNotOrEquivNotAndNot => s!"validOfNotOrEquivNotAndNot"
+| .validOfImpEquivNotOr => s!"validOfImpEquivNotOr"
+| .validOfNotImpEquivAndNot => s!"validOfNotImpEquivAndNot"
 | .validOfPropEq => s!"validOfPropEq"
 | .validOfPropNe => s!"validOfPropNe"
 | .validOfPushBVCast => s!"validOfPushBVCast"
@@ -1127,6 +1139,10 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
 | .validOfNotEqEquivEqNot => LamTerm.not_eq_equiv_eq_not?
 | .validOfNotEqNotEquivEq => LamTerm.not_eq_not_equiv_eq?
 | .validOfPropext => LamTerm.propext?
+| .validOfNotAndEquivNotOrNot => LamTerm.not_and_equiv_not_or_not?
+| .validOfNotOrEquivNotAndNot => LamTerm.not_or_equiv_not_and_not?
+| .validOfImpEquivNotOr => LamTerm.imp_equiv_not_or?
+| .validOfNotImpEquivAndNot => LamTerm.not_imp_equiv_and_not?
 | .validOfPropEq => LamTerm.propeq?
 | .validOfPropNe => LamTerm.propne?
 | .validOfPushBVCast => fun t => LamTerm.pushBVCast .none t
@@ -2076,6 +2092,18 @@ theorem PrepConvStep.eval_correct (lval : LamValuation) :
 | .validOfPropext => And.intro
   LamGenConv.propext?
   (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_propext?)
+| .validOfNotAndEquivNotOrNot => And.intro
+  LamGenConv.not_and_equiv_not_or_not?
+  (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_not_and_equiv_not_or_not?)
+| .validOfNotOrEquivNotAndNot => And.intro
+  LamGenConv.not_or_equiv_not_and_not?
+  (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_not_or_equiv_not_and_not?)
+| .validOfImpEquivNotOr => And.intro
+  LamGenConv.imp_equiv_not_or?
+  (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_imp_equiv_not_or?)
+| .validOfNotImpEquivAndNot => And.intro
+  LamGenConv.not_imp_equiv_and_not?
+  (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_not_imp_equiv_and_not?)
 | .validOfPropEq => And.intro
   LamGenConv.propeq?
   (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_propeq?)
