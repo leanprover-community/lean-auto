@@ -33,10 +33,10 @@ def tokens := [
   "~", ",", "(", ")", "*", "!", "?", "^", ":", "[", "]", "!>", ".", "*"
 ] -- TODO: Add ?? and !!
 
-def tokenHashMap : HashSet String := 
+def tokenHashMap : HashSet String :=
   HashSet.empty.insertMany tokens
 
-def tokenPrefixes : HashSet String := 
+def tokenPrefixes : HashSet String :=
   HashSet.empty.insertMany $ tokens.bind (fun t => Id.run do
     let mut res := []
     let mut pref := ""
@@ -59,13 +59,13 @@ def addToCurrToken (char : Char) : TokenizerM Unit := do
 
 def getCurrToken : TokenizerM String := do
   return (← get).currToken
-  
+
 def addCurrToken : TokenizerM Unit := do
-  modify fun (s : State) => 
-    {s with 
+  modify fun (s : State) =>
+    {s with
       res := s.res.push $
-        match s.status with 
-        | .default => .op s.currToken 
+        match s.status with
+        | .default => .op s.currToken
         | .ident => .ident s.currToken
         | .string => .ident s.currToken
         | .comment => panic! s!"Cannot add comment as token"
@@ -75,7 +75,7 @@ def addCurrToken : TokenizerM Unit := do
 def finalizeToken : TokenizerM Unit := do
   if (← getStatus) == .string || (← getCurrToken) != "" then
     match ← getStatus with
-    | .default => 
+    | .default =>
       if tokenHashMap.contains (← getCurrToken)
       then addCurrToken
       else throw $ IO.userError s!"Invalid token: {(← getCurrToken)}"
@@ -150,7 +150,7 @@ def peek : ParserM Token := do
   return ts[i]!
 
 def peek? : ParserM (Option Token) := do
-  if ← isEOF then return none else return ← peek 
+  if ← isEOF then return none else return ← peek
 
 def next : ParserM Token := do
   let c ← peek
@@ -199,8 +199,8 @@ partial def parseSep (sep : Token) (p : ParserM α) : ParserM (List α) := do
     return [t]
 
 mutual
-partial def parseTerm (minbp : Nat := 0) : ParserM Term := do        
-  let lhs ← parseLhs 
+partial def parseTerm (minbp : Nat := 0) : ParserM Term := do
+  let lhs ← parseLhs
   let res ← addOpAndRhs lhs minbp
   return res
 
@@ -221,7 +221,7 @@ partial def parseLhs : ParserM Term := do
       let p ← next
       parseToken (.op ")")
       return ⟨p, []⟩
-    else      
+    else
     let lhs ← parseTerm 0
     parseToken (.op ")")
     return lhs
@@ -301,7 +301,7 @@ def parseCommand : ParserM Command := do
   | _ => throw $ IO.userError "Command '{cmd}' not supported"
 
 partial def parseCommands : ParserM (List Command) := do
-  if ← isEOF 
+  if ← isEOF
   then return []
   else
     let c ← parseCommand
@@ -313,76 +313,420 @@ def parse (s : String) : IO (List Command) := do
   return res.1
 
 open Embedding.Lam in
-partial def term2LamTerm : Term → Except String LamTerm := fun _ => sorry
--- | ⟨.ident "$i", []⟩ =>
---   .error "term2LamTerm :: Does not support iota"
--- | ⟨.ident "$tType", []⟩ => mkSort levelOne
--- | ⟨.ident "$o", []⟩ => .ok (.base .prop)
--- | ⟨.ident "$true", []⟩ => mkConst `True
--- | ⟨.ident "$false", []⟩ => mkConst `False
--- | ⟨.ident n, as⟩ => do
---   let some decl := (← getLCtx).findFromUserName? n
---     | throwError "Unknown variable name {n}"
---   mkAppN (mkFVar decl.fvarId) (← as.mapM toLeanExpr).toArray
--- | ⟨.op "!", body :: var :: tail⟩ =>
---   withVar var fun v => do
---     mkForallFVars #[v] (← toLeanExpr ⟨.op "!", body :: tail⟩)
--- | ⟨.op "!>", body :: var :: tail⟩ =>
---   withVar var fun v => do
---     mkForallFVars #[v] (← toLeanExpr ⟨.op "!>", body :: tail⟩)
--- | ⟨.op "^", body :: var :: tail⟩ =>
---   withVar var fun v => do
---     mkLambdaFVars #[v] (← toLeanExpr ⟨.op "^", body :: tail⟩)
--- | ⟨.op "?", body :: var :: tail⟩ =>
---   withVar var fun v => do
---     mkAppM `Exists #[← mkLambdaFVars #[v] (← toLeanExpr ⟨.op "?", body :: tail⟩)]
--- | ⟨.op "!", body :: []⟩ | ⟨.op "!>", body :: []⟩ | ⟨.op "^", body :: []⟩ | ⟨.op "?", body :: []⟩ =>
---   body.toLeanExpr
--- | ⟨.op "~", [a]⟩     => mkAppM `Not #[← a.toLeanExpr]
--- | ⟨.op "|", [a,b]⟩   => mkAppM `Or (← [a,b].mapM toLeanExpr).toArray
--- | ⟨.op "&", [a,b]⟩   => mkAppM `And (← [a,b].mapM toLeanExpr).toArray
--- | ⟨.op "<=>", [a,b]⟩ => mkAppM `Iff (← [a,b].mapM toLeanExpr).toArray
--- | ⟨.op "!=", [a,b]⟩  => mkAppM `Ne (← [a,b].mapM toLeanExpr).toArray
--- | ⟨.op "=", [a,b]⟩   => mkAppM `Eq (← [a,b].mapM toLeanExpr).toArray
--- | ⟨.op "~|", [a,b]⟩  => mkAppM ``Not #[← mkAppM `Or (← [a,b].mapM toLeanExpr).toArray]
--- | ⟨.op "~&", [a,b]⟩  => mkAppM ``Not #[← mkAppM `And (← [a,b].mapM toLeanExpr).toArray]
--- | ⟨.op "<~>", [a,b]⟩ => mkAppM ``Not #[← mkAppM `Iff (← [a,b].mapM toLeanExpr).toArray]
--- | ⟨.op "@", [a,b]⟩   => mkApp (← a.toLeanExpr) (← b.toLeanExpr)
--- | ⟨.op "=>", [a,b]⟩ | ⟨.op "<=", [b,a]⟩ => mkArrow (← a.toLeanExpr) (← b.toLeanExpr)
--- | ⟨.op "~", []⟩   => pure $ mkConst `Not
--- | ⟨.op "|", []⟩   => pure $ mkConst `Or
--- | ⟨.op "&", []⟩   => pure $ mkConst `And
--- | ⟨.op "<=>", []⟩ => pure $ mkConst `Iff
--- | ⟨.op "!=", []⟩  => pure $ mkConst `Ne
--- | ⟨.op "=", []⟩   => pure $ mkConst `Eq
--- | ⟨.op "~|", []⟩  => pure $ mkLambda `x .default (mkSort levelZero) $
---                        mkLambda `y .default (mkSort levelZero) $ 
---                          mkAppN (mkConst ``Not) #[mkAppN (mkConst ``Or) #[.bvar 1, .bvar 0]]
--- | ⟨.op "~&", []⟩  => pure $ mkLambda `x .default (mkSort levelZero) $
---                        mkLambda `y .default (mkSort levelZero) $ 
---                          mkAppN (mkConst ``Not) #[mkAppN (mkConst ``And) #[.bvar 1, .bvar 0]]
--- | ⟨.op "<~>", []⟩  => pure $ mkLambda `x .default (mkSort levelZero) $
---                        mkLambda `y .default (mkSort levelZero) $ 
---                          mkAppN (mkConst ``Not) #[mkAppN (mkConst ``Iff) #[.bvar 1, .bvar 0]]
--- | ⟨.op "=>", []⟩  => pure $ mkLambda `x .default (mkSort levelZero) $
---                        mkLambda `y .default (mkSort levelZero) $ 
---                          Lean.mkForall `i BinderInfo.default (.bvar 1) (.bvar 1)
--- | ⟨.op "<=", []⟩  => pure $ mkLambda `x .default (mkSort levelZero) $
---                        mkLambda `y .default (mkSort levelZero) $ 
---                          Lean.mkForall `i BinderInfo.default (.bvar 0) (.bvar 2)
--- | ⟨.op ">", [⟨.op "*", [a, b]⟩, c]⟩   => toLeanExpr ⟨.op ">", [a, ⟨.op ">", [b, c]⟩]⟩
--- | ⟨.op ">", [a, b]⟩ => mkArrow (← a.toLeanExpr) (← b.toLeanExpr)
--- | _ => .error "term2LamTerm :: Could not translate to Lean Expr: {repr t}"
--- where
---   withVar {α : Type _} (var : TPTP.Term) (k : Expr → MetaM α) : MetaM α := do
---     match var with
---     | ⟨.ident v, ty⟩ =>
---       let ty ← match ty with
---       | [ty] => toLeanExpr ty
---       | [] => pure $ mkConst `Iota
---       | _ => throwError "invalid bound var: {repr var}"
---       withLocalDeclD v ty k
---     | _ => throwError "invalid bound var: {repr var}"
+def ident2BaseSort (s : String) : Option LamBaseSort :=
+  match s with
+  | "s_nat"    => .some .nat
+  | "s_int"    => .some .int
+  | "s_string" => .some .string
+  | "s_empty"  => .some .empty
+  | _ =>
+    match s.take 4 with
+    | "s_bv" =>
+      match (s.drop 4).toNat? with
+      | .some n => .some (.bv n)
+      | .none   => .none
+    | _ => .none
+
+open Embedding.Lam in
+def ident2NatConst (s : String) : Option NatConst :=
+  match s with
+  | "t_nadd" => .some .nadd
+  | "t_nsub" => .some .nsub
+  | "t_nmul" => .some .nmul
+  | "t_ndiv" => .some .ndiv
+  | "t_nmod" => .some .nmod
+  | "t_nle"  => .some .nle
+  | "t_nlt"  => .some .nlt
+  | _ =>
+    match s.take 5 with
+    | "t_nat" =>
+      match (s.drop 5).toNat? with
+      | .some n => .some (.natVal n)
+      | .none   => .none
+    | _ => .none
+
+open Embedding.Lam in
+def ident2StringConst (s : String) : Option StringConst :=
+  match s with
+  | "t_slength"   => .some .slength
+  | "t_sapp"      => .some .sapp
+  | "t_sle"       => .some .sle
+  | "t_slt"       => .some .slt
+  | "t_sprefixof" => .some .sprefixof
+  | "t_srepall"   => .some .srepall
+  | _ =>
+    let foldFn (x : Option String) (y : String) : Option String :=
+      match x, y.toNat? with
+      | .some l, .some y' => .some (l.push (Char.ofNat y'))
+      | _,       _        => .none
+    match s.take 7, (((s.drop 7).splitOn "d").drop 1).foldl foldFn (.some "") with
+    | "t_sVal_", .some s => .some (.strVal s)
+    | _,         _       => .none
+
+open Embedding.Lam in
+def ident2IntConst (s : String) : Option IntConst :=
+  match s with
+  | "t_iofNat"   => .some .iofNat
+  | "t_inegSucc" => .some .inegSucc
+  | "t_ineg"     => .some .ineg
+  | "t_iabs"     => .some .iabs
+  | "t_iadd"     => .some .iadd
+  | "t_isub"     => .some .isub
+  | "t_imul"     => .some .imul
+  | "t_idiv"     => .some .idiv
+  | "t_imod"     => .some .imod
+  | "t_iediv"    => .some .iediv
+  | "t_iemod"    => .some .iemod
+  | "t_ile"      => .some .ile
+  | "t_ilt"      => .some .ilt
+  | _ =>
+    match s.take 7 with
+    | "t_int_o" =>
+      match (s.drop 7).toNat? with
+      | .some n => .some (.intVal (.ofNat n))
+      | .none   => .none
+    | "t_int_n" =>
+      match (s.drop 7).toNat? with
+      | .some n => .some (.intVal (.negSucc n))
+      | .none   => .none
+    | _         => .none
+
+open Embedding.Lam in
+def ident2BitVecConst (s : String) : Option BitVecConst :=
+  match s.take 7 with
+  | "t_bvVal" =>
+    match (s.drop 7).splitOn "_" with
+    | ["", ns, is] =>
+      match ns.toNat?, is.toNat? with
+      | .some n, .some i => .some (.bvVal n i)
+      | _,       _       => .none
+    | _ => .none
+  | "t_bvofN" =>
+    match s.take 10 == "t_bvofNat_", (s.drop 10).toNat? with
+    | true, .some n => .some (.bvofNat n)
+    | _,    _       => .none
+  | "t_bvtoN" =>
+    match s.take 10 == "t_bvtoNat_", (s.drop 10).toNat? with
+    | true, .some n => .some (.bvtoNat n)
+    | _,    _       => .none
+  | "t_bvofI" =>
+    match s.take 10 == "t_bvofInt_", (s.drop 10).toNat? with
+    | true, .some n => .some (.bvofInt n)
+    | _,    _       => .none
+  | "t_bvtoI" =>
+    match s.take 10 == "t_bvtoInt_", (s.drop 10).toNat? with
+    | true, .some n => .some (.bvtoInt n)
+    | _,    _       => .none
+  | "t_bvmsb" =>
+    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    | '_', .some n => .some (.bvmsb n)
+    | _,   _       => .none
+  | "t_bvadd" =>
+    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    | '_', .some n => .some (.bvadd n)
+    | _,   _       => .none
+  | "t_bvsub" =>
+    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    | '_', .some n => .some (.bvsub n)
+    | _,   _       => .none
+  | "t_bvneg" =>
+    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    | '_', .some n => .some (.bvneg n)
+    | _,   _       => .none
+  | "t_bvabs" =>
+    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    | '_', .some n => .some (.bvabs n)
+    | _,   _       => .none
+  | "t_bvmul" =>
+    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    | '_', .some n => .some (.bvmul n)
+    | _,   _       => .none
+  | "t_bvudi" =>
+    match s.take 9, (s.drop 8).toNat? with
+    | "t_bvudiv_", .some n => .some (.bvudiv n)
+    | _,           _       => .none
+  | "t_bvure" =>
+    match s.take 9, (s.drop 8).toNat? with
+    | "t_bvurem_", .some n => .some (.bvurem n)
+    | _,           _       => .none
+  | "t_bvsdi" =>
+    match s.take 9, (s.drop 8).toNat? with
+    | "t_bvsdiv_", .some n => .some (.bvsdiv n)
+    | _,           _       => .none
+  | "t_bvsre" =>
+    match s.take 9, (s.drop 8).toNat? with
+    | "t_bvsrem_", .some n => .some (.bvsrem n)
+    | _,           _       => .none
+  | "t_bvsmo" =>
+    match s.take 9, (s.drop 8).toNat? with
+    | "t_bvsmod_", .some n => .some (.bvsmod n)
+    | _,           _       => .none
+  | "t_bvult" =>
+    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    | '_', .some n => .some (.bvult n)
+    | _,   _       => .none
+  | "t_bvule" =>
+    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    | '_', .some n => .some (.bvule n)
+    | _,   _       => .none
+  | "t_bvslt" =>
+    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    | '_', .some n => .some (.bvslt n)
+    | _,   _       => .none
+  | "t_bvsle" =>
+    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    | '_', .some n => .some (.bvsle n)
+    | _,   _       => .none
+  | "t_bvand" =>
+    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    | '_', .some n => .some (.bvand n)
+    | _,   _       => .none
+  | "t_bvor_" =>
+    match (s.drop 8).toNat? with
+    | .some n => .some (.bvor n)
+    | _       => .none
+  | "t_bvxor" =>
+    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    | '_', .some n => .some (.bvxor n)
+    | _,   _       => .none
+  | "t_bvnot" =>
+    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    | '_', .some n => .some (.bvnot n)
+    | _,   _       => .none
+  | "t_bvshl" =>
+    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    | '_', .some n => .some (.bvshl n)
+    | _,   _       => .none
+  | "t_bvlsh" =>
+    match s.take 9, (s.drop 8).toNat? with
+    | "t_bvlshr_", .some n => .some (.bvlshr n)
+    | _,           _       => .none
+  | "t_bvash" =>
+    match s.take 9, (s.drop 8).toNat? with
+    | "t_bvashr_", .some n => .some (.bvashr n)
+    | _,           _       => .none
+  | "t_bvsmt" =>
+    match (s.drop 7).take 4 with
+    | "shl_" =>
+      match (s.drop 11).toNat? with
+      | .some n => .some (.bvsmtshl n)
+      | .none   => .none
+    | _ =>
+      match (s.drop 7).take 5, (s.drop 12).toNat? with
+      | "lshr", .some n => .some (.bvsmtlshr n)
+      | "ashr", .some n => .some (.bvsmtashr n)
+      | _,      _       => .none
+  | "t_bvapp" =>
+    match s.take 11, (s.drop 11).splitOn "_" with
+    | "t_bvappend_", [ns, ms] =>
+      match ns.toNat?, ms.toNat? with
+      | .some n, .some m => .some (.bvappend n m)
+      | _,       _       => .none
+    | _,             _        => .none
+  | "t_bvext" =>
+    match s.take 12, (s.drop 12).splitOn "_" with
+    | "t_bvextract_", [ns, hs, ls] =>
+      match ns.toNat?, hs.toNat?, ls.toNat? with
+      | .some n, .some h, .some l => .some (.bvextract n h l)
+      | _,       _,       _       => .none
+    | _,              _            => .none
+  | "t_bvrep" =>
+    match s.take 11, (s.drop 11).splitOn "_" with
+    | "t_bvrepeat_", [ws, is] =>
+      match ws.toNat?, is.toNat? with
+      | .some w, .some i => .some (.bvrepeat w i)
+      | _,       _       => .none
+    | _,             _        => .none
+  | "t_bvzer" =>
+    match s.take 15, (s.drop 15).splitOn "_" with
+    | "t_bvzeroExtend_", [ws, vs] =>
+      match ws.toNat?, vs.toNat? with
+      | .some w, .some v => .some (.bvzeroExtend w v)
+      | _,       _       => .none
+    | _,             _        => .none
+  | "t_bvsig" =>
+    match s.take 15, (s.drop 15).splitOn "_" with
+    | "t_bvsignExtend_", [ws, vs] =>
+      match ws.toNat?, vs.toNat? with
+      | .some w, .some v => .some (.bvsignExtend w v)
+      | _,       _       => .none
+    | _,             _        => .none
+  | _ => .none
+
+open Embedding.Lam in
+inductive LamConstr where
+  | error : String → LamConstr
+  | kind  : LamConstr
+  | sort  : LamSort → LamConstr
+  | term  : LamSort → LamTerm → LamConstr
+  deriving Inhabited, Hashable, BEq
+
+open Embedding.Lam in
+def LamConstr.ofBaseTerm (ltv : LamTyVal) (b : LamBaseTerm) : LamConstr :=
+  .term (b.lamCheck ltv) (.base b)
+
+open Embedding.Lam in
+def ident2LamConstr (ltv : LamTyVal) (s : String) : LamConstr :=
+  match s.get ⟨0⟩ with
+  | 's' =>
+    match ident2BaseSort s with
+    | .some b => .sort (.base b)
+    | _       => .error s!"Unknown identifier {s}"
+  | 't' =>
+    match s.take 3 with
+    | "t_a" =>
+      match (s.drop 3).toNat? with
+      | .some n => .term (ltv.lamVarTy n) (.atom n)
+      | .none   => .error s!"Unknown identifier {s}"
+    | "t_e" =>
+      match (s.drop 3).toNat? with
+      | .some n => .term (ltv.lamEVarTy n) (.etom n)
+      | .none   => .error s!"Unknown identifier {s}"
+    | "t_n" =>
+      match ident2NatConst s with
+      | .some n => .term n.lamCheck (.base (.ncst n))
+      | .none   => .error s!"Unknown identifier {s}"
+    | "t_i" =>
+      match ident2IntConst s with
+      | .some i => .term i.lamCheck (.base (.icst i))
+      | .none   => .error s!"Unknown identifier {s}"
+    | "t_s" =>
+      match ident2StringConst s with
+      | .some s => .term s.lamCheck (.base (.scst s))
+      | .none   => .error s!"Unknown identifier {s}"
+    | "t_bv" =>
+      match ident2BitVecConst s with
+      | .some bv => .term bv.lamCheck (.base (.bvcst bv))
+      | .none   => .error s!"Unknown identifier {s}"
+    | _ => .error s!"Unknown identifier {s}"
+  | _   => .error s!"Unknown identifier {s}"
+
+open Embedding.Lam in
+partial def term2LamTerm (ltv : LamTyVal) (t : Term) (lctx : List LamSort := []) : LamConstr :=
+  match t with
+  | ⟨.ident "$i", []⟩ => .error "Does not have iota"
+  | ⟨.ident "$tType", []⟩ => .kind
+  | ⟨.ident "$o", []⟩ => .sort (.base .prop)
+  | ⟨.ident "$true", []⟩ => .term (.base .prop) (.base .trueE)
+  | ⟨.ident "$false", []⟩ => .term (.base .prop) (.base .falseE)
+  | ⟨.ident ids, as⟩ =>
+    match ids.get ⟨0⟩ with
+    | 'X' =>
+      match (ids.drop 1).toNat? with
+      | .some n =>
+        match lctx[n]? with
+        | .some s => .term s (.bvar (lctx.length - n - 1))
+        | .none   => .error "Loose Bound Variable"
+      | .none => .error s!"Unknown identifier{ids}"
+    | _   => ident2LamConstr ltv ids
+  | ⟨.op "!", body :: var :: tail⟩ =>
+    match term2LamTerm ltv var lctx with
+    | .sort s =>
+      match term2LamTerm ltv ⟨.op "!", body :: tail⟩ (s :: lctx) with
+      | .term (.base .prop) body => .term (.base .prop) (.mkForallEF s body)
+      | _ => .error s!"Unexpected term {repr t}"
+    | _ => .error s!"Unexpected term {repr t}"
+  | ⟨.op "!>", body :: var :: tail⟩ =>
+    match term2LamTerm ltv var lctx with
+    | .sort s =>
+      match term2LamTerm ltv ⟨.op "!>", body :: tail⟩ (s :: lctx) with
+      | .term (.base .prop) body => .term (.base .prop) (.mkForallEF s body)
+      | _ => .error s!"Unexpected term {repr t}"
+    | _ => .error s!"Unexpected term {repr t}"
+  | ⟨.op "^", body :: var :: tail⟩ =>
+    match term2LamTerm ltv var lctx with
+    | .sort s =>
+      match term2LamTerm ltv ⟨.op "^", body :: tail⟩ (s :: lctx) with
+      | .term resTy body => .term (.func s resTy) (.lam s body)
+      | _ => .error s!"Unexpected term {repr t}"
+    | _ => .error s!"Unexpected term {repr t}"
+  | ⟨.op "?", body :: var :: tail⟩ =>
+    match term2LamTerm ltv var lctx with
+    | .sort s =>
+      match term2LamTerm ltv ⟨.op "?", body :: tail⟩ (s :: lctx) with
+      | .term (.base .prop) body => .term (.base .prop) (.mkExistEF s body)
+      | _ => .error s!"Unexpected term {repr t}"
+    | _ => .error s!"Unexpected term {repr t}"
+  | ⟨.op "!", body :: []⟩ | ⟨.op "!>", body :: []⟩ | ⟨.op "^", body :: []⟩ | ⟨.op "?", body :: []⟩ =>
+    term2LamTerm ltv body lctx
+  | ⟨.op "~", [a]⟩     =>
+    match term2LamTerm ltv a lctx with
+    | .term (.base .prop) la => .term (.base .prop) (.mkNot la)
+    | _ => .error s!"Unexpected term {repr t}"
+  | ⟨.op "|", [a,b]⟩   =>
+    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    | .term (.base .prop) la, .term (.base .prop) lb => .term (.base .prop) (.mkOr la lb)
+    | _, _ => .error "Unexpected term {repr t}"
+  | ⟨.op "&", [a,b]⟩   =>
+    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    | .term (.base .prop) la, .term (.base .prop) lb => .term (.base .prop) (.mkAnd la lb)
+    | _, _ => .error "Unexpected term {repr t}"
+  | ⟨.op "<=>", [a,b]⟩ =>
+    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    | .term (.base .prop) la, .term (.base .prop) lb => .term (.base .prop) (.mkIff la lb)
+    | _, _ => .error "Unexpected term {repr t}"
+  | ⟨.op "!=", [a,b]⟩  =>
+    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    | .term s₁ la, .term s₂ lb =>
+      match s₁.beq s₂ with
+      | true => .term (.base .prop) (.mkNot (.mkEq s₁ la lb))
+      | false => .error "Application type mismatch in {repr t}"
+    | _, _ => .error "Unexpected term {repr t}"
+  | ⟨.op "=", [a,b]⟩   =>
+    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    | .term s₁ la, .term s₂ lb =>
+      match s₁.beq s₂ with
+      | true => .term (.base .prop) (.mkEq s₁ la lb)
+      | false => .error "Application type mismatch in {repr t}"
+    | _, _ => .error "Unexpected term {repr t}"
+  | ⟨.op "~|", [a,b]⟩  =>
+    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    | .term (.base .prop) la, .term (.base .prop) lb =>
+      .term (.base .prop) (.mkNot (.mkOr la lb))
+    | _, _ => .error "Unexpected term {repr t}"
+  | ⟨.op "~&", [a,b]⟩  =>
+    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    | .term (.base .prop) la, .term (.base .prop) lb =>
+      .term (.base .prop) (.mkNot (.mkAnd la lb))
+    | _, _ => .error "Unexpected term {repr t}"
+  | ⟨.op "<~>", [a,b]⟩ =>
+    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    | .term (.base .prop) la, .term (.base .prop) lb =>
+      .term (.base .prop) (.mkNot (.mkIff la lb))
+    | _, _ => .error "Unexpected term {repr t}"
+  | ⟨.op "@", [a,b]⟩   =>
+    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    | .term (.func argTy resTy) la, .term argTy' lb =>
+      match argTy.beq argTy' with
+      | true => .term resTy (.app argTy la lb)
+      | false => .error "Application type mismatch in {repr t}"
+    | _, _ => .error "Unexpected term {repr t}"
+  | ⟨.op "=>", [a,b]⟩ | ⟨.op "<=", [b,a]⟩ =>
+    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    | .term (.base .prop) la, .term (.base .prop) lb => .term (.base .prop) (.mkImp la lb)
+    | _, _ => .error "Unexpected term {repr t}"
+  | ⟨.op "~", []⟩   => .ofBaseTerm ltv .not
+  | ⟨.op "|", []⟩   => .ofBaseTerm ltv .or
+  | ⟨.op "&", []⟩   => .ofBaseTerm ltv .and
+  | ⟨.op "<=>", []⟩ => .ofBaseTerm ltv .iff
+  | ⟨.op "!=", []⟩  => .error "Type inference for `!=` is not implemented"
+  | ⟨.op "=", []⟩   => .error "Type inference for `=` is not implemented"
+  | ⟨.op "~|", []⟩  => .term (.func (.base .prop) (.func (.base .prop) (.base .prop)))
+    (.lam (.base .prop) (.lam (.base .prop) (.mkNot (.mkOr (.bvar 1) (.bvar 0)))))
+  | ⟨.op "~&", []⟩  => .term (.func (.base .prop) (.func (.base .prop) (.base .prop)))
+    (.lam (.base .prop) (.lam (.base .prop) (.mkNot (.mkAnd (.bvar 1) (.bvar 0)))))
+  | ⟨.op "<~>", []⟩ => .term (.func (.base .prop) (.func (.base .prop) (.base .prop)))
+    (.lam (.base .prop) (.lam (.base .prop) (.mkNot (.mkIff (.bvar 1) (.bvar 0)))))
+  | ⟨.op "=>", []⟩  => .ofBaseTerm ltv .imp
+  | ⟨.op "<=", []⟩  => .term (.func (.base .prop) (.func (.base .prop) (.base .prop)))
+    (.lam (.base .prop) (.lam (.base .prop) (.mkImp (.bvar 0) (.bvar 1))))
+  | ⟨.op ">", [⟨.op "*", [a, b]⟩, c]⟩   =>
+    term2LamTerm ltv ⟨.op ">", [a, ⟨.op ">", [b, c]⟩]⟩ lctx
+  | ⟨.op ">", [a, b]⟩ =>
+    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    | .sort sa, .sort sb => .sort (.func sa sb)
+    | _, _ => .error "Unexpected term {repr t}"
+  | _ => .error "term2LamTerm :: Could not translate to Lean Expr: {repr t}"
 
 open Meta
 
@@ -420,7 +764,7 @@ partial def resolveIncludes (cmds : List Command) (dir : System.FilePath) : IO (
       let cmds' ← resolveIncludes cmds' dir
       for cmd' in cmds' do
         res := res.push cmd'
-    | _ => res := res.push cmd   
+    | _ => res := res.push cmd
   return res.toList
 
 abbrev Formulas := Array (Expr × Expr × Array Name)
@@ -429,7 +773,7 @@ abbrev Formulas := Array (Expr × Expr × Array Name)
 --   match cmds with
 --   | ⟨cmd, args⟩ :: cs =>
 --     match cmd with
---     | "thf" | "tff" | "cnf" | "fof" => 
+--     | "thf" | "tff" | "cnf" | "fof" =>
 --       match args with
 --       | [_, ⟨.ident "type", _⟩, ⟨.ident id, [ty]⟩]  =>
 --         withLocalDeclD id (← toLeanExpr ty) fun _ => do
@@ -451,26 +795,26 @@ partial def collectConstantsOfCmd (topLevel : Bool) (acc : HashMap String Expr) 
   | ⟨.ident n, as⟩ => do
     let acc ← as.foldlM (collectConstantsOfCmd false) acc
     if n.data[0]!.isLower && n.data[0]! != '$' && !acc.contains n
-    then 
-      let ty ← as.foldlM 
+    then
+      let ty ← as.foldlM
         (fun acc _ => mkArrow (mkConst `Iota) acc)
         (if topLevel then mkSort levelZero else mkConst `Iota)
       let acc := acc.insert n ty
       return acc
-    else 
+    else
       return acc
   | ⟨.op "!", body :: _⟩ | ⟨.op "?", body :: _⟩ =>
     collectConstantsOfCmd topLevel acc body
   | ⟨.op "~", as⟩
   | ⟨.op "|", as⟩
   | ⟨.op "&", as⟩
-  | ⟨.op "<=>", as⟩ 
-  | ⟨.op "=>", as⟩ | ⟨.op "<=", as⟩ 
-  | ⟨.op "~|", as⟩ 
-  | ⟨.op "~&", as⟩  
-  | ⟨.op "<~>", as⟩ => 
+  | ⟨.op "<=>", as⟩
+  | ⟨.op "=>", as⟩ | ⟨.op "<=", as⟩
+  | ⟨.op "~|", as⟩
+  | ⟨.op "~&", as⟩
+  | ⟨.op "<~>", as⟩ =>
     as.foldlM (collectConstantsOfCmd topLevel) acc
-  | ⟨.op "!=", as⟩ 
+  | ⟨.op "!=", as⟩
   | ⟨.op "=", as⟩ =>
     as.foldlM (collectConstantsOfCmd false) acc
   | _ => throwError "Failed to collect constants: {repr t}"
@@ -513,7 +857,7 @@ def unsatCore (str : String) : IO (Array String) := do
 --   let r ← toLeanExpr t
 --   trace[Meta.debug] "{r}"
 --   return r
--- 
+--
 -- set_option trace.Meta.debug true
 -- #eval toLeanExpr "?[a : $tType, b : $tType]: a = b"
 -- #eval toLeanExpr "![x : $tType]: ![a : x]: a != a"

@@ -17,14 +17,14 @@ def lam2TH0 (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort) (facts : Arra
      "thf(sortdecl_int, type, s_int: $tType).",
      "thf(sortdecl_string, type, s_string: $tType).",
      "thf(sortdecl_empty, type, s_empty: $tType)."] ++
-    bvLengthHs.toList.map (fun l => s!"thf(sortdecl_bv{l}, type, s_bv{l}: $tType).") ++ 
+    bvLengthHs.toList.map (fun l => s!"thf(sortdecl_bv{l}, type, s_bv{l}: $tType).") ++
     typeHs.toList.map (fun i => s!"thf(sortdecl_{i}, type, s_a{i}: $tType).")
   let types :=
     ncHs.toList.map (fun nc => s!"thf(typedecl_icst_{transNatConst nc}, type, {transNatConst nc}: {transNatConstSort nc}).") ++
     icHs.toList.map (fun ic => s!"thf(typedecl_icst_{transIntConst ic}, type, {transIntConst ic}: {transIntConstSort ic}).") ++
     scHs.toList.map (fun sc => s!"thf(typedecl_icst_{transStringConst sc}, type, {transStringConst sc}: {transStringConstSort sc}).") ++
     bvHs.toList.map (fun bvc => s!"thf(typedecl_bv{transBitVecConst bvc}, type, t_bv{transBitVecConst bvc}: {transBitVecConstSort bvc}).") ++
-    (← termHs.toList.mapM (fun i => do
+     (← termHs.toList.mapM (fun i => do
       let .some s := lamVarTy.get? i
         | throwError "lam2TH0 :: Unexpected error"
       return s!"thf(typedecl_t_a{i}, type, t_a{i}: {transLamSort s}).")) ++

@@ -58,8 +58,12 @@ def transNatConst : NatConst → String
 
 def transNatConstSort (nc : NatConst) := transLamSort nc.lamCheck
 
+def transIntVal : Int → String
+| .ofNat n => s!"o{n}"
+| .negSucc n => s!"n{n}"
+
 def transIntConst : IntConst → String
-| .intVal n => s!"t_int{n}"
+| .intVal n => "t_int_" ++ transIntVal n
 | .iofNat   => "t_iofNat"
 | .inegSucc => "t_inegSucc"
 | .ineg     => "t_ineg"
@@ -76,14 +80,11 @@ def transIntConst : IntConst → String
 
 def transIntConstSort (ic : IntConst) := transLamSort ic.lamCheck
 
-def transChar (c : Char) : String :=
-  "x" ++ String.mk (Nat.toDigits 16 c.toNat)
-
 def transString (s : String) : String :=
-  String.join (s.data.map transChar)
+  String.join (s.data.map (fun c => s!"d{c.toNat}"))
 
 def transStringConst : StringConst → String
-| .strVal s  => transString s
+| .strVal s  => "t_sVal_" ++ transString s
 | .slength   => "t_slength"
 | .sapp      => "t_sapp"
 | .sle       => "t_sle"
