@@ -10,6 +10,8 @@ example (a : Nat) : a = a := by auto
 
 example : nat_lit 2 = 2 := by auto
 
+example : max 3 4 = 4 ∧ min 1 2 = 1 := by auto
+
 example : (2 : Int) = ((nat_lit 2) : Int) := by auto
 
 example {α β : Type} (f : α → Nat → β → α → Nat) :

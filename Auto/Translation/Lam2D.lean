@@ -144,6 +144,8 @@ def interpNatConstAsUnlifted : NatConst → Expr
 | .nmod     => .const ``Nat.mod []
 | .nle      => .const ``Nat.le []
 | .nlt      => .const ``Nat.lt []
+| .nmax     => .const ``Nat.max []
+| .nmin     => .const ``Nat.min []
 
 open Embedding in
 def interpIntConstAsUnlifted : IntConst → Expr

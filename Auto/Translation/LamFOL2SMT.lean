@@ -118,6 +118,8 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .ncst .nmod => return .qStrApp "iemod" #[arg1, arg2]
 | .ncst .nle  => return .qStrApp "<=" #[arg1, arg2]
 | .ncst .nlt  => return .qStrApp "<" #[arg1, arg2]
+| .ncst .nmax => return .qStrApp "ite" #[.qStrApp "<=" #[arg1, arg2], arg2, arg1]
+| .ncst .nmin => return .qStrApp "ite" #[.qStrApp "<=" #[arg1, arg2], arg1, arg2]
 | .icst .iadd => return .qStrApp "+" #[arg1, arg2]
 | .icst .isub => return .qStrApp "-" #[arg1, arg2]
 | .icst .imul => return .qStrApp "*" #[arg1, arg2]

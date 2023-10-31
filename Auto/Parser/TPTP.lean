@@ -337,6 +337,8 @@ def ident2NatConst (s : String) : Option NatConst :=
   | "t_nmod" => .some .nmod
   | "t_nle"  => .some .nle
   | "t_nlt"  => .some .nlt
+  | "t_nmax" => .some .nmax
+  | "t_nmin" => .some .nmin
   | _ =>
     match s.take 5 with
     | "t_nat" =>

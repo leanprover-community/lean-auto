@@ -58,6 +58,12 @@ def nleLift.{u} (m n : GLift.{1, u} Nat) :=
 def nltLift.{u} (m n : GLift.{1, u} Nat) :=
   GLift.up (Nat.lt m.down n.down)
 
+def nmaxLift.{u} (m n : GLift.{1, u} Nat) :=
+  GLift.up (Nat.max m.down n.down)
+
+def nminLift.{u} (m n : GLift.{1, u} Nat) :=
+  GLift.up (Nat.min m.down n.down)
+
 def iofNatLift.{u} (m : GLift.{1, u} Nat) :=
   GLift.up (Int.ofNat m.down)
 

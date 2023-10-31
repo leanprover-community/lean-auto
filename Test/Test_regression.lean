@@ -476,6 +476,8 @@ section Adhoc
   -- Nat
   example (_ : ∃ b, !(!b) ≠ b) : False := by auto
 
+  example (a b : Nat) : max a b = max a b ∧ min a b = min a b := by auto
+
   example (a b c : Nat) : Nat.zero = 0 ∧ 3 = nat_lit 3 ∧ (a = b ↔ b = a) ∧ Nat.succ c = c + 1 := by auto
 
   example : Nat.succ x = x + 1 := by auto

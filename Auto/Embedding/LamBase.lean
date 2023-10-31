@@ -495,13 +495,8 @@ def BoolConst.LamWF.ofCheck (H : b.lamCheck = s) : LamWF b s := by
 
 inductive NatConst
   | natVal (n : Nat)
-  | nadd
-  | nsub
-  | nmul
-  | ndiv
-  | nmod
-  | nle
-  | nlt
+  | nadd | nsub | nmul | ndiv | nmod
+  | nle | nlt | nmax | nmin
 deriving Inhabited, Hashable, Lean.ToExpr
 
 def NatConst.reprPrec (nc : NatConst) (n : Nat) :=
@@ -515,6 +510,8 @@ def NatConst.reprPrec (nc : NatConst) (n : Nat) :=
     | .nmod     => f!".nmod"
     | .nle      => f!".nle"
     | .nlt      => f!".nlt"
+    | .nmax     => f!".nmax"
+    | .nmin     => f!".nmin"
   if n == 0 then
     f!"Auto.Embedding.Lam.NatConst" ++ s
   else
@@ -532,6 +529,8 @@ def NatConst.toString : NatConst → String
 | .nmod     => "%"
 | .nle      => "≤"
 | .nlt      => "<"
+| .nmax     => "nmax"
+| .nmin     => "nmin"
 
 instance : ToString NatConst where
   toString := NatConst.toString
@@ -545,6 +544,8 @@ def NatConst.beq : NatConst → NatConst → Bool
 | .nmod,     .nmod  => true
 | .nle,      .nle   => true
 | .nlt,      .nlt   => true
+| .nmax,     .nmax  => true
+| .nmin,     .nmin  => true
 | _,         _      => false
 
 instance : BEq NatConst where
@@ -570,6 +571,8 @@ def NatConst.lamCheck : NatConst → LamSort
 | .nmod     => .func (.base .nat) (.func (.base .nat) (.base .nat))
 | .nle      => .func (.base .nat) (.func (.base .nat) (.base .prop))
 | .nlt      => .func (.base .nat) (.func (.base .nat) (.base .prop))
+| .nmax     => .func (.base .nat) (.func (.base .nat) (.base .nat))
+| .nmin     => .func (.base .nat) (.func (.base .nat) (.base .nat))
 
 inductive NatConst.LamWF : NatConst → LamSort → Type
   | ofNatVal n : LamWF (.natVal n) (.base .nat)
@@ -580,6 +583,8 @@ inductive NatConst.LamWF : NatConst → LamSort → Type
   | ofNmod     : LamWF .nmod (.func (.base .nat) (.func (.base .nat) (.base .nat)))
   | ofNle      : LamWF .nle (.func (.base .nat) (.func (.base .nat) (.base .prop)))
   | ofNlt      : LamWF .nlt (.func (.base .nat) (.func (.base .nat) (.base .prop)))
+  | ofNmax     : LamWF .nmax (.func (.base .nat) (.func (.base .nat) (.base .nat)))
+  | ofNmin     : LamWF .nmin (.func (.base .nat) (.func (.base .nat) (.base .nat)))
 
 def NatConst.LamWF.unique {n : NatConst} {s₁ s₂ : LamSort}
   (nwf₁ : LamWF n s₁) (nwf₂ : LamWF n s₂) : s₁ = s₂ ∧ HEq nwf₁ nwf₂ := by
@@ -594,6 +599,8 @@ def NatConst.LamWF.ofNatConst : (n : NatConst) → (s : LamSort) × NatConst.Lam
 | .nmod     => ⟨.func (.base .nat) (.func (.base .nat) (.base .nat)), .ofNmod⟩
 | .nle      => ⟨.func (.base .nat) (.func (.base .nat) (.base .prop)), .ofNle⟩
 | .nlt      => ⟨.func (.base .nat) (.func (.base .nat) (.base .prop)), .ofNlt⟩
+| .nmax     => ⟨.func (.base .nat) (.func (.base .nat) (.base .nat)), .ofNmax⟩
+| .nmin     => ⟨.func (.base .nat) (.func (.base .nat) (.base .nat)), .ofNmin⟩
 
 def NatConst.lamWF_complete (wf : LamWF n s) : LamWF.ofNatConst n = ⟨s, wf⟩ := by
   cases wf <;> rfl
@@ -1273,6 +1280,8 @@ def LamBaseTerm.ndiv' := LamBaseTerm.ncst .ndiv
 def LamBaseTerm.nmod' := LamBaseTerm.ncst .nmod
 def LamBaseTerm.nle' := LamBaseTerm.ncst .nle
 def LamBaseTerm.nlt' := LamBaseTerm.ncst .nlt
+def LamBaseTerm.nmax' := LamBaseTerm.ncst .nmax
+def LamBaseTerm.nmin' := LamBaseTerm.ncst .nmin
 def LamBaseTerm.intVal' (i : Int) := LamBaseTerm.icst (.intVal i)
 def LamBaseTerm.iofNat' := LamBaseTerm.icst .iofNat
 def LamBaseTerm.inegSucc' := LamBaseTerm.icst .inegSucc
@@ -1603,6 +1612,8 @@ def LamBaseTerm.LamWF.ofNdiv' {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNdi
 def LamBaseTerm.LamWF.ofNmod' {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNmod
 def LamBaseTerm.LamWF.ofNle' {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNle
 def LamBaseTerm.LamWF.ofNlt' {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNlt
+def LamBaseTerm.LamWF.ofNmax' {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNmax
+def LamBaseTerm.LamWF.ofNmin' {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNmin
 def LamBaseTerm.LamWF.ofIntVal' {ltv : LamTyVal} (n : Nat) := LamWF.ofIcst (ltv:=ltv) (.ofIntVal n)
 def LamBaseTerm.LamWF.ofIOfNat' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIOfNat
 def LamBaseTerm.LamWF.ofINegSucc' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofINegSucc
@@ -1774,6 +1785,8 @@ def NatConst.interp (tyVal : Nat → Type u) : (n : NatConst) → n.lamCheck.int
 | .nmod     => nmodLift
 | .nle      => nleLift
 | .nlt      => nltLift
+| .nmax     => nmaxLift
+| .nmin     => nminLift
 
 def NatConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF i s) → s.interp tyVal
 | .ofNatVal n => GLift.up n
@@ -1784,6 +1797,8 @@ def NatConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF i s) → s.int
 | .ofNmod     => nmodLift
 | .ofNle      => nleLift
 | .ofNlt      => nltLift
+| .ofNmax     => nmaxLift
+| .ofNmin     => nminLift
 
 theorem NatConst.LamWF.interp_lvalIrrelevance
   (tyVal₁ tyVal₂ : Nat → Type u) (ncwf₁ : LamWF n₁ s₁) (ncwf₂ : LamWF n₂ s₂)

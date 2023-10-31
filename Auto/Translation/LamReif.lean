@@ -1144,6 +1144,8 @@ def newTermExpr (e : Expr) : ReifM LamTerm := do
 -- Auxiliary definitions for reification
 abbrev Nat.ge (x y : Nat) := Nat.le y x
 abbrev Nat.gt (x y : Nat) := Nat.lt y x
+abbrev Nat.max (x y : Nat) : Nat := Max.max x y
+abbrev Nat.min (x y : Nat) : Nat := Min.min x y
 abbrev Int.ge (a b : Int) := Int.le b a
 abbrev Int.gt (a b : Int) := Int.lt b a
 abbrev String.ge (a b : String) : Prop := b = a ∨ b < a
@@ -1283,6 +1285,20 @@ def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
           return .some (.bvugt' n)
         if (← Meta.isDefEqD e (.app (.const ``BitVec.sgt []) (.lit (.natVal n)))) then
           return .some (.bvsgt' n)
+      return .none
+    | _ => return .none
+  | .const ``Max.max _ =>
+    match arg₁ with
+    | .const ``Nat _ =>
+      if (← Meta.isDefEqD e (.const ``Nat.max [])) then
+        return .some (.base .nmax')
+      return .none
+    | _ => return .none
+  | .const ``Min.min _ =>
+    match arg₁ with
+    | .const ``Nat _ =>
+      if (← Meta.isDefEqD e (.const ``Nat.min [])) then
+        return .some (.base .nmin')
       return .none
     | _ => return .none
   | _ => return .none

@@ -55,6 +55,8 @@ def transNatConst : NatConst → String
 | .nmod     => "t_nmod"
 | .nle      => "t_nle"
 | .nlt      => "t_nlt"
+| .nmax     => "t_nmax"
+| .nmin     => "t_nmin"
 
 def transNatConstSort (nc : NatConst) := transLamSort nc.lamCheck
 
