@@ -1148,6 +1148,8 @@ abbrev Nat.max (x y : Nat) : Nat := Max.max x y
 abbrev Nat.min (x y : Nat) : Nat := Min.min x y
 abbrev Int.ge (a b : Int) := Int.le b a
 abbrev Int.gt (a b : Int) := Int.lt b a
+abbrev Int.max (x y : Int) : Int := Max.max x y
+abbrev Int.min (x y : Int) : Int := Min.min x y
 abbrev String.ge (a b : String) : Prop := b = a ∨ b < a
 abbrev String.gt (a b : String) : Prop := b < a
 abbrev BitVec.uge (a b : Std.BitVec n) : Bool := Std.BitVec.ule b a
@@ -1293,12 +1295,20 @@ def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
       if (← Meta.isDefEqD e (.const ``Nat.max [])) then
         return .some (.base .nmax')
       return .none
+    | .const ``Int _ =>
+      if (← Meta.isDefEqD e (.const ``Int.max [])) then
+        return .some (.base .imax')
+      return .none
     | _ => return .none
   | .const ``Min.min _ =>
     match arg₁ with
     | .const ``Nat _ =>
       if (← Meta.isDefEqD e (.const ``Nat.min [])) then
         return .some (.base .nmin')
+      return .none
+    | .const ``Int _ =>
+      if (← Meta.isDefEqD e (.const ``Int.min [])) then
+        return .some (.base .imin')
       return .none
     | _ => return .none
   | _ => return .none

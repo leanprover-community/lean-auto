@@ -129,6 +129,8 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .icst .iemod => return .qStrApp "iemod" #[arg1, arg2]
 | .icst .ile  => return .qStrApp "<=" #[arg1, arg2]
 | .icst .ilt  => return .qStrApp "<" #[arg1, arg2]
+| .icst .imax => return .qStrApp "ite" #[.qStrApp "<=" #[arg1, arg2], arg2, arg1]
+| .icst .imin => return .qStrApp "ite" #[.qStrApp "<=" #[arg1, arg2], arg1, arg2]
 | .scst .sapp => return .qStrApp "str.++" #[arg1, arg2]
 | .scst .sle  => return .qStrApp "str.<=" #[arg1, arg2]
 | .scst .slt  => return .qStrApp "str.<" #[arg1, arg2]

@@ -79,6 +79,8 @@ def transIntConst : IntConst → String
 | .iemod    => "t_iemod"
 | .ile      => "t_ile"
 | .ilt      => "t_ilt"
+| .imax     => "t_imax"
+| .imin     => "t_imin"
 
 def transIntConstSort (ic : IntConst) := transLamSort ic.lamCheck
 

@@ -489,7 +489,6 @@ section Adhoc
   example (a b c d : Nat) (h₁ : a ≤ b) (h₂ : c ≥ d) : b ≥ a ∧ d ≤ c := by auto
 
   -- Integer
-  -- Just testing whether the verified checker is correct
   example
     (a b : Int)
     (mul_comm : ∀ (a b : Int), a * b = b * a) : a * b + 1 = b * a + 1 := by auto
@@ -501,6 +500,8 @@ section Adhoc
   example (a : Int)
     (h₁ : a ≥ 0) (h₂ : -a ≤ 0) (h₃ : 0 < 1) (h₄ : 2 > 0)
     : (a ≥ 0) ∧ (-a ≤ 0) ∧ (0 < 1) ∧ (2 > 0) := by auto
+
+  example (a b : Int) : max a b = max a b ∧ min a b = min a b := by auto
 
   example : (3 : Int) = ((nat_lit 3) : Int) := by auto
 

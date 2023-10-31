@@ -103,6 +103,12 @@ def ileLift.{u} (m n : GLift.{1, u} Int) :=
 def iltLift.{u} (m n : GLift.{1, u} Int) :=
   GLift.up (Int.lt m.down n.down)
 
+def imaxLift.{u} (m n : GLift.{1, u} Int) :=
+  GLift.up (max m.down n.down)
+
+def iminLift.{u} (m n : GLift.{1, u} Int) :=
+  GLift.up (min m.down n.down)
+
 def sappLift.{u} (m n : GLift.{1, u} String) :=
   GLift.up (String.append m.down n.down)
 

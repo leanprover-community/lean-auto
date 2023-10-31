@@ -163,6 +163,8 @@ def interpIntConstAsUnlifted : IntConst → Expr
 | .iemod    => .const ``Int.emod []
 | .ile      => .const ``Int.le []
 | .ilt      => .const ``Int.lt []
+| .imax     => .const ``Int.max []
+| .imin     => .const ``Int.min []
 
 open Embedding in
 def interpStringConstAsUnlifted : StringConst → Expr

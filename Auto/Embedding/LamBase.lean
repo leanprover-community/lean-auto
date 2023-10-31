@@ -613,19 +613,9 @@ def NatConst.LamWF.ofCheck (H : n.lamCheck = s) : LamWF n s := by
 
 inductive IntConst
   | intVal (n : Int)
-  | iofNat
-  | inegSucc
-  | ineg
-  | iabs
-  | iadd
-  | isub
-  | imul
-  | idiv
-  | imod
-  | iediv
-  | iemod
-  | ile
-  | ilt
+  | iofNat | inegSucc | ineg | iabs
+  | iadd | isub | imul | idiv | imod | iediv | iemod
+  | ile | ilt | imax | imin
 deriving Inhabited, Hashable, Lean.ToExpr
 
 def IntConst.reprPrec (i : IntConst) (n : Nat) :=
@@ -645,6 +635,8 @@ def IntConst.reprPrec (i : IntConst) (n : Nat) :=
     | .iemod    => f!".iemod"
     | .ile      => f!".ile"
     | .ilt      => f!".ilt"
+    | .imax     => f!".imax"
+    | .imin     => f!".imin"
   if n == 0 then
     f!"Auto.Embedding.Lam.IntConst" ++ s
   else
@@ -668,6 +660,8 @@ def IntConst.toString : IntConst → String
 | .iemod    => "%?"
 | .ile      => "≤"
 | .ilt      => "<"
+| .imax     => "imax"
+| .imin     => "imin"
 
 instance : ToString IntConst where
   toString := IntConst.toString
@@ -687,6 +681,8 @@ def IntConst.beq : IntConst → IntConst → Bool
 | .iemod,    .iemod    => true
 | .ile,      .ile      => true
 | .ilt,      .ilt      => true
+| .imax,     .imax     => true
+| .imin,     .imin     => true
 | _,         _         => false
 
 instance : BEq IntConst where
@@ -714,10 +710,12 @@ def IntConst.lamCheck : IntConst → LamSort
 | .imul     => .func (.base .int) (.func (.base .int) (.base .int))
 | .idiv     => .func (.base .int) (.func (.base .int) (.base .int))
 | .imod     => .func (.base .int) (.func (.base .int) (.base .int))
-| .iediv     => .func (.base .int) (.func (.base .int) (.base .int))
-| .iemod     => .func (.base .int) (.func (.base .int) (.base .int))
+| .iediv    => .func (.base .int) (.func (.base .int) (.base .int))
+| .iemod    => .func (.base .int) (.func (.base .int) (.base .int))
 | .ile      => .func (.base .int) (.func (.base .int) (.base .prop))
 | .ilt      => .func (.base .int) (.func (.base .int) (.base .prop))
+| .imax     => .func (.base .int) (.func (.base .int) (.base .int))
+| .imin     => .func (.base .int) (.func (.base .int) (.base .int))
 
 inductive IntConst.LamWF : IntConst → LamSort → Type
   | ofIntVal n : LamWF (.intVal n) (.base .int)
@@ -734,6 +732,8 @@ inductive IntConst.LamWF : IntConst → LamSort → Type
   | ofIemod    : LamWF .iemod (.func (.base .int) (.func (.base .int) (.base .int)))
   | ofIle      : LamWF .ile (.func (.base .int) (.func (.base .int) (.base .prop)))
   | ofIlt      : LamWF .ilt (.func (.base .int) (.func (.base .int) (.base .prop)))
+  | ofImax     : LamWF .imax (.func (.base .int) (.func (.base .int) (.base .int)))
+  | ofImin     : LamWF .imin (.func (.base .int) (.func (.base .int) (.base .int)))
 
 def IntConst.LamWF.unique {i : IntConst} {s₁ s₂ : LamSort}
   (iwf₁ : LamWF i s₁) (iwf₂ : LamWF i s₂) : s₁ = s₂ ∧ HEq iwf₁ iwf₂ := by
@@ -754,6 +754,8 @@ def IntConst.LamWF.ofIntConst : (i : IntConst) → (s : LamSort) × IntConst.Lam
 | .iemod    => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofIemod⟩
 | .ile      => ⟨.func (.base .int) (.func (.base .int) (.base .prop)), .ofIle⟩
 | .ilt      => ⟨.func (.base .int) (.func (.base .int) (.base .prop)), .ofIlt⟩
+| .imax     => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofImax⟩
+| .imin     => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofImin⟩
 
 def IntConst.lamWF_complete (wf : LamWF i s) : LamWF.ofIntConst i = ⟨s, wf⟩ := by
   cases wf <;> rfl
@@ -1296,6 +1298,8 @@ def LamBaseTerm.iediv' := LamBaseTerm.icst .iediv
 def LamBaseTerm.iemod' := LamBaseTerm.icst .iemod
 def LamBaseTerm.ile' := LamBaseTerm.icst .ile
 def LamBaseTerm.ilt' := LamBaseTerm.icst .ilt
+def LamBaseTerm.imax' := LamBaseTerm.icst .imax
+def LamBaseTerm.imin' := LamBaseTerm.icst .imin
 def LamBaseTerm.strVal' (s : String) := LamBaseTerm.scst (.strVal s)
 def LamBaseTerm.slength' := LamBaseTerm.scst .slength
 def LamBaseTerm.sapp' := LamBaseTerm.scst .sapp
@@ -1628,6 +1632,8 @@ def LamBaseTerm.LamWF.ofIediv' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIe
 def LamBaseTerm.LamWF.ofIemod' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIemod
 def LamBaseTerm.LamWF.ofIle' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIle
 def LamBaseTerm.LamWF.ofIlt' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIlt
+def LamBaseTerm.LamWF.ofImax' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofImax
+def LamBaseTerm.LamWF.ofImin' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofImin
 def LamBaseTerm.LamWF.ofStrVal' {ltv : LamTyVal} (s : String) := LamWF.ofScst (ltv:=ltv) (.ofStrVal s)
 def LamBaseTerm.LamWF.ofSlength {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSlength
 def LamBaseTerm.LamWF.ofSapp' {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSapp
@@ -1825,6 +1831,8 @@ def IntConst.interp (tyVal : Nat → Type u) : (i : IntConst) → i.lamCheck.int
 | .iemod    => iemodLift
 | .ile      => ileLift
 | .ilt      => iltLift
+| .imax     => imaxLift
+| .imin     => iminLift
 
 def IntConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF i s) → s.interp tyVal
 | .ofIntVal n => GLift.up n
@@ -1841,6 +1849,8 @@ def IntConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF i s) → s.int
 | .ofIemod    => iemodLift
 | .ofIle      => ileLift
 | .ofIlt      => iltLift
+| .ofImax     => imaxLift
+| .ofImin     => iminLift
 
 theorem IntConst.LamWF.interp_lvalIrrelevance
   (tyVal₁ tyVal₂ : Nat → Type u) (icwf₁ : LamWF i₁ s₁) (icwf₂ : LamWF i₂ s₂)

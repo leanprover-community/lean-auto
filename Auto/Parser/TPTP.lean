@@ -381,6 +381,8 @@ def ident2IntConst (s : String) : Option IntConst :=
   | "t_iemod"    => .some .iemod
   | "t_ile"      => .some .ile
   | "t_ilt"      => .some .ilt
+  | "t_imax"     => .some .imax
+  | "t_imin"     => .some .imin
   | _ =>
     match s.take 7 with
     | "t_int_o" =>
