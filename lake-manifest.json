@@ -2,19 +2,19 @@
  "packagesDir": "lake-packages",
  "packages":
  [{"git":
-   {"url": "https://github.com/leanprover-community/duper.git",
-    "subDir?": null,
-    "rev": "99c469b55f573920c4bd34272ce8d72f8950f52b",
-    "opts": {},
-    "name": "Duper",
-    "inputRev?": null,
-    "inherited": false}},
-  {"git":
    {"url": "https://github.com/leanprover/std4.git",
     "subDir?": null,
-    "rev": "a71c160b1934814837d37f377efaf2964e55c433",
+    "rev": "29b53a086dd652c1b5cec81b7c4a68b44465d59b",
     "opts": {},
     "name": "std",
     "inputRev?": "main",
+    "inherited": false}},
+  {"git":
+   {"url": "https://github.com/leanprover-community/duper.git",
+    "subDir?": null,
+    "rev": "33d88afbff15603d45aa0ec6a7f77b9a2646f6a6",
+    "opts": {},
+    "name": "Duper",
+    "inputRev?": null,
     "inherited": false}}],
  "name": "auto"}
