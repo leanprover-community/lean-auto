@@ -244,13 +244,13 @@ example {a b : ℤ} (ha : 3 < a) : 0 ≤ min a (b ^ 2) := by positivity
 
 example : 0 ≤ max 3 4 := by auto
 
-example {b : ℤ} : 0 ≤ max (-3) (b ^ 2) := by positivity
+example {b : ℤ} : 0 ≤ max (-3) (b ^ 2) := by auto [pow_two]
 
-example {b : ℤ} : 0 ≤ max (b ^ 2) 0 := by positivity
+example {b : ℤ} : 0 ≤ max (b ^ 2) 0 := by auto [pow_two]
 
-example : 0 ≤ max (0:ℤ) (-3) := by positivity
+example : 0 ≤ max (0:ℤ) (-3) := by auto
 
-example : 0 ≤ max (-3 : ℤ) 5 := by positivity
+example : 0 ≤ max (-3 : ℤ) 5 := by auto
 
 -- example [OrderedSemiring α] [OrderedAddCommMonoid β] [SMulWithZero α β]
 --   [OrderedSMul α β] {a : α} (ha : 0 < a) {b : β} (hb : 0 < b) : 0 ≤ a • b := by positivity

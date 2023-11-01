@@ -5,8 +5,8 @@ package «auto» {
   -- add any package configuration options here
 }
 
-require mathlib from git
-  "https://github.com/leanprover-community/mathlib4.git"
+require std from git
+  "https://github.com/leanprover/std4.git"@"main"
 
 require Duper from git
   "https://github.com/leanprover-community/duper.git"
