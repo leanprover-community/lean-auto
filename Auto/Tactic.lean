@@ -11,7 +11,7 @@ initialize
   registerTraceClass `auto.printProof
 
 register_option auto.duper : Bool := {
-  defValue := true,
+  defValue := false,
   descr := "Enable/Disable proof reconstruction"
 }
 
