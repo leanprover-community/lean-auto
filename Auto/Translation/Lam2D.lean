@@ -1,5 +1,4 @@
 import Lean
-import Duper.Tactic
 import Auto.Lib.ExprExtra
 import Auto.Lib.MetaExtra
 import Auto.Lib.MetaState
@@ -323,36 +322,6 @@ def Duper.withoutModifyingCoreEnv (m : MetaM α) : MetaM α :=
     return ret
   catch e =>
     throwError e.toMessageData
-
-/-- Override the one in duper so that it works for `MetaM` -/
-def Duper.rconsProof (state : Duper.ProverM.State) : MetaM Expr := do
-  let some emptyClause := state.emptyClause
-    | throwError "rconsProof :: Can't find empty clause in ProverM's state"
-  let l := (← Elab.Tactic.collectClauses state emptyClause (#[], Std.BinomialHeap.empty)).2.toList.eraseDups.map Prod.snd
-  trace[ProofReconstruction] "Collected clauses: {l}"
-  -- First make proof for skolems, then make proof for clauses
-  let proof ← Elab.Tactic.mkAllProof state l
-  trace[ProofReconstruction] "rconsProof :: Reconstructed proof {proof}"
-  return proof
-
-def callDuperMetaMAction (lemmas : Array Lemma) : MetaM Expr := do
-  let startTime ← IO.monoMsNow
-  let lemmas : Array (Expr × Expr × Array Name) ← lemmas.mapM
-    (fun ⟨proof, ty, _⟩ => do return (ty, ← Meta.mkAppM ``eq_true #[proof], #[]))
-  let state ← Duper.withoutModifyingCoreEnv <| do
-    let skSorryName ← Elab.Tactic.addSkolemSorry
-    let (_, state) ←
-      Duper.ProverM.ProverM.runWithExprs (ctx := {}) (s := {skolemSorryName := skSorryName})
-        Duper.ProverM.saturateNoPreprocessingClausification
-        lemmas.toList
-    return state
-  match state.result with
-  | .contradiction =>
-    IO.println s!"callDuper :: Contradiction found. Time: {(← IO.monoMsNow) - startTime}ms"
-    Duper.rconsProof state
-  | .saturated =>
-    throwError "callDuper :: Duper saturated"
-  | .unknown => throwError "callDuper :: Duper was terminated"
 
 private def callProverExternMAction
   (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → MetaM Expr) :

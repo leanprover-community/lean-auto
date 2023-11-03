@@ -203,6 +203,21 @@ def collectAllLemmas (hintstx : TSyntax ``hints) (unfolds : TSyntax `Auto.unfold
   traceLemmas "Inhabitation lemmas :" inhFacts
   return (lctxLemmas ++ userLemmas ++ defeqLemmas, inhFacts)
 
+private def callDuperExpectedType := List (Expr × Expr × Array Name) → Nat → MetaM Expr
+
+private unsafe def callDuperMetaMActionUnsafe (lemmas : Array Lemma) : MetaM Expr := do
+  let lemmas : Array (Expr × Expr × Array Name) ← lemmas.mapM
+    (fun ⟨proof, ty, _⟩ => do return (ty, ← Meta.mkAppM ``eq_true #[proof], #[]))
+  let .some (.defnInfo di) := (← getEnv).find? `runDuper
+    | throwError "callDuperMetaMAction :: `runDuper` is not declared"
+  if !(← Meta.isDefEqD (.const ``callDuperExpectedType []) di.type) then
+    throwError "callDuperMetaMAction :: Unexpected type of `runDuper`"
+  let runDuperCst ← evalConst callDuperExpectedType `runDuper
+  runDuperCst lemmas.data 0
+
+@[implemented_by callDuperMetaMActionUnsafe]
+opaque callDuperMetaMAction : Array Lemma → MetaM Expr
+
 /-- `ngoal` means `negated goal` -/
 def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : Array Lemma) : TacticM Expr := do
   let instr ← parseInstr instrstx
@@ -281,7 +296,7 @@ where
   queryDuper declName? exportFacts exportInhs : LamReif.ReifM (Option Expr) := do
     try
       let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ←
-        Lam2D.callProver_checker exportInhs exportFacts Lam2D.callDuperMetaMAction
+        Lam2D.callProver_checker exportInhs exportFacts callDuperMetaMAction
       trace[auto.printProof] "Duper found proof of {← Meta.inferType proof}"
       LamReif.newAssertion proof proofLamTerm
       let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
@@ -367,7 +382,7 @@ def evalMonoDuper : Tactic
   replaceMainGoal [absurd]
   withMainContext do
     let (lemmas, inhFacts) ← collectAllLemmas hints unfolds defeqs (goalBinders.push ngoal)
-    let proof ← monoInterface lemmas inhFacts Lam2D.callDuperMetaMAction
+    let proof ← monoInterface lemmas inhFacts callDuperMetaMAction
     IO.println s!"Auto found proof. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
     absurd.assign proof
 | _ => throwUnsupportedSyntax

@@ -1,8 +1,0 @@
-(declare-sort A)
-(declare-fun f (Int A) A)
-(declare-fun g (A) A)
-(assert (forall ((x Int) (y Int) (z A)) (= (f (+ x y) z) (f x (f y z)))))
-(assert (forall ((z A)) (= (f 1 z) (g z))))
-(declare-const z A)
-(assert (not (= (f 4 z) (g (g (g (g z)))))))
-(check-sat)

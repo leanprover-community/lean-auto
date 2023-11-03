@@ -8,13 +8,5 @@
     "opts": {},
     "name": "std",
     "inputRev?": "main",
-    "inherited": false}},
-  {"git":
-   {"url": "https://github.com/leanprover-community/duper.git",
-    "subDir?": null,
-    "rev": "33d88afbff15603d45aa0ec6a7f77b9a2646f6a6",
-    "opts": {},
-    "name": "Duper",
-    "inputRev?": null,
     "inherited": false}}],
  "name": "auto"}
