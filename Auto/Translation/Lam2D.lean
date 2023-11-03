@@ -335,8 +335,10 @@ def Duper.rconsProof (state : Duper.ProverM.State) : MetaM Expr := do
   trace[ProofReconstruction] "rconsProof :: Reconstructed proof {proof}"
   return proof
 
-private def callDuperMetaMAction (lemmas : Array (Expr × Expr × Array Name)) : MetaM Expr := do
+def callDuperMetaMAction (lemmas : Array Lemma) : MetaM Expr := do
   let startTime ← IO.monoMsNow
+  let lemmas : Array (Expr × Expr × Array Name) ← lemmas.mapM
+    (fun ⟨proof, ty, _⟩ => do return (ty, ← Meta.mkAppM ``eq_true #[proof], #[]))
   let state ← Duper.withoutModifyingCoreEnv <| do
     let skSorryName ← Elab.Tactic.addSkolemSorry
     let (_, state) ←
@@ -352,35 +354,38 @@ private def callDuperMetaMAction (lemmas : Array (Expr × Expr × Array Name)) :
     throwError "callDuper :: Duper saturated"
   | .unknown => throwError "callDuper :: Duper was terminated"
 
-private def callDuperExternMAction (nonempties : Array REntry) (valids : Array REntry) :
+private def callProverExternMAction
+  (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → MetaM Expr) :
   ExternM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := do
   let ss ← nonempties.mapM (fun re => do
     match re with
     | .nonempty s => return s
-    | _ => throwError "callDuperExternMAction :: {re} is not a `nonempty` entry")
+    | _ => throwError "callProverExternMAction :: {re} is not a `nonempty` entry")
   let inhs ← withTranslatedLamSorts ss
   let inhFVars ← withHyps inhs
   let ts ← valids.mapM (fun re => do
     match re with
     | .valid [] t => return t
-    | _ => throwError "callDuperExternMAction :: {re} is not a `valid` entry")
+    | _ => throwError "callProverExternMAction :: {re} is not a `valid` entry")
   let hyps ← withTranslatedLamTerms ts
   for hyp in hyps do
     if !(← runMetaM <| Meta.isTypeCorrect hyp) then
-      throwError "callDuper :: Malformed hypothesis {hyp}"
+      throwError "callProver :: Malformed hypothesis {hyp}"
     if !(← runMetaM <| Meta.isProp hyp) then
-      throwError "callDuper :: Hypothesis {hyp} is not a proposition"
+      throwError "callProver :: Hypothesis {hyp} is not a proposition"
   let hyps ← runMetaM <| hyps.mapM (fun e => Core.betaReduce e)
   let hypFvars ← withHyps hyps
-  let lemmas : Array (Expr × Expr × Array Name) ← (hyps.zip hypFvars).mapM
-    (fun (ty, proof) => do return (ty, ← runMetaM <| Meta.mkAppM ``eq_true #[.fvar proof], #[]))
+  let lemmas : Array Lemma := (hyps.zip hypFvars).map (fun (ty, proof) => ⟨.fvar proof, ty, #[]⟩)
   -- Note that we're not introducing bound variables into local context
   --   in the above action, so it's reasonable to use `runMetaM`
   let atomsToAbstract ← getAtomsToAbstract
   let etomsToAbstract ← getEtomsToAbstract
   let lamEVarTy ← getLamEVarTy
   runMetaM (do
-    let mut expr ← callDuperMetaMAction lemmas
+    -- It is important to add `Meta.withNewMCtxDepth`, otherwise exprmvars
+    --   or levelmvars of the current level will be assigned, and we'll
+    --   get weird proof reconstruction error
+    let mut expr ← Meta.withNewMCtxDepth <| prover lemmas
     let mut usedHyps := []
     for (fvar, re_t) in (hypFvars.zip (valids.zip ts)).reverse do
       if expr.hasAnyFVar (· == fvar) then
@@ -406,7 +411,7 @@ private def callDuperExternMAction (nonempties : Array REntry) (valids : Array R
     let proofLamTermPre := proofLamTermPre.abstractsRevImp ((Array.mk usedEtoms).map LamTerm.etom)
     let usedEtomTys ← usedEtoms.mapM (fun etom => do
       let .some ty := lamEVarTy[etom]?
-        | throwError "callDuper :: Unexpected error"
+        | throwError "callProver :: Unexpected error"
       return ty)
     let proofLamTerm := usedEtomTys.foldr (fun s cur => LamTerm.mkForallEF s cur) proofLamTermPre
     return (mkAppN expr ⟨usedVals⟩, proofLamTerm, ⟨usedEtoms⟩, ⟨usedInhs.map Prod.fst⟩, ⟨usedHyps.map Prod.fst⟩))
@@ -415,7 +420,7 @@ private def callDuperExternMAction (nonempties : Array REntry) (valids : Array R
   Given
   · `nonempties = #[s₀, s₁, ⋯, sᵤ₋₁]`
   · `valids = #[t₀, t₁, ⋯, kₖ₋₁]`
-  Invoke Duper to get a proof of
+  Invoke prover to get a proof of
     `proof : (∀ (_ : v₀) (_ : v₁) ⋯ (_ : vᵤ₋₁), w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥).interp`
   and returns
   · `fun etoms => proof`
@@ -427,16 +432,41 @@ private def callDuperExternMAction (nonempties : Array REntry) (valids : Array R
   · `[v₀, v₁, ⋯, vᵤ₋₁]` is a subsequence of `[s₀, s₁, ⋯, sᵤ₋₁]`
   · `[w₀, w₁, ⋯, wₗ₋₁]` is a subsequence of `[t₀, t₁, ⋯, kₖ₋₁]`
   · `etoms` are all the etoms present in `w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥`
-  It is important to add `Meta.withNewMCtxDepth`, otherwise exprmvars
-    or levelmvars of the current level will be assigned, and we'll
-    get weird proof reconstruction error
 -/
-def callDuper (nonempties : Array REntry) (valids : Array REntry) :
-  ReifM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := Meta.withNewMCtxDepth <| do
+def callProver_checker
+  (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → MetaM Expr) :
+  ReifM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := do
   let tyVal ← LamReif.getTyVal
   let varVal ← LamReif.getVarVal
   let lamEVarTy ← LamReif.getLamEVarTy
-  runAtMetaM' <| (callDuperExternMAction nonempties valids).run'
+  runAtMetaM' <| (callProverExternMAction nonempties valids prover).run'
     { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
+
+/--
+  Similar in functionality compared to `callProver_checker`, but
+    all `valid` entries are supposed to be reified facts (so there should
+    be no `etom`s). We invoke the prover to get the same `proof` as
+    `callProverChecker`, but we return a proof of `⊥` by applying `proof`
+    to un-reified facts.
+-/
+def callProver_direct
+  (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → MetaM Expr) : ReifM Expr := do
+  let tyVal ← LamReif.getTyVal
+  let varVal ← LamReif.getVarVal
+  let lamEVarTy ← LamReif.getLamEVarTy
+  let (proof, _, usedEtoms, usedInhs, usedHyps) ← runAtMetaM' <|
+    (callProverExternMAction nonempties valids prover).run'
+      { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
+  if usedEtoms.size != 0 then
+    throwError "callProver_direct :: etoms should not occur here"
+  let ss ← usedInhs.mapM (fun re => do
+    let .inhabitation e _ ← lookupREntryProof! re
+      | throwError "callProver_direct :: Cannot find external proof of {re}"
+    return e)
+  let ts ← usedHyps.mapM (fun re => do
+    let .assertion e _ ← lookupREntryProof! re
+      | throwError "callProver_direct :: Cannot find external proof of {re}"
+    return e)
+  return mkAppN proof (ss ++ ts)
 
 end Auto.Lam2D

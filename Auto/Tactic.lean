@@ -25,6 +25,7 @@ syntax unfolds := ("u[" ident,* "]")?
 syntax defeqs := ("d[" ident,* "]")?
 syntax autoinstr := ("👍" <|> "👎")?
 syntax (name := auto) "auto" autoinstr hints unfolds defeqs : tactic
+syntax (name := monoduper) "monoduper" hints unfolds defeqs : tactic
 syntax (name := intromono) "intromono" hints unfolds defeqs : tactic
 
 inductive Instruction where
@@ -279,7 +280,8 @@ where
       return .none
   queryDuper declName? exportFacts exportInhs : LamReif.ReifM (Option Expr) := do
     try
-      let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ← Lam2D.callDuper exportInhs exportFacts
+      let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ←
+        Lam2D.callProver_checker exportInhs exportFacts Lam2D.callDuperMetaMAction
       trace[auto.printProof] "Duper found proof of {← Meta.inferType proof}"
       LamReif.newAssertion proof proofLamTerm
       let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
@@ -327,6 +329,47 @@ def evalIntromono : Tactic
     let (lemmas, _) ← collectAllLemmas hints unfolds defeqs (goalBinders.push ngoal)
     let newMid ← Monomorphization.intromono lemmas absurd
     replaceMainGoal [newMid]
+| _ => throwUnsupportedSyntax
+
+/--
+  A monomorphization interface that can be invoked by repos dependent
+    on `lean-auto`.
+-/
+def monoInterface
+  (lemmas : Array Lemma) (inhFacts : Array Lemma)
+  (prover : Array Lemma → MetaM Expr) : MetaM Expr := do
+  let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) : LamReif.ReifM Expr := (do
+    let exportFacts ← LamReif.reifFacts uvalids
+    let exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
+    let _ ← LamReif.reifInhabitations uinhs
+    let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
+      (fun (s, _) => Embedding.Lam.REntry.nonempty s)
+    let proof ← Lam2D.callProver_direct exportInhs exportFacts prover
+    Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) proof)
+  let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
+    let uvalids ← liftM <| Reif.getFacts
+    let uinhs ← liftM <| Reif.getInhTys
+    let u ← computeMaxLevel uvalids
+    (afterReify uvalids uinhs).run' {u := u})
+  return proof
+
+@[tactic monoduper]
+def evalMonoDuper : Tactic
+| `(monoduper | monoduper $hints $unfolds $defeqs) => withMainContext do
+  let startTime ← IO.monoMsNow
+  -- Suppose the goal is `∀ (x₁ x₂ ⋯ xₙ), G`
+  -- First, apply `intros` to put `x₁ x₂ ⋯ xₙ` into the local context,
+  --   now the goal is just `G`
+  let (goalBinders, newGoal) ← (← getMainGoal).intros
+  let [nngoal] ← newGoal.apply (.const ``Classical.byContradiction [])
+    | throwError "evalAuto :: Unexpected result after applying Classical.byContradiction"
+  let (ngoal, absurd) ← MVarId.intro1 nngoal
+  replaceMainGoal [absurd]
+  withMainContext do
+    let (lemmas, inhFacts) ← collectAllLemmas hints unfolds defeqs (goalBinders.push ngoal)
+    let proof ← monoInterface lemmas inhFacts Lam2D.callDuperMetaMAction
+    IO.println s!"Auto found proof. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
+    absurd.assign proof
 | _ => throwUnsupportedSyntax
 
 end Auto
