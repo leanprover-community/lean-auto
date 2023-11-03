@@ -1,4 +1,5 @@
 import Auto.Embedding.LamSystem
+import Std.Data.Array.Basic
 
 namespace Auto.Embedding.Lam
 
@@ -572,7 +573,7 @@ theorem LamTerm.maxEVarSucc_extensionalizeAux :
     dsimp [maxEVarSucc]; rw [IH]
   case app s fn arg IHFn IHArg =>
     match isAppFn with
-    | true => 
+    | true =>
       dsimp [maxEVarSucc]; rw [IHFn, IHArg]
     | false =>
       dsimp; rw [maxEVarSucc_extensionalizeEq]
@@ -835,7 +836,7 @@ def LamWF.instantiateAt
   (ltv : LamTyVal) (idx : Nat)
   {arg : LamTerm} {argTy : LamSort}
   {body : LamTerm} {bodyTy : LamSort} :
-  (lctx : Nat → LamSort) → 
+  (lctx : Nat → LamSort) →
   (wfArg : LamWF ltv ⟨lctx, arg.bvarLifts idx, argTy⟩) →
   (wfBody : LamWF ltv ⟨pushLCtxAt argTy idx lctx, body, bodyTy⟩) →
   LamWF ltv ⟨lctx, LamTerm.instantiateAt idx arg body, bodyTy⟩
@@ -932,7 +933,7 @@ theorem LamTerm.maxEVarSucc_instantiate1_le :
 def LamWF.instantiate1
   (ltv : LamTyVal) {arg : LamTerm} {argTy : LamSort}
   {body : LamTerm} {bodyTy : LamSort} :
-  (lctx : Nat → LamSort) → 
+  (lctx : Nat → LamSort) →
   (wfArg : LamWF ltv ⟨lctx, arg, argTy⟩) →
   (wfBody : LamWF ltv ⟨pushLCtx argTy lctx, body, bodyTy⟩) →
   LamWF ltv ⟨lctx, LamTerm.instantiate1 arg body, bodyTy⟩ :=
@@ -1091,7 +1092,7 @@ def LamTerm.topBetaAux (s : LamSort) (arg : LamTerm) : (fn : LamTerm) → LamTer
 
 def LamWF.topBetaAux (ltv : LamTyVal)
   {arg : LamTerm} {argTy : LamSort} {fn : LamTerm} {resTy : LamSort}
-  (lctx : Nat → LamSort) (wfArg : LamWF ltv ⟨lctx, arg, argTy⟩) 
+  (lctx : Nat → LamSort) (wfArg : LamWF ltv ⟨lctx, arg, argTy⟩)
   (wfFn : LamWF ltv ⟨lctx, fn, .func argTy resTy⟩) :
   LamWF ltv ⟨lctx, LamTerm.topBetaAux argTy arg fn, resTy⟩ :=
   match fn with
@@ -1472,7 +1473,7 @@ def LamWF.eqSymm?
 
 theorem LamEquiv.eqSymm?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩) (heq : t.eqSymm? = .some t') :
-  LamEquiv lval lctx (.base .prop) t t' := 
+  LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app s (.app _ (.base (.eq _)) lhs) rhs, Eq.refl _ => by
     cases wft.getFn.getFn.getBase
@@ -1513,7 +1514,7 @@ def LamWF.neSymm?
 
 theorem LamEquiv.neSymm?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩) (heq : t.neSymm? = .some t') :
-  LamEquiv lval lctx (.base .prop) t t' := 
+  LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.base .not) (.app s (.app _ (.base (.eq _)) lhs) rhs), Eq.refl _ => by
     cases wft.getArg.getFn.getFn.getBase
@@ -1702,7 +1703,7 @@ theorem LamTerm.maxEVarSucc_congrFun?
   match t, rw, heq with
   | .app s fn arg, .app s' (.app _ (.base (.eq _)) arg') res, heq =>
     dsimp [congrFun?] at heq
-    cases h : fn.beq arg' <;> rw [h] at heq <;> cases heq 
+    cases h : fn.beq arg' <;> rw [h] at heq <;> cases heq
     case true =>
       dsimp [maxEVarSucc]; rw [Nat.max_le]
       dsimp [maxEVarSucc] at hrw; rw [Nat.max_le] at hrw
@@ -1944,7 +1945,7 @@ theorem LamThmEquiv.congrs?
   fun lctx' => LamEquiv.congrs? (wft lctx') (HrwFn lctx') (HrwArgs.map (fun _ twf => twf lctx')) heq
 
 section UnsafeOps
-  
+
   def LamTerm.replace (t : LamTerm) (f : LamTerm → Option LamTerm) (lvl : Nat) :=
     match f (t.bvarLifts lvl) with
     | .some t' => t'.bvarLifts lvl
@@ -1953,15 +1954,15 @@ section UnsafeOps
       | .app s fn arg => .app s (replace fn f lvl) (replace arg f lvl)
       | .lam s body => .lam s (replace body f (.succ lvl))
       | _ => t
-  
+
   /-- Turn `ts[i]` into `.bvar i` -/
   def LamTerm.abstractsImp (t : LamTerm) (ts : Array LamTerm) :=
     let ts := ts.mapIdx (fun i x => (x, LamTerm.bvar i.val))
     let tmap := @Lean.HashMap.ofList _ _ inferInstance inferInstance ts.data
     t.replace (fun x => tmap.find? x) 0
-  
+
   def LamTerm.abstractsRevImp (t : LamTerm) (ts : Array LamTerm) := t.abstractsImp ts.reverse
-  
+
   def LamTerm.instantiatesAtImp (idx : Nat) (args : Array LamTerm) : (body : LamTerm) → LamTerm
   | .atom n        => .atom n
   | .etom n        => .etom n
@@ -1975,7 +1976,7 @@ section UnsafeOps
     | false => LamTerm.bvar n
   | .lam s body    => .lam s (LamTerm.instantiatesAtImp (.succ idx) args body)
   | .app s fn arg' => .app s (LamTerm.instantiatesAtImp idx args fn) (LamTerm.instantiatesAtImp idx args arg')
-  
+
   /-- Turn `.bvar i` into `args[i]` -/
   def LamTerm.instantiatesImp := LamTerm.instantiatesAtImp 0
 
