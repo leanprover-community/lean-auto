@@ -160,9 +160,6 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
     | .lshr => return .qStrApp "bvlshr" #[arg1, arg2]
     | .ashr => return .qStrApp "bvashr" #[arg1, arg2]
 | .bvcst (.bvappend _ _) => return .qStrApp "concat" #[arg1, arg2]
-| .bvcst (.bvextract _ h l) => do
-  let l := min h l
-  return .qIdApp (.ident (.indexed "extract" #[.inr h, .inr l])) #[arg1, arg2]
 | t           => throwError "lamTerm2STerm :: The arity of {repr t} is not 2"
 
 private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamAtom STerm
@@ -219,6 +216,9 @@ private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamA
     return .qIdApp (.ident (.indexed "sign_extend" #[.inr (v - w)])) #[arg]
   else
     return .qIdApp (.ident (.indexed "extract" #[.inr (v - 1), .inr 0])) #[arg]
+| .bvcst (.bvextract _ h l) => do
+  let l := min h l
+  return .qIdApp (.ident (.indexed "extract" #[.inr h, .inr l])) #[arg]
 | t               => throwError "lamTerm2STerm :: The arity of {repr t} is not 1"
 where
   solverName : MetaM Solver.SMT.SolverName := do
