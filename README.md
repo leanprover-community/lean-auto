@@ -3,7 +3,7 @@
 Type **"auto 👍"** to see whether auto is set up.
 
 ## Introduction
-Lean-auto is an interface between Lean and automated theorem provers, based on a monomorphization procedure from dependent type theory to higher-order logic and a deep embedding of higher-order logic into dependent type theory. It is capable of handling dependently-typed and/or universe-polymorphic input terms. Currently, proof reconstruction is handeled by duper, a higher-order superposition prover written in Lean.  
+Lean-auto is an interface between Lean and automated theorem provers, based on a monomorphization procedure from dependent type theory to higher-order logic and a deep embedding of higher-order logic into dependent type theory. It is capable of handling dependently-typed and/or universe-polymorphic input terms. Currently, proof reconstruction can be handeled by duper, a higher-order superposition prover written in Lean.  
 Lean-auto is still under development, but it's already able to solve nontrivial problems. For example the first part of the "snake lemma" in category theory can be solved by a direct invocation to ``auto`` (and the second part can also be partly automated):
 
 <img src="Doc/pics/shortfive.png" alt="drawing" width="500"/>
@@ -15,7 +15,7 @@ Lean-auto is still under development, but it's already able to solve nontrivial 
 * Currently, auto supports
   * SMT solver invocation: ``set_option auto.smt true``, but without proof reconstruction
   * TPTP Solver invocation: ``set_option auto.tptp true``, but without proof reconstruction
-  * Proof search by native prover. To enable proof search by native prover, use ``set_option auto.native true``
+  * Proof search by native prover. To enable proof search by native prover, use ``set_option auto.native true``, and set ``auto.native.solver.func`` to the name of the interface of the solver, which should be a Lean constant of type ``Array Lemma → MetaM Expr``.
 
 ## Installing Lean-auto
 * ``z3`` version >= 4.12.2. Lower versions may not be able to deal with smt-lib 2.6 string escape sequence.
