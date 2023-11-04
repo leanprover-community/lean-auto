@@ -1142,10 +1142,12 @@ def newTermExpr (e : Expr) : ReifM LamTerm := do
   newTermExprAux e lamTy
 
 -- Auxiliary definitions for reification
+abbrev Nat.modEq (n a b : Nat) := a % n = b % n
 abbrev Nat.ge (x y : Nat) := Nat.le y x
 abbrev Nat.gt (x y : Nat) := Nat.lt y x
 abbrev Nat.max (x y : Nat) : Nat := Max.max x y
 abbrev Nat.min (x y : Nat) : Nat := Min.min x y
+abbrev Int.modEq (n a b : Int) := a % n = b % n
 abbrev Int.ge (a b : Int) := Int.le b a
 abbrev Int.gt (a b : Int) := Int.lt b a
 abbrev Int.max (x y : Int) : Int := Max.max x y
@@ -1553,6 +1555,7 @@ def processNewTermExpr (e : Expr) : ReifM LamTerm :=
   | .const ``Nat.mod [] => return .base .nmod'
   | .const ``Nat.le [] => return .base .nle'
   | .const ``Nat.lt [] => return .base .nlt'
+  | .const `Nat.ModEq [] => return .nmodeq'
   | .const ``Int.ofNat [] => return .base .iofNat'
   | .const ``Int.negSucc [] => return .base .inegSucc'
   | .const ``Int.neg [] => return .base .ineg'
@@ -1565,6 +1568,7 @@ def processNewTermExpr (e : Expr) : ReifM LamTerm :=
   | .const ``Int.emod [] => return .base .iemod'
   | .const ``Int.le [] => return .base .ile'
   | .const ``Int.lt [] => return .base .ilt'
+  | .const `Int.ModEq [] => return .imodeq'
   | .const ``String.length [] => return .base .slength'
   | .const ``String.append [] => return .base .sapp'
   | .const ``String.isPrefixOf [] => return .base .sprefixof'

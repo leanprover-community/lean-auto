@@ -2295,6 +2295,13 @@ def LamTerm.flipApp (t : LamTerm) (argTy₁ argTy₂ resTy : LamSort) : LamTerm 
 theorem LamTerm.maxEVarSucc_flipApp : LamTerm.maxEVarSucc (flipApp t argTy₁ argTy₂ resTy) = t.maxEVarSucc := by
   dsimp [flipApp]; rw [maxEVarSucc_app, maxEVarSucc_flip, Nat.max_zero_left]
 
+abbrev LamTerm.nmodeq' : LamTerm :=
+  .lam (.base .nat) (.lam (.base .nat) (.lam (.base .nat) (.app (.base .nat) (.app (.base .nat) (.base (.eq (.base .nat)))
+    (.app (.base .nat) (.app (.base .nat) (.base .nmod') (.bvar 1)) (.bvar 2)))
+    (.app (.base .nat) (.app (.base .nat) (.base .nmod') (.bvar 0)) (.bvar 2)))))
+
+theorem LamTerm.maxEVarSucc_nmodeq' : LamTerm.maxEVarSucc nmodeq' = 0 := rfl
+
 abbrev LamTerm.nge' : LamTerm := .flipApp (.base .nle') (.base .nat) (.base .nat) (.base .prop)
 
 abbrev LamTerm.ngt' : LamTerm := .flipApp (.base .nlt') (.base .nat) (.base .nat) (.base .prop)
@@ -2302,6 +2309,13 @@ abbrev LamTerm.ngt' : LamTerm := .flipApp (.base .nlt') (.base .nat) (.base .nat
 abbrev LamTerm.ige' : LamTerm := .flipApp (.base .ile') (.base .int) (.base .int) (.base .prop)
 
 abbrev LamTerm.igt' : LamTerm := .flipApp (.base .ilt') (.base .int) (.base .int) (.base .prop)
+
+abbrev LamTerm.imodeq' : LamTerm :=
+  .lam (.base .int) (.lam (.base .int) (.lam (.base .int) (.app (.base .int) (.app (.base .int) (.base (.eq (.base .int)))
+    (.app (.base .int) (.app (.base .int) (.base .iemod') (.bvar 1)) (.bvar 2)))
+    (.app (.base .int) (.app (.base .int) (.base .iemod') (.bvar 0)) (.bvar 2)))))
+
+theorem LamTerm.maxEVarSucc_imodeq' : LamTerm.maxEVarSucc imodeq' = 0 := rfl
 
 abbrev LamTerm.sge' : LamTerm := .flipApp (.base .sle') (.base .string) (.base .string) (.base .prop)
 
@@ -3153,11 +3167,21 @@ def LamWF.flipApp
   LamWF ltv ⟨lctx, LamTerm.flipApp t argTy₁ argTy₂ resTy, .func argTy₂ (.func argTy₁ resTy)⟩ :=
   .ofApp _ .flip wft
 
+def LamWF.ofNmodeq' : LamWF ltv ⟨lctx, LamTerm.nmodeq', .func (.base .nat) (.func (.base .nat) (.func (.base .nat) (.base .prop)))⟩ :=
+  .ofLam _ (.ofLam _ (.ofLam _ (.ofApp _ (.ofApp _ (.ofBase (.ofEq _))
+    (.ofApp _ (.ofApp _ (.ofBase .ofNmod') (.ofBVar 1)) (.ofBVar 2)))
+    (.ofApp _ (.ofApp _ (.ofBase .ofNmod') (.ofBVar 0)) (.ofBVar 2)))))
+
 def LamWF.ofNge' : LamWF ltv ⟨lctx, LamTerm.nge', .func (.base .nat) (.func (.base .nat) (.base .prop))⟩ :=
   .flipApp (.ofBase .ofNle')
 
 def LamWF.ofNgt' : LamWF ltv ⟨lctx, LamTerm.ngt', .func (.base .nat) (.func (.base .nat) (.base .prop))⟩ :=
   .flipApp (.ofBase .ofNlt')
+
+def LamWF.ofImodeq' : LamWF ltv ⟨lctx, LamTerm.imodeq', .func (.base .int) (.func (.base .int) (.func (.base .int) (.base .prop)))⟩ :=
+  .ofLam _ (.ofLam _ (.ofLam _ (.ofApp _ (.ofApp _ (.ofBase (.ofEq _))
+    (.ofApp _ (.ofApp _ (.ofBase .ofIemod') (.ofBVar 1)) (.ofBVar 2)))
+    (.ofApp _ (.ofApp _ (.ofBase .ofIemod') (.ofBVar 0)) (.ofBVar 2)))))
 
 def LamWF.ofIge' : LamWF ltv ⟨lctx, LamTerm.ige', .func (.base .int) (.func (.base .int) (.base .prop))⟩ :=
   .flipApp (.ofBase .ofIle')
