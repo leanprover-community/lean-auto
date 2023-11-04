@@ -15,7 +15,7 @@ Lean-auto is still under development, but it's already able to solve nontrivial 
 * Currently, auto supports
   * SMT solver invocation: ``set_option auto.smt true``, but without proof reconstruction
   * TPTP Solver invocation: ``set_option auto.tptp true``, but without proof reconstruction
-  * Proof search by duper. To disable proof search by duper, use ``set_option auto.duper false``
+  * Proof search by native prover. To enable proof search by native prover, use ``set_option auto.native true``
 
 ## Installing Lean-auto
 * ``z3`` version >= 4.12.2. Lower versions may not be able to deal with smt-lib 2.6 string escape sequence.

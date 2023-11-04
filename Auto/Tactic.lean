@@ -2,18 +2,13 @@ import Lean
 import Auto.Translation
 import Auto.Solver.SMT
 import Auto.Solver.TPTP
+import Auto.Solver.Native
 import Auto.HintDB
 open Lean Elab Tactic
 
 initialize
   registerTraceClass `auto.tactic
   registerTraceClass `auto.printLemmas
-  registerTraceClass `auto.printProof
-
-register_option auto.duper : Bool := {
-  defValue := false,
-  descr := "Enable/Disable proof reconstruction"
-}
 
 namespace Auto
 
@@ -25,7 +20,7 @@ syntax unfolds := ("u[" ident,* "]")?
 syntax defeqs := ("d[" ident,* "]")?
 syntax autoinstr := ("👍" <|> "👎")?
 syntax (name := auto) "auto" autoinstr hints unfolds defeqs : tactic
-syntax (name := monoduper) "monoduper" hints unfolds defeqs : tactic
+syntax (name := mononative) "mononative" hints unfolds defeqs : tactic
 syntax (name := intromono) "intromono" hints unfolds defeqs : tactic
 
 inductive Instruction where
@@ -203,21 +198,6 @@ def collectAllLemmas (hintstx : TSyntax ``hints) (unfolds : TSyntax `Auto.unfold
   traceLemmas "Inhabitation lemmas :" inhFacts
   return (lctxLemmas ++ userLemmas ++ defeqLemmas, inhFacts)
 
-private def callDuperExpectedType := List (Expr × Expr × Array Name) → Nat → MetaM Expr
-
-private unsafe def callDuperMetaMActionUnsafe (lemmas : Array Lemma) : MetaM Expr := do
-  let lemmas : Array (Expr × Expr × Array Name) ← lemmas.mapM
-    (fun ⟨proof, ty, _⟩ => do return (ty, ← Meta.mkAppM ``eq_true #[proof], #[]))
-  let .some (.defnInfo di) := (← getEnv).find? `runDuper
-    | throwError "callDuperMetaMAction :: `runDuper` is not declared"
-  if !(← Meta.isDefEqD (.const ``callDuperExpectedType []) di.type) then
-    throwError "callDuperMetaMAction :: Unexpected type of `runDuper`"
-  let runDuperCst ← evalConst callDuperExpectedType `runDuper
-  runDuperCst lemmas.data 0
-
-@[implemented_by callDuperMetaMActionUnsafe]
-opaque callDuperMetaMAction : Array Lemma → MetaM Expr
-
 /-- `ngoal` means `negated goal` -/
 def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : Array Lemma) : TacticM Expr := do
   let instr ← parseInstr instrstx
@@ -247,10 +227,10 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
       if (auto.smt.get (← getOptions)) then
         if let .some proof ← querySMT exportFacts exportInds then
           return proof
-      -- **Duper**
+      -- **Native Prover**
       let exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)
-      if (auto.duper.get (← getOptions)) then
-        if let .some proof ← queryDuper declName? exportFacts exportInhs then
+      if (auto.native.get (← getOptions)) then
+        if let .some proof ← queryNative declName? exportFacts exportInhs then
           return proof
       throwError "Auto failed to find proof"
       )
@@ -293,11 +273,10 @@ where
     catch e =>
       trace[auto.smt.result] "SMT invocation failed with {e.toMessageData}"
       return .none
-  queryDuper declName? exportFacts exportInhs : LamReif.ReifM (Option Expr) := do
+  queryNative declName? exportFacts exportInhs : LamReif.ReifM (Option Expr) := do
     try
       let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ←
-        Lam2D.callProver_checker exportInhs exportFacts callDuperMetaMAction
-      trace[auto.printProof] "Duper found proof of {← Meta.inferType proof}"
+        Lam2D.callNative_checker exportInhs exportFacts Solver.Native.queryNative
       LamReif.newAssertion proof proofLamTerm
       let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
       let forallElimed ← LamReif.validOfElimForalls etomInstantiated usedInhs
@@ -310,7 +289,7 @@ where
       let proof ← Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra
       return .some proof
     catch e =>
-      trace[auto.tactic] "Duper invocation failed with {e.toMessageData}"
+      trace[auto.tactic] "Native prover invocation failed with {e.toMessageData}"
       return .none
 
 @[tactic auto]
@@ -359,7 +338,7 @@ def monoInterface
     let _ ← LamReif.reifInhabitations uinhs
     let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
       (fun (s, _) => Embedding.Lam.REntry.nonempty s)
-    let proof ← Lam2D.callProver_direct exportInhs exportFacts prover
+    let proof ← Lam2D.callNative_direct exportInhs exportFacts prover
     Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) proof)
   let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
     let uvalids ← liftM <| Reif.getFacts
@@ -368,9 +347,9 @@ def monoInterface
     (afterReify uvalids uinhs).run' {u := u})
   return proof
 
-@[tactic monoduper]
-def evalMonoDuper : Tactic
-| `(monoduper | monoduper $hints $unfolds $defeqs) => withMainContext do
+@[tactic mononative]
+def evalMonoNative : Tactic
+| `(mononative | mononative $hints $unfolds $defeqs) => withMainContext do
   let startTime ← IO.monoMsNow
   -- Suppose the goal is `∀ (x₁ x₂ ⋯ xₙ), G`
   -- First, apply `intros` to put `x₁ x₂ ⋯ xₙ` into the local context,
@@ -382,7 +361,7 @@ def evalMonoDuper : Tactic
   replaceMainGoal [absurd]
   withMainContext do
     let (lemmas, inhFacts) ← collectAllLemmas hints unfolds defeqs (goalBinders.push ngoal)
-    let proof ← monoInterface lemmas inhFacts callDuperMetaMAction
+    let proof ← monoInterface lemmas inhFacts Solver.Native.queryNative
     IO.println s!"Auto found proof. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
     absurd.assign proof
 | _ => throwUnsupportedSyntax

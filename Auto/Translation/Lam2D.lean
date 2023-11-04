@@ -313,35 +313,25 @@ def withHyps (hyps : Array Expr) : ExternM (Array FVarId) := do
     ret := ret.push newFVarId
   return ret
 
-/-- Override the one in duper so that it works for `MetaM` -/
-def Duper.withoutModifyingCoreEnv (m : MetaM α) : MetaM α :=
-  try
-    let env := (← liftM (get : CoreM Core.State)).env
-    let ret ← m
-    liftM (modify fun s => {s with env := env} : CoreM Unit)
-    return ret
-  catch e =>
-    throwError e.toMessageData
-
-private def callProverExternMAction
+private def callNativeExternMAction
   (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → MetaM Expr) :
   ExternM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := do
   let ss ← nonempties.mapM (fun re => do
     match re with
     | .nonempty s => return s
-    | _ => throwError "callProverExternMAction :: {re} is not a `nonempty` entry")
+    | _ => throwError "callNativeExternMAction :: {re} is not a `nonempty` entry")
   let inhs ← withTranslatedLamSorts ss
   let inhFVars ← withHyps inhs
   let ts ← valids.mapM (fun re => do
     match re with
     | .valid [] t => return t
-    | _ => throwError "callProverExternMAction :: {re} is not a `valid` entry")
+    | _ => throwError "callNativeExternMAction :: {re} is not a `valid` entry")
   let hyps ← withTranslatedLamTerms ts
   for hyp in hyps do
     if !(← runMetaM <| Meta.isTypeCorrect hyp) then
-      throwError "callProver :: Malformed hypothesis {hyp}"
+      throwError "callNative :: Malformed hypothesis {hyp}"
     if !(← runMetaM <| Meta.isProp hyp) then
-      throwError "callProver :: Hypothesis {hyp} is not a proposition"
+      throwError "callNative :: Hypothesis {hyp} is not a proposition"
   let hyps ← runMetaM <| hyps.mapM (fun e => Core.betaReduce e)
   let hypFvars ← withHyps hyps
   let lemmas : Array Lemma := (hyps.zip hypFvars).map (fun (ty, proof) => ⟨.fvar proof, ty, #[]⟩)
@@ -380,7 +370,7 @@ private def callProverExternMAction
     let proofLamTermPre := proofLamTermPre.abstractsRevImp ((Array.mk usedEtoms).map LamTerm.etom)
     let usedEtomTys ← usedEtoms.mapM (fun etom => do
       let .some ty := lamEVarTy[etom]?
-        | throwError "callProver :: Unexpected error"
+        | throwError "callNative :: Unexpected error"
       return ty)
     let proofLamTerm := usedEtomTys.foldr (fun s cur => LamTerm.mkForallEF s cur) proofLamTermPre
     return (mkAppN expr ⟨usedVals⟩, proofLamTerm, ⟨usedEtoms⟩, ⟨usedInhs.map Prod.fst⟩, ⟨usedHyps.map Prod.fst⟩))
@@ -402,39 +392,39 @@ private def callProverExternMAction
   · `[w₀, w₁, ⋯, wₗ₋₁]` is a subsequence of `[t₀, t₁, ⋯, kₖ₋₁]`
   · `etoms` are all the etoms present in `w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥`
 -/
-def callProver_checker
+def callNative_checker
   (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → MetaM Expr) :
   ReifM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := do
   let tyVal ← LamReif.getTyVal
   let varVal ← LamReif.getVarVal
   let lamEVarTy ← LamReif.getLamEVarTy
-  runAtMetaM' <| (callProverExternMAction nonempties valids prover).run'
+  runAtMetaM' <| (callNativeExternMAction nonempties valids prover).run'
     { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
 
 /--
-  Similar in functionality compared to `callProver_checker`, but
+  Similar in functionality compared to `callNative_checker`, but
     all `valid` entries are supposed to be reified facts (so there should
     be no `etom`s). We invoke the prover to get the same `proof` as
-    `callProverChecker`, but we return a proof of `⊥` by applying `proof`
+    `callNativeChecker`, but we return a proof of `⊥` by applying `proof`
     to un-reified facts.
 -/
-def callProver_direct
+def callNative_direct
   (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → MetaM Expr) : ReifM Expr := do
   let tyVal ← LamReif.getTyVal
   let varVal ← LamReif.getVarVal
   let lamEVarTy ← LamReif.getLamEVarTy
   let (proof, _, usedEtoms, usedInhs, usedHyps) ← runAtMetaM' <|
-    (callProverExternMAction nonempties valids prover).run'
+    (callNativeExternMAction nonempties valids prover).run'
       { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
   if usedEtoms.size != 0 then
-    throwError "callProver_direct :: etoms should not occur here"
+    throwError "callNative_direct :: etoms should not occur here"
   let ss ← usedInhs.mapM (fun re => do
     let .inhabitation e _ ← lookupREntryProof! re
-      | throwError "callProver_direct :: Cannot find external proof of {re}"
+      | throwError "callNative_direct :: Cannot find external proof of {re}"
     return e)
   let ts ← usedHyps.mapM (fun re => do
     let .assertion e _ ← lookupREntryProof! re
-      | throwError "callProver_direct :: Cannot find external proof of {re}"
+      | throwError "callNative_direct :: Cannot find external proof of {re}"
     return e)
   return mkAppN proof (ss ++ ts)
 
