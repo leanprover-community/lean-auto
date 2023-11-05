@@ -606,7 +606,7 @@ def ident2LamConstr (ltv : LamTyVal) (s : String) : LamConstr :=
   | _   => .error s!"Unknown identifier {s}"
 
 open Embedding.Lam in
-partial def term2LamTerm (ltv : LamTyVal) (t : Term) (lctx : List LamSort := []) : LamConstr :=
+partial def term2LamTerm (ltv : LamTyVal) (t : Term) (lctx : HashMap String (Nat × LamSort) := {}) : LamConstr :=
   match t with
   | ⟨.ident "$i", []⟩ => .error "Does not have iota"
   | ⟨.ident "$tType", []⟩ => .kind
@@ -614,40 +614,36 @@ partial def term2LamTerm (ltv : LamTyVal) (t : Term) (lctx : List LamSort := [])
   | ⟨.ident "$true", []⟩ => .term (.base .prop) (.base .trueE)
   | ⟨.ident "$false", []⟩ => .term (.base .prop) (.base .falseE)
   | ⟨.ident ids, as⟩ =>
-    match ids.get ⟨0⟩ with
-    | 'X' =>
-      match (ids.drop 1).toNat? with
-      | .some n =>
-        match lctx[n]? with
-        | .some s => .term s (.bvar (lctx.length - n - 1))
-        | .none   => .error "Loose Bound Variable"
-      | .none => .error s!"Unknown identifier{ids}"
-    | _   => ident2LamConstr ltv ids
+    let head :=
+      match deBruijnAndSort? lctx ids with
+      | .some (db, s) => .term s (.bvar db)
+      | .none => ident2LamConstr ltv ids
+    lamConstrMkAppN head (as.map (term2LamTerm ltv · lctx))
   | ⟨.op "!", body :: var :: tail⟩ =>
-    match term2LamTerm ltv var lctx with
-    | .sort s =>
-      match term2LamTerm ltv ⟨.op "!", body :: tail⟩ (s :: lctx) with
+    match processVar ltv var lctx with
+    | .some (name, s) =>
+      match term2LamTerm ltv ⟨.op "!", body :: tail⟩ (lctx.insert name (lctx.size, s)) with
       | .term (.base .prop) body => .term (.base .prop) (.mkForallEF s body)
       | _ => .error s!"Unexpected term {repr t}"
     | _ => .error s!"Unexpected term {repr t}"
   | ⟨.op "!>", body :: var :: tail⟩ =>
-    match term2LamTerm ltv var lctx with
-    | .sort s =>
-      match term2LamTerm ltv ⟨.op "!>", body :: tail⟩ (s :: lctx) with
+    match processVar ltv var lctx with
+    | .some (name, s) =>
+      match term2LamTerm ltv ⟨.op "!>", body :: tail⟩ (lctx.insert name (lctx.size, s)) with
       | .term (.base .prop) body => .term (.base .prop) (.mkForallEF s body)
       | _ => .error s!"Unexpected term {repr t}"
     | _ => .error s!"Unexpected term {repr t}"
   | ⟨.op "^", body :: var :: tail⟩ =>
-    match term2LamTerm ltv var lctx with
-    | .sort s =>
-      match term2LamTerm ltv ⟨.op "^", body :: tail⟩ (s :: lctx) with
+    match processVar ltv var lctx with
+    | .some (name, s) =>
+      match term2LamTerm ltv ⟨.op "^", body :: tail⟩ (lctx.insert name (lctx.size, s)) with
       | .term resTy body => .term (.func s resTy) (.lam s body)
       | _ => .error s!"Unexpected term {repr t}"
     | _ => .error s!"Unexpected term {repr t}"
   | ⟨.op "?", body :: var :: tail⟩ =>
-    match term2LamTerm ltv var lctx with
-    | .sort s =>
-      match term2LamTerm ltv ⟨.op "?", body :: tail⟩ (s :: lctx) with
+    match processVar ltv var lctx with
+    | .some (name, s) =>
+      match term2LamTerm ltv ⟨.op "?", body :: tail⟩ (lctx.insert name (lctx.size, s)) with
       | .term (.base .prop) body => .term (.base .prop) (.mkExistEF s body)
       | _ => .error s!"Unexpected term {repr t}"
     | _ => .error s!"Unexpected term {repr t}"
@@ -713,8 +709,8 @@ partial def term2LamTerm (ltv : LamTyVal) (t : Term) (lctx : List LamSort := [])
   | ⟨.op "|", []⟩   => .ofBaseTerm ltv .or
   | ⟨.op "&", []⟩   => .ofBaseTerm ltv .and
   | ⟨.op "<=>", []⟩ => .ofBaseTerm ltv .iff
-  | ⟨.op "!=", []⟩  => .error "Type inference for `!=` is not implemented"
-  | ⟨.op "=", []⟩   => .error "Type inference for `=` is not implemented"
+  | ⟨.op "!=", []⟩  => .error "Type inference for `(!=)` is not implemented"
+  | ⟨.op "=", []⟩   => .error "Type inference for `(=)` is not implemented"
   | ⟨.op "~|", []⟩  => .term (.func (.base .prop) (.func (.base .prop) (.base .prop)))
     (.lam (.base .prop) (.lam (.base .prop) (.mkNot (.mkOr (.bvar 1) (.bvar 0)))))
   | ⟨.op "~&", []⟩  => .term (.func (.base .prop) (.func (.base .prop) (.base .prop)))
@@ -731,120 +727,54 @@ partial def term2LamTerm (ltv : LamTyVal) (t : Term) (lctx : List LamSort := [])
     | .sort sa, .sort sb => .sort (.func sa sb)
     | _, _ => .error "Unexpected term {repr t}"
   | _ => .error "term2LamTerm :: Could not translate to Lean Expr: {repr t}"
+where
+  processVar (ltv : LamTyVal) (var : Term) (lctx : HashMap String (Nat × LamSort)) : Option (String × LamSort) :=
+    match var with
+    | ⟨.ident v, ty⟩ =>
+      match ty with
+      | [ty] =>
+        match term2LamTerm ltv ty lctx with
+        | .sort s => .some (v, s)
+        | _ => .none
+      | _ => .none
+    | _ => .none
+  deBruijnAndSort? (lctx : HashMap String (Nat × LamSort)) (id : String) : Option (Nat × LamSort) :=
+    match lctx.find? id with
+    | .some (n, s) => (lctx.size - 1 - n, s)
+    | .none => none
+  lamConstrMkAppN (head : LamConstr) (args : List LamConstr) :=
+    match head, args with
+    | .term s₁ t₁, .nil => .term s₁ t₁
+    | .term s₁ t₁, .cons (.term s₂ t₂) tail =>
+      match s₁ with
+      | .func argTy resTy =>
+        match argTy.beq s₂ with
+        | true => lamConstrMkAppN (.term resTy (.app s₂ t₁ t₂)) tail
+        | false => .error "term2LamTerm :: Application type mismatch in lamConstrMkAppN"
+      | _ => .error "term2LamTerm :: Non-function term applied to argument"
+    | _, _ => .error "term2LamTerm :: Unexpected input to lamConstrMkAppN"
 
-open Meta
-
-partial def findFile (name : String) (dir : System.FilePath) : IO (Option System.FilePath) := do
-  -- search in [dir], and its parents recursively
-  if (name : System.FilePath).isRelative
-  then match ← search dir with
-    | .none =>
-      match ← IO.getEnv "TPTP" with
-      | .none => return .none
-      | .some dir' => search dir'
-    | .some res => return res
-  else if ← System.FilePath.pathExists name
-  then return .some name
-  else return .none
-where search (dir : System.FilePath) : IO (Option System.FilePath) := do
-    let curName := dir / name
-    if ← System.FilePath.pathExists curName
-    then return .some curName
-    else
-      let some dir' := dir.parent
-        | return .none
-      return ← search dir'
-
-partial def resolveIncludes (cmds : List Command) (dir : System.FilePath) : IO (List Command) := do
-  let mut res : Array Command := #[]
-  for cmd in cmds do
+open Embedding.Lam in
+def getProof (ltv : LamTyVal) (str : String) : MetaM (Array LamTerm) := do
+  let parseTree ← TPTP.parse str
+  let mut ret := #[]
+  for ⟨cmd, args⟩ in parseTree do
     match cmd with
-    | ⟨"include", [⟨.ident name, []⟩]⟩ =>
-      let some path ← findFile (name : String) (dir : System.FilePath)
-        | throw $ IO.userError s!"Cannot find: {name}"
-      IO.println s!"Reading included file: {path}"
-      let s ← IO.FS.readFile path
-      let cmds' ← parse s
-      let cmds' ← resolveIncludes cmds' dir
-      for cmd' in cmds' do
-        res := res.push cmd'
-    | _ => res := res.push cmd
-  return res.toList
-
-abbrev Formulas := Array (Expr × Expr × Array Name)
-
--- def compileCmds (cmds : List TPTP.Command) (acc : Formulas) (k : Formulas → MetaM α): MetaM α := do
---   match cmds with
---   | ⟨cmd, args⟩ :: cs =>
---     match cmd with
---     | "thf" | "tff" | "cnf" | "fof" =>
---       match args with
---       | [_, ⟨.ident "type", _⟩, ⟨.ident id, [ty]⟩]  =>
---         withLocalDeclD id (← toLeanExpr ty) fun _ => do
---           compileCmds cs acc k
---       | [⟨.ident name, []⟩, ⟨.ident kind, _⟩, val] =>
---         let val ← toLeanExpr val
---         let val := if kind == "conjecture" then ← mkAppM ``Not #[val] else val
---         withLocalDeclD ("H_" ++ name) val fun x => do
---           let acc := acc.push (val, x, #[])
---           compileCmds cs acc k
---       | _ => throwError "Unknown declaration kind: {args.map repr}"
---     | "include" => throwError "includes should have been unfolded first: {args.map repr}"
---     | cmd => throwError "Unknown command: {cmd}"
---   | [] => k acc
-
-/-- Collect all constants (lower case variables) since these are not explicitly declared in FOF and CNF format. -/
-partial def collectConstantsOfCmd (topLevel : Bool) (acc : HashMap String Expr) (t : Term): MetaM (HashMap String Expr) := do
-  match t with
-  | ⟨.ident n, as⟩ => do
-    let acc ← as.foldlM (collectConstantsOfCmd false) acc
-    if n.data[0]!.isLower && n.data[0]! != '$' && !acc.contains n
-    then
-      let ty ← as.foldlM
-        (fun acc _ => mkArrow (mkConst `Iota) acc)
-        (if topLevel then mkSort levelZero else mkConst `Iota)
-      let acc := acc.insert n ty
-      return acc
-    else
-      return acc
-  | ⟨.op "!", body :: _⟩ | ⟨.op "?", body :: _⟩ =>
-    collectConstantsOfCmd topLevel acc body
-  | ⟨.op "~", as⟩
-  | ⟨.op "|", as⟩
-  | ⟨.op "&", as⟩
-  | ⟨.op "<=>", as⟩
-  | ⟨.op "=>", as⟩ | ⟨.op "<=", as⟩
-  | ⟨.op "~|", as⟩
-  | ⟨.op "~&", as⟩
-  | ⟨.op "<~>", as⟩ =>
-    as.foldlM (collectConstantsOfCmd topLevel) acc
-  | ⟨.op "!=", as⟩
-  | ⟨.op "=", as⟩ =>
-    as.foldlM (collectConstantsOfCmd false) acc
-  | _ => throwError "Failed to collect constants: {repr t}"
-
-def collectCnfFofConstants (cmds : List Command) : MetaM (HashMap String Expr) := do
-  let mut acc := HashMap.empty
-  for cmd in cmds do
-    match cmd with
-    | ⟨"cnf", [_, _, val]⟩ | ⟨"fof", [_, _, val]⟩ =>
-      acc ← collectConstantsOfCmd true acc val
-    | _ => pure ()
-  return acc
-
--- def compile [Inhabited α] (code : String) (dir : System.FilePath) (k : Formulas → MetaM α) : MetaM α := do
---   let cmds ← TPTP.parse code
---   let cmds ← resolveIncludes cmds dir
---   let constants ← collectCnfFofConstants cmds
---   withLocalDeclsD (constants.toArray.map fun (n, ty) => (n, fun _ => pure ty)) fun _ => do
---     compileCmds cmds #[] k
-
--- def compileFile [Inhabited α] (path : String) (k : Formulas → MetaM α) : MetaM α := do
---   let code ← IO.FS.readFile path
---   compile code (path : System.FilePath).parent.get! k
+    | "thf" | "tff" | "cnf" | "fof" =>
+      match args with
+      | [⟨.ident name, []⟩, ⟨.ident kind, _⟩, val, _] =>
+        match term2LamTerm ltv val with
+        | .term (.base .prop) t =>
+          ret := ret.push t
+        | .error e => throwError ("getProof :: " ++ e)
+        | _ => throwError "getProof :: Unexpected LamConstr"
+      | _ => continue
+    | "include" => throwError "getProof :: `include` should not occur in proof output of TPTP solvers"
+    | _ => throwError "getProof :: Unknown command {cmd}"
+  return ret
 
 /-- Returns the unsat core (= all used facts) of a TSTP output string. -/
-def unsatCore (str : String) : IO (Array String) := do
+def unsatCore (str : String) : MetaM (Array String) := do
   let parseTree ← TPTP.parse str
   let mut res := #[]
   for ⟨_, args⟩ in parseTree do
@@ -854,19 +784,5 @@ def unsatCore (str : String) : IO (Array String) := do
           if let ⟨.ident id, []⟩ := args[0]! then
             res := res.push id
   return res
-
--- def toLeanExpr (s : String) : MetaM Expr := do
---   let tokens ← Tokenizer.tokenize s
---   let (t, _) ← parseTerm.run {tokens}
---   let r ← toLeanExpr t
---   trace[Meta.debug] "{r}"
---   return r
---
--- set_option trace.Meta.debug true
--- #eval toLeanExpr "?[a : $tType, b : $tType]: a = b"
--- #eval toLeanExpr "![x : $tType]: ![a : x]: a != a"
--- #eval toLeanExpr "$true != $true"
--- #eval toLeanExpr "$true & $true"
--- #eval toLeanExpr "(<=)"
 
 end TPTP

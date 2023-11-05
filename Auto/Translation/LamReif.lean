@@ -1725,11 +1725,6 @@ def processNewTermExpr (e : Expr) : ReifM LamTerm :=
       return res
     newTermExpr e
 
-private def deBruijn? (lctx : HashMap FVarId Nat) (id : FVarId) : Option Nat :=
-  match lctx.find? id with
-  | .some n => lctx.size - 1 - n
-  | .none   => none
-
 def processTermExpr (lctx : HashMap FVarId Nat) (e : Expr) : ReifM LamTerm := do
   if let .fvar fid := e then
     if let .some n := deBruijn? lctx fid then
@@ -1741,6 +1736,11 @@ def processTermExpr (lctx : HashMap FVarId Nat) (e : Expr) : ReifM LamTerm := do
     return .atom id
   -- If the expression has not been processed
   processNewTermExpr e
+where
+  deBruijn? (lctx : HashMap FVarId Nat) (id : FVarId) : Option Nat :=
+    match lctx.find? id with
+    | .some n => lctx.size - 1 - n
+    | .none   => none
 
 partial def reifTerm (lctx : HashMap FVarId Nat) : Expr → ReifM LamTerm
 | .app fn arg => do
