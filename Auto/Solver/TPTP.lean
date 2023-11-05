@@ -92,7 +92,7 @@ def queryZEPort (query : String) : MetaM String := do
   solver.kill
   IO.FS.removeFile s!"./.zeport_ignore/problem{idx}.p"
   -- For synchronization, remove directory in the end
-  IO.FS.removeDir s!"./.zeport_ignore/tmp{idx}"
+  IO.FS.removeDirAll s!"./.zeport_ignore/tmp{idx}"
   return stdout
 where attempt (action : MetaM Unit) := try action catch _ => pure ()
 
