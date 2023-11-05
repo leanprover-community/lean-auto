@@ -319,6 +319,14 @@ example
   (Hw₁₂ : (w₁ = w₂) = (w₂ = w₁)) : True := by
   auto [Hadd, Hmul, Hw₁₂]
 
+example
+  (f : ((Nat → Prop) → Prop) → Prop) (h : f (@Auto.Embedding.forallF Nat)):
+  f (@Auto.Embedding.forallF Nat) := by
+  auto
+
+example : @Auto.Embedding.forallF Nat = @Auto.Embedding.forallF Nat := by
+  auto
+
 -- Polymorphic Constant
 
 set_option auto.redMode "instances" in
