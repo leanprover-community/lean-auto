@@ -1,0 +1,7 @@
+(set-logic ALL)
+(define-fun |itdiv| ((|x| |Int|) (|y| |Int|)) |Int| (|ite| (|=| |y| 0) |x| (|ite| (|>=| |x| 0) (|div| |x| |y|) (|-| (|div| (|-| |x|) |y|))))) 
+(define-fun |itmod| ((|x| |Int|) (|y| |Int|)) |Int| (|ite| (|=| |y| 0) |x| (|ite| (|>=| |x| 0) (|mod| |x| |y|) (|-| (|mod| (|-| |x|) |y|))))) 
+(define-fun |iediv| ((|x| |Int|) (|y| |Int|)) |Int| (|ite| (|=| |y| 0) 0 (|div| |x| |y|))) 
+(define-fun |iemod| ((|x| |Int|) (|y| |Int|)) |Int| (|ite| (|=| |y| 0) |x| (|mod| |x| |y|))) 
+(assert (|not| (|=| "\u{26}" "&")))
+(check-sat)
