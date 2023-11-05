@@ -78,7 +78,7 @@ where
 axiom autoSMTSorry.{u} (α : Sort u) : α
 
 /-- Only put declarations in the query -/
-def querySolver (query : Array IR.SMT.Command) : MetaM (Option Expr) := do
+def querySolver (query : Array IR.SMT.Command) : MetaM (Option Sexp) := do
   if !(auto.smt.get (← getOptions)) then
     throwError "querySolver :: Unexpected error"
   let name := auto.smt.solver.name.get (← getOptions)
@@ -106,11 +106,7 @@ def querySolver (query : Array IR.SMT.Command) : MetaM (Option Expr) := do
     let (proof, _) ← getSexp stdout
     solver.kill
     trace[auto.smt.result] "{name} says Unsat, proof:\n {proof}\nstderr:\n{stderr}"
-    if (auto.smt.trust.get (← getOptions)) then
-      logWarning "Trusting SMT solvers. `autoSMTSorry` is used to discharge the goal."
-      return ← Meta.mkAppM ``autoSMTSorry #[Expr.const ``False []]
-    else
-      return .none
+    return .some proof
   | _ =>
     trace[auto.smt.result] "{name} produces unexpected check-sat response\n {checkSatResponse}"
     return .none

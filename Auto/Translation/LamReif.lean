@@ -264,7 +264,7 @@ def lookupEtomChkStep! (eidx : Nat) : ReifM ChkStep := do
   This should only be used at the meta level, i.e. in code that will
     be evaluated during the execution of `auto`
 -/
-private def getLamTyValAtMeta : ReifM LamTyVal := do
+def getLamTyValAtMeta : ReifM LamTyVal := do
   let varVal ← getVarVal
   let varTy := varVal.map Prod.snd
   let lamILTy ← getLamILTy

@@ -23,9 +23,9 @@ def Token.toString : Token → String
 | .ident a => a
 
 structure State where
-(status : Status := .default)
-(currToken : String := "")
-(res : Array Token := #[])
+  status    : Status := .default
+  currToken : String := ""
+  res       : Array Token := #[]
 deriving Repr
 
 def tokens := [
@@ -134,10 +134,9 @@ open Tokenizer
 /- Pratt parser following `https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html`-/
 
 structure State where
-(tokens : Array Token)
-(curr : Nat := 0)
+  tokens : Array Token
+  curr   : Nat := 0
 deriving Repr
-
 
 abbrev ParserM := StateRefT State IO
 
@@ -270,8 +269,8 @@ partial def parseTypeDecl : ParserM Term := do
 end
 
 structure Command where
-(cmd : String)
-(args : List Term)
+  cmd : String
+  args : List Term
 deriving Repr
 
 def parseCommand : ParserM Command := do
@@ -298,7 +297,7 @@ def parseCommand : ParserM Command := do
     parseToken (.op ")")
     parseToken (.op ".")
     return ⟨cmd, [Term.mk (.ident str) []]⟩
-  | _ => throw $ IO.userError "Command '{cmd}' not supported"
+  | _ => throw $ IO.userError s!"Command '{cmd}' not supported"
 
 partial def parseCommands : ParserM (List Command) := do
   if ← isEOF
@@ -307,10 +306,10 @@ partial def parseCommands : ParserM (List Command) := do
     let c ← parseCommand
     return c :: (← parseCommands)
 
-def parse (s : String) : IO (List Command) := do
+def parse (s : String) : IO (Array Command) := do
   let tokens ← Tokenizer.tokenize s
   let res ← parseCommands.run {tokens}
-  return res.1
+  return (Array.mk res.fst)
 
 open Embedding.Lam in
 def ident2BaseSort (s : String) : Option LamBaseSort :=
@@ -755,14 +754,13 @@ where
     | _, _ => .error "term2LamTerm :: Unexpected input to lamConstrMkAppN"
 
 open Embedding.Lam in
-def getProof (ltv : LamTyVal) (str : String) : MetaM (Array LamTerm) := do
-  let parseTree ← TPTP.parse str
+def getProof (ltv : LamTyVal) (cmds : Array Command) : MetaM (Array LamTerm) := do
   let mut ret := #[]
-  for ⟨cmd, args⟩ in parseTree do
+  for ⟨cmd, args⟩ in cmds do
     match cmd with
     | "thf" | "tff" | "cnf" | "fof" =>
       match args with
-      | [⟨.ident name, []⟩, ⟨.ident kind, _⟩, val, _] =>
+      | [⟨.ident name, []⟩, ⟨.ident kind, _⟩, val] =>
         match term2LamTerm ltv val with
         | .term (.base .prop) t =>
           ret := ret.push t
@@ -774,10 +772,9 @@ def getProof (ltv : LamTyVal) (str : String) : MetaM (Array LamTerm) := do
   return ret
 
 /-- Returns the unsat core (= all used facts) of a TSTP output string. -/
-def unsatCore (str : String) : MetaM (Array String) := do
-  let parseTree ← TPTP.parse str
+def unsatCore (cmds : Array Command) : MetaM (Array String) := do
   let mut res := #[]
-  for ⟨_, args⟩ in parseTree do
+  for ⟨_, args⟩ in cmds do
     if args.length > 1 then
       if let ⟨.ident kind, []⟩ := args[1]! then
         if ["axiom", "conjecture", "negated_conjecture"].contains kind then

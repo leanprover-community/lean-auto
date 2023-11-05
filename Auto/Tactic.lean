@@ -254,7 +254,11 @@ where
         | _ => throwError "runAuto :: Unexpected error")
       let query ← lam2TH0 lamVarTy lamEVarTy exportLamTerms
       trace[auto.tptp.printQuery] "\n{query}"
-      Solver.TPTP.querySolver query
+      let tptpProof ← Solver.TPTP.querySolver query
+      let proofSteps ← Parser.TPTP.getProof (← LamReif.getLamTyValAtMeta) tptpProof
+      for step in proofSteps do
+        trace[auto.tptp.printProof] "{step}"
+      return .none
     catch e =>
       trace[auto.tptp.result] "TPTP invocation failed with {e.toMessageData}"
       return .none
@@ -269,7 +273,13 @@ where
       let commands ← (lamFOL2SMT lamVarTy lamEVarTy exportLamTerms exportInds).run'
       for cmd in commands do
         trace[auto.smt.printCommands] "{cmd}"
-      Solver.SMT.querySolver commands
+      let .some _ ← Solver.SMT.querySolver commands
+        | return .none
+      if (auto.smt.trust.get (← getOptions)) then
+        logWarning "Trusting SMT solvers. `autoSMTSorry` is used to discharge the goal."
+        return .some (← Meta.mkAppM ``Solver.SMT.autoSMTSorry #[Expr.const ``False []])
+      else
+        return .none
     catch e =>
       trace[auto.smt.result] "SMT invocation failed with {e.toMessageData}"
       return .none

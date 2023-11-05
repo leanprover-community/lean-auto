@@ -1,10 +1,13 @@
 import Lean
 import Auto.IR.TPTP_TH0
+import Auto.Parser.TPTP
+import Auto.Embedding.LamBase
 open Lean
 
 initialize
   registerTraceClass `auto.tptp.printQuery
   registerTraceClass `auto.tptp.result
+  registerTraceClass `auto.tptp.printProof
 
 register_option auto.tptp : Bool := {
   defValue := false
@@ -12,6 +15,8 @@ register_option auto.tptp : Bool := {
 }
 
 namespace Auto
+
+open Parser.TPTP
 
 namespace Solver.TPTP
 
@@ -53,16 +58,17 @@ private def createAux (path : String) (args : Array String) : MetaM SolverProc :
 def queryNone : MetaM Unit := do
   trace[auto.tptp.result] "TPTP solver is disabled. No result available."
 
-def queryZipperposition (query : String) : MetaM (Option Expr) := do
+def queryZipperposition (query : String) : MetaM String := do
   let solver ← createAux "zipperposition" #["-i=tptp", "--mode=ho-competitive", "-t=10"]
   solver.stdin.putStr s!"{query}\n"
   let (_, solver) ← solver.takeStdin
-  let result ← solver.stdout.readToEnd
-  trace[auto.tptp.result] "Result: {result}"
+  let stderr ← solver.stderr.readToEnd
+  let stdout ← solver.stdout.readToEnd
+  trace[auto.tptp.result] "Result: \nstderr:\n{stderr}\nstdout:\n{stdout}"
   solver.kill
-  return .none
+  return stdout
 
-def queryZEPort (query : String) : MetaM (Option Expr) := do
+def queryZEPort (query : String) : MetaM String := do
   let path := auto.tptp.zeport.path.get (← getOptions)
   -- To avoid concurrency issue, use `attempt`
   attempt <| IO.FS.createDir "./.zeport_ignore"
@@ -79,7 +85,7 @@ def queryZEPort (query : String) : MetaM (Option Expr) := do
       idx := idx + (← IO.rand 0 100)
   IO.FS.withFile s!"./.zeport_ignore/problem{idx}.p" .writeNew (fun stream =>
     stream.putStr query)
-  let solver ← createAux "python3" #[path, s!"./.zeport_ignore/problem{idx}.p", "10", s!"./.zeport_ignore/tmp{idx}"]
+  let solver ← createAux "python3" #[path, s!"./.zeport_ignore/problem{idx}.p", "10", s!"./.zeport_ignore/tmp{idx}", "true"]
   let stderr ← solver.stderr.readToEnd
   let stdout ← solver.stdout.readToEnd
   trace[auto.tptp.result] "Result: \nstderr:\n{stderr}\nstdout:\n{stdout}"
@@ -87,15 +93,17 @@ def queryZEPort (query : String) : MetaM (Option Expr) := do
   IO.FS.removeFile s!"./.zeport_ignore/problem{idx}.p"
   -- For synchronization, remove directory in the end
   IO.FS.removeDir s!"./.zeport_ignore/tmp{idx}"
-  return .none
+  return stdout
 where attempt (action : MetaM Unit) := try action catch _ => pure ()
 
-def querySolver (query : String) : MetaM (Option Expr) := do
+def querySolver (query : String) : MetaM (Array Parser.TPTP.Command) := do
   if !(auto.tptp.get (← getOptions)) then
     throwError "querySolver :: Unexpected error"
-  match auto.tptp.solver.name.get (← getOptions) with
-  | .zipperposition => queryZipperposition query
-  | .zeport => queryZEPort query
+  let stdout ← (do
+    match auto.tptp.solver.name.get (← getOptions) with
+    | .zipperposition => queryZipperposition query
+    | .zeport => queryZEPort query)
+  return ← Parser.TPTP.parse stdout
 
 end Solver.TPTP
 
