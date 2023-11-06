@@ -1369,52 +1369,6 @@ def reifMapLam0Arg2Natlit : HashMap (Name × Name) (Array ((Nat → Expr) × (Na
                 (fun n => .app (.const ``BitVec.sgt []) (.lit (.natVal n)), fun n => .bvsgt' n)])
   ]
 
-def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
-  let .const fnName _ := fn
-    | return .none
-  if arg₁.isConst then
-    let .const arg₁Name _ := arg₁
-      | throwError "processLam0Arg2 :: Unexpected error"
-    if let .some (e', t) := reifMapLam0Arg2NoLit.find? (fnName, arg₁Name) then
-      if (← Meta.isDefEqD e e') then
-        return .some t
-  if arg₁.isApp then
-    let .app arg₁fn arg₁arg := arg₁
-      | throwError "processLam0Arg2 :: Unexpected error"
-    if let .const arg₁FnName _ := arg₁fn then
-      if let .some candidates := reifMapLam0Arg2Natlit.find? (fnName, arg₁FnName) then
-        for (e'con, tcon) in candidates do
-          if let .some n ← Meta.evalNat arg₁arg then
-            if (← Meta.isDefEqD e (e'con n)) then
-              return .some (tcon n)
-  return .none
-
-def processLam0Arg3 (e fn arg₁ arg₂ arg₃ : Expr) : MetaM (Option LamTerm) := do
-  match fn with
-  | .const ``OfNat.ofNat _ =>
-    match arg₁ with
-    | .const ``Nat _ =>
-      if (← Meta.isDefEqD e arg₂) then
-        let .lit (.natVal nv) := arg₂
-          | throwError "processLam0Arg3 :: OfNat.ofNat instance is not based on a nat literal"
-        return .some (.base (.natVal' nv))
-      return .none
-    | .const ``Int _ =>
-      if (← Meta.isDefEqD e (.app (.const ``Int.ofNat []) arg₂)) then
-        let .lit (.natVal nv) := arg₂
-          | throwError "processLam0Arg3 :: OfNat.ofNat instance is not based on a nat literal"
-        return .some (.base (.intVal' nv))
-      return .none
-    | .app (.const ``Std.BitVec []) nExpr =>
-      if let .some n ← Meta.evalNat nExpr then
-        if (← Meta.isDefEqD e (mkApp2 (.const ``Std.BitVec.ofNat []) (.lit (.natVal n)) arg₂)) then
-          let .lit (.natVal nv) := arg₂
-            | throwError "processLam0Arg3 :: OfNat.ofNat instance is not based on a nat literal"
-          return .some (.base (.bvVal' n nv))
-      return .none
-    | _ => return .none
-  | _ => return .none
-
 /--
   fn   : .const _ _
   arg₁ : .const _ _
@@ -1475,6 +1429,11 @@ def reifMapLam0Arg4NatLitNatLitH : HashMap (Name × Name) (Array ((Nat → Nat �
         (fun n m => mkApp2 (.const ``BitVec.smtHsshiftRight []) (.lit (.natVal n)) (.lit (.natVal m)), fun n m => .bvsmtHashr' n m)])
   ]
 
+/--
+  fn   : .const _ _
+  arg₁ : .app (.const _ _) natlit
+  arg₂ : .const _ _
+-/
 def reifMapLam0Arg4NatLit : HashMap (Name × Name) (Array ((Nat → Expr) × (Nat → LamTerm))) :=
   HashMap.ofList [
     ((``HShiftLeft.hShiftLeft, ``Std.BitVec),
@@ -1483,6 +1442,52 @@ def reifMapLam0Arg4NatLit : HashMap (Name × Name) (Array ((Nat → Expr) × (Na
       #[(fun n => .app (.const ``Std.BitVec.ushiftRight []) (.lit (.natVal n)), fun n => .base (.bvlshr' n)),
         (fun n => .app (.const ``Std.BitVec.sshiftRight []) (.lit (.natVal n)), fun n => .base (.bvashr' n))])
   ]
+
+def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
+  let .const fnName _ := fn
+    | return .none
+  if arg₁.isConst then
+    let .const arg₁Name _ := arg₁
+      | throwError "processLam0Arg2 :: Unexpected error"
+    if let .some (e', t) := reifMapLam0Arg2NoLit.find? (fnName, arg₁Name) then
+      if (← Meta.isDefEqD e e') then
+        return .some t
+  if arg₁.isApp then
+    let .app arg₁fn arg₁arg := arg₁
+      | throwError "processLam0Arg2 :: Unexpected error"
+    if let .const arg₁FnName _ := arg₁fn then
+      if let .some candidates := reifMapLam0Arg2Natlit.find? (fnName, arg₁FnName) then
+        for (e'con, tcon) in candidates do
+          if let .some n ← Meta.evalNat arg₁arg then
+            if (← Meta.isDefEqD e (e'con n)) then
+              return .some (tcon n)
+  return .none
+
+def processLam0Arg3 (e fn arg₁ arg₂ arg₃ : Expr) : MetaM (Option LamTerm) := do
+  match fn with
+  | .const ``OfNat.ofNat _ =>
+    match arg₁ with
+    | .const ``Nat _ =>
+      if (← Meta.isDefEqD e arg₂) then
+        let .lit (.natVal nv) := arg₂
+          | throwError "processLam0Arg3 :: OfNat.ofNat instance is not based on a nat literal"
+        return .some (.base (.natVal' nv))
+      return .none
+    | .const ``Int _ =>
+      if (← Meta.isDefEqD e (.app (.const ``Int.ofNat []) arg₂)) then
+        let .lit (.natVal nv) := arg₂
+          | throwError "processLam0Arg3 :: OfNat.ofNat instance is not based on a nat literal"
+        return .some (.base (.intVal' nv))
+      return .none
+    | .app (.const ``Std.BitVec []) nExpr =>
+      if let .some n ← Meta.evalNat nExpr then
+        if (← Meta.isDefEqD e (mkApp2 (.const ``Std.BitVec.ofNat []) (.lit (.natVal n)) arg₂)) then
+          let .lit (.natVal nv) := arg₂
+            | throwError "processLam0Arg3 :: OfNat.ofNat instance is not based on a nat literal"
+          return .some (.base (.bvVal' n nv))
+      return .none
+    | _ => return .none
+  | _ => return .none
 
 def processLam0Arg4 (e fn arg₁ arg₂ arg₃ arg₄ : Expr) : MetaM (Option LamTerm) := do
   let .const fnName _ := fn
@@ -1509,9 +1514,9 @@ def processLam0Arg4 (e fn arg₁ arg₂ arg₃ arg₄ : Expr) : MetaM (Option La
   if arg₁.isApp && arg₂.isApp then
     let .app arg₁fn arg₁arg := arg₁
       | throwError "processLam0Arg4 :: Unexpected error"
-    let .app _ arg₂arg := arg₂
+    let .app arg₂fn arg₂arg := arg₂
       | throwError "processLam0Arg4 :: Unexpected error"
-    if arg₁.isConst && arg₂.isConst then
+    if arg₁fn.isConst && arg₂fn.isConst then
       let .const arg₁fnName _ := arg₁fn
         | throwError "processLam0Arg4 :: Unexpected error"
       if let .some candidates := reifMapLam0Arg4NatLitNatLitEq.find? (fnName, arg₁fnName) then
