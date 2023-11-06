@@ -1162,158 +1162,232 @@ abbrev BitVec.smtHshiftLeft (a : Std.BitVec n) (b : Std.BitVec m) := Std.BitVec.
 abbrev BitVec.smtHushiftRight (a : Std.BitVec n) (b : Std.BitVec m) := Std.BitVec.ushiftRight a b.toNat
 abbrev BitVec.smtHsshiftRight (a : Std.BitVec n) (b : Std.BitVec m) := Std.BitVec.sshiftRight a b.toNat
 
-def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
-  match fn with
-  | .const ``NatCast.natCast _ =>
-    match arg₁ with
-    | .const ``Int _ =>
-      if (← Meta.isDefEqD e (.const ``Int.ofNat [])) then
-        return .some (.base .iofNat')
+def reifMapIL : HashMap Name (LamSort → LamBaseTerm) :=
+  HashMap.ofList [
+    (``Eq,                .eq),
+    (``Embedding.forallF, .forallE),
+    (``Exists,            .existE),
+    (``Bool.ite',         .ite)
+  ]
+
+def reifMapConstNilLvl : HashMap Name LamTerm :=
+  HashMap.ofList [
+    (``True,              .base .trueE),
+    (``False,             .base .falseE),
+    (``Not,               .base .not),
+    (``And,               .base .and),
+    (``Or,                .base .or),
+    (``Iff,               .base .iff),
+    (``Bool.ofProp,       .base .ofProp'),
+    (``true,              .base .trueb'),
+    (``false,             .base .falseb'),
+    (``not,               .base .notb'),
+    (``and,               .base .andb'),
+    (``or,                .base .orb'),
+    (``Nat.zero,          .base (.natVal' 0)),
+    (``Nat.succ,          .lam (.base .nat) (.mkNatBinOp .nadd (.bvar 0) (.base (.natVal' 1)))),
+    (``Nat.add,           .base .nadd'),
+    (``Nat.sub,           .base .nsub'),
+    (``Nat.mul,           .base .nmul'),
+    (``Nat.div,           .base .ndiv'),
+    (``Nat.mod,           .base .nmod'),
+    (``Nat.le,            .base .nle'),
+    (``Nat.lt,            .base .nlt'),
+    (`Nat.ModEq,          .nmodeq'),
+    (``Int.ofNat,         .base .iofNat'),
+    (``Int.negSucc,       .base .inegSucc'),
+    (``Int.neg,           .base .ineg'),
+    (``Int.add,           .base .iadd'),
+    (``Int.sub,           .base .isub'),
+    (``Int.mul,           .base .imul'),
+    (``Int.div,           .base .idiv'),
+    (``Int.mod,           .base .imod'),
+    (``Int.ediv,          .base .iediv'),
+    (``Int.emod,          .base .iemod'),
+    (``Int.le,            .base .ile'),
+    (``Int.lt,            .base .ilt'),
+    (`Int.ModEq,          .imodeq'),
+    (``String.length,     .base .slength'),
+    (``String.append,     .base .sapp'),
+    (``String.isPrefixOf, .base .sprefixof'),
+    (``String.replace,    .base .srepall')
+  ]
+
+def reifMapBVConst1 : HashMap Name (Nat → LamTerm) :=
+  HashMap.ofList [
+    (``Std.BitVec.ofNat,       fun n => .base (.bvofNat' n)),
+    (``Std.BitVec.toNat,       fun n => .base (.bvtoNat' n)),
+    (``Std.BitVec.ofInt,       fun n => .base (.bvofInt' n)),
+    (``Std.BitVec.toInt,       fun n => .base (.bvtoInt' n)),
+    (``Std.BitVec.msb,         fun n => .base (.bvmsb' n)),
+    (``Std.BitVec.add,         fun n => .base (.bvadd' n)),
+    (``Std.BitVec.sub,         fun n => .base (.bvsub' n)),
+    (``Std.BitVec.neg,         fun n => .base (.bvneg' n)),
+    (``Std.BitVec.abs,         fun n => .base (.bvabs' n)),
+    (``Std.BitVec.mul,         fun n => .base (.bvmul' n)),
+    (``Std.BitVec.smtUDiv,     fun n => .base (.bvudiv' n)),
+    (``Std.BitVec.umod,        fun n => .base (.bvurem' n)),
+    (``Std.BitVec.smtSDiv,     fun n => .base (.bvsdiv' n)),
+    (``Std.BitVec.srem,        fun n => .base (.bvsrem' n)),
+    (``Std.BitVec.smod,        fun n => .base (.bvsmod' n)),
+    (``Std.BitVec.ult,         fun n => .base (.bvult' n)),
+    (``Std.BitVec.ule,         fun n => .base (.bvule' n)),
+    (``Std.BitVec.slt,         fun n => .base (.bvslt' n)),
+    (``Std.BitVec.sle,         fun n => .base (.bvsle' n)),
+    (``Std.BitVec.and,         fun n => .base (.bvand' n)),
+    (``Std.BitVec.or,          fun n => .base (.bvor' n)),
+    (``Std.BitVec.xor,         fun n => .base (.bvxor' n)),
+    (``Std.BitVec.not,         fun n => .base (.bvnot' n)),
+    (``Std.BitVec.shiftLeft,   fun n => .base (.bvshl' n)),
+    (``Std.BitVec.ushiftRight, fun n => .base (.bvlshr' n)),
+    (``Std.BitVec.sshiftRight, fun n => .base (.bvashr' n)),
+    (``Std.BitVec.rotateLeft,  fun n => .bvrotateLeft' n),
+    (``Std.BitVec.rotateRight, fun n => .bvrotateRight' n)
+  ]
+
+def reifMapBVConst2 : HashMap Name (Nat → Nat → LamTerm) :=
+  HashMap.ofList [
+    (``Std.BitVec.append,     fun n m => .base (.bvappend' n m)),
+    (``Std.BitVec.replicate,  fun w i => .base (.bvrepeat' w i)),
+    (``Std.BitVec.zeroExtend, fun w v => .base (.bvzeroExtend' w v)),
+    (``Std.BitVec.signExtend, fun w v => .base (.bvsignExtend' w v))
+  ]
+
+def reifMapBVConst3 : HashMap Name (Nat → Nat → Nat → LamTerm) :=
+  HashMap.ofList [
+    (``Std.BitVec.extractLsb, fun n h l => .base (.bvextract' n h l))
+  ]
+
+def processSimpleLit (l : Literal) : LamTerm :=
+  match l with
+  | .natVal n => .base (.natVal' n)
+  | .strVal s => .base (.strVal' s)
+
+def processSimpleConst (name : Name) (lvls : List Level) : ReifM (Option LamTerm) := do
+  if let .some t := reifMapConstNilLvl.find? name then
+    if lvls.length != 0 then
+      throwError "processSimpleConst :: ConstNilLvl constants should have nil level list"
+    return t
+  if name == ``Embedding.ImpF then
+    let [u, v] := lvls
+      | throwError "processSimpleConst :: Invalid levels {lvls} for Auto.Embedding.ImpF"
+    if (← Meta.isLevelDefEq u .zero) ∧ (← Meta.isLevelDefEq v .zero) then
+      return .some (.base .imp)
+    else
+      throwError "processSimpleConst :: Non-propositional implication is not supported"
+  return .none
+
+def processSimpleApp (fn arg : Expr) : ReifM (Option LamTerm) := do
+  let fn := fn.getAppFn
+  let args := fn.getAppArgs ++ #[arg]
+  let .const name lvls := fn
+    | return .none
+  match args.data with
+  | [] => throwError "processSimpleApp :: Unexpected error"
+  | [arg] =>
+    if let .some tcon := reifMapBVConst1.find? name then
+      if lvls.length != 0 then
+        throwError "processSimpleApp :: BVConst1 should have nil level list"
+      if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
+        return .some (tcon n)
       return .none
-    | _ => return .none
-  | .const ``Neg.neg _ =>
-    match arg₁ with
-    | .const ``Int _ =>
-      if (← Meta.isDefEqD e (.const ``Int.neg [])) then
-        return .some (.base .ineg')
-      return .none
-    | .app (.const ``Std.BitVec []) nExpr =>
-      if let .some n ← Meta.evalNat nExpr then
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.neg []) (.lit (.natVal n)))) then
-          return .some (.base (.bvneg' n))
-      return .none
-    | _ => return .none
-  | .const `Abs.abs _ =>
-    match arg₁ with
-    | .const ``Int _ =>
-      if (← Meta.isDefEqD e (.const ``Int.abs [])) then
-        return .some (.base .iabs')
-      return .none
-    | .app (.const ``Std.BitVec []) nExpr =>
-      if let .some n ← Meta.evalNat nExpr then
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.abs []) (.lit (.natVal n)))) then
-          return .some (.base (.bvabs' n))
-      return .none
-    | _ => return .none
-  | .const ``Complement.complement _ =>
-    match arg₁ with
-    | .app (.const ``Std.BitVec []) nExpr =>
-      if let .some n ← Meta.evalNat nExpr then
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.not []) (.lit (.natVal n)))) then
-          return .some (.base (.bvnot' n))
-      return .none
-    | _ => return .none
-  | .const ``LE.le _ =>
-    match arg₁ with
-    | .const ``Nat _ =>
-      if (← Meta.isDefEqD e (.const ``Nat.le [])) then
-        return .some (.base .nle')
-      return .none
-    | .const ``Int _ =>
-      if (← Meta.isDefEqD e (.const ``Int.le [])) then
-        return .some (.base .ile')
-      return .none
-    | .const ``String _ =>
-      if (← Meta.isDefEqD e (.const ``String.le [])) then
-        return .some (.base .sle')
-      return .none
-    | .app (.const ``Std.BitVec []) nExpr =>
-      if let .some n ← Meta.evalNat nExpr then
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.ule []) (.lit (.natVal n)))) then
-          return .some (.base (.bvule' n))
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.sle []) (.lit (.natVal n)))) then
-          return .some (.base (.bvsle' n))
-      return .none
-    | _ => return .none
-  | .const ``GE.ge _ =>
-    match arg₁ with
-    | .const ``Nat _ =>
-      if (← Meta.isDefEqD e (.const ``Nat.ge [])) then
-        return .some .nge'
-      return .none
-    | .const ``Int _ =>
-      if (← Meta.isDefEqD e (.const ``Int.ge [])) then
-        return .some .ige'
-      return .none
-    | .const ``String _ =>
-      if (← Meta.isDefEqD e (.const ``String.ge [])) then
-        return .some .sge'
-      return .none
-    | .app (.const ``Std.BitVec []) nExpr =>
-      if let .some n ← Meta.evalNat nExpr then
-        if (← Meta.isDefEqD e (.app (.const ``BitVec.uge []) (.lit (.natVal n)))) then
-          return .some (.bvuge' n)
-        if (← Meta.isDefEqD e (.app (.const ``BitVec.sge []) (.lit (.natVal n)))) then
-          return .some (.bvsge' n)
-      return .none
-    | _ => return .none
-  | .const ``LT.lt _ =>
-    match arg₁ with
-    | .const ``Nat _ =>
-      if (← Meta.isDefEqD e (.const ``Nat.lt [])) then
-        return .some (.base .nlt')
-      return .none
-    | .const ``Int _ =>
-      if (← Meta.isDefEqD e (.const ``Int.lt [])) then
-        return .some (.base .ilt')
-      return .none
-    | .const ``String _ =>
-      if (← Meta.isDefEqD e (.const ``String.lt [])) then
-        return .some (.base .slt')
-      return .none
-    | .app (.const ``Std.BitVec []) nExpr =>
-      if let .some n ← Meta.evalNat nExpr then
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.ult []) (.lit (.natVal n)))) then
-          return .some (.base (.bvult' n))
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.slt []) (.lit (.natVal n)))) then
-          return .some (.base (.bvslt' n))
-      return .none
-    | _ => return .none
-  | .const ``GT.gt _ =>
-    match arg₁ with
-    | .const ``Nat _ =>
-      if (← Meta.isDefEqD e (.const ``Nat.gt [])) then
-        return .some .ngt'
-      return .none
-    | .const ``Int _ =>
-      if (← Meta.isDefEqD e (.const ``Int.gt [])) then
-        return .some .igt'
-      return .none
-    | .const ``String _ =>
-      if (← Meta.isDefEqD e (.const ``String.gt [])) then
-        return .some .sgt'
-      return .none
-    | .app (.const ``Std.BitVec []) nExpr =>
-      if let .some n ← Meta.evalNat nExpr then
-        if (← Meta.isDefEqD e (.app (.const ``BitVec.ugt []) (.lit (.natVal n)))) then
-          return .some (.bvugt' n)
-        if (← Meta.isDefEqD e (.app (.const ``BitVec.sgt []) (.lit (.natVal n)))) then
-          return .some (.bvsgt' n)
-      return .none
-    | _ => return .none
-  | .const ``Max.max _ =>
-    match arg₁ with
-    | .const ``Nat _ =>
-      if (← Meta.isDefEqD e (.const ``Nat.max [])) then
-        return .some (.base .nmax')
-      return .none
-    | .const ``Int _ =>
-      if (← Meta.isDefEqD e (.const ``Int.max [])) then
-        return .some (.base .imax')
-      return .none
-    | _ => return .none
-  | .const ``Min.min _ =>
-    match arg₁ with
-    | .const ``Nat _ =>
-      if (← Meta.isDefEqD e (.const ``Nat.min [])) then
-        return .some (.base .nmin')
-      return .none
-    | .const ``Int _ =>
-      if (← Meta.isDefEqD e (.const ``Int.min [])) then
-        return .some (.base .imin')
-      return .none
-    | _ => return .none
+      -- `arg` is the original (un-lifted) type
+    if let .some tcon := reifMapIL.find? name then
+      return .some (.base (tcon (← reifType arg)))
+    return .none
+  | [arg₁, arg₂] =>
+    if let .some tcon := reifMapBVConst2.find? name then
+      if lvls.length != 0 then
+        throwError "processSimpleApp :: BVConst2 should have nil level list"
+        match ← @id (MetaM _) (Meta.evalNat arg₁),
+              ← @id (MetaM _) (Meta.evalNat arg₂) with
+        | .some n, .some m => return .some (tcon n m)
+        | _,       _       => return .none
+    return .none
+  | [arg₁, arg₂, arg₃] =>
+    if let .some tcon := reifMapBVConst3.find? name then
+      if lvls.length != 0 then
+        throwError "processSimpleApp :: BVConst2 should have nil level list"
+        match ← @id (MetaM _) (Meta.evalNat arg₁),
+              ← @id (MetaM _) (Meta.evalNat arg₂),
+              ← @id (MetaM _) (Meta.evalNat arg₃) with
+        | .some n, .some h, .some l => return .some (tcon n h l)
+        | _,       _,       _       => return .none
+    return .none
   | _ => return .none
+
+/--
+  fn   : .const _ _
+  arg₁ : .const _ _
+-/
+def reifMapLam0Arg2NoLit : HashMap (Name × Name) (Expr × LamTerm) :=
+  HashMap.ofList [
+    ((``NatCast.natCast, ``Int), (.const ``Int.ofNat [], .base .iofNat')),
+    ((``Neg.neg, ``Int),         (.const ``Int.neg [], .base .ineg')),
+    ((`Abs.abs, ``Int),          (.const ``Int.abs [], .base .iabs')),
+    ((``LE.le, ``Nat),           (.const ``Nat.le [], .base .nle')),
+    ((``LE.le, ``Int),           (.const ``Int.le [], .base .ile')),
+    ((``LE.le, ``String),        (.const ``String.le [], .base .sle')),
+    ((``GE.ge, ``Nat),           (.const ``Nat.ge [], .nge')),
+    ((``GE.ge, ``Int),           (.const ``Int.ge [], .ige')),
+    ((``GE.ge, ``String),        (.const ``String.ge [], .sge')),
+    ((``LT.lt, ``Nat),           (.const ``Nat.lt [], .base .nlt')),
+    ((``LT.lt, ``Int),           (.const ``Int.lt [], .base .ilt')),
+    ((``LT.lt, ``String),        (.const ``String.lt [], .base .slt')),
+    ((``GT.gt, ``Nat),           (.const ``Nat.gt [], .ngt')),
+    ((``GT.gt, ``Int),           (.const ``Int.gt [], .igt')),
+    ((``GT.gt, ``String),        (.const ``String.gt [], .sgt')),
+    ((``Max.max, ``Nat),         (.const ``Nat.max [], .base .nmax')),
+    ((``Max.max, ``Int),         (.const ``Int.max [], .base .imax')),
+    ((``Min.min, ``Nat),         (.const ``Nat.min [], .base .nmin')),
+    ((``Min.min, ``Int),         (.const ``Int.min [], .base .imin'))
+  ]
+
+/--
+  fn   : .const _ _
+  arg₁ : .app (.const _ _) natlit
+-/
+def reifMapLam0Arg2Natlit : HashMap (Name × Name) (Array ((Nat → Expr) × (Nat → LamTerm))) :=
+  HashMap.ofList [
+    ((``Neg.neg, ``Std.BitVec),
+              #[(fun n => .app (.const ``Std.BitVec.neg []) (.lit (.natVal n)), fun n => .base (.bvneg' n))]),
+    ((`Abs.abs, ``Std.BitVec),
+              #[(fun n => .app (.const ``Std.BitVec.abs []) (.lit (.natVal n)), fun n => .base (.bvabs' n))]),
+    ((``Complement.complement, ``Std.BitVec),
+              #[(fun n => .app (.const ``Std.BitVec.not []) (.lit (.natVal n)), fun n => .base (.bvnot' n))]),
+    ((``LE.le, ``Std.BitVec),
+              #[(fun n => .app (.const ``Std.BitVec.ule []) (.lit (.natVal n)), fun n => .base (.bvule' n)),
+                (fun n => .app (.const ``Std.BitVec.sle []) (.lit (.natVal n)), fun n => .base (.bvsle' n))]),
+    ((``GE.ge, ``Std.BitVec),
+              #[(fun n => .app (.const ``BitVec.uge []) (.lit (.natVal n)), fun n => .bvuge' n),
+                (fun n => .app (.const ``BitVec.sge []) (.lit (.natVal n)), fun n => .bvsge' n)]),
+    ((``LT.lt, ``Std.BitVec),
+              #[(fun n => .app (.const ``Std.BitVec.ult []) (.lit (.natVal n)), fun n => .base (.bvult' n)),
+                (fun n => .app (.const ``Std.BitVec.slt []) (.lit (.natVal n)), fun n => .base (.bvslt' n))]),
+    ((``GT.gt, ``Std.BitVec),
+              #[(fun n => .app (.const ``BitVec.ugt []) (.lit (.natVal n)), fun n => .bvugt' n),
+                (fun n => .app (.const ``BitVec.sgt []) (.lit (.natVal n)), fun n => .bvsgt' n)])
+  ]
+
+def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
+  let .const fnName _ := fn
+    | return .none
+  if arg₁.isConst then
+    let .const arg₁Name _ := arg₁
+      | throwError "processLam0Arg2 :: Unexpected error"
+    if let .some (e', t) := reifMapLam0Arg2NoLit.find? (fnName, arg₁Name) then
+      if (← Meta.isDefEqD e e') then
+        return .some t
+  if arg₁.isApp then
+    let .app arg₁fn arg₁arg := arg₁
+      | throwError "processLam0Arg2 :: Unexpected error"
+    if let .const arg₁FnName _ := arg₁fn then
+      if let .some candidates := reifMapLam0Arg2Natlit.find? (fnName, arg₁FnName) then
+        for (e'con, tcon) in candidates do
+          if let .some n ← Meta.evalNat arg₁arg then
+            if (← Meta.isDefEqD e (e'con n)) then
+              return .some (tcon n)
+  return .none
 
 def processLam0Arg3 (e fn arg₁ arg₂ arg₃ : Expr) : MetaM (Option LamTerm) := do
   match fn with
@@ -1341,171 +1415,119 @@ def processLam0Arg3 (e fn arg₁ arg₂ arg₃ : Expr) : MetaM (Option LamTerm) 
     | _ => return .none
   | _ => return .none
 
+/--
+  fn   : .const _ _
+  arg₁ : .const _ _
+  arg₂ : .const _ _
+-/
+def reifMapLam0Arg4NoLit : HashMap (Name × Name × Name) (Expr × LamTerm) :=
+  HashMap.ofList [
+    ((``HAdd.hAdd, ``Nat, ``Nat),             (.const ``Nat.add [], .base .nadd')),
+    ((``HAdd.hAdd, ``Int, ``Int),             (.const ``Int.add [], .base .iadd')),
+    ((``HSub.hSub, ``Nat, ``Nat),             (.const ``Nat.sub [], .base .nsub')),
+    ((``HSub.hSub, ``Int, ``Int),             (.const ``Int.sub [], .base .isub')),
+    ((``HMul.hMul, ``Nat, ``Nat),             (.const ``Nat.mul [], .base .nmul')),
+    ((``HMul.hMul, ``Int, ``Int),             (.const ``Int.mul [], .base .imul')),
+    ((``HDiv.hDiv, ``Nat, ``Nat),             (.const ``Nat.div [], .base .ndiv')),
+    ((``HDiv.hDiv, ``Int, ``Int),             (.const ``Int.div [], .base .idiv')),
+    ((``HAppend.hAppend, ``String, ``String), (.const ``String.append [], .base .sapp'))
+  ]
+
+/--
+  fn   : .const _ _
+  arg₁ : .app (.const _ _) natlit₁
+  arg₂ : .app (.const _ _) natlit₂
+  |- natlit₁ = natlit₂
+-/
+def reifMapLam0Arg4NatLitNatLitEq : HashMap (Name × Name) (Array ((Nat → Expr) × (Nat → LamTerm))) :=
+  HashMap.ofList [
+    ((``HAdd.hAdd, ``Std.BitVec),
+      #[(fun n => .app (.const ``Std.BitVec.add []) (.lit (.natVal n)), fun n => .base (.bvadd' n))]),
+    ((``HSub.hSub, ``Std.BitVec),
+      #[(fun n => .app (.const ``Std.BitVec.sub []) (.lit (.natVal n)), fun n => .base (.bvsub' n))]),
+    ((``HMul.hMul, ``Std.BitVec),
+      #[(fun n => .app (.const ``Std.BitVec.mul []) (.lit (.natVal n)), fun n => .base (.bvmul' n))]),
+    ((``HDiv.hDiv, ``Std.BitVec),
+      #[(fun n => .app (.const ``Std.BitVec.smtUDiv []) (.lit (.natVal n)), fun n => .base (.bvudiv' n)),
+        (fun n => .app (.const ``Std.BitVec.smtSDiv []) (.lit (.natVal n)), fun n => .base (.bvsdiv' n))]),
+    ((``HAnd.hAnd, ``Std.BitVec),
+      #[(fun n => .app (.const ``Std.BitVec.and []) (.lit (.natVal n)), fun n => .base (.bvand' n))]),
+    ((``HOr.hOr, ``Std.BitVec),
+      #[(fun n => .app (.const ``Std.BitVec.or []) (.lit (.natVal n)), fun n => .base (.bvor' n))]),
+    ((``HXor.hXor, ``Std.BitVec),
+      #[(fun n => .app (.const ``Std.BitVec.xor []) (.lit (.natVal n)), fun n => .base (.bvxor' n))])
+  ]
+
+/--
+  fn   : .const _ _
+  arg₁ : .app (.const _ _) natlit₁
+  arg₂ : .app (.const _ _) natlit₂
+  |- natlit₁ ?? natlit₂
+-/
+def reifMapLam0Arg4NatLitNatLitH : HashMap (Name × Name) (Array ((Nat → Nat → Expr) × (Nat → Nat → LamTerm))) :=
+  HashMap.ofList [
+    ((``HAppend.hAppend, ``Std.BitVec),
+      #[(fun n m => mkApp2 (.const ``Std.BitVec.append []) (.lit (.natVal n)) (.lit (.natVal m)), fun n m => .base (.bvappend' n m))]),
+    ((``HShiftLeft.hShiftLeft, ``Std.BitVec),
+      #[(fun n m => mkApp2 (.const ``BitVec.smtHshiftLeft []) (.lit (.natVal n)) (.lit (.natVal m)), fun n m => .bvsmtHshl' n m)]),
+    ((``HShiftRight.hShiftRight, ``Std.BitVec),
+      #[(fun n m => mkApp2 (.const ``BitVec.smtHushiftRight []) (.lit (.natVal n)) (.lit (.natVal m)), fun n m => .bvsmtHlshr' n m),
+        (fun n m => mkApp2 (.const ``BitVec.smtHsshiftRight []) (.lit (.natVal n)) (.lit (.natVal m)), fun n m => .bvsmtHashr' n m)])
+  ]
+
+def reifMapLam0Arg4NatLit : HashMap (Name × Name) (Array ((Nat → Expr) × (Nat → LamTerm))) :=
+  HashMap.ofList [
+    ((``HShiftLeft.hShiftLeft, ``Std.BitVec),
+      #[(fun n => .app (.const ``Std.BitVec.shiftLeft []) (.lit (.natVal n)), fun n => .base (.bvshl' n))]),
+    ((``HShiftRight.hShiftRight, ``Std.BitVec),
+      #[(fun n => .app (.const ``Std.BitVec.ushiftRight []) (.lit (.natVal n)), fun n => .base (.bvlshr' n)),
+        (fun n => .app (.const ``Std.BitVec.sshiftRight []) (.lit (.natVal n)), fun n => .base (.bvashr' n))])
+  ]
+
 def processLam0Arg4 (e fn arg₁ arg₂ arg₃ arg₄ : Expr) : MetaM (Option LamTerm) := do
-  match fn with
-  | .const ``HAdd.hAdd _ =>
-    match arg₁ with
-    | .const ``Nat _ =>
-      if (← Meta.isDefEqD e (.const ``Nat.add [])) then
-        return .some (.base .nadd')
+  let .const fnName _ := fn
+    | return .none
+  if arg₁.isConst && arg₂.isConst then
+    let .const arg₁name _ := arg₁
+      | throwError "processLam0Arg4 :: Unexpected error"
+    let .const arg₂name _ := arg₂
+      | throwError "processLam0Arg4 :: Unexpected error"
+    if let .some (e', t) := reifMapLam0Arg4NoLit.find? (fnName, arg₁name, arg₂name) then
+      if (← Meta.isDefEqD e e') then
+        return .some t
       return .none
-    | .const ``Int _ =>
-      if (← Meta.isDefEqD e (.const ``Int.add [])) then
-        return .some (.base .iadd')
-      return .none
-    | .app (.const ``Std.BitVec []) nExpr =>
-      if let .some n ← Meta.evalNat nExpr then
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.add []) (.lit (.natVal n)))) then
-          return .some (.base (.bvadd' n))
-      return .none
-    | _ => return .none
-  | .const ``HSub.hSub _ =>
-    match arg₁ with
-    | .const ``Nat _ =>
-      if (← Meta.isDefEqD e (.const ``Nat.sub [])) then
-        return .some (.base .nsub')
-      return .none
-    | .const ``Int _ =>
-      if (← Meta.isDefEqD e (.const ``Int.sub [])) then
-        return .some (.base .isub')
-      return .none
-    | .app (.const ``Std.BitVec []) nExpr =>
-      if let .some n ← Meta.evalNat nExpr then
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.sub []) (.lit (.natVal n)))) then
-          return .some (.base (.bvsub' n))
-      return .none
-    | _ => return .none
-  | .const ``HMul.hMul _ =>
-    match arg₁ with
-    | .const ``Nat _ =>
-      if (← Meta.isDefEqD e (.const ``Nat.mul [])) then
-        return .some (.base .nmul')
-      return .none
-    | .const ``Int _ =>
-      if (← Meta.isDefEqD e (.const ``Int.mul [])) then
-        return .some (.base .imul')
-      return .none
-    | .app (.const ``Std.BitVec []) nExpr =>
-      if let .some n ← Meta.evalNat nExpr then
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.mul []) (.lit (.natVal n)))) then
-          return .some (.base (.bvmul' n))
-      return .none
-    | _ => return .none
-  | .const ``HDiv.hDiv _ =>
-    match arg₁ with
-    | .const ``Nat _ =>
-      if (← Meta.isDefEqD e (.const ``Nat.div [])) then
-        return .some (.base .ndiv')
-      return .none
-    | .const ``Int _ =>
-      if (← Meta.isDefEqD e (.const ``Int.div [])) then
-        return .some (.base .idiv')
-      if (← Meta.isDefEqD e (.const ``Int.ediv [])) then
-        return .some (.base .iediv')
-      return .none
-    | .app (.const ``Std.BitVec []) nExpr =>
-      if let .some n ← Meta.evalNat nExpr then
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.smtUDiv []) (.lit (.natVal n)))) then
-          return .some (.base (.bvudiv' n))
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.smtSDiv []) (.lit (.natVal n)))) then
-          return .some (.base (.bvsdiv' n))
-      return .none
-    | _ => return .none
-  | .const ``HMod.hMod _ =>
-    match arg₁ with
-    | .const ``Nat _ =>
-      if (← Meta.isDefEqD e (.const ``Nat.mod [])) then
-        return .some (.base .nmod')
-      return .none
-    | .const ``Int _ =>
-      if (← Meta.isDefEqD e (.const ``Int.mod [])) then
-        return .some (.base .imod')
-      if (← Meta.isDefEqD e (.const ``Int.emod [])) then
-        return .some (.base .iemod')
-      return .none
-    | .app (.const ``Std.BitVec []) nExpr =>
-      if let .some n ← Meta.evalNat nExpr then
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.umod []) (.lit (.natVal n)))) then
-          return .some (.base (.bvurem' n))
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.srem []) (.lit (.natVal n)))) then
-          return .some (.base (.bvsrem' n))
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.srem []) (.lit (.natVal n)))) then
-          return .some (.base (.bvsrem' n))
-      return .none
-    | _ => return .none
-  | .const ``HAnd.hAnd _ =>
-    match arg₁ with
-    | .app (.const ``Std.BitVec []) nExpr =>
-      if let .some n ← Meta.evalNat nExpr then
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.and []) (.lit (.natVal n)))) then
-          return .some (.base (.bvand' n))
-      return .none
-    | _ => return .none
-  | .const ``HOr.hOr _ =>
-    match arg₁ with
-    | .app (.const ``Std.BitVec []) nExpr =>
-      if let .some n ← Meta.evalNat nExpr then
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.or []) (.lit (.natVal n)))) then
-          return .some (.base (.bvor' n))
-      return .none
-    | _ => return .none
-  | .const ``HXor.hXor _ =>
-    match arg₁ with
-    | .app (.const ``Std.BitVec []) nExpr =>
-      if let .some n ← Meta.evalNat nExpr then
-        if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.xor []) (.lit (.natVal n)))) then
-          return .some (.base (.bvxor' n))
-      return .none
-    | _ => return .none
-  | .const ``HAppend.hAppend _ =>
-    match arg₁, arg₂ with
-    | .const ``String _, _ =>
-      if (← Meta.isDefEqD e (.const ``String.append [])) then
-        return .some (.base .sapp')
-      return .none
-    | .app (.const ``Std.BitVec []) nExpr, .app (.const ``Std.BitVec []) mExpr =>
-      match ← Meta.evalNat nExpr, ← Meta.evalNat mExpr with
-      | .some n, .some m =>
-        if (← Meta.isDefEqD e (mkApp2 (.const ``Std.BitVec.append []) (.lit (.natVal n)) (.lit (.natVal m)))) then
-          return .some (.base (.bvappend' n m))
-        return .none
-      | _,       _       => return .none
-    | _, _ => return .none
-  | .const ``HShiftLeft.hShiftLeft _ =>
-    match arg₁ with
-    | .app (.const ``Std.BitVec []) nExpr =>
-      if let .some n ← Meta.evalNat nExpr then
-        match arg₂ with
-        | .const ``Nat [] =>
-          if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.shiftLeft []) (.lit (.natVal n)))) then
-            return .some (.base (.bvshl' n))
-        | .app (.const ``Std.BitVec []) mExpr =>
-          if let .some m ← Meta.evalNat mExpr then
-            if (← Meta.isDefEqD e (mkApp2 (.const ``BitVec.smtHshiftLeft []) (.lit (.natVal n)) (.lit (.natVal m)))) then
-              return .some (.bvsmtHshl' n m)
-        | _ => pure .unit
-      return .none
-    | _ => return .none
-  | .const ``HShiftRight.hShiftRight _ =>
-    match arg₁ with
-    | .app (.const ``Std.BitVec []) nExpr =>
-      if let .some n ← Meta.evalNat nExpr then
-        match arg₂ with
-        | .const ``Nat [] =>
-          if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.ushiftRight []) (.lit (.natVal n)))) then
-            return .some (.base (.bvlshr' n))
-          if (← Meta.isDefEqD e (.app (.const ``Std.BitVec.sshiftRight []) (.lit (.natVal n)))) then
-            return .some (.base (.bvashr' n))
-        | .app (.const ``Std.BitVec []) mExpr =>
-          if let .some m ← Meta.evalNat mExpr then
-            if (← Meta.isDefEqD e (mkApp2 (.const ``BitVec.smtHushiftRight []) (.lit (.natVal n)) (.lit (.natVal m)))) then
-              return .some (.bvsmtHlshr' n m)
-            if (← Meta.isDefEqD e (mkApp2 (.const ``BitVec.smtHsshiftRight []) (.lit (.natVal n)) (.lit (.natVal m)))) then
-              return .some (.bvsmtHashr' n m)
-        | _ => pure .unit
-      return .none
-    | _ => return .none
-  | _ => return .none
+  if arg₁.isApp && arg₂.isConst then
+    let .app arg₁fn arg₁arg := arg₂
+      | throwError "processLam0Arg4 :: Unexpected error"
+    let .const arg₁fnName _ := arg₁fn
+      | throwError "processLam0Arg4 :: Unexpected error"
+    if let .some candidates := reifMapLam0Arg4NatLit.find? (fnName, arg₁fnName) then
+      for (e'con, tcon) in candidates do
+        if let .some n ← Meta.evalNat arg₁arg then
+          if (← Meta.isDefEqD e (e'con n)) then
+            return tcon n
+  if arg₁.isApp && arg₂.isApp then
+    let .app arg₁fn arg₁arg := arg₁
+      | throwError "processLam0Arg4 :: Unexpected error"
+    let .app _ arg₂arg := arg₂
+      | throwError "processLam0Arg4 :: Unexpected error"
+    if arg₁.isConst && arg₂.isConst then
+      let .const arg₁fnName _ := arg₁fn
+        | throwError "processLam0Arg4 :: Unexpected error"
+      if let .some candidates := reifMapLam0Arg4NatLitNatLitEq.find? (fnName, arg₁fnName) then
+        for (e'con, tcon) in candidates do
+          if let .some n ← Meta.evalNat arg₁arg then
+            if (← Meta.isDefEqD e (e'con n)) then
+              return tcon n
+      if let .some candidates := reifMapLam0Arg4NatLitNatLitH.find? (fnName, arg₁fnName) then
+        for (e'con, tcon) in candidates do
+          match ← Meta.evalNat arg₁arg, ← Meta.evalNat arg₂arg with
+          | .some n , .some m =>
+            if (← Meta.isDefEqD e (e'con n m)) then
+              return .some (tcon n m)
+            return .none
+          | _,        _       => return .none
+  return .none
 
 def processComplexTermExpr (e : Expr) : MetaM (Option LamTerm) := do
   let e := Expr.eta e
@@ -1522,214 +1544,6 @@ def processComplexTermExpr (e : Expr) : MetaM (Option LamTerm) := do
     | [arg₁, arg₂, arg₃, arg₄] =>
       processLam0Arg4 e fn arg₁ arg₂ arg₃ arg₄
     | _ => return .none
-  | _ => return .none
-
-def processSimpleLit (l : Literal) : LamTerm :=
-  match l with
-  | .natVal n => .base (.natVal' n)
-  | .strVal s => .base (.strVal' s)
-
-def processSimpleConst (name : Name) (lvls : List Level) : ReifM (Option LamTerm) :=
-  match name, lvls with
-  | ``True, [] => return .some (.base .trueE)
-  | ``False, [] => return .some (.base .falseE)
-  | ``Not, [] => return .some (.base .not)
-  | ``And, [] => return .some (.base .and)
-  | ``Or, []  => return .some (.base .or)
-  | ``Embedding.ImpF, [u, v] => do
-    if (← Meta.isLevelDefEq u .zero) ∧ (← Meta.isLevelDefEq v .zero) then
-      return .some (.base .imp)
-    else
-      throwError "processTermExpr :: Non-propositional implication is not supported"
-  | ``Iff, [] => return .some (.base .iff)
-  | ``Bool.ofProp, [] => return .some (.base .ofProp')
-  | ``true, [] => return .some (.base .trueb')
-  | ``false, [] => return .some (.base .falseb')
-  | ``not, [] => return .some (.base .notb')
-  | ``and, [] => return .some (.base .andb')
-  | ``or, [] => return .some (.base .orb')
-  | ``Nat.zero, [] => return .some (.base (.natVal' 0))
-  | ``Nat.succ, [] =>
-    return .some (.lam (.base .nat) (.app (.base .nat) (.app (.base .nat) (.base .nadd') (.bvar 0)) (.base (.natVal' 1))))
-  | ``Nat.add, [] => return .some (.base .nadd')
-  | ``Nat.sub, [] => return .some (.base .nsub')
-  | ``Nat.mul, [] => return .some (.base .nmul')
-  | ``Nat.div, [] => return .some (.base .ndiv')
-  | ``Nat.mod, [] => return .some (.base .nmod')
-  | ``Nat.le, [] => return .some (.base .nle')
-  | ``Nat.lt, [] => return .some (.base .nlt')
-  | `Nat.ModEq, [] => return .some (.nmodeq')
-  | ``Int.ofNat, [] => return .some (.base .iofNat')
-  | ``Int.negSucc, [] => return .some (.base .inegSucc')
-  | ``Int.neg, [] => return .some (.base .ineg')
-  | ``Int.add, [] => return .some (.base .iadd')
-  | ``Int.sub, [] => return .some (.base .isub')
-  | ``Int.mul, [] => return .some (.base .imul')
-  | ``Int.div, [] => return .some (.base .idiv')
-  | ``Int.mod, [] => return .some (.base .imod')
-  | ``Int.ediv, [] => return .some (.base .iediv')
-  | ``Int.emod, [] => return .some (.base .iemod')
-  | ``Int.le, [] => return .some (.base .ile')
-  | ``Int.lt, [] => return .some (.base .ilt')
-  | `Int.ModEq, [] => return .some (.imodeq')
-  | ``String.length, [] => return .some (.base .slength')
-  | ``String.append, [] => return .some (.base .sapp')
-  | ``String.isPrefixOf, [] => return .some (.base .sprefixof')
-  | ``String.replace, [] => return .some (.base .srepall')
-  | _, _ => return .none
-
-def processSimpleApp (fn arg : Expr) : ReifM (Option LamTerm) :=
-  match fn with
-  | .const ``Std.BitVec.ofNat [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvofNat' n))
-    return .none
-  | .const ``Std.BitVec.toNat [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvtoNat' n))
-    return .none
-  | .const ``Std.BitVec.ofInt [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvofInt' n))
-    return .none
-  | .const ``Std.BitVec.toInt [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvtoInt' n))
-    return .none
-  | .const ``Std.BitVec.msb [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvmsb' n))
-    return .none
-  | .const ``Std.BitVec.add [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvadd' n))
-    return .none
-  | .const ``Std.BitVec.sub [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvsub' n))
-    return .none
-  | .const ``Std.BitVec.neg [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvneg' n))
-    return .none
-  | .const ``Std.BitVec.abs [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvabs' n))
-    return .none
-  | .const ``Std.BitVec.mul [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvmul' n))
-    return .none
-  | .const ``Std.BitVec.smtUDiv [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvudiv' n))
-    return .none
-  | .const ``Std.BitVec.umod [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvurem' n))
-    return .none
-  | .const ``Std.BitVec.smtSDiv [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvsdiv' n))
-    return .none
-  | .const ``Std.BitVec.srem [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvsrem' n))
-    return .none
-  | .const ``Std.BitVec.smod [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvsmod' n))
-    return .none
-  | .const ``Std.BitVec.ult [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvult' n))
-    return .none
-  | .const ``Std.BitVec.ule [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvule' n))
-    return .none
-  | .const ``Std.BitVec.slt [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvslt' n))
-    return .none
-  | .const ``Std.BitVec.sle [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvsle' n))
-    return .none
-  | .const ``Std.BitVec.and [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvand' n))
-    return .none
-  | .const ``Std.BitVec.or [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvor' n))
-    return .none
-  | .const ``Std.BitVec.xor [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvxor' n))
-    return .none
-  | .const ``Std.BitVec.not [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvnot' n))
-    return .none
-  | .const ``Std.BitVec.shiftLeft [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvshl' n))
-    return .none
-  | .const ``Std.BitVec.ushiftRight [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvlshr' n))
-    return .none
-  | .const ``Std.BitVec.sshiftRight [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.base (.bvashr' n))
-    return .none
-  | .const ``Std.BitVec.rotateLeft [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.bvrotateLeft' n)
-    return .none
-  | .const ``Std.BitVec.rotateRight [] => do
-    if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
-      return .some (.bvrotateRight' n)
-    return .none
-  | .app fn' arg' =>
-    match fn' with
-    | .const ``Std.BitVec.append [] => do
-      match ← @id (MetaM _) (Meta.evalNat arg'),
-            ← @id (MetaM _) (Meta.evalNat arg) with
-      | .some n, .some m => return .some (.base (.bvappend' n m))
-      | _,       _       => return .none
-    | .app (.const ``Std.BitVec.extractLsb []) nExpr => do
-      match ← @id (MetaM _) (Meta.evalNat nExpr),
-            ← @id (MetaM _) (Meta.evalNat arg'),
-            ← @id (MetaM _) (Meta.evalNat arg) with
-      | .some n, .some h, .some l => return .some (.base (.bvextract' n h l))
-      | _,       _      , _       => return .none
-    | .const ``Std.BitVec.replicate [] => do
-      match ← @id (MetaM _) (Meta.evalNat arg'),
-            ← @id (MetaM _) (Meta.evalNat arg) with
-      | .some w, .some i => return .some (.base (.bvrepeat' w i))
-      | _,       _       => return .none
-    | .const ``Std.BitVec.zeroExtend [] => do
-      match ← @id (MetaM _) (Meta.evalNat arg'),
-            ← @id (MetaM _) (Meta.evalNat arg) with
-      | .some w, .some v => return .some (.base (.bvzeroExtend' w v))
-      | _,       _       => return .none
-    | .const ``Std.BitVec.signExtend [] => do
-      match ← @id (MetaM _) (Meta.evalNat arg'),
-            ← @id (MetaM _) (Meta.evalNat arg) with
-      | .some w, .some v => return .some (.base (.bvsignExtend' w v))
-      | _,       _       => return .none
-    | _ => return .none
-  -- `arg` is the original (un-lifted) type
-  | .const ``Eq _ =>
-    return .some (.base (.eq (← reifType arg)))
-  | .const ``Embedding.forallF _ =>
-    return .some (.base (.forallE (← reifType arg)))
-  | .const ``Exists _ =>
-    return .some (.base (.existE (← reifType arg)))
-  | .const ``Bool.ite' _ =>
-    return .some (.base (.ite (← reifType arg)))
   | _ => return .none
 
 def processNewTermExpr (e : Expr) : ReifM LamTerm := do

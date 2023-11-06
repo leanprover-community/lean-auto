@@ -1,0 +1,72 @@
+-- Show size of compiled C files
+find build -name '*.c' | xargs wc | sort -n
+
+-- Profile elaboration/compilation
+for f in `find Auto -name '*.lean'`; do echo $f; time lake env lean $f; done
+-- Result:
+      29       92      951 build/ir/Auto/Lib/HEqExtra.c
+      29       92      953 build/ir/Auto/Lib/BoolExtra.c
+      29       92      955 build/ir/Auto/Lib/LogicExtra.c
+      29       92      957 build/ir/Auto/Lib/OptionExtra.c
+      29       92      957 build/ir/Auto/Lib/StringExtra.c
+      33      106     1179 build/ir/Auto/Lib/NatExtra.c
+      45      148     1983 build/ir/Auto/MathlibEmulator.c
+      57      190     2692 build/ir/Auto/Translation.c
+      74      201     2311 build/ir/Auto/MathlibEmulator/ToLevel.c
+     117      360     4005 build/ir/Auto/Lib/IsomType.c
+     177      439     4594 build/ir/Auto/Lib/IntExtra.c
+     228      505     6511 build/ir/Auto/MathlibEmulator/Basic.c
+     258      764     8951 build/ir/Auto/Lib/Containers.c
+     320      850    10705 build/ir/Auto/Lib/MessageData.c
+     329      833     7879 build/ir/Auto/Embedding/LamInference.c
+     376      949    13131 build/ir/Auto/Lib/ToExprExtra.c
+     551     1409    14131 build/ir/Auto/Embedding/LamLCtx.c
+     605     1630    15992 build/ir/Auto/Lib/ListExtra.c
+     644     1733    20657 build/ir/Auto/Embedding/LamInhReasoning.c
+     709     1976    19100 build/ir/Auto/Lib/HList.c
+     805     2045    21487 build/ir/Auto/Embedding/LamInductive.c
+     813     2380    27853 build/ir/Auto/Embedding/LCtx.c
+    1215     3201    32016 build/ir/Auto/Lib/LevelExtra.c
+    1312     3167    39595 build/ir/Auto/Lib/Pos.c
+    1472     4747    49799 build/ir/Auto/Translation/ReifM.c
+    1483     4010    64255 build/ir/Auto/Solver/Native.c
+    1978     4770    77227 build/ir/Auto/Parser/LexInit.c
+    2256     5790    70103 build/ir/Auto/Embedding/Lift.c
+    2455     7010    76977 build/ir/Auto/Translation/Lam2TH0.c
+    2609     6934    86429 build/ir/Auto/Lib/BinTree.c
+    2933     7813    87638 build/ir/Auto/Translation/Reduction.c
+    3032     6338    59555 build/ir/Auto/Embedding/LamPrep.c
+    3426     9419   101720 build/ir/Auto/Embedding/LamTermInterp.c
+    3477    10633   109617 build/ir/Auto/Embedding/LamBitVec.c
+    3639     8965   114860 build/ir/Auto/IR/TPTP_TH0.c
+    3669    10991   123332 build/ir/Auto/Lib/MetaState.c
+    3902    10617   129440 build/ir/Auto/Solver/TPTP.c
+    4045    11673   134077 build/ir/Auto/Lib/DeCompile.c
+    4065    11214   131974 build/ir/Auto/Embedding/LamSystem.c
+    4086    11733   142123 build/ir/Auto/Lib/MetaExtra.c
+    4121    11502   150100 build/ir/Auto/Translation/Inhabitation.c
+    4212    11528   127188 build/ir/Auto/Translation/Preprocessing.c
+    4232    11710   143890 build/ir/Auto/Solver/SMT.c
+    4243    11655   148824 build/ir/Auto/HintDB.c
+    4876    12777   298677 build/ir/Auto/MathlibEmulator/ToExpr.c
+    5149    14823   167774 build/ir/Auto/Embedding/LamBVarOp.c
+    5306    14967   190862 build/ir/Auto/Parser/SMTSexp.c
+    5879    17077   179507 build/ir/Auto/Lib/AbstractMVars.c
+    6277    17396   235800 build/ir/Auto/Lib/MonadUtils.c
+    7326    20613   250083 build/ir/Auto/IR/SMT.c
+    7823    21984   251737 build/ir/Auto/Translation/Inductive.c
+    8240    22248   231149 build/ir/Auto/Embedding/LamConv.c
+    9179    27623   386089 build/ir/Auto/MathlibEmulator/DeriveToExpr.c
+    9493    25900   294974 build/ir/Auto/Lib/ExprExtra.c
+   10090    28756   309509 build/ir/Auto/Translation/Assumptions.c
+   16323    45193   538127 build/ir/Auto/Translation/Lam2D.c
+   18411    51233   547020 build/ir/Auto/Tactic.c
+   20841    59650   688572 build/ir/Auto/Parser/LeanLex.c
+   21888    57195   970503 build/ir/Auto/Embedding/LamChecker.c
+   30005    84826   974647 build/ir/Auto/Translation/LamFOL2SMT.c
+   31654    87925   928731 build/ir/Auto/Parser/NDFA.c
+   31702    88839   990954 build/ir/Auto/Translation/Monomorphization.c
+   33415    83065   939141 build/ir/Auto/Parser/TPTP.c
+   41845   112196  1572954 build/ir/Auto/Embedding/LamBase.c
+  123020   337177  3525572 build/ir/Auto/Translation/LamReif.c
+  522890  1433861 16861055 total

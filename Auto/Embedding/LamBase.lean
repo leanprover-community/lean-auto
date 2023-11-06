@@ -502,7 +502,7 @@ deriving Inhabited, Hashable, Lean.ToExpr
 def NatConst.reprPrec (nc : NatConst) (n : Nat) :=
   let s :=
     match nc with
-    | .natVal n => f!".intVal {n}"
+    | .natVal n => f!".natVal {n}"
     | .nadd     => f!".nadd"
     | .nsub     => f!".nsub"
     | .nmul     => f!".nmul"
@@ -3506,9 +3506,9 @@ def LamWF.fromBVarAppsRev
 
 def LamWF.ofLamTerm {ltv : LamTyVal} :
   {lctx : Nat → LamSort} → (t : LamTerm) → Option ((rty : LamSort) × LamWF ltv ⟨lctx, t, rty⟩)
-| lctx, .atom n => .some ⟨ltv.lamVarTy n, .ofAtom n⟩
-| lctx, .etom n => .some ⟨ltv.lamEVarTy n, .ofEtom n⟩
-| lctx, .base b =>
+| _,    .atom n => .some ⟨ltv.lamVarTy n, .ofAtom n⟩
+| _,    .etom n => .some ⟨ltv.lamEVarTy n, .ofEtom n⟩
+| _,    .base b =>
   let bWF := LamBaseTerm.LamWF.ofLamBaseTerm ltv b
   .some ⟨bWF.fst, .ofBase bWF.snd⟩
 | lctx, .bvar n => .some ⟨lctx n, .ofBVar n⟩
