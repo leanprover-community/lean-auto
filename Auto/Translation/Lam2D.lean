@@ -107,7 +107,7 @@ def withTermAtomsAsFVar (atoms : Array Nat) : ExternM Unit :=
     let .some (e, s) := (← getVarVal)[atom]?
       | throwError "withTermAtomAsFVar :: Unknown term atom {atom}"
     let sinterp ← interpLamSortAsUnlifted s
-    let name := (`_exVar).appendIndexAfter (← getTermAtomFVars).size
+    let name := (`e!).appendIndexAfter (← getTermAtomFVars).size
     let newFVarId ← withLocalDecl name .default sinterp .default
     setAtomsToAbstract ((← getAtomsToAbstract).push (newFVarId, e))
     setTermAtomFVars ((← getTermAtomFVars).insert atom newFVarId)
@@ -119,7 +119,7 @@ def withEtomsAsFVar (etoms : Array Nat) : ExternM Unit :=
     let .some s := (← getLamEVarTy)[etom]?
       | throwError "withEtomAsFVar :: Unknown etom {etom}"
     let sinterp ← interpLamSortAsUnlifted s
-    let name := (`_exEVar).appendIndexAfter (← getEtomFVars).size
+    let name := (`e?).appendIndexAfter (← getEtomFVars).size
     let newFVarId ← withLocalDecl name .default sinterp .default
     setEtomsToAbstract ((← getEtomsToAbstract).push (newFVarId, etom))
     setEtomFVars ((← getEtomFVars).insert etom newFVarId)
@@ -276,7 +276,7 @@ def interpLamTermAsUnlifted (lctx : Nat) : LamTerm → ExternM Expr
 | .lam s t => do
   let sinterp ← interpLamSortAsUnlifted s
   let tinterp ← interpLamTermAsUnlifted lctx.succ t
-  let name := (`_exBVar).appendIndexAfter lctx
+  let name := (`eb!).appendIndexAfter lctx
   return .lam name sinterp tinterp .default
 | .app _ fn arg => do
   return .app (← interpLamTermAsUnlifted lctx fn) (← interpLamTermAsUnlifted lctx arg)
