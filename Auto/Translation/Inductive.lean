@@ -170,7 +170,7 @@ section Test
     let (_, st) ← (Auto.collectExprSimpleInduct (Auto.Expr.eraseMData e)).run {}
     for siw in st.sis do
       for si in siw do
-        IO.println <| ← MessageData.format m!"{si}"
+        logInfo m!"{si}"
 
   #getExprAndApply[List.cons 2|skd]
   #getExprAndApply[(Array Bool × Array Nat)|skd]

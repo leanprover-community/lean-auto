@@ -2,6 +2,10 @@ import Lean
 import Auto.Lib.DeCompile
 open Lean Elab Command
 
+initialize
+  registerTraceClass `auto.genMonadContext
+  registerTraceClass `auto.genMonadState
+
 namespace Auto
 
 -- Given
@@ -111,7 +115,7 @@ where
       let fnBodyPre ← Meta.mkAppM ``bind #[bind₁, bind₂]
       let fnBodyPre ← Meta.mkLambdaFVars xs fnBodyPre (usedOnly := true)
       let fnBody ← instantiateMVars fnBodyPre
-      IO.println s!"genMonadContext :: {getFnName}"
+      trace[auto.genMonadContext] "{getFnName}"
       addDefnitionValFromExpr fnBody getFnName
 
 private def elabGenMonadStateAux (m : Term) : CommandElab := fun _ => runTermElabM <| fun xs => do
@@ -143,7 +147,7 @@ where
       let fnBodyPre ← Meta.mkAppM ``bind #[bind₁, bind₂]
       let fnBodyPre ← Meta.mkLambdaFVars xs fnBodyPre (usedOnly := true)
       let fnBody ← instantiateMVars fnBodyPre
-      IO.println s!"genMonadGets :: {getFnName}"
+      trace[auto.genMonadState] "{getFnName}"
       addDefnitionValFromExpr fnBody getFnName
   genMonadSets
       (xs : Array Expr) (stateTy : Expr) (stateMkExpr : Expr) (mstateInst : Expr)
@@ -163,7 +167,7 @@ where
           let modifyBody ← Meta.mkAppOptM ``modify #[none, none, mstateInst, insideModify]
           Meta.mkLambdaFVars #[f] modifyBody)
       let fnBody := ← instantiateMVars (← Meta.mkLambdaFVars xs fnBodyPre (usedOnly := true))
-      IO.println s!"getMonadSets :: {setFnName}"
+      trace[auto.genMonadState] "{setFnName}"
       addDefnitionValFromExpr fnBody setFnName
       fieldCnt := fieldCnt + 1
 
