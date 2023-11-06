@@ -1739,12 +1739,14 @@ def processNewTermExpr (e : Expr) : ReifM LamTerm := do
   | .const name lvls => do
     match ← processSimpleConst name lvls with
     | .some t => return t
-    | .none => newTermExpr e
+    | .none => processOther e
   | .app fn arg => do
     match ← processSimpleApp fn arg with
     | .some t => return t
-    | .none => newTermExpr e
-  | e => do
+    | .none => processOther e
+  | e => processOther e
+where
+  processOther (e : Expr) := do
     if let .some res ← processComplexTermExpr e then
       return res
     newTermExpr e
