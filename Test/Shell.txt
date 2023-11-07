@@ -1,8 +1,5 @@
 -- Show size of compiled C files
 find build -name '*.c' | xargs wc | sort -n
-
--- Profile elaboration/compilation
-for f in `find Auto -name '*.lean'`; do echo $f; time lake env lean $f; done
 -- Result:
       29       92      951 build/ir/Auto/Lib/HEqExtra.c
       29       92      953 build/ir/Auto/Lib/BoolExtra.c
@@ -70,3 +67,6 @@ for f in `find Auto -name '*.lean'`; do echo $f; time lake env lean $f; done
    41845   112196  1572954 build/ir/Auto/Embedding/LamBase.c
   123020   337177  3525572 build/ir/Auto/Translation/LamReif.c
   522890  1433861 16861055 total
+
+-- Profile elaboration/compilation
+for f in `find Auto -name '*.lean'`; do echo $f; time lake env lean $f; done

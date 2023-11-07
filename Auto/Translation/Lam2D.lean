@@ -419,9 +419,13 @@ def callNative_direct
   if usedEtoms.size != 0 then
     throwError "callNative_direct :: etoms should not occur here"
   let ss ← usedInhs.mapM (fun re => do
-    let .inhabitation e _ ← lookupREntryProof! re
-      | throwError "callNative_direct :: Cannot find external proof of {re}"
-    return e)
+    match ← lookupREntryProof! re with
+    | .inhabitation e _ => return e
+    | .chkStep (.n (.nonemptyOfAtom n)) =>
+      match varVal[n]? with
+      | .some (e, _) => return e
+      | .none => throwError "callNative_direct :: Unexpected error"
+    | _ => throwError "callNative_direct :: Cannot find external proof of {re}")
   let ts ← usedHyps.mapM (fun re => do
     let .assertion e _ ← lookupREntryProof! re
       | throwError "callNative_direct :: Cannot find external proof of {re}"
