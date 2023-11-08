@@ -9,6 +9,8 @@ open Lean
 
 initialize
   registerTraceClass `auto.lam2D
+  registerTraceClass `auto.lam2D.printInhs
+  registerTraceClass `auto.lam2D.printHyps
 
 /-
   Lam2D : Simply-typed lambda calculus to Lean expression
@@ -321,6 +323,8 @@ private def callNativeExternMAction
     | .nonempty s => return s
     | _ => throwError "callNativeExternMAction :: {re} is not a `nonempty` entry")
   let inhs ← withTranslatedLamSorts ss
+  for inh in inhs do
+    trace[auto.printInhs] "{inh}"
   let inhFVars ← withHyps inhs
   let ts ← valids.mapM (fun re => do
     match re with
@@ -332,6 +336,7 @@ private def callNativeExternMAction
       throwError "callNative :: Malformed hypothesis {hyp}"
     if !(← runMetaM <| Meta.isProp hyp) then
       throwError "callNative :: Hypothesis {hyp} is not a proposition"
+    trace[auto.printHyps] "{hyp}"
   let hyps ← runMetaM <| hyps.mapM (fun e => Core.betaReduce e)
   let hypFvars ← withHyps hyps
   let lemmas : Array Lemma := (hyps.zip hypFvars).map (fun (ty, proof) => ⟨.fvar proof, ty, #[]⟩)
