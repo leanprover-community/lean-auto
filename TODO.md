@@ -19,10 +19,10 @@ __Auto Issues:__
 * Unsound translation for SMT: Although we have the option ``auto.smt.trust``, the translation is unsound since types in Lean might be inhabited while SMT-LIB assumes that all types are inhabited.
 * ``autoSMTSorry`` warning?
 * TPTP interpreted polymorphic logical constants type inference.
-* Strange performance issues on Windows.
 * Report errors when monomorphization fails.
 * Support tableux mode in verified checker?
-* Better inhabitation reasoning.
+* Create an interface that invokes the verified checker for duper.
+* Better inhabitation reasoning (a new lambaseterm ctor "nonempty").
 
 __Lean Issues:__
 * ``cases`` fails on some simple examples. E.g, ``cases h : a.beq b`` fails if the goal contains term
