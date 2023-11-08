@@ -46,16 +46,32 @@ def getInhFactsFromLCtx : MetaM (Array Lemma) := withNewMCtxDepth do
   let lctxDecls := (← read).lctx.fvarIdToDecl
   let mut ret : Array Lemma := #[]
   for (fid, decl) in lctxDecls.toList do
-    let ty ← instantiateMVars decl.type
-    if ← isDefEq (← inferType ty) (.sort .zero) then
-      continue
+    let mut ty ← instantiateMVars decl.type
+    let mut proof := Expr.fvar fid
     let quickConstCheck (e : Expr) : Bool :=
       match e with
       | .const name _ => logicalConsts.contains name
       | _ => false
+    -- Ignore variables whose type contains logical constants
     if let .some _ := Expr.find? quickConstCheck ty then
       continue
+    -- Ignore variables whose type is a dependent forall
     if let .some _ := Expr.find? Expr.isDepForall (Expr.stripLeadingDepForall ty) then
+      continue
+    -- Process `Nonempty` and `Inhabited`
+    if let .some name ← Meta.isClass? ty then
+      if name == ``Nonempty then
+        let ty' ← Meta.mkFreshTypeMVar
+        if ← Meta.isDefEq ty (← Meta.mkAppM ``Nonempty #[ty']) then
+          ty ← instantiateMVars ty'
+          proof ← Meta.mkAppM ``Classical.choice #[proof]
+      if name == ``Inhabited then
+        let ty' ← Meta.mkFreshTypeMVar
+        if ← Meta.isDefEq ty (← Meta.mkAppM ``Inhabited #[ty']) then
+          ty ← instantiateMVars ty'
+          proof ← Meta.mkAppOptM ``Inhabited.default #[.none, proof]
+    -- Ignore `Prop`s
+    if ← isDefEq (← inferType ty) (.sort .zero) then
       continue
     let mut new := true
     for lem in ret do
@@ -66,7 +82,7 @@ def getInhFactsFromLCtx : MetaM (Array Lemma) := withNewMCtxDepth do
       if ← isDefEq lem.type ty then
         new := false; break
     if !new then continue
-    ret := ret.push ⟨.fvar fid, ty, #[]⟩
+    ret := ret.push ⟨proof, ty, #[]⟩
   return ret
 
 private def inhFactMatchAtomTysAux (inhTy : Lemma) (atomTys : Array Expr) : MetaM LemmaInsts :=

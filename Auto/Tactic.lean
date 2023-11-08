@@ -110,15 +110,20 @@ def collectLctxLemmas (lctxhyps : Bool) (ngoalAndBinders : Array FVarId) : Tacti
     let mut lemmas := #[]
     for fVarId in fVarIds do
       let decl ← FVarId.getDecl fVarId
-      if ¬ decl.isAuxDecl ∧ (← Meta.isProp decl.type) then
-        lemmas := lemmas.push ⟨mkFVar fVarId, ← instantiateMVars decl.type, #[]⟩
+      let type ← instantiateMVars decl.type
+      if ← Prep.isNonemptyInhabited type then
+        continue
+      if ¬ decl.isAuxDecl ∧ (← Meta.isProp type) then
+        lemmas := lemmas.push ⟨mkFVar fVarId, type, #[]⟩
     return lemmas
 
 def collectUserLemmas (terms : Array Term) : TacticM (Array Lemma) :=
   Meta.withNewMCtxDepth do
     let mut lemmas := #[]
     for ⟨proof, type, params⟩ in ← terms.mapM Prep.elabLemma do
-      if ← Meta.isProp type then
+      if ← Prep.isNonemptyInhabited type then
+        throwError "invalid lemma {type}, lemmas should not be inhabitation facts"
+      else if ← Meta.isProp type then
         lemmas := lemmas.push ⟨proof, ← instantiateMVars type, params⟩
       else
         -- **TODO**: Relax condition?

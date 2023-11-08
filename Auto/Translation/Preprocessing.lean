@@ -66,6 +66,11 @@ def elabDefEq (name : Name) : TacticM (Array Lemma) := do
   | some (.inductInfo _) => throwError "Inductive types cannot be provided as lemmas"
   | none => throwError "Unknown constant {name}"
 
+def isNonemptyInhabited (ty : Expr) : MetaM Bool := do
+  let .some name ← Meta.isClass? ty
+    | return false
+  return name == ``Nonempty || name == ``Inhabited
+
 structure ConstUnfoldInfo where
   name : Name
   val : Expr
