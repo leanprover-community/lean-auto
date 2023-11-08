@@ -154,6 +154,7 @@ def transLamBaseTerm : LamBaseTerm → Except String String
 | .forallEI _ => .error "transLamBaseTerm :: forallEI should not occur here"
 | .existEI _  => .error "transLamBaseTerm :: existEI should not occur here"
 | .iteI _     => .error "transLamBaseTerm :: iteI should not occur here"
+-- **TODO**: Get rid of (=) (!!) (??)
 | .eq _       => .ok s!"(=)"
 | .forallE s  =>
   if s == .base .empty then

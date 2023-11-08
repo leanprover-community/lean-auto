@@ -1,5 +1,5 @@
 import Lean
-import Auto.Embedding.LamBase
+import Auto.Embedding.LamBVarOp
 open Lean
 
 namespace Auto.Parser.TPTP
@@ -564,6 +564,15 @@ inductive LamConstr where
   | term  : LamSort → LamTerm → LamConstr
   deriving Inhabited, Hashable, BEq
 
+def LamConstr.toString : LamConstr → String
+| .error s => s!"error {s}"
+| .kind    => "kind"
+| .sort s  => s!"sort {s}"
+| .term s t => s!"term {t} : {s}"
+
+instance : ToString LamConstr where
+  toString := LamConstr.toString
+
 open Embedding.Lam in
 def LamConstr.ofBaseTerm (ltv : LamTyVal) (b : LamBaseTerm) : LamConstr :=
   .term (b.lamCheck ltv) (.base b)
@@ -751,7 +760,7 @@ where
         | true => lamConstrMkAppN (.term resTy (.app s₂ t₁ t₂)) tail
         | false => .error "term2LamTerm :: Application type mismatch in lamConstrMkAppN"
       | _ => .error "term2LamTerm :: Non-function term applied to argument"
-    | _, _ => .error "term2LamTerm :: Unexpected input to lamConstrMkAppN"
+    | _, _ => .error s!"term2LamTerm :: Unexpected input `{head}`, `{args}` to lamConstrMkAppN"
 
 open Embedding.Lam in
 def getProof (ltv : LamTyVal) (cmds : Array Command) : MetaM (Array LamTerm) := do
@@ -761,11 +770,14 @@ def getProof (ltv : LamTyVal) (cmds : Array Command) : MetaM (Array LamTerm) := 
     | "thf" | "tff" | "cnf" | "fof" =>
       match args with
       | [⟨.ident name, []⟩, ⟨.ident kind, _⟩, val] =>
-        match term2LamTerm ltv val with
-        | .term (.base .prop) t =>
-          ret := ret.push t
-        | .error e => throwError ("getProof :: " ++ e)
-        | _ => throwError "getProof :: Unexpected LamConstr"
+        if kind != "type" then
+          match term2LamTerm ltv val with
+          | .term (.base .prop) t =>
+            ret := ret.push t
+          | .error e => throwError ("getProof :: " ++ e)
+          | _ => throwError "getProof :: Unexpected LamConstr"
+        else
+          continue
       | _ => continue
     | "include" => throwError "getProof :: `include` should not occur in proof output of TPTP solvers"
     | _ => throwError "getProof :: Unknown command {cmd}"
