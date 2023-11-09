@@ -8,10 +8,16 @@ initialize
   registerTraceClass `auto.tptp.result
   registerTraceClass `auto.tptp.printQuery
   registerTraceClass `auto.tptp.printProof
+  registerTraceClass `auto.tptp.premiseSelection
 
 register_option auto.tptp : Bool := {
   defValue := false
   descr := "Enable/Disable TPTP Solver"
+}
+
+register_option auto.tptp.premiseSelection : Bool := {
+  defValue := true
+  descr := "Enable/Disable premise selection by TPTP solvers"
 }
 
 namespace Auto

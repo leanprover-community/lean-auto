@@ -88,7 +88,7 @@ private def addDefnitionValFromExpr (e : Expr) (name : Name) : MetaM Unit := do
     let dfnVal : DefinitionVal := {cstVal with value := e, hints := .opaque, safety := .safe}
     addAndCompile (.defnDecl dfnVal)
 
-private def elabGenMonadContextAux (m : Term) : CommandElab := fun _ => runTermElabM <| fun xs => do
+private def elabGenMonadContextAux (m : Term) (stx : Syntax) : CommandElabM Unit := runTermElabM <| fun xs => do
   let mexpr ← elabStx m
   let .const mname _ := mexpr.getAppFn
     | throwError "elabGenMonadContext :: Unknown monad"
@@ -116,9 +116,10 @@ where
       let fnBodyPre ← Meta.mkLambdaFVars xs fnBodyPre (usedOnly := true)
       let fnBody ← instantiateMVars fnBodyPre
       trace[auto.genMonadContext] "{getFnName}"
+      Elab.addDeclarationRanges getFnName stx
       addDefnitionValFromExpr fnBody getFnName
 
-private def elabGenMonadStateAux (m : Term) : CommandElab := fun _ => runTermElabM <| fun xs => do
+private def elabGenMonadStateAux (m : Term) (stx : Syntax) : CommandElabM Unit := runTermElabM <| fun xs => do
   let mexpr ← elabStx m
   let .const mname _ := mexpr.getAppFn
     | throwError "elabGenMonadState :: Unknown monad"
@@ -148,6 +149,7 @@ where
       let fnBodyPre ← Meta.mkLambdaFVars xs fnBodyPre (usedOnly := true)
       let fnBody ← instantiateMVars fnBodyPre
       trace[auto.genMonadState] "{getFnName}"
+      Elab.addDeclarationRanges getFnName stx
       addDefnitionValFromExpr fnBody getFnName
   genMonadSets
       (xs : Array Expr) (stateTy : Expr) (stateMkExpr : Expr) (mstateInst : Expr)
@@ -168,6 +170,7 @@ where
           Meta.mkLambdaFVars #[f] modifyBody)
       let fnBody := ← instantiateMVars (← Meta.mkLambdaFVars xs fnBodyPre (usedOnly := true))
       trace[auto.genMonadState] "{setFnName}"
+      Elab.addDeclarationRanges setFnName stx
       addDefnitionValFromExpr fnBody setFnName
       fieldCnt := fieldCnt + 1
 

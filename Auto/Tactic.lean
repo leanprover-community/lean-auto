@@ -217,24 +217,28 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
   | .none =>
     let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) (minds : Array (Array SimpleIndVal)) : LamReif.ReifM Expr := (do
       let exportFacts ← LamReif.reifFacts uvalids
-      let exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
+      let mut exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
       let _ ← LamReif.reifInhabitations uinhs
       let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
         (fun (s, _) => Embedding.Lam.REntry.nonempty s)
       let exportInds ← LamReif.reifMutInds minds
       -- **Preprocessing in Verified Checker**
-      let (exportFacts, exportInds) ← LamReif.preprocess exportFacts exportInds
-      -- **TPTP**
-      if (auto.tptp.get (← getOptions)) then
-        if let .some proof ← queryTPTP exportFacts then
-          return proof
+      let (exportFacts', exportInds) ← LamReif.preprocess exportFacts exportInds
+      exportFacts := exportFacts'
+      -- **TPTP invocation and Premise Selection**
+      if auto.tptp.get (← getOptions) then
+        if let .some unsatCore ← queryTPTP exportFacts then
+          if auto.tptp.premiseSelection.get (← getOptions) then
+            for re in unsatCore do
+              trace[auto.tptp.premiseSelection] "{re}"
+            exportFacts := unsatCore
       -- **SMT**
-      if (auto.smt.get (← getOptions)) then
+      if auto.smt.get (← getOptions) then
         if let .some proof ← querySMT exportFacts exportInds then
           return proof
       -- **Native Prover**
-      let exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)
-      if (auto.native.get (← getOptions)) then
+      exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)
+      if auto.native.get (← getOptions) then
         if let .some proof ← queryNative declName? exportFacts exportInhs then
           return proof
       throwError "Auto failed to find proof"
@@ -249,7 +253,11 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
     return proof
   | .useSorry => return ← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []]
 where
-  queryTPTP exportFacts : LamReif.ReifM (Option Expr) :=
+  /--
+    If TPTP succeeds, return unsat core
+    If TPTP fails, return none
+  -/
+  queryTPTP exportFacts : LamReif.ReifM (Option (Array Embedding.Lam.REntry)) :=
     try
       let lamVarTy := (← LamReif.getVarVal).map Prod.snd
       let lamEVarTy ← LamReif.getLamEVarTy
@@ -263,7 +271,13 @@ where
       let proofSteps ← Parser.TPTP.getProof (← LamReif.getLamTyValAtMeta) tptpProof
       for step in proofSteps do
         trace[auto.tptp.printProof] "{step}"
-      return .none
+      let unsatCore ← Parser.TPTP.unsatCore tptpProof
+      let mut ret := #[]
+      for n in unsatCore do
+        let .some re := exportFacts[n]?
+          | throwError "queryTPTP :: Index {n} out of range"
+        ret := ret.push re
+      return .some ret
     catch e =>
       trace[auto.tptp.result] "TPTP invocation failed with {e.toMessageData}"
       return .none
