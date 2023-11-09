@@ -60,12 +60,7 @@ def transNatConst : NatConst → String
 
 def transNatConstSort (nc : NatConst) := transLamSort nc.lamCheck
 
-def transIntVal : Int → String
-| .ofNat n => s!"o{n}"
-| .negSucc n => s!"n{n}"
-
 def transIntConst : IntConst → String
-| .intVal n => "t_int_" ++ transIntVal n
 | .iofNat   => "t_iofNat"
 | .inegSucc => "t_inegSucc"
 | .ineg     => "t_ineg"

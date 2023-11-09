@@ -150,7 +150,6 @@ def interpNatConstAsUnlifted : NatConst → Expr
 
 open Embedding in
 def interpIntConstAsUnlifted : IntConst → Expr
-| .intVal n => Lean.toExpr n
 | .iofNat   => .const ``Int.ofNat []
 | .inegSucc => .const ``Int.negSucc []
 | .ineg     => .const ``Int.neg []

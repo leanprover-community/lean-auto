@@ -227,11 +227,15 @@ def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : 
       exportFacts := exportFacts'
       -- **TPTP invocation and Premise Selection**
       if auto.tptp.get (← getOptions) then
-        if let .some unsatCore ← queryTPTP exportFacts then
-          if auto.tptp.premiseSelection.get (← getOptions) then
+        let premiseSel? := auto.tptp.premiseSelection.get (← getOptions)
+        let queryResult ← queryTPTP exportFacts
+        if premiseSel? then
+          match queryResult with
+          | .some unsatCore =>
             for re in unsatCore do
               trace[auto.tptp.premiseSelection] "{re}"
             exportFacts := unsatCore
+          | .none => trace[auto.tptp.premiseSelection] "TPTP invocation failed, skipping TPTP premise selection"
       -- **SMT**
       if auto.smt.get (← getOptions) then
         if let .some proof ← querySMT exportFacts exportInds then

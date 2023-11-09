@@ -1477,7 +1477,7 @@ def processLam0Arg3 (e fn arg₁ arg₂ arg₃ : Expr) : MetaM (Option LamTerm) 
       if (← Meta.isDefEqD e (.app (.const ``Int.ofNat []) arg₂)) then
         let .lit (.natVal nv) := arg₂
           | throwError "processLam0Arg3 :: OfNat.ofNat instance is not based on a nat literal"
-        return .some (.base (.intVal' nv))
+        return .some (.mkIOfNat (.base (.natVal' nv)))
       return .none
     | .app (.const ``Std.BitVec []) nExpr =>
       if let .some n ← Meta.evalNat nExpr then

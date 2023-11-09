@@ -612,7 +612,6 @@ def NatConst.LamWF.ofCheck (H : n.lamCheck = s) : LamWF n s := by
   cases H; cases n <;> constructor
 
 inductive IntConst
-  | intVal (n : Int)
   | iofNat | inegSucc | ineg | iabs
   | iadd | isub | imul | idiv | imod | iediv | iemod
   | ile | ilt | imax | imin
@@ -621,7 +620,6 @@ deriving Inhabited, Hashable, Lean.ToExpr
 def IntConst.reprPrec (i : IntConst) (n : Nat) :=
   let s :=
     match i with
-    | .intVal n => f!".intVal {n}"
     | .iofNat   => f!".iofNat"
     | .inegSucc => f!".inegSucc"
     | .ineg     => f!".ineg"
@@ -646,7 +644,6 @@ instance : Repr IntConst where
   reprPrec := IntConst.reprPrec
 
 def IntConst.toString : IntConst → String
-| .intVal n => s!"{n} : Int"
 | .iofNat   => "iofNat"
 | .inegSucc => "inegSucc"
 | .ineg     => "-"
@@ -667,7 +664,6 @@ instance : ToString IntConst where
   toString := IntConst.toString
 
 def IntConst.beq : IntConst → IntConst → Bool
-| .intVal n, .intVal m => Int.beq n m
 | .iofNat,   .iofNat   => true
 | .inegSucc, .inegSucc => true
 | .ineg,     .ineg     => true
@@ -689,18 +685,16 @@ instance : BEq IntConst where
   beq := IntConst.beq
 
 def IntConst.beq_refl {i : IntConst} : (i.beq i) = true := by
-  cases i <;> first | rfl | apply Int.beq_refl
+  cases i <;> rfl
 
 def IntConst.eq_of_beq_eq_true {i₁ i₂ : IntConst} (H : i₁.beq i₂) : i₁ = i₂ := by
   cases i₁ <;> cases i₂ <;> try (first | contradiction | rfl)
-  case intVal.intVal n m => apply congrArg; apply Int.eq_of_beq_eq_true H
 
 instance : LawfulBEq IntConst where
   eq_of_beq := IntConst.eq_of_beq_eq_true
   rfl := IntConst.beq_refl
 
 def IntConst.lamCheck : IntConst → LamSort
-| .intVal _ => .base .int
 | .iofNat   => .func (.base .nat) (.base .int)
 | .inegSucc => .func (.base .nat) (.base .int)
 | .ineg     => .func (.base .int) (.base .int)
@@ -718,7 +712,6 @@ def IntConst.lamCheck : IntConst → LamSort
 | .imin     => .func (.base .int) (.func (.base .int) (.base .int))
 
 inductive IntConst.LamWF : IntConst → LamSort → Type
-  | ofIntVal n : LamWF (.intVal n) (.base .int)
   | ofIOfNat   : LamWF .iofNat (.func (.base .nat) (.base .int))
   | ofINegSucc : LamWF .inegSucc (.func (.base .nat) (.base .int))
   | ofIneg     : LamWF .ineg (.func (.base .int) (.base .int))
@@ -740,7 +733,6 @@ def IntConst.LamWF.unique {i : IntConst} {s₁ s₂ : LamSort}
   cases iwf₁ <;> cases iwf₂ <;> trivial
 
 def IntConst.LamWF.ofIntConst : (i : IntConst) → (s : LamSort) × IntConst.LamWF i s
-| .intVal n => ⟨.base .int, .ofIntVal n⟩
 | .iofNat   => ⟨.func (.base .nat) (.base .int), .ofIOfNat⟩
 | .inegSucc => ⟨.func (.base .nat) (.base .int), .ofINegSucc⟩
 | .ineg     => ⟨.func (.base .int) (.base .int), .ofIneg⟩
@@ -1284,7 +1276,6 @@ def LamBaseTerm.nle' := LamBaseTerm.ncst .nle
 def LamBaseTerm.nlt' := LamBaseTerm.ncst .nlt
 def LamBaseTerm.nmax' := LamBaseTerm.ncst .nmax
 def LamBaseTerm.nmin' := LamBaseTerm.ncst .nmin
-def LamBaseTerm.intVal' (i : Int) := LamBaseTerm.icst (.intVal i)
 def LamBaseTerm.iofNat' := LamBaseTerm.icst .iofNat
 def LamBaseTerm.inegSucc' := LamBaseTerm.icst .inegSucc
 def LamBaseTerm.ineg' := LamBaseTerm.icst .ineg
@@ -1618,7 +1609,6 @@ def LamBaseTerm.LamWF.ofNle' {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNle
 def LamBaseTerm.LamWF.ofNlt' {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNlt
 def LamBaseTerm.LamWF.ofNmax' {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNmax
 def LamBaseTerm.LamWF.ofNmin' {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNmin
-def LamBaseTerm.LamWF.ofIntVal' {ltv : LamTyVal} (n : Nat) := LamWF.ofIcst (ltv:=ltv) (.ofIntVal n)
 def LamBaseTerm.LamWF.ofIOfNat' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIOfNat
 def LamBaseTerm.LamWF.ofINegSucc' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofINegSucc
 def LamBaseTerm.LamWF.ofIneg' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIneg
@@ -1817,7 +1807,6 @@ def NatConst.interp_equiv (tyVal : Nat → Type u) (ncwf : LamWF n s) :
   cases ncwf <;> rfl
 
 def IntConst.interp (tyVal : Nat → Type u) : (i : IntConst) → i.lamCheck.interp tyVal
-| .intVal n => GLift.up n
 | .iofNat   => iofNatLift
 | .inegSucc => inegSuccLift
 | .ineg     => inegLift
@@ -1835,7 +1824,6 @@ def IntConst.interp (tyVal : Nat → Type u) : (i : IntConst) → i.lamCheck.int
 | .imin     => iminLift
 
 def IntConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF i s) → s.interp tyVal
-| .ofIntVal n => GLift.up n
 | .ofIOfNat   => iofNatLift
 | .ofINegSucc => inegSuccLift
 | .ofIneg     => inegLift

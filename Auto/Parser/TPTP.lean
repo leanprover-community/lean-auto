@@ -395,17 +395,7 @@ def ident2IntConst (s : String) : Option IntConst :=
   | "t_ilt"      => .some .ilt
   | "t_imax"     => .some .imax
   | "t_imin"     => .some .imin
-  | _ =>
-    match s.take 7 with
-    | "t_int_o" =>
-      match (s.drop 7).toNat? with
-      | .some n => .some (.intVal (.ofNat n))
-      | .none   => .none
-    | "t_int_n" =>
-      match (s.drop 7).toNat? with
-      | .some n => .some (.intVal (.negSucc n))
-      | .none   => .none
-    | _         => .none
+  | _ => .none
 
 open Embedding.Lam in
 def ident2BitVecConst (s : String) : Option BitVecConst :=
