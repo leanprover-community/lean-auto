@@ -288,6 +288,12 @@ structure Command where
   args : List Term
 deriving Inhabited, BEq
 
+def Command.toString : Command → String
+| .mk cmd args => cmd ++ "(" ++ String.intercalate ", " (args.map Term.toString) ++ ")"
+
+instance : ToString Command where
+  toString := Command.toString
+
 def parseCommand : ParserM Command := do
   let cmd ← parseIdent
   match cmd with
@@ -583,47 +589,73 @@ instance : ToString LamConstr where
   toString := LamConstr.toString
 
 open Embedding.Lam in
-def LamConstr.ofBaseTerm (ltv : LamTyVal) (b : LamBaseTerm) : LamConstr :=
-  .term (b.lamCheck ltv) (.base b)
+structure ParsingInfo where
+  lamVarTy     : Array LamSort
+  lamEVarTy    : Array LamSort
+  proverSkolem : HashMap String (LamSort × Nat) := {}
 
 open Embedding.Lam in
-def ident2LamConstr (ltv : LamTyVal) (s : String) : LamConstr :=
-  match s.get ⟨0⟩ with
-  | 's' =>
-    match ident2LamSort s with
-    | .some b => .sort b
-    | _       => .error s!"Unknown identifier {s}"
-  | 't' =>
-    match s.take 3 with
-    | "t_a" =>
-      match (s.drop 3).toNat? with
-      | .some n => .term (ltv.lamVarTy n) (.atom n)
-      | .none   => .error s!"Unknown identifier {s}"
-    | "t_e" =>
-      match (s.drop 3).toNat? with
-      | .some n => .term (ltv.lamEVarTy n) (.etom n)
-      | .none   => .error s!"Unknown identifier {s}"
-    | "t_n" =>
-      match ident2NatConst s with
-      | .some n => .term n.lamCheck (.base (.ncst n))
-      | .none   => .error s!"Unknown identifier {s}"
-    | "t_i" =>
-      match ident2IntConst s with
-      | .some i => .term i.lamCheck (.base (.icst i))
-      | .none   => .error s!"Unknown identifier {s}"
-    | "t_s" =>
-      match ident2StringConst s with
-      | .some s => .term s.lamCheck (.base (.scst s))
-      | .none   => .error s!"Unknown identifier {s}"
-    | "t_bv" =>
-      match ident2BitVecConst s with
-      | .some bv => .term bv.lamCheck (.base (.bvcst bv))
-      | .none   => .error s!"Unknown identifier {s}"
-    | _ => .error s!"Unknown identifier {s}"
-  | _   => .error s!"Unknown identifier {s}"
+def ParsingInfo.toLamTyVal (pi : ParsingInfo) : LamTyVal :=
+  ⟨fun n => pi.lamVarTy.getD n (.base .prop),
+   fun _ => .base .prop,
+   fun n => pi.lamEVarTy.getD n (.base .prop)⟩
 
 open Embedding.Lam in
-partial def term2LamTerm (ltv : LamTyVal) (t : Term) (lctx : HashMap String (Nat × LamSort) := {}) : LamConstr :=
+def ParsingInfo.addSkolem (pi : ParsingInfo) (name : String) (s : LamSort) :=
+  {pi with proverSkolem := pi.proverSkolem.insert name (s, pi.proverSkolem.size)}
+
+open Embedding.Lam in
+def LamConstr.ofBaseTerm (pi : ParsingInfo) (b : LamBaseTerm) : LamConstr :=
+  .term (b.lamCheck pi.toLamTyVal) (.base b)
+
+open Embedding.Lam in
+def ident2LamConstr (pi : ParsingInfo) (s : String) : LamConstr :=
+  match pi.proverSkolem.find? s with
+  | .some (s, n) => .term s (.etom (n + pi.lamEVarTy.size))
+  | .none =>
+    match s.get ⟨0⟩ with
+    | 's' =>
+      match ident2LamSort s with
+      | .some b => .sort b
+      | _       => .error s!"Unknown identifier {s}"
+    | 't' =>
+      match s.take 3 with
+      | "t_a" =>
+        match (s.drop 3).toNat? with
+        | .some n =>
+          match pi.lamVarTy[n]? with
+          | .some s => .term s (.atom n)
+          | .none => .error s!"Unknown atom {n}"
+        | .none   => .error s!"Unknown identifier {s}"
+      | "t_e" =>
+        match (s.drop 3).toNat? with
+        | .some n =>
+          match pi.lamEVarTy[n]? with
+          | .some s => .term s (.etom n)
+          | .none   => .error s!"Unknown etom {n}"
+        | .none   => .error s!"Unknown identifier {s}"
+      | "t_n" =>
+        match ident2NatConst s with
+        | .some n => .term n.lamCheck (.base (.ncst n))
+        | .none   => .error s!"Unknown identifier {s}"
+      | "t_i" =>
+        match ident2IntConst s with
+        | .some i => .term i.lamCheck (.base (.icst i))
+        | .none   => .error s!"Unknown identifier {s}"
+      | "t_s" =>
+        match ident2StringConst s with
+        | .some s => .term s.lamCheck (.base (.scst s))
+        | .none   => .error s!"Unknown identifier {s}"
+      | "t_b" =>
+        match ident2BitVecConst s with
+        | .some bv => .term bv.lamCheck (.base (.bvcst bv))
+        | .none   => .error s!"Unknown identifier {s}"
+      | _ => .error s!"Unknown identifier {s}"
+    | _   => .error s!"Unknown identifier {s}"
+
+open Embedding.Lam in
+/-- This function is only for zipperposition's output -/
+partial def term2LamTerm (pi : ParsingInfo) (t : Term) (lctx : HashMap String (Nat × LamSort) := {}) : LamConstr :=
   match t with
   | ⟨.ident "$i", []⟩ => .error "Does not have iota"
   | ⟨.ident "$tType", []⟩ => .kind
@@ -634,100 +666,100 @@ partial def term2LamTerm (ltv : LamTyVal) (t : Term) (lctx : HashMap String (Nat
     let head :=
       match deBruijnAndSort? lctx ids with
       | .some (db, s) => .term s (.bvar db)
-      | .none => ident2LamConstr ltv ids
+      | .none => ident2LamConstr pi ids
     match as with
     | .nil => head
-    | .cons _ _ => lamConstrMkAppN head (as.map (term2LamTerm ltv · lctx))
+    | .cons _ _ => lamConstrMkAppN head (as.map (term2LamTerm pi · lctx))
   | ⟨.op "!", body :: var :: tail⟩ =>
-    match processVar ltv var lctx with
+    match processVar pi var lctx with
     | .some (name, s) =>
-      match term2LamTerm ltv ⟨.op "!", body :: tail⟩ (lctx.insert name (lctx.size, s)) with
+      match term2LamTerm pi ⟨.op "!", body :: tail⟩ (lctx.insert name (lctx.size, s)) with
       | .term (.base .prop) body => .term (.base .prop) (.mkForallEF s body)
       | r => .error s!"Unexpected term {t} produces ({r})"
     | r => .error s!"Unexpected term {t} produces ({r})"
   | ⟨.op "!>", body :: var :: tail⟩ =>
-    match processVar ltv var lctx with
+    match processVar pi var lctx with
     | .some (name, s) =>
-      match term2LamTerm ltv ⟨.op "!>", body :: tail⟩ (lctx.insert name (lctx.size, s)) with
+      match term2LamTerm pi ⟨.op "!>", body :: tail⟩ (lctx.insert name (lctx.size, s)) with
       | .term (.base .prop) body => .term (.base .prop) (.mkForallEF s body)
       | r => .error s!"Unexpected term {t} produces ({r})"
     | r => .error s!"Unexpected term {t} produces ({r})"
   | ⟨.op "^", body :: var :: tail⟩ =>
-    match processVar ltv var lctx with
+    match processVar pi var lctx with
     | .some (name, s) =>
-      match term2LamTerm ltv ⟨.op "^", body :: tail⟩ (lctx.insert name (lctx.size, s)) with
+      match term2LamTerm pi ⟨.op "^", body :: tail⟩ (lctx.insert name (lctx.size, s)) with
       | .term resTy body => .term (.func s resTy) (.lam s body)
       | r => .error s!"Unexpected term {t} produces ({r})"
     | r => .error s!"Unexpected term {t} produces ({r})"
   | ⟨.op "?", body :: var :: tail⟩ =>
-    match processVar ltv var lctx with
+    match processVar pi var lctx with
     | .some (name, s) =>
-      match term2LamTerm ltv ⟨.op "?", body :: tail⟩ (lctx.insert name (lctx.size, s)) with
+      match term2LamTerm pi ⟨.op "?", body :: tail⟩ (lctx.insert name (lctx.size, s)) with
       | .term (.base .prop) body => .term (.base .prop) (.mkExistEF s body)
       | r => .error s!"Unexpected term {t} produces ({r})"
     | r => .error s!"Unexpected term {t} produces ({r})"
   | ⟨.op "!", body :: []⟩ | ⟨.op "!>", body :: []⟩ | ⟨.op "^", body :: []⟩ | ⟨.op "?", body :: []⟩ =>
-    term2LamTerm ltv body lctx
+    term2LamTerm pi body lctx
   | ⟨.op "~", [a]⟩     =>
-    match term2LamTerm ltv a lctx with
+    match term2LamTerm pi a lctx with
     | .term (.base .prop) la => .term (.base .prop) (.mkNot la)
     | r => .error s!"Unexpected term {t} produces ({r})"
   | ⟨.op "|", [a,b]⟩   =>
-    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    match term2LamTerm pi a lctx, term2LamTerm pi b lctx with
     | .term (.base .prop) la, .term (.base .prop) lb => .term (.base .prop) (.mkOr la lb)
     | r₁, r₂ => .error s!"Unexpected term {t} produces ({r₁}) and ({r₂})"
   | ⟨.op "&", [a,b]⟩   =>
-    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    match term2LamTerm pi a lctx, term2LamTerm pi b lctx with
     | .term (.base .prop) la, .term (.base .prop) lb => .term (.base .prop) (.mkAnd la lb)
     | r₁, r₂ => .error s!"Unexpected term {t} produces ({r₁}) and ({r₂})"
   | ⟨.op "<=>", [a,b]⟩ =>
-    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    match term2LamTerm pi a lctx, term2LamTerm pi b lctx with
     | .term (.base .prop) la, .term (.base .prop) lb => .term (.base .prop) (.mkIff la lb)
     | r₁, r₂ => .error s!"Unexpected term {t} produces ({r₁}) and ({r₂})"
   | ⟨.op "!=", [a,b]⟩  =>
-    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    match term2LamTerm pi a lctx, term2LamTerm pi b lctx with
     | .term s₁ la, .term s₂ lb =>
       match s₁.beq s₂ with
       | true => .term (.base .prop) (.mkNot (.mkEq s₁ la lb))
       | false => .error s!"Application type mismatch in {t}"
     | r₁, r₂ => .error s!"Unexpected term {t} produces ({r₁}) and ({r₂})"
   | ⟨.op "=", [a,b]⟩   =>
-    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    match term2LamTerm pi a lctx, term2LamTerm pi b lctx with
     | .term s₁ la, .term s₂ lb =>
       match s₁.beq s₂ with
       | true => .term (.base .prop) (.mkEq s₁ la lb)
       | false => .error s!"Application type mismatch in {t}"
     | r₁, r₂ => .error s!"Unexpected term {t} produces ({r₁}) and ({r₂})"
   | ⟨.op "~|", [a,b]⟩  =>
-    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    match term2LamTerm pi a lctx, term2LamTerm pi b lctx with
     | .term (.base .prop) la, .term (.base .prop) lb =>
       .term (.base .prop) (.mkNot (.mkOr la lb))
     | r₁, r₂ => .error s!"Unexpected term {t} produces ({r₁}) and ({r₂})"
   | ⟨.op "~&", [a,b]⟩  =>
-    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    match term2LamTerm pi a lctx, term2LamTerm pi b lctx with
     | .term (.base .prop) la, .term (.base .prop) lb =>
       .term (.base .prop) (.mkNot (.mkAnd la lb))
     | r₁, r₂ => .error s!"Unexpected term {t} produces ({r₁}) and ({r₂})"
   | ⟨.op "<~>", [a,b]⟩ =>
-    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    match term2LamTerm pi a lctx, term2LamTerm pi b lctx with
     | .term (.base .prop) la, .term (.base .prop) lb =>
       .term (.base .prop) (.mkNot (.mkIff la lb))
     | r₁, r₂ => .error s!"Unexpected term {t} produces ({r₁}) and ({r₂})"
   | ⟨.op "@", [a,b]⟩   =>
-    match term2LamTerm ltv b lctx with
+    match term2LamTerm pi b lctx with
     | .term argTy' lb =>
       match isPolyIL? a.toString with
       | true =>
         if a.toString == "=" then
-          .term argTy' (.app argTy' (.base (.eq argTy')) lb)
+          .term (.base .prop) (.app argTy' (.base (.eq argTy')) lb)
         else
           match argTy' with
           | .func domTy (.base .prop) =>
             let b := if a.toString == "??" then .existE domTy else .forallE domTy
-            .term domTy (.app argTy' (.base b) lb)
+            .term (.base .prop) (.app argTy' (.base b) lb)
           | _ => .error s!"Invalid argument type for {a.toString}"
       | false =>
-        match term2LamTerm ltv a lctx with
+        match term2LamTerm pi a lctx with
         | .term fnTy la =>
           match fnTy with
           | .func argTy resTy =>
@@ -738,13 +770,13 @@ partial def term2LamTerm (ltv : LamTyVal) (t : Term) (lctx : HashMap String (Nat
         | r => .error s!"Unexpected term {t} produces ({r}) at appFn"
     | r => .error s!"Unexpected term {t} produces ({r}) at appArg"
   | ⟨.op "=>", [a,b]⟩ | ⟨.op "<=", [b,a]⟩ =>
-    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    match term2LamTerm pi a lctx, term2LamTerm pi b lctx with
     | .term (.base .prop) la, .term (.base .prop) lb => .term (.base .prop) (.mkImp la lb)
     | r₁, r₂ => .error s!"Unexpected term {t} produces ({r₁}) and ({r₂})"
-  | ⟨.op "~", []⟩   => .ofBaseTerm ltv .not
-  | ⟨.op "|", []⟩   => .ofBaseTerm ltv .or
-  | ⟨.op "&", []⟩   => .ofBaseTerm ltv .and
-  | ⟨.op "<=>", []⟩ => .ofBaseTerm ltv .iff
+  | ⟨.op "~", []⟩   => .ofBaseTerm pi .not
+  | ⟨.op "|", []⟩   => .ofBaseTerm pi .or
+  | ⟨.op "&", []⟩   => .ofBaseTerm pi .and
+  | ⟨.op "<=>", []⟩ => .ofBaseTerm pi .iff
   | ⟨.op "!=", []⟩  => .error s!"Unapplied (!=), cannot infer type"
   | ⟨.op "=", []⟩   => .error s!"Unapplied (=), cannot infer type"
   | ⟨.op "!!", []⟩  => .error s!"Unapplied (!!), cannot infer type"
@@ -755,23 +787,23 @@ partial def term2LamTerm (ltv : LamTyVal) (t : Term) (lctx : HashMap String (Nat
     (.lam (.base .prop) (.lam (.base .prop) (.mkNot (.mkAnd (.bvar 1) (.bvar 0)))))
   | ⟨.op "<~>", []⟩ => .term (.func (.base .prop) (.func (.base .prop) (.base .prop)))
     (.lam (.base .prop) (.lam (.base .prop) (.mkNot (.mkIff (.bvar 1) (.bvar 0)))))
-  | ⟨.op "=>", []⟩  => .ofBaseTerm ltv .imp
+  | ⟨.op "=>", []⟩  => .ofBaseTerm pi .imp
   | ⟨.op "<=", []⟩  => .term (.func (.base .prop) (.func (.base .prop) (.base .prop)))
     (.lam (.base .prop) (.lam (.base .prop) (.mkImp (.bvar 0) (.bvar 1))))
   | ⟨.op ">", [⟨.op "*", [a, b]⟩, c]⟩   =>
-    term2LamTerm ltv ⟨.op ">", [a, ⟨.op ">", [b, c]⟩]⟩ lctx
+    term2LamTerm pi ⟨.op ">", [a, ⟨.op ">", [b, c]⟩]⟩ lctx
   | ⟨.op ">", [a, b]⟩ =>
-    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
+    match term2LamTerm pi a lctx, term2LamTerm pi b lctx with
     | .sort sa, .sort sb => .sort (.func sa sb)
     | _, r => .error s!"Unexpected term {t} produces ({r})"
   | _ => .error s!"term2LamTerm :: Could not translate to Lean Expr: {t}"
 where
-  processVar (ltv : LamTyVal) (var : Term) (lctx : HashMap String (Nat × LamSort)) : Option (String × LamSort) :=
+  processVar (pi : ParsingInfo) (var : Term) (lctx : HashMap String (Nat × LamSort)) : Option (String × LamSort) :=
     match var with
     | ⟨.ident v, ty⟩ =>
       match ty with
       | [ty] =>
-        match term2LamTerm ltv ty lctx with
+        match term2LamTerm pi ty lctx with
         | .sort s => .some (v, s)
         | _ => .none
       | _ => .none
@@ -793,22 +825,35 @@ where
     | _, _ => .error s!"term2LamTerm :: Unexpected input `{head}`, `{args}` to lamConstrMkAppN"
 
 open Embedding.Lam in
-/-- Turn TSTP term into LamSort/LamTerm -/
-def getProof (ltv : LamTyVal) (cmds : Array Command) : MetaM (Array LamTerm) := do
+/--
+  Turn TSTP term into LamSort/LamTerm
+  This function is only for zipperposition's output
+-/
+def getProof (lamVarTy lamEVarTy : Array LamSort) (cmds : Array Command) : MetaM (Array LamTerm) := do
   let mut ret := #[]
+  let mut pi : ParsingInfo := ⟨lamVarTy, lamEVarTy, {}⟩
   for ⟨cmd, args⟩ in cmds do
     match cmd with
     | "thf" | "tff" | "cnf" | "fof" =>
       match args with
       | [⟨.ident name, []⟩, ⟨.ident kind, _⟩, val] =>
         if kind != "type" then
-          match term2LamTerm ltv val with
+          match term2LamTerm pi val with
           | .term (.base .prop) t =>
             ret := ret.push t
           | .error e => throwError ("getProof :: " ++ e)
-          | _ => throwError "getProof :: Unexpected LamConstr"
+          | lc => throwError "getProof :: Unexpected LamConstr {lc}, expected term"
         else
-          continue
+          match val with
+          | ⟨.ident name, [ty]⟩ =>
+            -- In zipperposition, skolems start with `sk_`
+            if name.take 3 == "sk_" then
+              match term2LamTerm pi ty with
+              | .sort s => pi := pi.addSkolem name s
+              | lc => throwError "getProof :: Unexpected LamConstr {lc}, expected sort"
+            else
+              continue
+          | _ => continue
       | _ => continue
     | "include" => throwError "getProof :: `include` should not occur in proof output of TPTP solvers"
     | _ => throwError "getProof :: Unknown command {cmd}"

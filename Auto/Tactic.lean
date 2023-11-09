@@ -261,69 +261,60 @@ where
     If TPTP succeeds, return unsat core
     If TPTP fails, return none
   -/
-  queryTPTP exportFacts : LamReif.ReifM (Option (Array Embedding.Lam.REntry)) :=
+  queryTPTP exportFacts : LamReif.ReifM (Option (Array Embedding.Lam.REntry)) := do
+    let lamVarTy := (← LamReif.getVarVal).map Prod.snd
+    let lamEVarTy ← LamReif.getLamEVarTy
+    let exportLamTerms ← exportFacts.mapM (fun re => do
+      match re with
+      | .valid [] t => return t
+      | _ => throwError "runAuto :: Unexpected error")
+    let query ← lam2TH0 lamVarTy lamEVarTy exportLamTerms
+    trace[auto.tptp.printQuery] "\n{query}"
+    let tptpProof ← Solver.TPTP.querySolver query
     try
-      let lamVarTy := (← LamReif.getVarVal).map Prod.snd
-      let lamEVarTy ← LamReif.getLamEVarTy
-      let exportLamTerms ← exportFacts.mapM (fun re => do
-        match re with
-        | .valid [] t => return t
-        | _ => throwError "runAuto :: Unexpected error")
-      let query ← lam2TH0 lamVarTy lamEVarTy exportLamTerms
-      trace[auto.tptp.printQuery] "\n{query}"
-      let tptpProof ← Solver.TPTP.querySolver query
-      let proofSteps ← Parser.TPTP.getProof (← LamReif.getLamTyValAtMeta) tptpProof
+      let proofSteps ← Parser.TPTP.getProof lamVarTy lamEVarTy tptpProof
       for step in proofSteps do
         trace[auto.tptp.printProof] "{step}"
-      let unsatCore ← Parser.TPTP.unsatCore tptpProof
-      let mut ret := #[]
-      for n in unsatCore do
-        let .some re := exportFacts[n]?
-          | throwError "queryTPTP :: Index {n} out of range"
-        ret := ret.push re
-      return .some ret
     catch e =>
-      trace[auto.tptp.result] "TPTP invocation failed with {e.toMessageData}"
-      return .none
-  querySMT exportFacts exportInds : LamReif.ReifM (Option Expr) :=
-    try
-      let lamVarTy := (← LamReif.getVarVal).map Prod.snd
-      let lamEVarTy ← LamReif.getLamEVarTy
-      let exportLamTerms ← exportFacts.mapM (fun re => do
-        match re with
-        | .valid [] t => return t
-        | _ => throwError "runAuto :: Unexpected error")
-      let commands ← (lamFOL2SMT lamVarTy lamEVarTy exportLamTerms exportInds).run'
-      for cmd in commands do
-        trace[auto.smt.printCommands] "{cmd}"
-      let .some _ ← Solver.SMT.querySolver commands
-        | return .none
-      if (auto.smt.trust.get (← getOptions)) then
-        logWarning "Trusting SMT solvers. `autoSMTSorry` is used to discharge the goal."
-        return .some (← Meta.mkAppM ``Solver.SMT.autoSMTSorry #[Expr.const ``False []])
-      else
-        return .none
-    catch e =>
-      trace[auto.smt.result] "SMT invocation failed with {e.toMessageData}"
+      trace[auto.tptp.printProof] "TPTP proof reification failed with {e.toMessageData}"
+    let unsatCore ← Parser.TPTP.unsatCore tptpProof
+    let mut ret := #[]
+    for n in unsatCore do
+      let .some re := exportFacts[n]?
+        | throwError "queryTPTP :: Index {n} out of range"
+      ret := ret.push re
+    return .some ret
+  querySMT exportFacts exportInds : LamReif.ReifM (Option Expr) := do
+    let lamVarTy := (← LamReif.getVarVal).map Prod.snd
+    let lamEVarTy ← LamReif.getLamEVarTy
+    let exportLamTerms ← exportFacts.mapM (fun re => do
+      match re with
+      | .valid [] t => return t
+      | _ => throwError "runAuto :: Unexpected error")
+    let commands ← (lamFOL2SMT lamVarTy lamEVarTy exportLamTerms exportInds).run'
+    for cmd in commands do
+      trace[auto.smt.printCommands] "{cmd}"
+    let .some _ ← Solver.SMT.querySolver commands
+      | return .none
+    if (auto.smt.trust.get (← getOptions)) then
+      logWarning "Trusting SMT solvers. `autoSMTSorry` is used to discharge the goal."
+      return .some (← Meta.mkAppM ``Solver.SMT.autoSMTSorry #[Expr.const ``False []])
+    else
       return .none
   queryNative declName? exportFacts exportInhs : LamReif.ReifM (Option Expr) := do
-    try
-      let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ←
-        Lam2D.callNative_checker exportInhs exportFacts Solver.Native.queryNative
-      LamReif.newAssertion proof proofLamTerm
-      let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
-      let forallElimed ← LamReif.validOfElimForalls etomInstantiated usedInhs
-      let contra ← LamReif.validOfImps forallElimed unsatCore
-      LamReif.printValuation
-      LamReif.printProofs
-      Reif.setDeclName? declName?
-      let checker ← LamReif.buildCheckerExprFor contra
-      let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
-      let proof ← Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra
-      return .some proof
-    catch e =>
-      trace[auto.tactic] "Native prover invocation failed with {e.toMessageData}"
-      return .none
+    let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ←
+      Lam2D.callNative_checker exportInhs exportFacts Solver.Native.queryNative
+    LamReif.newAssertion proof proofLamTerm
+    let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
+    let forallElimed ← LamReif.validOfElimForalls etomInstantiated usedInhs
+    let contra ← LamReif.validOfImps forallElimed unsatCore
+    LamReif.printValuation
+    LamReif.printProofs
+    Reif.setDeclName? declName?
+    let checker ← LamReif.buildCheckerExprFor contra
+    let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
+    let proof ← Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra
+    return .some proof
 
 @[tactic auto]
 def evalAuto : Tactic
