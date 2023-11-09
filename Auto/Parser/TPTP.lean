@@ -167,9 +167,13 @@ def prefixBindingPower? : String → Option Nat
 | "~" => some 70
 | _ => none
 
-def BinderBindingPower? : String → Option Nat
+def binderBindingPower? : String → Option Nat
 | "!" | "!>" | "?" | "^" => some 70
 | _ => none
+
+def isPolyIL? : String → Bool
+| "??" | "!!" | "=" => true
+| _ => false
 
 inductive Term where
   | mk : Token → List Term → Term
@@ -230,14 +234,14 @@ partial def parseLhs : ParserM Term := do
       parseToken (.op ")")
       return ⟨p, []⟩
     else
-    let lhs ← parseTerm 0
-    parseToken (.op ")")
-    return lhs
+      let lhs ← parseTerm 0
+      parseToken (.op ")")
+      return lhs
   else if nextToken == .op "[" then
     let args ← parseSep (.op ",") (parseTerm 0)
     parseToken (.op "]")
     return Term.mk nextToken args
-  else if let some rbp := BinderBindingPower? nextToken.toString then
+  else if let some rbp := binderBindingPower? nextToken.toString then
     parseToken (.op "[")
     let vars ← parseSep (.op ",") parseTypeDecl
     parseToken (.op "]")
@@ -248,8 +252,10 @@ partial def parseLhs : ParserM Term := do
     if (← peek?) == .some (.op ")") then -- support for `(~)` syntax
       return Term.mk nextToken []
     else
-    let rhs ← parseTerm rbp
-    return Term.mk nextToken [rhs]
+      let rhs ← parseTerm rbp
+      return Term.mk nextToken [rhs]
+  else if isPolyIL? nextToken.toString && (← peek?) == .some (.op ")") then
+    return Term.mk nextToken []
   else
     throw $ IO.userError s!"Expected term, got '{repr nextToken}'"
 
@@ -708,17 +714,29 @@ partial def term2LamTerm (ltv : LamTyVal) (t : Term) (lctx : HashMap String (Nat
       .term (.base .prop) (.mkNot (.mkIff la lb))
     | r₁, r₂ => .error s!"Unexpected term {t} produces ({r₁}) and ({r₂})"
   | ⟨.op "@", [a,b]⟩   =>
-    match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
-    | .term fnTy la, .term argTy' lb =>
-      match fnTy with
-      | .func argTy resTy =>
-        match argTy.beq argTy' with
-        | true => .term resTy (.app argTy la lb)
-        | false => .error s!"Application type mismatch ({fnTy} applied to {argTy'}) in {t}"
-      | _ => .error s!"Non-function type applied to arg in {t}"
-    | .error e, _ => .error s!"Unexpected term {t} produces (error {e}) at appFn"
-    | _, .error e => .error s!"Unexpected term {t} produces (error {e}) at appArg"
-    | r₁, r₂ => .error s!"Unexpected term {t} produces ({r₁}) at appFn and ({r₂}) at appArg"
+    match term2LamTerm ltv b lctx with
+    | .term argTy' lb =>
+      match isPolyIL? a.toString with
+      | true =>
+        if a.toString == "=" then
+          .term argTy' (.app argTy' (.base (.eq argTy')) lb)
+        else
+          match argTy' with
+          | .func domTy (.base .prop) =>
+            let b := if a.toString == "??" then .existE domTy else .forallE domTy
+            .term domTy (.app argTy' (.base b) lb)
+          | _ => .error s!"Invalid argument type for {a.toString}"
+      | false =>
+        match term2LamTerm ltv a lctx with
+        | .term fnTy la =>
+          match fnTy with
+          | .func argTy resTy =>
+            match argTy.beq argTy' with
+            | true => .term resTy (.app argTy la lb)
+            | false => .error s!"Application type mismatch ({fnTy} applied to {argTy'}) in {t}"
+          | _ => .error s!"Non-function type {fnTy} applied to arg in {t}"
+        | r => .error s!"Unexpected term {t} produces ({r}) at appFn"
+    | r => .error s!"Unexpected term {t} produces ({r}) at appArg"
   | ⟨.op "=>", [a,b]⟩ | ⟨.op "<=", [b,a]⟩ =>
     match term2LamTerm ltv a lctx, term2LamTerm ltv b lctx with
     | .term (.base .prop) la, .term (.base .prop) lb => .term (.base .prop) (.mkImp la lb)
@@ -773,12 +791,6 @@ where
         | false => .error s!"term2LamTerm :: Application type ({s₁} applied to {s₂}) mismatch in lamConstrMkAppN, `{head}` `{args}`"
       | _ => .error s!"term2LamTerm :: Non-function head `{head}` applied to argument"
     | _, _ => .error s!"term2LamTerm :: Unexpected input `{head}`, `{args}` to lamConstrMkAppN"
-
-def sd := do
-  let t ← parse "thf(fact1, axiom, (? [X0 : s_nat] : $false))."
-  let w := t[0]!.args[2]!
-  let t := term2LamTerm Inhabited.default w
-  IO.println t
 
 open Embedding.Lam in
 /-- Turn TSTP term into LamSort/LamTerm -/
