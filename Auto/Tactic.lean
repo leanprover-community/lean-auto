@@ -204,58 +204,53 @@ def collectAllLemmas (hintstx : TSyntax ``hints) (unfolds : TSyntax `Auto.unfold
   return (lctxLemmas ++ userLemmas ++ defeqLemmas, inhFacts)
 
 /-- `ngoal` means `negated goal` -/
-def runAuto (instrstx : TSyntax ``autoinstr) (lemmas : Array Lemma) (inhFacts : Array Lemma) : TacticM Expr := do
-  let instr ← parseInstr instrstx
-  let declName? ← Elab.Term.getDeclName?
+def runAuto (declName? : Option Name) (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr := do
   -- Simplify `ite`
   let ite_simp_lem ← Lemma.ofConst ``Auto.Bool.ite_simp
   let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem ite_simp_lem)
   -- Simplify `decide`
   let decide_simp_lem ← Lemma.ofConst ``Auto.Bool.decide_simp
   let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem decide_simp_lem)
-  match instr with
-  | .none =>
-    let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) (minds : Array (Array SimpleIndVal)) : LamReif.ReifM Expr := (do
-      let exportFacts ← LamReif.reifFacts uvalids
-      let mut exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
-      let _ ← LamReif.reifInhabitations uinhs
-      let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
-        (fun (s, _) => Embedding.Lam.REntry.nonempty s)
-      let exportInds ← LamReif.reifMutInds minds
-      -- **Preprocessing in Verified Checker**
-      let (exportFacts', exportInds) ← LamReif.preprocess exportFacts exportInds
-      exportFacts := exportFacts'
-      -- **TPTP invocation and Premise Selection**
-      if auto.tptp.get (← getOptions) then
-        let premiseSel? := auto.tptp.premiseSelection.get (← getOptions)
-        let queryResult ← queryTPTP exportFacts
-        if premiseSel? then
-          match queryResult with
-          | .some unsatCore =>
-            for re in unsatCore do
-              trace[auto.tptp.premiseSelection] "{re}"
-            exportFacts := unsatCore
-          | .none => trace[auto.tptp.premiseSelection] "TPTP invocation failed, skipping TPTP premise selection"
-      -- **SMT**
-      if auto.smt.get (← getOptions) then
-        if let .some proof ← querySMT exportFacts exportInds then
-          return proof
-      -- **Native Prover**
-      exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)
-      if auto.native.get (← getOptions) then
-        if let .some proof ← queryNative declName? exportFacts exportInhs then
-          return proof
-      throwError "Auto failed to find proof"
-      )
-    let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
-      let uvalids ← liftM <| Reif.getFacts
-      let uinhs ← liftM <| Reif.getInhTys
-      let inds ← liftM <| Reif.getInds
-      let u ← computeMaxLevel uvalids
-      (afterReify uvalids uinhs inds).run' {u := u})
-    trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
-    return proof
-  | .useSorry => return ← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []]
+  let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) (minds : Array (Array SimpleIndVal)) : LamReif.ReifM Expr := (do
+    let exportFacts ← LamReif.reifFacts uvalids
+    let mut exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
+    let _ ← LamReif.reifInhabitations uinhs
+    let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
+      (fun (s, _) => Embedding.Lam.REntry.nonempty s)
+    let exportInds ← LamReif.reifMutInds minds
+    -- **Preprocessing in Verified Checker**
+    let (exportFacts', exportInds) ← LamReif.preprocess exportFacts exportInds
+    exportFacts := exportFacts'
+    -- **TPTP invocation and Premise Selection**
+    if auto.tptp.get (← getOptions) then
+      let premiseSel? := auto.tptp.premiseSelection.get (← getOptions)
+      let queryResult ← queryTPTP exportFacts
+      if premiseSel? then
+        match queryResult with
+        | .some unsatCore =>
+          for re in unsatCore do
+            trace[auto.tptp.premiseSelection] "{re}"
+          exportFacts := unsatCore
+        | .none => trace[auto.tptp.premiseSelection] "TPTP invocation failed, skipping TPTP premise selection"
+    -- **SMT**
+    if auto.smt.get (← getOptions) then
+      if let .some proof ← querySMT exportFacts exportInds then
+        return proof
+    -- **Native Prover**
+    exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)
+    if auto.native.get (← getOptions) then
+      if let .some proof ← queryNative declName? exportFacts exportInhs then
+        return proof
+    throwError "Auto failed to find proof"
+    )
+  let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
+    let uvalids ← liftM <| Reif.getFacts
+    let uinhs ← liftM <| Reif.getInhTys
+    let inds ← liftM <| Reif.getInds
+    let u ← computeMaxLevel uvalids
+    (afterReify uvalids uinhs inds).run' {u := u})
+  trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
+  return proof
 where
   /--
     If TPTP succeeds, return unsat core
@@ -329,10 +324,17 @@ def evalAuto : Tactic
   let (ngoal, absurd) ← MVarId.intro1 nngoal
   replaceMainGoal [absurd]
   withMainContext do
-    let (lemmas, inhFacts) ← collectAllLemmas hints unfolds defeqs (goalBinders.push ngoal)
-    let proof ← runAuto instr lemmas inhFacts
-    IO.println s!"Auto found proof. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
-    absurd.assign proof
+    let instr ← parseInstr instr
+    match instr with
+    | .none =>
+      let (lemmas, inhFacts) ← collectAllLemmas hints unfolds defeqs (goalBinders.push ngoal)
+      let declName? ← Elab.Term.getDeclName?
+      let proof ← runAuto declName? lemmas inhFacts
+      IO.println s!"Auto found proof. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
+      absurd.assign proof
+    | .useSorry =>
+      let proof ← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []]
+      absurd.assign proof
 | _ => throwUnsupportedSyntax
 
 @[tactic intromono]
@@ -350,8 +352,22 @@ def evalIntromono : Tactic
 | _ => throwUnsupportedSyntax
 
 /--
+  An interface to monomorphization and preprocessing by verified checker
+-/
+def monoPrepInterface
+  (declName : Name) (proverName : String)
+  (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr :=
+  withOptions (fun opts =>
+    let opts := opts.set ``auto.smt false
+    let opts := opts.set ``auto.tptp false
+    let opts := opts.set ``auto.native false
+    let opts := opts.set ``auto.native.solver.func proverName
+    opts) (runAuto (.some declName) lemmas inhFacts)
+
+/--
   A monomorphization interface that can be invoked by repos dependent
     on `lean-auto`.
+  **TODO: Change `prover : Array Lemma → MetaM Expr` to have type `proverName : String`**
 -/
 def monoInterface
   (lemmas : Array Lemma) (inhFacts : Array Lemma)

@@ -23,6 +23,18 @@ __Auto Issues:__
 * Support tableux mode in verified checker?
 * Create an interface that invokes the verified checker for duper.
 * Better inhabitation reasoning (a new lambaseterm ctor "nonempty").
+* Eta-expand (=) (??) (!!) when sending problem to zipperposition.
+* Premise Selection:
+  * https://lean-forward.github.io/pubs/geesing_msc_thesis.pdf
+  * https://github.com/aalistairr/ps-lean
+  * https://arxiv.org/abs/2304.00994
+  * https://github.com/BartoszPiotrowski/lean-premise-selection
+* Benchmarks:
+  * GRUNGE: https://arxiv.org/abs/1903.02539
+  * Seventeen benchmark: https://matryoshka-project.github.io/pubs/seventeen.pdf
+* Justification:
+  * Duper is fine on problems suitable for hammers
+  * Duper can do something that metis can't
 
 __Lean Issues:__
 * ``cases`` fails on some simple examples. E.g, ``cases h : a.beq b`` fails if the goal contains term

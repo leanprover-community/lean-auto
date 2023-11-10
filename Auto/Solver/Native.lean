@@ -8,16 +8,16 @@ register_option auto.native : Bool := {
   descr := "Enable/Disable Native Solver"
 }
 
+register_option auto.native.solver.func : String := {
+  defValue := ""
+  descr := "Lean name of solver function. The function must have type `Array Lemma → MetaM Expr`"
+}
+
 initialize
   registerTraceClass `auto.native.printFormulas
   registerTraceClass `auto.native.printProof
 
 namespace Auto.Solver.Native
-
-register_option auto.native.solver.func : String := {
-  defValue := ""
-  descr := "Lean name of solver function. The function must have type `Array Lemma → MetaM Expr`"
-}
 
 private def nativeFuncExpectedType := Array Lemma → MetaM Expr
 
