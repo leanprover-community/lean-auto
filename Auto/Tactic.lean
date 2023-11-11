@@ -203,6 +203,98 @@ def collectAllLemmas (hintstx : TSyntax ``hints) (unfolds : TSyntax `Auto.unfold
   traceLemmas "Inhabitation lemmas :" inhFacts
   return (lctxLemmas ++ userLemmas ++ defeqLemmas, inhFacts)
 
+open Embedding.Lam in
+/--
+  If TPTP succeeds, return unsat core
+  If TPTP fails, return none
+-/
+def queryTPTP (exportFacts : Array REntry) : LamReif.ReifM (Option (Array Embedding.Lam.REntry)) := do
+    let lamVarTy := (← LamReif.getVarVal).map Prod.snd
+    let lamEVarTy ← LamReif.getLamEVarTy
+    let exportLamTerms ← exportFacts.mapM (fun re => do
+      match re with
+      | .valid [] t => return t
+      | _ => throwError "runAuto :: Unexpected error")
+    let query ← lam2TH0 lamVarTy lamEVarTy exportLamTerms
+    trace[auto.tptp.printQuery] "\n{query}"
+    let tptpProof ← Solver.TPTP.querySolver query
+    try
+      let proofSteps ← Parser.TPTP.getProof lamVarTy lamEVarTy tptpProof
+      for step in proofSteps do
+        trace[auto.tptp.printProof] "{step}"
+    catch e =>
+      trace[auto.tptp.printProof] "TPTP proof reification failed with {e.toMessageData}"
+    let unsatCore ← Parser.TPTP.unsatCore tptpProof
+    let mut ret := #[]
+    for n in unsatCore do
+      let .some re := exportFacts[n]?
+        | throwError "queryTPTP :: Index {n} out of range"
+      ret := ret.push re
+    return .some ret
+
+open Embedding.Lam in
+def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : LamReif.ReifM (Option Expr) := do
+  let lamVarTy := (← LamReif.getVarVal).map Prod.snd
+  let lamEVarTy ← LamReif.getLamEVarTy
+  let exportLamTerms ← exportFacts.mapM (fun re => do
+    match re with
+    | .valid [] t => return t
+    | _ => throwError "runAuto :: Unexpected error")
+  let commands ← (lamFOL2SMT lamVarTy lamEVarTy exportLamTerms exportInds).run'
+  for cmd in commands do
+    trace[auto.smt.printCommands] "{cmd}"
+  let .some _ ← Solver.SMT.querySolver commands
+    | return .none
+  if (auto.smt.trust.get (← getOptions)) then
+    logWarning "Trusting SMT solvers. `autoSMTSorry` is used to discharge the goal."
+    return .some (← Meta.mkAppM ``Solver.SMT.autoSMTSorry #[Expr.const ``False []])
+  else
+    return .none
+
+open Embedding.Lam in
+/--
+  If `prover?` is specified, use the specified one.
+  Otherwise use the one determined by `Solver.Native.queryNative`
+-/
+def queryNative
+  (declName? : Option Name) (exportFacts exportInhs : Array REntry)
+  (prover? : Option (Array Lemma → MetaM Expr) := .none) : LamReif.ReifM (Option Expr) := do
+  let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ←
+    Lam2D.callNative_checker exportInhs exportFacts (prover?.getD Solver.Native.queryNative)
+  LamReif.newAssertion proof proofLamTerm
+  let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
+  let forallElimed ← LamReif.validOfElimForalls etomInstantiated usedInhs
+  let contra ← LamReif.validOfImps forallElimed unsatCore
+  LamReif.printValuation
+  LamReif.printProofs
+  Reif.setDeclName? declName?
+  let checker ← LamReif.buildCheckerExprFor contra
+  let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
+  let proof ← Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra
+  return .some proof
+
+def runNativeProverWithAuto
+  (declName? : Option Name) (prover : Array Lemma → MetaM Expr)
+  (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr := do
+  let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) : LamReif.ReifM Expr := (do
+    let exportFacts ← LamReif.reifFacts uvalids
+    let exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
+    let _ ← LamReif.reifInhabitations uinhs
+    let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
+      (fun (s, _) => Embedding.Lam.REntry.nonempty s)
+    let (exportFacts, _) ← LamReif.preprocess exportFacts #[]
+    if let .some expr ← queryNative declName? exportFacts exportInhs prover then
+      return expr
+    else
+      throwError "runAutoFromProver :: Failed to find proof")
+  let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
+    let uvalids ← liftM <| Reif.getFacts
+    let uinhs ← liftM <| Reif.getInhTys
+    let u ← computeMaxLevel uvalids
+    (afterReify uvalids uinhs).run' {u := u})
+  trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
+  return proof
+
 /-- `ngoal` means `negated goal` -/
 def runAuto (declName? : Option Name) (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr := do
   -- Simplify `ite`
@@ -251,65 +343,6 @@ def runAuto (declName? : Option Name) (lemmas : Array Lemma) (inhFacts : Array L
     (afterReify uvalids uinhs inds).run' {u := u})
   trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
   return proof
-where
-  /--
-    If TPTP succeeds, return unsat core
-    If TPTP fails, return none
-  -/
-  queryTPTP exportFacts : LamReif.ReifM (Option (Array Embedding.Lam.REntry)) := do
-    let lamVarTy := (← LamReif.getVarVal).map Prod.snd
-    let lamEVarTy ← LamReif.getLamEVarTy
-    let exportLamTerms ← exportFacts.mapM (fun re => do
-      match re with
-      | .valid [] t => return t
-      | _ => throwError "runAuto :: Unexpected error")
-    let query ← lam2TH0 lamVarTy lamEVarTy exportLamTerms
-    trace[auto.tptp.printQuery] "\n{query}"
-    let tptpProof ← Solver.TPTP.querySolver query
-    try
-      let proofSteps ← Parser.TPTP.getProof lamVarTy lamEVarTy tptpProof
-      for step in proofSteps do
-        trace[auto.tptp.printProof] "{step}"
-    catch e =>
-      trace[auto.tptp.printProof] "TPTP proof reification failed with {e.toMessageData}"
-    let unsatCore ← Parser.TPTP.unsatCore tptpProof
-    let mut ret := #[]
-    for n in unsatCore do
-      let .some re := exportFacts[n]?
-        | throwError "queryTPTP :: Index {n} out of range"
-      ret := ret.push re
-    return .some ret
-  querySMT exportFacts exportInds : LamReif.ReifM (Option Expr) := do
-    let lamVarTy := (← LamReif.getVarVal).map Prod.snd
-    let lamEVarTy ← LamReif.getLamEVarTy
-    let exportLamTerms ← exportFacts.mapM (fun re => do
-      match re with
-      | .valid [] t => return t
-      | _ => throwError "runAuto :: Unexpected error")
-    let commands ← (lamFOL2SMT lamVarTy lamEVarTy exportLamTerms exportInds).run'
-    for cmd in commands do
-      trace[auto.smt.printCommands] "{cmd}"
-    let .some _ ← Solver.SMT.querySolver commands
-      | return .none
-    if (auto.smt.trust.get (← getOptions)) then
-      logWarning "Trusting SMT solvers. `autoSMTSorry` is used to discharge the goal."
-      return .some (← Meta.mkAppM ``Solver.SMT.autoSMTSorry #[Expr.const ``False []])
-    else
-      return .none
-  queryNative declName? exportFacts exportInhs : LamReif.ReifM (Option Expr) := do
-    let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ←
-      Lam2D.callNative_checker exportInhs exportFacts Solver.Native.queryNative
-    LamReif.newAssertion proof proofLamTerm
-    let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
-    let forallElimed ← LamReif.validOfElimForalls etomInstantiated usedInhs
-    let contra ← LamReif.validOfImps forallElimed unsatCore
-    LamReif.printValuation
-    LamReif.printProofs
-    Reif.setDeclName? declName?
-    let checker ← LamReif.buildCheckerExprFor contra
-    let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
-    let proof ← Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra
-    return .some proof
 
 @[tactic auto]
 def evalAuto : Tactic
@@ -350,19 +383,6 @@ def evalIntromono : Tactic
     let newMid ← Monomorphization.intromono lemmas absurd
     replaceMainGoal [newMid]
 | _ => throwUnsupportedSyntax
-
-/--
-  An interface to monomorphization and preprocessing by verified checker
--/
-def monoPrepInterface
-  (declName : Name) (proverName : String)
-  (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr :=
-  withOptions (fun opts =>
-    let opts := opts.set ``auto.smt false
-    let opts := opts.set ``auto.tptp false
-    let opts := opts.set ``auto.native false
-    let opts := opts.set ``auto.native.solver.func proverName
-    opts) (runAuto (.some declName) lemmas inhFacts)
 
 /--
   A monomorphization interface that can be invoked by repos dependent
