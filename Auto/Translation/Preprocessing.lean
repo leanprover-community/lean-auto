@@ -24,14 +24,15 @@ def elabLemma (stx : Term) : TacticM Lemma :=
     let paramNames := abstres.paramNames
     return Lemma.mk e (← inferType e) paramNames
 
-def addRecAsLemma (recVal : RecursorVal) : TacticM (Array Lemma) := do
+def addRecAsLemma (recVal : RecursorVal) : MetaM (Array Lemma) := do
   let some (.inductInfo indVal) := (← getEnv).find? recVal.getInduct
     | throwError "Expected inductive datatype: {recVal.getInduct}"
   let expr := mkConst recVal.name (recVal.levelParams.map Level.param)
-  let res ← forallBoundedTelescope (← inferType expr) recVal.getMajorIdx fun xs _ => do
+  let res ← forallBoundedTelescope (← inferType expr) recVal.getMajorIdx fun xs body => do
     let expr := mkAppN expr xs
+    let inductTyArgs : Array Expr := xs[:indVal.numParams]
     indVal.ctors.mapM fun ctorName => do
-      let ctor ← mkAppOptM ctorName #[]
+      let ctor ← mkAppOptM ctorName (inductTyArgs.map Option.some)
       let (proof, eq) ← forallTelescope (← inferType ctor) fun ys _ => do
         let ctor := mkAppN ctor ys
         let expr := mkApp expr ctor
@@ -44,6 +45,10 @@ def addRecAsLemma (recVal : RecursorVal) : TacticM (Array Lemma) := do
       let proof ← instantiateMVars (← mkLambdaFVars xs proof)
       let eq ← instantiateMVars (← mkForallFVars xs eq)
       return ⟨proof, eq, recVal.levelParams.toArray⟩
+  for lem in res do
+    let ty' ← Meta.inferType lem.proof
+    if !(← Meta.isDefEq ty' lem.type) then
+      throwError "addRecAsLemma :: Application type mismatch"
   return Array.mk res
 
 def elabDefEq (name : Name) : TacticM (Array Lemma) := do
