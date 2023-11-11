@@ -204,7 +204,8 @@ def collectAllLemmas (hintstx : TSyntax ``hints) (unfolds : TSyntax `Auto.unfold
   return (lctxLemmas ++ userLemmas ++ defeqLemmas, inhFacts)
 
 /-- `ngoal` means `negated goal` -/
-def runAuto (declName? : Option Name) (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr := do
+def runAuto (declName? : Option Name) (prover : Option (Array Lemma → MetaM Expr) := none)
+  (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr := do
   -- Simplify `ite`
   let ite_simp_lem ← Lemma.ofConst ``Auto.Bool.ite_simp
   let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem ite_simp_lem)
@@ -298,7 +299,10 @@ where
       return .none
   queryNative declName? exportFacts exportInhs : LamReif.ReifM (Option Expr) := do
     let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ←
-      Lam2D.callNative_checker exportInhs exportFacts Solver.Native.queryNative
+      -- If a prover function is provided use that. Otherwise, use the function indicated by auto.native.solver.func
+      match prover with
+      | none => Lam2D.callNative_checker exportInhs exportFacts Solver.Native.queryNative
+      | some prover => Lam2D.callNative_checker exportInhs exportFacts (Solver.Native.queryNativeFromFunction prover)
     LamReif.newAssertion proof proofLamTerm
     let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
     let forallElimed ← LamReif.validOfElimForalls etomInstantiated usedInhs
@@ -329,7 +333,7 @@ def evalAuto : Tactic
     | .none =>
       let (lemmas, inhFacts) ← collectAllLemmas hints unfolds defeqs (goalBinders.push ngoal)
       let declName? ← Elab.Term.getDeclName?
-      let proof ← runAuto declName? lemmas inhFacts
+      let proof ← runAuto declName? none lemmas inhFacts
       IO.println s!"Auto found proof. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
       absurd.assign proof
     | .useSorry =>
@@ -355,14 +359,13 @@ def evalIntromono : Tactic
   An interface to monomorphization and preprocessing by verified checker
 -/
 def monoPrepInterface
-  (declName : Name) (proverName : String)
+  (declName? : Option Name) (prover : Array Lemma → MetaM Expr)
   (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr :=
   withOptions (fun opts =>
     let opts := opts.set ``auto.smt false
     let opts := opts.set ``auto.tptp false
-    let opts := opts.set ``auto.native false
-    let opts := opts.set ``auto.native.solver.func proverName
-    opts) (runAuto (.some declName) lemmas inhFacts)
+    let opts := opts.set ``auto.native true
+    opts) (runAuto declName? (.some prover) lemmas inhFacts)
 
 /--
   A monomorphization interface that can be invoked by repos dependent

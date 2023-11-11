@@ -21,7 +21,18 @@ namespace Auto.Solver.Native
 
 private def nativeFuncExpectedType := Array Lemma → MetaM Expr
 
-private unsafe def queryNativeUnsafe (lemmas : Array Lemma) : MetaM Expr := do
+private unsafe def queryNativeUnsafeFromFunction (func : nativeFuncExpectedType)
+  (lemmas : Array Lemma) : MetaM Expr := do
+  for lem in lemmas do
+    trace[auto.native.printFormulas] "{lem.type}"
+  let proof ← func lemmas
+  trace[auto.native.printProof] "Native prover found proof {proof}"
+  return proof
+
+@[implemented_by queryNativeUnsafeFromFunction]
+opaque queryNativeFromFunction : nativeFuncExpectedType → Array Lemma → MetaM Expr
+
+private unsafe def queryNativeUnsafeFromName (lemmas : Array Lemma) : MetaM Expr := do
   let nativeFuncStr := auto.native.solver.func.get (← getOptions)
   let nativeFunc := (nativeFuncStr.splitOn ".").foldl (fun acc s => Name.str acc s) .anonymous
   let .some (.defnInfo di) := (← getEnv).find? nativeFunc
@@ -36,7 +47,7 @@ private unsafe def queryNativeUnsafe (lemmas : Array Lemma) : MetaM Expr := do
   trace[auto.native.printProof] "Native prover found proof {proof}"
   return proof
 
-@[implemented_by queryNativeUnsafe]
+@[implemented_by queryNativeUnsafeFromName]
 opaque queryNative : Array Lemma → MetaM Expr
 
 end Auto.Solver.Native
