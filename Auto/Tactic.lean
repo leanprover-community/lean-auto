@@ -273,6 +273,9 @@ def queryNative
   let proof ← Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra
   return .some proof
 
+/--
+  Run native `prover` with monomorphization and preprocessing of `auto`
+-/
 def runNativeProverWithAuto
   (declName? : Option Name) (prover : Array Lemma → MetaM Expr)
   (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr := do
@@ -286,17 +289,19 @@ def runNativeProverWithAuto
     if let .some expr ← queryNative declName? exportFacts exportInhs prover then
       return expr
     else
-      throwError "runAutoFromProver :: Failed to find proof")
+      throwError "runNativeProverWithAuto :: Failed to find proof")
   let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
-    let uvalids ← liftM <| Reif.getFacts
-    let uinhs ← liftM <| Reif.getInhTys
-    let u ← computeMaxLevel uvalids
-    (afterReify uvalids uinhs).run' {u := u})
-  trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
+    let s ← get
+    let u ← computeMaxLevel s.facts
+    (afterReify s.facts s.inhTys).run' {u := u})
+  trace[auto.tactic] "runNativeProverWithAuto :: Found proof of {← Meta.inferType proof}"
   return proof
 
-/-- `ngoal` means `negated goal` -/
-def runAuto (declName? : Option Name) (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr := do
+/--
+  Run `auto`'s monomorphization and preprocessing, then send the problem to different solvers
+-/
+def runAuto
+  (declName? : Option Name) (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr := do
   -- Simplify `ite`
   let ite_simp_lem ← Lemma.ofConst ``Auto.Bool.ite_simp
   let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem ite_simp_lem)
@@ -336,11 +341,9 @@ def runAuto (declName? : Option Name) (lemmas : Array Lemma) (inhFacts : Array L
     throwError "Auto failed to find proof"
     )
   let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
-    let uvalids ← liftM <| Reif.getFacts
-    let uinhs ← liftM <| Reif.getInhTys
-    let inds ← liftM <| Reif.getInds
-    let u ← computeMaxLevel uvalids
-    (afterReify uvalids uinhs inds).run' {u := u})
+    let s ← get
+    let u ← computeMaxLevel s.facts
+    (afterReify s.facts s.inhTys s.inds).run' {u := u})
   trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
   return proof
 
