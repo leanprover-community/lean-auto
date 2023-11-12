@@ -428,13 +428,14 @@ def lamFOL2SMT
     let (dsdecl, compCtors, compProjs) ← lamMutualIndInfo2STerm mind
     trace[auto.lamFOL2SMT] "MutualIndInfo translated to command {dsdecl}"
     addCommand dsdecl
-    let ctorEqns ← compCtors.mapM (compEqn lamVarTy lamEVarTy)
-    let _ ← ctorEqns.mapM addCommand
-    let projEqns ← compProjs.mapM (compEqn lamVarTy lamEVarTy)
-  for t in facts do
+    let compCtorEqns ← compCtors.mapM (compEqn lamVarTy lamEVarTy)
+    let _ ← compCtorEqns.mapM addCommand
+    let compProjEqns ← compProjs.mapM (compEqn lamVarTy lamEVarTy)
+    let _ ← compProjEqns.mapM addCommand
+  for (t, idx) in facts.zipWithIndex do
     let sterm ← lamTerm2STerm lamVarTy lamEVarTy t
     trace[auto.lamFOL2SMT] "λ term {repr t} translated to SMT term {sterm}"
-    addCommand (.assert sterm)
+    addCommand (.assert (.attr sterm #[.symb "named" s!"valid_fact_{idx}"]))
   getCommands
 
 end Auto

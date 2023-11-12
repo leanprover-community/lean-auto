@@ -49,7 +49,7 @@ private def SSort.toStringAux : SSort → List SIdent → String
   let head := SSort.toStringAux a binders ++ " "
   let tail := String.intercalate " " (go as binders)
   intro ++ head ++ tail ++ ")"
-where go : List SSort → List SIdent →  List String 
+where go : List SSort → List SIdent →  List String
 | [], _ => []
 | a :: as, binders => SSort.toStringAux a binders :: go as binders
 
@@ -92,18 +92,33 @@ def SpecConst.toString : SpecConst → String
 where specCharRepr (c : Char) : String :=
   "\\u{" ++ String.mk (Nat.toDigits 16 c.toNat) ++ "}"
 
-inductive STerm where
-  | sConst  : SpecConst → STerm
-  | bvar    : Nat → STerm                      -- De bruijin index
-  | qIdApp  : QualIdent → Array STerm → STerm  -- Application of function symbol to array of terms
-  | letE    : (name : String) → (binding : STerm) → (body : STerm) → STerm
-  | forallE : (name : String) → (binderType : SSort) → (body : STerm) → STerm
-  | existE  : (name : String) → (binderType : SSort) → (body : STerm) → STerm
-  | matchE  : (matchTerm : STerm) → Array (MatchCase STerm) → STerm
+mutual
+
+  inductive STerm where
+    | sConst  : SpecConst → STerm
+    | bvar    : Nat → STerm                      -- De bruijin index
+    | qIdApp  : QualIdent → Array STerm → STerm  -- Application of function symbol to array of terms
+    | letE    : (name : String) → (binding : STerm) → (body : STerm) → STerm
+    | forallE : (name : String) → (binderType : SSort) → (body : STerm) → STerm
+    | existE  : (name : String) → (binderType : SSort) → (body : STerm) → STerm
+    | matchE  : (matchTerm : STerm) → Array (MatchCase STerm) → STerm
+    | attr    : STerm → Array Attribute → STerm
+
+  /--
+   〈attribute_value〉 ::= 〈spec_constant〉 | 〈symbol〉 | (〈s_expr〉∗ )
+   〈attribute〉 ::= 〈keyword〉 | 〈keyword〉〈attribute_value〉
+  -/
+  inductive Attribute where
+    | none  : String → Attribute
+    | spec  : String → SpecConst → Attribute
+    | symb  : String → String → Attribute
+    | sexpr : String → Array STerm → Attribute
+
+end
 
 def STerm.qStrApp (s : String) (arr : Array STerm) := STerm.qIdApp (.ofString s) arr
 
-private def STerm.toStringAux : STerm → List SIdent → String
+private partial def STerm.toStringAux : STerm → List SIdent → String
   | .sConst c, _         => SpecConst.toString c
   | .bvar i, binders   =>
     if let some si := binders.get? i then
@@ -139,6 +154,10 @@ private def STerm.toStringAux : STerm → List SIdent → String
     let intro := intro ++ goMatchBranch a binders
     let body := String.join ((goMatchBody as binders).map (fun s => " " ++ s)) ++ "))"
     intro ++ body
+  | .attr t attrs, binders =>
+    let intro := "(! " ++ STerm.toStringAux t binders ++ " "
+    let sattrs := String.intercalate " " (attrs.data.map (attrToStringAux · binders))
+    intro ++ sattrs ++ ")"
 where
   goQIdApp : List STerm → List SIdent → List String
     | [], _ => []
@@ -158,12 +177,23 @@ where
   goMatchBody : List (MatchCase STerm) → List SIdent → List String
     | [], _ => []
     | a :: as, binders => goMatchBranch a binders :: goMatchBody as binders
+  attrToStringAux : Attribute → List SIdent → String
+    | .none s,     _ => ":" ++ s
+    | .spec s sc,  _ => s!":{s} {sc.toString}"
+    | .symb s s',  _ => s!":{s} {s'}"
+    | .sexpr s ts, binders => s!":{s} (" ++ String.intercalate " " (ts.data.map (STerm.toStringAux · binders)) ++ ")"
 
-def STerm.toString (s : STerm) (binders : Array SIdent) : String :=
-  STerm.toStringAux s binders.data
+def STerm.toString (t : STerm) (binders : Array SIdent) : String :=
+  STerm.toStringAux t binders.data
 
 instance : ToString STerm where
-  toString s := STerm.toString s #[]
+  toString t := STerm.toString t #[]
+
+def Attribute.toString (attr : Attribute) (binders : Array SIdent) : String :=
+  SMT.STerm.toStringAux.attrToStringAux attr binders.data
+
+instance : ToString Attribute where
+  toString attr := Attribute.toString attr #[]
 
 /--
  〈selector_dec〉 ::= ( 〈symbol〉 〈sort〉 )
@@ -193,16 +223,6 @@ private def DatatypeDecl.toString : DatatypeDecl → String := fun ⟨params, cs
     scstrDecls
   else
     "(par ("  ++ String.intercalate " " params.data ++ ") " ++ scstrDecls ++ ")"
-
--- **TODO**: Complete?
-inductive Attribute where
-  | key : String → Attribute
-
-def Attribute.toString : Attribute → String
-| .key s => s
-
-instance : ToString Attribute where
-  toString := Attribute.toString
 
 inductive SMTOption where
   | diagnosticOC            : String → SMTOption
@@ -357,10 +377,10 @@ section
   instance : Monad (TransM ω) :=
     let i := inferInstanceAs (Monad (TransM ω));
     { pure := i.pure, bind := i.bind }
-  
+
   instance : Inhabited (TransM ω α) where
     default := fun _ => throw default
-  
+
   variable {ω : Type} [BEq ω] [Hashable ω]
 
   @[inline] def TransM.run (x : TransM ω α) (s : State ω := {}) : MetaM (α × State ω) :=
@@ -375,7 +395,7 @@ section
     let size := (← getH2lMap).size
     assert! ((← getL2hMap).size == size)
     return size
-  
+
   def hIn (e : ω) : TransM ω Bool := do
     return (← getH2lMap).contains e
 
@@ -410,7 +430,7 @@ section
   def addCommand (c : Command) : TransM ω Unit := do
     let commands ← getCommands
     setCommands (commands.push c)
-  
+
 end
 
 end IR.SMT
