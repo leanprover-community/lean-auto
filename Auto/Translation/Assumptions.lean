@@ -81,32 +81,6 @@ def Lemma.equivQuick (lem₁ lem₂ : Lemma) : MetaM Bool := do
   let s₂₁ ← Lemma.subsumeQuick lem₂ lem₁
   return s₁₂ && s₂₁
 
-def Lemma.unfoldConst (lem : Lemma) (declName : Name) : MetaM Lemma := do
-  let result ← Meta.unfold lem.type declName
-  match result.proof? with
-  | .some eqProof =>
-    let tySort ← Expr.normalizeType (← Meta.inferType lem.type)
-    let Expr.sort lvl := tySort
-      | throwError "Lemma.unfoldConst :: {tySort} is not a sort"
-    let eq ← Meta.mkEq lem.type result.expr
-    let eqProof' ← Meta.mkExpectedTypeHint eqProof eq
-    let proof := mkAppN (Lean.mkConst ``Eq.mp [lvl]) #[lem.type, result.expr, eqProof', lem.proof]
-    -- **TODO**: Remove?
-    if !(← Meta.isTypeCorrect proof) then
-      throwError "Lemma.unfoldConst :: Proof {proof} is not type correct"
-    return ⟨proof, result.expr, lem.params⟩
-  | .none => return ⟨lem.proof, result.expr, lem.params⟩
-
-/--
-  `declNames` must be topologically sorted, i.e., we do not allow
-    the situation where
-    · `n` and `m` are both in `declNames`
-    · `n` is before `m`
-    · The declaration body of `m` contains `n`
--/
-def Lemma.unfoldConsts (lem : Lemma) (declNames : Array Name) : MetaM Lemma := do
-  declNames.foldlM (fun lem name => lem.unfoldConst name) lem
-
 /-- Reorder top-level `∀` so that (non-prop / dependent) ones precede other ones -/
 def Lemma.reorderForallInstDep (lem : Lemma) : MetaM Lemma := do
   let depargs := HashSet.empty.insertMany (Expr.depArgs lem.type)
@@ -229,7 +203,7 @@ def LemmaInst.ofLemmaLeadingDepOnly (lem : Lemma) : MetaM LemmaInst := do
       throwError "LemmaInst.ofLemmaLeadingDepOnly :: Unexpected error"
     let proof ← Meta.mkLambdaFVars xs (mkAppN proof xs)
     let lem' : Lemma := ⟨proof, type, params⟩
-    return ⟨lem', xs.size, xs.size⟩  
+    return ⟨lem', xs.size, xs.size⟩
 
 /-- Get the proof of the lemma that `li` is an instance of -/
 def LemmaInst.getProofOfLemma (li : LemmaInst) : Option Expr :=

@@ -91,6 +91,40 @@ def getConstUnfoldInfo (name : Name) : MetaM ConstUnfoldInfo := do
   return ⟨name, val, ⟨params⟩⟩
 
 /--
+  Topologically sort constant names, such that the definition body
+    of previous names does not use latter ones.
+  If there is cyclic dependency, `topoSortUnfolds` throws an error
+-/
+partial def topoSortUnfolds (unfolds : Array ConstUnfoldInfo) : MetaM (Array ConstUnfoldInfo) := do
+  let mut depMap : HashMap Name (HashSet Name) := {}
+  for ⟨i, val, _⟩ in unfolds do
+    for ⟨j, _, _⟩ in unfolds do
+      if (val.find? (fun e => e.constName? == .some j)).isSome then
+        let deps := (depMap.find? i).getD {}
+        depMap := depMap.insert i (deps.insert j)
+  let (_, _, nameArr) ← (unfolds.mapM (fun n => go depMap {} n.name)).run ({}, #[])
+  let nameMap : HashMap Name _ := HashMap.ofList (unfolds.data.map (fun ui => (ui.name, ui)))
+  let mut ret := #[]
+  for name in nameArr do
+    let .some ui := nameMap.find? name
+      | throwError "topoSortUnfolds :: Unexpected error"
+    ret := ret.push ui
+  return ret.reverse
+where
+  go (depMap : HashMap Name (HashSet Name)) (stack : HashSet Name) (n : Name) : StateRefT (HashSet Name × Array Name) MetaM Unit := do
+    if stack.contains n then
+      throwError "topoSortUnfolds :: Cyclic dependency"
+    let (done, ret) ← get
+    if done.contains n then
+      return
+    let deps := (depMap.find? n).getD {}
+    set (done.insert n, ret)
+    for dep in deps do
+      go depMap (stack.insert n) dep
+    let (done, ret) ← get
+    set (done, ret.push n)
+
+/--
   Unfold constants occurring in expression `e`
   `unfolds` should satisfy the following constraint:
     ∀ i j, i < j → `unfolds[j].name` does not occur in `unfolds[i].val`

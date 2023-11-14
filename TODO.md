@@ -18,11 +18,9 @@ __Auto Issues:__
 * Add semantics check for ``BitVec`` operations
 * Unsound translation for SMT: Although we have the option ``auto.smt.trust``, the translation is unsound since types in Lean might be inhabited while SMT-LIB assumes that all types are inhabited.
 * ``autoSMTSorry`` warning?
-* TPTP interpreted polymorphic logical constants type inference.
 * Report errors when monomorphization fails.
-* Support tableux mode in verified checker?
+* Better inhabitation reasoning (a new lambaseterm ctor "nonempty"). Support divide and conquer for inhabitation reasoning in verified checker?
 * Create an interface that invokes the verified checker for duper.
-* Better inhabitation reasoning (a new lambaseterm ctor "nonempty").
 * Eta-expand (=) (??) (!!) when sending problem to zipperposition.
 * Premise Selection:
   * https://lean-forward.github.io/pubs/geesing_msc_thesis.pdf

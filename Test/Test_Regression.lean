@@ -231,7 +231,8 @@ section UnfoldConst
 
   example : c₁ = 2 := by auto u[c₁]
   example : c₂ = 2 := by
-    try auto u[c₁, c₂]
+    auto u[c₁, c₂]
+  example : c₂ = 2 := by
     auto u[c₂, c₁]
   example : c₂ = 2 := by auto u[c₁] d[c₂]
   example : c₂ = 2 := by auto u[c₂] d[c₁]

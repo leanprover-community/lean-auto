@@ -14,14 +14,15 @@ namespace Auto
 
 syntax hintelem := term <|> "*"
 syntax hints := ("[" hintelem,* "]")?
--- Must be topologically sorted, refer to `Lemma.unfoldConsts`
--- **TODO**: Automatically topological sort
-syntax unfolds := ("u[" ident,* "]")?
-syntax defeqs := ("d[" ident,* "]")?
+/-- Specify constants to unfold. `unfolds` Must not contain cyclic dependency -/
+syntax unfolds := "u[" ident,* "]"
+/-- Specify constants to collect definitional equality for -/
+syntax defeqs := "d[" ident,* "]"
+syntax uord := atomic(unfolds) <|> defeqs
 syntax autoinstr := ("👍" <|> "👎")?
-syntax (name := auto) "auto" autoinstr hints unfolds defeqs : tactic
-syntax (name := mononative) "mononative" hints unfolds defeqs : tactic
-syntax (name := intromono) "intromono" hints unfolds defeqs : tactic
+syntax (name := auto) "auto" autoinstr hints (uord)* : tactic
+syntax (name := mononative) "mononative" hints (uord)* : tactic
+syntax (name := intromono) "intromono" hints (uord)* : tactic
 
 inductive Instruction where
   | none
@@ -88,7 +89,6 @@ def parseUnfolds : TSyntax ``unfolds → TacticM (Array Prep.ConstUnfoldInfo)
     let some name := expr.constName?
       | throwError "parseUnfolds :: Unknown declaration {expr}. {defeqUnfoldErrHint}"
     Prep.getConstUnfoldInfo name)
-| `(unfolds|) => pure #[]
 | _ => throwUnsupportedSyntax
 
 def parseDefeqs : TSyntax ``defeqs → TacticM (Array Name)
@@ -101,8 +101,31 @@ def parseDefeqs : TSyntax ``defeqs → TacticM (Array Name)
     let some name := expr.constName?
       | throwError "parseDefeqs :: Unknown declaration {expr}. {defeqUnfoldErrHint}"
     return name)
-| `(defeqs|) => pure #[]
 | _ => throwUnsupportedSyntax
+
+def parseUOrD : TSyntax ``uord → TacticM (Array Prep.ConstUnfoldInfo ⊕ Array Name)
+| `(uord| $unfolds:unfolds) => Sum.inl <$> parseUnfolds unfolds
+| `(uord| $defeqs:defeqs) => Sum.inr <$> parseDefeqs defeqs
+| _ => throwUnsupportedSyntax
+
+def parseUOrDs (stxs : Array (TSyntax ``uord)) : TacticM (Array Prep.ConstUnfoldInfo × Array Name) := do
+  let mut hasUnfolds := false
+  let mut hasDefeqs := false
+  let mut unfolds := #[]
+  let mut defeqs := #[]
+  for stx in stxs do
+    match ← parseUOrD stx with
+    | .inl u =>
+      if hasUnfolds then
+        throwError "Auto :: Duplicated unfold hint"
+      hasUnfolds := true
+      unfolds := u
+    | .inr d =>
+      if hasDefeqs then
+        throwError "Auto :: Duplicated defeq hint"
+      hasDefeqs := true
+      defeqs := defeqs.append d
+  return (unfolds, defeqs)
 
 def collectLctxLemmas (lctxhyps : Bool) (ngoalAndBinders : Array FVarId) : TacticM (Array Lemma) :=
   Meta.withNewMCtxDepth do
@@ -178,14 +201,14 @@ def checkDuplicatedFact (terms : Array Term) : TacticM Unit :=
       if terms[i]? == terms[j]? then
         throwError "Auto does not accept duplicated input terms"
 
-def collectAllLemmas (hintstx : TSyntax ``hints) (unfolds : TSyntax `Auto.unfolds)
-  (defeqs : TSyntax `Auto.defeqs) (ngoalAndBinders : Array FVarId) :
+def collectAllLemmas
+  (hintstx : TSyntax ``hints) (uords : Array (TSyntax `Auto.uord)) (ngoalAndBinders : Array FVarId) :
   -- The first `Array Lemma` are `Prop` lemmas
   -- The second `Array Lemma` are Inhabitation facts
   TacticM (Array Lemma × Array Lemma) := do
   let inputHints ← parseHints hintstx
-  let unfoldInfos ← parseUnfolds unfolds
-  let defeqNames ← parseDefeqs defeqs
+  let (unfoldInfos, defeqNames) ← parseUOrDs uords
+  let unfoldInfos ← Prep.topoSortUnfolds unfoldInfos
   let startTime ← IO.monoMsNow
   let lctxLemmas ← collectLctxLemmas inputHints.lctxhyps ngoalAndBinders
   let lctxLemmas ← lctxLemmas.mapM (m:=MetaM) (unfoldConstAndPreprocessLemma unfoldInfos)
@@ -349,7 +372,7 @@ def runAuto
 
 @[tactic auto]
 def evalAuto : Tactic
-| `(auto | auto $instr $hints $unfolds $defeqs) => withMainContext do
+| `(auto | auto $instr $hints $[$uords]*) => withMainContext do
   let startTime ← IO.monoMsNow
   -- Suppose the goal is `∀ (x₁ x₂ ⋯ xₙ), G`
   -- First, apply `intros` to put `x₁ x₂ ⋯ xₙ` into the local context,
@@ -363,7 +386,7 @@ def evalAuto : Tactic
     let instr ← parseInstr instr
     match instr with
     | .none =>
-      let (lemmas, inhFacts) ← collectAllLemmas hints unfolds defeqs (goalBinders.push ngoal)
+      let (lemmas, inhFacts) ← collectAllLemmas hints uords (goalBinders.push ngoal)
       let declName? ← Elab.Term.getDeclName?
       let proof ← runAuto declName? lemmas inhFacts
       IO.println s!"Auto found proof. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
@@ -375,14 +398,14 @@ def evalAuto : Tactic
 
 @[tactic intromono]
 def evalIntromono : Tactic
-| `(intromono | intromono $hints $unfolds $defeqs) => withMainContext do
+| `(intromono | intromono $hints $[$uords]*) => withMainContext do
   let (goalBinders, newGoal) ← (← getMainGoal).intros
   let [nngoal] ← newGoal.apply (.const ``Classical.byContradiction [])
     | throwError "evalAuto :: Unexpected result after applying Classical.byContradiction"
   let (ngoal, absurd) ← MVarId.intro1 nngoal
   replaceMainGoal [absurd]
   withMainContext do
-    let (lemmas, _) ← collectAllLemmas hints unfolds defeqs (goalBinders.push ngoal)
+    let (lemmas, _) ← collectAllLemmas hints uords (goalBinders.push ngoal)
     let newMid ← Monomorphization.intromono lemmas absurd
     replaceMainGoal [newMid]
 | _ => throwUnsupportedSyntax
@@ -412,7 +435,7 @@ def monoInterface
 
 @[tactic mononative]
 def evalMonoNative : Tactic
-| `(mononative | mononative $hints $unfolds $defeqs) => withMainContext do
+| `(mononative | mononative $hints $[$uords]*) => withMainContext do
   let startTime ← IO.monoMsNow
   -- Suppose the goal is `∀ (x₁ x₂ ⋯ xₙ), G`
   -- First, apply `intros` to put `x₁ x₂ ⋯ xₙ` into the local context,
@@ -423,7 +446,7 @@ def evalMonoNative : Tactic
   let (ngoal, absurd) ← MVarId.intro1 nngoal
   replaceMainGoal [absurd]
   withMainContext do
-    let (lemmas, inhFacts) ← collectAllLemmas hints unfolds defeqs (goalBinders.push ngoal)
+    let (lemmas, inhFacts) ← collectAllLemmas hints uords (goalBinders.push ngoal)
     let proof ← monoInterface lemmas inhFacts Solver.Native.queryNative
     IO.println s!"Auto found proof. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
     absurd.assign proof
