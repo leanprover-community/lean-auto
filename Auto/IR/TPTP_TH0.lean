@@ -139,7 +139,8 @@ def transLamBaseTerm : LamBaseTerm → Except String String
 | .and        => .ok s!"(&)"
 | .or         => .ok s!"(|)"
 | .imp        => .ok s!"(=>)"
-| .iff        => .ok s!"(=)" -- Zipperposition seems buggy on (<=>)
+-- Zipperposition seems buggy on (<=>)
+| .iff        => .ok s!"(^ [L : {transLamSort (.base .prop)}, R : {transLamSort (.base .prop)}] : L = R)"
 | .bcst bc    => .ok (transBoolConst bc)
 | .ncst nc    => .ok (transNatConst nc)
 | .icst ic    => .ok (transIntConst ic)
@@ -149,18 +150,17 @@ def transLamBaseTerm : LamBaseTerm → Except String String
 | .forallEI _ => .error "transLamBaseTerm :: forallEI should not occur here"
 | .existEI _  => .error "transLamBaseTerm :: existEI should not occur here"
 | .iteI _     => .error "transLamBaseTerm :: iteI should not occur here"
--- **TODO**: Get rid of (=) (!!) (??)
-| .eq _       => .ok s!"(=)"
+| .eq s       => .ok s!"(^ [L : {transLamSort s}, R : {transLamSort s}] : L = R)"
 | .forallE s  =>
   if s == .base .empty then
     .ok s!"(^ [EPF : {transLamSort (.func s (.base .prop))}] : $true)"
   else
-    .ok s!"(!!)"
+    .ok s!"(^ [EPF : {transLamSort (.func s (.base .prop))}] : ! [EPX : {transLamSort s}] : (EPF @ EPX))"
 | .existE s   =>
   if s == .base .empty then
     .ok s!"(^ [EPF : {transLamSort (.func s (.base .prop))}] : $false)"
   else
-    .ok s!"(??)"
+    .ok s!"(^ [EPF : {transLamSort (.func s (.base .prop))}] : ? [EPX : {transLamSort s}] : (EPF @ EPX))"
 | .ite s      => .ok s!"(^ [IB : {transLamSort (.base .prop)}] : ^ [IX : {transLamSort s}] : ^ [IY : {transLamSort s}] : $ite(IB, IX, IY))"
 
 partial def transLamTerm (t : LamTerm) (lctx := 0) : Except String String :=

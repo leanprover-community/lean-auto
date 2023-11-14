@@ -22,11 +22,6 @@ Lean-auto is still under development, but it's already able to solve nontrivial 
 * ``cvc5``
 * ``zipperposition`` portfolio mode
 
-## Coding Style
-* ``Array``/``List``: In computational code, we only use ``Array``, functions whose signature contains ``List`` should be declared as ``private``. In verification code, we only use ```List```?
-* IR: Logic-oriented IR can be found in ```TRanslation/ReifTerm.lean```, and Solver-oriented IR can be found in ```Auto/IR/..```. Each IR should be equipped with its ``TransM``.
-* Translation: Translation code from ``A`` to ``B`` should be written in ```Translation/A2B.lean```
-
 ## Utilities
 * Command ```#getExprAndApply [ <term> | <ident> ]```: Defined in ```ExprExtra.lean```. This command first elaborates the ```<term>``` into a lean ```Expr```, then applies function ```<ident>``` to ```Expr```. The constant ```ident``` must be already declared and be of type ```Expr → TermElabM Unit```
 * Command ```#genMonadState <term>, #genMonadContext <term>```: Defined in ```MonadUtils.lean```. Refer to the comment at the beginning of ```MonadUtils.lean```.
@@ -76,6 +71,3 @@ Lean-auto is still under development, but it's already able to solve nontrivial 
 ## Checker
 * The checker is based on a deep embedding of simply-typed lambda calculus into dependent type theory.
 * The checker is slow on large input. For example, it takes ```6s``` to typecheck the final example in ```BinderComplexity.lean```. However, this is probably acceptable for mathlib usages, because e.g ```Mathlib/Analysis/BoxIntegral/DivergenceTheorem.lean``` has two theorems that take ```4s``` to compile (but a large portion of the ```4s``` are spent on typeclass inference)
-
-## Notes
-* The ``DUnif`` folder in ``lean-auto`` is copied from ``duper``. The ``PrattParser`` is also copied from ``duper``.
