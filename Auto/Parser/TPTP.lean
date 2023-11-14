@@ -78,10 +78,10 @@ def finalizeToken : TokenizerM Unit := do
     | .default =>
       if tokenHashMap.contains (← getCurrToken)
       then addCurrToken
-      else throw $ IO.userError s!"Invalid token: {(← getCurrToken)}"
+      else throw $ IO.userError s!"TPTP.parse :: Invalid token: {(← getCurrToken)}"
     | .ident => addCurrToken
     | .string => addCurrToken
-    | .comment => throw $ IO.userError s!"Cannot finalize comment"
+    | .comment => throw $ IO.userError s!"TPTP.parse :: Cannot finalize comment"
     setStatus .default
 
 def tokenizeAux (str : String) : TokenizerM Unit := do
@@ -105,7 +105,7 @@ def tokenizeAux (str : String) : TokenizerM Unit := do
       else if tokenPrefixes.contains (⟨[char]⟩) then
         finalizeToken
         addToCurrToken char
-      else throw $ IO.userError s!"Invalid token: {char}"
+      else throw $ IO.userError s!"TPTP.parse :: Invalid token: {char}"
     | .ident =>
       if char.isWhitespace then
         finalizeToken
@@ -145,7 +145,7 @@ def isEOF : ParserM Bool := do return (← get).curr ==  (← get).tokens.size
 def peek : ParserM Token := do
   let i := (← get).curr
   let ts := (← get).tokens
-  if i >= ts.size then throw $ IO.userError "Unexpected end of file"
+  if i >= ts.size then throw $ IO.userError "TPTP.parse :: Unexpected end of file"
   return ts[i]!
 
 def peek? : ParserM (Option Token) := do
@@ -193,12 +193,12 @@ def Term.args : Term → List Term := fun ⟨_, as⟩ => as
 
 def parseToken (t : Token) : ParserM Unit := do
   let nextToken ← next
-  if nextToken != t then throw $ IO.userError s!"Expected '{t.toString}', got '{repr nextToken}'"
+  if nextToken != t then throw $ IO.userError s!"TPTP.parse :: Expected '{t.toString}', got '{repr nextToken}'"
 
 def parseIdent : ParserM String := do
   let nextToken ← next
   let .ident id := nextToken
-    | throw $ IO.userError s!"Expected identifier, got '{repr nextToken}'"
+    | throw $ IO.userError s!"TPTP.parse :: Expected identifier, got '{repr nextToken}'"
   return id
 
 partial def parseSep (sep : Token) (p : ParserM α) : ParserM (List α) := do
@@ -257,7 +257,7 @@ partial def parseLhs : ParserM Term := do
   else if isPolyIL? nextToken.toString && (← peek?) == .some (.op ")") then
     return Term.mk nextToken []
   else
-    throw $ IO.userError s!"Expected term, got '{repr nextToken}'"
+    throw $ IO.userError s!"TPTP.parse :: Expected term, got '{repr nextToken}'"
 
 partial def addOpAndRhs (lhs : Term) (minbp : Nat) : ParserM Term := do
   if ← isEOF then
