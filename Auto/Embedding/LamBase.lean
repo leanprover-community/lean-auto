@@ -1593,79 +1593,79 @@ def LamBaseTerm.LamWF.eVarIrrelevance
   cases b <;> cases lbwf <;> (try constructor) <;> cases ltv₁ <;> cases ltv₂ <;>
     cases hLamVarTy <;> cases hLamILTy <;> first | constructor | assumption
 
-def LamBaseTerm.LamWF.ofOfProp' {ltv : LamTyVal} := LamWF.ofBcst (ltv:=ltv) .ofOfProp
-def LamBaseTerm.LamWF.ofTrueB' {ltv : LamTyVal} := LamWF.ofBcst (ltv:=ltv) .ofTrueB
-def LamBaseTerm.LamWF.ofFalseB' {ltv : LamTyVal} := LamWF.ofBcst (ltv:=ltv) .ofFalseB
-def LamBaseTerm.LamWF.ofNotB' {ltv : LamTyVal} := LamWF.ofBcst (ltv:=ltv) .ofNotB
-def LamBaseTerm.LamWF.ofAndB' {ltv : LamTyVal} := LamWF.ofBcst (ltv:=ltv) .ofAndB
-def LamBaseTerm.LamWF.ofOrB' {ltv : LamTyVal} := LamWF.ofBcst (ltv:=ltv) .ofOrB
-def LamBaseTerm.LamWF.ofNatVal' {ltv : LamTyVal} (n : Nat) := LamWF.ofNcst (ltv:=ltv) (.ofNatVal n)
-def LamBaseTerm.LamWF.ofNadd' {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNadd
-def LamBaseTerm.LamWF.ofNsub' {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNsub
-def LamBaseTerm.LamWF.ofNmul' {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNmul
-def LamBaseTerm.LamWF.ofNdiv' {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNdiv
-def LamBaseTerm.LamWF.ofNmod' {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNmod
-def LamBaseTerm.LamWF.ofNle' {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNle
-def LamBaseTerm.LamWF.ofNlt' {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNlt
-def LamBaseTerm.LamWF.ofNmax' {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNmax
-def LamBaseTerm.LamWF.ofNmin' {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNmin
-def LamBaseTerm.LamWF.ofIOfNat' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIOfNat
-def LamBaseTerm.LamWF.ofINegSucc' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofINegSucc
-def LamBaseTerm.LamWF.ofIneg' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIneg
-def LamBaseTerm.LamWF.ofIabs' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIabs
-def LamBaseTerm.LamWF.ofIadd' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIadd
-def LamBaseTerm.LamWF.ofIsub' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIsub
-def LamBaseTerm.LamWF.ofImul' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofImul
-def LamBaseTerm.LamWF.ofIdiv' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIdiv
-def LamBaseTerm.LamWF.ofImod' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofImod
-def LamBaseTerm.LamWF.ofIediv' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIediv
-def LamBaseTerm.LamWF.ofIemod' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIemod
-def LamBaseTerm.LamWF.ofIle' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIle
-def LamBaseTerm.LamWF.ofIlt' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIlt
-def LamBaseTerm.LamWF.ofImax' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofImax
-def LamBaseTerm.LamWF.ofImin' {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofImin
-def LamBaseTerm.LamWF.ofStrVal' {ltv : LamTyVal} (s : String) := LamWF.ofScst (ltv:=ltv) (.ofStrVal s)
+def LamBaseTerm.LamWF.ofOfProp {ltv : LamTyVal} := LamWF.ofBcst (ltv:=ltv) .ofOfProp
+def LamBaseTerm.LamWF.ofTrueB {ltv : LamTyVal} := LamWF.ofBcst (ltv:=ltv) .ofTrueB
+def LamBaseTerm.LamWF.ofFalseB {ltv : LamTyVal} := LamWF.ofBcst (ltv:=ltv) .ofFalseB
+def LamBaseTerm.LamWF.ofNotB {ltv : LamTyVal} := LamWF.ofBcst (ltv:=ltv) .ofNotB
+def LamBaseTerm.LamWF.ofAndB {ltv : LamTyVal} := LamWF.ofBcst (ltv:=ltv) .ofAndB
+def LamBaseTerm.LamWF.ofOrB {ltv : LamTyVal} := LamWF.ofBcst (ltv:=ltv) .ofOrB
+def LamBaseTerm.LamWF.ofNatVal {ltv : LamTyVal} (n : Nat) := LamWF.ofNcst (ltv:=ltv) (.ofNatVal n)
+def LamBaseTerm.LamWF.ofNadd {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNadd
+def LamBaseTerm.LamWF.ofNsub {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNsub
+def LamBaseTerm.LamWF.ofNmul {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNmul
+def LamBaseTerm.LamWF.ofNdiv {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNdiv
+def LamBaseTerm.LamWF.ofNmod {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNmod
+def LamBaseTerm.LamWF.ofNle {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNle
+def LamBaseTerm.LamWF.ofNlt {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNlt
+def LamBaseTerm.LamWF.ofNmax {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNmax
+def LamBaseTerm.LamWF.ofNmin {ltv : LamTyVal} := LamWF.ofNcst (ltv:=ltv) .ofNmin
+def LamBaseTerm.LamWF.ofIOfNat {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIOfNat
+def LamBaseTerm.LamWF.ofINegSucc {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofINegSucc
+def LamBaseTerm.LamWF.ofIneg {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIneg
+def LamBaseTerm.LamWF.ofIabs {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIabs
+def LamBaseTerm.LamWF.ofIadd {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIadd
+def LamBaseTerm.LamWF.ofIsub {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIsub
+def LamBaseTerm.LamWF.ofImul {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofImul
+def LamBaseTerm.LamWF.ofIdiv {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIdiv
+def LamBaseTerm.LamWF.ofImod {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofImod
+def LamBaseTerm.LamWF.ofIediv {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIediv
+def LamBaseTerm.LamWF.ofIemod {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIemod
+def LamBaseTerm.LamWF.ofIle {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIle
+def LamBaseTerm.LamWF.ofIlt {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIlt
+def LamBaseTerm.LamWF.ofImax {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofImax
+def LamBaseTerm.LamWF.ofImin {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofImin
+def LamBaseTerm.LamWF.ofStrVal {ltv : LamTyVal} (s : String) := LamWF.ofScst (ltv:=ltv) (.ofStrVal s)
 def LamBaseTerm.LamWF.ofSlength {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSlength
-def LamBaseTerm.LamWF.ofSapp' {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSapp
-def LamBaseTerm.LamWF.ofSle' {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSle
-def LamBaseTerm.LamWF.ofSlt' {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSlt
-def LamBaseTerm.LamWF.ofSprefixof' {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSprefixof
-def LamBaseTerm.LamWF.ofSrepall' {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSrepall
-def LamBaseTerm.LamWF.ofBvVal' {ltv : LamTyVal} (n i : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvVal n i)
-def LamBaseTerm.LamWF.ofBvofNat' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvofNat n)
-def LamBaseTerm.LamWF.ofBvtoNat' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvtoNat n)
-def LamBaseTerm.LamWF.ofBvofInt' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvofInt n)
-def LamBaseTerm.LamWF.ofBvtoInt' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvtoInt n)
-def LamBaseTerm.LamWF.ofBvmsb' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvmsb n)
-def LamBaseTerm.LamWF.ofBvadd' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvadd n)
-def LamBaseTerm.LamWF.ofBvsub' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsub n)
-def LamBaseTerm.LamWF.ofBvneg' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvneg n)
-def LamBaseTerm.LamWF.ofBvabs' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvabs n)
-def LamBaseTerm.LamWF.ofBvmul' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvmul n)
-def LamBaseTerm.LamWF.ofBvudiv' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvudiv n)
-def LamBaseTerm.LamWF.ofBvurem' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvurem n)
-def LamBaseTerm.LamWF.ofBvsdiv' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsdiv n)
-def LamBaseTerm.LamWF.ofBvsrem' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsrem n)
-def LamBaseTerm.LamWF.ofBvsmod' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsmod n)
-def LamBaseTerm.LamWF.ofBvult' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvult n)
-def LamBaseTerm.LamWF.ofBvule' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvule n)
+def LamBaseTerm.LamWF.ofSapp {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSapp
+def LamBaseTerm.LamWF.ofSle {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSle
+def LamBaseTerm.LamWF.ofSlt {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSlt
+def LamBaseTerm.LamWF.ofSprefixof {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSprefixof
+def LamBaseTerm.LamWF.ofSrepall {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSrepall
+def LamBaseTerm.LamWF.ofBvVal {ltv : LamTyVal} (n i : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvVal n i)
+def LamBaseTerm.LamWF.ofBvofNat {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvofNat n)
+def LamBaseTerm.LamWF.ofBvtoNat {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvtoNat n)
+def LamBaseTerm.LamWF.ofBvofInt {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvofInt n)
+def LamBaseTerm.LamWF.ofBvtoInt {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvtoInt n)
+def LamBaseTerm.LamWF.ofBvmsb {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvmsb n)
+def LamBaseTerm.LamWF.ofBvadd {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvadd n)
+def LamBaseTerm.LamWF.ofBvsub {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsub n)
+def LamBaseTerm.LamWF.ofBvneg {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvneg n)
+def LamBaseTerm.LamWF.ofBvabs {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvabs n)
+def LamBaseTerm.LamWF.ofBvmul {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvmul n)
+def LamBaseTerm.LamWF.ofBvudiv {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvudiv n)
+def LamBaseTerm.LamWF.ofBvurem {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvurem n)
+def LamBaseTerm.LamWF.ofBvsdiv {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsdiv n)
+def LamBaseTerm.LamWF.ofBvsrem {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsrem n)
+def LamBaseTerm.LamWF.ofBvsmod {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsmod n)
+def LamBaseTerm.LamWF.ofBvult {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvult n)
+def LamBaseTerm.LamWF.ofBvule {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvule n)
 def LamBaseTerm.LamWF.ofBvslt {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvslt n)
 def LamBaseTerm.LamWF.ofBvsle {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsle n)
-def LamBaseTerm.LamWF.ofBvand' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvand n)
-def LamBaseTerm.LamWF.ofBvor' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvor n)
-def LamBaseTerm.LamWF.ofBvxor' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvxor n)
-def LamBaseTerm.LamWF.ofBvnot' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvnot n)
-def LamBaseTerm.LamWF.ofBvshl' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvshl n)
-def LamBaseTerm.LamWF.ofBvlshr' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvlshr n)
-def LamBaseTerm.LamWF.ofBvashr' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvashr n)
-def LamBaseTerm.LamWF.ofBvsmtshl' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsmtshl n)
-def LamBaseTerm.LamWF.ofBvsmtlshr' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsmtlshr n)
-def LamBaseTerm.LamWF.ofBvsmtashr' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsmtashr n)
-def LamBaseTerm.LamWF.ofBvappend' {ltv : LamTyVal} (n m : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvappend n m)
-def LamBaseTerm.LamWF.ofBvextract' {ltv : LamTyVal} (n h l : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvextract n h l)
-def LamBaseTerm.LamWF.ofBvrepeat' {ltv : LamTyVal} (w i : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvrepeat w i)
-def LamBaseTerm.LamWF.ofBvzeroExtend' {ltv : LamTyVal} (w v : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvzeroExtend w v)
-def LamBaseTerm.LamWF.ofBvsignExtend' {ltv : LamTyVal} (w v : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsignExtend w v)
+def LamBaseTerm.LamWF.ofBvand {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvand n)
+def LamBaseTerm.LamWF.ofBvor {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvor n)
+def LamBaseTerm.LamWF.ofBvxor {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvxor n)
+def LamBaseTerm.LamWF.ofBvnot {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvnot n)
+def LamBaseTerm.LamWF.ofBvshl {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvshl n)
+def LamBaseTerm.LamWF.ofBvlshr {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvlshr n)
+def LamBaseTerm.LamWF.ofBvashr {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvashr n)
+def LamBaseTerm.LamWF.ofBvsmtshl {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsmtshl n)
+def LamBaseTerm.LamWF.ofBvsmtlshr {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsmtlshr n)
+def LamBaseTerm.LamWF.ofBvsmtashr {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsmtashr n)
+def LamBaseTerm.LamWF.ofBvappend {ltv : LamTyVal} (n m : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvappend n m)
+def LamBaseTerm.LamWF.ofBvextract {ltv : LamTyVal} (n h l : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvextract n h l)
+def LamBaseTerm.LamWF.ofBvrepeat {ltv : LamTyVal} (w i : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvrepeat w i)
+def LamBaseTerm.LamWF.ofBvzeroExtend {ltv : LamTyVal} (w v : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvzeroExtend w v)
+def LamBaseTerm.LamWF.ofBvsignExtend {ltv : LamTyVal} (w v : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsignExtend w v)
 
 def LamBaseTerm.LamWF.getBcst (wf : LamWF ltv (.bcst bc) s) : BoolConst.LamWF bc s :=
   match wf with | .ofBcst bcwf => bcwf
@@ -3155,39 +3155,39 @@ def LamWF.flipApp
   LamWF ltv ⟨lctx, LamTerm.flipApp t argTy₁ argTy₂ resTy, .func argTy₂ (.func argTy₁ resTy)⟩ :=
   .ofApp _ .flip wft
 
-def LamWF.ofNmodeq' : LamWF ltv ⟨lctx, LamTerm.nmodeq, .func (.base .nat) (.func (.base .nat) (.func (.base .nat) (.base .prop)))⟩ :=
+def LamWF.ofNmodeq : LamWF ltv ⟨lctx, LamTerm.nmodeq, .func (.base .nat) (.func (.base .nat) (.func (.base .nat) (.base .prop)))⟩ :=
   .ofLam _ (.ofLam _ (.ofLam _ (.ofApp _ (.ofApp _ (.ofBase (.ofEq _))
-    (.ofApp _ (.ofApp _ (.ofBase .ofNmod') (.ofBVar 1)) (.ofBVar 2)))
-    (.ofApp _ (.ofApp _ (.ofBase .ofNmod') (.ofBVar 0)) (.ofBVar 2)))))
+    (.ofApp _ (.ofApp _ (.ofBase .ofNmod) (.ofBVar 1)) (.ofBVar 2)))
+    (.ofApp _ (.ofApp _ (.ofBase .ofNmod) (.ofBVar 0)) (.ofBVar 2)))))
 
-def LamWF.ofNge' : LamWF ltv ⟨lctx, LamTerm.nge, .func (.base .nat) (.func (.base .nat) (.base .prop))⟩ :=
-  .flipApp (.ofBase .ofNle')
+def LamWF.ofNge : LamWF ltv ⟨lctx, LamTerm.nge, .func (.base .nat) (.func (.base .nat) (.base .prop))⟩ :=
+  .flipApp (.ofBase .ofNle)
 
-def LamWF.ofNgt' : LamWF ltv ⟨lctx, LamTerm.ngt, .func (.base .nat) (.func (.base .nat) (.base .prop))⟩ :=
-  .flipApp (.ofBase .ofNlt')
+def LamWF.ofNgt : LamWF ltv ⟨lctx, LamTerm.ngt, .func (.base .nat) (.func (.base .nat) (.base .prop))⟩ :=
+  .flipApp (.ofBase .ofNlt)
 
-def LamWF.ofImodeq' : LamWF ltv ⟨lctx, LamTerm.imodeq, .func (.base .int) (.func (.base .int) (.func (.base .int) (.base .prop)))⟩ :=
+def LamWF.ofImodeq : LamWF ltv ⟨lctx, LamTerm.imodeq, .func (.base .int) (.func (.base .int) (.func (.base .int) (.base .prop)))⟩ :=
   .ofLam _ (.ofLam _ (.ofLam _ (.ofApp _ (.ofApp _ (.ofBase (.ofEq _))
-    (.ofApp _ (.ofApp _ (.ofBase .ofIemod') (.ofBVar 1)) (.ofBVar 2)))
-    (.ofApp _ (.ofApp _ (.ofBase .ofIemod') (.ofBVar 0)) (.ofBVar 2)))))
+    (.ofApp _ (.ofApp _ (.ofBase .ofIemod) (.ofBVar 1)) (.ofBVar 2)))
+    (.ofApp _ (.ofApp _ (.ofBase .ofIemod) (.ofBVar 0)) (.ofBVar 2)))))
 
-def LamWF.ofIge' : LamWF ltv ⟨lctx, LamTerm.ige, .func (.base .int) (.func (.base .int) (.base .prop))⟩ :=
-  .flipApp (.ofBase .ofIle')
+def LamWF.ofIge : LamWF ltv ⟨lctx, LamTerm.ige, .func (.base .int) (.func (.base .int) (.base .prop))⟩ :=
+  .flipApp (.ofBase .ofIle)
 
-def LamWF.ofIgt' : LamWF ltv ⟨lctx, LamTerm.igt, .func (.base .int) (.func (.base .int) (.base .prop))⟩ :=
-  .flipApp (.ofBase .ofIlt')
+def LamWF.ofIgt : LamWF ltv ⟨lctx, LamTerm.igt, .func (.base .int) (.func (.base .int) (.base .prop))⟩ :=
+  .flipApp (.ofBase .ofIlt)
 
-def LamWF.ofSge' : LamWF ltv ⟨lctx, LamTerm.sge, .func (.base .string) (.func (.base .string) (.base .prop))⟩ :=
-  .flipApp (.ofBase .ofSle')
+def LamWF.ofSge : LamWF ltv ⟨lctx, LamTerm.sge, .func (.base .string) (.func (.base .string) (.base .prop))⟩ :=
+  .flipApp (.ofBase .ofSle)
 
-def LamWF.ofSgt' : LamWF ltv ⟨lctx, LamTerm.sgt, .func (.base .string) (.func (.base .string) (.base .prop))⟩ :=
-  .flipApp (.ofBase .ofSlt')
+def LamWF.ofSgt : LamWF ltv ⟨lctx, LamTerm.sgt, .func (.base .string) (.func (.base .string) (.base .prop))⟩ :=
+  .flipApp (.ofBase .ofSlt)
 
-def LamWF.ofBvuge' (n : Nat) : LamWF ltv ⟨lctx, LamTerm.bvuge n, .func (.base (.bv n)) (.func (.base (.bv n)) (.base .bool))⟩ :=
-  .flipApp (.ofBase (.ofBvule' n))
+def LamWF.ofBvuge (n : Nat) : LamWF ltv ⟨lctx, LamTerm.bvuge n, .func (.base (.bv n)) (.func (.base (.bv n)) (.base .bool))⟩ :=
+  .flipApp (.ofBase (.ofBvule n))
 
-def LamWF.ofBvugt' (n : Nat) : LamWF ltv ⟨lctx, LamTerm.bvugt n, .func (.base (.bv n)) (.func (.base (.bv n)) (.base .bool))⟩ :=
-  .flipApp (.ofBase (.ofBvult' n))
+def LamWF.ofBvugt (n : Nat) : LamWF ltv ⟨lctx, LamTerm.bvugt n, .func (.base (.bv n)) (.func (.base (.bv n)) (.base .bool))⟩ :=
+  .flipApp (.ofBase (.ofBvult n))
 
 def LamWF.ofBvsge (n : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsge n, .func (.base (.bv n)) (.func (.base (.bv n)) (.base .bool))⟩ :=
   .flipApp (.ofBase (.ofBvsle n))
@@ -3196,13 +3196,13 @@ def LamWF.ofBvsgt (n : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsgt n, .func (.base (
   .flipApp (.ofBase (.ofBvslt n))
 
 def LamWF.bvsmtHshl (n m : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsmtHshl n m, .func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv n)))⟩ :=
-  .ofLam _ (.ofLam _ (.ofApp _ (.ofApp _ (.ofBase (.ofBvshl' _)) (.ofBVar 1)) (.ofApp _ (.ofBase (.ofBvtoNat' _)) (.ofBVar 0))))
+  .ofLam _ (.ofLam _ (.ofApp _ (.ofApp _ (.ofBase (.ofBvshl _)) (.ofBVar 1)) (.ofApp _ (.ofBase (.ofBvtoNat _)) (.ofBVar 0))))
 
 def LamWF.bvsmtHlshr (n m : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsmtHlshr n m, .func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv n)))⟩ :=
-  .ofLam _ (.ofLam _ (.ofApp _ (.ofApp _ (.ofBase (.ofBvlshr' _)) (.ofBVar 1)) (.ofApp _ (.ofBase (.ofBvtoNat' _)) (.ofBVar 0))))
+  .ofLam _ (.ofLam _ (.ofApp _ (.ofApp _ (.ofBase (.ofBvlshr _)) (.ofBVar 1)) (.ofApp _ (.ofBase (.ofBvtoNat _)) (.ofBVar 0))))
 
 def LamWF.bvsmtHashr (n m : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsmtHashr n m, .func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv n)))⟩ :=
-  .ofLam _ (.ofLam _ (.ofApp _ (.ofApp _ (.ofBase (.ofBvashr' _)) (.ofBVar 1)) (.ofApp _ (.ofBase (.ofBvtoNat' _)) (.ofBVar 0))))
+  .ofLam _ (.ofLam _ (.ofApp _ (.ofApp _ (.ofBase (.ofBvashr _)) (.ofBVar 1)) (.ofApp _ (.ofBase (.ofBvtoNat _)) (.ofBVar 0))))
 
 def LamWF.mkNot {ltv : LamTyVal}
   (wft : LamWF ltv ⟨lctx, t, .base .prop⟩) : LamWF ltv ⟨lctx, .mkNot t, .base .prop⟩ :=
@@ -3267,7 +3267,7 @@ def LamWF.mkIte {ltv : LamTyVal}
   (wfx : LamWF ltv ⟨lctx, x, s⟩) (wfy : LamWF ltv ⟨lctx, y, s⟩) :
   LamWF ltv ⟨lctx, .mkIte s p x y, s⟩ := LamWF.ofApp _ (.ofApp _ (.ofApp _ (.ofBase (.ofIte _)) wfp) wfx) wfy
 
-def LamWF.mkNatVal {ltv : LamTyVal} : LamWF ltv ⟨lctx, .mkNatVal n, .base .nat⟩ := .ofBase (.ofNatVal' n)
+def LamWF.mkNatVal {ltv : LamTyVal} : LamWF ltv ⟨lctx, .mkNatVal n, .base .nat⟩ := .ofBase (.ofNatVal n)
 
 def LamWF.mkNatBinOp {ltv : LamTyVal}
   (wfop : NatConst.LamWF binOp (.func (.base .nat) (.func (.base .nat) s)))
@@ -3277,11 +3277,11 @@ def LamWF.mkNatBinOp {ltv : LamTyVal}
 
 def LamWF.mkIOfNat {ltv : LamTyVal}
   (wfn : LamWF ltv ⟨lctx, n, .base .nat⟩) : LamWF ltv ⟨lctx, .mkIOfNat n, .base .int⟩ :=
-  .ofApp _ (.ofBase .ofIOfNat') wfn
+  .ofApp _ (.ofBase .ofIOfNat) wfn
 
 def LamWF.mkINegSucc {ltv : LamTyVal}
   (wfn : LamWF ltv ⟨lctx, n, .base .nat⟩) : LamWF ltv ⟨lctx, .mkINegSucc n, .base .int⟩ :=
-  .ofApp _ (.ofBase .ofINegSucc') wfn
+  .ofApp _ (.ofBase .ofINegSucc) wfn
 
 def LamWF.mkIntUOp {ltv : LamTyVal}
   (wfop : IntConst.LamWF uop (.func (.base .int) s))
@@ -3296,11 +3296,11 @@ def LamWF.mkIntBinOp {ltv : LamTyVal}
 
 def LamWF.mkBvofNat {ltv : LamTyVal}
   (wfi : LamWF ltv ⟨lctx, i, .base .nat⟩) : LamWF ltv ⟨lctx, .mkBvofNat n i, .base (.bv n)⟩ :=
-  .ofApp _ (.ofBase (.ofBvofNat' n)) wfi
+  .ofApp _ (.ofBase (.ofBvofNat n)) wfi
 
 def LamWF.mkBvofInt {ltv : LamTyVal}
   (wfi : LamWF ltv ⟨lctx, i, .base .int⟩) : LamWF ltv ⟨lctx, .mkBvofInt n i, .base (.bv n)⟩ :=
-  .ofApp _ (.ofBase (.ofBvofInt' n)) wfi
+  .ofApp _ (.ofBase (.ofBvofInt n)) wfi
 
 def LamWF.mkBvUOp {ltv : LamTyVal}
   (wfop : BitVecConst.LamWF uop (.func (.base (.bv n)) s))

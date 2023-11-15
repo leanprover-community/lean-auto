@@ -278,7 +278,7 @@ end BitVec
 
 theorem LamEquiv.bvofNat :
   LamEquiv lval lctx (.base (.bv n)) (.mkBvofNat n (.mkNatVal i)) (.base (.bvVal n i)) :=
-  ⟨.mkBvofNat (.ofBase (.ofNatVal' i)), .ofBase (.ofBvVal' n i), fun _ => rfl⟩
+  ⟨.mkBvofNat (.ofBase (.ofNatVal i)), .ofBase (.ofBvVal n i), fun _ => rfl⟩
 
 theorem LamEquiv.bvofNat_bvtoNat
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, .base (.bv n)⟩) :
@@ -286,7 +286,7 @@ theorem LamEquiv.bvofNat_bvtoNat
     (.mkBvofNat m (.mkBvUOp n (.bvtoNat n) t))
     (.app (.base (.bv n)) (.base (.bvzeroExtend n m)) t) :=
   ⟨.mkBvofNat (.mkBvUOp (.ofBvtoNat n) wft),
-   .ofApp _ (.ofBase (.ofBvzeroExtend' n m)) wft, fun lctxTerm => rfl⟩
+   .ofApp _ (.ofBase (.ofBvzeroExtend n m)) wft, fun lctxTerm => rfl⟩
 
 theorem LamEquiv.bvofNat_nadd
   (wfa : LamWF lval.toLamTyVal ⟨lctx, a, .base .nat⟩)
@@ -310,7 +310,7 @@ theorem LamEquiv.bvofNat_nsub
     (.bvofNat_nsub n a b (.mkBvofNat n a) (.mkBvofNat n b)) :=
   ⟨.mkBvofNat (.mkNatBinOp .ofNsub wfa wfb),
    .mkIte (.mkNatBinOp .ofNlt wfa wfb)
-     (.ofBase (.ofBvVal' n 0)) (.mkBvBinOp (.ofBvsub _) (.mkBvofNat wfa) (.mkBvofNat wfb)), fun lctxTerm => by
+     (.ofBase (.ofBvVal n 0)) (.mkBvBinOp (.ofBvsub _) (.mkBvofNat wfa) (.mkBvofNat wfb)), fun lctxTerm => by
     apply GLift.down.inj; apply BitVec.ofNat_sub'⟩
 
 theorem LamEquiv.bvofNat_nmul
@@ -340,9 +340,9 @@ theorem LamEquiv.congr_shl_equiv
   (eqbbv : LamEquiv lval lctx (.base (.bv n)) bbv₁ bbv₂) :
   LamEquiv lval lctx (.base (.bv n)) (.shl_equiv n a₁ b₁ bbv₁) (.shl_equiv n a₂ b₂ bbv₂) :=
   congrFun (congr (congrArg (.ofBase (.ofIte _))
-    (congrFun (congrArg (.ofBase .ofNlt') eqb)
-      (.ofBase (.ofNatVal' _)))) (congr (congrArg (.ofBase (.ofBvsmtshl' _)) eqa) eqbbv))
-      (.ofBase (.ofBvVal' _ _))
+    (congrFun (congrArg (.ofBase .ofNlt) eqb)
+      (.ofBase (.ofNatVal _)))) (congr (congrArg (.ofBase (.ofBvsmtshl _)) eqa) eqbbv))
+      (.ofBase (.ofBvVal _ _))
 
 theorem LamEquiv.shl_equiv
   (wfa : LamWF lval.toLamTyVal ⟨lctx, a, .base (.bv n)⟩)
@@ -351,8 +351,8 @@ theorem LamEquiv.shl_equiv
     (.mkBvNatBinOp n (.bvshl n) a b)
     (.shl_equiv n a b (.mkBvofNat n b)) :=
   ⟨.mkBvNatBinOp (.ofBvshl _) wfa wfb,
-   .mkIte (.mkNatBinOp (.ofNlt) wfb (.ofBase (.ofNatVal' n)))
-    (.mkBvBinOp (.ofBvsmtshl _) wfa (.mkBvofNat wfb)) (.ofBase (.ofBvVal' _ _)), fun lctxTerm => by
+   .mkIte (.mkNatBinOp (.ofNlt) wfb (.ofBase (.ofNatVal n)))
+    (.mkBvBinOp (.ofBvsmtshl _) wfa (.mkBvofNat wfb)) (.ofBase (.ofBvVal _ _)), fun lctxTerm => by
     apply GLift.down.inj; apply BitVec.shl_equiv'⟩
 
 abbrev LamTerm.shl_toNat_equiv_short (n : Nat) (a : LamTerm) (m : Nat) (b : LamTerm) :=
@@ -368,7 +368,7 @@ theorem LamEquiv.congr_shl_toNat_equiv_short
   (eqa : LamEquiv lval lctx (.base (.bv n)) a₁ a₂)
   (eqb : LamEquiv lval lctx (.base (.bv m)) b₁ b₂) :
   LamEquiv lval lctx (.base (.bv n)) (.shl_toNat_equiv_short n a₁ m b₁) (.shl_toNat_equiv_short n a₂ m b₂) :=
-  congr (congrArg (.ofBase (.ofBvsmtshl' _)) eqa) (congrArg (.ofBase (.ofBvzeroExtend' _ _)) eqb)
+  congr (congrArg (.ofBase (.ofBvsmtshl _)) eqa) (congrArg (.ofBase (.ofBvzeroExtend _ _)) eqb)
 
 theorem LamEquiv.shl_toNat_equiv_short
   (wfa : LamWF lval.toLamTyVal ⟨lctx, a, .base (.bv n)⟩)
@@ -398,10 +398,10 @@ theorem LamEquiv.congr_shl_toNat_equiv_long
   LamEquiv lval lctx (.base (.bv n)) (.shl_toNat_equiv_long n a₁ m b₁) (.shl_toNat_equiv_long n a₂ m b₂) :=
   congrFun (congr (congrArg (.ofBase (.ofIte _))
     (congrFun (congrArg (.ofBase (.ofEq _)) (congrFun
-      (congrArg (.ofBase (.ofBvsmtlshr' _)) eqb) (.ofBase (.ofBvVal' _ _))))
-        (.ofBase (.ofBvVal' _ _))))
-    (congr (congrArg (.ofBase (.ofBvsmtshl' _)) eqa) (congrArg (.ofBase (.ofBvzeroExtend' _ _)) eqb)))
-    (.ofBase (.ofBvVal' _ _))
+      (congrArg (.ofBase (.ofBvsmtlshr _)) eqb) (.ofBase (.ofBvVal _ _))))
+        (.ofBase (.ofBvVal _ _))))
+    (congr (congrArg (.ofBase (.ofBvsmtshl _)) eqa) (congrArg (.ofBase (.ofBvzeroExtend _ _)) eqb)))
+    (.ofBase (.ofBvVal _ _))
 
 theorem LamEquiv.shl_toNat_equiv_long
   (wfa : LamWF lval.toLamTyVal ⟨lctx, a, .base (.bv n)⟩)
@@ -412,8 +412,8 @@ theorem LamEquiv.shl_toNat_equiv_long
     (.shl_toNat_equiv_long n a m b) :=
   ⟨.mkBvNatBinOp (.ofBvshl _) wfa (.mkBvUOp (.ofBvtoNat _) wfb),
    .mkIte
-    (.mkEq (.mkBvBinOp (.ofBvsmtlshr _) wfb (.ofBase (.ofBvVal' _ _))) (.ofBase (.ofBvVal' _ _)))
-    (.mkBvBinOp (.ofBvsmtshl _) wfa (.mkBvUOp (.ofBvzeroExtend _ _) wfb)) (.ofBase (.ofBvVal' _ _)), fun lctxTerm => by
+    (.mkEq (.mkBvBinOp (.ofBvsmtlshr _) wfb (.ofBase (.ofBvVal _ _))) (.ofBase (.ofBvVal _ _)))
+    (.mkBvBinOp (.ofBvsmtshl _) wfa (.mkBvUOp (.ofBvzeroExtend _ _) wfb)) (.ofBase (.ofBvVal _ _)), fun lctxTerm => by
     apply GLift.down.inj; apply BitVec.shl_toNat_equiv_long' _ _ h⟩
 
 def LamTerm.lshr_equiv (n : Nat) (a b bbv : LamTerm) :=
@@ -432,9 +432,9 @@ theorem LamEquiv.congr_lshr_equiv
   (eqb : LamEquiv lval lctx (.base .nat) b₁ b₂)
   (eqbbv : LamEquiv lval lctx (.base (.bv n)) bbv₁ bbv₂) :
   LamEquiv lval lctx (.base (.bv n)) (.lshr_equiv n a₁ b₁ bbv₁) (.lshr_equiv n a₂ b₂ bbv₂) :=
-  congrFun (congr (congrArg (.ofBase (.ofIte _)) (congrFun (congrArg (.ofBase .ofNlt') eqb)
-    (.ofBase (.ofNatVal' _)))) (congr (congrArg (.ofBase (.ofBvsmtlshr' _)) eqa) eqbbv))
-    (.ofBase (.ofBvVal' _ _))
+  congrFun (congr (congrArg (.ofBase (.ofIte _)) (congrFun (congrArg (.ofBase .ofNlt) eqb)
+    (.ofBase (.ofNatVal _)))) (congr (congrArg (.ofBase (.ofBvsmtlshr _)) eqa) eqbbv))
+    (.ofBase (.ofBvVal _ _))
 
 theorem LamEquiv.lshr_equiv
   (wfa : LamWF lval.toLamTyVal ⟨lctx, a, .base (.bv n)⟩)
@@ -443,8 +443,8 @@ theorem LamEquiv.lshr_equiv
     (.mkBvNatBinOp n (.bvlshr n) a b)
     (.lshr_equiv n a b (.mkBvofNat n b)) :=
   ⟨.mkBvNatBinOp (.ofBvlshr _) wfa wfb,
-   .mkIte (.mkNatBinOp (.ofNlt) wfb (.ofBase (.ofNatVal' n)))
-    (.mkBvBinOp (.ofBvsmtlshr _) wfa (.mkBvofNat wfb)) (.ofBase (.ofBvVal' _ _)), fun lctxTerm => by
+   .mkIte (.mkNatBinOp (.ofNlt) wfb (.ofBase (.ofNatVal n)))
+    (.mkBvBinOp (.ofBvsmtlshr _) wfa (.mkBvofNat wfb)) (.ofBase (.ofBvVal _ _)), fun lctxTerm => by
     apply GLift.down.inj; apply BitVec.lshr_equiv'⟩
 
 abbrev LamTerm.lshr_toNat_equiv_short (n : Nat) (a : LamTerm) (m : Nat) (b : LamTerm) :=
@@ -460,7 +460,7 @@ theorem LamEquiv.congr_lshr_toNat_equiv_short
   (eqa : LamEquiv lval lctx (.base (.bv n)) a₁ a₂)
   (eqb : LamEquiv lval lctx (.base (.bv m)) b₁ b₂) :
   LamEquiv lval lctx (.base (.bv n)) (.lshr_toNat_equiv_short n a₁ m b₁) (.lshr_toNat_equiv_short n a₂ m b₂) :=
-  congr (congrArg (.ofBase (.ofBvsmtlshr' _)) eqa) (congrArg (.ofBase (.ofBvzeroExtend' _ _)) eqb)
+  congr (congrArg (.ofBase (.ofBvsmtlshr _)) eqa) (congrArg (.ofBase (.ofBvzeroExtend _ _)) eqb)
 
 theorem LamEquiv.lshr_toNat_equiv_short
   (wfa : LamWF lval.toLamTyVal ⟨lctx, a, .base (.bv n)⟩)
@@ -490,10 +490,10 @@ theorem LamEquiv.congr_lshr_toNat_equiv_long
   LamEquiv lval lctx (.base (.bv n)) (.lshr_toNat_equiv_long n a₁ m b₁) (.lshr_toNat_equiv_long n a₂ m b₂) :=
   congrFun (congr (congrArg (.ofBase (.ofIte _))
     (congrFun (congrArg (.ofBase (.ofEq _)) (congrFun
-      (congrArg (.ofBase (.ofBvsmtlshr' _)) eqb)
-        (.ofBase (.ofBvVal' _ _)))) (.ofBase (.ofBvVal' _ _))))
-    (congr (congrArg (.ofBase (.ofBvsmtlshr' _)) eqa) (congrArg (.ofBase (.ofBvzeroExtend' _ _)) eqb)))
-    (.ofBase (.ofBvVal' _ _))
+      (congrArg (.ofBase (.ofBvsmtlshr _)) eqb)
+        (.ofBase (.ofBvVal _ _)))) (.ofBase (.ofBvVal _ _))))
+    (congr (congrArg (.ofBase (.ofBvsmtlshr _)) eqa) (congrArg (.ofBase (.ofBvzeroExtend _ _)) eqb)))
+    (.ofBase (.ofBvVal _ _))
 
 theorem LamEquiv.lshr_toNat_equiv_long
   (wfa : LamWF lval.toLamTyVal ⟨lctx, a, .base (.bv n)⟩)
@@ -504,8 +504,8 @@ theorem LamEquiv.lshr_toNat_equiv_long
     (.lshr_toNat_equiv_long n a m b) :=
   ⟨.mkBvNatBinOp (.ofBvlshr _) wfa (.mkBvUOp (.ofBvtoNat _) wfb),
     .mkIte
-      (.mkEq (.mkBvBinOp (.ofBvsmtlshr _) wfb (.ofBase (.ofBvVal' _ _))) (.ofBase (.ofBvVal' _ _)))
-      (.mkBvBinOp (.ofBvsmtlshr _) wfa (.mkBvUOp (.ofBvzeroExtend _ _) wfb)) (.ofBase (.ofBvVal' _ _)), fun lctxTerm => by
+      (.mkEq (.mkBvBinOp (.ofBvsmtlshr _) wfb (.ofBase (.ofBvVal _ _))) (.ofBase (.ofBvVal _ _)))
+      (.mkBvBinOp (.ofBvsmtlshr _) wfa (.mkBvUOp (.ofBvzeroExtend _ _) wfb)) (.ofBase (.ofBvVal _ _)), fun lctxTerm => by
     apply GLift.down.inj; apply BitVec.lshr_toNat_equiv_long' _ _ h⟩
 
 def LamTerm.ashr_equiv (n : Nat) (a b bbv : LamTerm) :=
@@ -526,12 +526,12 @@ theorem LamEquiv.congr_ashr_equiv
   (eqb : LamEquiv lval lctx (.base .nat) b₁ b₂)
   (eqbbv : LamEquiv lval lctx (.base (.bv n)) bbv₁ bbv₂) :
   LamEquiv lval lctx (.base (.bv n)) (.ashr_equiv n a₁ b₁ bbv₁) (.ashr_equiv n a₂ b₂ bbv₂) :=
-  congr (congr (congrArg (.ofBase (.ofIte _)) (congrFun (congrArg (.ofBase .ofNlt') eqb) (.ofBase (.ofNatVal' _))))
-    (congr (congrArg (.ofBase (.ofBvsmtashr' _)) eqa) eqbbv))
+  congr (congr (congrArg (.ofBase (.ofIte _)) (congrFun (congrArg (.ofBase .ofNlt) eqb) (.ofBase (.ofNatVal _))))
+    (congr (congrArg (.ofBase (.ofBvsmtashr _)) eqa) eqbbv))
     (congrFun (congrFun (congrArg (.ofBase (.ofIte _)) (congrFun
-      (congrArg (.ofBase (.ofEq _)) (congrArg (.ofBase (.ofBvmsb' _)) eqa)) (.ofBase .ofTrueB')))
-      (.ofApp _ (.ofBase (.ofBvneg' _)) (.ofBase (.ofBvVal' _ _))))
-      (.ofBase (.ofBvVal' _ _)))
+      (congrArg (.ofBase (.ofEq _)) (congrArg (.ofBase (.ofBvmsb _)) eqa)) (.ofBase .ofTrueB)))
+      (.ofApp _ (.ofBase (.ofBvneg _)) (.ofBase (.ofBvVal _ _))))
+      (.ofBase (.ofBvVal _ _)))
 
 theorem LamEquiv.ashr_equiv
   (wfa : LamWF lval.toLamTyVal ⟨lctx, a, .base (.bv n)⟩)
@@ -540,11 +540,11 @@ theorem LamEquiv.ashr_equiv
     (.mkBvNatBinOp n (.bvashr n) a b)
     (.ashr_equiv n a b (.mkBvofNat n b)) :=
   ⟨.mkBvNatBinOp (.ofBvashr _) wfa wfb,
-   .mkIte (.mkNatBinOp (.ofNlt) wfb (.ofBase (.ofNatVal' n)))
+   .mkIte (.mkNatBinOp (.ofNlt) wfb (.ofBase (.ofNatVal n)))
     (.mkBvBinOp (.ofBvsmtashr _) wfa (.mkBvofNat wfb))
-    (.mkIte (.mkEq (.mkBvUOp (.ofBvmsb _) wfa) (.ofBase .ofTrueB'))
-      (.mkBvUOp (.ofBvneg _) ((.ofBase (.ofBvVal' _ _))))
-      (.ofBase (.ofBvVal' _ _))), fun lctxTerm => by
+    (.mkIte (.mkEq (.mkBvUOp (.ofBvmsb _) wfa) (.ofBase .ofTrueB))
+      (.mkBvUOp (.ofBvneg _) ((.ofBase (.ofBvVal _ _))))
+      (.ofBase (.ofBvVal _ _))), fun lctxTerm => by
     apply GLift.down.inj; apply BitVec.ashr_equiv'⟩
 
 abbrev LamTerm.ashr_toNat_equiv_short (n : Nat) (a : LamTerm) (m : Nat) (b : LamTerm) :=
@@ -560,7 +560,7 @@ theorem LamEquiv.congr_ashr_toNat_equiv_short
   (eqa : LamEquiv lval lctx (.base (.bv n)) a₁ a₂)
   (eqb : LamEquiv lval lctx (.base (.bv m)) b₁ b₂) :
   LamEquiv lval lctx (.base (.bv n)) (.ashr_toNat_equiv_short n a₁ m b₁) (.ashr_toNat_equiv_short n a₂ m b₂) :=
-  congr (congrArg (.ofBase (.ofBvsmtashr' _)) eqa) (congrArg (.ofBase (.ofBvzeroExtend' _ _)) eqb)
+  congr (congrArg (.ofBase (.ofBvsmtashr _)) eqa) (congrArg (.ofBase (.ofBvzeroExtend _ _)) eqb)
 
 theorem LamEquiv.ashr_toNat_equiv_short
   (wfa : LamWF lval.toLamTyVal ⟨lctx, a, .base (.bv n)⟩)
@@ -592,11 +592,11 @@ theorem LamEquiv.congr_ashr_toNat_equiv_long
   (eqb : LamEquiv lval lctx (.base (.bv m)) b₁ b₂) :
   LamEquiv lval lctx (.base (.bv n)) (.ashr_toNat_equiv_long n a₁ m b₁) (.ashr_toNat_equiv_long n a₂ m b₂) :=
   congr (congr (congrArg (.ofBase (.ofIte _)) (congrFun (congrArg (.ofBase (.ofEq _))
-    (congrFun (congrArg (.ofBase (.ofBvsmtlshr' _)) eqb) (.ofBase (.ofBvVal' _ _)))) (.ofBase (.ofBvVal' _ _))))
-    (congr (congrArg (.ofBase (.ofBvsmtashr' _)) eqa) (congrArg (.ofBase (.ofBvzeroExtend' _ _)) eqb)))
+    (congrFun (congrArg (.ofBase (.ofBvsmtlshr _)) eqb) (.ofBase (.ofBvVal _ _)))) (.ofBase (.ofBvVal _ _))))
+    (congr (congrArg (.ofBase (.ofBvsmtashr _)) eqa) (congrArg (.ofBase (.ofBvzeroExtend _ _)) eqb)))
     (congrFun (congrFun (congrArg (.ofBase (.ofIte _)) (congrFun (congrArg (.ofBase (.ofEq _))
-      (congrArg (.ofBase (.ofBvmsb' _)) eqa)) (.ofBase .ofTrueB'))) (.mkBvUOp (.ofBvneg _) (.ofBase (.ofBvVal' _ _))))
-      (.ofBase (.ofBvVal' _ _)))
+      (congrArg (.ofBase (.ofBvmsb _)) eqa)) (.ofBase .ofTrueB))) (.mkBvUOp (.ofBvneg _) (.ofBase (.ofBvVal _ _))))
+      (.ofBase (.ofBvVal _ _)))
 
 theorem LamEquiv.ashr_toNat_equiv_long
   (wfa : LamWF lval.toLamTyVal ⟨lctx, a, .base (.bv n)⟩)
@@ -607,11 +607,11 @@ theorem LamEquiv.ashr_toNat_equiv_long
     (.ashr_toNat_equiv_long n a m b) :=
   ⟨.mkBvNatBinOp (.ofBvashr _) wfa (.mkBvUOp (.ofBvtoNat _) wfb),
     .mkIte
-      (.mkEq (.mkBvBinOp (.ofBvsmtlshr _) wfb (.ofBase (.ofBvVal' _ _))) (.ofBase (.ofBvVal' _ _)))
+      (.mkEq (.mkBvBinOp (.ofBvsmtlshr _) wfb (.ofBase (.ofBvVal _ _))) (.ofBase (.ofBvVal _ _)))
       (.mkBvBinOp (.ofBvsmtashr _) wfa (.mkBvUOp (.ofBvzeroExtend _ _) wfb))
-        (.mkIte (.mkEq (.mkBvUOp (.ofBvmsb _) wfa) (.ofBase .ofTrueB'))
-          (.mkBvUOp (.ofBvneg _) (.ofBase (.ofBvVal' _ _)))
-          (.ofBase (.ofBvVal' _ _))), fun lctxTerm => by
+        (.mkIte (.mkEq (.mkBvUOp (.ofBvmsb _) wfa) (.ofBase .ofTrueB))
+          (.mkBvUOp (.ofBvneg _) (.ofBase (.ofBvVal _ _)))
+          (.ofBase (.ofBvVal _ _))), fun lctxTerm => by
     apply GLift.down.inj; apply BitVec.ashr_toNat_equiv_long' _ _ h⟩
 
 inductive BVCastType where
@@ -862,7 +862,7 @@ theorem LamEquiv.pushBVCast
               have wfbv := wfapp'.getArg
               dsimp [LamTerm.applyBVCast, LamTerm.pushBVCast]
               apply trans (bvofNat_bvtoNat wfbv)
-              apply congrArg (.ofBase (.ofBvzeroExtend' _ _))
+              apply congrArg (.ofBase (.ofBvzeroExtend _ _))
               apply IH (ct:=.none) (t:=arg) wfbv leArg
         case app s'' fn arg₁ =>
           cases fn <;> try (dsimp [LamTerm.pushBVCast]; apply refl wft)
@@ -875,19 +875,19 @@ theorem LamEquiv.pushBVCast
                 (try cases wfapp'.getFn.getFn.getBase.getNcst; dsimp [LamTerm.applyBVCast])
               case nadd =>
                 apply trans (bvofNat_nadd wfl wfr)
-                apply congr (congrArg (.ofBase (.ofBvadd' _)) ?eql) ?eqr
+                apply congr (congrArg (.ofBase (.ofBvadd _)) ?eql) ?eqr
                 case eql => apply IH (ct:=.ofNat m) (t:=arg₁) (.mkBvofNat wfl) leArg₁
                 case eqr => apply IH (ct:=.ofNat m) (t:=arg) (.mkBvofNat wfr) leArg
               case nsub =>
                 apply trans (bvofNat_nsub wfl wfr)
                 apply congrArg
-                  (.ofApp _ (.ofApp _ (.ofBase (.ofIte _)) (.mkNatBinOp .ofNlt wfl wfr)) (.ofBase (.ofBvVal' _ _)))
-                  (congr (congrArg (.ofBase (.ofBvsub' _)) ?eql) ?eqr)
+                  (.ofApp _ (.ofApp _ (.ofBase (.ofIte _)) (.mkNatBinOp .ofNlt wfl wfr)) (.ofBase (.ofBvVal _ _)))
+                  (congr (congrArg (.ofBase (.ofBvsub _)) ?eql) ?eqr)
                 case eql => apply IH (ct:=.ofNat m) (t:=arg₁) (.mkBvofNat wfl) leArg₁
                 case eqr => apply IH (ct:=.ofNat m) (t:=arg) (.mkBvofNat wfr) leArg
               case nmul =>
                 apply trans (bvofNat_nmul wfl wfr)
-                apply congr (congrArg (.ofBase (.ofBvmul' _)) ?eql) ?eqr
+                apply congr (congrArg (.ofBase (.ofBvmul _)) ?eql) ?eqr
                 case eql => apply IH (ct:=.ofNat m) (t:=arg₁) (.mkBvofNat wfl) leArg₁
                 case eqr => apply IH (ct:=.ofNat m) (t:=arg) (.mkBvofNat wfr) leArg
       case ofInt m => dsimp [LamTerm.pushBVCast]; apply refl wft
