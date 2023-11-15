@@ -1278,8 +1278,8 @@ def processSimpleConst (name : Name) (lvls : List Level) : ReifM (Option LamTerm
   return .none
 
 def processSimpleApp (fn arg : Expr) : ReifM (Option LamTerm) := do
-  let fn := fn.getAppFn
   let args := fn.getAppArgs ++ #[arg]
+  let fn := fn.getAppFn
   let .const name lvls := fn
     | return .none
   match args.data with
@@ -1299,20 +1299,20 @@ def processSimpleApp (fn arg : Expr) : ReifM (Option LamTerm) := do
     if let .some tcon := reifMapBVConst2.find? name then
       if lvls.length != 0 then
         throwError "processSimpleApp :: BVConst2 should have nil level list"
-        match ← @id (MetaM _) (Meta.evalNat arg₁),
-              ← @id (MetaM _) (Meta.evalNat arg₂) with
-        | .some n, .some m => return .some (tcon n m)
-        | _,       _       => return .none
+      match ← @id (MetaM _) (Meta.evalNat arg₁),
+            ← @id (MetaM _) (Meta.evalNat arg₂) with
+      | .some n, .some m => return .some (tcon n m)
+      | _,       _       => return .none
     return .none
   | [arg₁, arg₂, arg₃] =>
     if let .some tcon := reifMapBVConst3.find? name then
       if lvls.length != 0 then
         throwError "processSimpleApp :: BVConst2 should have nil level list"
-        match ← @id (MetaM _) (Meta.evalNat arg₁),
-              ← @id (MetaM _) (Meta.evalNat arg₂),
-              ← @id (MetaM _) (Meta.evalNat arg₃) with
-        | .some n, .some h, .some l => return .some (tcon n h l)
-        | _,       _,       _       => return .none
+      match ← @id (MetaM _) (Meta.evalNat arg₁),
+            ← @id (MetaM _) (Meta.evalNat arg₂),
+            ← @id (MetaM _) (Meta.evalNat arg₃) with
+      | .some n, .some h, .some l => return .some (tcon n h l)
+      | _,       _,       _       => return .none
     return .none
   | _ => return .none
 
@@ -1502,15 +1502,16 @@ def processLam0Arg4 (e fn arg₁ arg₂ arg₃ arg₄ : Expr) : MetaM (Option La
         return .some t
       return .none
   if arg₁.isApp && arg₂.isConst then
-    let .app arg₁fn arg₁arg := arg₂
+    let .app arg₁fn arg₁arg := arg₁
       | throwError "processLam0Arg4 :: Unexpected error"
-    let .const arg₁fnName _ := arg₁fn
-      | throwError "processLam0Arg4 :: Unexpected error"
-    if let .some candidates := reifMapLam0Arg4NatLit.find? (fnName, arg₁fnName) then
-      for (e'con, tcon) in candidates do
-        if let .some n ← Meta.evalNat arg₁arg then
-          if (← Meta.isDefEqD e (e'con n)) then
-            return tcon n
+    if arg₁fn.isConst then
+      let .const arg₁fnName _ := arg₁fn
+        | throwError "processLam0Arg4 :: Unexpected error {arg₁fn}"
+      if let .some candidates := reifMapLam0Arg4NatLit.find? (fnName, arg₁fnName) then
+        for (e'con, tcon) in candidates do
+          if let .some n ← Meta.evalNat arg₁arg then
+            if (← Meta.isDefEqD e (e'con n)) then
+              return tcon n
   if arg₁.isApp && arg₂.isApp then
     let .app arg₁fn arg₁arg := arg₁
       | throwError "processLam0Arg4 :: Unexpected error"
