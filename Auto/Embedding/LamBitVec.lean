@@ -277,14 +277,14 @@ namespace BitVec
 end BitVec
 
 theorem LamEquiv.bvofNat :
-  LamEquiv lval lctx (.base (.bv n)) (.mkBvofNat n (.mkNatVal i)) (.base (.bvVal' n i)) :=
+  LamEquiv lval lctx (.base (.bv n)) (.mkBvofNat n (.mkNatVal i)) (.base (.bvVal n i)) :=
   ⟨.mkBvofNat (.ofBase (.ofNatVal' i)), .ofBase (.ofBvVal' n i), fun _ => rfl⟩
 
 theorem LamEquiv.bvofNat_bvtoNat
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, .base (.bv n)⟩) :
   LamEquiv lval lctx (.base (.bv m))
     (.mkBvofNat m (.mkBvUOp n (.bvtoNat n) t))
-    (.app (.base (.bv n)) (.base (.bvzeroExtend' n m)) t) :=
+    (.app (.base (.bv n)) (.base (.bvzeroExtend n m)) t) :=
   ⟨.mkBvofNat (.mkBvUOp (.ofBvtoNat n) wft),
    .ofApp _ (.ofBase (.ofBvzeroExtend' n m)) wft, fun lctxTerm => rfl⟩
 
@@ -300,7 +300,7 @@ theorem LamEquiv.bvofNat_nadd
 
 def LamTerm.bvofNat_nsub (n : Nat) (a b bva bvb : LamTerm) :=
   LamTerm.mkIte (.base (.bv n)) (.mkNatBinOp .nlt a b)
-    (.base (.bvVal' n 0)) (.mkBvBinOp n (.bvsub n) bva bvb)
+    (.base (.bvVal n 0)) (.mkBvBinOp n (.bvsub n) bva bvb)
 
 theorem LamEquiv.bvofNat_nsub
   (wfa : LamWF lval.toLamTyVal ⟨lctx, a, .base .nat⟩)
@@ -324,8 +324,8 @@ theorem LamEquiv.bvofNat_nmul
     apply GLift.down.inj; apply BitVec.ofNat_mul⟩
 
 def LamTerm.shl_equiv (n : Nat) (a b bbv : LamTerm) :=
-  LamTerm.mkIte (.base (.bv n)) (.mkNatBinOp .nlt b (.base (.natVal' n)))
-    (.mkBvBinOp n (.bvsmtshl n) a bbv) (.base (.bvVal' n 0))
+  LamTerm.mkIte (.base (.bv n)) (.mkNatBinOp .nlt b (.base (.natVal n)))
+    (.mkBvBinOp n (.bvsmtshl n) a bbv) (.base (.bvVal n 0))
 
 theorem LamTerm.congr_maxEVarSucc_shl_equiv
   (eqa : maxEVarSucc a₁ = maxEVarSucc a₂)
@@ -383,8 +383,8 @@ theorem LamEquiv.shl_toNat_equiv_short
 
 abbrev LamTerm.shl_toNat_equiv_long (n : Nat) (a : LamTerm) (m : Nat) (b : LamTerm) :=
   LamTerm.mkIte (.base (.bv n))
-    (.mkEq (.base (.bv m)) (.mkBvBinOp m (.bvsmtlshr m) b (.base (.bvVal' m n))) (.base (.bvVal' m 0)))
-    (.mkBvBinOp n (.bvsmtshl n) a (.mkBvUOp m (.bvzeroExtend m n) b)) (.base (.bvVal' n 0))
+    (.mkEq (.base (.bv m)) (.mkBvBinOp m (.bvsmtlshr m) b (.base (.bvVal m n))) (.base (.bvVal m 0)))
+    (.mkBvBinOp n (.bvsmtshl n) a (.mkBvUOp m (.bvzeroExtend m n) b)) (.base (.bvVal n 0))
 
 theorem LamTerm.congr_maxEVarSucc_shl_toNat_equiv_long
   (eqa : maxEVarSucc a₁ = maxEVarSucc a₂)
@@ -417,8 +417,8 @@ theorem LamEquiv.shl_toNat_equiv_long
     apply GLift.down.inj; apply BitVec.shl_toNat_equiv_long' _ _ h⟩
 
 def LamTerm.lshr_equiv (n : Nat) (a b bbv : LamTerm) :=
-  LamTerm.mkIte (.base (.bv n)) (.mkNatBinOp .nlt b (.base (.natVal' n)))
-    (.mkBvBinOp n (.bvsmtlshr n) a bbv) (.base (.bvVal' n 0))
+  LamTerm.mkIte (.base (.bv n)) (.mkNatBinOp .nlt b (.base (.natVal n)))
+    (.mkBvBinOp n (.bvsmtlshr n) a bbv) (.base (.bvVal n 0))
 
 theorem LamTerm.congr_maxEVarSucc_lshr_equiv
   (eqa : maxEVarSucc a₁ = maxEVarSucc a₂)
@@ -475,8 +475,8 @@ theorem LamEquiv.lshr_toNat_equiv_short
 
 abbrev LamTerm.lshr_toNat_equiv_long (n : Nat) (a : LamTerm) (m : Nat) (b : LamTerm) :=
   LamTerm.mkIte (.base (.bv n))
-    (.mkEq (.base (.bv m)) (.mkBvBinOp m (.bvsmtlshr m) b (.base (.bvVal' m n))) (.base (.bvVal' m 0)))
-    (.mkBvBinOp n (.bvsmtlshr n) a (.mkBvUOp m (.bvzeroExtend m n) b)) (.base (.bvVal' n 0))
+    (.mkEq (.base (.bv m)) (.mkBvBinOp m (.bvsmtlshr m) b (.base (.bvVal m n))) (.base (.bvVal m 0)))
+    (.mkBvBinOp n (.bvsmtlshr n) a (.mkBvUOp m (.bvzeroExtend m n) b)) (.base (.bvVal n 0))
 
 theorem LamTerm.congr_maxEVarSucc_lshr_toNat_equiv_long
   (eqa : maxEVarSucc a₁ = maxEVarSucc a₂)
@@ -509,10 +509,10 @@ theorem LamEquiv.lshr_toNat_equiv_long
     apply GLift.down.inj; apply BitVec.lshr_toNat_equiv_long' _ _ h⟩
 
 def LamTerm.ashr_equiv (n : Nat) (a b bbv : LamTerm) :=
-  LamTerm.mkIte (.base (.bv n)) (.mkNatBinOp .nlt b (.base (.natVal' n)))
+  LamTerm.mkIte (.base (.bv n)) (.mkNatBinOp .nlt b (.base (.natVal n)))
     (.mkBvBinOp n (.bvsmtashr n) a bbv)
-    (.mkIte (.base (.bv n)) (.mkEq (.base .bool) (.mkBvUOp n (.bvmsb n) a) (.base .trueb'))
-      (.mkBvUOp n (.bvneg n) (.base (.bvVal' n 1))) (.base (.bvVal' n 0)))
+    (.mkIte (.base (.bv n)) (.mkEq (.base .bool) (.mkBvUOp n (.bvmsb n) a) (.base .trueb))
+      (.mkBvUOp n (.bvneg n) (.base (.bvVal n 1))) (.base (.bvVal n 0)))
 
 theorem LamTerm.congr_maxEVarSucc_ashr_equiv
   (eqa : maxEVarSucc a₁ = maxEVarSucc a₂)
@@ -575,11 +575,11 @@ theorem LamEquiv.ashr_toNat_equiv_short
 
 def LamTerm.ashr_toNat_equiv_long (n : Nat) (a : LamTerm) (m : Nat) (b : LamTerm) :=
   LamTerm.mkIte (.base (.bv n))
-    (.mkEq (.base (.bv m)) (.mkBvBinOp m (.bvsmtlshr m) b (.base (.bvVal' m n))) (.base (.bvVal' m 0)))
+    (.mkEq (.base (.bv m)) (.mkBvBinOp m (.bvsmtlshr m) b (.base (.bvVal m n))) (.base (.bvVal m 0)))
     (.mkBvBinOp n (.bvsmtashr n) a (.mkBvUOp m (.bvzeroExtend m n) b))
-    (.mkIte (.base (.bv n)) (.mkEq (.base .bool) (.mkBvUOp n (.bvmsb n) a) (.base .trueb'))
-      (.mkBvUOp n (.bvneg n) (.base (.bvVal' n 1)))
-      (.base (.bvVal' n 0)))
+    (.mkIte (.base (.bv n)) (.mkEq (.base .bool) (.mkBvUOp n (.bvmsb n) a) (.base .trueb))
+      (.mkBvUOp n (.bvneg n) (.base (.bvVal n 1)))
+      (.base (.bvVal n 0)))
 
 theorem LamTerm.congr_maxEVarSucc_ashr_toNat_equiv_long
   (eqa : maxEVarSucc a₁ = maxEVarSucc a₂)
@@ -631,7 +631,7 @@ def LamTerm.pushBVCast (ct : BVCastType) (t : LamTerm) : LamTerm :=
     match t with
     | .base (.ncst (.natVal i)) => .base (.bvcst (.bvVal n i))
     | .app _ (.base (.bvcst (.bvtoNat m))) arg =>
-      .app (.base (.bv m)) (.base (.bvzeroExtend' m n)) (pushBVCast .none arg)
+      .app (.base (.bv m)) (.base (.bvzeroExtend m n)) (pushBVCast .none arg)
     | .app _ (.app _ (.base (.ncst .nadd)) lhs) rhs =>
       mkBvBinOp n (.bvadd n) (pushBVCast (.ofNat n) lhs) (pushBVCast (.ofNat n) rhs)
     | .app _ (.app _ (.base (.ncst .nsub)) lhs) rhs =>

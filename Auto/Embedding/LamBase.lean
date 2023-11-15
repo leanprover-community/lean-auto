@@ -1260,79 +1260,79 @@ inductive LamBaseTerm
   | ite      : LamSort → LamBaseTerm
 deriving Inhabited, Hashable, Lean.ToExpr
 
-def LamBaseTerm.ofProp' := LamBaseTerm.bcst .ofProp
-def LamBaseTerm.trueb' := LamBaseTerm.bcst .trueb
-def LamBaseTerm.falseb' := LamBaseTerm.bcst .falseb
-def LamBaseTerm.notb' := LamBaseTerm.bcst .notb
-def LamBaseTerm.andb' := LamBaseTerm.bcst .andb
-def LamBaseTerm.orb' := LamBaseTerm.bcst .orb
-def LamBaseTerm.natVal' (n : Nat) := LamBaseTerm.ncst (.natVal n)
-def LamBaseTerm.nadd' := LamBaseTerm.ncst .nadd
-def LamBaseTerm.nsub' := LamBaseTerm.ncst .nsub
-def LamBaseTerm.nmul' := LamBaseTerm.ncst .nmul
-def LamBaseTerm.ndiv' := LamBaseTerm.ncst .ndiv
-def LamBaseTerm.nmod' := LamBaseTerm.ncst .nmod
-def LamBaseTerm.nle' := LamBaseTerm.ncst .nle
-def LamBaseTerm.nlt' := LamBaseTerm.ncst .nlt
-def LamBaseTerm.nmax' := LamBaseTerm.ncst .nmax
-def LamBaseTerm.nmin' := LamBaseTerm.ncst .nmin
-def LamBaseTerm.iofNat' := LamBaseTerm.icst .iofNat
-def LamBaseTerm.inegSucc' := LamBaseTerm.icst .inegSucc
-def LamBaseTerm.ineg' := LamBaseTerm.icst .ineg
-def LamBaseTerm.iabs' := LamBaseTerm.icst .iabs
-def LamBaseTerm.iadd' := LamBaseTerm.icst .iadd
-def LamBaseTerm.isub' := LamBaseTerm.icst .isub
-def LamBaseTerm.imul' := LamBaseTerm.icst .imul
-def LamBaseTerm.idiv' := LamBaseTerm.icst .idiv
-def LamBaseTerm.imod' := LamBaseTerm.icst .imod
-def LamBaseTerm.iediv' := LamBaseTerm.icst .iediv
-def LamBaseTerm.iemod' := LamBaseTerm.icst .iemod
-def LamBaseTerm.ile' := LamBaseTerm.icst .ile
-def LamBaseTerm.ilt' := LamBaseTerm.icst .ilt
-def LamBaseTerm.imax' := LamBaseTerm.icst .imax
-def LamBaseTerm.imin' := LamBaseTerm.icst .imin
-def LamBaseTerm.strVal' (s : String) := LamBaseTerm.scst (.strVal s)
-def LamBaseTerm.slength' := LamBaseTerm.scst .slength
-def LamBaseTerm.sapp' := LamBaseTerm.scst .sapp
-def LamBaseTerm.sle' := LamBaseTerm.scst .sle
-def LamBaseTerm.slt' := LamBaseTerm.scst .slt
-def LamBaseTerm.sprefixof' := LamBaseTerm.scst .sprefixof
-def LamBaseTerm.srepall' := LamBaseTerm.scst .srepall
-def LamBaseTerm.bvVal' (n i : Nat) := LamBaseTerm.bvcst (.bvVal n i)
-def LamBaseTerm.bvofNat' (n : Nat) := LamBaseTerm.bvcst (.bvofNat n)
-def LamBaseTerm.bvtoNat' (n : Nat) := LamBaseTerm.bvcst (.bvtoNat n)
-def LamBaseTerm.bvofInt' (n : Nat) := LamBaseTerm.bvcst (.bvofInt n)
-def LamBaseTerm.bvtoInt' (n : Nat) := LamBaseTerm.bvcst (.bvtoInt n)
-def LamBaseTerm.bvmsb' (n : Nat) := LamBaseTerm.bvcst (.bvmsb n)
-def LamBaseTerm.bvadd' (n : Nat) := LamBaseTerm.bvcst (.bvadd n)
-def LamBaseTerm.bvsub' (n : Nat) := LamBaseTerm.bvcst (.bvsub n)
-def LamBaseTerm.bvneg' (n : Nat) := LamBaseTerm.bvcst (.bvneg n)
-def LamBaseTerm.bvabs' (n : Nat) := LamBaseTerm.bvcst (.bvabs n)
-def LamBaseTerm.bvmul' (n : Nat) := LamBaseTerm.bvcst (.bvmul n)
-def LamBaseTerm.bvudiv' (n : Nat) := LamBaseTerm.bvcst (.bvudiv n)
-def LamBaseTerm.bvurem' (n : Nat) := LamBaseTerm.bvcst (.bvurem n)
-def LamBaseTerm.bvsdiv' (n : Nat) := LamBaseTerm.bvcst (.bvsdiv n)
-def LamBaseTerm.bvsrem' (n : Nat) := LamBaseTerm.bvcst (.bvsrem n)
-def LamBaseTerm.bvsmod' (n : Nat) := LamBaseTerm.bvcst (.bvsmod n)
-def LamBaseTerm.bvult' (n : Nat) := LamBaseTerm.bvcst (.bvult n)
-def LamBaseTerm.bvule' (n : Nat) := LamBaseTerm.bvcst (.bvule n)
-def LamBaseTerm.bvslt' (n : Nat) := LamBaseTerm.bvcst (.bvslt n)
-def LamBaseTerm.bvsle' (n : Nat) := LamBaseTerm.bvcst (.bvsle n)
-def LamBaseTerm.bvand' (n : Nat) := LamBaseTerm.bvcst (.bvand n)
-def LamBaseTerm.bvor' (n : Nat) := LamBaseTerm.bvcst (.bvor n)
-def LamBaseTerm.bvxor' (n : Nat) := LamBaseTerm.bvcst (.bvxor n)
-def LamBaseTerm.bvnot' (n : Nat) := LamBaseTerm.bvcst (.bvnot n)
-def LamBaseTerm.bvshl' (n : Nat) := LamBaseTerm.bvcst (.bvshl n)
-def LamBaseTerm.bvlshr' (n : Nat) := LamBaseTerm.bvcst (.bvlshr n)
-def LamBaseTerm.bvashr' (n : Nat) := LamBaseTerm.bvcst (.bvashr n)
-def LamBaseTerm.bvsmtshl' (n : Nat) := LamBaseTerm.bvcst (.bvsmtshl n)
-def LamBaseTerm.bvsmtlshr' (n : Nat) := LamBaseTerm.bvcst (.bvsmtlshr n)
-def LamBaseTerm.bvsmtashr' (n : Nat) := LamBaseTerm.bvcst (.bvsmtashr n)
-def LamBaseTerm.bvappend' (n m : Nat) := LamBaseTerm.bvcst (.bvappend n m)
-def LamBaseTerm.bvextract' (n h l : Nat) := LamBaseTerm.bvcst (.bvextract n h l)
-def LamBaseTerm.bvrepeat' (w i : Nat) := LamBaseTerm.bvcst (.bvrepeat w i)
-def LamBaseTerm.bvzeroExtend' (w v : Nat) := LamBaseTerm.bvcst (.bvzeroExtend w v)
-def LamBaseTerm.bvsignExtend' (w v : Nat) := LamBaseTerm.bvcst (.bvsignExtend w v)
+def LamBaseTerm.ofProp := LamBaseTerm.bcst .ofProp
+def LamBaseTerm.trueb := LamBaseTerm.bcst .trueb
+def LamBaseTerm.falseb := LamBaseTerm.bcst .falseb
+def LamBaseTerm.notb := LamBaseTerm.bcst .notb
+def LamBaseTerm.andb := LamBaseTerm.bcst .andb
+def LamBaseTerm.orb := LamBaseTerm.bcst .orb
+def LamBaseTerm.natVal (n : Nat) := LamBaseTerm.ncst (.natVal n)
+def LamBaseTerm.nadd := LamBaseTerm.ncst .nadd
+def LamBaseTerm.nsub := LamBaseTerm.ncst .nsub
+def LamBaseTerm.nmul := LamBaseTerm.ncst .nmul
+def LamBaseTerm.ndiv := LamBaseTerm.ncst .ndiv
+def LamBaseTerm.nmod := LamBaseTerm.ncst .nmod
+def LamBaseTerm.nle := LamBaseTerm.ncst .nle
+def LamBaseTerm.nlt := LamBaseTerm.ncst .nlt
+def LamBaseTerm.nmax := LamBaseTerm.ncst .nmax
+def LamBaseTerm.nmin := LamBaseTerm.ncst .nmin
+def LamBaseTerm.iofNat := LamBaseTerm.icst .iofNat
+def LamBaseTerm.inegSucc := LamBaseTerm.icst .inegSucc
+def LamBaseTerm.ineg := LamBaseTerm.icst .ineg
+def LamBaseTerm.iabs := LamBaseTerm.icst .iabs
+def LamBaseTerm.iadd := LamBaseTerm.icst .iadd
+def LamBaseTerm.isub := LamBaseTerm.icst .isub
+def LamBaseTerm.imul := LamBaseTerm.icst .imul
+def LamBaseTerm.idiv := LamBaseTerm.icst .idiv
+def LamBaseTerm.imod := LamBaseTerm.icst .imod
+def LamBaseTerm.iediv := LamBaseTerm.icst .iediv
+def LamBaseTerm.iemod := LamBaseTerm.icst .iemod
+def LamBaseTerm.ile := LamBaseTerm.icst .ile
+def LamBaseTerm.ilt := LamBaseTerm.icst .ilt
+def LamBaseTerm.imax := LamBaseTerm.icst .imax
+def LamBaseTerm.imin := LamBaseTerm.icst .imin
+def LamBaseTerm.strVal (s : String) := LamBaseTerm.scst (.strVal s)
+def LamBaseTerm.slength := LamBaseTerm.scst .slength
+def LamBaseTerm.sapp := LamBaseTerm.scst .sapp
+def LamBaseTerm.sle := LamBaseTerm.scst .sle
+def LamBaseTerm.slt := LamBaseTerm.scst .slt
+def LamBaseTerm.sprefixof := LamBaseTerm.scst .sprefixof
+def LamBaseTerm.srepall := LamBaseTerm.scst .srepall
+def LamBaseTerm.bvVal (n i : Nat) := LamBaseTerm.bvcst (.bvVal n i)
+def LamBaseTerm.bvofNat (n : Nat) := LamBaseTerm.bvcst (.bvofNat n)
+def LamBaseTerm.bvtoNat (n : Nat) := LamBaseTerm.bvcst (.bvtoNat n)
+def LamBaseTerm.bvofInt (n : Nat) := LamBaseTerm.bvcst (.bvofInt n)
+def LamBaseTerm.bvtoInt (n : Nat) := LamBaseTerm.bvcst (.bvtoInt n)
+def LamBaseTerm.bvmsb (n : Nat) := LamBaseTerm.bvcst (.bvmsb n)
+def LamBaseTerm.bvadd (n : Nat) := LamBaseTerm.bvcst (.bvadd n)
+def LamBaseTerm.bvsub (n : Nat) := LamBaseTerm.bvcst (.bvsub n)
+def LamBaseTerm.bvneg (n : Nat) := LamBaseTerm.bvcst (.bvneg n)
+def LamBaseTerm.bvabs (n : Nat) := LamBaseTerm.bvcst (.bvabs n)
+def LamBaseTerm.bvmul (n : Nat) := LamBaseTerm.bvcst (.bvmul n)
+def LamBaseTerm.bvudiv (n : Nat) := LamBaseTerm.bvcst (.bvudiv n)
+def LamBaseTerm.bvurem (n : Nat) := LamBaseTerm.bvcst (.bvurem n)
+def LamBaseTerm.bvsdiv (n : Nat) := LamBaseTerm.bvcst (.bvsdiv n)
+def LamBaseTerm.bvsrem (n : Nat) := LamBaseTerm.bvcst (.bvsrem n)
+def LamBaseTerm.bvsmod (n : Nat) := LamBaseTerm.bvcst (.bvsmod n)
+def LamBaseTerm.bvult (n : Nat) := LamBaseTerm.bvcst (.bvult n)
+def LamBaseTerm.bvule (n : Nat) := LamBaseTerm.bvcst (.bvule n)
+def LamBaseTerm.bvslt (n : Nat) := LamBaseTerm.bvcst (.bvslt n)
+def LamBaseTerm.bvsle (n : Nat) := LamBaseTerm.bvcst (.bvsle n)
+def LamBaseTerm.bvand (n : Nat) := LamBaseTerm.bvcst (.bvand n)
+def LamBaseTerm.bvor (n : Nat) := LamBaseTerm.bvcst (.bvor n)
+def LamBaseTerm.bvxor (n : Nat) := LamBaseTerm.bvcst (.bvxor n)
+def LamBaseTerm.bvnot (n : Nat) := LamBaseTerm.bvcst (.bvnot n)
+def LamBaseTerm.bvshl (n : Nat) := LamBaseTerm.bvcst (.bvshl n)
+def LamBaseTerm.bvlshr (n : Nat) := LamBaseTerm.bvcst (.bvlshr n)
+def LamBaseTerm.bvashr (n : Nat) := LamBaseTerm.bvcst (.bvashr n)
+def LamBaseTerm.bvsmtshl (n : Nat) := LamBaseTerm.bvcst (.bvsmtshl n)
+def LamBaseTerm.bvsmtlshr (n : Nat) := LamBaseTerm.bvcst (.bvsmtlshr n)
+def LamBaseTerm.bvsmtashr (n : Nat) := LamBaseTerm.bvcst (.bvsmtashr n)
+def LamBaseTerm.bvappend (n m : Nat) := LamBaseTerm.bvcst (.bvappend n m)
+def LamBaseTerm.bvextract (n h l : Nat) := LamBaseTerm.bvcst (.bvextract n h l)
+def LamBaseTerm.bvrepeat (w i : Nat) := LamBaseTerm.bvcst (.bvrepeat w i)
+def LamBaseTerm.bvzeroExtend (w v : Nat) := LamBaseTerm.bvcst (.bvzeroExtend w v)
+def LamBaseTerm.bvsignExtend (w v : Nat) := LamBaseTerm.bvcst (.bvsignExtend w v)
 
 def LamBaseTerm.isBcst : LamBaseTerm → Bool
 | .bcst _ => true
@@ -1649,8 +1649,8 @@ def LamBaseTerm.LamWF.ofBvsrem' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv
 def LamBaseTerm.LamWF.ofBvsmod' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsmod n)
 def LamBaseTerm.LamWF.ofBvult' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvult n)
 def LamBaseTerm.LamWF.ofBvule' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvule n)
-def LamBaseTerm.LamWF.ofBvslt' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvslt n)
-def LamBaseTerm.LamWF.ofBvsle' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsle n)
+def LamBaseTerm.LamWF.ofBvslt {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvslt n)
+def LamBaseTerm.LamWF.ofBvsle {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsle n)
 def LamBaseTerm.LamWF.ofBvand' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvand n)
 def LamBaseTerm.LamWF.ofBvor' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvor n)
 def LamBaseTerm.LamWF.ofBvxor' {ltv : LamTyVal} (n : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvxor n)
@@ -2283,68 +2283,68 @@ def LamTerm.flipApp (t : LamTerm) (argTy₁ argTy₂ resTy : LamSort) : LamTerm 
 theorem LamTerm.maxEVarSucc_flipApp : LamTerm.maxEVarSucc (flipApp t argTy₁ argTy₂ resTy) = t.maxEVarSucc := by
   dsimp [flipApp]; rw [maxEVarSucc_app, maxEVarSucc_flip, Nat.max_zero_left]
 
-abbrev LamTerm.nmodeq' : LamTerm :=
+abbrev LamTerm.nmodeq : LamTerm :=
   .lam (.base .nat) (.lam (.base .nat) (.lam (.base .nat) (.app (.base .nat) (.app (.base .nat) (.base (.eq (.base .nat)))
-    (.app (.base .nat) (.app (.base .nat) (.base .nmod') (.bvar 1)) (.bvar 2)))
-    (.app (.base .nat) (.app (.base .nat) (.base .nmod') (.bvar 0)) (.bvar 2)))))
+    (.app (.base .nat) (.app (.base .nat) (.base .nmod) (.bvar 1)) (.bvar 2)))
+    (.app (.base .nat) (.app (.base .nat) (.base .nmod) (.bvar 0)) (.bvar 2)))))
 
-theorem LamTerm.maxEVarSucc_nmodeq' : LamTerm.maxEVarSucc nmodeq' = 0 := rfl
+theorem LamTerm.maxEVarSucc_nmodeq : LamTerm.maxEVarSucc nmodeq = 0 := rfl
 
-abbrev LamTerm.nge' : LamTerm := .flipApp (.base .nle') (.base .nat) (.base .nat) (.base .prop)
+abbrev LamTerm.nge : LamTerm := .flipApp (.base .nle) (.base .nat) (.base .nat) (.base .prop)
 
-abbrev LamTerm.ngt' : LamTerm := .flipApp (.base .nlt') (.base .nat) (.base .nat) (.base .prop)
+abbrev LamTerm.ngt : LamTerm := .flipApp (.base .nlt) (.base .nat) (.base .nat) (.base .prop)
 
-abbrev LamTerm.ige' : LamTerm := .flipApp (.base .ile') (.base .int) (.base .int) (.base .prop)
+abbrev LamTerm.ige : LamTerm := .flipApp (.base .ile) (.base .int) (.base .int) (.base .prop)
 
-abbrev LamTerm.igt' : LamTerm := .flipApp (.base .ilt') (.base .int) (.base .int) (.base .prop)
+abbrev LamTerm.igt : LamTerm := .flipApp (.base .ilt) (.base .int) (.base .int) (.base .prop)
 
-abbrev LamTerm.imodeq' : LamTerm :=
+abbrev LamTerm.imodeq : LamTerm :=
   .lam (.base .int) (.lam (.base .int) (.lam (.base .int) (.app (.base .int) (.app (.base .int) (.base (.eq (.base .int)))
-    (.app (.base .int) (.app (.base .int) (.base .iemod') (.bvar 1)) (.bvar 2)))
-    (.app (.base .int) (.app (.base .int) (.base .iemod') (.bvar 0)) (.bvar 2)))))
+    (.app (.base .int) (.app (.base .int) (.base .iemod) (.bvar 1)) (.bvar 2)))
+    (.app (.base .int) (.app (.base .int) (.base .iemod) (.bvar 0)) (.bvar 2)))))
 
-theorem LamTerm.maxEVarSucc_imodeq' : LamTerm.maxEVarSucc imodeq' = 0 := rfl
+theorem LamTerm.maxEVarSucc_imodeq : LamTerm.maxEVarSucc imodeq = 0 := rfl
 
-abbrev LamTerm.sge' : LamTerm := .flipApp (.base .sle') (.base .string) (.base .string) (.base .prop)
+abbrev LamTerm.sge : LamTerm := .flipApp (.base .sle) (.base .string) (.base .string) (.base .prop)
 
-abbrev LamTerm.sgt' : LamTerm := .flipApp (.base .slt') (.base .string) (.base .string) (.base .prop)
+abbrev LamTerm.sgt : LamTerm := .flipApp (.base .slt) (.base .string) (.base .string) (.base .prop)
 
-abbrev LamTerm.bvuge' (n : Nat) : LamTerm := .flipApp (.base (.bvule' n)) (.base (.bv n)) (.base (.bv n)) (.base .bool)
+abbrev LamTerm.bvuge (n : Nat) : LamTerm := .flipApp (.base (.bvule n)) (.base (.bv n)) (.base (.bv n)) (.base .bool)
 
-abbrev LamTerm.bvugt' (n : Nat) : LamTerm := .flipApp (.base (.bvult' n)) (.base (.bv n)) (.base (.bv n)) (.base .bool)
+abbrev LamTerm.bvugt (n : Nat) : LamTerm := .flipApp (.base (.bvult n)) (.base (.bv n)) (.base (.bv n)) (.base .bool)
 
-abbrev LamTerm.bvsge' (n : Nat) : LamTerm := .flipApp (.base (.bvsle' n)) (.base (.bv n)) (.base (.bv n)) (.base .bool)
+abbrev LamTerm.bvsge (n : Nat) : LamTerm := .flipApp (.base (.bvsle n)) (.base (.bv n)) (.base (.bv n)) (.base .bool)
 
-abbrev LamTerm.bvsgt' (n : Nat) : LamTerm := .flipApp (.base (.bvslt' n)) (.base (.bv n)) (.base (.bv n)) (.base .bool)
+abbrev LamTerm.bvsgt (n : Nat) : LamTerm := .flipApp (.base (.bvslt n)) (.base (.bv n)) (.base (.bv n)) (.base .bool)
 
-abbrev LamTerm.bvsmtHshl' (n m : Nat) : LamTerm :=
-  .lam (.base (.bv n)) (.lam (.base (.bv m)) (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvshl' n)) (.bvar 1)) (.app (.base (.bv m)) (.base (.bvtoNat' m)) (.bvar 0))))
+abbrev LamTerm.bvsmtHshl (n m : Nat) : LamTerm :=
+  .lam (.base (.bv n)) (.lam (.base (.bv m)) (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvshl n)) (.bvar 1)) (.app (.base (.bv m)) (.base (.bvtoNat m)) (.bvar 0))))
 
-theorem LamTerm.maxEVarSucc_bvsmtHshl' : maxEVarSucc (bvsmtHshl' n m) = 0 := rfl
+theorem LamTerm.maxEVarSucc_bvsmtHshl : maxEVarSucc (bvsmtHshl n m) = 0 := rfl
 
-abbrev LamTerm.bvsmtHlshr' (n m : Nat) : LamTerm :=
-  .lam (.base (.bv n)) (.lam (.base (.bv m)) (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvlshr' n)) (.bvar 1)) (.app (.base (.bv m)) (.base (.bvtoNat' m)) (.bvar 0))))
+abbrev LamTerm.bvsmtHlshr (n m : Nat) : LamTerm :=
+  .lam (.base (.bv n)) (.lam (.base (.bv m)) (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvlshr n)) (.bvar 1)) (.app (.base (.bv m)) (.base (.bvtoNat m)) (.bvar 0))))
 
-theorem LamTerm.maxEVarSucc_bvsmtHlshr' : maxEVarSucc (bvsmtHlshr' n m) = 0 := rfl
+theorem LamTerm.maxEVarSucc_bvsmtHlshr : maxEVarSucc (bvsmtHlshr n m) = 0 := rfl
 
-abbrev LamTerm.bvsmtHashr' (n m : Nat) : LamTerm :=
-  .lam (.base (.bv n)) (.lam (.base (.bv m)) (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvashr' n)) (.bvar 1)) (.app (.base (.bv m)) (.base (.bvtoNat' m)) (.bvar 0))))
+abbrev LamTerm.bvsmtHashr (n m : Nat) : LamTerm :=
+  .lam (.base (.bv n)) (.lam (.base (.bv m)) (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvashr n)) (.bvar 1)) (.app (.base (.bv m)) (.base (.bvtoNat m)) (.bvar 0))))
 
-theorem LamTerm.maxEVarSucc_bvsmtHashr' : maxEVarSucc (bvsmtHashr' n m) = 0 := rfl
+theorem LamTerm.maxEVarSucc_bvsmtHashr : maxEVarSucc (bvsmtHashr n m) = 0 := rfl
 
-abbrev LamTerm.bvrotateLeft' (n : Nat) : LamTerm :=
+abbrev LamTerm.bvrotateLeft (n : Nat) : LamTerm :=
   .lam (.base (.bv n)) (.lam (.base .nat) (.app (.base (.bv n))
-    (.app (.base (.bv n)) (.base (.bvor' n))
-      (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvshl' n)) (.bvar 1)) (.bvar 0)))
-    (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvlshr' n)) (.bvar 1))
-      (.app (.base .nat) (.app (.base .nat) (.base .nsub') (.base (.natVal' n))) (.bvar 0)))))
+    (.app (.base (.bv n)) (.base (.bvor n))
+      (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvshl n)) (.bvar 1)) (.bvar 0)))
+    (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvlshr n)) (.bvar 1))
+      (.app (.base .nat) (.app (.base .nat) (.base .nsub) (.base (.natVal n))) (.bvar 0)))))
 
-abbrev LamTerm.bvrotateRight' (n : Nat) : LamTerm :=
+abbrev LamTerm.bvrotateRight (n : Nat) : LamTerm :=
   .lam (.base (.bv n)) (.lam (.base .nat) (.app (.base (.bv n))
-    (.app (.base (.bv n)) (.base (.bvor' n))
-      (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvlshr' n)) (.bvar 1)) (.bvar 0)))
-    (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvshl' n)) (.bvar 1))
-      (.app (.base .nat) (.app (.base .nat) (.base .nsub') (.base (.natVal' n))) (.bvar 0)))))
+    (.app (.base (.bv n)) (.base (.bvor n))
+      (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvlshr n)) (.bvar 1)) (.bvar 0)))
+    (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvshl n)) (.bvar 1))
+      (.app (.base .nat) (.app (.base .nat) (.base .nsub) (.base (.natVal n))) (.bvar 0)))))
 
 def LamTerm.mkNot (t : LamTerm) : LamTerm :=
   .app (.base .prop) (.base .not) t
@@ -2447,7 +2447,7 @@ theorem LamTerm.maxEVarSucc_mkIte :
   (mkIte s b x y).maxEVarSucc = max (max b.maxEVarSucc x.maxEVarSucc) y.maxEVarSucc := by
   dsimp [maxEVarSucc, Nat.max]; rw [Nat.max_zero_left]
 
-def LamTerm.mkNatVal (n : Nat) : LamTerm := .base (.natVal' n)
+def LamTerm.mkNatVal (n : Nat) : LamTerm := .base (.natVal n)
 
 theorem LamTerm.maxEVarSucc_mkNatVal : (mkNatVal n).maxEVarSucc = 0 := rfl
 
@@ -2459,14 +2459,14 @@ theorem LamTerm.maxEVarSucc_mkNatBinOp :
   dsimp [maxEVarSucc]; simp [Nat.max, Nat.max_zero_left]
 
 def LamTerm.mkIOfNat (n : LamTerm) : LamTerm :=
-  .app (.base .nat) (.base .iofNat') n
+  .app (.base .nat) (.base .iofNat) n
 
 theorem LamTerm.maxEVarSucc_mkIOfNat :
   (mkIOfNat n).maxEVarSucc = n.maxEVarSucc := by
   dsimp [maxEVarSucc]; apply Nat.max_zero_left
 
 def LamTerm.mkINegSucc (n : LamTerm) : LamTerm :=
-  .app (.base .nat) (.base .inegSucc') n
+  .app (.base .nat) (.base .inegSucc) n
 
 theorem LamTerm.maxEVarSucc_mkINegSucc :
   (mkINegSucc n).maxEVarSucc = n.maxEVarSucc := by
@@ -2488,7 +2488,7 @@ theorem LamTerm.maxEVarSucc_mkIntBinOp :
 
 /-- Make `Std.BitVec.ofNat n i` -/
 def LamTerm.mkBvofNat (n : Nat) (i : LamTerm) : LamTerm :=
-  .app (.base .nat) (.base (.bvofNat' n)) i
+  .app (.base .nat) (.base (.bvofNat n)) i
 
 theorem LamTerm.maxEVarSucc_mkBvofNat :
   (mkBvofNat n i).maxEVarSucc = i.maxEVarSucc := by
@@ -2496,7 +2496,7 @@ theorem LamTerm.maxEVarSucc_mkBvofNat :
 
 /-- Make `Std.BitVec.ofInt n i` -/
 def LamTerm.mkBvofInt (n : Nat) (i : LamTerm) : LamTerm :=
-  .app (.base .int) (.base (.bvofInt' n)) i
+  .app (.base .int) (.base (.bvofInt n)) i
 
 theorem LamTerm.maxEVarSucc_mkBvofInt :
   (mkBvofInt n i).maxEVarSucc = i.maxEVarSucc := by
@@ -3155,53 +3155,53 @@ def LamWF.flipApp
   LamWF ltv ⟨lctx, LamTerm.flipApp t argTy₁ argTy₂ resTy, .func argTy₂ (.func argTy₁ resTy)⟩ :=
   .ofApp _ .flip wft
 
-def LamWF.ofNmodeq' : LamWF ltv ⟨lctx, LamTerm.nmodeq', .func (.base .nat) (.func (.base .nat) (.func (.base .nat) (.base .prop)))⟩ :=
+def LamWF.ofNmodeq' : LamWF ltv ⟨lctx, LamTerm.nmodeq, .func (.base .nat) (.func (.base .nat) (.func (.base .nat) (.base .prop)))⟩ :=
   .ofLam _ (.ofLam _ (.ofLam _ (.ofApp _ (.ofApp _ (.ofBase (.ofEq _))
     (.ofApp _ (.ofApp _ (.ofBase .ofNmod') (.ofBVar 1)) (.ofBVar 2)))
     (.ofApp _ (.ofApp _ (.ofBase .ofNmod') (.ofBVar 0)) (.ofBVar 2)))))
 
-def LamWF.ofNge' : LamWF ltv ⟨lctx, LamTerm.nge', .func (.base .nat) (.func (.base .nat) (.base .prop))⟩ :=
+def LamWF.ofNge' : LamWF ltv ⟨lctx, LamTerm.nge, .func (.base .nat) (.func (.base .nat) (.base .prop))⟩ :=
   .flipApp (.ofBase .ofNle')
 
-def LamWF.ofNgt' : LamWF ltv ⟨lctx, LamTerm.ngt', .func (.base .nat) (.func (.base .nat) (.base .prop))⟩ :=
+def LamWF.ofNgt' : LamWF ltv ⟨lctx, LamTerm.ngt, .func (.base .nat) (.func (.base .nat) (.base .prop))⟩ :=
   .flipApp (.ofBase .ofNlt')
 
-def LamWF.ofImodeq' : LamWF ltv ⟨lctx, LamTerm.imodeq', .func (.base .int) (.func (.base .int) (.func (.base .int) (.base .prop)))⟩ :=
+def LamWF.ofImodeq' : LamWF ltv ⟨lctx, LamTerm.imodeq, .func (.base .int) (.func (.base .int) (.func (.base .int) (.base .prop)))⟩ :=
   .ofLam _ (.ofLam _ (.ofLam _ (.ofApp _ (.ofApp _ (.ofBase (.ofEq _))
     (.ofApp _ (.ofApp _ (.ofBase .ofIemod') (.ofBVar 1)) (.ofBVar 2)))
     (.ofApp _ (.ofApp _ (.ofBase .ofIemod') (.ofBVar 0)) (.ofBVar 2)))))
 
-def LamWF.ofIge' : LamWF ltv ⟨lctx, LamTerm.ige', .func (.base .int) (.func (.base .int) (.base .prop))⟩ :=
+def LamWF.ofIge' : LamWF ltv ⟨lctx, LamTerm.ige, .func (.base .int) (.func (.base .int) (.base .prop))⟩ :=
   .flipApp (.ofBase .ofIle')
 
-def LamWF.ofIgt' : LamWF ltv ⟨lctx, LamTerm.igt', .func (.base .int) (.func (.base .int) (.base .prop))⟩ :=
+def LamWF.ofIgt' : LamWF ltv ⟨lctx, LamTerm.igt, .func (.base .int) (.func (.base .int) (.base .prop))⟩ :=
   .flipApp (.ofBase .ofIlt')
 
-def LamWF.ofSge' : LamWF ltv ⟨lctx, LamTerm.sge', .func (.base .string) (.func (.base .string) (.base .prop))⟩ :=
+def LamWF.ofSge' : LamWF ltv ⟨lctx, LamTerm.sge, .func (.base .string) (.func (.base .string) (.base .prop))⟩ :=
   .flipApp (.ofBase .ofSle')
 
-def LamWF.ofSgt' : LamWF ltv ⟨lctx, LamTerm.sgt', .func (.base .string) (.func (.base .string) (.base .prop))⟩ :=
+def LamWF.ofSgt' : LamWF ltv ⟨lctx, LamTerm.sgt, .func (.base .string) (.func (.base .string) (.base .prop))⟩ :=
   .flipApp (.ofBase .ofSlt')
 
-def LamWF.ofBvuge' (n : Nat) : LamWF ltv ⟨lctx, LamTerm.bvuge' n, .func (.base (.bv n)) (.func (.base (.bv n)) (.base .bool))⟩ :=
+def LamWF.ofBvuge' (n : Nat) : LamWF ltv ⟨lctx, LamTerm.bvuge n, .func (.base (.bv n)) (.func (.base (.bv n)) (.base .bool))⟩ :=
   .flipApp (.ofBase (.ofBvule' n))
 
-def LamWF.ofBvugt' (n : Nat) : LamWF ltv ⟨lctx, LamTerm.bvugt' n, .func (.base (.bv n)) (.func (.base (.bv n)) (.base .bool))⟩ :=
+def LamWF.ofBvugt' (n : Nat) : LamWF ltv ⟨lctx, LamTerm.bvugt n, .func (.base (.bv n)) (.func (.base (.bv n)) (.base .bool))⟩ :=
   .flipApp (.ofBase (.ofBvult' n))
 
-def LamWF.ofBvsge' (n : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsge' n, .func (.base (.bv n)) (.func (.base (.bv n)) (.base .bool))⟩ :=
-  .flipApp (.ofBase (.ofBvsle' n))
+def LamWF.ofBvsge (n : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsge n, .func (.base (.bv n)) (.func (.base (.bv n)) (.base .bool))⟩ :=
+  .flipApp (.ofBase (.ofBvsle n))
 
-def LamWF.ofBvsgt' (n : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsgt' n, .func (.base (.bv n)) (.func (.base (.bv n)) (.base .bool))⟩ :=
-  .flipApp (.ofBase (.ofBvslt' n))
+def LamWF.ofBvsgt (n : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsgt n, .func (.base (.bv n)) (.func (.base (.bv n)) (.base .bool))⟩ :=
+  .flipApp (.ofBase (.ofBvslt n))
 
-def LamWF.bvsmtHshl' (n m : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsmtHshl' n m, .func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv n)))⟩ :=
+def LamWF.bvsmtHshl (n m : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsmtHshl n m, .func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv n)))⟩ :=
   .ofLam _ (.ofLam _ (.ofApp _ (.ofApp _ (.ofBase (.ofBvshl' _)) (.ofBVar 1)) (.ofApp _ (.ofBase (.ofBvtoNat' _)) (.ofBVar 0))))
 
-def LamWF.bvsmtHlshr' (n m : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsmtHlshr' n m, .func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv n)))⟩ :=
+def LamWF.bvsmtHlshr (n m : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsmtHlshr n m, .func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv n)))⟩ :=
   .ofLam _ (.ofLam _ (.ofApp _ (.ofApp _ (.ofBase (.ofBvlshr' _)) (.ofBVar 1)) (.ofApp _ (.ofBase (.ofBvtoNat' _)) (.ofBVar 0))))
 
-def LamWF.bvsmtHashr' (n m : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsmtHashr' n m, .func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv n)))⟩ :=
+def LamWF.bvsmtHashr (n m : Nat) : LamWF ltv ⟨lctx, LamTerm.bvsmtHashr n m, .func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv n)))⟩ :=
   .ofLam _ (.ofLam _ (.ofApp _ (.ofApp _ (.ofBase (.ofBvashr' _)) (.ofBVar 1)) (.ofApp _ (.ofBase (.ofBvtoNat' _)) (.ofBVar 0))))
 
 def LamWF.mkNot {ltv : LamTyVal}
