@@ -15,10 +15,8 @@ open Embedding.Lam
          etom n    => t_e{n}
          Refer to
          · transBoolConst
-         · transNatConst
-         · transIntConst
          · transStringConst
-         · transBitVecConst
+         · transLamBaseTerm
 -/
 
 def transLamBaseSort : LamBaseSort → String
@@ -56,89 +54,24 @@ def transBoolConst : BoolConst → String
 | .andb       => "(&)"
 | .orb        => "(|)"
 
-def transNatConst : NatConst → String
-| .natVal n => s!"t_nat{n}"
-| .nadd     => "t_nadd"
-| .nsub     => "t_nsub"
-| .nmul     => "t_nmul"
-| .ndiv     => "t_ndiv"
-| .nmod     => "t_nmod"
-| .nle      => "t_nle"
-| .nlt      => "t_nlt"
-| .nmax     => "t_nmax"
-| .nmin     => "t_nmin"
+def transNatConst (nc : NatConst) : String := "t_" ++ nc.reprAux.replace " " "_"
 
-def transNatConstSort (nc : NatConst) := transLamSort nc.lamCheck
-
-def transIntConst : IntConst → String
-| .iofNat   => "t_iofNat"
-| .inegSucc => "t_inegSucc"
-| .ineg     => "t_ineg"
-| .iabs     => "t_iabs"
-| .iadd     => "t_iadd"
-| .isub     => "t_isub"
-| .imul     => "t_imul"
-| .idiv     => "t_idiv"
-| .imod     => "t_imod"
-| .iediv    => "t_iediv"
-| .iemod    => "t_iemod"
-| .ile      => "t_ile"
-| .ilt      => "t_ilt"
-| .imax     => "t_imax"
-| .imin     => "t_imin"
-
-def transIntConstSort (ic : IntConst) := transLamSort ic.lamCheck
+def transIntConst (ic : IntConst) : String := "t_" ++ ic.reprAux
 
 def transString (s : String) : String :=
   String.join (s.data.map (fun c => s!"d{c.toNat}"))
 
 def transStringConst : StringConst → String
-| .strVal s  => "t_sVal_" ++ transString s
-| .slength   => "t_slength"
-| .sapp      => "t_sapp"
-| .sle       => "t_sle"
-| .slt       => "t_slt"
-| .sprefixof => "t_sprefixof"
-| .srepall   => "t_srepall"
+| .strVal s  => "t_strVal_" ++ transString s
+| sc         => "t_" ++ sc.reprAux
+
+def transBitVecConst (bvc : BitVecConst) : String := "t_" ++ bvc.reprAux.replace " " "_"
+
+def transNatConstSort (nc : NatConst) := transLamSort nc.lamCheck
+
+def transIntConstSort (ic : IntConst) := transLamSort ic.lamCheck
 
 def transStringConstSort (sc : StringConst) := transLamSort sc.lamCheck
-
-def transBitVecConst : BitVecConst → String
-| .bvVal n i        => s!"t_bvVal_{n}_{i}"
-| .bvofNat n        => s!"t_bvofNat_{n}"
-| .bvtoNat n        => s!"t_bvtoNat_{n}"
-| .bvofInt n        => s!"t_bvofInt_{n}"
-| .bvtoInt n        => s!"t_bvtoInt_{n}"
-| .bvmsb n          => s!"t_bvmsb_{n}"
-| .bvadd n          => s!"t_bvadd_{n}"
-| .bvsub n          => s!"t_bvsub_{n}"
-| .bvneg n          => s!"t_bvneg_{n}"
-| .bvabs n          => s!"t_bvabs_{n}"
-| .bvmul n          => s!"t_bvmul_{n}"
-| .bvudiv n         => s!"t_bvudiv_{n}"
-| .bvurem n         => s!"t_bvurem_{n}"
-| .bvsdiv n         => s!"t_bvsdiv_{n}"
-| .bvsrem n         => s!"t_bvsrem_{n}"
-| .bvsmod n         => s!"t_bvsmod_{n}"
-| .bvult n          => s!"t_bvult_{n}"
-| .bvule n          => s!"t_bvule_{n}"
-| .bvslt n          => s!"t_bvslt_{n}"
-| .bvsle n          => s!"t_bvsle_{n}"
-| .bvand n          => s!"t_bvand_{n}"
-| .bvor n           => s!"t_bvor_{n}"
-| .bvxor n          => s!"t_bvxor_{n}"
-| .bvnot n          => s!"t_bvnot_{n}"
-| .bvshOp n smt? op =>
-  let smtStr := if smt? then "smt" else ""
-  match op with
-  | .shl          => s!"t_bv{smtStr}shl_{n}"
-  | .lshr         => s!"t_bv{smtStr}lshr_{n}"
-  | .ashr         => s!"t_bv{smtStr}ashr_{n}"
-| .bvappend n m     => s!"t_bvappend_{n}_{m}"
-| .bvextract n h l  => s!"t_bvextract_{n}_{h}_{l}"
-| .bvrepeat w i     => s!"t_bvrepeat_{w}_{i}"
-| .bvzeroExtend w v => s!"t_bvzeroExtend_{w}_{v}"
-| .bvsignExtend w v => s!"t_bvsignExtend_{w}_{v}"
 
 def transBitVecConstSort (bvc : BitVecConst) := transLamSort bvc.lamCheck
 

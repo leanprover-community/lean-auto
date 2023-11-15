@@ -364,9 +364,9 @@ def ident2NatConst (s : String) : Option NatConst :=
   | "t_nmax" => .some .nmax
   | "t_nmin" => .some .nmin
   | _ =>
-    match s.take 5 with
-    | "t_nat" =>
-      match (s.drop 5).toNat? with
+    match s.take 9 with
+    | "t_natVal_" =>
+      match (s.drop 9).toNat? with
       | .some n => .some (.natVal n)
       | .none   => .none
     | _ => .none
@@ -385,8 +385,8 @@ def ident2StringConst (s : String) : Option StringConst :=
       match x, y.toNat? with
       | .some l, .some y' => .some (l.push (Char.ofNat y'))
       | _,       _        => .none
-    match s.take 7, (((s.drop 7).splitOn "d").drop 1).foldl foldFn (.some "") with
-    | "t_sVal_", .some s => .some (.strVal s)
+    match s.take 9, (((s.drop 9).splitOn "d").drop 1).foldl foldFn (.some "") with
+    | "t_strVal_", .some s => .some (.strVal s)
     | _,         _       => .none
 
 open Embedding.Lam in

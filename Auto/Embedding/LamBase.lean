@@ -37,19 +37,19 @@ def LamBaseSort.empty := LamBaseSort.isto0 (.xO .xH)
 def LamBaseSort.reprPrec (b : LamBaseSort) (n : Nat) :=
   let str :=
     match b with
-    | .prop => ".prop"
-    | .bool => ".bool"
-    | .nat  => ".nat"
-    | .int  => ".int"
+    | .prop => "prop"
+    | .bool => "bool"
+    | .nat  => "nat"
+    | .int  => "int"
     | .isto0 p =>
       match p with
-      | .xH => ".string"
-      | _ => ".empty"
-    | .bv n => s!".bv {n}"
+      | .xH => "string"
+      | _   => "empty"
+    | .bv n => s!"bv {n}"
   if n == 0 then
     f!"LamBaseSort." ++ str
   else
-    f!"({str})"
+    f!"(.{str})"
 
 instance : Repr LamBaseSort where
   reprPrec s n := s.reprPrec n
@@ -167,13 +167,13 @@ def LamSort.isFunc : LamSort → Bool
 def LamSort.reprPrec (s : LamSort) (n : Nat) :=
   let str :=
     match s with
-    | .atom n     => f!".atom {n}"
-    | .base b     => f!".base {LamBaseSort.reprPrec b 1}"
-    | .func s1 s2 => f!".func {LamSort.reprPrec s1 1} {LamSort.reprPrec s2 1}"
+    | .atom n     => f!"atom {n}"
+    | .base b     => f!"base {LamBaseSort.reprPrec b 1}"
+    | .func s1 s2 => f!"func {LamSort.reprPrec s1 1} {LamSort.reprPrec s2 1}"
   if n == 0 then
-    f!"Auto.Embedding.Lam.LamSort" ++ str
+    f!"Auto.Embedding.Lam.LamSort." ++ str
   else
-    f!"({str})"
+    f!"(.{str})"
 
 instance : Repr LamSort where
   reprPrec s n := s.reprPrec n
@@ -407,20 +407,19 @@ inductive PropConst
   | iff      : PropConst -- Propositional `iff`
 deriving Inhabited, Hashable, Lean.ToExpr
 
+def PropConst.reprAux : PropConst → String
+| trueE  => "trueE"
+| falseE => "falseE"
+| not    => "not"
+| and    => "and"
+| or     => "or"
+| imp    => "imp"
+| iff    => "iff"
+
 def PropConst.reprPrec (p : PropConst) (n : Nat) :=
-  let s :=
-    match p with
-    | trueE  => f!".trueE"
-    | falseE => f!".falseE"
-    | not    => f!".not"
-    | and    => f!".and"
-    | or     => f!".or"
-    | imp    => f!".imp"
-    | iff    => f!".iff"
-  if n == 0 then
-    f!"Auto.Embedding.Lam.PropConst" ++ s
-  else
-    f!"({s})"
+  match n with
+  | 0 => f!"Auto.Embedding.Lam.PropConst.{p.reprAux}"
+  | _ + 1 => f!"({p.reprAux})"
 
 instance : Repr PropConst where
   reprPrec := PropConst.reprPrec
@@ -506,19 +505,18 @@ inductive BoolConst
   | orb    -- Boolean `or`
 deriving Inhabited, Hashable, Lean.ToExpr
 
+def BoolConst.reprAux : BoolConst → String
+| .ofProp => "ofProp"
+| .trueb  => "trueb"
+| .falseb => "falseb"
+| .notb   => "notb"
+| .andb   => "andb"
+| .orb    => "orb"
+
 def BoolConst.reprPrec (b : BoolConst) (n : Nat) :=
-  let s :=
-    match b with
-    | .ofProp => f!".ofProp"
-    | .trueb  => f!".trueb"
-    | .falseb => f!".falseb"
-    | .notb   => f!".notb"
-    | .andb   => f!".andb"
-    | .orb    => f!".orb"
-  if n == 0 then
-    f!"Auto.Embedding.Lam.BoolConst" ++ s
-  else
-    f!"({s})"
+  match n with
+  | 0 => f!"Auto.Embedding.Lam.BoolConst.{b.reprAux}"
+  | _ + 1 => f!"(.{b.reprAux})"
 
 instance : Repr BoolConst where
   reprPrec := BoolConst.reprPrec
@@ -599,23 +597,22 @@ inductive NatConst
   | nle | nlt | nmax | nmin
 deriving Inhabited, Hashable, Lean.ToExpr
 
+def NatConst.reprAux : NatConst → String
+| .natVal n => s!"natVal {n}"
+| .nadd     => "nadd"
+| .nsub     => "nsub"
+| .nmul     => "nmul"
+| .ndiv     => "ndiv"
+| .nmod     => "nmod"
+| .nle      => "nle"
+| .nlt      => "nlt"
+| .nmax     => "nmax"
+| .nmin     => "nmin"
+
 def NatConst.reprPrec (nc : NatConst) (n : Nat) :=
-  let s :=
-    match nc with
-    | .natVal n => f!".natVal {n}"
-    | .nadd     => f!".nadd"
-    | .nsub     => f!".nsub"
-    | .nmul     => f!".nmul"
-    | .ndiv     => f!".ndiv"
-    | .nmod     => f!".nmod"
-    | .nle      => f!".nle"
-    | .nlt      => f!".nlt"
-    | .nmax     => f!".nmax"
-    | .nmin     => f!".nmin"
-  if n == 0 then
-    f!"Auto.Embedding.Lam.NatConst" ++ s
-  else
-    f!"({s})"
+  match n with
+  | 0 => f!"Auto.Embedding.Lam.NatConst.{nc.reprAux}"
+  | _ + 1 => f!"(.{nc.reprAux})"
 
 instance : Repr NatConst where
   reprPrec := NatConst.reprPrec
@@ -717,28 +714,27 @@ inductive IntConst
   | ile | ilt | imax | imin
 deriving Inhabited, Hashable, Lean.ToExpr
 
+def IntConst.reprAux : IntConst → String
+| .iofNat   => "iofNat"
+| .inegSucc => "inegSucc"
+| .ineg     => "ineg"
+| .iabs     => "iabs"
+| .iadd     => "iadd"
+| .isub     => "isub"
+| .imul     => "imul"
+| .idiv     => "idiv"
+| .imod     => "imod"
+| .iediv    => "iediv"
+| .iemod    => "iemod"
+| .ile      => "ile"
+| .ilt      => "ilt"
+| .imax     => "imax"
+| .imin     => "imin"
+
 def IntConst.reprPrec (i : IntConst) (n : Nat) :=
-  let s :=
-    match i with
-    | .iofNat   => f!".iofNat"
-    | .inegSucc => f!".inegSucc"
-    | .ineg     => f!".ineg"
-    | .iabs     => f!".iabs"
-    | .iadd     => f!".iadd"
-    | .isub     => f!".isub"
-    | .imul     => f!".imul"
-    | .idiv     => f!".idiv"
-    | .imod     => f!".imod"
-    | .iediv    => f!".iediv"
-    | .iemod    => f!".iemod"
-    | .ile      => f!".ile"
-    | .ilt      => f!".ilt"
-    | .imax     => f!".imax"
-    | .imin     => f!".imin"
-  if n == 0 then
-    f!"Auto.Embedding.Lam.IntConst" ++ s
-  else
-    f!"({s})"
+  match n with
+  | 0 => f!"Auto.Embedding.Lam.IntConst.{i.reprAux}"
+  | _ + 1 => f!"(.{i.reprAux})"
 
 instance : Repr IntConst where
   reprPrec := IntConst.reprPrec
@@ -868,20 +864,19 @@ inductive StringConst
   | srepall
 deriving Inhabited, Hashable, Lean.ToExpr
 
-def StringConst.reprPrec (sc : StringConst) (n : Nat) :=
-  let s :=
-    match sc with
-    | .strVal s => f!".strVal {s}"
-    | .slength => f!".slength"
-    | .sapp => f!".sapp"
-    | .sle => f!".sle"
-    | .slt => f!".slt"
-    | .sprefixof => f!".sprefixof"
-    | .srepall => f!".srepall"
-  if n == 0 then
-    f!"Auto.Embedding.Lam.StrConst" ++ s
-  else
-    f!"({s})"
+def StringConst.reprAux : StringConst → String
+| .strVal s  => s!"strVal \"{s}\""
+| .slength   => "slength"
+| .sapp      => "sapp"
+| .sle       => "sle"
+| .slt       => "slt"
+| .sprefixof => "sprefixof"
+| .srepall   => "srepall"
+
+def StringConst.reprPrec (s : StringConst) (n : Nat) :=
+  match n with
+  | 0 => f!"Auto.Embedding.Lam.StringConst.{s.reprAux}"
+  | _ + 1 => f!"(.{s.reprAux})"
 
 instance : Repr StringConst where
   reprPrec := StringConst.reprPrec
@@ -1044,48 +1039,47 @@ def BitVecConst.bvsmtlshr (n : Nat) := BitVecConst.bvshOp n true .lshr
 
 def BitVecConst.bvsmtashr (n : Nat) := BitVecConst.bvshOp n true .ashr
 
+def BitVecConst.reprAux : BitVecConst → String
+| .bvVal n i => s!"bvVal {n} {i}"
+| .bvofNat n => s!"bvofNat {n}"
+| .bvtoNat n => s!"bvtoNat {n}"
+| .bvofInt n => s!"bvofInt {n}"
+| .bvtoInt n => s!"bvtoInt {n}"
+| .bvmsb n   => s!"bvmsb {n}"
+| .bvadd n   => s!"bvadd {n}"
+| .bvsub n   => s!"bvsub {n}"
+| .bvneg n   => s!"bvneg {n}"
+| .bvabs n   => s!"bvabs {n}"
+| .bvmul n   => s!"bvmul {n}"
+| .bvudiv n  => s!"bvudiv {n}"
+| .bvurem n  => s!"bvurem {n}"
+| .bvsdiv n  => s!"bvsdiv {n}"
+| .bvsrem n  => s!"bvsrem {n}"
+| .bvsmod n  => s!"bvsmod {n}"
+| .bvult n   => s!"bvult {n}"
+| .bvule n   => s!"bvule {n}"
+| .bvslt n   => s!"bvslt {n}"
+| .bvsle n   => s!"bvsle {n}"
+| .bvand n   => s!"bvand {n}"
+| .bvor n    => s!"bvor {n}"
+| .bvxor n   => s!"bvxor {n}"
+| .bvnot n   => s!"bvnot {n}"
+| .bvshOp n smt? shOp =>
+  let smtStr := if smt? then "smt" else ""
+  match shOp with
+  | .shl  => s!"bv{smtStr}shl {n}"
+  | .lshr => s!"bv{smtStr}lshr {n}"
+  | .ashr => s!"bv{smtStr}ashr {n}"
+| .bvappend n m      => s!"bvappend {n} {m}"
+| .bvextract n hi lo => s!"bvextract {n} {hi} {lo}"
+| .bvrepeat w i      => s!"bvrepeat {w} {i}"
+| .bvzeroExtend w v  => s!"bvzeroExtend {w} {v}"
+| .bvsignExtend w v  => s!"bvsignExtend {w} {v}"
+
 def BitVecConst.reprPrec (b : BitVecConst) (n : Nat) :=
-  let s :=
-    match b with
-    | .bvVal n i => f!".bvVal {n} {i}"
-    | .bvofNat n => f!".bvofNat {n}"
-    | .bvtoNat n => f!".bvtoNat {n}"
-    | .bvofInt n => f!".bvofInt {n}"
-    | .bvtoInt n => f!".bvtoInt {n}"
-    | .bvmsb n => f!".bvmsb {n}"
-    | .bvadd n => f!".bvadd {n}"
-    | .bvsub n => f!".bvsub {n}"
-    | .bvneg n => f!".bvneg {n}"
-    | .bvabs n => f!".bvabs {n}"
-    | .bvmul n => f!".bvmul {n}"
-    | .bvudiv n => f!".bvudiv {n}"
-    | .bvurem n => f!".bvurem {n}"
-    | .bvsdiv n => f!".bvsdiv {n}"
-    | .bvsrem n => f!".bvsrem {n}"
-    | .bvsmod n => f!".bvsmod {n}"
-    | .bvult n => f!".bvult {n}"
-    | .bvule n => f!".bvule {n}"
-    | .bvslt n => f!".bvslt {n}"
-    | .bvsle n => f!".bvsle {n}"
-    | .bvand n => f!".bvand {n}"
-    | .bvor n => f!".bvor {n}"
-    | .bvxor n => f!".bvxor {n}"
-    | .bvnot n => f!".bvnot {n}"
-    | .bvshOp n smt? shOp =>
-      let smtStr := if smt? then "smt" else ""
-      match shOp with
-      | .shl => f!".bv{smtStr}shl {n}"
-      | .lshr => f!".bv{smtStr}lshr {n}"
-      | .ashr => f!".bv{smtStr}ashr {n}"
-    | .bvappend n m => f!".bvappend {n} {m}"
-    | .bvextract n hi lo => f!".bvextract {n} {hi} {lo}"
-    | .bvrepeat w i => f!".bvrepeat {w} {i}"
-    | .bvzeroExtend w v => f!".bvzeroExtend {w} {v}"
-    | .bvsignExtend w v => f!".bvsignExtend {w} {v}"
-  if n == 0 then
-    f!"Auto.Embedding.Lam.BitVecConst" ++ s
-  else
-    f!"({s})"
+  match n with
+  | 0 => f!"Auto.Embedding.Lam.BitVecConst.{b.reprAux}"
+  | _ + 1 => f!"(.{b.reprAux})"
 
 instance : Repr BitVecConst where
   reprPrec := BitVecConst.reprPrec
@@ -1490,24 +1484,24 @@ def LamBaseTerm.isIte : LamBaseTerm → Bool
 def LamBaseTerm.reprPrec (l : LamBaseTerm) (n : Nat) :=
   let s :=
     match l with
-    | .pcst pc    => f!".pcst {PropConst.reprPrec pc 1}"
-    | .bcst bc    => f!".bcst {BoolConst.reprPrec bc 1}"
-    | .ncst nc    => f!".ncst {NatConst.reprPrec nc 1}"
-    | .icst ic    => f!".icst {IntConst.reprPrec ic 1}"
-    | .scst sc    => f!".scst {StringConst.reprPrec sc 1}"
-    | .bvcst bvc  => f!".bvcst {BitVecConst.reprPrec bvc 1}"
-    | .eqI n      => f!".eqI {n}"
-    | .forallEI n => f!".forallEI {n}"
-    | .existEI n  => f!".existEI {n}"
-    | .iteI n     => f!".iteI {n}"
-    | .eq s       => f!".eq {LamSort.reprPrec s 1}"
-    | .forallE s  => f!".forallE {LamSort.reprPrec s 1}"
-    | .existE s   => f!".existE {LamSort.reprPrec s 1}"
-    | .ite n      => f!".ite {n}"
+    | .pcst pc    => f!"pcst {PropConst.reprPrec pc 1}"
+    | .bcst bc    => f!"bcst {BoolConst.reprPrec bc 1}"
+    | .ncst nc    => f!"ncst {NatConst.reprPrec nc 1}"
+    | .icst ic    => f!"icst {IntConst.reprPrec ic 1}"
+    | .scst sc    => f!"scst {StringConst.reprPrec sc 1}"
+    | .bvcst bvc  => f!"bvcst {BitVecConst.reprPrec bvc 1}"
+    | .eqI n      => f!"eqI {n}"
+    | .forallEI n => f!"forallEI {n}"
+    | .existEI n  => f!"existEI {n}"
+    | .iteI n     => f!"iteI {n}"
+    | .eq s       => f!"eq {LamSort.reprPrec s 1}"
+    | .forallE s  => f!"forallE {LamSort.reprPrec s 1}"
+    | .existE s   => f!"existE {LamSort.reprPrec s 1}"
+    | .ite n      => f!"ite {n}"
   if n == 0 then
-    f!"Auto.Embedding.Lam.LamBaseTerm" ++ s
+    f!"Auto.Embedding.Lam.LamBaseTerm." ++ s
   else
-    f!"({s})"
+    f!"(.{s})"
 
 instance : Repr LamBaseTerm where
   reprPrec := LamBaseTerm.reprPrec
@@ -2995,16 +2989,16 @@ def LamTerm.getForallEFTys (t : LamTerm) : List LamSort :=
 def LamTerm.reprPrec (t : LamTerm) (n : Nat) :=
   let s :=
     match t with
-    | .atom m => f!".atom {m}"
-    | .etom m => f!".etom {m}"
-    | .base b => f!".base {LamBaseTerm.reprPrec b 1}"
-    | .bvar m => f!".bvar {m}"
-    | .lam s t => f!".lam {LamSort.reprPrec s 1} {LamTerm.reprPrec t 1}"
-    | .app s t₁ t₂ => f!".app {LamSort.reprPrec s 1} {LamTerm.reprPrec t₁ 1} {LamTerm.reprPrec t₂ 1}"
+    | .atom m      => f!"atom {m}"
+    | .etom m      => f!"etom {m}"
+    | .base b      => f!"base {LamBaseTerm.reprPrec b 1}"
+    | .bvar m      => f!"bvar {m}"
+    | .lam s t     => f!"lam {LamSort.reprPrec s 1} {LamTerm.reprPrec t 1}"
+    | .app s t₁ t₂ => f!"app {LamSort.reprPrec s 1} {LamTerm.reprPrec t₁ 1} {LamTerm.reprPrec t₂ 1}"
   if n == 0 then
-    f!"Auto.Embedding.Lam.LamTerm" ++ s
+    f!"Auto.Embedding.Lam.LamTerm." ++ s
   else
-    f!"({s})"
+    f!"(.{s})"
 
 instance : Repr LamTerm where
   reprPrec f n := LamTerm.reprPrec f n
