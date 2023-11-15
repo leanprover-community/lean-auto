@@ -231,7 +231,7 @@ open Embedding.Lam in
   If TPTP succeeds, return unsat core
   If TPTP fails, return none
 -/
-def queryTPTP (exportFacts : Array REntry) : LamReif.ReifM (Option (Array Embedding.Lam.REntry)) := do
+def queryTPTP (exportFacts : Array REntry) : LamReif.ReifM (Array Embedding.Lam.REntry) := do
     let lamVarTy := (← LamReif.getVarVal).map Prod.snd
     let lamEVarTy ← LamReif.getLamEVarTy
     let exportLamTerms ← exportFacts.mapM (fun re => do
@@ -253,7 +253,7 @@ def queryTPTP (exportFacts : Array REntry) : LamReif.ReifM (Option (Array Embedd
       let .some re := exportFacts[n]?
         | throwError "queryTPTP :: Index {n} out of range"
       ret := ret.push re
-    return .some ret
+    return ret
 
 open Embedding.Lam in
 def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : LamReif.ReifM (Option Expr) := do
@@ -344,14 +344,9 @@ def runAuto
     -- **TPTP invocation and Premise Selection**
     if auto.tptp.get (← getOptions) then
       let premiseSel? := auto.tptp.premiseSelection.get (← getOptions)
-      let queryResult ← queryTPTP exportFacts
+      let unsatCore ← queryTPTP exportFacts
       if premiseSel? then
-        match queryResult with
-        | .some unsatCore =>
-          for re in unsatCore do
-            trace[auto.tptp.premiseSelection] "{re}"
-          exportFacts := unsatCore
-        | .none => trace[auto.tptp.premiseSelection] "TPTP invocation failed, skipping TPTP premise selection"
+        exportFacts := unsatCore
     -- **SMT**
     if auto.smt.get (← getOptions) then
       if let .some proof ← querySMT exportFacts exportInds then
