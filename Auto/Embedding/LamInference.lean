@@ -65,8 +65,10 @@ theorem LamTerm.maxEVarSucc_impApp?
         rw [h] at heq; cases imp <;> try cases heq
         case base b =>
           cases b <;> try cases heq
-          dsimp [maxEVarSucc]; cases (LamTerm.eq_of_beq_eq_true h)
-          apply Nat.le_max_right
+          case pcst p =>
+            cases p <;> try cases heq
+            dsimp [maxEVarSucc]; cases (LamTerm.eq_of_beq_eq_true h)
+            apply Nat.le_max_right
       case false =>
         rw [h] at heq; cases heq
 
@@ -84,15 +86,17 @@ theorem LamValid.impApp
         rw [h] at heq
         cases imp <;> try cases heq
         case base b =>
-          cases b <;> cases heq
-          case imp =>
-            have ⟨wf₁₂, h₁₂⟩ := v₁₂
-            match wf₁₂ with
-            | .ofApp _ (.ofApp _ (.ofBase .ofImp) HArg) wfConcl =>
-              exists wfConcl; have ⟨wf₁, h₁⟩ := v₁;
-              intro lctxTerm; apply h₁₂; apply Eq.mp _ (h₁ lctxTerm);
-              apply congrArg; apply eq_of_heq; apply LamWF.interp_heq <;> try rfl
-              exact .symm (LamTerm.eq_of_beq_eq_true h)
+          cases b <;> try cases heq
+          case pcst p =>
+            cases p <;> cases heq
+            case imp =>
+              have ⟨wf₁₂, h₁₂⟩ := v₁₂
+              match wf₁₂ with
+              | .ofApp _ (.ofApp _ (.ofBase .ofImp) HArg) wfConcl =>
+                exists wfConcl; have ⟨wf₁, h₁⟩ := v₁;
+                intro lctxTerm; apply h₁₂; apply Eq.mp _ (h₁ lctxTerm);
+                apply congrArg; apply eq_of_heq; apply LamWF.interp_heq <;> try rfl
+                exact .symm (LamTerm.eq_of_beq_eq_true h)
       | false =>
         rw [h] at heq; cases heq
 
@@ -176,7 +180,7 @@ section Skolemization
     | .app _ (.base (.existE s)) p, Eq.refl _ => by
       dsimp [maxEVarSucc]; rw [LamTerm.maxEVarSucc_bvarApps];
       simp [Nat.max, Nat.max_zero_left]; apply Nat.le_refl
-  
+
   theorem choose_spec' {p : α → β → Prop} (h : ∀ q, ∃ x, p x q) : ∃ (y : _ → _), ∀ q, p (y q) q :=
     ⟨fun q => Classical.choose (h q), fun q => Classical.choose_spec (h q)⟩
 

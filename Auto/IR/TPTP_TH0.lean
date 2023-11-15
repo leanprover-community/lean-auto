@@ -38,6 +38,16 @@ def transLamSort : LamSort → String
 | .base b => transLamBaseSort b
 | .func s1 s2 => s!"({transLamSort s1} > {transLamSort s2})"
 
+def transPropConst : PropConst → String
+| .trueE      => "$true"
+| .falseE     => "$false"
+| .not        => "(~)"
+| .and        => "(&)"
+| .or         => "(|)"
+| .imp        => "(=>)"
+-- Zipperposition seems buggy on (<=>)
+| .iff        => "(^ [L : {transLamSort (.base .prop)}, R : {transLamSort (.base .prop)}] : L = R)"
+
 def transBoolConst : BoolConst → String
 | .ofProp     => s!"(^ [X : {transLamSort (.base .prop)}] : X)"
 | .trueb      => "$true"
@@ -133,14 +143,7 @@ def transBitVecConst : BitVecConst → String
 def transBitVecConstSort (bvc : BitVecConst) := transLamSort bvc.lamCheck
 
 def transLamBaseTerm : LamBaseTerm → Except String String
-| .trueE      => .ok s!"$true"
-| .falseE     => .ok s!"$false"
-| .not        => .ok s!"(~)"
-| .and        => .ok s!"(&)"
-| .or         => .ok s!"(|)"
-| .imp        => .ok s!"(=>)"
--- Zipperposition seems buggy on (<=>)
-| .iff        => .ok s!"(^ [L : {transLamSort (.base .prop)}, R : {transLamSort (.base .prop)}] : L = R)"
+| .pcst pc    => .ok (transPropConst pc)
 | .bcst bc    => .ok (transBoolConst bc)
 | .ncst nc    => .ok (transNatConst nc)
 | .icst ic    => .ok (transIntConst ic)

@@ -18,7 +18,7 @@ theorem LamGenModify.andLeft? : LamGenModify lval LamTerm.andLeft? true := by
   intro t₁ t₂ heq lctx hwf; dsimp
   match t₁, heq with
   | .app _ (.app _ (.base .and) _) _, Eq.refl _ =>
-    cases hwf.getFn.getFn.getBase
+    cases hwf.getFn.getFn.getBase.getPcst
     apply LamValid.and_left hwf.getFn.getArg hwf.getArg
 
 def LamTerm.andRight? (t : LamTerm) : Option LamTerm :=
@@ -37,7 +37,7 @@ theorem LamGenModify.andRight? : LamGenModify lval LamTerm.andRight? true := by
   intro t₁ t₂ heq lctx hwf; dsimp
   match t₁, heq with
   | .app _ (.app _ (.base .and) _) _, Eq.refl _ =>
-    cases hwf.getFn.getFn.getBase
+    cases hwf.getFn.getFn.getBase.getPcst
     apply LamValid.and_right hwf.getFn.getArg hwf.getArg
 
 theorem eq_not_of_ne (h : a ≠ b) : a = (¬ b) :=
@@ -88,7 +88,7 @@ theorem LamEquiv.prop_ne_equiv_eq_not
     intro h'; apply h; apply GLift.down.inj _ _ h'
   case mpr =>
     intro h h'; have h' := _root_.congrArg GLift.down h'; revert h'
-    apply ne_of_eq_not; dsimp at h; rw [h]
+    apply ne_of_eq_not; dsimp at h; rw [h]; rfl
 
 /-- (a ≠ b) ↔ (a = (¬ b)) -/
 def LamTerm.prop_ne_equiv_eq_not? (t : LamTerm) : Option LamTerm :=
@@ -109,7 +109,7 @@ theorem LamEquiv.prop_ne_equiv_eq_not?
   LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.base .not) (.app _ (.app _ (.base (.eq (.base .prop))) lhs) rhs), Eq.refl _ => by
-    cases wft.getFn.getBase; cases wft.getArg.getFn.getFn.getBase
+    cases wft.getArg.getFn.getFn.getBase
     match wft with
     | .ofApp _ (.ofBase .ofNot) (.ofApp _ (.ofApp _ (.ofBase (.ofEq _)) Hlhs) Hrhs) =>
       apply LamEquiv.prop_ne_equiv_eq_not Hlhs Hrhs
@@ -263,7 +263,7 @@ theorem LamEquiv.eq_true_equiv?
   s = .base .prop ∧ LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.app _ (.base (.eq _)) lhs) (.base .trueE), Eq.refl _ => by
-    cases wft.getFn.getFn.getBase; cases wft.getArg.getBase; exists rfl, wft
+    cases wft.getFn.getFn.getBase; exists rfl, wft
     match wft with
     | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) Hlhs) (.ofBase .ofTrueE) =>
       exists Hlhs; intro lctxTerm
@@ -304,7 +304,7 @@ theorem LamEquiv.eq_false_equiv?
   s = .base .prop ∧ LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.app _ (.base (.eq _)) lhs) (.base .falseE), Eq.refl _ => by
-    cases wft.getFn.getFn.getBase; cases wft.getArg.getBase; exists rfl, wft
+    cases wft.getFn.getFn.getBase; exists rfl, wft
     match wft with
     | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) Hlhs) (.ofBase .ofFalseE) =>
       exists LamWF.mkNot Hlhs; intro lctxTerm
@@ -404,7 +404,7 @@ theorem LamEquiv.not_eq_true_equiv_eq_false?
   s = .base .prop ∧ LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.app _ (.base (.eq _)) (.app _ (.base .not) lhs)) (.base .trueE), Eq.refl _ => by
-    cases wft.getFn.getFn.getBase; cases wft.getFn.getArg.getFn.getBase
+    cases wft.getFn.getFn.getBase; cases wft.getFn.getArg.getFn.getBase.getPcst
     match wft with
     | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) (.ofApp _ (.ofBase .ofNot) Hlhs)) (.ofBase .ofTrueE) =>
       apply And.intro rfl
@@ -438,7 +438,7 @@ theorem LamEquiv.not_eq_false_equiv_eq_true?
   s = .base .prop ∧ LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.app _ (.base (.eq _)) (.app _ (.base .not) lhs)) (.base .falseE), Eq.refl _ => by
-    cases wft.getFn.getFn.getBase; cases wft.getFn.getArg.getFn.getBase
+    cases wft.getFn.getFn.getBase; cases wft.getFn.getArg.getFn.getBase.getPcst
     match wft with
     | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) (.ofApp _ (.ofBase .ofNot) Hlhs)) (.ofBase .ofFalseE) =>
       apply And.intro rfl
@@ -478,7 +478,7 @@ theorem LamEquiv.not_not_equiv?
   s = .base .prop ∧ LamEquiv lval lctx (.base .prop) t t' := by
   match t, heq with
   | .app _ (.base .not) (.app _ (.base .not) t'), Eq.refl _ =>
-    cases wft.getFn.getBase; cases wft.getArg.getFn.getBase
+    cases wft.getFn.getBase.getPcst; cases wft.getArg.getFn.getBase.getPcst
     apply And.intro rfl (LamEquiv.not_not_equiv wft.getArg.getArg)
 
 theorem LamGenConv.not_not_equiv? : LamGenConv lval LamTerm.not_not_equiv? := by
@@ -506,7 +506,7 @@ theorem LamEquiv.not_eq_equiv_eq_not?
   s = .base .prop ∧ LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.app _ (.base (.eq _)) (.app _ (.base .not) lhs)) rhs, Eq.refl _ => by
-    cases wft.getFn.getFn.getBase; cases wft.getFn.getArg.getFn.getBase
+    cases wft.getFn.getArg.getFn.getBase
     match wft with
     | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) (.ofApp _ (.ofBase .ofNot) Hlhs)) Hrhs =>
       apply And.intro rfl
@@ -538,7 +538,7 @@ theorem LamEquiv.not_eq_not_equiv_eq?
   s = .base .prop ∧ LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.app _ (.base (.eq _)) (.app _ (.base .not) lhs)) (.app _ (.base .not) rhs), Eq.refl _ => by
-    cases wft.getFn.getFn.getBase; cases wft.getArg.getFn.getBase; cases wft.getFn.getArg.getFn.getBase
+    cases wft.getFn.getFn.getBase
     match wft with
     | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) (.ofApp _ (.ofBase .ofNot) Hlhs)) (.ofApp _ (.ofBase .ofNot) Hrhs) =>
       apply And.intro rfl
@@ -569,7 +569,6 @@ theorem LamEquiv.propext?
   LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.app _ (.base .iff) lhs) rhs, Eq.refl _ => by
-    cases wft.getFn.getFn.getBase
     match wft with
     | .ofApp _ (.ofApp _ (.ofBase .ofIff) Hlhs) Hrhs =>
       exists (.mkIff Hlhs Hrhs); exists (.mkEq Hlhs Hrhs); intro lctxTerm
@@ -605,8 +604,7 @@ theorem LamEquiv.not_and_equiv_not_or_not?
   LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.base .not) (.app _ (.app _ (.base .and) lhs) rhs), Eq.refl _ => by
-    cases wft.getFn.getBase
-    cases wft.getArg.getFn.getFn.getBase
+    cases wft.getArg.getFn.getFn.getBase.getPcst
     match wft with
     | .ofApp _ _ (.ofApp _ (.ofApp _ _ Hlhs) Hrhs) =>
       exists (.mkNot (.mkAnd Hlhs Hrhs)), (.mkOr (.mkNot Hlhs) (.mkNot Hrhs)); intro lctxTerm
@@ -638,8 +636,7 @@ theorem LamEquiv.not_or_equiv_not_and_not?
   LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.base .not) (.app _ (.app _ (.base .or) lhs) rhs), Eq.refl _ => by
-    cases wft.getFn.getBase
-    cases wft.getArg.getFn.getFn.getBase
+    cases wft.getArg.getFn.getFn.getBase.getPcst
     match wft with
     | .ofApp _ _ (.ofApp _ (.ofApp _ _ Hlhs) Hrhs) =>
       exists (.mkNot (.mkOr Hlhs Hrhs)), (.mkAnd (.mkNot Hlhs) (.mkNot Hrhs)); intro lctxTerm
@@ -705,7 +702,7 @@ theorem LamEquiv.imp_equiv_not_or?
   LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.app _ (.base .imp) lhs) rhs, Eq.refl _ => by
-    cases wft.getFn.getFn.getBase
+    cases wft.getFn.getFn.getBase.getPcst
     match wft with
     | .ofApp _ (.ofApp _ _ Hlhs) Hrhs =>
       exists (.mkImp Hlhs Hrhs), (.mkOr (.mkNot Hlhs) Hrhs); intro lctxTerm
@@ -737,7 +734,7 @@ theorem LamEquiv.not_imp_equiv_and_not?
   LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.base .not) (.app _ (.app _ (.base .imp) lhs) rhs), Eq.refl _ => by
-    cases wft.getFn.getBase; cases wft.getArg.getFn.getFn.getBase
+    cases wft.getArg.getFn.getFn.getBase.getPcst
     match wft with
     | .ofApp _ _ (.ofApp _ (.ofApp _ _ Hlhs) Hrhs) =>
       exists .mkNot (.mkImp Hlhs Hrhs), (.mkAnd Hlhs (.mkNot Hrhs)); intro lctxTerm
@@ -773,7 +770,7 @@ theorem LamEquiv.propne?
   LamEquiv lval lctx (.base .prop) t t' :=
   match t, heq with
   | .app _ (.base .not) (.app (.base .prop) (.app _ (.base (.eq _)) lhs) rhs), Eq.refl _ => by
-    cases wft.getFn.getBase; cases wft.getArg.getFn.getFn.getBase
+    cases wft.getArg.getFn.getFn.getBase
     match wft with
     | .ofApp _ (.ofBase .ofNot) (.ofApp _ (.ofApp _ (.ofBase (.ofEq _)) Hlhs) Hrhs) =>
       exists (.mkNot (.mkEq Hlhs Hrhs))

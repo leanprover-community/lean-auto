@@ -127,6 +127,19 @@ def withEtomsAsFVar (etoms : Array Nat) : ExternM Unit :=
     setEtomFVars ((← getEtomFVars).insert etom newFVarId)
 
 open Embedding in
+def interpPropConstAsUnlifted : PropConst → CoreM Expr
+| .trueE      => return .const ``True []
+| .falseE     => return .const ``False []
+| .not        => return .const ``Not []
+| .and        => return .const ``And []
+| .or         => return .const ``Or []
+| .imp        => do
+  let .some (.defnInfo impVal) := (← getEnv).find? ``ImpF
+    | throwError "interpLamBaseTermAsUnlifted :: Unexpected error"
+  return impVal.value.instantiateLevelParams impVal.levelParams [.zero, .zero]
+| .iff        => return .const ``Iff []
+
+open Embedding in
 def interpBoolConstAsUnlifted : BoolConst → Expr
 | .ofProp => .const ``Bool.ofProp []
 | .trueb  => .const ``true []
@@ -222,16 +235,7 @@ def interpBitVecConstAsUnlifted : BitVecConst → Expr
 
 open Embedding in
 def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
-| .trueE      => return .const ``True []
-| .falseE     => return .const ``False []
-| .not        => return .const ``Not []
-| .and        => return .const ``And []
-| .or         => return .const ``Or []
-| .imp        => do
-  let .some (.defnInfo impVal) := (← getEnv).find? ``ImpF
-    | throwError "interpLamBaseTermAsUnlifted :: Unexpected error"
-  return impVal.value.instantiateLevelParams impVal.levelParams [.zero, .zero]
-| .iff        => return .const ``Iff []
+| .pcst pc    => interpPropConstAsUnlifted pc
 | .bcst bc    => return interpBoolConstAsUnlifted bc
 | .ncst nc    => return interpNatConstAsUnlifted nc
 | .icst ic    => return interpIntConstAsUnlifted ic

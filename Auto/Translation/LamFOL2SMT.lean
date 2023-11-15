@@ -105,10 +105,10 @@ private def lamBaseTerm2STerm_Arity3 (arg1 arg2 arg3 : STerm) : LamBaseTerm → 
 | t              => throwError "lamTerm2STerm :: The arity of {repr t} is not 3"
 
 private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → TransM LamAtom STerm
-| .and        => return .qStrApp "and" #[arg1, arg2]
-| .or         => return .qStrApp "or" #[arg1, arg2]
-| .imp        => return .qStrApp "=>" #[arg1, arg2]
-| .iff        => return .qStrApp "=" #[arg1, arg2]
+| .pcst .and  => return .qStrApp "and" #[arg1, arg2]
+| .pcst .or   => return .qStrApp "or" #[arg1, arg2]
+| .pcst .imp  => return .qStrApp "=>" #[arg1, arg2]
+| .pcst .iff  => return .qStrApp "=" #[arg1, arg2]
 | .bcst .andb => return .qStrApp "and" #[arg1, arg2]
 | .bcst .orb  => return .qStrApp "or" #[arg1, arg2]
 | .ncst .nadd => return .qStrApp "+" #[arg1, arg2]
@@ -163,7 +163,7 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | t           => throwError "lamTerm2STerm :: The arity of {repr t} is not 2"
 
 private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamAtom STerm
-| .not                   => return .qStrApp "not" #[arg]
+| .pcst .not             => return .qStrApp "not" #[arg]
 | .bcst .ofProp          => return arg
 | .bcst .notb            => return .qStrApp "not" #[arg]
 | .icst .iofNat          => return arg
@@ -228,8 +228,8 @@ where
     .qStrApp "not" #[.qStrApp "=" #[andExpr, bitVec2STerm n 0]]
 
 private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtom STerm
-| .trueE              => return .qStrApp "true" #[]
-| .falseE             => return .qStrApp "false" #[]
+| .pcst .trueE        => return .qStrApp "true" #[]
+| .pcst .falseE       => return .qStrApp "false" #[]
 | .bcst .trueb        => return .qStrApp "true" #[]
 | .bcst .falseb       => return .qStrApp "false" #[]
 | .ncst (.natVal n)   => return .sConst (.num n)

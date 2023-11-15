@@ -30,7 +30,7 @@ def LamThmValid (lval : LamValuation) (lctx : List LamSort) (t : LamTerm) :=
   ∀ (lctx' : Nat → LamSort), LamValid lval (pushLCtxs lctx lctx') t
 
 def LamThmValidD (lval : LamValuation.{u}) lctx t :=
-  t.maxLooseBVarSucc ≤ lctx.length ∧ 
+  t.maxLooseBVarSucc ≤ lctx.length ∧
   ∃ (wf : LamWF lval.toLamTyVal ⟨pushLCtxs lctx dfLCtxTy, t, .base .prop⟩),
     ∀ (lctxTerm : HList (LamSort.interp lval.tyVal) lctx),
       (wf.interp lval _ (pushLCtxsDep lctxTerm (dfLCtxTerm _))).down
@@ -592,7 +592,7 @@ theorem LamEquiv.ofLamValid
   (heq : LamValid lval lctx (LamTerm.mkEq s t₁ t₂)) :
   LamEquiv lval lctx s t₁ t₂ :=
   let ⟨.ofApp _ (.ofApp _ (.ofBase (.ofEq _)) wft₁) wft₂, heq'⟩ := heq
-  ⟨wft₁, ⟨wft₂, heq'⟩⟩ 
+  ⟨wft₁, ⟨wft₂, heq'⟩⟩
 
 theorem LamEquiv.ofLamValidSymm
   (heq : LamValid lval lctx (LamTerm.mkEq s t₁ t₂)) :
@@ -1098,7 +1098,7 @@ theorem LamValid.and_equiv :
       apply And.intro ⟨wfa, fun lctxTerm => And.left (hv lctxTerm)⟩ ⟨wfb, fun lctxTerm => And.right (hv lctxTerm)⟩
   case mpr =>
     intro ⟨⟨wfa, va⟩, ⟨wfb, vb⟩⟩; exists (.mkAnd wfa wfb)
-    intro lctxTerm; apply And.intro (va lctxTerm) (vb lctxTerm) 
+    intro lctxTerm; apply And.intro (va lctxTerm) (vb lctxTerm)
 
 theorem LamValid.and_left
   (wfa : LamWF lval.toLamTyVal ⟨lctx, a, .base .prop⟩)
@@ -1655,133 +1655,137 @@ theorem LamGenModify.rwGenAtIfSign {modify} (H : LamGenModify lval modify weaken
           cases fnI <;> try cases h₁
           case base b =>
             cases b <;> try cases h₁
-            dsimp [LamTerm.isSign] at h₁
-            have ⟨beqT, h₁'⟩ := (Bool.and_eq_true _ _).mp h₁
-            clear h₁; cases beqT
-            dsimp [LamTerm.rwGenAt]
-            cases h₂ : LamTerm.rwGenAt occ modify argI <;> intro h <;> cases h
-            case refl argI' =>
-              have IH' := @IH weaken? (!weaken?') occ H hl' argI argI';
-              clear IH; rw [← Bool.not_beq_swap] at IH';
-              dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [h₁'] at IH'; dsimp at IH'
-              intro lctx wfNArgI; cases wfNArgI.getFn.getBase; have .ofApp _ _ wfArgI := wfNArgI
-              have IH := IH' h₂ lctx wfArgI; clear IH'
-              cases weaken?'
-              case true =>
-                have ⟨.ofApp _ (.ofApp _ _ wfArgI') _, _⟩ := IH
-                apply LamValid.mpLamEquiv IH (LamEquiv.not_imp_not wfArgI wfArgI').symm
-              case false =>
-                have ⟨.ofApp _ _ wfArgI', _⟩ := IH
-                apply LamValid.mpLamEquiv IH (LamEquiv.not_imp_not wfArgI' wfArgI).symm
+            case pcst p =>
+              cases p <;> try cases h₁
+              dsimp [LamTerm.isSign] at h₁
+              have ⟨beqT, h₁'⟩ := (Bool.and_eq_true _ _).mp h₁
+              clear h₁; cases beqT
+              dsimp [LamTerm.rwGenAt]
+              cases h₂ : LamTerm.rwGenAt occ modify argI <;> intro h <;> cases h
+              case refl argI' =>
+                have IH' := @IH weaken? (!weaken?') occ H hl' argI argI';
+                clear IH; rw [← Bool.not_beq_swap] at IH';
+                dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [h₁'] at IH'; dsimp at IH'
+                intro lctx wfNArgI; cases wfNArgI.getFn.getBase.getPcst; have .ofApp _ _ wfArgI := wfNArgI
+                have IH := IH' h₂ lctx wfArgI; clear IH'
+                cases weaken?'
+                case true =>
+                  have ⟨.ofApp _ (.ofApp _ _ wfArgI') _, _⟩ := IH
+                  apply LamValid.mpLamEquiv IH (LamEquiv.not_imp_not wfArgI wfArgI').symm
+                case false =>
+                  have ⟨.ofApp _ _ wfArgI', _⟩ := IH
+                  apply LamValid.mpLamEquiv IH (LamEquiv.not_imp_not wfArgI' wfArgI).symm
           case app sII fnII argII =>
             cases fnII <;> try cases h₁
             case base b' =>
-              cases b' <;> first | cases h₁ |
-                (unfold LamTerm.isSign at h₁; dsimp at h₁;
-                 intro h lctx wfAp; cases wfAp.getFn.getFn.getBase; revert h;
-                 have .ofApp _ (.ofApp _ _ wfArgII) wfArgI := wfAp)
-              case and =>
-                cases b <;> dsimp at h₁ <;> dsimp [LamTerm.rwGenAt]
-                case true =>
-                  cases h₂ : LamTerm.rwGenAt occ modify argI <;> intro h <;> cases h
-                  case refl argI' =>
-                    have IH' := @IH weaken? weaken?' occ H hl' argI argI';
-                    clear IH; dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [h₁] at IH'; dsimp at IH'
-                    have IH := IH' h₂ lctx wfArgI; clear IH'
-                    cases weaken?'
-                    case true =>
-                      dsimp; have ⟨.ofApp _ _ wfArgI', _⟩ := IH
-                      apply LamValid.impLift (LamValid.and_imp_and_of_right_imp wfArgII wfArgI wfArgI') IH
-                    case false =>
-                      dsimp; have ⟨.ofApp _ (.ofApp _ _ wfArgI') _, _⟩ := IH
-                      apply LamValid.impLift (LamValid.and_imp_and_of_right_imp wfArgII wfArgI' wfArgI) IH
-                case false =>
-                  cases h₂ : LamTerm.rwGenAt occ modify (.app (.base .prop) (.base .and) argII) <;> intro h <;> cases h
-                  case refl argAp' =>
-                    cases occ <;> try cases h₁
-                    case cons b' occ =>
-                      dsimp at h₁; have ⟨b't, h₁'⟩ := (Bool.and_eq_true _ _).mp h₁; cases b't; clear h₁
-                      have IH' := @IH weaken? weaken?' occ H (Nat.le_of_lt hl') argII;
-                      clear IH; dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [h₁'] at IH'; dsimp at IH'
-                      dsimp [LamTerm.rwGenAt] at h₂; revert h₂
-                      cases h₃ : LamTerm.rwGenAt occ modify argII <;> intro h₂ <;> cases h₂
-                      case refl argII' =>
-                        have IH := IH' argII' h₃ lctx wfArgII; clear IH'
-                        cases weaken?'
-                        case true =>
-                          dsimp; have ⟨.ofApp _ _ wfArgII', _⟩ := IH
-                          apply LamValid.impLift (LamValid.and_imp_and_of_left_imp wfArgII wfArgII' wfArgI) IH
-                        case false =>
-                          dsimp; have ⟨.ofApp _ (.ofApp _ _ wfArgII') _, _⟩ := IH
-                          apply LamValid.impLift (LamValid.and_imp_and_of_left_imp wfArgII' wfArgII wfArgI) IH
-              case or =>
-                cases b <;> dsimp at h₁ <;> dsimp [LamTerm.rwGenAt]
-                case true =>
-                  cases h₂ : LamTerm.rwGenAt occ modify argI <;> intro h <;> cases h
-                  case refl argI' =>
-                    have IH' := @IH weaken? weaken?' occ H hl' argI argI';
-                    clear IH; dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [h₁] at IH'; dsimp at IH'
-                    have IH := IH' h₂ lctx wfArgI; clear IH'
-                    cases weaken?'
-                    case true =>
-                      dsimp; have ⟨.ofApp _ _ wfArgI', _⟩ := IH
-                      apply LamValid.impLift (LamValid.or_imp_or_of_right_imp wfArgII wfArgI wfArgI') IH
-                    case false =>
-                      dsimp; have ⟨.ofApp _ (.ofApp _ _ wfArgI') _, _⟩ := IH
-                      apply LamValid.impLift (LamValid.or_imp_or_of_right_imp wfArgII wfArgI' wfArgI) IH
-                case false =>
-                  cases h₂ : LamTerm.rwGenAt occ modify (.app (.base .prop) (.base .or) argII) <;> intro h <;> cases h
-                  case refl argAp' =>
-                    cases occ <;> try cases h₁
-                    case cons b' occ =>
-                      dsimp at h₁; have ⟨b't, h₁'⟩ := (Bool.and_eq_true _ _).mp h₁; cases b't; clear h₁
-                      have IH' := @IH weaken? weaken?' occ H (Nat.le_of_lt hl') argII;
-                      clear IH; dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [h₁'] at IH'; dsimp at IH'
-                      dsimp [LamTerm.rwGenAt] at h₂; revert h₂
-                      cases h₃ : LamTerm.rwGenAt occ modify argII <;> intro h₂ <;> cases h₂
-                      case refl argII' =>
-                        have IH := IH' argII' h₃ lctx wfArgII; clear IH'
-                        cases weaken?'
-                        case true =>
-                          dsimp; have ⟨.ofApp _ _ wfArgII', _⟩ := IH
-                          apply LamValid.impLift (LamValid.or_imp_or_of_left_imp wfArgII wfArgII' wfArgI) IH
-                        case false =>
-                          dsimp; have ⟨.ofApp _ (.ofApp _ _ wfArgII') _, _⟩ := IH
-                          apply LamValid.impLift (LamValid.or_imp_or_of_left_imp wfArgII' wfArgII wfArgI) IH
-              case imp =>
-                cases b <;> dsimp at h₁ <;> dsimp [LamTerm.rwGenAt]
-                case true =>
-                  cases h₂ : LamTerm.rwGenAt occ modify argI <;> intro h <;> cases h
-                  case refl argI' =>
-                    have IH' := @IH weaken? weaken?' occ H hl' argI argI';
-                    clear IH; dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [h₁] at IH'; dsimp at IH'
-                    have IH := IH' h₂ lctx wfArgI; clear IH'
-                    cases weaken?'
-                    case true =>
-                      dsimp; have ⟨.ofApp _ _ wfArgI', _⟩ := IH
-                      apply LamValid.impLift (LamValid.imp_trans' wfArgII wfArgI wfArgI') IH
-                    case false =>
-                      dsimp; have ⟨.ofApp _ (.ofApp _ _ wfArgI') _, _⟩ := IH
-                      apply LamValid.impLift (LamValid.imp_trans' wfArgII wfArgI' wfArgI) IH
-                case false =>
-                  cases h₂ : LamTerm.rwGenAt occ modify (.app (.base .prop) (.base .imp) argII) <;> intro h <;> cases h
-                  case refl argAp' =>
-                    cases occ <;> try cases h₁
-                    case cons b' occ =>
-                      dsimp at h₁; have ⟨b't, h₁'⟩ := (Bool.and_eq_true _ _).mp h₁; cases b't; clear h₁
-                      have IH' := @IH weaken? (!weaken?') occ H (Nat.le_of_lt hl') argII;
-                      clear IH; dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [← Bool.not_beq_swap, h₁'] at IH'; dsimp at IH'
-                      dsimp [LamTerm.rwGenAt] at h₂; revert h₂
-                      cases h₃ : LamTerm.rwGenAt occ modify argII <;> intro h₂ <;> cases h₂
-                      case refl argII' =>
-                        have IH := IH' argII' h₃ lctx wfArgII; clear IH'
-                        cases weaken?'
-                        case true =>
-                          dsimp; have ⟨.ofApp _ (.ofApp _ _ wfArgII') _, _⟩ := IH
-                          apply LamValid.impLift (LamValid.imp_trans wfArgII' wfArgII wfArgI) IH
-                        case false =>
-                          dsimp; have ⟨.ofApp _ _ wfArgII', _⟩ := IH
-                          apply LamValid.impLift (LamValid.imp_trans wfArgII wfArgII' wfArgI) IH
+              cases b' <;> try cases h₁
+              case pcst p =>
+                cases p <;> (try cases h₁) <;> try (
+                  unfold LamTerm.isSign at h₁; dsimp at h₁;
+                  intro h lctx wfAp; cases wfAp.getFn.getFn.getBase.getPcst; revert h;
+                  have .ofApp _ (.ofApp _ _ wfArgII) wfArgI := wfAp)
+                case and =>
+                  cases b <;> dsimp at h₁ <;> dsimp [LamTerm.rwGenAt]
+                  case true =>
+                    cases h₂ : LamTerm.rwGenAt occ modify argI <;> intro h <;> cases h
+                    case refl argI' =>
+                      have IH' := @IH weaken? weaken?' occ H hl' argI argI';
+                      clear IH; dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [h₁] at IH'; dsimp at IH'
+                      have IH := IH' h₂ lctx wfArgI; clear IH'
+                      cases weaken?'
+                      case true =>
+                        dsimp; have ⟨.ofApp _ _ wfArgI', _⟩ := IH
+                        apply LamValid.impLift (LamValid.and_imp_and_of_right_imp wfArgII wfArgI wfArgI') IH
+                      case false =>
+                        dsimp; have ⟨.ofApp _ (.ofApp _ _ wfArgI') _, _⟩ := IH
+                        apply LamValid.impLift (LamValid.and_imp_and_of_right_imp wfArgII wfArgI' wfArgI) IH
+                  case false =>
+                    cases h₂ : LamTerm.rwGenAt occ modify (.app (.base .prop) (.base .and) argII) <;> intro h <;> cases h
+                    case refl argAp' =>
+                      cases occ <;> try cases h₁
+                      case cons b' occ =>
+                        dsimp at h₁; have ⟨b't, h₁'⟩ := (Bool.and_eq_true _ _).mp h₁; cases b't; clear h₁
+                        have IH' := @IH weaken? weaken?' occ H (Nat.le_of_lt hl') argII;
+                        clear IH; dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [h₁'] at IH'; dsimp at IH'
+                        dsimp [LamTerm.rwGenAt] at h₂; revert h₂
+                        cases h₃ : LamTerm.rwGenAt occ modify argII <;> intro h₂ <;> cases h₂
+                        case refl argII' =>
+                          have IH := IH' argII' h₃ lctx wfArgII; clear IH'
+                          cases weaken?'
+                          case true =>
+                            dsimp; have ⟨.ofApp _ _ wfArgII', _⟩ := IH
+                            apply LamValid.impLift (LamValid.and_imp_and_of_left_imp wfArgII wfArgII' wfArgI) IH
+                          case false =>
+                            dsimp; have ⟨.ofApp _ (.ofApp _ _ wfArgII') _, _⟩ := IH
+                            apply LamValid.impLift (LamValid.and_imp_and_of_left_imp wfArgII' wfArgII wfArgI) IH
+                case or =>
+                  cases b <;> dsimp at h₁ <;> dsimp [LamTerm.rwGenAt]
+                  case true =>
+                    cases h₂ : LamTerm.rwGenAt occ modify argI <;> intro h <;> cases h
+                    case refl argI' =>
+                      have IH' := @IH weaken? weaken?' occ H hl' argI argI';
+                      clear IH; dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [h₁] at IH'; dsimp at IH'
+                      have IH := IH' h₂ lctx wfArgI; clear IH'
+                      cases weaken?'
+                      case true =>
+                        dsimp; have ⟨.ofApp _ _ wfArgI', _⟩ := IH
+                        apply LamValid.impLift (LamValid.or_imp_or_of_right_imp wfArgII wfArgI wfArgI') IH
+                      case false =>
+                        dsimp; have ⟨.ofApp _ (.ofApp _ _ wfArgI') _, _⟩ := IH
+                        apply LamValid.impLift (LamValid.or_imp_or_of_right_imp wfArgII wfArgI' wfArgI) IH
+                  case false =>
+                    cases h₂ : LamTerm.rwGenAt occ modify (.app (.base .prop) (.base .or) argII) <;> intro h <;> cases h
+                    case refl argAp' =>
+                      cases occ <;> try cases h₁
+                      case cons b' occ =>
+                        dsimp at h₁; have ⟨b't, h₁'⟩ := (Bool.and_eq_true _ _).mp h₁; cases b't; clear h₁
+                        have IH' := @IH weaken? weaken?' occ H (Nat.le_of_lt hl') argII;
+                        clear IH; dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [h₁'] at IH'; dsimp at IH'
+                        dsimp [LamTerm.rwGenAt] at h₂; revert h₂
+                        cases h₃ : LamTerm.rwGenAt occ modify argII <;> intro h₂ <;> cases h₂
+                        case refl argII' =>
+                          have IH := IH' argII' h₃ lctx wfArgII; clear IH'
+                          cases weaken?'
+                          case true =>
+                            dsimp; have ⟨.ofApp _ _ wfArgII', _⟩ := IH
+                            apply LamValid.impLift (LamValid.or_imp_or_of_left_imp wfArgII wfArgII' wfArgI) IH
+                          case false =>
+                            dsimp; have ⟨.ofApp _ (.ofApp _ _ wfArgII') _, _⟩ := IH
+                            apply LamValid.impLift (LamValid.or_imp_or_of_left_imp wfArgII' wfArgII wfArgI) IH
+                case imp =>
+                  cases b <;> dsimp at h₁ <;> dsimp [LamTerm.rwGenAt]
+                  case true =>
+                    cases h₂ : LamTerm.rwGenAt occ modify argI <;> intro h <;> cases h
+                    case refl argI' =>
+                      have IH' := @IH weaken? weaken?' occ H hl' argI argI';
+                      clear IH; dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [h₁] at IH'; dsimp at IH'
+                      have IH := IH' h₂ lctx wfArgI; clear IH'
+                      cases weaken?'
+                      case true =>
+                        dsimp; have ⟨.ofApp _ _ wfArgI', _⟩ := IH
+                        apply LamValid.impLift (LamValid.imp_trans' wfArgII wfArgI wfArgI') IH
+                      case false =>
+                        dsimp; have ⟨.ofApp _ (.ofApp _ _ wfArgI') _, _⟩ := IH
+                        apply LamValid.impLift (LamValid.imp_trans' wfArgII wfArgI' wfArgI) IH
+                  case false =>
+                    cases h₂ : LamTerm.rwGenAt occ modify (.app (.base .prop) (.base .imp) argII) <;> intro h <;> cases h
+                    case refl argAp' =>
+                      cases occ <;> try cases h₁
+                      case cons b' occ =>
+                        dsimp at h₁; have ⟨b't, h₁'⟩ := (Bool.and_eq_true _ _).mp h₁; cases b't; clear h₁
+                        have IH' := @IH weaken? (!weaken?') occ H (Nat.le_of_lt hl') argII;
+                        clear IH; dsimp [LamTerm.rwGenAtIfSign] at IH'; rw [← Bool.not_beq_swap, h₁'] at IH'; dsimp at IH'
+                        dsimp [LamTerm.rwGenAt] at h₂; revert h₂
+                        cases h₃ : LamTerm.rwGenAt occ modify argII <;> intro h₂ <;> cases h₂
+                        case refl argII' =>
+                          have IH := IH' argII' h₃ lctx wfArgII; clear IH'
+                          cases weaken?'
+                          case true =>
+                            dsimp; have ⟨.ofApp _ (.ofApp _ _ wfArgII') _, _⟩ := IH
+                            apply LamValid.impLift (LamValid.imp_trans wfArgII' wfArgII wfArgI) IH
+                          case false =>
+                            dsimp; have ⟨.ofApp _ _ wfArgII', _⟩ := IH
+                            apply LamValid.impLift (LamValid.imp_trans wfArgII wfArgII' wfArgI) IH
       | false => intro h; cases h
 
 -- Boolean theorems
