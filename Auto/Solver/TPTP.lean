@@ -89,8 +89,8 @@ def queryZipperposition (query : String) : MetaM String := do
   let solver ← createAux path #["-i=tptp", "-o=tptp", "--mode=ho-competitive", "-t=10"]
   solver.stdin.putStr s!"{query}\n"
   let (_, solver) ← solver.takeStdin
-  let stderr ← solver.stderr.readToEnd
   let stdout ← solver.stdout.readToEnd
+  let stderr ← solver.stderr.readToEnd
   trace[auto.tptp.result] "Result: \nstderr:\n{stderr}\nstdout:\n{stdout}"
   solver.kill
   return stdout
@@ -112,8 +112,8 @@ def queryZEPort (zept : ZEPortType) (query : String) : MetaM String := do
       idx := idx + (← IO.rand 0 100)
   IO.FS.withFile s!"./.zeport_ignore/problem{idx}.p" .writeNew (fun stream => stream.putStr query)
   let solver ← createSolver path idx
-  let stderr ← solver.stderr.readToEnd
   let stdout ← solver.stdout.readToEnd
+  let stderr ← solver.stderr.readToEnd
   trace[auto.tptp.result] "Result: \nstderr:\n{stderr}\nstdout:\n{stdout}"
   solver.kill
   IO.FS.removeFile s!"./.zeport_ignore/problem{idx}.p"
@@ -133,8 +133,8 @@ def queryE (query : String) : MetaM String := do
   let solver ← createAux path #["--tptp-format", "--cpu-limit=10"]
   solver.stdin.putStr s!"{query}\n"
   let (_, solver) ← solver.takeStdin
-  let stderr ← solver.stderr.readToEnd
   let stdout ← solver.stdout.readToEnd
+  let stderr ← solver.stderr.readToEnd
   trace[auto.tptp.result] "Result: \nstderr:\n{stderr}\nstdout:\n{stdout}"
   solver.kill
   return stdout
