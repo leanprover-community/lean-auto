@@ -1,8 +1,8 @@
 import Lean
 import Std.Data.Nat.Lemmas
+import Std.Logic
 import Auto.MathlibEmulator
 import Auto.Lib.BoolExtra
-import Auto.Lib.LogicExtra
 import Auto.Lib.NatExtra
 import Auto.Lib.OptionExtra
 import Auto.Lib.Containers
@@ -130,7 +130,7 @@ termination_by get?'WF bt n => n
 decreasing_by apply Bin.wfAux; assumption
 
 theorem get?'WF.succSucc (bt : BinTree α) (n : Nat) :
-  get?'WF bt (n + 2) = 
+  get?'WF bt (n + 2) =
     match Nat.mod (n + 2) 2 with
     | 0 => get?'WF bt.left! (Nat.div (n + 2) 2)
     | _ + 1 => get?'WF bt.right! (Nat.div (n + 2) 2) := rfl
@@ -183,7 +183,7 @@ theorem get?'.equiv (bt : BinTree α) (n : Nat) :
   get?'Aux.equiv _ _ n .refl
 
 theorem get?'_succSucc (bt : BinTree α) (n : Nat) :
-  get?' bt (n + 2) = 
+  get?' bt (n + 2) =
     match (n + 2) % 2 with
     | 0 => get?' bt.left! ((n + 2) / 2)
     | _ + 1 => get?' bt.right! ((n + 2) / 2) := by
@@ -219,7 +219,7 @@ termination_by insert'WF bt n x => n
 decreasing_by rw [← h]; apply Bin.wfAux; assumption
 
 theorem insert'WF.succSucc (bt : BinTree α) (n : Nat) (x : α) :
-  insert'WF bt (n + 2) x = 
+  insert'WF bt (n + 2) x =
     match Nat.mod (n + 2) 2 with
     | 0 =>
       match bt with
@@ -286,7 +286,7 @@ theorem insert'.equiv (bt : BinTree α) (n : Nat) (x : α) :
   insert'Aux.equiv _ n x n .refl
 
 theorem insert'.succSucc (bt : BinTree α) (n : Nat) (x : α) :
-  insert' bt (n + 2) x = 
+  insert' bt (n + 2) x =
     match (n + 2) % 2 with
     | 0 =>
       match bt with
@@ -510,7 +510,7 @@ theorem all_allp' (p : α → Bool) (bt : BinTree α) :
     refine Iff.intro (fun _ n => by rw [get?'_leaf]; exact True.intro) (fun _ => rfl)
   case node l x r IHl IHr =>
     rw [all_node]; rw [Bool.and_eq_true]; rw [Bool.and_eq_true]
-    rw [IHl, IHr]; rw [allp'_node]; rw [And.assoc]; rw [Option.all_allp]
+    rw [IHl, IHr]; rw [allp'_node]; rw [and_assoc]; rw [Option.all_allp]
 
 theorem all_allp (p : α → Bool) (bt : BinTree α) :
   (bt.all p = true) ↔ bt.allp (fun x => p x = true) := by
