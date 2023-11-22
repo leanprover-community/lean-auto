@@ -21,6 +21,30 @@ section Enum
 
   example (x y z t : Color) : x = y ∨ x = z ∨ x = t ∨ y = z ∨ y = t ∨ z = t := by auto
 
+  inductive Zone where
+    | Z1 | Z2 | Z3 | Z4
+    -- Ask Lean to automatically show that type is not empty, has a representation function, and
+    -- equality is decidable
+    deriving Inhabited, Repr, DecidableEq
+
+  abbrev Area : Type := Int
+
+  def Zone.MinArea1 : Zone → Area
+    | .Z1 => 10000
+    | .Z2 => 5000
+    | .Z3 => 3500
+    | .Z4 => 2500
+
+  def Zone.MinArea2 : Zone → Area
+    | .Z1 => 12000
+    | .Z2 => 7000
+    | .Z3 => 4000
+    | .Z4 => 3000
+
+  set_option trace.auto.mono.printResult true in
+  example (x : Zone) : x.MinArea1 <= x.MinArea2 := by
+    cases x <;> auto d[Zone.MinArea1, Zone.MinArea2]
+
 end Enum
 
 section NonRecursive

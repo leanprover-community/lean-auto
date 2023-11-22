@@ -1,5 +1,6 @@
 import Lean
 import Auto.Lib.LevelExtra
+import Auto.Lib.Containers
 open Lean Elab Command
 
 namespace Auto
@@ -44,6 +45,37 @@ def Expr.forallBinders (e : Expr) : Array (Name × Expr × BinderInfo) :=
     | .forallE n ty b bi => (n, ty, bi) :: aux b
     | _ => []
   Array.mk (aux e)
+
+def Expr.collectRawM [Monad m] (p : Expr → m Bool) : Expr → m (HashSet Expr)
+| e@(.forallE _ d b _) => do
+  let hd ← collectRawM p d
+  let hb ← collectRawM p b
+  addp? p e (mergeHashSet hd hb)
+| e@(.lam _ d b _) => do
+  let hd ← collectRawM p d
+  let hb ← collectRawM p b
+  addp? p e (mergeHashSet hd hb)
+| e@(.letE _ t v b _) => do
+  let ht ← collectRawM p t
+  let hv ← collectRawM p v
+  let hb ← collectRawM p b
+  addp? p e (mergeHashSet ht (mergeHashSet hv hb))
+| e@(.app f a) => do
+  let hf ← collectRawM p f
+  let ha ← collectRawM p a
+  addp? p e (mergeHashSet hf ha)
+| e@(.mdata _ b) => do
+  let hb ← collectRawM p b
+  addp? p e hb
+| e@(.proj _ _ b) => do
+  let hb ← collectRawM p b
+  addp? p e hb
+| e => addp? p e HashSet.empty
+where addp? p e hs := do
+  if ← p e then
+    return hs.insert e
+  else
+    return hs
 
 def Expr.lambdaBinders (e : Expr) : Array (Name × Expr × BinderInfo) :=
   let rec aux (e : Expr) :=
@@ -348,7 +380,7 @@ section EvalAtTermElabM
           synthInstance (mkApp (Lean.mkConst evalClassName [u]) α)
         catch _ =>
           throwError "expression{indentExpr e}\nhas type{indentExpr α}\nbut instance{indentExpr inst}\nfailed to be synthesized, this instance instructs Lean on how to display the resulting value, recall that any type implementing the `Repr` class also implements the `{evalClassName}` class"
-  
+
   private def mkRunMetaEval (e : Expr) : MetaM Expr :=
     withLocalDeclD `env (mkConst ``Lean.Environment) fun env =>
     withLocalDeclD `opts (mkConst ``Lean.Options) fun opts => do
@@ -357,13 +389,13 @@ section EvalAtTermElabM
       let instVal ← mkEvalInstCore ``Lean.MetaEval e
       let e := mkAppN (mkConst ``Lean.runMetaEval [u]) #[α, instVal, env, opts, e]
       instantiateMVars (← mkLambdaFVars #[env, opts] e)
-  
+
   private def mkRunEval (e : Expr) : MetaM Expr := do
     let α ← inferType e
     let u ← getDecLevel α
     let instVal ← mkEvalInstCore ``Lean.Eval e
     instantiateMVars (mkAppN (mkConst ``Lean.runEval [u]) #[α, instVal, mkSimpleThunk e])
-  
+
   unsafe def termElabEval (elabEvalTerm : Expr) : TermElabM Unit := do
     let declName := `_eval
     let addAndCompile (value : Expr) : TermElabM Unit := do
@@ -424,5 +456,5 @@ section EvalAtTermElabM
       elabEval
 
 end EvalAtTermElabM
-      
+
 end Auto
