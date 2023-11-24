@@ -534,6 +534,11 @@ def saturate : MonoM Unit := do
 def postprocessSaturate : MonoM Unit := do
   let lisArr ← getLisArr
   let lisArr ← liftM <| lisArr.mapM (fun lis => lis.filterMapM LemmaInst.monomorphic?)
+  -- Since typeclasses might have been instantiated, we need to collectConstInst again
+  for li in lisArr.concatMap id do
+    let newCis ← collectConstInsts li.params #[] li.type
+    for newCi in newCis do
+      processConstInst newCi
   setLisArr lisArr
 
 /-- Collect inductive types -/

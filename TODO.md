@@ -1,7 +1,7 @@
 __Auto Issues:__
 * HOL to FOL. Do this in the verified checker. Introduce new etoms to represent instancecs of higher-order functions.
 * When we matched against ``Eq`` in monomorphization, we found that some type arguments of other constants got unified with ``Prop``, which created a bunch of junk lemma. Find out whether something similar happened in Duper.
-* Matcher issue: Please use ``Lean.Meta.Match.getEquationsFor``. Maybe ``getMatcherInfo?`` is also useful.
+* Matcher Equational Theorems: Please use ``Lean.Meta.Match.getEquationsFor``. Maybe ``getMatcherInfo?`` is also useful.
 * Implement native interpretation
 * Improve portfolio mode script. Download E and zipperposition from the web.
 * Floating point numbers
@@ -29,6 +29,7 @@ __Auto Issues:__
 * Benchmarks:
   * GRUNGE: https://arxiv.org/abs/1903.02539
   * Seventeen benchmark: https://matryoshka-project.github.io/pubs/seventeen.pdf
+* Fix Josh's issue posted on Zulip. Implement mapping from monomorphized formula to original formula.
 
 __Lean Issues:__
 * ``cases`` fails on some simple examples. E.g, ``cases h : a.beq b`` fails if the goal contains term
