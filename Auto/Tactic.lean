@@ -3,7 +3,7 @@ import Auto.Translation
 import Auto.Solver.SMT
 import Auto.Solver.TPTP
 import Auto.Solver.Native
-import Auto.HintDB
+import Auto.LemDB
 open Lean Elab Tactic
 
 initialize
@@ -12,7 +12,8 @@ initialize
 
 namespace Auto
 
-syntax hintelem := term <|> "*"
+/-- `*` : LCtxHyps, `* <ident>` : Lemma database -/
+syntax hintelem := term <|> "*" (ident)?
 syntax hints := ("[" hintelem,* "]")?
 /-- Specify constants to unfold. `unfolds` Must not contain cyclic dependency -/
 syntax unfolds := "u[" ident,* "]"
@@ -40,7 +41,7 @@ inductive HintElem where
   -- A user-provided term
   | term     : Term → HintElem
   -- Hint database, not yet supported
-  | hintdb   : HintElem
+  | lemdb    : Name → HintElem
   -- `*` adds all hypotheses in the local context
   -- Also, if `[..]` is not supplied to `auto`, all
   --   hypotheses in the local context are
@@ -49,13 +50,14 @@ inductive HintElem where
 deriving Inhabited, BEq
 
 def parseHintElem : TSyntax ``hintelem → TacticM HintElem
-| `(hintelem| *)       => return .lctxhyps
+| `(hintelem| *) => return .lctxhyps
+| `(hintelem| * $id:ident) => return .lemdb id.getId
 | `(hintelem| $t:term) => return .term t
 | _ => throwUnsupportedSyntax
 
 structure InputHints where
   terms    : Array Term := #[]
-  hintdbs  : Array Unit := #[]
+  lemdbs   : Array Name := #[]
   lctxhyps : Bool       := false
 deriving Inhabited, BEq
 
@@ -63,14 +65,15 @@ deriving Inhabited, BEq
 def parseHints : TSyntax ``hints → TacticM InputHints
 | `(hints| [ $[$hs],* ]) => do
   let mut terms := #[]
+  let mut lemdbs := #[]
   let mut lctxhyps := false
   let elems ← hs.mapM parseHintElem
   for elem in elems do
     match elem with
     | .term t => terms := terms.push t
+    | .lemdb db => lemdbs := lemdbs.push db
     | .lctxhyps => lctxhyps := true
-    | _ => throwError "parseHints :: Not implemented"
-  return ⟨terms, #[], lctxhyps⟩
+  return ⟨terms, lemdbs, lctxhyps⟩
 | `(hints| ) => return ⟨#[], #[], true⟩
 | _ => throwUnsupportedSyntax
 
@@ -153,6 +156,14 @@ def collectUserLemmas (terms : Array Term) : TacticM (Array Lemma) :=
         throwError "invalid lemma {type} for auto, proposition expected"
     return lemmas
 
+def collectHintDBLemmas (names : Array Name) : TacticM (Array Lemma) := do
+  let mut hs : HashSet Name := HashSet.empty
+  for name in names do
+    let .some db ← findLemDB name
+      | throwError "unknown lemma database {name}"
+    hs := mergeHashSet hs (← db.toHashSet)
+  liftM <| hs.toArray.mapM Lemma.ofConst
+
 def collectDefeqLemmas (names : Array Name) : TacticM (Array Lemma) :=
   Meta.withNewMCtxDepth do
     let lemmas ← names.concatMapM Prep.elabDefEq
@@ -201,6 +212,13 @@ def checkDuplicatedFact (terms : Array Term) : TacticM Unit :=
       if terms[i]? == terms[j]? then
         throwError "Auto does not accept duplicated input terms"
 
+def checkDuplicatedLemmaDB (names : Array Name) : TacticM Unit :=
+  let n := names.size
+  for i in [0:n] do
+    for j in [i+1:n] do
+      if names[i]? == names[j]? then
+        throwError "Auto does not accept duplicated lemma databases"
+
 def collectAllLemmas
   (hintstx : TSyntax ``hints) (uords : Array (TSyntax `Auto.uord)) (ngoalAndBinders : Array FVarId) :
   -- The first `Array Lemma` are `Prop` lemmas
@@ -214,7 +232,8 @@ def collectAllLemmas
   let lctxLemmas ← lctxLemmas.mapM (m:=MetaM) (unfoldConstAndPreprocessLemma unfoldInfos)
   traceLemmas "Lemmas collected from local context:" lctxLemmas
   checkDuplicatedFact inputHints.terms
-  let userLemmas ← collectUserLemmas inputHints.terms
+  checkDuplicatedLemmaDB inputHints.lemdbs
+  let userLemmas := (← collectUserLemmas inputHints.terms) ++ (← collectHintDBLemmas inputHints.lemdbs)
   let userLemmas ← userLemmas.mapM (m:=MetaM) (unfoldConstAndPreprocessLemma unfoldInfos)
   traceLemmas "Lemmas collected from user-provided terms:" userLemmas
   let defeqLemmas ← collectDefeqLemmas defeqNames

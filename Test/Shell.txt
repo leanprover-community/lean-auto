@@ -44,7 +44,7 @@ find build -name '*.c' | xargs wc | sort -n
     4121    11502   150100 build/ir/Auto/Translation/Inhabitation.c
     4212    11528   127188 build/ir/Auto/Translation/Preprocessing.c
     4232    11710   143890 build/ir/Auto/Solver/SMT.c
-    4243    11655   148824 build/ir/Auto/HintDB.c
+    4243    11655   148824 build/ir/Auto/LemDB.c
     4876    12777   298677 build/ir/Auto/MathlibEmulator/ToExpr.c
     5149    14823   167774 build/ir/Auto/Embedding/LamBVarOp.c
     5306    14967   190862 build/ir/Auto/Parser/SMTSexp.c
