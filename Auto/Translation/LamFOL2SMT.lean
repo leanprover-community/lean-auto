@@ -168,8 +168,8 @@ private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamA
 | .bcst .notb            => return .qStrApp "not" #[arg]
 | .icst .iofNat          => return arg
 | .icst .inegSucc        => return .qStrApp "-" #[int2STerm (-1), arg]
-| .icst .iabs            => return .qStrApp "abs" #[arg]
 | .icst .ineg            => return .qStrApp "-" #[int2STerm 0, arg]
+| .icst .iabs            => return .qStrApp "abs" #[arg]
 | .scst .slength         => return .qStrApp "str.len" #[arg]
 -- To SMT solvers `.bvofNat` is the same as `.bvofInt`
 | .bvcst (.bvofNat n)    => do
@@ -205,6 +205,10 @@ private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamA
 | .bvcst (.bvmsb n)      => return mkSMTMsbExpr n arg
 | .bvcst (.bvneg _)      => return .qStrApp "bvneg" #[arg]
 | .bvcst (.bvabs _)      => return .qStrApp "bvabs" #[arg]
+| .bvcst (.bvnot _)      => return .qStrApp "bvnot" #[arg]
+| .bvcst (.bvextract _ h l) => do
+  let l := min h l
+  return .qIdApp (.ident (.indexed "extract" #[.inr h, .inr l])) #[arg]
 | .bvcst (.bvrepeat _ i) => return .qIdApp (.ident (.indexed "repeat" #[.inr i])) #[arg]
 | .bvcst (.bvzeroExtend w v) =>
   if v ≥ w then
@@ -216,9 +220,6 @@ private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamA
     return .qIdApp (.ident (.indexed "sign_extend" #[.inr (v - w)])) #[arg]
   else
     return .qIdApp (.ident (.indexed "extract" #[.inr (v - 1), .inr 0])) #[arg]
-| .bvcst (.bvextract _ h l) => do
-  let l := min h l
-  return .qIdApp (.ident (.indexed "extract" #[.inr h, .inr l])) #[arg]
 | t               => throwError "lamTerm2STerm :: The arity of {repr t} is not 1"
 where
   solverName : MetaM Solver.SMT.SolverName := do
