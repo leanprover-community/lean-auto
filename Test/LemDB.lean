@@ -19,17 +19,14 @@ def Zone.MinArea1 : Zone → Area
   | .Z3 => 3500
   | .Z4 => 2500
 
+abbrev Zone.MinArea1.defeq_spec :=
+  Zone.MinArea1 .Z1 = 10000 ∧ Zone.MinArea1 .Z2 = 5000 ∧
+  Zone.MinArea1 .Z3 = 3500 ∧ Zone.MinArea1 .Z4 = 2500
+theorem Zone.MinArea1.defeq : defeq_spec := by simp
 
-def Zone.MinArea1.defeq1 : Zone.MinArea1 .Z1 = 10000 := rfl
-def Zone.MinArea1.defeq2 : Zone.MinArea1 .Z2 = 5000  := rfl
-def Zone.MinArea1.defeq3 : Zone.MinArea1 .Z3 = 3500  := rfl
-def Zone.MinArea1.defeq4 : Zone.MinArea1 .Z4 = 2500  := rfl
-
-#declare_lemdb zone_defeq1
-attribute[lemdb zone_defeq1] Zone.MinArea1.defeq1 Zone.MinArea1.defeq2 Zone.MinArea1.defeq3 Zone.MinArea1.defeq4
 
 example (x: Zone) : x.MinArea1 >= 2500 := by cases x <;> simp -- succeeds
-example (x: Zone) : x.MinArea1 >= 2500 := by auto [*zone_defeq1]
+example (x: Zone) : x.MinArea1 >= 2500 := by auto [Zone.MinArea1.defeq]
 
 def Zone.MinArea2 : Zone → Area
   | .Z1 => 0
@@ -37,19 +34,17 @@ def Zone.MinArea2 : Zone → Area
   | .Z3 => 6500
   | .Z4 => 7500
 
-def Zone.MinArea2.defeq1 : Zone.MinArea2 .Z1 = 0 := rfl
-def Zone.MinArea2.defeq2 : Zone.MinArea2 .Z2 = 5000 := rfl
-def Zone.MinArea2.defeq3 : Zone.MinArea2 .Z3 = 6500 := rfl
-def Zone.MinArea2.defeq4 : Zone.MinArea2 .Z4 = 7500 := rfl
+abbrev Zone.MinArea2.defeq_spec :=
+  Zone.MinArea2 .Z1 = 0 ∧ Zone.MinArea2 .Z2 = 5000 ∧
+  Zone.MinArea2 .Z3 = 6500 ∧ Zone.MinArea2 .Z4 = 7500
 
-#declare_lemdb zone_defeq2
-attribute[lemdb zone_defeq2] Zone.MinArea2.defeq1 Zone.MinArea2.defeq2 Zone.MinArea2.defeq3 Zone.MinArea2.defeq4
+theorem Zone.MinArea2.defeq : defeq_spec := by simp
 
 example (x: Zone) : x.MinArea1 + x.MinArea2 = 10000 := by
-  auto [*zone_defeq1, *zone_defeq2]
+  auto [Zone.MinArea1.defeq, Zone.MinArea2.defeq]
 example (x: Zone) (_ : x = .Z1) : x.MinArea1 = 10000 && x.MinArea2 = 0 := by
-  auto [*, *zone_defeq1, *zone_defeq2]
+  auto [*, Zone.MinArea1.defeq, Zone.MinArea2.defeq]
 
-#compose_lemdb zone_defeqAll [zone_defeq1, zone_defeq2]
-example (x: Zone) : x.MinArea1 + x.MinArea2 = 10000 := by
-  auto [*zone_defeqAll]
+abbrev Zone.MinArea.defeq_spec := MinArea1.defeq_spec ∧ MinArea2.defeq_spec
+theorem Zone.MinArea.defeq : Zone.MinArea.defeq_spec := And.intro MinArea1.defeq MinArea2.defeq
+example (x: Zone) : x.MinArea1 + x.MinArea2 = 10000 := by auto [Zone.MinArea.defeq]
