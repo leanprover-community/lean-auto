@@ -7,7 +7,7 @@ namespace Auto
   Lemma database is a collection of lemmas that users
     can supply to a tactic. Users only need to provide
     the name of the lemma database to the tactic.
-  Each lemma database has a name, which is internally stored as a string.
+  Each lemma database has a name, which is internally stored as a `Name`.
   User can add a lemma to a lemma database (internally, .addLemma),
     or combine several existing lemma databases to form a larger
     lemma database (internally, .compose), or both.
@@ -16,17 +16,22 @@ namespace Auto
 inductive LemDB where
   | empty     : LemDB
   | addLemma  : (lem : Name) → (lemdb : LemDB) → LemDB
-  | compose   : (lemdbs : Array String) → LemDB
+  | compose   : (lemdbs : Array Name) → LemDB
 deriving BEq, Hashable, Inhabited, Repr
 
 abbrev LemDBExtension :=
-  SimplePersistentEnvExtension (String × LemDB) (HashMap String LemDB)
+  PersistentEnvExtension (Name × LemDB) (Name × LemDB) (HashMap Name LemDB)
 
-initialize lemDBExt : LemDBExtension ← registerSimplePersistentEnvExtension {
-  name          := `LemDBExt
-  addImportedFn := fun _ => {},
-  addEntryFn    := fun s n => s.insert n.1 n.2
+initialize lemDBExt : LemDBExtension ← registerPersistentEnvExtension {
+  name            := `LemDBExt
+  mkInitial       := pure {}
+  addEntryFn      := fun s n => s.insert n.1 n.2
+  addImportedFn   := fun arr => pure <| HashMap.ofList (arr.concatMap id).toList,
+  exportEntriesFn := fun s => s.toArray
 }
+
+def LemDBExt.addLemToDB (env : Environment) (dbname : Name) (db : LemDB) :=
+  lemDBExt.addEntry env (dbname, db)
 
 partial def LemDB.toHashSet : LemDB → AttrM (HashSet Name)
 | .empty => pure HashSet.empty
@@ -43,37 +48,37 @@ partial def LemDB.toHashSet : LemDB → AttrM (HashSet Name)
       ret := ret.insertMany hset
     return ret
 
-private def throwUnregisteredLemDB (dbname action : String) : AttrM α := do
+private def throwUndeclaredLemDB (dbname action : Name) : AttrM α := do
   let cmdstr := "#declare_lemdb " ++ dbname
   throwError ("Please declare lemma database using " ++
     s!"command {repr cmdstr} before {action}")
 
-def registerLemDB : IO Unit :=
+def addLemToDB : IO Unit :=
   registerBuiltinAttribute {
     name  := `lemdb
-    descr := "Use this attribute to register lemmas to lemma databases"
+    descr := "Use this attribute to add lemmas to lemma databases"
     applicationTime := .afterTypeChecking
     add   := fun decl stx _ => do
-      let dbname := (← Attribute.Builtin.getIdent stx).getId.toString
+      let dbname := (← Attribute.Builtin.getIdent stx).getId
       let state := lemDBExt.getState (← getEnv)
       if let some db := state.find? dbname then
         let state' := state.insert dbname (.addLemma decl db)
         modifyEnv fun env => lemDBExt.modifyState env fun _ => state'
       else
-        throwUnregisteredLemDB dbname "adding lemma to it"
+        throwUndeclaredLemDB dbname "adding lemma to it"
     erase := fun _ => do
       throwError "Lemmas cannot be erased from lemma database"
   }
 
+initialize addLemToDB
+
 def findLemDB (dbname : Name) : CoreM (Option LemDB) := do
-  let dbname := dbname.toString
+  let dbname := dbname
   let state := lemDBExt.getState (← getEnv)
   if let some db := state.find? dbname then
     return .some db
   else
     return .none
-
-initialize registerLemDB
 
 open Elab Command
 
@@ -85,7 +90,7 @@ syntax (name := composelemdb) "#compose_lemdb" ident "[" ident,* "]" : command
 def elabdeclarelemdb : CommandElab := fun stx => do
   match stx with
   | `(declarelemdb | #declare_lemdb $dbname) =>
-    let dbname := dbname.getId.toString
+    let dbname := dbname.getId
     let state := lemDBExt.getState (← getEnv)
     if let some db := state.find? dbname then
       throwError "Lemma database {repr db} has already been declared"
@@ -99,7 +104,7 @@ def elabprintlemdb : CommandElab := fun stx => do
   match stx with
   | `(printlemdb | #print_lemdb $dbname) =>
     let .some db ← liftCoreM <| findLemDB dbname.getId
-      | liftCoreM <| throwUnregisteredLemDB dbname.getId.toString "printing it"
+      | liftCoreM <| throwUndeclaredLemDB dbname.getId "printing it"
     let hset ← liftCoreM (db.toHashSet)
     logInfoAt stx m!"{hset.toList}"
   | _ => throwUnsupportedSyntax
@@ -108,8 +113,8 @@ def elabprintlemdb : CommandElab := fun stx => do
 def elabcomposelemdb : CommandElab := fun stx => do
   match stx with
   | `(composelemdb | #compose_lemdb $db [$[$dbs],*]) =>
-    let db := db.getId.toString
-    let dbs := dbs.map (fun x => x.getId.toString)
+    let db := db.getId
+    let dbs := dbs.map (fun x => x.getId)
     let state := lemDBExt.getState (← getEnv)
     for db in dbs do
       if !state.contains db then

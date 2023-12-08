@@ -1,4 +1,4 @@
-import Auto
+import Auto.Tactic
 import Std.Data.BitVec
 set_option auto.smt true
 set_option auto.smt.trust true
