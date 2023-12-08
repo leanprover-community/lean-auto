@@ -26,12 +26,11 @@ initialize lemDBExt : LemDBExtension ← registerPersistentEnvExtension {
   name            := `LemDBExt
   mkInitial       := pure {}
   addEntryFn      := fun s n => s.insert n.1 n.2
+  -- **Note** We suppose that, if module `a` imports module `b`,
+  --   then the index of `a` within the `arr` is greater than the index of `b` in `arr`
   addImportedFn   := fun arr => pure <| HashMap.ofList (arr.concatMap id).toList,
   exportEntriesFn := fun s => s.toArray
 }
-
-def LemDBExt.addLemToDB (env : Environment) (dbname : Name) (db : LemDB) :=
-  lemDBExt.addEntry env (dbname, db)
 
 partial def LemDB.toHashSet : LemDB → AttrM (HashSet Name)
 | .empty => pure HashSet.empty
@@ -53,7 +52,7 @@ private def throwUndeclaredLemDB (dbname action : Name) : AttrM α := do
   throwError ("Please declare lemma database using " ++
     s!"command {repr cmdstr} before {action}")
 
-def addLemToDB : IO Unit :=
+def registerAddLemToDB : IO Unit :=
   registerBuiltinAttribute {
     name  := `lemdb
     descr := "Use this attribute to add lemmas to lemma databases"
@@ -70,7 +69,7 @@ def addLemToDB : IO Unit :=
       throwError "Lemmas cannot be erased from lemma database"
   }
 
-initialize addLemToDB
+initialize registerAddLemToDB
 
 def findLemDB (dbname : Name) : CoreM (Option LemDB) := do
   let dbname := dbname
