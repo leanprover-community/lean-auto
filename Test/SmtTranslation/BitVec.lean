@@ -90,3 +90,10 @@ example : (12#10).toInt = 12 && (686#10).toInt = -338 := by auto
 example : (12#10).toInt = 12 ∧ (686#10).toInt = -338 := by auto
 example : Std.BitVec.ofInt 4 (-6) = 10#4 ∧ Std.BitVec.ofInt 4 10 = 10#4 := by auto
 example (x : Std.BitVec 4) : x + (Std.BitVec.not x) = 0xF#4 := by auto
+
+example
+  (i j max : Std.BitVec 64)
+  (h0 : Std.BitVec.ult i max) (h1 : Std.BitVec.ule j (max - i))
+  (h2 : Std.BitVec.ult 0#64 j) :
+  Std.BitVec.ult (max - (i + j)) (max - i) := by
+  auto

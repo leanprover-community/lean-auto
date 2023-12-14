@@ -287,8 +287,11 @@ def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : L
     trace[auto.smt.printCommands] "{cmd}"
   if (auto.smt.save.get (← getOptions)) then
     Solver.SMT.saveQuery commands
-  let .some _ ← Solver.SMT.querySolver commands
+  let .some proof ← Solver.SMT.querySolver commands
     | return .none
+  if auto.smt.rconsProof.get (← getOptions) then
+    let (_, _) ← Solver.SMT.getSexp proof
+    logWarning "Proof reconstruction is not implemented."
   if (auto.smt.trust.get (← getOptions)) then
     logWarning "Trusting SMT solvers. `autoSMTSorry` is used to discharge the goal."
     return .some (← Meta.mkAppM ``Solver.SMT.autoSMTSorry #[Expr.const ``False []])

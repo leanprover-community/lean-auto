@@ -6,6 +6,9 @@ open Lean
 initialize
   registerTraceClass `auto.smt.printCommands
   registerTraceClass `auto.smt.result
+  registerTraceClass `auto.smt.proof
+  registerTraceClass `auto.smt.model
+  registerTraceClass `auto.smt.stderr
 
 register_option auto.smt : Bool := {
   defValue := false
@@ -36,6 +39,11 @@ register_option auto.smt.save : Bool := {
 register_option auto.smt.savepath : String := {
   defValue := ""
   descr := auto.smt.save.doc
+}
+
+register_option auto.smt.rconsProof : Bool := {
+  defValue := false
+  descr := "Enable/Disable proof reconstruction"
 }
 
 namespace Auto
@@ -82,12 +90,6 @@ private def emitCommand (p : SolverProc) (c : IR.SMT.Command) : IO Unit := do
 private def emitCommands (p : SolverProc) (c : Array IR.SMT.Command) : IO Unit := do
   let _ ← c.mapM (emitCommand p)
 
-private def getSexp (s : String) : MetaM (Sexp × String) :=
-  match parseSexp s ⟨0⟩ {} with
-  | .complete se p => return (se, Substring.toString ⟨s, p, s.endPos⟩)
-  | .incomplete _ _ => throwError s!"getSexp :: Incomplete input {s}"
-  | .malformed => throwError s!"getSexp :: Malformed (prefix of) input {s}"
-
 def createSolver (name : SolverName) : MetaM SolverProc := do
   let tlim := auto.smt.timeout.get (← getOptions)
   match name with
@@ -102,8 +104,14 @@ where
 
 axiom autoSMTSorry.{u} (α : Sort u) : α
 
+def getSexp (s : String) : MetaM (Sexp × String) :=
+  match parseSexp s ⟨0⟩ {} with
+  | .complete se p => return (se, Substring.toString ⟨s, p, s.endPos⟩)
+  | .incomplete _ _ => throwError s!"getSexp :: Incomplete input {s}"
+  | .malformed => throwError s!"getSexp :: Malformed (prefix of) input {s}"
+
 /-- Only put declarations in the query -/
-def querySolver (query : Array IR.SMT.Command) : MetaM (Option Sexp) := do
+def querySolver (query : Array IR.SMT.Command) : MetaM (Option String) := do
   if !(auto.smt.get (← getOptions)) then
     throwError "querySolver :: Unexpected error"
   if (auto.smt.solver.name.get (← getOptions) == .none) then
@@ -125,7 +133,9 @@ def querySolver (query : Array IR.SMT.Command) : MetaM (Option Sexp) := do
     let stderr ← solver.stderr.readToEnd
     let (model, _) ← getSexp stdout
     solver.kill
-    trace[auto.smt.result] "{name} says Sat, model:\n{model}\nstderr:\n{stderr}"
+    trace[auto.smt.result] "{name} says Sat"
+    trace[auto.smt.model] "Model:\n{model}"
+    trace[auto.smt.stderr] "stderr:\n{stderr}"
     return .none
   | .atom (.symb "unsat") =>
     emitCommand solver .getUnsatCore
@@ -134,10 +144,11 @@ def querySolver (query : Array IR.SMT.Command) : MetaM (Option Sexp) := do
     let stdout ← solver.stdout.readToEnd
     let stderr ← solver.stderr.readToEnd
     let (unsatCore, stdout) ← getSexp stdout
-    let (proof, _) ← getSexp stdout
     solver.kill
-    trace[auto.smt.result] "{name} says Unsat, unsat core\n {unsatCore}\n:proof:\n {proof}\nstderr:\n{stderr}"
-    return .some proof
+    trace[auto.smt.result] "{name} says Unsat, unsat core:\n{unsatCore}"
+    trace[auto.smt.proof] "Proof:\n{stdout}"
+    trace[auto.smt.stderr] "stderr:\n{stderr}"
+    return .some stdout
   | _ =>
     trace[auto.smt.result] "{name} produces unexpected check-sat response\n {checkSatResponse}"
     return .none

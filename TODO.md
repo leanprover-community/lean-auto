@@ -30,6 +30,7 @@ __Auto Issues:__
   * GRUNGE: https://arxiv.org/abs/1903.02539
   * Seventeen benchmark: https://matryoshka-project.github.io/pubs/seventeen.pdf
 * Fix Josh's issue posted on Zulip. Implement mapping from monomorphized formula to original formula.
+* Fix: Proof parsing too slow
 
 __Lean Issues:__
 * ``cases`` fails on some simple examples. E.g, ``cases h : a.beq b`` fails if the goal contains term
