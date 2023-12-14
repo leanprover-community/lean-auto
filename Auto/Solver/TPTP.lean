@@ -12,7 +12,7 @@ initialize
 
 register_option auto.tptp : Bool := {
   defValue := false
-  descr := "Enable/Disable TPTP Solver"
+  descr := "Enable/Disable TPTP"
 }
 
 register_option auto.tptp.premiseSelection : Bool := {

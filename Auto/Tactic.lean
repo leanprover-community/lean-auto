@@ -285,6 +285,8 @@ def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : L
   let commands ← (lamFOL2SMT lamVarTy lamEVarTy exportLamTerms exportInds).run'
   for cmd in commands do
     trace[auto.smt.printCommands] "{cmd}"
+  if (auto.smt.save.get (← getOptions)) then
+    Solver.SMT.saveQuery commands
   let .some _ ← Solver.SMT.querySolver commands
     | return .none
   if (auto.smt.trust.get (← getOptions)) then
