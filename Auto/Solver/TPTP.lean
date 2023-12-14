@@ -20,6 +20,11 @@ register_option auto.tptp.premiseSelection : Bool := {
   descr := "Enable/Disable premise selection by TPTP solvers"
 }
 
+register_option auto.tptp.timeout : Nat := {
+  defValue := 10
+  descr := "Time limit for TPTP solvers (seconds)"
+}
+
 namespace Auto
 
 open Parser.TPTP
@@ -86,7 +91,8 @@ private def createAux (path : String) (args : Array String) : MetaM SolverProc :
 
 def queryZipperposition (query : String) : MetaM String := do
   let path := auto.tptp.zipperposition.path.get (← getOptions)
-  let solver ← createAux path #["-i=tptp", "-o=tptp", "--mode=ho-competitive", "-t=10"]
+  let tlim := auto.tptp.timeout.get (← getOptions)
+  let solver ← createAux path #["-i=tptp", "-o=tptp", "--mode=ho-competitive", s!"-t={tlim}"]
   solver.stdin.putStr s!"{query}\n"
   let (_, solver) ← solver.takeStdin
   let stdout ← solver.stdout.readToEnd
@@ -122,15 +128,17 @@ def queryZEPort (zept : ZEPortType) (query : String) : MetaM String := do
   return stdout
 where
   attempt (action : MetaM Unit) : MetaM Unit := try action catch _ => pure ()
-  createSolver (path : String) (idx : Nat) :=
+  createSolver (path : String) (idx : Nat) := do
     let path := if ("A" ++ path).back == '/' then path else path ++ "/"
+    let tlim := auto.tptp.timeout.get (← getOptions)
     match zept with
-    | .fo => createAux "python3" #[path ++ "portfolio.fo.parallel.py", s!"./.zeport_ignore/problem{idx}.p", "10", "true"]
-    | .lams => createAux "python3" #[path ++ "portfolio.lams.parallel.py", s!"./.zeport_ignore/problem{idx}.p", "10", s!"./.zeport_ignore/tmp{idx}", "true"]
+    | .fo => createAux "python3" #[path ++ "portfolio.fo.parallel.py", s!"./.zeport_ignore/problem{idx}.p", s!"{tlim}", "true"]
+    | .lams => createAux "python3" #[path ++ "portfolio.lams.parallel.py", s!"./.zeport_ignore/problem{idx}.p", s!"{tlim}", s!"./.zeport_ignore/tmp{idx}", "true"]
 
 def queryE (query : String) : MetaM String := do
   let path := auto.tptp.eproverHo.path.get (← getOptions)
-  let solver ← createAux path #["--tptp-format", "--cpu-limit=10"]
+  let tlim := auto.tptp.timeout.get (← getOptions)
+  let solver ← createAux path #["--tptp-format", s!"--cpu-limit={tlim}"]
   solver.stdin.putStr s!"{query}\n"
   let (_, solver) ← solver.takeStdin
   let stdout ← solver.stdout.readToEnd

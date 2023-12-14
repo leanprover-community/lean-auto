@@ -15,7 +15,12 @@ register_option auto.smt : Bool := {
 register_option auto.smt.trust : Bool := {
   defValue := false
   descr := "When this option is set to `true`, auto closes the " ++
-    "goal by `sorry` if SMT solver returns `unsat`."
+    "goal by `sorry` if SMT solver returns `unsat`"
+}
+
+register_option auto.smt.timeout : Nat := {
+  defValue := 10
+  descr := "Time limit for smt solvers (seconds)"
 }
 
 namespace Auto
@@ -66,10 +71,11 @@ private def getSexp (s : String) : MetaM (Sexp × String) :=
   | .malformed => throwError s!"getSexp :: Malformed (prefix of) input {s}"
 
 def createSolver (name : SolverName) : MetaM SolverProc := do
+  let tlim := auto.smt.timeout.get (← getOptions)
   match name with
-  | .z3   => createAux "z3" #["-in", "-smt2", "-T:10"]
+  | .z3   => createAux "z3" #["-in", "-smt2", s!"-T:{tlim}"]
   | .cvc4 => throwError "cvc4 is not supported"
-  | .cvc5 => createAux "cvc5" #["--tlimit=10000", "--produce-models"]
+  | .cvc5 => createAux "cvc5" #[s!"--tlimit={tlim * 1000}", "--produce-models"]
 where
   createAux (path : String) (args : Array String) : MetaM SolverProc :=
     IO.Process.spawn {stdin := .piped, stdout := .piped, stderr := .piped,

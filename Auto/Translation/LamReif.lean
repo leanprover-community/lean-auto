@@ -1457,8 +1457,8 @@ def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
       | throwError "processLam0Arg2 :: Unexpected error"
     if let .const arg₁FnName _ := arg₁fn then
       if let .some candidates := reifMapLam0Arg2Natlit.find? (fnName, arg₁FnName) then
-        for (e'con, tcon) in candidates do
-          if let .some n ← Meta.evalNat arg₁arg then
+        if let .some n ← Meta.evalNat arg₁arg then
+          for (e'con, tcon) in candidates do
             if (← Meta.isDefEqD e (e'con n)) then
               return .some (tcon n)
   return .none
