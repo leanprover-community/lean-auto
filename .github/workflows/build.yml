@@ -3,6 +3,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  write-all
+
 name: ci
 
 jobs:
