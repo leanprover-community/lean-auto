@@ -109,8 +109,8 @@ theorem Nat.max_add {a b c : Nat} : max a b + c = max (a + c) (b + c) := by
     simp [h, naleb]
 
 theorem Nat.max_lt {a b c : Nat} : max a b < c ↔ a < c ∧ b < c := by
-  rw [← Nat.lt_eq]; dsimp [Nat.lt]; rw [← Nat.add_one]; rw [Nat.max_add]
-  rw [Nat.max_le]; apply Iff.intro id id
+  rw [← Nat.lt_eq, Nat.lt]; dsimp only [Nat.le_eq]; rw [← Nat.add_one];
+  rw [Nat.max_add]; rw [Nat.max_le]; apply Iff.intro id id
 
 theorem Nat.max_zero_left {a : Nat} : max 0 a = a := by
   rw [Nat.max_def]; simp

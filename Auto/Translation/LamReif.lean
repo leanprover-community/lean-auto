@@ -1050,7 +1050,9 @@ section CheckerUtils
       else
         return (vs, minds))
     let vs ← vs.mapM validOfBetaReduce
+    /- Temporarily removing this operation until I can get Auto.Embedding.BitVec to build on Lean v4.4.0-rc1
     let vs ← vs.mapM (fun re => validOfPrepConv .validOfPushBVCast re [])
+    -/
     let vs ← vs.mapM validOfRevertAll
     for v in vs do
       trace[auto.lamReif.prep.printResult] "{v}"

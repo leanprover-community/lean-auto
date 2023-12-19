@@ -30,7 +30,7 @@ theorem toNat'_not_zero (p : Pos) : toNat' p ≠ 0 := by
     case inl H' => revert H'; exact IH
     case inr H' => cases H'
   case xI p' _ =>
-    simp [toNat'] 
+    simp [toNat']
 
 private theorem ofNat'WFAux (n n' : Nat) : n = n' + 2 → n / 2 < n := by
   intro H; apply Nat.div_lt_self
@@ -96,7 +96,7 @@ theorem ofNat'WF.doubleSucc_xI (n : Nat) :
     rw [ofNat'WF.succSucc];
     have heq : (2 * n' + 3 + 2) % 2 = 1 := by
       rw [Nat.add_mod_right]; rw [Nat.add_mod]
-      rw [Nat.mul_mod]; simp
+      rw [Nat.mul_mod]; simp; rfl
     rw [heq]; simp
     have heq' : Nat.succ ((2 * n' + 3) / 2) = n' + 2 := by
       apply congrArg; rw [Nat.add_comm];
