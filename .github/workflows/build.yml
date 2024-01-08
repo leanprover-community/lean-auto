@@ -11,6 +11,7 @@ name: ci
 jobs:
   build:
     name: ${{ matrix.name }}
+    if: github.ref_type == 'tag'
     runs-on: ${{ matrix.os }}
     defaults:
       run:
