@@ -1,0 +1,66 @@
+# This file was modified from ProofWidgets4's build.yml code
+on:
+  push:
+  pull_request:
+
+permissions:
+  write-all
+
+name: ci
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    if: github.ref_type == 'tag'
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: ${{ matrix.shell || 'sh' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - name: Build on Ubuntu
+          os: ubuntu-latest
+          lean_os: linux
+        - name: Build on macOS
+          os: macos-latest
+          lean_os: macOS
+        - name: Build on Windows
+          os: windows-latest
+          lean_os: windows
+          shell: msys2 {0}
+    steps:
+      - name: Install MSYS2 (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: msys2/setup-msys2@v2
+        with:
+          path-type: inherit
+          install: curl unzip
+
+      - name: Install elan
+        shell: bash
+        run: |
+          curl -sSfLO https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh
+          chmod +x elan-init.sh
+          ./elan-init.sh -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> $GITHUB_PATH
+
+      - uses: actions/checkout@v4
+
+      - name: Build package
+        run: lake build
+
+      - name: Create release for tag
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v1
+
+      - name: Upload release archive
+        if: github.ref_type == 'tag'
+        # All our runners are 64-bit ¯\_(ツ)_/¯
+        run: |
+          lake upload ${RELEASE_TAG}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          LEAN_OS: ${{ matrix.lean_os }}
