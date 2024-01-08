@@ -2,7 +2,8 @@ import Lake
 open Lake DSL
 
 package «auto» {
-  -- add any package configuration options here
+  precompileModules := true
+  preferReleaseBuild := true
 }
 
 require std from git
