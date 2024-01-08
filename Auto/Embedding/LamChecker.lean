@@ -2320,17 +2320,17 @@ theorem Checker.getValidExport_indirectReduceAux
   LamThmValid cpv.toLamValuationEraseEtom lctx t := by
   apply RTable.getValidExport_correct _ heq
   have lvtEq : (fun n => (lvt.get? n).getD (.base .prop)) = cpv.toLamVarTy := by
-    cases cpv; dsimp [CPVal.toLamVarTy]; apply funext; intro n
+    cases cpv; unfold CPVal.toLamVarTy; apply funext; intro n
     rw [← Option.getD_map (f:=@Sigma.fst LamSort _)]; dsimp
     apply congrFun; apply congrArg; rw [hlvt, BinTree.get?_mapOpt]
     apply Eq.symm; apply Option.map_eq_bind
   have litEq : (fun n => (lit.get? n).getD (.base .prop)) = cpv.toLamILTy := by
-    cases cpv; dsimp [CPVal.toLamILTy]; apply funext; intro n
+    cases cpv; unfold CPVal.toLamILTy; apply funext; intro n
     rw [← Option.getD_map (f:=@Sigma.fst LamSort _)]; dsimp
     apply congrFun; apply congrArg; rw [hlit, BinTree.get?_mapOpt]
     apply Eq.symm; apply Option.map_eq_bind
   rw [lvtEq, litEq] at runEq; cases runEq; apply ChkSteps.run_correct
-  dsimp [RTable.inv, BinTree.get?]
+  unfold RTable.inv BinTree.get?
   exists fun _ => BinTree.get?'_leaf _ ▸ GLift.up False
   cases hImport; apply ImportTable.importFacts_correct
 

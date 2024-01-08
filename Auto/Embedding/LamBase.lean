@@ -2343,7 +2343,7 @@ theorem LamTerm.maxLooseBVarSucc.spec (m : Nat) :
 | .app _ t₁ t₂ => by
   dsimp [hasLooseBVarGe, maxLooseBVarSucc];
   rw [Bool.or_eq_true]; rw [spec m t₁]; rw [spec m t₂];
-  simp [Nat.max]; rw [Nat.gt_eq_succ_le]; rw [Nat.gt_eq_succ_le]; rw [Nat.gt_eq_succ_le];
+  simp [Nat.max]; rw [Nat.gt_eq_succ_le, Nat.gt_eq_succ_le, Nat.gt_eq_succ_le];
   rw [Nat.le_max_iff]
 
 def LamTerm.maxEVarSucc : LamTerm → Nat

@@ -1607,7 +1607,7 @@ def LamTerm.mpAll? (rw : LamTerm) (t : LamTerm) : Option LamTerm :=
   | _ => .none
 
 theorem LamTerm.evarBounded_mpAll? : evarBounded (LamTerm.mpAll? rw) rw.maxEVarSucc := by
-  dsimp [LamTerm.mpAll?]
+  unfold LamTerm.mpAll?
   cases rw <;> try dsimp <;> try apply evarBounded_none
   case app s fn rhs =>
     cases fn <;> try dsimp <;> try apply evarBounded_none
@@ -1621,7 +1621,7 @@ theorem LamTerm.evarBounded_mpAll? : evarBounded (LamTerm.mpAll? rw) rw.maxEVarS
 
 theorem LamGenConv.mpAll?
   (hvalid : LamThmValid lval [] rw) : LamGenConv lval (LamTerm.mpAll? rw) := by
-  dsimp [LamTerm.mpAll?]
+  unfold LamTerm.mpAll?
   cases rw <;> try dsimp <;> try apply LamGenConv.none
   case app s fn rhs =>
     cases fn <;> try dsimp <;> try apply LamGenConv.none
