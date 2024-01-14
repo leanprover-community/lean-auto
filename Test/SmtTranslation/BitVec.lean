@@ -97,3 +97,13 @@ example
   (h2 : Std.BitVec.ult 0#64 j) :
   Std.BitVec.ult (max - (i + j)) (max - i) := by
   auto
+
+example : (2#6) < (3#6) := by auto
+
+example (a b : Std.BitVec 6) :
+  (a < b) = (a.ult b) ∧ (a ≤ b) = (a.ule b) := by auto
+
+theorem auto_bitvec_inequality_test (i j max : Std.BitVec 64)
+  (h0 : i < max) (h1 : j <= max - i) (h2 : 0#64 < j) :
+  (max - (i + j)) < (max - i) := by
+  auto

@@ -1158,6 +1158,14 @@ abbrev BitVec.uge (a b : Std.BitVec n) : Bool := Std.BitVec.ule b a
 abbrev BitVec.ugt (a b : Std.BitVec n) : Bool := Std.BitVec.ult b a
 abbrev BitVec.sge (a b : Std.BitVec n) : Bool := Std.BitVec.sle b a
 abbrev BitVec.sgt (a b : Std.BitVec n) : Bool := Std.BitVec.slt b a
+abbrev BitVec.propule (a b : Std.BitVec n) : Prop := a.toFin <= b.toFin
+abbrev BitVec.propult (a b : Std.BitVec n) : Prop := a.toFin < b.toFin
+abbrev BitVec.propsle (a b : Std.BitVec n) : Prop := a.toInt <= b.toInt
+abbrev BitVec.propslt (a b : Std.BitVec n) : Prop := a.toInt < b.toInt
+abbrev BitVec.propuge (a b : Std.BitVec n) : Prop := BitVec.propule b a
+abbrev BitVec.propugt (a b : Std.BitVec n) : Prop := BitVec.propult b a
+abbrev BitVec.propsge (a b : Std.BitVec n) : Prop := BitVec.propsle b a
+abbrev BitVec.propsgt (a b : Std.BitVec n) : Prop := BitVec.propslt b a
 abbrev BitVec.smtHshiftLeft (a : Std.BitVec n) (b : Std.BitVec m) := Std.BitVec.shiftLeft a b.toNat
 abbrev BitVec.smtHushiftRight (a : Std.BitVec n) (b : Std.BitVec m) := Std.BitVec.ushiftRight a b.toNat
 abbrev BitVec.smtHsshiftRight (a : Std.BitVec n) (b : Std.BitVec m) := Std.BitVec.sshiftRight a b.toNat
@@ -1356,17 +1364,17 @@ def reifMapLam0Arg2Natlit : HashMap (Name × Name) (Array ((Nat → Expr) × (Na
     ((``Complement.complement, ``Std.BitVec),
               #[(fun n => .app (.const ``Std.BitVec.not []) (.lit (.natVal n)), fun n => .base (.bvnot n))]),
     ((``LE.le, ``Std.BitVec),
-              #[(fun n => .app (.const ``Std.BitVec.ule []) (.lit (.natVal n)), fun n => .base (.bvule n)),
-                (fun n => .app (.const ``Std.BitVec.sle []) (.lit (.natVal n)), fun n => .base (.bvsle n))]),
+              #[(fun n => .app (.const ``BitVec.propule []) (.lit (.natVal n)), fun n => .base (.bvpropule n)),
+                (fun n => .app (.const ``BitVec.propsle []) (.lit (.natVal n)), fun n => .base (.bvpropsle n))]),
     ((``GE.ge, ``Std.BitVec),
-              #[(fun n => .app (.const ``BitVec.uge []) (.lit (.natVal n)), fun n => .bvuge n),
-                (fun n => .app (.const ``BitVec.sge []) (.lit (.natVal n)), fun n => .bvsge n)]),
+              #[(fun n => .app (.const ``BitVec.propuge []) (.lit (.natVal n)), fun n => .bvpropuge n),
+                (fun n => .app (.const ``BitVec.propsge []) (.lit (.natVal n)), fun n => .bvpropsge n)]),
     ((``LT.lt, ``Std.BitVec),
-              #[(fun n => .app (.const ``Std.BitVec.ult []) (.lit (.natVal n)), fun n => .base (.bvult n)),
-                (fun n => .app (.const ``Std.BitVec.slt []) (.lit (.natVal n)), fun n => .base (.bvslt n))]),
+              #[(fun n => .app (.const ``BitVec.propult []) (.lit (.natVal n)), fun n => .base (.bvpropult n)),
+                (fun n => .app (.const ``BitVec.propslt []) (.lit (.natVal n)), fun n => .base (.bvpropslt n))]),
     ((``GT.gt, ``Std.BitVec),
-              #[(fun n => .app (.const ``BitVec.ugt []) (.lit (.natVal n)), fun n => .bvugt n),
-                (fun n => .app (.const ``BitVec.sgt []) (.lit (.natVal n)), fun n => .bvsgt n)])
+              #[(fun n => .app (.const ``BitVec.propugt []) (.lit (.natVal n)), fun n => .bvpropugt n),
+                (fun n => .app (.const ``BitVec.propsgt []) (.lit (.natVal n)), fun n => .bvpropsgt n)])
   ]
 
 /--

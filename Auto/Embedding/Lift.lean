@@ -185,6 +185,18 @@ def bvsltLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} B
 def bvsleLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} Bool :=
   GLift.up (Std.BitVec.sle x.down y.down)
 
+def bvpropultLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} Prop :=
+  GLift.up (x.down.toFin < y.down.toFin)
+
+def bvpropuleLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} Prop :=
+  GLift.up (x.down.toFin <= y.down.toFin)
+
+def bvpropsltLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} Prop :=
+  GLift.up (x.down.toInt < y.down.toInt)
+
+def bvpropsleLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} Prop :=
+  GLift.up (x.down.toInt <= y.down.toInt)
+
 def bvandLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
   GLift.up (Std.BitVec.and x.down y.down)
 
