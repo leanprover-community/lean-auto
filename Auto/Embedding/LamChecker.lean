@@ -3,8 +3,7 @@ import Auto.Embedding.LamConv
 import Auto.Embedding.LamInference
 import Auto.Embedding.LamLCtx
 import Auto.Embedding.LamPrep
--- Temporarily removing this input until I can get this file to build on Lean v4.4.0-rc1
--- import Auto.Embedding.BitVec
+import Auto.Embedding.LamBitVec
 import Auto.Embedding.LamInductive
 import Auto.Lib.BinTree
 open Lean
@@ -602,10 +601,8 @@ inductive PrepConvStep where
   | validOfPropEq : PrepConvStep
   /-- (a = b) ↔ (a ∨ b) ∧ (¬ a ∨ ¬ b) -/
   | validOfPropNe : PrepConvStep
-  /- Temporarily removing this operation until I can get Auto.Embedding.BitVec to build on Lean v4.4.0-rc1
   /-- Basic BitVec simplification operations -/
   | validOfPushBVCast : PrepConvStep
-  -/
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
 inductive WFStep where
@@ -706,9 +703,7 @@ def PrepConvStep.toString : PrepConvStep → String
 | .validOfNotImpEquivAndNot => s!"validOfNotImpEquivAndNot"
 | .validOfPropEq => s!"validOfPropEq"
 | .validOfPropNe => s!"validOfPropNe"
-/- Temporarily removing this operation until I can get Auto.Embedding.BitVec to build on Lean v4.4.0-rc1
 | .validOfPushBVCast => s!"validOfPushBVCast"
--/
 
 def WFStep.toString : WFStep → String
 | .wfOfCheck lctx t => s!"wfOfCheck {lctx} {t}"
@@ -1150,9 +1145,7 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
 | .validOfNotImpEquivAndNot => LamTerm.not_imp_equiv_and_not?
 | .validOfPropEq => LamTerm.propeq?
 | .validOfPropNe => LamTerm.propne?
-/- Temporarily removing this operation until I can get Auto.Embedding.BitVec to build on Lean v4.4.0-rc1
 | .validOfPushBVCast => fun t => LamTerm.pushBVCast .none t
--/
 
 @[reducible] def WFStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : WFStep) → EvalResult
 | .wfOfCheck lctx t =>
@@ -2117,11 +2110,9 @@ theorem PrepConvStep.eval_correct (lval : LamValuation) :
 | .validOfPropNe => And.intro
   LamGenConv.propne?
   (LamTerm.evarBounded_of_evarEquiv @LamTerm.maxEVarSucc_propne?)
-/- Temporarily removing this operation until I can get Auto.Embedding.BitVec to build on Lean v4.4.0-rc1
 | .validOfPushBVCast => And.intro
   LamGenConv.pushBVCast
   (LamTerm.evarBounded_of_evarEquiv LamTerm.evarEquiv_pushBVCast)
--/
 
 theorem WFStep.eval_correct
   (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
@@ -2339,7 +2330,7 @@ theorem Checker.getValidExport_indirectReduceAux
     apply congrFun; apply congrArg; rw [hlit, BinTree.get?_mapOpt]
     apply Eq.symm; apply Option.map_eq_bind
   rw [lvtEq, litEq] at runEq; cases runEq; apply ChkSteps.run_correct
-  dsimp [RTable.inv, BinTree.get?]
+  unfold RTable.inv BinTree.get?
   exists fun _ => BinTree.get?'_leaf _ ▸ GLift.up False
   cases hImport; apply ImportTable.importFacts_correct
 

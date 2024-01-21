@@ -2,11 +2,12 @@ import Lake
 open Lake DSL
 
 package «auto» {
-  -- add any package configuration options here
+  precompileModules := true
+  preferReleaseBuild := true
 }
 
 require std from git
-  "https://github.com/leanprover/std4.git"@"9e37a01f8590f81ace095b56710db694b5bf8ca0"
+  "https://github.com/leanprover/std4.git"@"main"
 
 @[default_target]
 lean_lib «Auto» {

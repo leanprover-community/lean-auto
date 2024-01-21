@@ -118,7 +118,7 @@ theorem ofNat'WF_toNat' (p : Pos) : ofNat'WF (toNat' p) = p := by
 theorem toNat'_ofNat'WF (n : Nat) : n ≠ 0 → toNat' (ofNat'WF n) = n := by
   revert n; apply ofNat'WF.induction
   case base₀ => intro H; contradiction
-  case base₁ => intro H; rfl
+  case base₁ => intro _; rfl
   case ind =>
     intro x IH _
     have hne : (x + 2) / 2 ≠ 0 := by

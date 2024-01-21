@@ -432,7 +432,7 @@ theorem allp'_node (p : α → Prop) :
         have h' := h (2 * n + 5)
         rw [get?'_succSucc] at h'
         have eq₁ : (2 * n + 5) % 2 = 1 := by
-          rw [Nat.add_mod]; simp; rfl
+          simp [Nat.add_mod]; rfl
         have eq₂ : (2 * n + 5) / 2 = n + 2 := by
           rw [Nat.add_comm _ 5];
           rw [Nat.add_mul_div_left];

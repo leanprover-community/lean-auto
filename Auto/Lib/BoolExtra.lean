@@ -15,7 +15,7 @@ theorem Bool.eq_false_of_ne_true {a : Bool} : a ≠ true → a = false := by
 theorem Bool.ne_true_of_eq_false {a : Bool} : a = false → a ≠ true := by
   cases a <;> decide
 
-theorem Bool.eq_false_eq_not_eq_true {a : Bool} : (a ≠ true) = (a = false) := by
+theorem Bool.eq_false_eq_not_eq_true {a : Bool} : (a = false) = (a ≠ true) := by
   cases a <;> decide
 
 theorem Bool.and_eq_false (a b : Bool) : ((a && b) = false) = ((a = false) ∨ (b = false)) := by
@@ -52,6 +52,16 @@ theorem Bool.ite_eq_false (p : Prop) [inst : Decidable p] (a b : α) : ¬ p → 
   intro hnp; dsimp [ite]; cases inst
   case isFalse _ => rfl
   case isTrue hp => apply False.elim (hnp hp)
+
+theorem Bool.dite_eq_true (p : Prop) [inst : Decidable p] (a : p → α) (b : ¬ p → α) (proof : p) : dite p a b = a proof := by
+  dsimp [dite]; cases inst
+  case isFalse hnp => apply False.elim (hnp proof)
+  case isTrue _ => rfl
+
+theorem Bool.dite_eq_false (p : Prop) [inst : Decidable p] (a : p → α) (b : ¬ p → α) (proof : ¬ p) : dite p a b = b proof := by
+  dsimp [dite]; cases inst
+  case isFalse _ => rfl
+  case isTrue hp => apply False.elim (proof hp)
 
 /--
   Similar to `ite`, but does not have complicated dependent types
