@@ -82,7 +82,8 @@ def getInhFactsFromLCtx : MetaM (Array Lemma) := withNewMCtxDepth do
       if ← isDefEq lem.type ty then
         new := false; break
     if !new then continue
-    ret := ret.push ⟨proof, ty, #[]⟩
+    let name ← fid.getUserName
+    ret := ret.push ⟨⟨proof, ty, .leaf s!"lctxInh {name}"⟩, #[]⟩
   return ret
 
 private def inhFactMatchAtomTysAux (inhTy : Lemma) (atomTys : Array Expr) : MetaM LemmaInsts :=
@@ -114,11 +115,11 @@ def inhFactMatchAtomTys (inhTys : Array Lemma) (atomTys : Array Expr) : MetaM (A
     if li.params.size != 0 || li.nbinders != 0 then continue
     let mut new? := true
     let canTy ← canonicalize li.type atomTys
-    for (_, ty) in ret do
+    for ⟨_, ty, _⟩ in ret do
       if canTy == ty then
         new? := false
     if !new? then continue
-    ret := ret.push ⟨li.proof, canTy⟩
+    ret := ret.push ⟨li.proof, canTy, li.deriv⟩
   return ret
 where
   canonicalize (inhTy : Expr) (atomTys : Array Expr) : MetaM Expr :=

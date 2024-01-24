@@ -140,17 +140,18 @@ def collectLctxLemmas (lctxhyps : Bool) (ngoalAndBinders : Array FVarId) : Tacti
       if ← Prep.isNonemptyInhabited type then
         continue
       if ¬ decl.isAuxDecl ∧ (← Meta.isProp type) then
-        lemmas := lemmas.push ⟨mkFVar fVarId, type, #[]⟩
+        let name ← fVarId.getUserName
+        lemmas := lemmas.push ⟨⟨mkFVar fVarId, type, .leaf s!"lctxLem {name}"⟩, #[]⟩
     return lemmas
 
 def collectUserLemmas (terms : Array Term) : TacticM (Array Lemma) :=
   Meta.withNewMCtxDepth do
     let mut lemmas := #[]
-    for ⟨proof, type, params⟩ in ← terms.mapM Prep.elabLemma do
+    for ⟨⟨proof, type, deriv⟩, params⟩ in ← terms.mapM Prep.elabLemma do
       if ← Prep.isNonemptyInhabited type then
         throwError "invalid lemma {type}, lemmas should not be inhabitation facts"
       else if ← Meta.isProp type then
-        lemmas := lemmas.push ⟨proof, ← instantiateMVars type, params⟩
+        lemmas := lemmas.push ⟨⟨proof, ← instantiateMVars type, deriv⟩, params⟩
       else
         -- **TODO**: Relax condition?
         throwError "invalid lemma {type} for auto, proposition expected"
@@ -158,18 +159,23 @@ def collectUserLemmas (terms : Array Term) : TacticM (Array Lemma) :=
 
 def collectHintDBLemmas (names : Array Name) : TacticM (Array Lemma) := do
   let mut hs : HashSet Name := HashSet.empty
+  let mut ret : Array Lemma := #[]
   for name in names do
     let .some db ← findLemDB name
       | throwError "unknown lemma database {name}"
-    hs := mergeHashSet hs (← db.toHashSet)
-  liftM <| hs.toArray.mapM Lemma.ofConst
+    let lemNames ← db.toHashSet
+    for lname in lemNames do
+      if !hs.contains lname then
+        hs := hs.insert lname
+        ret := ret.push (← Lemma.ofConst lname (.leaf s!"lemdb {name} {lname}"))
+  return ret
 
 def collectDefeqLemmas (names : Array Name) : TacticM (Array Lemma) :=
   Meta.withNewMCtxDepth do
     let lemmas ← names.concatMapM Prep.elabDefEq
-    lemmas.mapM (fun (⟨proof, type, params⟩ : Lemma) => do
+    lemmas.mapM (fun (⟨⟨proof, type, deriv⟩, params⟩ : Lemma) => do
       let type ← instantiateMVars type
-      return ⟨proof, type, params⟩)
+      return ⟨⟨proof, type, deriv⟩, params⟩)
 
 def unfoldConstAndPreprocessLemma (unfolds : Array Prep.ConstUnfoldInfo) (lem : Lemma) : MetaM Lemma := do
   let type ← prepReduceExpr (← instantiateMVars lem.type)
@@ -350,10 +356,10 @@ def runNativeProverWithAuto
 def runAuto
   (declName? : Option Name) (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr := do
   -- Simplify `ite`
-  let ite_simp_lem ← Lemma.ofConst ``Auto.Bool.ite_simp
+  let ite_simp_lem ← Lemma.ofConst ``Auto.Bool.ite_simp (.leaf "hw Auto.Bool.ite_simp")
   let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem ite_simp_lem)
   -- Simplify `decide`
-  let decide_simp_lem ← Lemma.ofConst ``Auto.Bool.decide_simp
+  let decide_simp_lem ← Lemma.ofConst ``Auto.Bool.decide_simp (.leaf "hw Auto.Bool.decide_simp")
   let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem decide_simp_lem)
   let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) (minds : Array (Array SimpleIndVal)) : LamReif.ReifM Expr := (do
     let exportFacts ← LamReif.reifFacts uvalids

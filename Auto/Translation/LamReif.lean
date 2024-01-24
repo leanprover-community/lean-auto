@@ -1620,7 +1620,7 @@ def reifTermCheckType (e : Expr) : ReifM (LamSort × LamTerm) := do
 
 /-- Return the positions of the reified and `resolveImport`-ed facts within the `validTable` -/
 def reifFacts (facts : Array UMonoFact) : ReifM (Array LamTerm) :=
-  facts.mapM (fun (proof, ty) => do
+  facts.mapM (fun ⟨proof, ty, _⟩ => do
     let (s, lamty) ← reifTermCheckType ty
     if s != .base .prop then
       throwError "reifFacts :: Fact {lamty} is not of type `prop`"
@@ -1629,7 +1629,7 @@ def reifFacts (facts : Array UMonoFact) : ReifM (Array LamTerm) :=
     return lamty)
 
 def reifInhabitations (inhs : Array UMonoFact) : ReifM (Array LamSort) :=
-  inhs.mapM (fun (inhTy, ty) => do
+  inhs.mapM (fun ⟨inhTy, ty, _⟩ => do
     let s ← reifType ty
     newInhabitation inhTy s
     trace[auto.lamReif.printResult] "Successfully reified inhabitation proof of {ty} to λsort `{s}`"

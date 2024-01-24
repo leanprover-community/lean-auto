@@ -741,7 +741,7 @@ def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State
   -- Lemma instances
   let lis := monoSt.lisArr.concatMap id
   let fvarRepMFactAction : FVarRep.FVarRepM (Array UMonoFact) :=
-    lis.mapM (fun li => do return ⟨li.proof, ← FVarRep.replacePolyWithFVar li.type⟩)
+    lis.mapM (fun li => do return ⟨li.proof, ← FVarRep.replacePolyWithFVar li.type, li.deriv⟩)
   let fvarRepMInductAction (ivals : Array (Array SimpleIndVal)) : FVarRep.FVarRepM (Array (Array SimpleIndVal)) :=
     ivals.mapM (fun svals => svals.mapM (fun ⟨name, type, ctors, projs⟩ => do
       FVarRep.processType type
@@ -754,7 +754,7 @@ def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State
       return ⟨name, type, ctors, projs⟩))
   let metaStateMAction : MetaState.MetaStateM (Array FVarId × Reif.State) := (do
     let (uvalids, s) ← fvarRepMFactAction.run { ciMap := monoSt.ciMap }
-    for (proof, ty) in uvalids do
+    for ⟨proof, ty, _⟩ in uvalids do
       trace[auto.mono.printResult] "Monomorphized :: {proof} : {ty}"
     let exlis := s.exprMap.toList.map (fun (e, id) => (id, e))
     let cilis ← s.ciIdMap.toList.mapM (fun (ci, id) => do return (id, ← MetaState.runMetaM ci.toExpr))
@@ -765,7 +765,7 @@ def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State
     let mut tyCanInhs := #[]
     for e in tyCans do
       if let .some inh ← MetaState.runMetaM <| Meta.withNewMCtxDepth <| Meta.trySynthInhabited e then
-        tyCanInhs := tyCanInhs.push ⟨inh, e⟩
+        tyCanInhs := tyCanInhs.push ⟨inh, e, .leaf "tyCanInh"⟩
     let inhMatches ← MetaState.runMetaM (Inhabitation.inhFactMatchAtomTys inhFacts tyCans)
     let inhs := tyCanInhs ++ inhMatches
     trace[auto.mono] "Monomorphizing inhabitation facts took {(← IO.monoMsNow) - startTime}ms"

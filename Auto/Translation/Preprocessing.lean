@@ -12,7 +12,10 @@ namespace Auto
 
 namespace Prep
 
-/-- From a user-provided term `stx`, produce a lemma -/
+/--
+  From a user-provided term `stx`, produce a lemma
+  Note that the `deriv` of the lemma is left unspecified
+-/
 def elabLemma (stx : Term) : TacticM Lemma :=
   -- elaborate term as much as possible and abstract any remaining mvars:
   Term.withoutModifyingElabMetaStateWithInfo <| withRef stx <| Term.withoutErrToSorry do
@@ -22,7 +25,7 @@ def elabLemma (stx : Term) : TacticM Lemma :=
     let abstres ← Auto.abstractMVars e
     let e := abstres.expr
     let paramNames := abstres.paramNames
-    return Lemma.mk e (← inferType e) paramNames
+    return Lemma.mk ⟨e, ← inferType e, .leaf "?elabLemma"⟩ paramNames
 
 def addRecAsLemma (recVal : RecursorVal) : MetaM (Array Lemma) := do
   let some (.inductInfo indVal) := (← getEnv).find? recVal.getInduct
@@ -44,13 +47,16 @@ def addRecAsLemma (recVal : RecursorVal) : MetaM (Array Lemma) := do
         return (← mkLambdaFVars ys proof, ← mkForallFVars ys eq)
       let proof ← instantiateMVars (← mkLambdaFVars xs proof)
       let eq ← instantiateMVars (← mkForallFVars xs eq)
-      return ⟨proof, eq, recVal.levelParams.toArray⟩
+      return ⟨⟨proof, eq, .leaf s!"rec {recVal.name}.{ctorName}"⟩, recVal.levelParams.toArray⟩
   for lem in res do
     let ty' ← Meta.inferType lem.proof
     if !(← Meta.isDefEq ty' lem.type) then
       throwError "addRecAsLemma :: Application type mismatch"
   return Array.mk res
 
+/--
+  Note that the `deriv` of the lemmas are left unspecified
+-/
 def elabDefEq (name : Name) : TacticM (Array Lemma) := do
   match (← getEnv).find? name with
   | some (.recInfo val) =>

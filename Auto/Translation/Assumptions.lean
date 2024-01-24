@@ -3,15 +3,31 @@ import Std.Data.Array.Basic
 import Auto.Lib.BoolExtra
 import Auto.Lib.MessageData
 import Auto.Lib.ExprExtra
+import Auto.Lib.ListExtra
 import Auto.Lib.Containers
 import Auto.Lib.AbstractMVars
 open Lean
 
 namespace Auto
 
-structure Lemma where
-  proof  : Expr       -- Proof of the lemma
-  type   : Expr       -- The statement of the lemma
+/-- Proof Tree -/
+inductive DTr where
+  | node : String → Array DTr → DTr
+  | leaf : String → DTr
+deriving Inhabited, Hashable, BEq
+
+/--
+  Universe monomprphic facts
+  User-supplied facts should have their universe level parameters
+    instantiated before being put into `Reif.State.facts`
+-/
+structure UMonoFact where
+  proof  : Expr
+  type   : Expr
+  deriv  : DTr
+deriving Inhabited, Hashable, BEq
+
+structure Lemma extends UMonoFact where
   params : Array Name -- Universe Levels
 deriving Inhabited, Hashable, BEq
 
@@ -19,48 +35,41 @@ instance : ToMessageData Lemma where
   toMessageData lem := MessageData.compose
     m!"⦗⦗ {lem.proof} : {lem.type} @@ " (.compose (MessageData.array lem.params toMessageData) m!" ⦘⦘")
 
-/--
-  Universe monomprphic facts
-  User-supplied facts should have their universe level parameters
-    instantiated before being put into `Reif.State.facts`
-  The first `Expr` is the proof, and the second `Expr` is the fact
--/
-abbrev UMonoFact := Expr × Expr
-
-def Lemma.ofUMonoFact (fact : UMonoFact) : Lemma := ⟨fact.fst, fact.snd, #[]⟩
+def Lemma.ofUMonoFact (fact : UMonoFact) : Lemma := { fact with params := #[] }
 
 def Lemma.toUMonoFact? (lem : Lemma) : Option UMonoFact :=
   match lem.params with
-  | ⟨.nil⟩ => .some ⟨lem.proof, lem.type⟩
+  | ⟨.nil⟩ => .some lem.toUMonoFact
   | ⟨_::_⟩ => .none
 
 def Lemma.instantiateLevelParamsArray (lem : Lemma) (lvls : Array Level) : Lemma :=
-  let ⟨proof, type, params⟩ := lem
-  ⟨proof.instantiateLevelParamsArray params lvls,
+  let ⟨⟨proof, type, deriv⟩, params⟩ := lem
+  ⟨⟨proof.instantiateLevelParamsArray params lvls,
    type.instantiateLevelParamsArray params lvls,
+   deriv⟩,
    params[lvls.size:]⟩
 
 def Lemma.instantiateLevelParams (lem : Lemma) (lvls : List Level) : Lemma :=
   Lemma.instantiateLevelParamsArray lem ⟨lvls⟩
 
 def Lemma.instantiateMVars (lem : Lemma) : MetaM Lemma := do
-  let ⟨proof, type, params⟩ := lem
+  let ⟨⟨proof, type, deriv⟩, params⟩ := lem
   let proof ← Lean.instantiateMVars proof
   let type ← Lean.instantiateMVars type
-  return ⟨proof, type, params⟩
+  return ⟨⟨proof, type, deriv⟩, params⟩
 
 def Lemma.betaReduceType (lem : Lemma) : CoreM Lemma := do
-  let ⟨proof, type, params⟩ := lem
+  let ⟨⟨proof, type, deriv⟩, params⟩ := lem
   let type ← Core.betaReduce type
-  return ⟨proof, type, params⟩
+  return ⟨⟨proof, type, deriv⟩, params⟩
 
 /-- Create a `Lemma` out of a constant, given the name of the constant -/
-def Lemma.ofConst (name : Name) : CoreM Lemma := do
+def Lemma.ofConst (name : Name) (deriv : DTr) : CoreM Lemma := do
   let .some decl := (← getEnv).find? name
     | throwError "Lemma.ofConst :: Unknown constant {name}"
   let type := decl.type
   let params := decl.levelParams
-  return ⟨.const name (params.map Level.param), type, ⟨params⟩⟩
+  return ⟨⟨.const name (params.map Level.param), type, deriv⟩, ⟨params⟩⟩
 
 /-- Check whether `lem₁` subsumes `lem₂` -/
 def Lemma.subsumeQuick (lem₁ lem₂ : Lemma) : MetaM Bool := Meta.withNewMCtxDepth <| do
@@ -95,7 +104,7 @@ def Lemma.reorderForallInstDep (lem : Lemma) : MetaM Lemma := do
     let proof := Expr.headBeta (Lean.mkAppN lem.proof xs)
     let proof ← Meta.mkLambdaFVars prec (← Meta.mkLambdaFVars trail proof)
     let type ← Meta.mkForallFVars prec (← Meta.mkForallFVars trail body)
-    return ⟨proof, type, lem.params⟩
+    return ⟨⟨proof, type, lem.deriv⟩, lem.params⟩
 
 /--
   Rewrite using a universe-monomorphic rigid equality
@@ -104,10 +113,10 @@ def Lemma.reorderForallInstDep (lem : Lemma) : MetaM Lemma := do
   · If `lhs` does not occur in `lem.type`, return `.none`
 -/
 def Lemma.rewriteUMonoRigid? (lem : Lemma) (rw : UMonoFact) : MetaM (Option Lemma) := do
-  let (rwproof, rwtype) := rw
+  let ⟨rwproof, rwtype, rwDeriv⟩ := rw
   let .some (α, lhs, rhs) ← Meta.matchEq? rwtype
     | throwError "Lemma.rewriteUMonoRigid :: {rwtype} is not an equality"
-  let ⟨proof, e, params⟩ := lem
+  let ⟨⟨proof, e, lemDeriv⟩, params⟩ := lem
   let eAbst ← Meta.kabstract e lhs
   unless eAbst.hasLooseBVars do
     return .none
@@ -116,7 +125,7 @@ def Lemma.rewriteUMonoRigid? (lem : Lemma) (rw : UMonoFact) : MetaM (Option Lemm
   unless (← Meta.isTypeCorrect motive) do
     throwError "Lemma.rewriteUMonoRigid :: Motive {motive} is not type correct"
   let eqPrf ← Meta.mkEqNDRec motive proof rwproof
-  return .some ⟨eqPrf, eNew, params⟩
+  return .some ⟨⟨eqPrf, eNew, .node "rw" #[lemDeriv, rwDeriv]⟩, params⟩
 
 /--
   Exhaustively rewrite using a universe-polymorphic rigid equality
@@ -172,10 +181,10 @@ structure LemmaInst extends Lemma where
 deriving Inhabited, Hashable, BEq
 
 def LemmaInst.ofLemma (lem : Lemma) : MetaM LemmaInst := do
-  let ⟨proof, type, params⟩ := lem
+  let ⟨⟨proof, type, deriv⟩, params⟩ := lem
   Meta.forallTelescope type fun xs _ => do
     let proof ← Meta.mkLambdaFVars xs (mkAppN proof xs)
-    let lem' : Lemma := ⟨proof, type, params⟩
+    let lem' : Lemma := ⟨⟨proof, type, deriv⟩, params⟩
     return ⟨lem', xs.size, xs.size⟩
 
 /--
@@ -183,7 +192,7 @@ def LemmaInst.ofLemma (lem : Lemma) : MetaM LemmaInst := do
   But, if a prop-binder is an instance binder, we still introduce it
 -/
 def LemmaInst.ofLemmaHOL (lem : Lemma) : MetaM LemmaInst := do
-  let ⟨proof, type, params⟩ := lem
+  let ⟨⟨proof, type, deriv⟩, params⟩ := lem
   Meta.forallTelescope type fun xs _ => do
     let mut xs' := #[]
     for x in xs do
@@ -192,17 +201,17 @@ def LemmaInst.ofLemmaHOL (lem : Lemma) : MetaM LemmaInst := do
         break
       xs' := xs'.push x
     let proof ← Meta.mkLambdaFVars xs' (mkAppN proof xs')
-    let lem' : Lemma := ⟨proof, type, params⟩
+    let lem' : Lemma := ⟨⟨proof, type, deriv⟩, params⟩
     return ⟨lem', xs'.size, xs'.size⟩
 
 def LemmaInst.ofLemmaLeadingDepOnly (lem : Lemma) : MetaM LemmaInst := do
-  let ⟨proof, type, params⟩ := lem
+  let ⟨⟨proof, type, deriv⟩, params⟩ := lem
   let nld := Expr.numLeadingDepArgs type
   Meta.forallBoundedTelescope type nld fun xs _ => do
     if xs.size != nld then
       throwError "LemmaInst.ofLemmaLeadingDepOnly :: Unexpected error"
     let proof ← Meta.mkLambdaFVars xs (mkAppN proof xs)
-    let lem' : Lemma := ⟨proof, type, params⟩
+    let lem' : Lemma := ⟨⟨proof, type, deriv⟩, params⟩
     return ⟨lem', xs.size, xs.size⟩
 
 /-- Get the proof of the lemma that `li` is an instance of -/
@@ -253,6 +262,7 @@ structure MLemmaInst where
   origProof : Expr
   args      : Array Expr
   type      : Expr
+  deriv     : DTr
 deriving Inhabited, Hashable, BEq
 
 instance : ToMessageData MLemmaInst where
@@ -262,7 +272,7 @@ instance : ToMessageData MLemmaInst where
         m!" : {mi.type} ⦘⦘")
 
 def MLemmaInst.ofLemmaInst (li : LemmaInst) : MetaM (Array Level × Array Expr × MLemmaInst) := do
-  let ⟨proof, type, params⟩ := li.toLemma
+  let ⟨⟨proof, type, deriv⟩, params⟩ := li.toLemma
   let lvls ← params.mapM (fun _ => Meta.mkFreshLevelMVar)
   let proof := proof.instantiateLevelParamsArray params lvls
   let type := type.instantiateLevelParamsArray params lvls
@@ -273,10 +283,10 @@ def MLemmaInst.ofLemmaInst (li : LemmaInst) : MetaM (Array Level × Array Expr �
   if args.size != li.nargs then
     throwError "MLemmaInst.ofLemmaInst :: Unexpected error"
   let type ← Meta.instantiateForall type mvars
-  return (lvls, mvars, ⟨origProof, args, type⟩)
+  return (lvls, mvars, ⟨origProof, args, type, deriv⟩)
 
 def LemmaInst.ofMLemmaInst (mi : MLemmaInst) : MetaM LemmaInst := do
-  let ⟨origProof, args, type⟩ := mi
+  let ⟨origProof, args, type, deriv⟩ := mi
   let origProof ← instantiateMVars origProof
   let args ← args.mapM instantiateMVars
   let type ← instantiateMVars type
@@ -289,7 +299,7 @@ def LemmaInst.ofMLemmaInst (mi : MLemmaInst) : MetaM LemmaInst := do
   let nargs := args.size
   let proof := s.lctx.mkLambda s.fvars proof
   let type := s.lctx.mkForall s.fvars type
-  let lem : Lemma := ⟨proof, type, s.paramNames⟩
+  let lem : Lemma := ⟨⟨proof, type, deriv⟩, s.paramNames⟩
   return ⟨lem, nbinders, nargs⟩
 
 partial def collectUniverseLevels : Expr → MetaM (HashSet Level)
@@ -323,7 +333,7 @@ partial def collectUniverseLevels : Expr → MetaM (HashSet Level)
 | .proj .. => throwError "Please unfold projections before collecting universe levels"
 
 def computeMaxLevel (facts : Array UMonoFact) : MetaM Level := do
-  let levels ← facts.foldlM (fun hs (_, ty) => do
+  let levels ← facts.foldlM (fun hs ⟨_, ty, _⟩ => do
     let tyUs ← collectUniverseLevels ty
     return mergeHashSet tyUs hs) HashSet.empty
   -- Compute the universe level that we need to lift to

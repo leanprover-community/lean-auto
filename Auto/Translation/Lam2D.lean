@@ -354,7 +354,10 @@ private def callNativeExternMAction
     trace[auto.printHyps] "{hyp}"
   let hyps ← runMetaM <| hyps.mapM (fun e => Core.betaReduce e)
   let hypFvars ← withHyps hyps
-  let lemmas : Array Lemma := (hyps.zip hypFvars).map (fun (ty, proof) => ⟨.fvar proof, ty, #[]⟩)
+  -- debug
+  -- **TODO: Specify origin**
+  let lemmas : Array Lemma := (hyps.zip hypFvars).map (fun (ty, proof) =>
+    ⟨⟨.fvar proof, ty, .leaf "?callNativeExternMAction"⟩, #[]⟩)
   -- Note that we're not introducing bound variables into local context
   --   in the above action, so it's reasonable to use `runMetaM`
   let atomsToAbstract ← getAtomsToAbstract
