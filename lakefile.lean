@@ -7,7 +7,7 @@ package «auto» {
 }
 
 require std from git
-  "https://github.com/leanprover/std4.git"@"main"
+  "https://github.com/leanprover/std4.git"@"3959bc5de5142d06d7673ec091d406e5abe45bf0"
 
 @[default_target]
 lean_lib «Auto» {

@@ -7,7 +7,7 @@
    "rev": "3959bc5de5142d06d7673ec091d406e5abe45bf0",
    "name": "std",
    "manifestFile": "lake-manifest.json",
-   "inputRev": "main",
+   "inputRev": "3959bc5de5142d06d7673ec091d406e5abe45bf0",
    "inherited": false,
    "configFile": "lakefile.lean"}],
  "name": "auto",
