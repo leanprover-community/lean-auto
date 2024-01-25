@@ -9,6 +9,7 @@ initialize
   registerTraceClass `auto.smt.proof
   registerTraceClass `auto.smt.model
   registerTraceClass `auto.smt.stderr
+  registerTraceClass `auto.smt.unsatCore
 
 register_option auto.smt : Bool := {
   defValue := false
@@ -110,8 +111,24 @@ def getSexp (s : String) : MetaM (Sexp × String) :=
   | .incomplete _ _ => throwError s!"getSexp :: Incomplete input {s}"
   | .malformed => throwError s!"getSexp :: Malformed (prefix of) input {s}"
 
+/--
+  Recover id of valid facts from unsat core. Refer to `lamFOL2SMT`
+-/
+def validFactOfUnsatCore (unsatCore : Sexp) : MetaM (Array Nat) := do
+  let .app unsatCore := unsatCore
+    | throwError "validFactOfUnsatCore :: Malformed unsat core `{unsatCore}`"
+  let mut ret := #[]
+  for sexp in unsatCore do
+    let .atom (.symb name) := sexp
+      | continue
+    if name.take 11 == "valid_fact_" then
+      let .some n := (name.drop 11).toNat?
+        | throwError "validFactOfUnsatCore :: The id {name.drop 11} of {name} is invalid"
+      ret := ret.push n
+  return ret
+
 /-- Only put declarations in the query -/
-def querySolver (query : Array IR.SMT.Command) : MetaM (Option String) := do
+def querySolver (query : Array IR.SMT.Command) : MetaM (Option (Sexp × String)) := do
   if !(auto.smt.get (← getOptions)) then
     throwError "querySolver :: Unexpected error"
   if (auto.smt.solver.name.get (← getOptions) == .none) then
@@ -148,7 +165,7 @@ def querySolver (query : Array IR.SMT.Command) : MetaM (Option String) := do
     trace[auto.smt.result] "{name} says Unsat, unsat core:\n{unsatCore}"
     trace[auto.smt.proof] "Proof:\n{stdout}"
     trace[auto.smt.stderr] "stderr:\n{stderr}"
-    return .some stdout
+    return .some (unsatCore, stdout)
   | _ =>
     trace[auto.smt.result] "{name} produces unexpected check-sat response\n {checkSatResponse}"
     return .none

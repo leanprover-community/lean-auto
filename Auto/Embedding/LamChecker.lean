@@ -627,104 +627,190 @@ inductive ChkStep where
   | w : WFStep → ChkStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
-def ConvStep.toString : ConvStep → String
-| .validOfHeadBeta pos => s!"validOfHeadBeta {pos}"
-| .validOfBetaBounded pos bound => s!"validOfBetaBounded {pos} {bound}"
-| .validOfExtensionalize pos => s!"validOfExtensionalize {pos}"
-| .validOfEqSymm pos => s!"validOfEqSymm {pos}"
-| .validOfMp pos rw => s!"validOfMp {pos} {rw}"
-| .validOfMpAll pos rw => s!"validOfMpAll {pos} {rw}"
-| .validOfCongrArg pos rw => s!"validOfCongrArg {pos} {rw}"
-| .validOfCongrFun pos rw => s!"validOfCongrFun {pos} {rw}"
-| .validOfCongr pos rwFn rwArg => s!"validOfCongr {pos} {rwFn} {rwArg}"
-| .validOfCongrArgs pos rws => s!"validOfCongrArgs {pos} {rws}"
-| .validOfCongrFunN pos rwFn n => s!"validOfCongrFunN {pos} {rwFn} {n}"
-| .validOfCongrs pos rwFn rwArgs => s!"validOfCongrs {pos} {rwFn} {rwArgs}"
 
-def ConvAtStep.toString : ConvAtStep → String
-| .validOfEtaExpand1At pos occ => s!"validOfEtaExpand1At {pos} {occ}"
-| .validOfEtaReduce1At pos occ => s!"validOfEtaReduce1At {pos} {occ}"
-| .validOfEtaExpandNAt pos n occ => s!"validOfEtaExpandNAt {pos} {n} {occ}"
-| .validOfEtaReduceNAt pos n occ => s!"validOfEtaReduceNAt {pos} {n} {occ}"
-| .validOfExtensionalizeEqAt pos occ => s!"validOfExtensionalizeEqAt {pos} {occ}"
-| .validOfExtensionalizeEqFNAt pos n occ => s!"validOfExtensionalizeEqFNAt {pos} {n} {occ}"
-| .validOfIntensionalizeEqAt pos occ => s!"validOfIntensionalizeEqAt {pos} {occ}"
+section ChkStepToString
 
-def EtomStep.toString : EtomStep → String
-| .skolemize pos => s!"skolemize {pos}"
-| .define t => s!"define {t}"
+  def ConvStep.toString : ConvStep → String
+  | .validOfHeadBeta pos => s!"validOfHeadBeta {pos}"
+  | .validOfBetaBounded pos bound => s!"validOfBetaBounded {pos} {bound}"
+  | .validOfExtensionalize pos => s!"validOfExtensionalize {pos}"
+  | .validOfEqSymm pos => s!"validOfEqSymm {pos}"
+  | .validOfMp pos rw => s!"validOfMp {pos} {rw}"
+  | .validOfMpAll pos rw => s!"validOfMpAll {pos} {rw}"
+  | .validOfCongrArg pos rw => s!"validOfCongrArg {pos} {rw}"
+  | .validOfCongrFun pos rw => s!"validOfCongrFun {pos} {rw}"
+  | .validOfCongr pos rwFn rwArg => s!"validOfCongr {pos} {rwFn} {rwArg}"
+  | .validOfCongrArgs pos rws => s!"validOfCongrArgs {pos} {rws}"
+  | .validOfCongrFunN pos rwFn n => s!"validOfCongrFunN {pos} {rwFn} {n}"
+  | .validOfCongrs pos rwFn rwArgs => s!"validOfCongrs {pos} {rwFn} {rwArgs}"
 
-def FactStep.toString : FactStep → String
-| .boolFacts => s!"boolFacts"
-| .iteSpec s => s!"iteSpec {s}"
+  def ConvAtStep.toString : ConvAtStep → String
+  | .validOfEtaExpand1At pos occ => s!"validOfEtaExpand1At {pos} {occ}"
+  | .validOfEtaReduce1At pos occ => s!"validOfEtaReduce1At {pos} {occ}"
+  | .validOfEtaExpandNAt pos n occ => s!"validOfEtaExpandNAt {pos} {n} {occ}"
+  | .validOfEtaReduceNAt pos n occ => s!"validOfEtaReduceNAt {pos} {n} {occ}"
+  | .validOfExtensionalizeEqAt pos occ => s!"validOfExtensionalizeEqAt {pos} {occ}"
+  | .validOfExtensionalizeEqFNAt pos n occ => s!"validOfExtensionalizeEqFNAt {pos} {n} {occ}"
+  | .validOfIntensionalizeEqAt pos occ => s!"validOfIntensionalizeEqAt {pos} {occ}"
 
-def InferenceStep.toString : InferenceStep → String
-| .validOfBVarLower pv pn => s!"validOfBVarLower {pv} {pn}"
-| .validOfBVarLowers pv pns => s!"validOfBVarLowers {pv} {pns}"
-| .validOfImp p₁₂ p₁ => s!"validOfImp {p₁₂} {p₁}"
-| .validOfImps imp ps => s!"validOfImps {imp} {ps}"
-| .validOfInstantiate1 pos arg => s!"validOfInstantiate1 {pos} {arg}"
-| .validOfInstantiate pos args => s!"validOfInstantiate {pos} {args}"
-| .validOfInstantiateRev pos args => s!"validOfInstantiateRev {pos} {args}"
-| .validOfEqualize pos occ => s!"validOfEqualize {pos} {occ}"
-| .validOfAndLeft pos occ => s!"validOfAndLeft {pos} {occ}"
-| .validOfAndRight pos occ => s!"validOfAndRight {pos} {occ}"
+  def EtomStep.toString : EtomStep → String
+  | .skolemize pos => s!"skolemize {pos}"
+  | .define t => s!"define {t}"
 
-def LCtxStep.toString : LCtxStep → String
-| .validOfIntro1F pos => s!"validOfIntro1F {pos}"
-| .validOfIntro1H pos => s!"validOfIntro1H {pos}"
-| .validOfIntros pos idx => s!"validOfIntros {pos} {idx}"
-| .validOfRevert pos => s!"validOfRevert {pos}"
-| .validOfReverts pos idx => s!"validOfReverts {pos} {idx}"
-| .validOfAppend pos ex => s!"validOfAppend {pos} {ex}"
-| .validOfPrepend pos ex => s!"validOfPrepend {pos} {ex}"
+  def FactStep.toString : FactStep → String
+  | .boolFacts => s!"boolFacts"
+  | .iteSpec s => s!"iteSpec {s}"
 
-def NonemptyStep.toString : NonemptyStep → String
-| .nonemptyOfAtom n => s!"nonemptyOfAtom {n}"
-| .nonemptyOfEtom n => s!"nonemptyOfEtom {n}"
+  def InferenceStep.toString : InferenceStep → String
+  | .validOfBVarLower pv pn => s!"validOfBVarLower {pv} {pn}"
+  | .validOfBVarLowers pv pns => s!"validOfBVarLowers {pv} {pns}"
+  | .validOfImp p₁₂ p₁ => s!"validOfImp {p₁₂} {p₁}"
+  | .validOfImps imp ps => s!"validOfImps {imp} {ps}"
+  | .validOfInstantiate1 pos arg => s!"validOfInstantiate1 {pos} {arg}"
+  | .validOfInstantiate pos args => s!"validOfInstantiate {pos} {args}"
+  | .validOfInstantiateRev pos args => s!"validOfInstantiateRev {pos} {args}"
+  | .validOfEqualize pos occ => s!"validOfEqualize {pos} {occ}"
+  | .validOfAndLeft pos occ => s!"validOfAndLeft {pos} {occ}"
+  | .validOfAndRight pos occ => s!"validOfAndRight {pos} {occ}"
 
-def PrepConvStep.toString : PrepConvStep → String
-| .validOfPropNeEquivEqNot => s!"validOfPropNeEquivEqNot"
-| .validOfTrueEqFalseEquivFalse => s!"validOfTrueEqFalseEquivFalse"
-| .validOfFalseEqTrueEquivFalse => s!"validOfFalseEqTrueEquivFalse"
-| .validOfEqTrueEquiv => s!"validOfEqTrueEquiv"
-| .validOfEqFalseEquiv => s!"validOfEqFalseEquiv"
-| .validOfNeTrueEquivEqFalse => s!"validOfNeTrueEquivEqFalse"
-| .validOfNeFalseEquivEqTrue => s!"validOfNeFalseEquivEqTrue"
-| .validOfNotEqTrueEquivEqFalse => s!"validOfNotEqTrueEquivEqFalse"
-| .validOfNotEqFalseEquivEqTrue => s!"validOfNotEqFalseEquivEqTrue"
-| .validOfNotNotEquiv => s!"validOfNotNotEquiv"
-| .validOfNotEqEquivEqNot => s!"validOfNotEqEquivEqNot"
-| .validOfNotEqNotEquivEq => s!"validOfNotEqNotEquivEq"
-| .validOfPropext => s!"validOfPropext"
-| .validOfNotAndEquivNotOrNot => s!"validOfNotAndEquivNotOrNot"
-| .validOfNotOrEquivNotAndNot => s!"validOfNotOrEquivNotAndNot"
-| .validOfImpEquivNotOr => s!"validOfImpEquivNotOr"
-| .validOfNotImpEquivAndNot => s!"validOfNotImpEquivAndNot"
-| .validOfPropEq => s!"validOfPropEq"
-| .validOfPropNe => s!"validOfPropNe"
-| .validOfPushBVCast => s!"validOfPushBVCast"
+  def LCtxStep.toString : LCtxStep → String
+  | .validOfIntro1F pos => s!"validOfIntro1F {pos}"
+  | .validOfIntro1H pos => s!"validOfIntro1H {pos}"
+  | .validOfIntros pos idx => s!"validOfIntros {pos} {idx}"
+  | .validOfRevert pos => s!"validOfRevert {pos}"
+  | .validOfReverts pos idx => s!"validOfReverts {pos} {idx}"
+  | .validOfAppend pos ex => s!"validOfAppend {pos} {ex}"
+  | .validOfPrepend pos ex => s!"validOfPrepend {pos} {ex}"
 
-def WFStep.toString : WFStep → String
-| .wfOfCheck lctx t => s!"wfOfCheck {lctx} {t}"
-| .wfOfAppend pos ex => s!"wfOfAppend {pos} {ex}"
-| .wfOfPrepend pos ex => s!"wfOfPrepend {pos} {ex}"
-| .wfOfHeadBeta pos => s!"wfOfHeadBeta {pos}"
-| .wfOfBetaBounded pos bound => s!"wfOfBetaBounded {pos} {bound}"
+  def NonemptyStep.toString : NonemptyStep → String
+  | .nonemptyOfAtom n => s!"nonemptyOfAtom {n}"
+  | .nonemptyOfEtom n => s!"nonemptyOfEtom {n}"
 
-def ChkStep.toString : ChkStep → String
-| .c s  => ConvStep.toString s
-| .ca s => ConvAtStep.toString s
-| .e s  => EtomStep.toString s
-| .f s  => FactStep.toString s
-| .i s  => InferenceStep.toString s
-| .l s  => LCtxStep.toString s
-| .n s  => NonemptyStep.toString s
-| .p s pos occ => s!"{PrepConvStep.toString s} {pos} {occ}"
-| .w s  => WFStep.toString s
+  def PrepConvStep.toString : PrepConvStep → String
+  | .validOfPropNeEquivEqNot => s!"validOfPropNeEquivEqNot"
+  | .validOfTrueEqFalseEquivFalse => s!"validOfTrueEqFalseEquivFalse"
+  | .validOfFalseEqTrueEquivFalse => s!"validOfFalseEqTrueEquivFalse"
+  | .validOfEqTrueEquiv => s!"validOfEqTrueEquiv"
+  | .validOfEqFalseEquiv => s!"validOfEqFalseEquiv"
+  | .validOfNeTrueEquivEqFalse => s!"validOfNeTrueEquivEqFalse"
+  | .validOfNeFalseEquivEqTrue => s!"validOfNeFalseEquivEqTrue"
+  | .validOfNotEqTrueEquivEqFalse => s!"validOfNotEqTrueEquivEqFalse"
+  | .validOfNotEqFalseEquivEqTrue => s!"validOfNotEqFalseEquivEqTrue"
+  | .validOfNotNotEquiv => s!"validOfNotNotEquiv"
+  | .validOfNotEqEquivEqNot => s!"validOfNotEqEquivEqNot"
+  | .validOfNotEqNotEquivEq => s!"validOfNotEqNotEquivEq"
+  | .validOfPropext => s!"validOfPropext"
+  | .validOfNotAndEquivNotOrNot => s!"validOfNotAndEquivNotOrNot"
+  | .validOfNotOrEquivNotAndNot => s!"validOfNotOrEquivNotAndNot"
+  | .validOfImpEquivNotOr => s!"validOfImpEquivNotOr"
+  | .validOfNotImpEquivAndNot => s!"validOfNotImpEquivAndNot"
+  | .validOfPropEq => s!"validOfPropEq"
+  | .validOfPropNe => s!"validOfPropNe"
+  | .validOfPushBVCast => s!"validOfPushBVCast"
 
-instance : ToString ChkStep where
-  toString := ChkStep.toString
+  def WFStep.toString : WFStep → String
+  | .wfOfCheck lctx t => s!"wfOfCheck {lctx} {t}"
+  | .wfOfAppend pos ex => s!"wfOfAppend {pos} {ex}"
+  | .wfOfPrepend pos ex => s!"wfOfPrepend {pos} {ex}"
+  | .wfOfHeadBeta pos => s!"wfOfHeadBeta {pos}"
+  | .wfOfBetaBounded pos bound => s!"wfOfBetaBounded {pos} {bound}"
+
+  def ChkStep.toString : ChkStep → String
+  | .c s  => ConvStep.toString s
+  | .ca s => ConvAtStep.toString s
+  | .e s  => EtomStep.toString s
+  | .f s  => FactStep.toString s
+  | .i s  => InferenceStep.toString s
+  | .l s  => LCtxStep.toString s
+  | .n s  => NonemptyStep.toString s
+  | .p s pos occ => s!"{PrepConvStep.toString s} {pos} {occ}"
+  | .w s  => WFStep.toString s
+
+  instance : ToString ChkStep where
+    toString := ChkStep.toString
+
+end ChkStepToString
+
+
+section ChkStepPremises
+
+  def ConvStep.premises : ConvStep → List Nat
+  | .validOfHeadBeta pos => [pos]
+  | .validOfBetaBounded pos _ => [pos]
+  | .validOfExtensionalize pos => [pos]
+  | .validOfEqSymm pos => [pos]
+  | .validOfMp pos rw => [pos, rw]
+  | .validOfMpAll pos rw => [pos, rw]
+  | .validOfCongrArg pos rw => [pos, rw]
+  | .validOfCongrFun pos rw => [pos, rw]
+  | .validOfCongr pos rwFn rwArg => [pos, rwFn, rwArg]
+  | .validOfCongrArgs pos rws => pos :: rws
+  | .validOfCongrFunN pos rwFn _ => [pos, rwFn]
+  | .validOfCongrs pos rwFn rwArgs => pos :: rwFn :: rwArgs
+
+  def ConvAtStep.premises : ConvAtStep → List Nat
+  | .validOfEtaExpand1At pos _ => [pos]
+  | .validOfEtaReduce1At pos _ => [pos]
+  | .validOfEtaExpandNAt pos _ _ => [pos]
+  | .validOfEtaReduceNAt pos _ _ => [pos]
+  | .validOfExtensionalizeEqAt pos _ => [pos]
+  | .validOfExtensionalizeEqFNAt pos _ _ => [pos]
+  | .validOfIntensionalizeEqAt pos _ => [pos]
+
+  def EtomStep.premises : EtomStep → List Nat
+  | .skolemize pos => [pos]
+  | .define _ => []
+
+  def FactStep.premises : FactStep → List Nat
+  | .boolFacts => []
+  | .iteSpec _ => []
+
+  def InferenceStep.premises : InferenceStep → List Nat
+  | .validOfBVarLower pv pn => [pv, pn]
+  | .validOfBVarLowers pv pns => pv :: pns
+  | .validOfImp p₁₂ p₁ => [p₁₂, p₁]
+  | .validOfImps imp ps => imp :: ps
+  | .validOfInstantiate1 pos _ => [pos]
+  | .validOfInstantiate pos _ => [pos]
+  | .validOfInstantiateRev pos _ => [pos]
+  | .validOfEqualize pos _ => [pos]
+  | .validOfAndLeft pos _ => [pos]
+  | .validOfAndRight pos _ => [pos]
+
+  def LCtxStep.premises : LCtxStep → List Nat
+  | .validOfIntro1F pos => [pos]
+  | .validOfIntro1H pos => [pos]
+  | .validOfIntros pos _ => [pos]
+  | .validOfRevert pos => [pos]
+  | .validOfReverts pos _ => [pos]
+  | .validOfAppend pos _ => [pos]
+  | .validOfPrepend pos _ => [pos]
+
+  def NonemptyStep.premises : NonemptyStep → List Nat
+  | .nonemptyOfAtom _ => []
+  | .nonemptyOfEtom _ => []
+
+  /--
+    Whether a term is well-formed or not does not depend
+      on assertions. So, the premises of a WFStep is
+      deemed empty (although for some `WFStep`s they seem
+      to have premise syntactically)
+  -/
+  def WFStep.premises (_ : WFStep) : List Nat := []
+
+  def ChkStep.premises : ChkStep → List Nat
+  | .c s  => ConvStep.premises s
+  | .ca s => ConvAtStep.premises s
+  | .e s  => EtomStep.premises s
+  | .f s  => FactStep.premises s
+  | .i s  => InferenceStep.premises s
+  | .l s  => LCtxStep.premises s
+  | .n s  => NonemptyStep.premises s
+  | .p _ pos _ => [pos]
+  | .w s  => WFStep.premises s
+
+end ChkStepPremises
+
 
 inductive EvalResult where
   | fail

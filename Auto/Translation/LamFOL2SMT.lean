@@ -422,7 +422,10 @@ def termAuxDecls : Array IR.SMT.Command :=
       (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "y" #[], .sConst (.num 0)], .qStrApp "x" #[], .qStrApp "mod" #[.qStrApp "x" #[], .qStrApp "y" #[]]])
    ]
 
-/-- `facts` should not contain import versions of `eq, ∀` or `∃` -/
+/--
+  `facts` should not contain import versions of `eq, ∀` or `∃`
+  `valid_fact_{i}` corresponds to the `i`-th entry in `facts`
+-/
 def lamFOL2SMT
   (lamVarTy lamEVarTy : Array LamSort)
   (facts : Array LamTerm) (minds : Array MutualIndInfo) :

@@ -147,7 +147,8 @@ def collectLctxLemmas (lctxhyps : Bool) (ngoalAndBinders : Array FVarId) : Tacti
 def collectUserLemmas (terms : Array Term) : TacticM (Array Lemma) :=
   Meta.withNewMCtxDepth do
     let mut lemmas := #[]
-    for ⟨⟨proof, type, deriv⟩, params⟩ in ← terms.mapM Prep.elabLemma do
+    for term in terms do
+      let ⟨⟨proof, type, deriv⟩, params⟩ ← Prep.elabLemma term (.leaf s!"❰{term}❱")
       if ← Prep.isNonemptyInhabited type then
         throwError "invalid lemma {type}, lemmas should not be inhabitation facts"
       else if ← Meta.isProp type then
@@ -293,8 +294,13 @@ def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : L
     trace[auto.smt.printCommands] "{cmd}"
   if (auto.smt.save.get (← getOptions)) then
     Solver.SMT.saveQuery commands
-  let .some proof ← Solver.SMT.querySolver commands
+  let .some (unsatCore, proof) ← Solver.SMT.querySolver commands
     | return .none
+  for id in ← Solver.SMT.validFactOfUnsatCore unsatCore do
+    let .some t := exportLamTerms[id]?
+      | throwError "runAuto :: Index {id} of `exportLamTerm` out of range"
+    let vderiv ← LamReif.collectDerivFor (.valid [] t)
+    trace[auto.smt.unsatCore] "valid_fact_{id}: {vderiv}"
   if auto.smt.rconsProof.get (← getOptions) then
     let (_, _) ← Solver.SMT.getSexp proof
     logWarning "Proof reconstruction is not implemented."
@@ -314,7 +320,7 @@ def queryNative
   (prover? : Option (Array Lemma → MetaM Expr) := .none) : LamReif.ReifM (Option Expr) := do
   let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ←
     Lam2D.callNative_checker exportInhs exportFacts (prover?.getD Solver.Native.queryNative)
-  LamReif.newAssertion proof proofLamTerm
+  LamReif.newAssertion proof (.leaf "by_native::queryNative") proofLamTerm
   let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
   let forallElimed ← LamReif.validOfElimForalls etomInstantiated usedInhs
   let contra ← LamReif.validOfImps forallElimed unsatCore
@@ -436,8 +442,7 @@ def evalIntromono : Tactic
 | _ => throwUnsupportedSyntax
 
 /--
-  A monomorphization interface that can be invoked by repos dependent
-    on `lean-auto`.
+  A monomorphization interface that can be invoked by repos dependent on `lean-auto`.
   **TODO: Change `prover : Array Lemma → MetaM Expr` to have type `proverName : String`**
 -/
 def monoInterface

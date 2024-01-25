@@ -14,9 +14,8 @@ namespace Prep
 
 /--
   From a user-provided term `stx`, produce a lemma
-  Note that the `deriv` of the lemma is left unspecified
 -/
-def elabLemma (stx : Term) : TacticM Lemma :=
+def elabLemma (stx : Term) (deriv : DTr) : TacticM Lemma :=
   -- elaborate term as much as possible and abstract any remaining mvars:
   Term.withoutModifyingElabMetaStateWithInfo <| withRef stx <| Term.withoutErrToSorry do
     let e ← Term.elabTerm stx none
@@ -25,13 +24,13 @@ def elabLemma (stx : Term) : TacticM Lemma :=
     let abstres ← Auto.abstractMVars e
     let e := abstres.expr
     let paramNames := abstres.paramNames
-    return Lemma.mk ⟨e, ← inferType e, .leaf "?elabLemma"⟩ paramNames
+    return Lemma.mk ⟨e, ← inferType e, deriv⟩ paramNames
 
 def addRecAsLemma (recVal : RecursorVal) : MetaM (Array Lemma) := do
   let some (.inductInfo indVal) := (← getEnv).find? recVal.getInduct
     | throwError "Expected inductive datatype: {recVal.getInduct}"
   let expr := mkConst recVal.name (recVal.levelParams.map Level.param)
-  let res ← forallBoundedTelescope (← inferType expr) recVal.getMajorIdx fun xs body => do
+  let res ← forallBoundedTelescope (← inferType expr) recVal.getMajorIdx fun xs _ => do
     let expr := mkAppN expr xs
     let inductTyArgs : Array Expr := xs[:indVal.numParams]
     indVal.ctors.mapM fun ctorName => do
@@ -54,9 +53,6 @@ def addRecAsLemma (recVal : RecursorVal) : MetaM (Array Lemma) := do
       throwError "addRecAsLemma :: Application type mismatch"
   return Array.mk res
 
-/--
-  Note that the `deriv` of the lemmas are left unspecified
--/
 def elabDefEq (name : Name) : TacticM (Array Lemma) := do
   match (← getEnv).find? name with
   | some (.recInfo val) =>
@@ -65,7 +61,8 @@ def elabDefEq (name : Name) : TacticM (Array Lemma) := do
   | some (.defnInfo _) =>
     -- Generate definitional equation for (possibly recursive) declaration
     match ← getEqnsFor? name (nonRec := true) with
-    | some eqns => eqns.mapM fun eq => do elabLemma (← `($(mkIdent eq)))
+    | some eqns => eqns.mapIdxM fun i eq =>
+      do elabLemma (← `($(mkIdent eq))) (.leaf s!"defeq {i.val} {name}")
     | none => return #[]
   | some (.axiomInfo _)  => return #[]
   | some (.thmInfo _)    => return #[]

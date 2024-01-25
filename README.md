@@ -74,9 +74,12 @@ Lean-auto is still under development, but it's already able to solve nontrivial 
 
 ## Rules in Proof Tree
 * `?<name>`: Not specified, generated in function `<name>`. This is for debug purpose only.
+* `defeq <num> <name>`: The `<num>`-th definitional equality associated with definition `<name>`
 * `hw <name>`: Lemmas hard-wired into Lean-auto
 * `lctxInh`: Inhabitation fact from local context
 * `lctxLem`: Lemma from local context
+* `queryNative::<func_name>`: Proved by native prover
 * `rec <indName>.<ctorName>`
 * `rw [0, 1]`: Rewrite `0` using `1` (`1` must be an equality)
 * `tyCanInh`: Inhabitation instance synthesized for canonicalized type
+* `❰<term>❱`: User-provided lemma `<term>`

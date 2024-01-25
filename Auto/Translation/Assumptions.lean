@@ -16,6 +16,14 @@ inductive DTr where
   | leaf : String → DTr
 deriving Inhabited, Hashable, BEq
 
+partial def DTr.toString : DTr → String
+| .node s dtrs =>
+  s ++ " [" ++ String.intercalate ", " (dtrs.map DTr.toString).data ++ "]"
+| .leaf s => s
+
+instance : ToString DTr where
+  toString := DTr.toString
+
 /--
   Universe monomprphic facts
   User-supplied facts should have their universe level parameters
