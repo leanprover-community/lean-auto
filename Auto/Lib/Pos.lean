@@ -48,7 +48,7 @@ def ofNat'WF (n : Nat) :=
     match n % 2 with
     | 0 => .xO (ofNat'WF (n / 2))
     | _ => .xI (ofNat'WF (n / 2))
-decreasing_by apply ofNat'WFAux; assumption
+decreasing_by rw [← h]; apply ofNat'WFAux; assumption
 
 theorem ofNat'WF.inductionOn.{u}
   {motive : Nat → Sort u} (x : Nat)
@@ -96,7 +96,7 @@ theorem ofNat'WF.doubleSucc_xI (n : Nat) :
     rw [ofNat'WF.succSucc];
     have heq : (2 * n' + 3 + 2) % 2 = 1 := by
       rw [Nat.add_mod_right]; rw [Nat.add_mod]
-      rw [Nat.mul_mod]; simp; rfl
+      rw [Nat.mul_mod]; simp
     rw [heq]; simp
     have heq' : Nat.succ ((2 * n' + 3) / 2) = n' + 2 := by
       apply congrArg; rw [Nat.add_comm];

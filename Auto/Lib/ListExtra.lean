@@ -54,15 +54,15 @@ theorem List.eq_of_beq_eq_true [BEq α] (H : ∀ (x y : α), (x == y) = true →
 section
 
   variable (l : List α) (x : α) (xs : List α) (d : α)
-  
+
   @[simp]
   theorem List.getD_cons_zero : List.getD (x :: xs) 0 d = x :=
     rfl
-  
+
   @[simp]
   theorem List.getD_cons_succ : List.getD (x :: xs) (n + 1) d = List.getD xs n d :=
     rfl
-  
+
   theorem List.getD_eq_get {n : Nat} (hn : n < l.length) : l.getD n d = l.get ⟨n, hn⟩ := by
     induction l generalizing n
     case nil => cases hn
@@ -107,7 +107,7 @@ def List.merge (r : α → α → Prop) [DecidableRel r] : List α → List α �
   | [], l' => l'
   | l, [] => l
   | a :: l, b :: l' => if r a b then a :: merge r l (b :: l') else b :: merge r (a :: l) l'
-  termination_by merge r l₁ l₂ => List.length l₁ + List.length l₂
+  termination_by l₁ l₂ => List.length l₁ + List.length l₂
 
 def List.mergeSort (r : α → α → Prop) [DecidableRel r]  : List α → List α
   | [] => []
@@ -120,7 +120,7 @@ def List.mergeSort (r : α → α → Prop) [DecidableRel r]  : List α → List
     have := h.1
     have := h.2
     exact merge r (mergeSort r ls.1) (mergeSort r ls.2)
-  termination_by mergeSort r l => List.length l
+  termination_by l => List.length l
 
 theorem List.map_equiv (f₁ f₂ : α → β) (hequiv : ∀ x, f₁ x = f₂ x) : List.map f₁ xs = List.map f₂ xs := by
   induction xs

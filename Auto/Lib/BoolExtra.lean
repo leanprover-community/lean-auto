@@ -37,7 +37,7 @@ noncomputable def Bool.ofProp (c : Prop) : Bool :=
 
 theorem Bool.ofProp_spec (c : Prop) : Bool.ofProp c ↔ c := by
   dsimp [ofProp]
-  cases h : Classical.propDecidable c <;> simp [*]
+  cases Classical.propDecidable c <;> simp [*]
 
 theorem Bool.ofProp_spec' (c : Prop) : Bool.ofProp c = false ↔ ¬ c := by
   conv => enter [2, 1]; rw [← Bool.ofProp_spec c]

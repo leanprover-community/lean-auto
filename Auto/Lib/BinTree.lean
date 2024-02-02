@@ -126,8 +126,8 @@ def get?'WF (bt : BinTree α) (n : Nat) : Option α :=
     match Nat.mod n 2 with
     | 0 => get?'WF bt.left! (Nat.div n 2)
     | _ + 1 => get?'WF bt.right! (Nat.div n 2)
-termination_by get?'WF bt n => n
-decreasing_by apply Bin.wfAux; assumption
+termination_by n
+decreasing_by all_goals { rw [← h]; apply Bin.wfAux; assumption }
 
 theorem get?'WF.succSucc (bt : BinTree α) (n : Nat) :
   get?'WF bt (n + 2) =
@@ -215,8 +215,8 @@ def insert'WF (bt : BinTree α) (n : Nat) (x : α) : BinTree α :=
       match bt with
       | .leaf => .node .leaf .none (insert'WF .leaf (Nat.div n 2) x)
       | .node l v r => .node l v (insert'WF r (Nat.div n 2) x)
-termination_by insert'WF bt n x => n
-decreasing_by rw [← h]; apply Bin.wfAux; assumption
+termination_by n
+decreasing_by all_goals { rw [← h]; apply Bin.wfAux; assumption }
 
 theorem insert'WF.succSucc (bt : BinTree α) (n : Nat) (x : α) :
   insert'WF bt (n + 2) x =
@@ -432,7 +432,7 @@ theorem allp'_node (p : α → Prop) :
         have h' := h (2 * n + 5)
         rw [get?'_succSucc] at h'
         have eq₁ : (2 * n + 5) % 2 = 1 := by
-          simp [Nat.add_mod]; rfl
+          simp [Nat.add_mod]
         have eq₂ : (2 * n + 5) / 2 = n + 2 := by
           rw [Nat.add_comm _ 5];
           rw [Nat.add_mul_div_left];
