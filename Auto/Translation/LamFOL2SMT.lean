@@ -297,7 +297,9 @@ def lamQuantified2STerm (forall? : Bool) (s : LamSort) (body : TransM LamAtom ST
   let dname ← disposableName
   let mut body' ← body
   if s == .base .nat then
-    body' := .qStrApp "=>" #[.qStrApp ">=" #[.bvar 0, .sConst (.num 0)], body']
+    body' := match forall? with
+    | true => .qStrApp "=>" #[.qStrApp ">=" #[.bvar 0, .sConst (.num 0)], body']
+    | false => .qStrApp "and" #[.qStrApp ">=" #[.bvar 0, .sConst (.num 0)], body']
   match forall? with
   | true => return .forallE dname s' body'
   | false => return .existE dname s' body'
