@@ -274,26 +274,27 @@ partial def addOpAndRhs (lhs : Term) (minbp : Nat) : ParserM Term := do
       return ← addOpAndRhs (Term.mk op [lhs, rhs]) minbp
 
 partial def parseTypeDecl : ParserM Term := do
-  if (← peek?) == some (.op "(") then
-    parseToken (.op "(")
-    let ident ← parseIdent
-    if (← peek?) == some (.op ":") then
-      parseToken (.op ":")
-      let ty ← parseTerm
-      parseToken (.op ")")
-      return Term.mk (.ident ident) [ty]
-    else
-      parseToken (.op ")")
-      return Term.mk (.ident ident) []
+  let ident ← parseIdent
+  if (← peek?) == some (.op ":") then
+    parseToken (.op ":")
+    let ty ← parseTerm
+    return Term.mk (.ident ident) [ty]
   else
-    let ident ← parseIdent
-    if (← peek?) == some (.op ":") then
-      parseToken (.op ":")
-      let ty ← parseTerm
-      return Term.mk (.ident ident) [ty]
-    else
-      return Term.mk (.ident ident) []
+    return Term.mk (.ident ident) []
 end
+
+/--
+  <thf_atom_typing>
+  <tff_atom_typing>
+-/
+def parseAtomTyping : ParserM Term := do
+  if (← peek?) == .some (.op "(") then
+    parseToken (.op "(")
+    let decl ← parseTypeDecl
+    parseToken (.op ")")
+    return decl
+  else
+    parseTypeDecl
 
 structure Command where
   cmd : String
@@ -316,7 +317,7 @@ def parseCommand : ParserM Command := do
     let kind ← parseIdent
     parseToken (.op ",")
     let val ← match kind with
-    | "type" => parseTypeDecl
+    | "type" => parseAtomTyping
     | _ => parseTerm
     if (← peek?) == some (.op ",") then
       parseToken (.op ",")
