@@ -609,7 +609,7 @@ theorem LamEquiv.not_and_equiv_not_or_not?
     | .ofApp _ _ (.ofApp _ (.ofApp _ _ Hlhs) Hrhs) =>
       exists (.mkNot (.mkAnd Hlhs Hrhs)), (.mkOr (.mkNot Hlhs) (.mkNot Hrhs)); intro lctxTerm
       apply GLift.down.inj; apply propext
-      apply @Decidable.not_and _ _ (Classical.propDecidable _)
+      apply Classical.not_and_iff_or_not_not
 
 theorem LamGenConv.not_and_equiv_not_or_not? : LamGenConv lval LamTerm.not_and_equiv_not_or_not? := by
   intro t₁ t₂ heq lctx rty wf
@@ -739,7 +739,7 @@ theorem LamEquiv.not_imp_equiv_and_not?
     | .ofApp _ _ (.ofApp _ (.ofApp _ _ Hlhs) Hrhs) =>
       exists .mkNot (.mkImp Hlhs Hrhs), (.mkAnd Hlhs (.mkNot Hrhs)); intro lctxTerm
       apply GLift.down.inj; apply propext
-      apply @Decidable.not_imp _ _ (Classical.propDecidable _)
+      apply Classical.not_imp_iff_and_not
 
 theorem LamGenConv.not_imp_equiv_and_not? : LamGenConv lval LamTerm.not_imp_equiv_and_not? := by
   intro t₁ t₂ heq lctx rty wf
