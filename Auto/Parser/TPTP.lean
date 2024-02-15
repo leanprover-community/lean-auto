@@ -274,13 +274,25 @@ partial def addOpAndRhs (lhs : Term) (minbp : Nat) : ParserM Term := do
       return ← addOpAndRhs (Term.mk op [lhs, rhs]) minbp
 
 partial def parseTypeDecl : ParserM Term := do
-  let ident ← parseIdent
-  if (← peek?) == some (.op ":") then
-    parseToken (.op ":")
-    let ty ← parseTerm
-    return Term.mk (.ident ident) [ty]
+  if (← peek?) == some (.op "(") then
+    parseToken (.op "(")
+    let ident ← parseIdent
+    if (← peek?) == some (.op ":") then
+      parseToken (.op ":")
+      let ty ← parseTerm
+      parseToken (.op ")")
+      return Term.mk (.ident ident) [ty]
+    else
+      parseToken (.op ")")
+      return Term.mk (.ident ident) []
   else
-    return Term.mk (.ident ident) []
+    let ident ← parseIdent
+    if (← peek?) == some (.op ":") then
+      parseToken (.op ":")
+      let ty ← parseTerm
+      return Term.mk (.ident ident) [ty]
+    else
+      return Term.mk (.ident ident) []
 end
 
 structure Command where
