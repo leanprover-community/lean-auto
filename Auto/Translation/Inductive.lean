@@ -112,7 +112,7 @@ mutual
     let .some (.inductInfo val) := (← getEnv).find? tyctor
       | return
     if !(← @id (CoreM _) (val.all.allM isSimpleInductive)) then
-      trace[auto.collectInd] (s!"Warning : {tyctor} or some type within the " ++
+      trace[auto.collectInd] (m!"Warning : {tyctor} or some type within the " ++
         "same mutual block is not a simple inductive type. Ignoring it ...")
       return
     /-
