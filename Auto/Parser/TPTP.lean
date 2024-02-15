@@ -287,10 +287,10 @@ end
   <thf_atom_typing>
   <tff_atom_typing>
 -/
-def parseAtomTyping : ParserM Term := do
+partial def parseAtomTyping : ParserM Term := do
   if (← peek?) == .some (.op "(") then
     parseToken (.op "(")
-    let decl ← parseTypeDecl
+    let decl ← parseAtomTyping
     parseToken (.op ")")
     return decl
   else
