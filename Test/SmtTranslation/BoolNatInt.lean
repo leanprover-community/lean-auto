@@ -36,5 +36,3 @@ example {a b c d : Bool} (h : if (if (2 < 3) then a else b) then c else d) :
   (a → c) ∧ (¬ a → d) := by auto
 
 example {a : Bool} : decide a = a := by auto
-
-#check Lean.Elab.Command.elabStructure

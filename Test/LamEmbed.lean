@@ -15,8 +15,9 @@ def manyArgFuncTy (n : Nat) (k : Nat) : LamSort :=
 set_option maxRecDepth 4000 in
 set_option lazyReduce.logInfo false in
 #lazyReduce manyArgFuncTy 3000 0
+
 set_option maxRecDepth 2000 in
-#reduce LamSort.beq_eq (manyArgFuncTy 100 40) (manyArgFuncTy 100 40)
+#reduce @LamSort.eq_of_beq_eq_true (manyArgFuncTy 100 40) (manyArgFuncTy 100 40)
 
 -- λ (x₁ x₂ ... xₙ : (.atom 0)) . (.atom 0) x₁ x₂ ... xₙ
 -- Note that the first `.atom 0` is a type atom, while the
@@ -76,6 +77,3 @@ set_option maxHeartbeats 20000000 in
 set_option lazyReduce.printTime true
 set_option maxRecDepth 50000 in
 #lazyReduce List.map (fun n => (List.range (1000 + n)).length) (List.range 10)
-
-set_option maxRecDepth 50000 in
-#lazyReduce (List.range 10000).length
