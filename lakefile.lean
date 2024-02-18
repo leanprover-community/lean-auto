@@ -3,7 +3,6 @@ open Lake DSL
 
 package «auto» {
   precompileModules := true
-  preferReleaseBuild := true
 }
 
 require std from git
