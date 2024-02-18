@@ -12,7 +12,7 @@ theorem HList.nil_IsomType : IsomType (HList β .nil) PUnit :=
    fun x => match x with | .nil => rfl, fun _ => rfl⟩
 
 theorem HList.cons_IsomType : IsomType (HList β (a :: as)) (β a × HList β as) :=
-  ⟨fun xs => match xs with | .cons x xs => (x, xs), fun (x, xs) => .cons x xs, 
+  ⟨fun xs => match xs with | .cons x xs => (x, xs), fun (x, xs) => .cons x xs,
    fun xs => match xs with | .cons _ _ => rfl,
    fun (_, _) => rfl⟩
 
@@ -72,7 +72,7 @@ theorem HList.append_assoc (xs : HList β as) (ys : HList β bs) (zs : HList β 
       case Hβ => rw [List.append_assoc]
       case h₁ =>
         apply congr_hd_heq <;> try apply HEq.rfl;
-        rw [List.append_assoc]; apply HEq.rfl
+        rw [List.append_assoc]
       case h₂ => apply HEq.rfl
     case h₂ => exact IH
 
