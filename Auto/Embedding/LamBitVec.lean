@@ -2,6 +2,7 @@ import Auto.Embedding.LamConv
 import Auto.Lib.NatExtra
 import Std.Data.Int.Lemmas
 import Std.Data.Fin.Lemmas
+import Std.Data.BitVec.Lemmas
 
 namespace Auto.Embedding.Lam
 
@@ -81,11 +82,8 @@ namespace BitVec
 
   theorem toNat_xor (a b : Std.BitVec n) : (a ^^^ b).toNat = a.toNat ^^^ b.toNat := rfl
 
-  theorem toNat_not_aux (a : Std.BitVec n) : (~~~a).toNat = (1 <<< n).pred ^^^ a.toNat := rfl
-
-  theorem toNat_not (a : Std.BitVec n) : (~~~a).toNat = 2 ^ n - 1 - a.toNat := by
-    rw [toNat_not_aux]; rw [Nat.shiftLeft_eq, Nat.one_mul, ← Nat.sub_one, Nat.ones_xor]
-    rcases a with ⟨⟨_, isLt⟩⟩; exact isLt
+  theorem toNat_not (a : Std.BitVec n) : (~~~a).toNat = 2 ^ n - 1 - a.toNat :=
+    Std.BitVec.toNat_not
 
   theorem shiftLeft_ge_length_eq_zero (a : Std.BitVec n) (i : Nat) : i ≥ n → a <<< i = 0#n := by
     intro h; apply eq_of_val_eq; rw [toNat_shiftLeft, toNat_ofNat]; apply Nat.mod_eq_zero_of_dvd
@@ -94,12 +92,12 @@ namespace BitVec
 
   theorem ushiftRight_ge_length_eq_zero (a : Std.BitVec n) (i : Nat) : i ≥ n → a >>> i = 0#n := by
     intro h; apply eq_of_val_eq; rw [toNat_ushiftRight, toNat_ofNat]
-    apply (Nat.le_iff_div_eq_zero (Nat.pow_two_pos _)).mpr
+    apply (Nat.le_iff_div_eq_zero (Nat.two_pow_pos _)).mpr
     apply Nat.le_trans (toNat_le _) (Nat.pow_le_pow_of_le_right (.step .refl) h)
 
   theorem ushiftRight_ge_length_eq_zero' (a : Std.BitVec n) (i : Nat) : i ≥ n → (a.toNat >>> i)#n = 0#n := by
     intro h; apply congr_arg (@Std.BitVec.ofNat n)
-    rw [Nat.shiftRight_eq_div_pow, Nat.le_iff_div_eq_zero (Nat.pow_two_pos _)]
+    rw [Nat.shiftRight_eq_div_pow, Nat.le_iff_div_eq_zero (Nat.two_pow_pos _)]
     apply Nat.le_trans (toNat_le _) (Nat.pow_le_pow_of_le_right (.step .refl) h)
 
   theorem sshiftRight_ge_length_eq_msb (a : Std.BitVec n) (i : Nat) : i ≥ n → a.sshiftRight i =
@@ -112,8 +110,8 @@ namespace BitVec
       rw [← Int.subNatNat_eq_coe, Int.subNatNat_of_lt (toNat_le _)]
       simp [Std.BitVec.toInt, Std.BitVec.ofInt]
       have hzero : Nat.pred (2 ^ n - Std.BitVec.toNat a) >>> i = 0 := by
-        rw [Nat.shiftRight_eq_div_pow]; apply (Nat.le_iff_div_eq_zero (Nat.pow_two_pos _)).mpr
-        rw [Nat.pred_lt_iff_le (Nat.pow_two_pos _)]
+        rw [Nat.shiftRight_eq_div_pow]; apply (Nat.le_iff_div_eq_zero (Nat.two_pow_pos _)).mpr
+        rw [Nat.pred_lt_iff_le (Nat.two_pow_pos _)]
         apply Nat.le_trans (Nat.sub_le _ _) (Nat.pow_le_pow_of_le_right (.step .refl) h)
       rw [hzero]; apply eq_of_val_eq; rw [toNat_not]
       rw [toNat_ofNat, toNat_neg, toNat_ofNat, Nat.zero_mod, Nat.sub_zero]
@@ -130,9 +128,9 @@ namespace BitVec
     rw [Nat.zero_mod, Nat.shiftRight_eq_div_pow]
     apply Iff.intro <;> intro h
     case mp =>
-      rw [← Nat.le_iff_div_eq_zero (Nat.pow_two_pos _)]
+      rw [← Nat.le_iff_div_eq_zero (Nat.two_pow_pos _)]
       exact h
-    case mpr => rw [(Nat.le_iff_div_eq_zero (Nat.pow_two_pos _)).mpr h]
+    case mpr => rw [(Nat.le_iff_div_eq_zero (Nat.two_pow_pos _)).mpr h]
 
   theorem ofNat_toNat (a : Std.BitVec n) : .ofNat m a.toNat = a.zeroExtend m := by
     apply eq_of_val_eq; rw [toNat_ofNat, toNat_zeroExtend]
@@ -156,7 +154,7 @@ namespace BitVec
       rw [Nat.add_sub_cancel_left, Nat.mod_add_mod, Nat.add_assoc b c]
       rw [← Nat.mod_add_mod, ← Nat.add_assoc _ c, Nat.add_comm _ c, Nat.add_assoc c]
       rw [Nat.add_comm (b % _), Nat.sub_add_cancel, ← Nat.add_mod_mod, Nat.mod_self, Nat.add_zero]
-      apply Nat.le_of_lt (Nat.mod_lt _ (Nat.pow_two_pos _))
+      apply Nat.le_of_lt (Nat.mod_lt _ (Nat.two_pow_pos _))
     case true =>
       have hle := of_decide_eq_true hdec
       rw [Bool.ite_eq_true _ _ _ hle, Nat.sub_eq_zero_of_le]
@@ -786,7 +784,7 @@ theorem LamTerm.maxEVarSucc_pushBVCast : maxEVarSucc (pushBVCast ct t) = maxEVar
                         cases bvc
                         case bvtoNat m =>
                           dsimp [maxEVarSucc, pushBVCast]
-                          cases hble : m.ble n <;> dsimp [maxEVarSucc] <;> rw [argeq₁, argeq₂]
+                          cases m.ble n <;> dsimp [maxEVarSucc] <;> rw [argeq₁, argeq₂]
                           simp [Nat.max, Nat.max_zero_left, Nat.max_zero_right, maxlem₁]
                         all_goals apply h_none_shl
                       all_goals apply h_none_shl
@@ -813,7 +811,7 @@ theorem LamTerm.maxEVarSucc_pushBVCast : maxEVarSucc (pushBVCast ct t) = maxEVar
                         cases bvc
                         case bvtoNat m =>
                           dsimp [maxEVarSucc, pushBVCast]
-                          cases hble : m.ble n <;> dsimp [maxEVarSucc] <;> rw [argeq₁, argeq₂]
+                          cases m.ble n <;> dsimp [maxEVarSucc] <;> rw [argeq₁, argeq₂]
                           simp [Nat.max, Nat.max_zero_left, Nat.max_zero_right, maxlem₁]
                         all_goals apply h_none_lshr
                       all_goals apply h_none_lshr
@@ -840,7 +838,7 @@ theorem LamTerm.maxEVarSucc_pushBVCast : maxEVarSucc (pushBVCast ct t) = maxEVar
                         cases bvc
                         case bvtoNat m =>
                           dsimp [maxEVarSucc, pushBVCast]
-                          cases hble : m.ble n <;> dsimp [maxEVarSucc] <;> rw [argeq₁, argeq₂]
+                          cases m.ble n <;> dsimp [maxEVarSucc] <;> rw [argeq₁, argeq₂]
                           simp [Nat.max, Nat.max_zero_left, Nat.max_zero_right, maxlem₂]
                         all_goals apply h_none_ashr
                       all_goals apply h_none_ashr

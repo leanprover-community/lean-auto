@@ -331,7 +331,7 @@ def withHyps (hyps : Array Expr) : ExternM (Array FVarId) := do
   return ret
 
 private def callNativeExternMAction
-  (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → MetaM Expr) :
+  (nonempties : Array REntry) (validsWithDTr : Array (REntry × DTr)) (prover : Array Lemma → MetaM Expr) :
   ExternM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := do
   let ss ← nonempties.mapM (fun re => do
     match re with
@@ -341,6 +341,8 @@ private def callNativeExternMAction
   for inh in inhs do
     trace[auto.printInhs] "{inh}"
   let inhFVars ← withHyps inhs
+  let valids := validsWithDTr.map Prod.fst
+  let hypDTrs := validsWithDTr.map Prod.snd
   let ts ← valids.mapM (fun re => do
     match re with
     | .valid [] t => return t
@@ -354,10 +356,8 @@ private def callNativeExternMAction
     trace[auto.printHyps] "{hyp}"
   let hyps ← runMetaM <| hyps.mapM (fun e => Core.betaReduce e)
   let hypFvars ← withHyps hyps
-  -- debug
-  -- **TODO: Specify origin**
-  let lemmas : Array Lemma := (hyps.zip hypFvars).map (fun (ty, proof) =>
-    ⟨⟨.fvar proof, ty, .leaf "?callNativeExternMAction"⟩, #[]⟩)
+  let lemmas : Array Lemma := ((hyps.zip hypFvars).zip hypDTrs).map
+    (fun ((ty, proof), dtr) => ⟨⟨.fvar proof, ty, dtr⟩, #[]⟩)
   -- Note that we're not introducing bound variables into local context
   --   in the above action, so it's reasonable to use `runMetaM`
   let atomsToAbstract ← getAtomsToAbstract
@@ -421,7 +421,9 @@ def callNative_checker
   let tyVal ← LamReif.getTyVal
   let varVal ← LamReif.getVarVal
   let lamEVarTy ← LamReif.getLamEVarTy
-  runAtMetaM' <| (callNativeExternMAction nonempties valids prover).run'
+  let validsWithDTr ← valids.mapM (fun re =>
+    do return (re, ← collectDerivFor re))
+  runAtMetaM' <| (callNativeExternMAction nonempties validsWithDTr prover).run'
     { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
 
 /--
@@ -436,8 +438,10 @@ def callNative_direct
   let tyVal ← LamReif.getTyVal
   let varVal ← LamReif.getVarVal
   let lamEVarTy ← LamReif.getLamEVarTy
+  let validsWithDTr ← valids.mapM (fun re =>
+    do return (re, ← collectDerivFor re))
   let (proof, _, usedEtoms, usedInhs, usedHyps) ← runAtMetaM' <|
-    (callNativeExternMAction nonempties valids prover).run'
+    (callNativeExternMAction nonempties validsWithDTr prover).run'
       { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
   if usedEtoms.size != 0 then
     throwError "callNative_direct :: etoms should not occur here"

@@ -73,7 +73,6 @@ Lean-auto is still under development, but it's already able to solve nontrivial 
 * The checker is slow on large input. For example, it takes ```6s``` to typecheck the final example in ```BinderComplexity.lean```. However, this is probably acceptable for mathlib usages, because e.g ```Mathlib/Analysis/BoxIntegral/DivergenceTheorem.lean``` has two theorems that take ```4s``` to compile (but a large portion of the ```4s``` are spent on typeclass inference)
 
 ## Rules in Proof Tree
-* `?<name>`: Not specified, generated in function `<name>`. This is for debug purpose only.
 * `defeq <num> <name>`: The `<num>`-th definitional equality associated with definition `<name>`
 * `hw <name>`: Lemmas hard-wired into Lean-auto
 * `lctxInh`: Inhabitation fact from local context
