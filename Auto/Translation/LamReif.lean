@@ -1,5 +1,4 @@
 import Lean
-import Std.Data.Array.Basic
 import Auto.Lib.MonadUtils
 import Auto.Lib.ExprExtra
 import Auto.Lib.MetaExtra

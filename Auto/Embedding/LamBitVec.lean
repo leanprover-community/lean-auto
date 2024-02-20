@@ -1,8 +1,5 @@
 import Auto.Embedding.LamConv
 import Auto.Lib.NatExtra
-import Std.Data.Int.Lemmas
-import Std.Data.Fin.Lemmas
-import Std.Data.BitVec.Lemmas
 
 namespace Auto.Embedding.Lam
 
@@ -96,7 +93,7 @@ namespace BitVec
     apply Nat.le_trans (toNat_le _) (Nat.pow_le_pow_of_le_right (.step .refl) h)
 
   theorem ushiftRight_ge_length_eq_zero' (a : Std.BitVec n) (i : Nat) : i ≥ n → (a.toNat >>> i)#n = 0#n := by
-    intro h; apply congr_arg (@Std.BitVec.ofNat n)
+    intro h; apply congrArg (@Std.BitVec.ofNat n)
     rw [Nat.shiftRight_eq_div_pow, Nat.le_iff_div_eq_zero (Nat.two_pow_pos _)]
     apply Nat.le_trans (toNat_le _) (Nat.pow_le_pow_of_le_right (.step .refl) h)
 
@@ -114,12 +111,7 @@ namespace BitVec
         rw [Nat.pred_lt_iff_le (Nat.two_pow_pos _)]
         apply Nat.le_trans (Nat.sub_le _ _) (Nat.pow_le_pow_of_le_right (.step .refl) h)
       rw [hzero]; apply eq_of_val_eq; rw [toNat_not]
-      rw [toNat_ofNat, toNat_neg, toNat_ofNat, Nat.zero_mod, Nat.sub_zero]
-      cases n <;> try rfl
-      case succ n =>
-        have hlt : 2 ≤ 2 ^ Nat.succ n := @Nat.pow_le_pow_of_le_right 2 (.step .refl) 1 (.succ n) (Nat.succ_le_succ (Nat.zero_le _))
-        rw [Nat.mod_eq_of_lt (a:=1) hlt]
-        rw [Nat.mod_eq_of_lt]; apply Nat.sub_lt (Nat.le_trans (.step .refl) hlt) .refl
+      simp
 
   theorem shiftRight_eq_zero_iff (a : Std.BitVec n) (b : Nat) : a >>> b = 0#n ↔ a.toNat < 2 ^ b := by
     rw [ushiftRight_def]; rcases a with ⟨⟨a, isLt⟩⟩;

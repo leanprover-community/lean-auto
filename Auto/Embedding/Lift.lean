@@ -1,4 +1,3 @@
-import Std.Data.BitVec.Basic
 import Auto.Lib.IsomType
 import Auto.Lib.StringExtra
 import Auto.Lib.BoolExtra

@@ -1,5 +1,3 @@
-import Std.Data.Nat.Lemmas
-import Std.Data.Nat.Bitwise
 import Auto.Lib.BoolExtra
 
 namespace Auto
