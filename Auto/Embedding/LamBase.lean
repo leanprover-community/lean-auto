@@ -8,7 +8,7 @@ import Auto.Lib.HEqExtra
 import Auto.Lib.ListExtra
 -- import Mathlib.Data.Real.Basic
 import Auto.MathlibEmulator
-import Std.Data.List.Lemmas
+import Auto.FromStd
 
 -- Embedding Simply Typed Lambda Calculus into Dependent Type Theory
 -- Simply Typed Lambda Calculus = HOL (without polymorphism)
