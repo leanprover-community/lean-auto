@@ -1,4 +1,3 @@
-import Std.Data.BitVec.Basic
 import Auto.Lib.IsomType
 import Auto.Lib.StringExtra
 import Auto.Lib.BoolExtra
@@ -127,119 +126,119 @@ def sprefixofLift.{u} (m n : GLift.{1, u} String) : GLift.{1, u} Bool :=
 def srepallLift.{u} (s patt rep: GLift.{1, u} String) : GLift.{1, u} String :=
   GLift.up (String.replace s.down patt.down rep.down)
 
-def bvofNatLift.{u} (n : Nat) (x : GLift.{1, u} Nat) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.ofNat n x.down)
+def bvofNatLift.{u} (n : Nat) (x : GLift.{1, u} Nat) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.ofNat n x.down)
 
-def bvtoNatLift.{u} (n : Nat) (x : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} Nat :=
-  GLift.up (Std.BitVec.toNat x.down)
+def bvtoNatLift.{u} (n : Nat) (x : GLift.{1, u} (BitVec n)) : GLift.{1, u} Nat :=
+  GLift.up (BitVec.toNat x.down)
 
-def bvofIntLift.{u} (n : Nat) (x : GLift.{1, u} Int) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.ofInt n x.down)
+def bvofIntLift.{u} (n : Nat) (x : GLift.{1, u} Int) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.ofInt n x.down)
 
-def bvtoIntLift.{u} (n : Nat) (x : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} Int :=
-  GLift.up (Std.BitVec.toInt x.down)
+def bvtoIntLift.{u} (n : Nat) (x : GLift.{1, u} (BitVec n)) : GLift.{1, u} Int :=
+  GLift.up (BitVec.toInt x.down)
 
-def bvaddLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.add x.down y.down)
+def bvaddLift.{u} (n : Nat) (x y : GLift.{1, u} (BitVec n)) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.add x.down y.down)
 
-def bvsubLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.sub x.down y.down)
+def bvsubLift.{u} (n : Nat) (x y : GLift.{1, u} (BitVec n)) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.sub x.down y.down)
 
-def bvnegLift.{u} (n : Nat) (x : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.neg x.down)
+def bvnegLift.{u} (n : Nat) (x : GLift.{1, u} (BitVec n)) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.neg x.down)
 
-def bvabsLift.{u} (n : Nat) (x : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.abs x.down)
+def bvabsLift.{u} (n : Nat) (x : GLift.{1, u} (BitVec n)) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.abs x.down)
 
-def bvmulLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.mul x.down y.down)
+def bvmulLift.{u} (n : Nat) (x y : GLift.{1, u} (BitVec n)) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.mul x.down y.down)
 
-def bvudivLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.smtUDiv x.down y.down)
+def bvudivLift.{u} (n : Nat) (x y : GLift.{1, u} (BitVec n)) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.smtUDiv x.down y.down)
 
-def bvuremLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.umod x.down y.down)
+def bvuremLift.{u} (n : Nat) (x y : GLift.{1, u} (BitVec n)) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.umod x.down y.down)
 
-def bvsdivLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.smtSDiv x.down y.down)
+def bvsdivLift.{u} (n : Nat) (x y : GLift.{1, u} (BitVec n)) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.smtSDiv x.down y.down)
 
-def bvsremLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.srem x.down y.down)
+def bvsremLift.{u} (n : Nat) (x y : GLift.{1, u} (BitVec n)) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.srem x.down y.down)
 
-def bvsmodLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.smod x.down y.down)
+def bvsmodLift.{u} (n : Nat) (x y : GLift.{1, u} (BitVec n)) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.smod x.down y.down)
 
-def bvmsbLift.{u} (n : Nat) (x : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} Bool :=
-  GLift.up (Std.BitVec.msb x.down)
+def bvmsbLift.{u} (n : Nat) (x : GLift.{1, u} (BitVec n)) : GLift.{1, u} Bool :=
+  GLift.up (BitVec.msb x.down)
 
-def bvultLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} Bool :=
-  GLift.up (Std.BitVec.ult x.down y.down)
+def bvultLift.{u} (n : Nat) (x y : GLift.{1, u} (BitVec n)) : GLift.{1, u} Bool :=
+  GLift.up (BitVec.ult x.down y.down)
 
-def bvuleLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} Bool :=
-  GLift.up (Std.BitVec.ule x.down y.down)
+def bvuleLift.{u} (n : Nat) (x y : GLift.{1, u} (BitVec n)) : GLift.{1, u} Bool :=
+  GLift.up (BitVec.ule x.down y.down)
 
-def bvsltLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} Bool :=
-  GLift.up (Std.BitVec.slt x.down y.down)
+def bvsltLift.{u} (n : Nat) (x y : GLift.{1, u} (BitVec n)) : GLift.{1, u} Bool :=
+  GLift.up (BitVec.slt x.down y.down)
 
-def bvsleLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} Bool :=
-  GLift.up (Std.BitVec.sle x.down y.down)
+def bvsleLift.{u} (n : Nat) (x y : GLift.{1, u} (BitVec n)) : GLift.{1, u} Bool :=
+  GLift.up (BitVec.sle x.down y.down)
 
-def bvpropultLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} Prop :=
+def bvpropultLift.{u} (n : Nat) (x y : GLift.{1, u} (BitVec n)) : GLift.{1, u} Prop :=
   GLift.up (x.down.toFin < y.down.toFin)
 
-def bvpropuleLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} Prop :=
+def bvpropuleLift.{u} (n : Nat) (x y : GLift.{1, u} (BitVec n)) : GLift.{1, u} Prop :=
   GLift.up (x.down.toFin <= y.down.toFin)
 
-def bvpropsltLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} Prop :=
+def bvpropsltLift.{u} (n : Nat) (x y : GLift.{1, u} (BitVec n)) : GLift.{1, u} Prop :=
   GLift.up (x.down.toInt < y.down.toInt)
 
-def bvpropsleLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} Prop :=
+def bvpropsleLift.{u} (n : Nat) (x y : GLift.{1, u} (BitVec n)) : GLift.{1, u} Prop :=
   GLift.up (x.down.toInt <= y.down.toInt)
 
-def bvandLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.and x.down y.down)
+def bvandLift.{u} (n : Nat) (x y : GLift.{1, u} (BitVec n)) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.and x.down y.down)
 
-def bvorLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.or x.down y.down)
+def bvorLift.{u} (n : Nat) (x y : GLift.{1, u} (BitVec n)) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.or x.down y.down)
 
-def bvxorLift.{u} (n : Nat) (x y : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.xor x.down y.down)
+def bvxorLift.{u} (n : Nat) (x y : GLift.{1, u} (BitVec n)) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.xor x.down y.down)
 
-def bvnotLift.{u} (n : Nat) (x : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.not x.down)
+def bvnotLift.{u} (n : Nat) (x : GLift.{1, u} (BitVec n)) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.not x.down)
 
-def bvshlLift.{u} (n : Nat) (a : GLift.{1, u} (Std.BitVec n)) (s : GLift.{1, u} Nat) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.shiftLeft a.down s.down)
+def bvshlLift.{u} (n : Nat) (a : GLift.{1, u} (BitVec n)) (s : GLift.{1, u} Nat) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.shiftLeft a.down s.down)
 
-def bvlshrLift.{u} (n : Nat) (a : GLift.{1, u} (Std.BitVec n)) (s : GLift.{1, u} Nat) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.ushiftRight a.down s.down)
+def bvlshrLift.{u} (n : Nat) (a : GLift.{1, u} (BitVec n)) (s : GLift.{1, u} Nat) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.ushiftRight a.down s.down)
 
-def bvashrLift.{u} (n : Nat) (a : GLift.{1, u} (Std.BitVec n)) (s : GLift.{1, u} Nat) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.sshiftRight a.down s.down)
+def bvashrLift.{u} (n : Nat) (a : GLift.{1, u} (BitVec n)) (s : GLift.{1, u} Nat) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.sshiftRight a.down s.down)
 
-def bvsmtshlLift.{u} (n : Nat) (a : GLift.{1, u} (Std.BitVec n)) (s : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.shiftLeft a.down s.down.toNat)
+def bvsmtshlLift.{u} (n : Nat) (a : GLift.{1, u} (BitVec n)) (s : GLift.{1, u} (BitVec n)) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.shiftLeft a.down s.down.toNat)
 
-def bvsmtlshrLift.{u} (n : Nat) (a : GLift.{1, u} (Std.BitVec n)) (s : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.ushiftRight a.down s.down.toNat)
+def bvsmtlshrLift.{u} (n : Nat) (a : GLift.{1, u} (BitVec n)) (s : GLift.{1, u} (BitVec n)) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.ushiftRight a.down s.down.toNat)
 
-def bvsmtashrLift.{u} (n : Nat) (a : GLift.{1, u} (Std.BitVec n)) (s : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec n) :=
-  GLift.up (Std.BitVec.sshiftRight a.down s.down.toNat)
+def bvsmtashrLift.{u} (n : Nat) (a : GLift.{1, u} (BitVec n)) (s : GLift.{1, u} (BitVec n)) : GLift.{1, u} (BitVec n) :=
+  GLift.up (BitVec.sshiftRight a.down s.down.toNat)
 
-def bvappendLift.{u} (n m : Nat) (x : GLift.{1, u} (Std.BitVec n)) (y : GLift.{1, u} (Std.BitVec m)) : GLift.{1, u} (Std.BitVec (Nat.add n m)) :=
-  GLift.up (Std.BitVec.append x.down y.down)
+def bvappendLift.{u} (n m : Nat) (x : GLift.{1, u} (BitVec n)) (y : GLift.{1, u} (BitVec m)) : GLift.{1, u} (BitVec (Nat.add n m)) :=
+  GLift.up (BitVec.append x.down y.down)
 
-def bvextractLift.{u} (n h l : Nat) (x : GLift.{1, u} (Std.BitVec n)) : GLift.{1, u} (Std.BitVec (Nat.add (Nat.sub h l) 1)) :=
-  GLift.up (Std.BitVec.extractLsb h l x.down)
+def bvextractLift.{u} (n h l : Nat) (x : GLift.{1, u} (BitVec n)) : GLift.{1, u} (BitVec (Nat.add (Nat.sub h l) 1)) :=
+  GLift.up (BitVec.extractLsb h l x.down)
 
-def bvrepeatLift.{u} (w i : Nat) (x : GLift.{1, u} (Std.BitVec w)) : GLift.{1, u} (Std.BitVec (Nat.mul w i)) :=
-  GLift.up (Std.BitVec.replicate i x.down)
+def bvrepeatLift.{u} (w i : Nat) (x : GLift.{1, u} (BitVec w)) : GLift.{1, u} (BitVec (Nat.mul w i)) :=
+  GLift.up (BitVec.replicate i x.down)
 
-def bvzeroExtendLift.{u} (w v : Nat) (x : GLift.{1, u} (Std.BitVec w)) : GLift.{1, u} (Std.BitVec v) :=
-  GLift.up (Std.BitVec.zeroExtend v x.down)
+def bvzeroExtendLift.{u} (w v : Nat) (x : GLift.{1, u} (BitVec w)) : GLift.{1, u} (BitVec v) :=
+  GLift.up (BitVec.zeroExtend v x.down)
 
-def bvsignExtendLift.{u} (w i : Nat) (x : GLift.{1, u} (Std.BitVec w)) : GLift.{1, u} (Std.BitVec i) :=
-  GLift.up (Std.BitVec.signExtend i x.down)
+def bvsignExtendLift.{u} (w i : Nat) (x : GLift.{1, u} (BitVec w)) : GLift.{1, u} (BitVec i) :=
+  GLift.up (BitVec.signExtend i x.down)
 
 @[reducible] def ImpF.{u, v} (p : Sort u) (q : Sort v) := p → q
 

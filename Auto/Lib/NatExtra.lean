@@ -1,5 +1,3 @@
-import Std.Data.Nat.Lemmas
-import Std.Data.Nat.Bitwise
 import Auto.Lib.BoolExtra
 
 namespace Auto
@@ -216,12 +214,12 @@ theorem Nat.le_pow (h : b ≥ 2) : a < b ^ a := by
       have lk : k < 2 ^ (i + 1) := by cases ek; apply Nat.mod_lt; apply Nat.two_pow_pos
       have ⟨l, hl⟩ := Nat.mod_par ek; clear ek; cases hl
       have eqi : 2 ^ (i + 1) * l + k = 2 ^ i * (2 * l) + k := by
-        rw [Nat.pow_add, Nat.mul_assoc]; simp
+        rw [Nat.pow_add, Nat.mul_assoc]
       rw [eqi, Nat.mul_add_div (Nat.two_pow_pos _), Nat.mul_add_mod]
       have kdge : k / (2 ^ i) > 0 := (Nat.le_div_iff_mul_le (Nat.two_pow_pos _)).mpr (by simp [h])
       have kdle : k / (2 ^ i) < 2 := (Nat.div_lt_iff_lt_mul (Nat.two_pow_pos _)).mpr (by rw [Nat.pow_add, Nat.mul_comm] at lk; apply lk)
       have kone : k / (2 ^ i) = 1 := Nat.eq_iff_le_and_ge.mpr (And.intro (Nat.le_of_succ_le_succ kdle) kdge)
-      rw [kone]; rfl
+      rw [kone]
 
   theorem Nat.testBit_false_iff (a i : Nat) : a.testBit i = false ↔ a % 2 ^ (i + 1) < 2 ^ i := by
     rw [Bool.eq_false_eq_not_eq_true, ne_eq, Nat.testBit_true_iff, Nat.not_le]

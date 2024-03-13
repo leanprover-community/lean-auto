@@ -436,7 +436,7 @@ theorem allp'_node (p : α → Prop) :
         have eq₂ : (2 * n + 5) / 2 = n + 2 := by
           rw [Nat.add_comm _ 5];
           rw [Nat.add_mul_div_left];
-          rw [Nat.add_comm (5 / 2)]; rfl
+          rw [Nat.add_comm (5 / 2)]
           simp
         rw [eq₁, eq₂] at h'; exact h'
   case mpr =>

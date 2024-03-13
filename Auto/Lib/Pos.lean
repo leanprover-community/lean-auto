@@ -100,7 +100,7 @@ theorem ofNat'WF.doubleSucc_xI (n : Nat) :
     rw [heq]; simp
     have heq' : Nat.succ ((2 * n' + 3) / 2) = n' + 2 := by
       apply congrArg; rw [Nat.add_comm];
-      rw [Nat.add_mul_div_left _ _ (by simp)]; rw [Nat.add_comm]; rfl;
+      rw [Nat.add_mul_div_left _ _ (by simp)]; rw [Nat.add_comm]
     rw [heq']
 
 theorem ofNat'WF_toNat' (p : Pos) : ofNat'WF (toNat' p) = p := by

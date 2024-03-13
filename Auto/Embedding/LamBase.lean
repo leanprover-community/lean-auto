@@ -144,7 +144,7 @@ instance : LawfulBEq LamBaseSort where
 | .nat     => GLift Nat
 | .int     => GLift Int
 | .isto0 p => isto0_interp p
-| .bv n    => GLift (Std.BitVec n)
+| .bv n    => GLift (BitVec n)
 
 inductive LamSort
 | atom : Nat → LamSort
@@ -962,10 +962,10 @@ inductive BVAOp where
   | add
   | sub
   | mul
-  -- `Std.BitVec.smtUDiv`
+  -- `BitVec.smtUDiv`
   | udiv
   | urem
-  -- `Std.BitVec.smtSDiv`
+  -- `BitVec.smtSDiv`
   | sdiv
   | srem
   | smod
@@ -1101,7 +1101,7 @@ instance : LawfulBEq BVShOp where
   Following `https://smtlib.cs.uiowa.edu/logics-all.shtml#QF_BV`
 -/
 inductive BitVecConst
-  -- `Std.BitVec.ofNat n i, but requires both arguments to be nat literals`
+  -- `BitVec.ofNat n i, but requires both arguments to be nat literals`
   | bvVal (n : Nat) (i : Nat)
   | bvofNat (n : Nat)
   | bvtoNat (n : Nat)
@@ -1123,7 +1123,7 @@ inductive BitVecConst
   | bvshOp (n : Nat) (smt? : Bool) (op : BVShOp)
   | bvappend (n m : Nat)
   | bvextract (n hi lo : Nat)
-  -- `Std.BitVec.replicate`
+  -- `BitVec.replicate`
   | bvrepeat (w i : Nat)
   | bvzeroExtend (w v : Nat)
   | bvsignExtend (w v : Nat)
@@ -1204,7 +1204,7 @@ instance : Repr BitVecConst where
   reprPrec := BitVecConst.reprPrec
 
 def BitVecConst.toString : BitVecConst → String
-| .bvVal n i => ToString.toString <| repr (Std.BitVec.ofNat n i)
+| .bvVal n i => ToString.toString <| repr (BitVec.ofNat n i)
 | .bvofNat n => s!"bvofNat {n}"
 | .bvtoNat n => s!"bvtoNat {n}"
 | .bvofInt n => s!"bvofInt {n}"
@@ -2091,7 +2091,7 @@ def StringConst.interp_equiv (tyVal : Nat → Type u) (scwf : LamWF sc s) :
   cases scwf <;> rfl
 
 def BVAOp.interp (n : Nat) : (op : BVAOp) →
-  GLift.{1, u} (Std.BitVec n) → GLift.{1, u} (Std.BitVec n) → GLift.{1, u} (Std.BitVec n)
+  GLift.{1, u} (BitVec n) → GLift.{1, u} (BitVec n) → GLift.{1, u} (BitVec n)
 | .add  => bvaddLift n
 | .sub  => bvsubLift n
 | .mul  => bvmulLift n
@@ -2102,33 +2102,33 @@ def BVAOp.interp (n : Nat) : (op : BVAOp) →
 | .smod => bvsmodLift n
 
 def BVCmp.interp (n : Nat) : (op : BVCmp) →
-  GLift.{1, u} (Std.BitVec n) → GLift.{1, u} (Std.BitVec n) → GLift.{1, u} Bool
+  GLift.{1, u} (BitVec n) → GLift.{1, u} (BitVec n) → GLift.{1, u} Bool
 | .ult => bvultLift n
 | .ule => bvuleLift n
 | .slt => bvsltLift n
 | .sle => bvsleLift n
 
 def BVCmp.propinterp (n : Nat) : (op : BVCmp) →
-  GLift.{1, u} (Std.BitVec n) → GLift.{1, u} (Std.BitVec n) → GLift.{1, u} Prop
+  GLift.{1, u} (BitVec n) → GLift.{1, u} (BitVec n) → GLift.{1, u} Prop
 | .ult => bvpropultLift n
 | .ule => bvpropuleLift n
 | .slt => bvpropsltLift n
 | .sle => bvpropsleLift n
 
 def BVShOp.interp (n : Nat) : (op : BVShOp) →
-  GLift.{1, u} (Std.BitVec n) → GLift.{1, u} Nat → GLift.{1, u} (Std.BitVec n)
+  GLift.{1, u} (BitVec n) → GLift.{1, u} Nat → GLift.{1, u} (BitVec n)
 | .shl         => bvshlLift n
 | .lshr        => bvlshrLift n
 | .ashr        => bvashrLift n
 
 def BVShOp.smtinterp (n : Nat) : (op : BVShOp) →
-  GLift.{1, u} (Std.BitVec n) → GLift.{1, u} (Std.BitVec n) → GLift.{1, u} (Std.BitVec n)
+  GLift.{1, u} (BitVec n) → GLift.{1, u} (BitVec n) → GLift.{1, u} (BitVec n)
 | .shl         => bvsmtshlLift n
 | .lshr        => bvsmtlshrLift n
 | .ashr        => bvsmtashrLift n
 
 def BitVecConst.interp (tyVal : Nat → Type u) : (b : BitVecConst) → b.lamCheck.interp tyVal
-| .bvVal n i         => GLift.up (Std.BitVec.ofNat n i)
+| .bvVal n i         => GLift.up (BitVec.ofNat n i)
 | .bvofNat n         => bvofNatLift n
 | .bvtoNat n         => bvtoNatLift n
 | .bvofInt n         => bvofIntLift n
@@ -2152,7 +2152,7 @@ def BitVecConst.interp (tyVal : Nat → Type u) : (b : BitVecConst) → b.lamChe
 | .bvsignExtend w v  => bvsignExtendLift w v
 
 def BitVecConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF b s) → s.interp tyVal
-| .ofBvVal n i        => GLift.up (Std.BitVec.ofNat n i)
+| .ofBvVal n i        => GLift.up (BitVec.ofNat n i)
 | .ofBvofNat n        => bvofNatLift n
 | .ofBvtoNat n        => bvtoNatLift n
 | .ofBvofInt n        => bvofIntLift n
@@ -2701,7 +2701,7 @@ theorem LamTerm.maxEVarSucc_mkIntBinOp :
   (mkIntBinOp op a b).maxEVarSucc = max a.maxEVarSucc b.maxEVarSucc := by
   dsimp [maxEVarSucc]; simp [Nat.max, Nat.max_zero_left]
 
-/-- Make `Std.BitVec.ofNat n i` -/
+/-- Make `BitVec.ofNat n i` -/
 def LamTerm.mkBvofNat (n : Nat) (i : LamTerm) : LamTerm :=
   .app (.base .nat) (.base (.bvofNat n)) i
 
@@ -2709,7 +2709,7 @@ theorem LamTerm.maxEVarSucc_mkBvofNat :
   (mkBvofNat n i).maxEVarSucc = i.maxEVarSucc := by
   dsimp [maxEVarSucc]; apply Nat.max_zero_left
 
-/-- Make `Std.BitVec.ofInt n i` -/
+/-- Make `BitVec.ofInt n i` -/
 def LamTerm.mkBvofInt (n : Nat) (i : LamTerm) : LamTerm :=
   .app (.base .int) (.base (.bvofInt n)) i
 
@@ -3671,7 +3671,7 @@ def LamWF.bvarApps
       have tyeq : ty = lctxr ex.length := by
         have exlt : List.length ex < List.length (List.reverse (ty :: ex)) := by
           rw [List.length_reverse]; apply Nat.le_refl
-        dsimp; rw [← List.reverseAux, List.reverseAux_eq]
+        dsimp [lctxr]; rw [← List.reverseAux, List.reverseAux_eq]
         rw [pushLCtxs_lt (by rw [List.length_append]; apply Nat.le_trans exlt (Nat.le_add_right _ _))]
         dsimp [List.getD]; rw [List.get?_append exlt];
         rw [List.get?_reverse _ (by dsimp [List.length]; apply Nat.le_refl _)]
