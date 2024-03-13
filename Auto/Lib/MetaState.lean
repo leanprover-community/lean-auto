@@ -35,7 +35,7 @@ protected def saveState : MetaStateM SavedState :=
 
 def SavedState.restore (b : SavedState) : MetaStateM Unit := do
   Core.restore b.core
-  modify fun s => { s with mctx := b.meta.mctx, zetaFVarIds := b.meta.zetaFVarIds, postponed := b.meta.postponed }
+  modify fun s => { s with mctx := b.meta.mctx, zetaDeltaFVarIds := b.meta.zetaDeltaFVarIds, postponed := b.meta.postponed }
 
 instance : MonadBacktrack SavedState MetaStateM where
   saveState      := MetaState.saveState
