@@ -1648,7 +1648,8 @@ theorem EtomStep.eval_correct
         exists replaceAtDep eVarVal' r.maxEVarSucc eV
         apply And.intro ?left (And.intro hsk ?right)
         case left =>
-          intro n hlt; dsimp [replaceAt, replaceAtDep]
+          -- Note how the result of `dsimp` remains seemingly unchanged while `rw` fails when we remove `levt'`
+          intro n hlt; dsimp [levt', replaceAt, replaceAtDep]
           rw [Nat.beq_eq_false_of_ne (Nat.ne_of_lt hlt)]
         case right =>
           apply Nat.le_trans (LamTerm.maxEVarSucc_skolemize? h₂)
@@ -1675,7 +1676,8 @@ theorem EtomStep.eval_correct
         exists replaceAtDep eVarVal' r.maxEVarSucc eV
         apply And.intro ?left (And.intro hdef ?right)
         case left =>
-          intro n hlt; dsimp [replaceAt, replaceAtDep]
+          -- Note how the result of `dsimp` remains seemingly unchanged while `rw` fails when we remove `levt'`
+          intro n hlt; dsimp [levt', replaceAt, replaceAtDep]
           rw [Nat.beq_eq_false_of_ne (Nat.ne_of_lt hlt)]
         case right =>
           rw [LamTerm.maxEVarSucc_mkEq]; dsimp [LamTerm.maxEVarSucc]

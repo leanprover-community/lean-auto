@@ -205,7 +205,7 @@ private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamA
     let arg1 := .qStrApp "-" #[.qStrApp (← lamBvToNat2String n) #[arg], .sConst (.num (2 ^ n))]
     let arg2 := .qStrApp (← lamBvToNat2String n) #[arg]
     return .qStrApp "ite" #[msbExpr, arg1, arg2]
--- @Std.BitVec.msb n a = not ((a &&& (1 <<< (n - 1))) = 0#n)
+-- @BitVec.msb n a = not ((a &&& (1 <<< (n - 1))) = 0#n)
 | .bvcst (.bvmsb n)      => return mkSMTMsbExpr n arg
 | .bvcst (.bvneg _)      => return .qStrApp "bvneg" #[arg]
 | .bvcst (.bvabs _)      => return .qStrApp "bvabs" #[arg]

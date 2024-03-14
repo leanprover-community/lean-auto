@@ -539,23 +539,23 @@ section Adhoc
       String.replace a b a = String.replace a b a := by auto
 
   -- BitVec
-  example (a : Std.BitVec k) (b : Std.BitVec 2) : a = a ∧ b = b := by auto
+  example (a : BitVec k) (b : BitVec 2) : a = a ∧ b = b := by auto
 
-  example (a : Std.BitVec u) (b : Std.BitVec v) (c : Std.BitVec 2) :
+  example (a : BitVec u) (b : BitVec v) (c : BitVec 2) :
     a ++ b = a ++ b ∧ b ++ c = b ++ c := by auto
 
-  open Std.BitVec in
+  open BitVec in
   example :
     0b10#3 + 0b101#3 = 0b10#3 + 0b101#3 ∧
     0b10#(3+0) * 0b101#(1+2) = 0b10#3 * 0b101#3 := by auto
 
-  open Std.BitVec in
+  open BitVec in
   #check (4+5)#(3+2)
 
-  open Std.BitVec in
+  open BitVec in
   example (a b : Nat) : (a + b)#16 = a#16 + b#16 ∧ (a * b)#16 = a#16 * b#16 := by auto
 
-  example (a : Std.BitVec 5) (b : Std.BitVec k) :
+  example (a : BitVec 5) (b : BitVec k) :
     a.msb = a.msb ∧ b.msb = b.msb ∧
     a.rotateLeft w = a.rotateLeft w ∧
     a.rotateRight w = a.rotateRight w := by auto

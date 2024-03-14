@@ -1,5 +1,5 @@
 import Auto.Tactic
-open Lean Std
+open Lean
 
 set_option auto.smt.trust true
 set_option trace.auto.smt.printCommands true
@@ -7,7 +7,7 @@ set_option trace.auto.smt.result true
 
 set_option auto.smt true
 
-open Std.BitVec
+open BitVec
 
 example : (2 : BitVec 7) + (3 : BitVec 7) = (5 : BitVec 7) := by
   auto
@@ -55,10 +55,10 @@ example (x : BitVec 8) : x.rotateLeft (7 - 2 * 2) = x.rotateLeft (1 + 2) := by
 example (x : BitVec 8) : x.rotateLeft 100 = x ∧ x.rotateRight 100 = x := by auto
 
 example :
-  Std.BitVec.zeroExtend 20 5#10 = 5#20 ∧
-  Std.BitVec.zeroExtend 3 5#10 = 5#3 ∧
-  Std.BitVec.signExtend 20 645#10 = 1048197#20 ∧
-  Std.BitVec.signExtend 9 645#10 = 133#9 := by
+  BitVec.zeroExtend 20 5#10 = 5#20 ∧
+  BitVec.zeroExtend 3 5#10 = 5#3 ∧
+  BitVec.signExtend 20 645#10 = 1048197#20 ∧
+  BitVec.signExtend 9 645#10 = 133#9 := by
   auto
 
 -- Permutation
@@ -71,7 +71,7 @@ example (x : Nat) : (2+x)#10 = BitVec.ofNat 10 x + (2 : BitVec 10) := by
 example (x : Nat) : (2*x)#10 = BitVec.ofNat 10 x * (2 : BitVec 10) := by
   auto
 
-example : (Std.BitVec.toNat x + Std.BitVec.toNat y)#10 = x + y := by
+example : (BitVec.toNat x + BitVec.toNat y)#10 = x + y := by
   auto
 
 example :
@@ -88,22 +88,22 @@ example (x : Nat) (h : x > 0) : ((25 * x) / x)#3 = 1#3 := by auto
 
 example : (12#10).toInt = 12 && (686#10).toInt = -338 := by auto
 example : (12#10).toInt = 12 ∧ (686#10).toInt = -338 := by auto
-example : Std.BitVec.ofInt 4 (-6) = 10#4 ∧ Std.BitVec.ofInt 4 10 = 10#4 := by auto
-example (x : Std.BitVec 4) : x + (Std.BitVec.not x) = 0xF#4 := by auto
+example : BitVec.ofInt 4 (-6) = 10#4 ∧ BitVec.ofInt 4 10 = 10#4 := by auto
+example (x : BitVec 4) : x + (BitVec.not x) = 0xF#4 := by auto
 
 example
-  (i j max : Std.BitVec 64)
-  (h0 : Std.BitVec.ult i max) (h1 : Std.BitVec.ule j (max - i))
-  (h2 : Std.BitVec.ult 0#64 j) :
-  Std.BitVec.ult (max - (i + j)) (max - i) := by
+  (i j max : BitVec 64)
+  (h0 : BitVec.ult i max) (h1 : BitVec.ule j (max - i))
+  (h2 : BitVec.ult 0#64 j) :
+  BitVec.ult (max - (i + j)) (max - i) := by
   auto
 
 example : (2#6) < (3#6) := by auto
 
-example (a b : Std.BitVec 6) :
+example (a b : BitVec 6) :
   (a < b) = (a.ult b) ∧ (a ≤ b) = (a.ule b) := by auto
 
-theorem auto_bitvec_inequality_test (i j max : Std.BitVec 64)
+theorem auto_bitvec_inequality_test (i j max : BitVec 64)
   (h0 : i < max) (h1 : j <= max - i) (h2 : 0#64 < j) :
   (max - (i + j)) < (max - i) := by
   auto

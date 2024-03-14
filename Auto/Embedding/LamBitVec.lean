@@ -12,6 +12,8 @@ namespace BVLems
 
   theorem toNat_ofNat (n a : Nat) : (BitVec.ofNat n a).toNat = a % (2 ^ n) := rfl
 
+  theorem toNat_ofNatLt {n : Nat} (i : Nat) (p : i < 2 ^ n) : (BitVec.ofNatLt i p).toNat = i := rfl
+
   theorem toNat_le (a : BitVec n) : a.toNat < 2 ^ n := by
     rcases a with ⟨⟨_, isLt⟩⟩; exact isLt
 
@@ -98,9 +100,28 @@ namespace BVLems
     rw [Nat.shiftRight_eq_div_pow, Nat.le_iff_div_eq_zero (Nat.two_pow_pos _)]
     apply Nat.le_trans (toNat_le _) (Nat.pow_le_pow_of_le_right (.step .refl) h)
 
+  theorem msb_equiv_lt (a : BitVec n) : !a.msb ↔ a.toNat < 2 ^ (n - 1) := by
+    dsimp [BitVec.msb, BitVec.getMsb, BitVec.getLsb]
+    cases n
+    case zero => simp
+    case succ n =>
+      have dtrue : decide (0 < n + 1) = true := by simp
+      rw [dtrue, Bool.not_eq_true', Bool.true_and, Nat.succ_sub_one, Nat.testBit_false_iff]
+      rw [Nat.mod_eq_of_lt (toNat_le _)]
+
+  theorem msb_equiv_lt' (a : BitVec n) : !a.msb ↔ 2 * a.toNat < 2 ^ n := by
+    rw [msb_equiv_lt]
+    cases n
+    case zero => simp
+    case succ n =>
+      rw [Nat.succ_sub_one, Nat.pow_succ, Nat.mul_comm (m:=2)]
+      apply Iff.symm; apply Nat.mul_lt_mul_left
+      exact .step .refl
+
   theorem sshiftRight_ge_length_eq_msb (a : BitVec n) (i : Nat) : i ≥ n → a.sshiftRight i =
     if a.msb then (1#n).neg else 0#n := by
-    intro h; cases hmsb : a.msb <;> simp [sshiftRight, BitVec.toInt, hmsb, Int.shiftRight_def]
+    intro h; simp [sshiftRight, BitVec.toInt, ← msb_equiv_lt']
+    cases hmsb : a.msb <;> simp [hmsb, Int.shiftRight_def]
     case false =>
       dsimp [BitVec.ofInt]
       apply ushiftRight_ge_length_eq_zero'; exact h
@@ -111,8 +132,10 @@ namespace BVLems
         rw [Nat.shiftRight_eq_div_pow]; apply (Nat.le_iff_div_eq_zero (Nat.two_pow_pos _)).mpr
         rw [Nat.pred_lt_iff_le (Nat.two_pow_pos _)]
         apply Nat.le_trans (Nat.sub_le _ _) (Nat.pow_le_pow_of_le_right (.step .refl) h)
-      rw [hzero]; apply eq_of_val_eq; rw [toNat_not]
-      rw [toNat_ofNat, toNat_neg, toNat_ofNat, Nat.zero_mod, Nat.sub_zero]
+      apply eq_of_val_eq; rw [toNat_ofNatLt, hzero]
+      rw [toNat_neg, Int.mod_def', Int.emod]; dsimp; rw [Nat.zero_mod]
+      rw [Int.subNatNat_of_sub_eq_zero ((Nat.sub_eq_zero_iff_le).mpr (Nat.two_pow_pos _))]
+      rw [Int.toNat_ofNat, BitVec.toNat_ofNat]
       cases n <;> try rfl
       case succ n =>
         have hlt : 2 ≤ 2 ^ Nat.succ n := @Nat.pow_le_pow_of_le_right 2 (.step .refl) 1 (.succ n) (Nat.succ_le_succ (Nat.zero_le _))
@@ -323,7 +346,7 @@ theorem LamEquiv.bvofNat_nadd
     (.mkBvBinOp n (.bvadd n) (.mkBvofNat n a) (.mkBvofNat n b)) :=
   ⟨.mkBvofNat (.mkNatBinOp .ofNadd wfa wfb),
    .mkBvBinOp (.ofBvadd _) (.mkBvofNat wfa) (.mkBvofNat wfb), fun lctxTerm => by
-      apply GLift.down.inj; apply BitVec.ofNat_add⟩
+      apply GLift.down.inj; apply BVLems.ofNat_add⟩
 
 def LamTerm.bvofNat_nsub (n : Nat) (a b bva bvb : LamTerm) :=
   LamTerm.mkIte (.base (.bv n)) (.mkNatBinOp .nlt a b)
@@ -338,7 +361,7 @@ theorem LamEquiv.bvofNat_nsub
   ⟨.mkBvofNat (.mkNatBinOp .ofNsub wfa wfb),
    .mkIte (.mkNatBinOp .ofNlt wfa wfb)
      (.ofBase (.ofBvVal n 0)) (.mkBvBinOp (.ofBvsub _) (.mkBvofNat wfa) (.mkBvofNat wfb)), fun lctxTerm => by
-    apply GLift.down.inj; apply BitVec.ofNat_sub'⟩
+    apply GLift.down.inj; apply BVLems.ofNat_sub'⟩
 
 theorem LamEquiv.bvofNat_nmul
   (wfa : LamWF lval.toLamTyVal ⟨lctx, a, .base .nat⟩)
@@ -348,7 +371,7 @@ theorem LamEquiv.bvofNat_nmul
     (.mkBvBinOp n (.bvmul n) (.mkBvofNat n a) (.mkBvofNat n b)) :=
   ⟨.mkBvofNat (.mkNatBinOp .ofNmul wfa wfb),
    .mkBvBinOp (.ofBvmul _) (.mkBvofNat wfa) (.mkBvofNat wfb), fun lctxTerm => by
-    apply GLift.down.inj; apply BitVec.ofNat_mul⟩
+    apply GLift.down.inj; apply BVLems.ofNat_mul⟩
 
 def LamTerm.shl_equiv (n : Nat) (a b bbv : LamTerm) :=
   LamTerm.mkIte (.base (.bv n)) (.mkNatBinOp .nlt b (.base (.natVal n)))
@@ -380,7 +403,7 @@ theorem LamEquiv.shl_equiv
   ⟨.mkBvNatBinOp (.ofBvshl _) wfa wfb,
    .mkIte (.mkNatBinOp (.ofNlt) wfb (.ofBase (.ofNatVal n)))
     (.mkBvBinOp (.ofBvsmtshl _) wfa (.mkBvofNat wfb)) (.ofBase (.ofBvVal _ _)), fun lctxTerm => by
-    apply GLift.down.inj; apply BitVec.shl_equiv'⟩
+    apply GLift.down.inj; apply BVLems.shl_equiv'⟩
 
 abbrev LamTerm.shl_toNat_equiv_short (n : Nat) (a : LamTerm) (m : Nat) (b : LamTerm) :=
   LamTerm.mkBvBinOp n (.bvsmtshl n) a (.mkBvUOp m (.bvzeroExtend m n) b)
@@ -406,7 +429,7 @@ theorem LamEquiv.shl_toNat_equiv_short
     (.shl_toNat_equiv_short n a m b) :=
   ⟨.mkBvNatBinOp (.ofBvshl _) wfa (.mkBvUOp (.ofBvtoNat _) wfb),
    .mkBvBinOp (.ofBvsmtshl _) wfa (.mkBvUOp (.ofBvzeroExtend _ _) wfb), fun lctxTerm => by
-    apply GLift.down.inj; apply BitVec.shl_toNat_equiv_short _ _ h⟩
+    apply GLift.down.inj; apply BVLems.shl_toNat_equiv_short _ _ h⟩
 
 abbrev LamTerm.shl_toNat_equiv_long (n : Nat) (a : LamTerm) (m : Nat) (b : LamTerm) :=
   LamTerm.mkIte (.base (.bv n))
@@ -441,7 +464,7 @@ theorem LamEquiv.shl_toNat_equiv_long
    .mkIte
     (.mkEq (.mkBvBinOp (.ofBvsmtlshr _) wfb (.ofBase (.ofBvVal _ _))) (.ofBase (.ofBvVal _ _)))
     (.mkBvBinOp (.ofBvsmtshl _) wfa (.mkBvUOp (.ofBvzeroExtend _ _) wfb)) (.ofBase (.ofBvVal _ _)), fun lctxTerm => by
-    apply GLift.down.inj; apply BitVec.shl_toNat_equiv_long' _ _ h⟩
+    apply GLift.down.inj; apply BVLems.shl_toNat_equiv_long' _ _ h⟩
 
 def LamTerm.lshr_equiv (n : Nat) (a b bbv : LamTerm) :=
   LamTerm.mkIte (.base (.bv n)) (.mkNatBinOp .nlt b (.base (.natVal n)))
@@ -472,7 +495,7 @@ theorem LamEquiv.lshr_equiv
   ⟨.mkBvNatBinOp (.ofBvlshr _) wfa wfb,
    .mkIte (.mkNatBinOp (.ofNlt) wfb (.ofBase (.ofNatVal n)))
     (.mkBvBinOp (.ofBvsmtlshr _) wfa (.mkBvofNat wfb)) (.ofBase (.ofBvVal _ _)), fun lctxTerm => by
-    apply GLift.down.inj; apply BitVec.lshr_equiv'⟩
+    apply GLift.down.inj; apply BVLems.lshr_equiv'⟩
 
 abbrev LamTerm.lshr_toNat_equiv_short (n : Nat) (a : LamTerm) (m : Nat) (b : LamTerm) :=
   LamTerm.mkBvBinOp n (.bvsmtlshr n) a (.mkBvUOp m (.bvzeroExtend m n) b)
@@ -498,7 +521,7 @@ theorem LamEquiv.lshr_toNat_equiv_short
     (.lshr_toNat_equiv_short n a m b) :=
   ⟨.mkBvNatBinOp (.ofBvlshr _) wfa (.mkBvUOp (.ofBvtoNat _) wfb),
    .mkBvBinOp (.ofBvsmtlshr _) wfa (.mkBvUOp (.ofBvzeroExtend _ _) wfb), fun lctxTerm => by
-    apply GLift.down.inj; apply BitVec.lshr_toNat_equiv_short _ _ h⟩
+    apply GLift.down.inj; apply BVLems.lshr_toNat_equiv_short _ _ h⟩
 
 abbrev LamTerm.lshr_toNat_equiv_long (n : Nat) (a : LamTerm) (m : Nat) (b : LamTerm) :=
   LamTerm.mkIte (.base (.bv n))
@@ -533,7 +556,7 @@ theorem LamEquiv.lshr_toNat_equiv_long
     .mkIte
       (.mkEq (.mkBvBinOp (.ofBvsmtlshr _) wfb (.ofBase (.ofBvVal _ _))) (.ofBase (.ofBvVal _ _)))
       (.mkBvBinOp (.ofBvsmtlshr _) wfa (.mkBvUOp (.ofBvzeroExtend _ _) wfb)) (.ofBase (.ofBvVal _ _)), fun lctxTerm => by
-    apply GLift.down.inj; apply BitVec.lshr_toNat_equiv_long' _ _ h⟩
+    apply GLift.down.inj; apply BVLems.lshr_toNat_equiv_long' _ _ h⟩
 
 def LamTerm.ashr_equiv (n : Nat) (a b bbv : LamTerm) :=
   LamTerm.mkIte (.base (.bv n)) (.mkNatBinOp .nlt b (.base (.natVal n)))
@@ -572,7 +595,7 @@ theorem LamEquiv.ashr_equiv
     (.mkIte (.mkEq (.mkBvUOp (.ofBvmsb _) wfa) (.ofBase .ofTrueB))
       (.mkBvUOp (.ofBvneg _) ((.ofBase (.ofBvVal _ _))))
       (.ofBase (.ofBvVal _ _))), fun lctxTerm => by
-    apply GLift.down.inj; apply BitVec.ashr_equiv'⟩
+    apply GLift.down.inj; apply BVLems.ashr_equiv'⟩
 
 abbrev LamTerm.ashr_toNat_equiv_short (n : Nat) (a : LamTerm) (m : Nat) (b : LamTerm) :=
   LamTerm.mkBvBinOp n (.bvsmtashr n) a (.mkBvUOp m (.bvzeroExtend m n) b)
@@ -598,7 +621,7 @@ theorem LamEquiv.ashr_toNat_equiv_short
     (.ashr_toNat_equiv_short n a m b) :=
   ⟨.mkBvNatBinOp (.ofBvashr _) wfa (.mkBvUOp (.ofBvtoNat _) wfb),
    .mkBvBinOp (.ofBvsmtashr _) wfa (.mkBvUOp (.ofBvzeroExtend _ _) wfb), fun lctxTerm => by
-    apply GLift.down.inj; apply BitVec.ashr_toNat_equiv_short _ _ h⟩
+    apply GLift.down.inj; apply BVLems.ashr_toNat_equiv_short _ _ h⟩
 
 def LamTerm.ashr_toNat_equiv_long (n : Nat) (a : LamTerm) (m : Nat) (b : LamTerm) :=
   LamTerm.mkIte (.base (.bv n))
@@ -639,7 +662,7 @@ theorem LamEquiv.ashr_toNat_equiv_long
         (.mkIte (.mkEq (.mkBvUOp (.ofBvmsb _) wfa) (.ofBase .ofTrueB))
           (.mkBvUOp (.ofBvneg _) (.ofBase (.ofBvVal _ _)))
           (.ofBase (.ofBvVal _ _))), fun lctxTerm => by
-    apply GLift.down.inj; apply BitVec.ashr_toNat_equiv_long' _ _ h⟩
+    apply GLift.down.inj; apply BVLems.ashr_toNat_equiv_long' _ _ h⟩
 
 inductive BVCastType where
   | ofNat : Nat → BVCastType

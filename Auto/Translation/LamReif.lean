@@ -450,7 +450,7 @@ partial def updownFunc (s : LamSort) : ReifM (Expr × Expr × Expr × Expr) :=
         | _   => Expr.const ``Empty []
       return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
     | .bv n =>
-      let ty := Expr.app (.const ``Std.BitVec []) (.lit (.natVal n))
+      let ty := Expr.app (.const ``BitVec []) (.lit (.natVal n))
       return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
   | .func s₁ s₂ => do
     let (uf₁, df₁, ty₁, tyUp₁) ← updownFunc s₁
@@ -1120,7 +1120,7 @@ def processTypeExpr (e : Expr) : ReifM LamSort := do
   | .const ``Int [] => return .base .int
   | .const ``String [] => return .base .string
   | .const ``Empty [] => return .base .empty
-  | .app (.const ``Std.BitVec []) nExpr =>
+  | .app (.const ``BitVec []) nExpr =>
     if let .some n ← @id (MetaM _) (Meta.evalNat nExpr) then
       return .base (.bv n)
     else
@@ -1159,21 +1159,21 @@ abbrev Int.max (x y : Int) : Int := Max.max x y
 abbrev Int.min (x y : Int) : Int := Min.min x y
 abbrev String.ge (a b : String) : Prop := b = a ∨ b < a
 abbrev String.gt (a b : String) : Prop := b < a
-abbrev BitVec.uge (a b : Std.BitVec n) : Bool := Std.BitVec.ule b a
-abbrev BitVec.ugt (a b : Std.BitVec n) : Bool := Std.BitVec.ult b a
-abbrev BitVec.sge (a b : Std.BitVec n) : Bool := Std.BitVec.sle b a
-abbrev BitVec.sgt (a b : Std.BitVec n) : Bool := Std.BitVec.slt b a
-abbrev BitVec.propule (a b : Std.BitVec n) : Prop := a.toFin <= b.toFin
-abbrev BitVec.propult (a b : Std.BitVec n) : Prop := a.toFin < b.toFin
-abbrev BitVec.propsle (a b : Std.BitVec n) : Prop := a.toInt <= b.toInt
-abbrev BitVec.propslt (a b : Std.BitVec n) : Prop := a.toInt < b.toInt
-abbrev BitVec.propuge (a b : Std.BitVec n) : Prop := BitVec.propule b a
-abbrev BitVec.propugt (a b : Std.BitVec n) : Prop := BitVec.propult b a
-abbrev BitVec.propsge (a b : Std.BitVec n) : Prop := BitVec.propsle b a
-abbrev BitVec.propsgt (a b : Std.BitVec n) : Prop := BitVec.propslt b a
-abbrev BitVec.smtHshiftLeft (a : Std.BitVec n) (b : Std.BitVec m) := Std.BitVec.shiftLeft a b.toNat
-abbrev BitVec.smtHushiftRight (a : Std.BitVec n) (b : Std.BitVec m) := Std.BitVec.ushiftRight a b.toNat
-abbrev BitVec.smtHsshiftRight (a : Std.BitVec n) (b : Std.BitVec m) := Std.BitVec.sshiftRight a b.toNat
+abbrev BitVec.uge (a b : BitVec n) : Bool := BitVec.ule b a
+abbrev BitVec.ugt (a b : BitVec n) : Bool := BitVec.ult b a
+abbrev BitVec.sge (a b : BitVec n) : Bool := BitVec.sle b a
+abbrev BitVec.sgt (a b : BitVec n) : Bool := BitVec.slt b a
+abbrev BitVec.propule (a b : BitVec n) : Prop := a.toFin <= b.toFin
+abbrev BitVec.propult (a b : BitVec n) : Prop := a.toFin < b.toFin
+abbrev BitVec.propsle (a b : BitVec n) : Prop := a.toInt <= b.toInt
+abbrev BitVec.propslt (a b : BitVec n) : Prop := a.toInt < b.toInt
+abbrev BitVec.propuge (a b : BitVec n) : Prop := BitVec.propule b a
+abbrev BitVec.propugt (a b : BitVec n) : Prop := BitVec.propult b a
+abbrev BitVec.propsge (a b : BitVec n) : Prop := BitVec.propsle b a
+abbrev BitVec.propsgt (a b : BitVec n) : Prop := BitVec.propslt b a
+abbrev BitVec.smtHshiftLeft (a : BitVec n) (b : BitVec m) := BitVec.shiftLeft a b.toNat
+abbrev BitVec.smtHushiftRight (a : BitVec n) (b : BitVec m) := BitVec.ushiftRight a b.toNat
+abbrev BitVec.smtHsshiftRight (a : BitVec n) (b : BitVec m) := BitVec.sshiftRight a b.toNat
 
 def reifMapIL : HashMap Name (LamSort → LamBaseTerm) :=
   HashMap.ofList [
@@ -1228,47 +1228,47 @@ def reifMapConstNilLvl : HashMap Name LamTerm :=
 
 def reifMapBVConst1 : HashMap Name (Nat → LamTerm) :=
   HashMap.ofList [
-    (``Std.BitVec.ofNat,       fun n => .base (.bvofNat n)),
-    (``Std.BitVec.toNat,       fun n => .base (.bvtoNat n)),
-    (``Std.BitVec.ofInt,       fun n => .base (.bvofInt n)),
-    (``Std.BitVec.toInt,       fun n => .base (.bvtoInt n)),
-    (``Std.BitVec.msb,         fun n => .base (.bvmsb n)),
-    (``Std.BitVec.add,         fun n => .base (.bvadd n)),
-    (``Std.BitVec.sub,         fun n => .base (.bvsub n)),
-    (``Std.BitVec.neg,         fun n => .base (.bvneg n)),
-    (``Std.BitVec.abs,         fun n => .base (.bvabs n)),
-    (``Std.BitVec.mul,         fun n => .base (.bvmul n)),
-    (``Std.BitVec.smtUDiv,     fun n => .base (.bvudiv n)),
-    (``Std.BitVec.umod,        fun n => .base (.bvurem n)),
-    (``Std.BitVec.smtSDiv,     fun n => .base (.bvsdiv n)),
-    (``Std.BitVec.srem,        fun n => .base (.bvsrem n)),
-    (``Std.BitVec.smod,        fun n => .base (.bvsmod n)),
-    (``Std.BitVec.ult,         fun n => .base (.bvult n)),
-    (``Std.BitVec.ule,         fun n => .base (.bvule n)),
-    (``Std.BitVec.slt,         fun n => .base (.bvslt n)),
-    (``Std.BitVec.sle,         fun n => .base (.bvsle n)),
-    (``Std.BitVec.and,         fun n => .base (.bvand n)),
-    (``Std.BitVec.or,          fun n => .base (.bvor n)),
-    (``Std.BitVec.xor,         fun n => .base (.bvxor n)),
-    (``Std.BitVec.not,         fun n => .base (.bvnot n)),
-    (``Std.BitVec.shiftLeft,   fun n => .base (.bvshl n)),
-    (``Std.BitVec.ushiftRight, fun n => .base (.bvlshr n)),
-    (``Std.BitVec.sshiftRight, fun n => .base (.bvashr n)),
-    (``Std.BitVec.rotateLeft,  fun n => .bvrotateLeft n),
-    (``Std.BitVec.rotateRight, fun n => .bvrotateRight n)
+    (``BitVec.ofNat,       fun n => .base (.bvofNat n)),
+    (``BitVec.toNat,       fun n => .base (.bvtoNat n)),
+    (``BitVec.ofInt,       fun n => .base (.bvofInt n)),
+    (``BitVec.toInt,       fun n => .base (.bvtoInt n)),
+    (``BitVec.msb,         fun n => .base (.bvmsb n)),
+    (``BitVec.add,         fun n => .base (.bvadd n)),
+    (``BitVec.sub,         fun n => .base (.bvsub n)),
+    (``BitVec.neg,         fun n => .base (.bvneg n)),
+    (``BitVec.abs,         fun n => .base (.bvabs n)),
+    (``BitVec.mul,         fun n => .base (.bvmul n)),
+    (``BitVec.smtUDiv,     fun n => .base (.bvudiv n)),
+    (``BitVec.umod,        fun n => .base (.bvurem n)),
+    (``BitVec.smtSDiv,     fun n => .base (.bvsdiv n)),
+    (``BitVec.srem,        fun n => .base (.bvsrem n)),
+    (``BitVec.smod,        fun n => .base (.bvsmod n)),
+    (``BitVec.ult,         fun n => .base (.bvult n)),
+    (``BitVec.ule,         fun n => .base (.bvule n)),
+    (``BitVec.slt,         fun n => .base (.bvslt n)),
+    (``BitVec.sle,         fun n => .base (.bvsle n)),
+    (``BitVec.and,         fun n => .base (.bvand n)),
+    (``BitVec.or,          fun n => .base (.bvor n)),
+    (``BitVec.xor,         fun n => .base (.bvxor n)),
+    (``BitVec.not,         fun n => .base (.bvnot n)),
+    (``BitVec.shiftLeft,   fun n => .base (.bvshl n)),
+    (``BitVec.ushiftRight, fun n => .base (.bvlshr n)),
+    (``BitVec.sshiftRight, fun n => .base (.bvashr n)),
+    (``BitVec.rotateLeft,  fun n => .bvrotateLeft n),
+    (``BitVec.rotateRight, fun n => .bvrotateRight n)
   ]
 
 def reifMapBVConst2 : HashMap Name (Nat → Nat → LamTerm) :=
   HashMap.ofList [
-    (``Std.BitVec.append,     fun n m => .base (.bvappend n m)),
-    (``Std.BitVec.replicate,  fun w i => .base (.bvrepeat w i)),
-    (``Std.BitVec.zeroExtend, fun w v => .base (.bvzeroExtend w v)),
-    (``Std.BitVec.signExtend, fun w v => .base (.bvsignExtend w v))
+    (``BitVec.append,     fun n m => .base (.bvappend n m)),
+    (``BitVec.replicate,  fun w i => .base (.bvrepeat w i)),
+    (``BitVec.zeroExtend, fun w v => .base (.bvzeroExtend w v)),
+    (``BitVec.signExtend, fun w v => .base (.bvsignExtend w v))
   ]
 
 def reifMapBVConst3 : HashMap Name (Nat → Nat → Nat → LamTerm) :=
   HashMap.ofList [
-    (``Std.BitVec.extractLsb, fun n h l => .base (.bvextract n h l))
+    (``BitVec.extractLsb, fun n h l => .base (.bvextract n h l))
   ]
 
 def processSimpleLit (l : Literal) : LamTerm :=
@@ -1362,22 +1362,22 @@ def reifMapLam0Arg2NoLit : HashMap (Name × Name) (Expr × LamTerm) :=
 -/
 def reifMapLam0Arg2Natlit : HashMap (Name × Name) (Array ((Nat → Expr) × (Nat → LamTerm))) :=
   HashMap.ofList [
-    ((``Neg.neg, ``Std.BitVec),
-              #[(fun n => .app (.const ``Std.BitVec.neg []) (.lit (.natVal n)), fun n => .base (.bvneg n))]),
-    ((`Abs.abs, ``Std.BitVec),
-              #[(fun n => .app (.const ``Std.BitVec.abs []) (.lit (.natVal n)), fun n => .base (.bvabs n))]),
-    ((``Complement.complement, ``Std.BitVec),
-              #[(fun n => .app (.const ``Std.BitVec.not []) (.lit (.natVal n)), fun n => .base (.bvnot n))]),
-    ((``LE.le, ``Std.BitVec),
+    ((``Neg.neg, ``BitVec),
+              #[(fun n => .app (.const ``BitVec.neg []) (.lit (.natVal n)), fun n => .base (.bvneg n))]),
+    ((`Abs.abs, ``BitVec),
+              #[(fun n => .app (.const ``BitVec.abs []) (.lit (.natVal n)), fun n => .base (.bvabs n))]),
+    ((``Complement.complement, ``BitVec),
+              #[(fun n => .app (.const ``BitVec.not []) (.lit (.natVal n)), fun n => .base (.bvnot n))]),
+    ((``LE.le, ``BitVec),
               #[(fun n => .app (.const ``BitVec.propule []) (.lit (.natVal n)), fun n => .base (.bvpropule n)),
                 (fun n => .app (.const ``BitVec.propsle []) (.lit (.natVal n)), fun n => .base (.bvpropsle n))]),
-    ((``GE.ge, ``Std.BitVec),
+    ((``GE.ge, ``BitVec),
               #[(fun n => .app (.const ``BitVec.propuge []) (.lit (.natVal n)), fun n => .bvpropuge n),
                 (fun n => .app (.const ``BitVec.propsge []) (.lit (.natVal n)), fun n => .bvpropsge n)]),
-    ((``LT.lt, ``Std.BitVec),
+    ((``LT.lt, ``BitVec),
               #[(fun n => .app (.const ``BitVec.propult []) (.lit (.natVal n)), fun n => .base (.bvpropult n)),
                 (fun n => .app (.const ``BitVec.propslt []) (.lit (.natVal n)), fun n => .base (.bvpropslt n))]),
-    ((``GT.gt, ``Std.BitVec),
+    ((``GT.gt, ``BitVec),
               #[(fun n => .app (.const ``BitVec.propugt []) (.lit (.natVal n)), fun n => .bvpropugt n),
                 (fun n => .app (.const ``BitVec.propsgt []) (.lit (.natVal n)), fun n => .bvpropsgt n)])
   ]
@@ -1408,21 +1408,21 @@ def reifMapLam0Arg4NoLit : HashMap (Name × Name × Name) (Expr × LamTerm) :=
 -/
 def reifMapLam0Arg4NatLitNatLitEq : HashMap (Name × Name) (Array ((Nat → Expr) × (Nat → LamTerm))) :=
   HashMap.ofList [
-    ((``HAdd.hAdd, ``Std.BitVec),
-      #[(fun n => .app (.const ``Std.BitVec.add []) (.lit (.natVal n)), fun n => .base (.bvadd n))]),
-    ((``HSub.hSub, ``Std.BitVec),
-      #[(fun n => .app (.const ``Std.BitVec.sub []) (.lit (.natVal n)), fun n => .base (.bvsub n))]),
-    ((``HMul.hMul, ``Std.BitVec),
-      #[(fun n => .app (.const ``Std.BitVec.mul []) (.lit (.natVal n)), fun n => .base (.bvmul n))]),
-    ((``HDiv.hDiv, ``Std.BitVec),
-      #[(fun n => .app (.const ``Std.BitVec.smtUDiv []) (.lit (.natVal n)), fun n => .base (.bvudiv n)),
-        (fun n => .app (.const ``Std.BitVec.smtSDiv []) (.lit (.natVal n)), fun n => .base (.bvsdiv n))]),
-    ((``HAnd.hAnd, ``Std.BitVec),
-      #[(fun n => .app (.const ``Std.BitVec.and []) (.lit (.natVal n)), fun n => .base (.bvand n))]),
-    ((``HOr.hOr, ``Std.BitVec),
-      #[(fun n => .app (.const ``Std.BitVec.or []) (.lit (.natVal n)), fun n => .base (.bvor n))]),
-    ((``HXor.hXor, ``Std.BitVec),
-      #[(fun n => .app (.const ``Std.BitVec.xor []) (.lit (.natVal n)), fun n => .base (.bvxor n))])
+    ((``HAdd.hAdd, ``BitVec),
+      #[(fun n => .app (.const ``BitVec.add []) (.lit (.natVal n)), fun n => .base (.bvadd n))]),
+    ((``HSub.hSub, ``BitVec),
+      #[(fun n => .app (.const ``BitVec.sub []) (.lit (.natVal n)), fun n => .base (.bvsub n))]),
+    ((``HMul.hMul, ``BitVec),
+      #[(fun n => .app (.const ``BitVec.mul []) (.lit (.natVal n)), fun n => .base (.bvmul n))]),
+    ((``HDiv.hDiv, ``BitVec),
+      #[(fun n => .app (.const ``BitVec.smtUDiv []) (.lit (.natVal n)), fun n => .base (.bvudiv n)),
+        (fun n => .app (.const ``BitVec.smtSDiv []) (.lit (.natVal n)), fun n => .base (.bvsdiv n))]),
+    ((``HAnd.hAnd, ``BitVec),
+      #[(fun n => .app (.const ``BitVec.and []) (.lit (.natVal n)), fun n => .base (.bvand n))]),
+    ((``HOr.hOr, ``BitVec),
+      #[(fun n => .app (.const ``BitVec.or []) (.lit (.natVal n)), fun n => .base (.bvor n))]),
+    ((``HXor.hXor, ``BitVec),
+      #[(fun n => .app (.const ``BitVec.xor []) (.lit (.natVal n)), fun n => .base (.bvxor n))])
   ]
 
 /--
@@ -1433,11 +1433,11 @@ def reifMapLam0Arg4NatLitNatLitEq : HashMap (Name × Name) (Array ((Nat → Expr
 -/
 def reifMapLam0Arg4NatLitNatLitH : HashMap (Name × Name) (Array ((Nat → Nat → Expr) × (Nat → Nat → LamTerm))) :=
   HashMap.ofList [
-    ((``HAppend.hAppend, ``Std.BitVec),
-      #[(fun n m => mkApp2 (.const ``Std.BitVec.append []) (.lit (.natVal n)) (.lit (.natVal m)), fun n m => .base (.bvappend n m))]),
-    ((``HShiftLeft.hShiftLeft, ``Std.BitVec),
+    ((``HAppend.hAppend, ``BitVec),
+      #[(fun n m => mkApp2 (.const ``BitVec.append []) (.lit (.natVal n)) (.lit (.natVal m)), fun n m => .base (.bvappend n m))]),
+    ((``HShiftLeft.hShiftLeft, ``BitVec),
       #[(fun n m => mkApp2 (.const ``BitVec.smtHshiftLeft []) (.lit (.natVal n)) (.lit (.natVal m)), fun n m => .bvsmtHshl n m)]),
-    ((``HShiftRight.hShiftRight, ``Std.BitVec),
+    ((``HShiftRight.hShiftRight, ``BitVec),
       #[(fun n m => mkApp2 (.const ``BitVec.smtHushiftRight []) (.lit (.natVal n)) (.lit (.natVal m)), fun n m => .bvsmtHlshr n m),
         (fun n m => mkApp2 (.const ``BitVec.smtHsshiftRight []) (.lit (.natVal n)) (.lit (.natVal m)), fun n m => .bvsmtHashr n m)])
   ]
@@ -1449,11 +1449,11 @@ def reifMapLam0Arg4NatLitNatLitH : HashMap (Name × Name) (Array ((Nat → Nat �
 -/
 def reifMapLam0Arg4NatLit : HashMap (Name × Name) (Array ((Nat → Expr) × (Nat → LamTerm))) :=
   HashMap.ofList [
-    ((``HShiftLeft.hShiftLeft, ``Std.BitVec),
-      #[(fun n => .app (.const ``Std.BitVec.shiftLeft []) (.lit (.natVal n)), fun n => .base (.bvshl n))]),
-    ((``HShiftRight.hShiftRight, ``Std.BitVec),
-      #[(fun n => .app (.const ``Std.BitVec.ushiftRight []) (.lit (.natVal n)), fun n => .base (.bvlshr n)),
-        (fun n => .app (.const ``Std.BitVec.sshiftRight []) (.lit (.natVal n)), fun n => .base (.bvashr n))])
+    ((``HShiftLeft.hShiftLeft, ``BitVec),
+      #[(fun n => .app (.const ``BitVec.shiftLeft []) (.lit (.natVal n)), fun n => .base (.bvshl n))]),
+    ((``HShiftRight.hShiftRight, ``BitVec),
+      #[(fun n => .app (.const ``BitVec.ushiftRight []) (.lit (.natVal n)), fun n => .base (.bvlshr n)),
+        (fun n => .app (.const ``BitVec.sshiftRight []) (.lit (.natVal n)), fun n => .base (.bvashr n))])
   ]
 
 def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
@@ -1492,9 +1492,9 @@ def processLam0Arg3 (e fn arg₁ arg₂ arg₃ : Expr) : MetaM (Option LamTerm) 
           | throwError "processLam0Arg3 :: OfNat.ofNat instance is not based on a nat literal"
         return .some (.mkIOfNat (.base (.natVal nv)))
       return .none
-    | .app (.const ``Std.BitVec []) nExpr =>
+    | .app (.const ``BitVec []) nExpr =>
       if let .some n ← Meta.evalNat nExpr then
-        if (← Meta.isDefEqD e (mkApp2 (.const ``Std.BitVec.ofNat []) (.lit (.natVal n)) arg₂)) then
+        if (← Meta.isDefEqD e (mkApp2 (.const ``BitVec.ofNat []) (.lit (.natVal n)) arg₂)) then
           let .lit (.natVal nv) := arg₂
             | throwError "processLam0Arg3 :: OfNat.ofNat instance is not based on a nat literal"
           return .some (.base (.bvVal n nv))
@@ -1644,7 +1644,7 @@ def reifInd (ind : SimpleIndVal) : ReifM (Option IndInfo) := do
   let ⟨name, type, ctors, projs⟩ := ind
   if name == ``Nat || name == ``Int || name == ``Bool ||
      name == ``String || name == ``String.Pos || name == ``Empty ||
-     name == ``Std.BitVec then
+     name == ``BitVec then
     return .none
   -- For now, do not reify inductively defined proposition
   if ← isIndProp name then
