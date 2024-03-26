@@ -1,4 +1,3 @@
-import Std.Data.Nat.Lemmas
 import Auto.Lib.BoolExtra
 
 namespace Auto

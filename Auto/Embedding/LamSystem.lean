@@ -1699,7 +1699,7 @@ theorem LamGenModify.rwGenAtIfSign {modify} (H : LamGenModify lval modify weaken
                         dsimp; have ⟨.ofApp _ (.ofApp _ _ wfArgI') _, _⟩ := IH
                         apply LamValid.impLift (LamValid.and_imp_and_of_right_imp wfArgII wfArgI' wfArgI) IH
                   case false =>
-                    cases h₂ : LamTerm.rwGenAt occ modify (.app (.base .prop) (.base .and) argII) <;> intro h <;> cases h
+                    cases h₂ : LamTerm.rwGenAt occ modify (.app (.base .prop) (.base (.pcst .and)) argII) <;> intro h <;> cases h
                     case refl argAp' =>
                       cases occ <;> try cases h₁
                       case cons b' occ =>
@@ -1733,7 +1733,7 @@ theorem LamGenModify.rwGenAtIfSign {modify} (H : LamGenModify lval modify weaken
                         dsimp; have ⟨.ofApp _ (.ofApp _ _ wfArgI') _, _⟩ := IH
                         apply LamValid.impLift (LamValid.or_imp_or_of_right_imp wfArgII wfArgI' wfArgI) IH
                   case false =>
-                    cases h₂ : LamTerm.rwGenAt occ modify (.app (.base .prop) (.base .or) argII) <;> intro h <;> cases h
+                    cases h₂ : LamTerm.rwGenAt occ modify (.app (.base .prop) (.base (.pcst .or)) argII) <;> intro h <;> cases h
                     case refl argAp' =>
                       cases occ <;> try cases h₁
                       case cons b' occ =>
@@ -1767,7 +1767,7 @@ theorem LamGenModify.rwGenAtIfSign {modify} (H : LamGenModify lval modify weaken
                         dsimp; have ⟨.ofApp _ (.ofApp _ _ wfArgI') _, _⟩ := IH
                         apply LamValid.impLift (LamValid.imp_trans' wfArgII wfArgI' wfArgI) IH
                   case false =>
-                    cases h₂ : LamTerm.rwGenAt occ modify (.app (.base .prop) (.base .imp) argII) <;> intro h <;> cases h
+                    cases h₂ : LamTerm.rwGenAt occ modify (.app (.base .prop) (.base (.pcst .imp)) argII) <;> intro h <;> cases h
                     case refl argAp' =>
                       cases occ <;> try cases h₁
                       case cons b' occ =>

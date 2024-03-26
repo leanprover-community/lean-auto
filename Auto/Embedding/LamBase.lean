@@ -3672,7 +3672,7 @@ def LamWF.bvarApps
       have tyeq : ty = lctxr ex.length := by
         have exlt : List.length ex < List.length (List.reverse (ty :: ex)) := by
           rw [List.length_reverse]; apply Nat.le_refl
-        rw [lctxr_def, ← List.reverseAux, List.reverseAux_eq]
+        dsimp [lctxr]; rw [← List.reverseAux, List.reverseAux_eq]
         rw [pushLCtxs_lt (by rw [List.length_append]; apply Nat.le_trans exlt (Nat.le_add_right _ _))]
         dsimp [List.getD]; rw [List.get?_append exlt];
         rw [List.get?_reverse _ (by dsimp [List.length]; apply Nat.le_refl _)]

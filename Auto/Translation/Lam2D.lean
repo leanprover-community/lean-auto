@@ -98,7 +98,7 @@ def interpLamSortAsUnlifted : LamSort → ExternM Expr
     | .xH => return .const ``String []
     | .xO .xH => return .const ``Empty []
     | _   => return .const ``Empty []
-  | .bv n    => return .app (.const ``Std.BitVec []) (.lit (.natVal n))
+  | .bv n    => return .app (.const ``BitVec []) (.lit (.natVal n))
 | .func s₁ s₂ => do
   return .forallE `_ (← interpLamSortAsUnlifted s₁) (← interpLamSortAsUnlifted s₂) .default
 
@@ -191,59 +191,59 @@ def interpStringConstAsUnlifted : StringConst → Expr
 
 open Embedding in
 def interpBitVecConstAsUnlifted : BitVecConst → Expr
-| .bvVal n i         => mkApp2 (.const ``Std.BitVec.ofNat []) (.lit (.natVal n)) (.lit (.natVal i))
-| .bvofNat n         => .app (.const ``Std.BitVec.ofNat []) (.lit (.natVal n))
-| .bvtoNat n         => .app (.const ``Std.BitVec.toNat []) (.lit (.natVal n))
-| .bvofInt n         => .app (.const ``Std.BitVec.ofInt []) (.lit (.natVal n))
-| .bvtoInt n         => .app (.const ``Std.BitVec.toInt []) (.lit (.natVal n))
-| .bvmsb n           => .app (.const ``Std.BitVec.msb []) (.lit (.natVal n))
+| .bvVal n i         => mkApp2 (.const ``BitVec.ofNat []) (.lit (.natVal n)) (.lit (.natVal i))
+| .bvofNat n         => .app (.const ``BitVec.ofNat []) (.lit (.natVal n))
+| .bvtoNat n         => .app (.const ``BitVec.toNat []) (.lit (.natVal n))
+| .bvofInt n         => .app (.const ``BitVec.ofInt []) (.lit (.natVal n))
+| .bvtoInt n         => .app (.const ``BitVec.toInt []) (.lit (.natVal n))
+| .bvmsb n           => .app (.const ``BitVec.msb []) (.lit (.natVal n))
 | .bvaOp n op =>
   match op with
-  | .add             => .app (.const ``Std.BitVec.add []) (.lit (.natVal n))
-  | .sub             => .app (.const ``Std.BitVec.sub []) (.lit (.natVal n))
-  | .mul             => .app (.const ``Std.BitVec.mul []) (.lit (.natVal n))
-  | .udiv            => .app (.const ``Std.BitVec.smtUDiv []) (.lit (.natVal n))
-  | .urem            => .app (.const ``Std.BitVec.umod []) (.lit (.natVal n))
-  | .sdiv            => .app (.const ``Std.BitVec.smtSDiv []) (.lit (.natVal n))
-  | .srem            => .app (.const ``Std.BitVec.srem []) (.lit (.natVal n))
-  | .smod            => .app (.const ``Std.BitVec.smod []) (.lit (.natVal n))
-| .bvneg n           => .app (.const ``Std.BitVec.neg []) (.lit (.natVal n))
-| .bvabs n           => .app (.const ``Std.BitVec.abs []) (.lit (.natVal n))
+  | .add             => .app (.const ``BitVec.add []) (.lit (.natVal n))
+  | .sub             => .app (.const ``BitVec.sub []) (.lit (.natVal n))
+  | .mul             => .app (.const ``BitVec.mul []) (.lit (.natVal n))
+  | .udiv            => .app (.const ``BitVec.smtUDiv []) (.lit (.natVal n))
+  | .urem            => .app (.const ``BitVec.umod []) (.lit (.natVal n))
+  | .sdiv            => .app (.const ``BitVec.smtSDiv []) (.lit (.natVal n))
+  | .srem            => .app (.const ``BitVec.srem []) (.lit (.natVal n))
+  | .smod            => .app (.const ``BitVec.smod []) (.lit (.natVal n))
+| .bvneg n           => .app (.const ``BitVec.neg []) (.lit (.natVal n))
+| .bvabs n           => .app (.const ``BitVec.abs []) (.lit (.natVal n))
 | .bvcmp n prop? op  =>
   match prop? with
   | false =>
     match op with
-    | .ult           => .app (.const ``Std.BitVec.ult []) (.lit (.natVal n))
-    | .ule           => .app (.const ``Std.BitVec.ule []) (.lit (.natVal n))
-    | .slt           => .app (.const ``Std.BitVec.slt []) (.lit (.natVal n))
-    | .sle           => .app (.const ``Std.BitVec.sle []) (.lit (.natVal n))
+    | .ult           => .app (.const ``BitVec.ult []) (.lit (.natVal n))
+    | .ule           => .app (.const ``BitVec.ule []) (.lit (.natVal n))
+    | .slt           => .app (.const ``BitVec.slt []) (.lit (.natVal n))
+    | .sle           => .app (.const ``BitVec.sle []) (.lit (.natVal n))
   | true =>
     match op with
     | .ult           => .app (.const ``BitVec.propult []) (.lit (.natVal n))
     | .ule           => .app (.const ``BitVec.propule []) (.lit (.natVal n))
     | .slt           => .app (.const ``BitVec.propslt []) (.lit (.natVal n))
     | .sle           => .app (.const ``BitVec.propsle []) (.lit (.natVal n))
-| .bvand n           => .app (.const ``Std.BitVec.and []) (.lit (.natVal n))
-| .bvor n            => .app (.const ``Std.BitVec.or []) (.lit (.natVal n))
-| .bvxor n           => .app (.const ``Std.BitVec.xor []) (.lit (.natVal n))
-| .bvnot n           => .app (.const ``Std.BitVec.not []) (.lit (.natVal n))
+| .bvand n           => .app (.const ``BitVec.and []) (.lit (.natVal n))
+| .bvor n            => .app (.const ``BitVec.or []) (.lit (.natVal n))
+| .bvxor n           => .app (.const ``BitVec.xor []) (.lit (.natVal n))
+| .bvnot n           => .app (.const ``BitVec.not []) (.lit (.natVal n))
 | .bvshOp n smt? op  =>
   match smt? with
   | false =>
     match op with
-    | .shl           => .app (.const ``Std.BitVec.shiftLeft []) (.lit (.natVal n))
-    | .lshr          => .app (.const ``Std.BitVec.ushiftRight []) (.lit (.natVal n))
-    | .ashr          => .app (.const ``Std.BitVec.sshiftRight []) (.lit (.natVal n))
+    | .shl           => .app (.const ``BitVec.shiftLeft []) (.lit (.natVal n))
+    | .lshr          => .app (.const ``BitVec.ushiftRight []) (.lit (.natVal n))
+    | .ashr          => .app (.const ``BitVec.sshiftRight []) (.lit (.natVal n))
   | true =>
     match op with
     | .shl           => mkApp2 (.const ``BitVec.smtHshiftLeft []) (.lit (.natVal n)) (.lit (.natVal n))
     | .lshr          => mkApp2 (.const ``BitVec.smtHushiftRight []) (.lit (.natVal n)) (.lit (.natVal n))
     | .ashr          => mkApp2 (.const ``BitVec.smtHsshiftRight []) (.lit (.natVal n)) (.lit (.natVal n))
-| .bvappend n m      => mkApp2 (.const ``Std.BitVec.append []) (.lit (.natVal n)) (.lit (.natVal m))
-| .bvextract n h l   => mkApp3 (.const ``Std.BitVec.extractLsb []) (.lit (.natVal n)) (.lit (.natVal h)) (.lit (.natVal l))
-| .bvrepeat w i      => mkApp2 (.const ``Std.BitVec.replicate []) (.lit (.natVal w)) (.lit (.natVal i))
-| .bvzeroExtend w v  => mkApp2 (.const ``Std.BitVec.zeroExtend []) (.lit (.natVal w)) (.lit (.natVal v))
-| .bvsignExtend w v  => mkApp2 (.const ``Std.BitVec.signExtend []) (.lit (.natVal w)) (.lit (.natVal v))
+| .bvappend n m      => mkApp2 (.const ``BitVec.append []) (.lit (.natVal n)) (.lit (.natVal m))
+| .bvextract n h l   => mkApp3 (.const ``BitVec.extractLsb []) (.lit (.natVal n)) (.lit (.natVal h)) (.lit (.natVal l))
+| .bvrepeat w i      => mkApp2 (.const ``BitVec.replicate []) (.lit (.natVal w)) (.lit (.natVal i))
+| .bvzeroExtend w v  => mkApp2 (.const ``BitVec.zeroExtend []) (.lit (.natVal w)) (.lit (.natVal v))
+| .bvsignExtend w v  => mkApp2 (.const ``BitVec.signExtend []) (.lit (.natVal w)) (.lit (.natVal v))
 
 open Embedding in
 def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
