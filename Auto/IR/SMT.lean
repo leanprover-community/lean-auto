@@ -305,6 +305,7 @@ inductive Command where
   -- String : Name of datatype
   -- Nat    : Number of parameters of the datatype
   | declDtypes : Array (String × Nat × DatatypeDecl) → Command
+  | echo       : String → Command
   | exit       : Command
 
 def Command.toString : Command → String
@@ -340,6 +341,7 @@ def Command.toString : Command → String
   let sort_decs := String.intercalate " " (infos.data.map (fun (name, args, _) => s!"({name} {args})"))
   let datatype_decs := String.intercalate " " (infos.data.map (fun (_, _, ddecl) => ddecl.toString))
   s!"(declare-datatypes ({sort_decs}) ({datatype_decs}))"
+| .echo s                              => s!"(echo \"{s}\")"
 | .exit                                => "(exit)"
 
 instance : ToString Command where

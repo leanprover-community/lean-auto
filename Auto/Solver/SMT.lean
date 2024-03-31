@@ -1,6 +1,6 @@
 import Lean
 import Auto.IR.SMT
-import Auto.Parser.SMTSexp
+import Auto.Parser.SMTParser
 open Lean
 
 initialize
@@ -47,10 +47,15 @@ register_option auto.smt.rconsProof : Bool := {
   descr := "Enable/Disable proof reconstruction"
 }
 
+register_option auto.smt.dumpHints : Bool := {
+  defValue := false
+  descr := "Enable/Disable dumping cvc5 hints (experimental)"
+}
+
 namespace Auto
 
 open IR.SMT
-open Parser.SMTSexp
+open Parser.SMTTerm
 
 namespace Solver.SMT
 
@@ -97,7 +102,13 @@ def createSolver (name : SolverName) : MetaM SolverProc := do
   | .none => throwError "createSolver :: Unexpected error"
   | .z3   => createAux "z3" #["-in", "-smt2", s!"-T:{tlim}"]
   | .cvc4 => throwError "cvc4 is not supported"
-  | .cvc5 => createAux "cvc5" #[s!"--tlimit={tlim * 1000}", "--produce-models"]
+  | .cvc5 =>
+    if auto.smt.dumpHints.get (← getOptions) then
+      createAux "cvc5"
+        #[s!"--tlimit={tlim * 1000}", "--produce-models",
+          "--dump-hints", "--proof-granularity=dsl-rewrite"]
+    else
+      createAux "cvc5" #[s!"--tlimit={tlim * 1000}", "--produce-models"]
 where
   createAux (path : String) (args : Array String) : MetaM SolverProc :=
     IO.Process.spawn {stdin := .piped, stdout := .piped, stderr := .piped,
@@ -105,16 +116,16 @@ where
 
 axiom autoSMTSorry.{u} (α : Sort u) : α
 
-def getSexp (s : String) : MetaM (Sexp × String) :=
-  match parseSexp s ⟨0⟩ {} with
+def getTerm (s : String) : MetaM (Parser.SMTTerm.Term × String) := do
+  match ← lexTerm s ⟨0⟩ {} with
   | .complete se p => return (se, Substring.toString ⟨s, p, s.endPos⟩)
-  | .incomplete _ _ => throwError s!"getSexp :: Incomplete input {s}"
-  | .malformed => throwError s!"getSexp :: Malformed (prefix of) input {s}"
+  | .incomplete _ _ => throwError s!"getTerm :: Incomplete input {s}"
+  | .malformed => throwError s!"getTerm :: Malformed (prefix of) input {s}"
 
 /--
   Recover id of valid facts from unsat core. Refer to `lamFOL2SMT`
 -/
-def validFactOfUnsatCore (unsatCore : Sexp) : MetaM (Array Nat) := do
+def validFactOfUnsatCore (unsatCore : Parser.SMTTerm.Term) : MetaM (Array Nat) := do
   let .app unsatCore := unsatCore
     | throwError "validFactOfUnsatCore :: Malformed unsat core `{unsatCore}`"
   let mut ret := #[]
@@ -128,7 +139,7 @@ def validFactOfUnsatCore (unsatCore : Sexp) : MetaM (Array Nat) := do
   return ret
 
 /-- Only put declarations in the query -/
-def querySolver (query : Array IR.SMT.Command) : MetaM (Option (Sexp × String)) := do
+def querySolver (query : Array IR.SMT.Command) : MetaM (Option (Parser.SMTTerm.Term × String)) := do
   if !(auto.smt.get (← getOptions)) then
     throwError "querySolver :: Unexpected error"
   if (auto.smt.solver.name.get (← getOptions) == .none) then
@@ -141,14 +152,14 @@ def querySolver (query : Array IR.SMT.Command) : MetaM (Option (Sexp × String))
   emitCommands solver query
   emitCommand solver .checkSat
   let stdout ← solver.stdout.getLine
-  let (checkSatResponse, _) ← getSexp stdout
+  let (checkSatResponse, _) ← getTerm stdout
   match checkSatResponse with
   | .atom (.symb "sat") =>
     emitCommand solver .getModel
     let (_, solver) ← solver.takeStdin
     let stdout ← solver.stdout.readToEnd
     let stderr ← solver.stderr.readToEnd
-    let (model, _) ← getSexp stdout
+    let (model, _) ← getTerm stdout
     solver.kill
     trace[auto.smt.result] "{name} says Sat"
     trace[auto.smt.model] "Model:\n{model}"
@@ -160,12 +171,70 @@ def querySolver (query : Array IR.SMT.Command) : MetaM (Option (Sexp × String))
     let (_, solver) ← solver.takeStdin
     let stdout ← solver.stdout.readToEnd
     let stderr ← solver.stderr.readToEnd
-    let (unsatCore, stdout) ← getSexp stdout
+    let (unsatCore, stdout) ← getTerm stdout
     solver.kill
     trace[auto.smt.result] "{name} says Unsat, unsat core:\n{unsatCore}"
     trace[auto.smt.proof] "Proof:\n{stdout}"
     trace[auto.smt.stderr] "stderr:\n{stderr}"
     return .some (unsatCore, stdout)
+  | _ =>
+    trace[auto.smt.result] "{name} produces unexpected check-sat response\n {checkSatResponse}"
+    return .none
+
+/-- Behaves like `querySolver` but assumes that the output came from cvc5 with `--dump-hints` enabled. The
+    additional output is used to return not just the unsatCore and proof, but also a list of theory lemmas. -/
+def querySolverWithHints (query : Array IR.SMT.Command)
+  : MetaM (Option (Parser.SMTTerm.Term × List (Parser.SMTTerm.Term) × String)) := do
+  if !(auto.smt.get (← getOptions)) then
+    throwError "querySolver :: Unexpected error"
+  if (auto.smt.solver.name.get (← getOptions) == .none) then
+    logInfo "querySolver :: Skipped"
+    return .none
+  let name := auto.smt.solver.name.get (← getOptions)
+  let solver ← createSolver name
+  emitCommand solver (.setOption (.produceProofs true))
+  emitCommand solver (.setOption (.produceUnsatCores true))
+  emitCommands solver query
+  emitCommand solver .checkSat
+  let stdout ← solver.stdout.getLine
+  let (checkSatResponse, _) ← getTerm stdout
+  match checkSatResponse with
+  | .atom (.symb "sat") =>
+    emitCommand solver .getModel
+    let (_, solver) ← solver.takeStdin
+    let stdout ← solver.stdout.readToEnd
+    let stderr ← solver.stderr.readToEnd
+    let (model, _) ← getTerm stdout
+    solver.kill
+    trace[auto.smt.result] "{name} says Sat"
+    trace[auto.smt.model] "Model:\n{model}"
+    trace[auto.smt.stderr] "stderr:\n{stderr}"
+    return .none
+  | .atom (.symb "unsat") =>
+    emitCommand solver (.echo "Unsat core:")
+    emitCommand solver .getUnsatCore
+    emitCommand solver .getProof
+    let (_, solver) ← solver.takeStdin
+    let stdout ← solver.stdout.readToEnd
+    let stderr ← solver.stderr.readToEnd
+    trace[auto.smt.result] "Original unfiltered {name} output: {stdout}"
+    let [_, stdout] := stdout.splitOn "Preprocess:"
+      | throwError "Error finding preprocess facts in output"
+    let [preprocessFacts, stdout] := stdout.splitOn "Theory lemmas:"
+      | throwError "Error finding theory lemmas in output"
+    let [theoryLemmas, stdout] := stdout.splitOn "Instantiations:"
+      | throwError "Error finding theory lemmas in output"
+    let [_, stdout] := stdout.splitOn "\"Unsat core:\""
+      | throwError "Error finding unsat core in output"
+    let (unsatCore, stdout) ← getTerm stdout
+    let preprocessFacts ← lexAllTerms preprocessFacts 0 []
+    let theoryLemmas ← lexAllTerms theoryLemmas 0 []
+    trace[auto.smt.result] "{name} says Unsat, unsat core:\n{unsatCore}"
+    trace[auto.smt.result] "{name} preprocess facts: {preprocessFacts}"
+    trace[auto.smt.result] "{name} theory lemmas: {theoryLemmas}"
+    trace[auto.smt.stderr] "stderr:\n{stderr}"
+    solver.kill
+    return .some (unsatCore, preprocessFacts ++ theoryLemmas, stdout)
   | _ =>
     trace[auto.smt.result] "{name} produces unexpected check-sat response\n {checkSatResponse}"
     return .none

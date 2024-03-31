@@ -281,6 +281,33 @@ def queryTPTP (exportFacts : Array REntry) : LamReif.ReifM (Array Embedding.Lam.
       ret := ret.push re
     return ret
 
+-- Note: This code is taken from Aesop's Util/Basic.lean file
+def addTryThisTacticSeqSuggestion (ref : Syntax) (suggestion : TSyntax ``Lean.Parser.Tactic.tacticSeq)
+  (origSpan? : Option Syntax := none) : MetaM Unit := do
+  let fmt ← PrettyPrinter.ppCategory ``Lean.Parser.Tactic.tacticSeq suggestion
+  let msgText := fmt.pretty (indent := 0) (column := 0)
+  if let some range := (origSpan?.getD ref).getRange? then
+    let map ← getFileMap
+    let (indent, column) := Lean.Meta.Tactic.TryThis.getIndentAndColumn map range
+    dbg_trace s!"indent: {indent}, column: {column}"
+    let text := fmt.pretty (width := Std.Format.defWidth) indent column
+    let suggestion := {
+      -- HACK: The `tacticSeq` syntax category is pretty-printed with each line
+      -- indented by two spaces (for some reason), so we remove this
+      -- indentation.
+      suggestion := .string $ dedent text
+      toCodeActionTitle? := some λ _ => "Create lemmas"
+      messageData? := some msgText
+      preInfo? := "  "
+    }
+    Lean.Meta.Tactic.TryThis.addSuggestion ref suggestion (origSpan? := origSpan?)
+      (header := "Try this:\n")
+where
+  dedent (s : String) : String :=
+    s.splitOn "\n"
+    |>.map (λ line => line.dropPrefix? "  " |>.map (·.toString) |>.getD line)
+    |> String.intercalate "\n"
+
 open Embedding.Lam in
 def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : LamReif.ReifM (Option Expr) := do
   let lamVarTy := (← LamReif.getVarVal).map Prod.snd
@@ -302,13 +329,43 @@ def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : L
     let vderiv ← LamReif.collectDerivFor (.valid [] t)
     trace[auto.smt.unsatCore] "valid_fact_{id}: {vderiv}"
   if auto.smt.rconsProof.get (← getOptions) then
-    let (_, _) ← Solver.SMT.getSexp proof
+    let (_, _) ← Solver.SMT.getTerm proof
     logWarning "Proof reconstruction is not implemented."
   if (auto.smt.trust.get (← getOptions)) then
     logWarning "Trusting SMT solvers. `autoSMTSorry` is used to discharge the goal."
     return .some (← Meta.mkAppM ``Solver.SMT.autoSMTSorry #[Expr.const ``False []])
   else
     return .none
+
+open Embedding.Lam in
+def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : LamReif.ReifM (Option (List Expr)) := do
+  let lamVarTy := (← LamReif.getVarVal).map Prod.snd
+  let lamEVarTy ← LamReif.getLamEVarTy
+  let exportLamTerms ← exportFacts.mapM (fun re => do
+    match re with
+    | .valid [] t => return t
+    | _ => throwError "runAuto :: Unexpected error")
+  let commands ← (lamFOL2SMT lamVarTy lamEVarTy exportLamTerms exportInds).run'
+  for cmd in commands do
+    trace[auto.smt.printCommands] "{cmd}"
+  if (auto.smt.save.get (← getOptions)) then
+    Solver.SMT.saveQuery commands
+  let .some (unsatCore, theoryLemmas, proof) ← Solver.SMT.querySolverWithHints commands
+    | return .none
+  for id in ← Solver.SMT.validFactOfUnsatCore unsatCore do
+    let .some t := exportLamTerms[id]?
+      | throwError "runAuto :: Index {id} of `exportLamTerm` out of range"
+    let vderiv ← LamReif.collectDerivFor (.valid [] t)
+    trace[auto.smt.unsatCore] "valid_fact_{id}: {vderiv}"
+  let mut symbolMap : HashMap String Expr := HashMap.empty
+  let varVal ← LamReif.getVarVal
+  let varValWithIndices := varVal.mapIdx (fun idx v => (idx.1, v))
+  for (idx, (vExp, _)) in varValWithIndices do
+    -- The assumption that smt variables are written in the form `smti_{idx}` comes
+    -- from `h2Symb` in Auto.IR.SMT.lean
+    symbolMap := symbolMap.insert s!"smti_{idx}" vExp
+  let lemmaExps ← theoryLemmas.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap)
+  return some lemmaExps
 
 open Embedding.Lam in
 /--
@@ -359,8 +416,7 @@ def runNativeProverWithAuto
 /--
   Run `auto`'s monomorphization and preprocessing, then send the problem to different solvers
 -/
-def runAuto
-  (declName? : Option Name) (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr := do
+def runAuto (declName? : Option Name) (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr := do
   -- Simplify `ite`
   let ite_simp_lem ← Lemma.ofConst ``Auto.Bool.ite_simp (.leaf "hw Auto.Bool.ite_simp")
   let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem ite_simp_lem)
@@ -421,6 +477,76 @@ def evalAuto : Tactic
       let declName? ← Elab.Term.getDeclName?
       let proof ← runAuto declName? lemmas inhFacts
       IO.println s!"Auto found proof. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
+      absurd.assign proof
+    | .useSorry =>
+      let proof ← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []]
+      absurd.assign proof
+| _ => throwUnsupportedSyntax
+
+/-- Run `auto`'s monomorphization and preprocessing, then return the list of preprocessing and theory lemmas output
+    by the SMT solver. -/
+def runAutoGetHints (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM (List Expr) := do
+  -- Simplify `ite`
+  let ite_simp_lem ← Lemma.ofConst ``Auto.Bool.ite_simp (.leaf "hw Auto.Bool.ite_simp")
+  let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem ite_simp_lem)
+  -- Simplify `decide`
+  let decide_simp_lem ← Lemma.ofConst ``Auto.Bool.decide_simp (.leaf "hw Auto.Bool.decide_simp")
+  let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem decide_simp_lem)
+  let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) (minds : Array (Array SimpleIndVal))
+    : LamReif.ReifM (List Expr) := (do
+    let exportFacts ← LamReif.reifFacts uvalids
+    let mut exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
+    let _ ← LamReif.reifInhabitations uinhs
+    let exportInds ← LamReif.reifMutInds minds
+    -- **Preprocessing in Verified Checker**
+    let (exportFacts', exportInds) ← LamReif.preprocess exportFacts exportInds
+    exportFacts := exportFacts'
+    -- runAutoGetHints only supports SMT right now
+    -- **SMT**
+    if auto.smt.get (← getOptions) then
+      if let .some lemmas ← querySMTForHints exportFacts exportInds then
+        return lemmas
+    throwError "autoGetHints only implemented for cvc5 (enable option auto.smt)"
+    )
+  let (lemmas, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM (List Expr)) do
+    let s ← get
+    let u ← computeMaxLevel s.facts
+    (afterReify s.facts s.inhTys s.inds).run' {u := u})
+  trace[auto.tactic] "Auto found preprocessing and theory lemmas: {lemmas}"
+  return lemmas
+
+syntax (name := autoGetHints) "autoGetHints" autoinstr hints (uord)* : tactic
+
+@[tactic autoGetHints]
+def evalAutoGetHints : Tactic
+| `(autoGetHints | autoGetHints%$stxRef $instr $hints $[$uords]*) => withMainContext do
+  let startTime ← IO.monoMsNow
+  -- Suppose the goal is `∀ (x₁ x₂ ⋯ xₙ), G`
+  -- First, apply `intros` to put `x₁ x₂ ⋯ xₙ` into the local context,
+  --   now the goal is just `G`
+  let (goalBinders, newGoal) ← (← getMainGoal).intros
+  let [nngoal] ← newGoal.apply (.const ``Classical.byContradiction [])
+    | throwError "evalAuto :: Unexpected result after applying Classical.byContradiction"
+  let (ngoal, absurd) ← MVarId.intro1 nngoal
+  replaceMainGoal [absurd]
+  withMainContext do
+    let instr ← parseInstr instr
+    match instr with
+    | .none =>
+      let (lemmas, inhFacts) ← collectAllLemmas hints uords (goalBinders.push ngoal)
+      let lemmas ← runAutoGetHints lemmas inhFacts
+      IO.println s!"Auto found hints. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
+      let lemmasStx ← lemmas.mapM (fun lemExp => PrettyPrinter.delab lemExp)
+      if lemmasStx.length = 0 then
+        IO.println "SMT solver did not generate any theory lemmas"
+      else
+        let mut tacticsArr : Array Syntax.Tactic := #[]
+        for lemmaStx in lemmasStx do
+          tacticsArr := tacticsArr.push $ ← `(tactic| have : $lemmaStx := sorry)
+        let tacticSeq ← `(Lean.Parser.Tactic.tacticSeq| $tacticsArr*)
+        withOptions (fun o => (o.set `pp.analyze true).set `pp.funBinderTypes true) $
+          addTryThisTacticSeqSuggestion stxRef tacticSeq (← getRef)
+      let proof ← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []]
       absurd.assign proof
     | .useSorry =>
       let proof ← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []]

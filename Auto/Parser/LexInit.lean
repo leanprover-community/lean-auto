@@ -7,7 +7,22 @@ namespace Auto.Lexer
 -- SMT-LIB2 compilant lexer
 --〈spec_constant〉 ::= 〈numeral〉 | 〈decimal〉 | 〈hexadecimal〉 | 〈binary〉 | 〈string〉
 --〈s_expr 〉 ::= 〈spec_constant〉 | 〈symbol〉 | 〈keyword〉 | ( 〈s_expr〉∗ )
-namespace SMTSexp
+
+-- ⟨index⟩ ::= ⟨numeral⟩ | ⟨symbol⟩
+-- ⟨identifier⟩ ::= ⟨symbol⟩ | (_ ⟨symbol⟩ ⟨index⟩+)
+-- ⟨sort⟩ ::= ⟨identifier⟩ | (⟨identifier⟩ ⟨sort⟩+)
+-- ⟨sorted_var⟩ ::= (⟨symbol⟩ ⟨sort⟩)
+-- ⟨var_binding⟩ ::= (⟨symbol⟩ ⟨term⟩)
+-- ⟨term⟩ ::= ⟨spec_constant⟩ | (forall (⟨sorted_var⟩+) ⟨term⟩) | (exists (⟨sorted_var⟩+) ⟨term⟩) | (let (⟨var_binding⟩+) ⟨term⟩)
+
+/- Ignored for now:
+    - Attributes
+    - Qual_identifiers
+    - Patterns
+    - Match_cases
+    - Some of the Term forms that require any of the above -/
+
+namespace SMT
 
 open Regex
 
@@ -59,6 +74,12 @@ def lparen : ERE := .inStr "("
 
 def rparen : ERE := .inStr ")"
 
+def underscore : ERE := .ofStr "_"
+
+def SMTforall : ERE := .ofStr "forall"
+def SMTexists : ERE := .ofStr "exists"
+def SMTlet : ERE := .ofStr "let"
+
 /-- Special constants -/
 def specConst : ERE := .plus #[
   .attr numeral "numeral",
@@ -68,7 +89,7 @@ def specConst : ERE := .plus #[
   .attr string "string"
 ]
 
-def lexicons : ERE := .plus #[
+def sexpr : ERE := .plus #[
   specConst,
   -- For lexical analysis, do not distinguish between keyword and symbol
   symbol,
@@ -77,22 +98,61 @@ def lexicons : ERE := .plus #[
   .attr rparen ")"
 ]
 
-/-
+-- ⟨index⟩ ::= ⟨numeral⟩ | ⟨symbol⟩
+def index : ERE := .plus #[
+  .attr numeral "numeral",
+  symbol
+]
 
-#eval string.toADFA
+-- ⟨identifier⟩ ::= ⟨symbol⟩ | (_ ⟨symbol⟩ ⟨index⟩+)
+def identifier : ERE := .plus #[
+  symbol,
+  .attr lparen "(",
+  .attr underscore "_",
+  .attr rparen ")",
+  index
+]
 
-#eval specConst.toADFA
+-- ⟨sort⟩ ::= ⟨identifier⟩ | (⟨identifier⟩ ⟨sort⟩+)
+def sort : ERE := .plus #[
+  identifier,
+  .attr lparen "(",
+  .attr rparen ")"
+]
+
+-- ⟨sorted_var⟩ ::= (⟨symbol⟩ ⟨sort⟩)
+def sorted_var : ERE := .plus #[
+  symbol,
+  .attr lparen "(",
+  .attr rparen ")",
+  sort
+]
+
+-- ⟨term⟩ ::= ⟨spec_constant⟩ | ⟨forall (⟨sorted_var⟩+) ⟨term⟩ | ⟨exists (⟨sorted_var⟩+) ⟨term⟩
+def term : ERE := .plus #[
+  specConst,
+  .attr SMTforall "forall",
+  .attr SMTexists "exists",
+  .attr SMTlet "let",
+  .attr lparen "(",
+  .attr rparen ")",
+  sorted_var
+]
 
 -- Good property: Each state have at most one attribute!
-#eval lexicons.toADFA
-
--/
+#eval string.toADFA
+#eval specConst.toADFA
+#eval sexpr.toADFA
+#eval identifier.toADFA -- State 6 has two attributes, not sure if that's a problem
+#eval sort.toADFA -- State 6 has two attributes, not sure if that's a problem
+#eval sorted_var.toADFA -- State 6 has two attributes, not sure if that's a problem
+#eval term.toADFA -- States 9, 36, and 37 have multiple attributes, not sure if that's a problem
 
 local instance : Hashable Char where
   hash c := hash c.val
 
-initialize lexiconADFA : ADFA Char ← pure lexicons.toADFA
+initialize lexiconADFA : ADFA Char ← pure term.toADFA
 
-end SMTSexp
+end SMT
 
 end Auto.Lexer
