@@ -345,7 +345,7 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
     match re with
     | .valid [] t => return t
     | _ => throwError "runAuto :: Unexpected error")
-  let commands ← (lamFOL2SMT lamVarTy lamEVarTy exportLamTerms exportInds).run'
+  let (commands, l2hMap) ← (lamFOL2SMTWithL2hMap lamVarTy lamEVarTy exportLamTerms exportInds).run'
   for cmd in commands do
     trace[auto.smt.printCommands] "{cmd}"
   if (auto.smt.save.get (← getOptions)) then
@@ -359,11 +359,12 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
     trace[auto.smt.unsatCore] "valid_fact_{id}: {vderiv}"
   let mut symbolMap : HashMap String Expr := HashMap.empty
   let varVal ← LamReif.getVarVal
-  let varValWithIndices := varVal.mapIdx (fun idx v => (idx.1, v))
-  for (idx, (vExp, _)) in varValWithIndices do
-    -- The assumption that smt variables are written in the form `smti_{idx}` comes
-    -- from `h2Symb` in Auto.IR.SMT.lean
-    symbolMap := symbolMap.insert s!"smti_{idx}" vExp
+  for (varName, varAtom) in l2hMap.toArray do
+    match varAtom with
+    | .term termNum =>
+      let vExp := varVal[termNum]!.1
+      symbolMap := symbolMap.insert varName vExp
+    | _ => logWarning s!"varName: {varName} maps to an atom other than term"
   let lemmaExps ← theoryLemmas.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap)
   return some lemmaExps
 

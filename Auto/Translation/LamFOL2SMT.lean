@@ -447,4 +447,27 @@ def lamFOL2SMT
     addCommand (.assert (.attr sterm #[.symb "named" s!"valid_fact_{idx}"]))
   getCommands
 
+/-- Identical to `lamFOL2SMT` but it also outputs `Auto.IR.SMT.State.l2hMap` -/
+def lamFOL2SMTWithL2hMap
+  (lamVarTy lamEVarTy : Array LamSort)
+  (facts : Array LamTerm) (minds : Array MutualIndInfo) :
+  TransM LamAtom ((Array IR.SMT.Command) × HashMap String LamAtom) := do
+  let _ ← sortAuxDecls.mapM addCommand
+  let _ ← termAuxDecls.mapM addCommand
+  for mind in minds do
+    let (dsdecl, compCtors, compProjs) ← lamMutualIndInfo2STerm mind
+    trace[auto.lamFOL2SMT] "MutualIndInfo translated to command {dsdecl}"
+    addCommand dsdecl
+    let compCtorEqns ← compCtors.mapM (compEqn lamVarTy lamEVarTy)
+    let _ ← compCtorEqns.mapM addCommand
+    let compProjEqns ← compProjs.mapM (compEqn lamVarTy lamEVarTy)
+    let _ ← compProjEqns.mapM addCommand
+  for (t, idx) in facts.zipWithIndex do
+    let sterm ← lamTerm2STerm lamVarTy lamEVarTy t
+    trace[auto.lamFOL2SMT] "λ term {repr t} translated to SMT term {sterm}"
+    addCommand (.assert (.attr sterm #[.symb "named" s!"valid_fact_{idx}"]))
+  let commands ← getCommands
+  let l2hMap ← Auto.IR.SMT.getL2hMap
+  return (commands, l2hMap)
+
 end Auto
