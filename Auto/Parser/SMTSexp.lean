@@ -19,6 +19,7 @@ inductive LexVal
   | str (s : String)
   | symb (s : String)
   | kw (s : String)
+  | comment
 deriving Inhabited, BEq, Hashable
 
 def LexVal.toString : LexVal → String
@@ -40,6 +41,7 @@ def LexVal.toString : LexVal → String
 | .str s   => "\"" ++ String.intercalate "\"\"" (s.splitOn "\"") ++ "\""
 | .symb s  => s!"|{s}|"
 | .kw s    => s!":{s}"
+| .comment => ""
 
 instance : ToString LexVal where
   toString := LexVal.toString
@@ -75,6 +77,7 @@ def LexVal.ofString (s : String) (attr : String) : LexVal :=
   | "simplesymbol" => .symb s
   | "quotedsymbol" => .symb ((s.drop 1).take (s.length - 2))
   | "keyword"      => .kw (s.drop 1)
+  | "comment"      => .comment
   | _              => panic! s!"LexVal.ofString :: {repr attr} is not a valid attribute"
 
 inductive Sexp where
@@ -89,7 +92,7 @@ partial def Sexp.toString : Sexp → String
 instance : ToString Sexp where
   toString e := Sexp.toString e
 
--- #eval IO.println <| Sexp.toString (.app #[.atom (.nat 3), 
+-- #eval IO.println <| Sexp.toString (.app #[.atom (.nat 3),
 --   .atom (.str "sdf"), .app #[.atom (.rat 3 10), .atom (.kw "kl"), .atom (.symb "a7&")]])
 
 structure PartialResult where
