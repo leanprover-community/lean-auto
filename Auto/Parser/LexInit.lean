@@ -18,7 +18,7 @@ def unprintable : String := String.mk
   ((127 :: List.range 32).map Char.ofNat)
 
 def comment : ERE :=
-  .comp #[.ofStr ";", .star $ .bracket (.minus (.cc .all) (.inStr "\n")), (.ofStr "\n")]
+  .comp #[.ofStr ";", .star (.bracketN (.inStr "\n")), (.ofStr "\n")]
 
 def numeral : ERE :=
   .plus #[.ofStr "0", .comp #[.inStr "123456789", .star (.ofCC .digit)]]

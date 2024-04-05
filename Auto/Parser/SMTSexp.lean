@@ -19,7 +19,7 @@ inductive LexVal
   | str (s : String)
   | symb (s : String)
   | kw (s : String)
-  | comment
+  | comment (s : String)
 deriving Inhabited, BEq, Hashable
 
 def LexVal.toString : LexVal → String
@@ -41,7 +41,7 @@ def LexVal.toString : LexVal → String
 | .str s   => "\"" ++ String.intercalate "\"\"" (s.splitOn "\"") ++ "\""
 | .symb s  => s!"|{s}|"
 | .kw s    => s!":{s}"
-| .comment => ""
+| .comment s => s!";{s}\n"
 
 instance : ToString LexVal where
   toString := LexVal.toString
@@ -77,7 +77,9 @@ def LexVal.ofString (s : String) (attr : String) : LexVal :=
   | "simplesymbol" => .symb s
   | "quotedsymbol" => .symb ((s.drop 1).take (s.length - 2))
   | "keyword"      => .kw (s.drop 1)
-  | "comment"      => .comment
+  | "comment"      =>
+    let rn : Nat := if s.get (s.prev (s.prev s.endPos)) == '\r' then 1 else 0
+    .comment ((s.drop 1).take (s.length - 2 - rn))
   | _              => panic! s!"LexVal.ofString :: {repr attr} is not a valid attribute"
 
 inductive Sexp where
