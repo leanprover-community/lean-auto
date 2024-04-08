@@ -118,6 +118,22 @@ end
 
 def STerm.qStrApp (s : String) (arr : Array STerm) := STerm.qIdApp (.ofString s) arr
 
+def STerm.attrApp (name : String) (attrTerm : STerm) (term : STerm) : STerm :=
+  match term with
+  | .attr term' attrs' => .attr term' (#[attr] ++ attrs')
+  | _ => .attr term #[attr]
+  where
+    attr :=
+      match attrTerm with
+      -- An empty string constant indicates an attribute with no arguments
+      | .sConst (.str "") => .none name
+      -- Other string constants are always symbols here.
+      | .sConst (.str sym) => .symb name sym
+      -- Other constants are constant arguments.
+      | .sConst c => .spec name c
+      -- Non-constant arguments are terms.
+      | t => .sexpr name #[t]
+
 private partial def STerm.toStringAux : STerm → List SIdent → String
   | .sConst c, _         => SpecConst.toString c
   | .bvar i, binders   =>

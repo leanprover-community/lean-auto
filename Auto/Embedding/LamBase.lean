@@ -1418,6 +1418,90 @@ def BitVecConst.LamWF.ofCheck (H : b.lamCheck = s) : LamWF b s := by
   case bvcmp n prop? op => cases prop? <;> constructor
   case bvshOp n smt? op => cases smt? <;> constructor
 
+inductive OtherConst
+  | attribute : String -> LamSort -> OtherConst
+deriving Inhabited, Hashable, Lean.ToExpr
+
+def OtherConst.reprAux : OtherConst → String
+| .attribute n s => s!"attribute {n} {s}"
+
+def OtherConst.reprPrec (p : OtherConst) (n : Nat) :=
+  match n with
+  | 0 => f!"Auto.Embedding.Lam.OtherConst.{p.reprAux}"
+  | _ + 1 => f!"(.{p.reprAux})"
+
+inductive OtherConst.LamWF : OtherConst → LamSort → Type
+  | ofAttribute n s    : LamWF (.attribute n s) (.func s (.func (.base .prop) (.base .prop)))
+
+def OtherConst.LamWF.ofOtherConst : (oc : OtherConst) → (s : LamSort) × OtherConst.LamWF oc s
+| .attribute n s  => ⟨.func s (.func (.base .prop) (.base .prop)), .ofAttribute n s⟩
+
+def OtherConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF p s) → s.interp tyVal
+| .ofAttribute _ _ =>  fun _ => fun term => term
+
+def OtherConst.toString : OtherConst → String
+| .attribute n s => s!"attr[{n} : {s}]"
+
+instance : ToString OtherConst where
+  toString := OtherConst.toString
+
+def OtherConst.beq : OtherConst → OtherConst → Bool
+| .attribute n1 s1, .attribute n2 s2 =>
+  n1 == n2 && s1.beq s2
+
+instance : BEq OtherConst where
+  beq := OtherConst.beq
+
+theorem OtherConst.beq_def {x y : OtherConst} : (x == y) = x.beq y := rfl
+
+def OtherConst.beq_refl {o : OtherConst} : (o.beq o) = true := by
+  cases o <;> unfold OtherConst.beq <;> simp [LamSort.beq_refl]
+
+def OtherConst.eq_of_beq_eq_true {o₁ o₂ : OtherConst} (H : o₁.beq o₂) : o₁ = o₂ :=
+  match o₁, o₂ with
+  | .attribute n1 s1, .attribute n2 s2 => by
+    simp [OtherConst.beq] at H
+    match H with
+    | And.intro neq sbeq =>
+      have seq := LamSort.eq_of_beq_eq_true sbeq
+      rw [neq, seq]
+
+instance : LawfulBEq OtherConst where
+  eq_of_beq := OtherConst.eq_of_beq_eq_true
+  rfl := OtherConst.beq_refl
+
+def OtherConst.lamCheck : OtherConst → LamSort
+| .attribute _ as1 => .func as1 (.func (.base .prop) (.base .prop))
+
+-- Note: add other attributes as needed
+def trigger {a : Type} (_ : a) (term : Prop) := term
+
+def OtherConst.interp (tyVal : Nat → Type u) : (o : OtherConst) → o.lamCheck.interp tyVal
+| .attribute _ _ => fun _ => fun term => term
+
+def OtherConst.interp_equiv (tyVal : Nat → Type u) (ocwf : LamWF p s) :
+  HEq (LamWF.interp tyVal ocwf) (interp tyVal p) := by
+  cases ocwf <;> rfl
+
+def OtherConst.LamWF.unique {o : OtherConst} {s₁ s₂ : LamSort}
+  (ocwf₁ : LamWF o s₁) (ocwf₂ : LamWF o s₂) : s₁ = s₂ ∧ HEq ocwf₁ ocwf₂ := by
+  cases ocwf₁ <;> cases ocwf₂ <;> trivial
+
+theorem OtherConst.LamWF.interp_lvalIrrelevance
+  (tyVal₁ tyVal₂ : Nat → Type u) (ocwf₁ : LamWF b₁ s₁) (ocwf₂ : LamWF b₂ s₂)
+  (HBeq : b₁ = b₂) (hTyVal : tyVal₁ = tyVal₂) :
+  HEq (ocwf₁.interp tyVal₁) (ocwf₂.interp tyVal₂) := by
+  cases HBeq; cases hTyVal; rcases OtherConst.LamWF.unique ocwf₁ ocwf₂ with ⟨⟨⟩, ⟨⟩⟩; rfl
+
+def OtherConst.lamWF_complete (wf : LamWF sc s) : LamWF.ofOtherConst sc = ⟨s, wf⟩ := by
+  cases wf <;> rfl
+
+def OtherConst.lamCheck_of_LamWF (H : LamWF sc s) : sc.lamCheck = s := by
+  cases H <;> rfl
+
+def OtherConst.LamWF.ofCheck (H : sc.lamCheck = s) : LamWF sc s := by
+  cases H; cases sc <;> constructor
+
 /--
   Interpreted constants
   Note that `eq`, `forallE`, `existE` have `ilVal/lamILTy`
@@ -1442,6 +1526,7 @@ inductive LamBaseTerm
   | icst     : IntConst    → LamBaseTerm
   | scst     : StringConst → LamBaseTerm
   | bvcst    : BitVecConst → LamBaseTerm
+  | ocst     : OtherConst  → LamBaseTerm
   -- Versions of `eq, ∀, ∃, ite'` when we're importing external facts
   -- Note that the [import versions] of `eq, ∀, ∃, ite'` should only be used when
   --   we're importing external facts. When facts are imported, we call
@@ -1604,6 +1689,7 @@ def LamBaseTerm.reprPrec (l : LamBaseTerm) (n : Nat) :=
     | .icst ic    => f!"icst {IntConst.reprPrec ic 1}"
     | .scst sc    => f!"scst {StringConst.reprPrec sc 1}"
     | .bvcst bvc  => f!"bvcst {BitVecConst.reprPrec bvc 1}"
+    | .ocst oc    => f!"ocst {OtherConst.reprPrec oc 1}"
     | .eqI n      => f!"eqI {n}"
     | .forallEI n => f!"forallEI {n}"
     | .existEI n  => f!"existEI {n}"
@@ -1627,6 +1713,7 @@ def LamBaseTerm.toString : LamBaseTerm → String
 | .icst ic    => s!"{ic}"
 | .scst sc    => s!"{sc}"
 | .bvcst bvc  => s!"{bvc}"
+| .ocst oc    => s!"{oc}"
 | .eqI _      => "="
 | .forallEI _ => "∀"
 | .existEI _  => "∃"
@@ -1646,6 +1733,7 @@ def LamBaseTerm.beq : LamBaseTerm → LamBaseTerm → Bool
 | .icst ic₁,    .icst ic₂    => IntConst.beq ic₁ ic₂
 | .scst sc₁,    .scst sc₂    => StringConst.beq sc₁ sc₂
 | .bvcst l₁,    .bvcst l₂    => BitVecConst.beq l₁ l₂
+| .ocst o₁,     .ocst o₂     => OtherConst.beq o₁ o₂
 | .eqI n₁,      .eqI n₂      => n₁.beq n₂
 | .forallEI n₁, .forallEI n₂ => n₁.beq n₂
 | .existEI n₁,  .existEI n₂  => n₁.beq n₂
@@ -1667,6 +1755,7 @@ def LamBaseTerm.beq_refl {b : LamBaseTerm} : (b.beq b) = true := by
   case icst i => apply LawfulBEq.rfl (α := IntConst)
   case scst s => apply LawfulBEq.rfl (α := StringConst)
   case bvcst s => apply LawfulBEq.rfl (α := BitVecConst)
+  case ocst o => apply LawfulBEq.rfl (α := OtherConst)
 
 def LamBaseTerm.eq_of_beq_eq_true {b₁ b₂ : LamBaseTerm} (H : b₁.beq b₂) : b₁ = b₂ := by
   cases b₁ <;> cases b₂ <;> (first | contradiction | rfl | apply congrArg) <;>
@@ -1677,6 +1766,7 @@ def LamBaseTerm.eq_of_beq_eq_true {b₁ b₂ : LamBaseTerm} (H : b₁.beq b₂) 
   case icst.icst.h n₁ n₂ => apply LawfulBEq.eq_of_beq (α := IntConst) H
   case scst.scst.h s₁ s₂ => apply LawfulBEq.eq_of_beq (α := StringConst) H
   case bvcst.bvcst.h v₁ v₂ => apply LawfulBEq.eq_of_beq (α := BitVecConst) H
+  case ocst.ocst.h o₁ o₂ => apply LawfulBEq.eq_of_beq (α := OtherConst) H
 
 instance : LawfulBEq LamBaseTerm where
   eq_of_beq := LamBaseTerm.eq_of_beq_eq_true
@@ -1690,6 +1780,7 @@ def LamBaseTerm.containsSort (b : LamBaseTerm) (s : LamSort) : Bool :=
   | .icst _     => false
   | .scst _     => false
   | .bvcst _    => false
+  | .ocst _     => false
   | .eqI _      => false
   | .forallEI _ => false
   | .existEI _  => false
@@ -1714,6 +1805,7 @@ def LamBaseTerm.lamCheck (ltv : LamTyVal) : LamBaseTerm → LamSort
 | .icst ic    => ic.lamCheck
 | .scst sc    => sc.lamCheck
 | .bvcst bvc  => bvc.lamCheck
+| .ocst oc    => oc.lamCheck
 | .eqI n      =>
   let s := ltv.lamILTy n
   .func s (.func s (.base .prop))
@@ -1738,6 +1830,7 @@ inductive LamBaseTerm.LamWF (ltv : LamTyVal) : LamBaseTerm → LamSort → Type
   | ofIcst       : (icwf : IntConst.LamWF ic s) → LamWF ltv (.icst ic) s
   | ofScst       : (scwf : StringConst.LamWF sc s) → LamWF ltv (.scst sc) s
   | ofBvcst      : (bvcwf : BitVecConst.LamWF bvc s) → LamWF ltv (.bvcst bvc) s
+  | ofOcst       : (ocwf : OtherConst.LamWF oc s) → LamWF ltv (.ocst oc) s
   | ofEqI n      : LamWF ltv (.eqI n) (.func (ltv.lamILTy n) (.func (ltv.lamILTy n) (.base .prop)))
   | ofForallEI n : LamWF ltv (.forallEI n) (.func (.func (ltv.lamILTy n) (.base .prop)) (.base .prop))
   | ofExistEI n  : LamWF ltv (.existEI n) (.func (.func (ltv.lamILTy n) (.base .prop)) (.base .prop))
@@ -1762,6 +1855,8 @@ def LamBaseTerm.LamWF.unique {ltv : LamTyVal} {b : LamBaseTerm} {s₁ s₂ : Lam
     rcases StringConst.LamWF.unique wf₁ wf₂ with ⟨⟨⟩, ⟨⟩⟩; trivial
   case ofBvcst.ofBvcst bvc wf₁ wf₂ =>
     rcases BitVecConst.LamWF.unique wf₁ wf₂ with ⟨⟨⟩, ⟨⟩⟩; trivial
+  case ofOcst.ofOcst oc wf₁ wf₂ =>
+    rcases OtherConst.LamWF.unique wf₁ wf₂ with ⟨⟨⟩, ⟨⟩⟩; trivial
 
 def LamBaseTerm.LamWF.eVarIrrelevance
   (hLamVarTy : ltv₁.lamVarTy = ltv₂.lamVarTy)
@@ -1876,6 +1971,7 @@ def LamBaseTerm.LamWF.ofLamBaseTerm (ltv : LamTyVal) : (b : LamBaseTerm) → (s 
 | .icst ic    => have ⟨s, wf⟩ := IntConst.LamWF.ofIntConst ic; ⟨s, .ofIcst wf⟩
 | .scst sc    => have ⟨s, wf⟩ := StringConst.LamWF.ofStringConst sc; ⟨s, .ofScst wf⟩
 | .bvcst bvc  => have ⟨s, wf⟩ := BitVecConst.LamWF.ofBitVecConst bvc; ⟨s, .ofBvcst wf⟩
+| .ocst oc    => have ⟨s, wf⟩ := OtherConst.LamWF.ofOtherConst oc; ⟨s, .ofOcst wf⟩
 | .eqI n      => ⟨.func _ (.func _ (.base .prop)), .ofEqI n⟩
 | .forallEI n => ⟨.func (.func _ (.base .prop)) (.base .prop), .ofForallEI n⟩
 | .existEI n  => ⟨.func (.func _ (.base .prop)) (.base .prop), .ofExistEI n⟩
@@ -1893,6 +1989,7 @@ def LamBaseTerm.lamWF_complete (wf : LamWF ltv b s) : LamWF.ofLamBaseTerm ltv b 
   case ofIcst ic wf => dsimp [LamWF.ofLamBaseTerm]; rw [IntConst.lamWF_complete]
   case ofScst bc wf => dsimp [LamWF.ofLamBaseTerm]; rw [StringConst.lamWF_complete wf]
   case ofBvcst bc wf => dsimp [LamWF.ofLamBaseTerm]; rw [BitVecConst.lamWF_complete wf]
+  case ofOcst oc wf => dsimp [LamWF.ofLamBaseTerm]; rw [OtherConst.lamWF_complete wf]
 
 def LamBaseTerm.lamCheck_of_LamWF (H : LamWF ltv b s) : b.lamCheck ltv = s := by
   cases H <;> try rfl
@@ -1902,6 +1999,7 @@ def LamBaseTerm.lamCheck_of_LamWF (H : LamWF ltv b s) : b.lamCheck ltv = s := by
   case ofIcst bc wf => apply IntConst.lamCheck_of_LamWF wf
   case ofScst sc wf => apply StringConst.lamCheck_of_LamWF wf
   case ofBvcst sc wf => apply BitVecConst.lamCheck_of_LamWF wf
+  case ofOcst oc wf => apply OtherConst.lamCheck_of_LamWF wf
 
 def LamBaseTerm.LamWF.ofCheck (H : b.lamCheck ltv = s) : LamWF ltv b s := by
   cases H; cases b <;> constructor
@@ -1911,6 +2009,7 @@ def LamBaseTerm.LamWF.ofCheck (H : b.lamCheck ltv = s) : LamWF ltv b s := by
   case refl.icst.icwf => apply IntConst.LamWF.ofCheck; rfl
   case refl.scst.scwf => apply StringConst.LamWF.ofCheck; rfl
   case refl.bvcst.bvcwf => apply BitVecConst.LamWF.ofCheck; rfl
+  case refl.ocst.ocwf => apply OtherConst.LamWF.ofCheck; rfl
 
 structure ILLift (β : Type u) where
   eqL     : EqLift.{u + 1, u} β
@@ -2192,6 +2291,7 @@ noncomputable def LamBaseTerm.interp (lval : LamValuation.{u}) : (b : LamBaseTer
 | .icst ic    => ic.interp lval.tyVal
 | .scst sc    => sc.interp lval.tyVal
 | .bvcst bvc  => bvc.interp lval.tyVal
+| .ocst oc    => oc.interp lval.tyVal
 | .eqI n      => (lval.ilVal n).eqL.eqF
 | .forallEI n => (lval.ilVal n).forallL.forallF
 | .existEI n  => (lval.ilVal n).existL.existF
@@ -2208,6 +2308,7 @@ noncomputable def LamBaseTerm.LamWF.interp (lval : LamValuation.{u}) : (lwf : La
 | .ofIcst wf    => wf.interp lval.tyVal
 | .ofScst wf    => wf.interp lval.tyVal
 | .ofBvcst wf   => wf.interp lval.tyVal
+| .ofOcst wf    => wf.interp lval.tyVal
 | .ofEqI n      => (lval.ilVal n).eqL.eqF
 | .ofForallEI n => (lval.ilVal n).forallL.forallF
 | .ofExistEI n  => (lval.ilVal n).existL.existF
@@ -2254,6 +2355,7 @@ theorem LamBaseTerm.LamWF.interp_lvalIrrelevance
           case ofIcst => apply IntConst.LamWF.interp_lvalIrrelevance <;> rfl
           case ofScst => apply StringConst.LamWF.interp_lvalIrrelevance <;> rfl
           case ofBvcst => apply BitVecConst.LamWF.interp_lvalIrrelevance <;> rfl
+          case ofOcst => apply OtherConst.LamWF.interp_lvalIrrelevance <;> rfl
 
 def LamBaseTerm.interp_equiv (lval : LamValuation.{u})
   (lwf : LamWF lval.toLamTyVal b s) :
@@ -2265,6 +2367,7 @@ def LamBaseTerm.interp_equiv (lval : LamValuation.{u})
   case ofIcst => apply IntConst.interp_equiv
   case ofScst => apply StringConst.interp_equiv
   case ofBvcst => apply BitVecConst.interp_equiv
+  case ofOcst => apply OtherConst.interp_equiv
 
 def LamValuation.insertEVarAt (lval : LamValuation.{u})
   (ty : LamSort) (val : ty.interp lval.tyVal) (pos : Nat) :=
