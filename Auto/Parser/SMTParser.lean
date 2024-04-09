@@ -17,6 +17,8 @@ inductive LexVal
   | symb (s : String)
   | kw (s : String)
   | reserved (s : String) -- e.g. "forall" and "exists"
+  | comment (s : String)
+
 deriving Inhabited, BEq, Hashable
 
 open LexVal
@@ -41,6 +43,7 @@ def LexVal.toString : LexVal → String
 | .symb s  => s!"|{s}|"
 | .kw s    => s!":{s}"
 | .reserved s => s
+| .comment s => s!";{s}\n"
 
 instance : ToString LexVal where
   toString := LexVal.toString
@@ -76,6 +79,9 @@ def LexVal.ofString (s : String) (attr : String) : LexVal :=
   | "simplesymbol" => .symb s
   | "quotedsymbol" => .symb ((s.drop 1).take (s.length - 2))
   | "keyword"      => .kw (s.drop 1)
+  | "comment"      =>
+    let rn : Nat := if s.get (s.prev (s.prev s.endPos)) == '\r' then 1 else 0
+    .comment ((s.drop 1).take (s.length - 2 - rn))
   | "reserved"     => .reserved s
   | "forall"       => .reserved "forall"
   | "exists"       => .reserved "exists"
