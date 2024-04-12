@@ -337,8 +337,16 @@ def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : L
   else
     return .none
 
+/-- solverLemmas includes:
+    - preprcoessFacts : List Expr
+    - theoryLemmas : List Expr
+    - instantiations : List Expr
+    - rewriteFacts : List (List Expr) -/
+abbrev solverLemmas := List Expr × List Expr × List Expr × List (List Expr)
+
 open Embedding.Lam in
-def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : LamReif.ReifM (Option (List Expr)) := do
+def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndInfo)
+  : LamReif.ReifM (Option solverLemmas) := do
   let lamVarTy := (← LamReif.getVarVal).map Prod.snd
   let lamEVarTy ← LamReif.getLamEVarTy
   let exportLamTerms ← exportFacts.mapM (fun re => do
@@ -350,8 +358,9 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
     trace[auto.smt.printCommands] "{cmd}"
   if (auto.smt.save.get (← getOptions)) then
     Solver.SMT.saveQuery commands
-  let .some (unsatCore, theoryLemmas, proof) ← Solver.SMT.querySolverWithHints commands
+  let .some (unsatCore, solverHints, proof) ← Solver.SMT.querySolverWithHints commands
     | return .none
+  let (preprocessFacts, theoryLemmas, instantiations, rewriteFacts) := solverHints
   for id in ← Solver.SMT.validFactOfUnsatCore unsatCore do
     let .some t := exportLamTerms[id]?
       | throwError "runAuto :: Index {id} of `exportLamTerm` out of range"
@@ -365,8 +374,13 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
       let vExp := varVal[termNum]!.1
       symbolMap := symbolMap.insert varName vExp
     | _ => logWarning s!"varName: {varName} maps to an atom other than term"
-  let lemmaExps ← theoryLemmas.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap)
-  return some lemmaExps
+  let preprocessFacts ← preprocessFacts.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap)
+  let theoryLemmas ← theoryLemmas.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap)
+  let instantiations ← instantiations.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap)
+  let rewriteFacts ← rewriteFacts.mapM
+    (fun rwFacts => rwFacts.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap))
+  let solverLemmas := (preprocessFacts, theoryLemmas, instantiations, rewriteFacts)
+  return some solverLemmas
 
 open Embedding.Lam in
 /--
@@ -486,7 +500,7 @@ def evalAuto : Tactic
 
 /-- Run `auto`'s monomorphization and preprocessing, then return the list of preprocessing and theory lemmas output
     by the SMT solver. -/
-def runAutoGetHints (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM (List Expr) := do
+def runAutoGetHints (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM solverLemmas := do
   -- Simplify `ite`
   let ite_simp_lem ← Lemma.ofConst ``Auto.Bool.ite_simp (.leaf "hw Auto.Bool.ite_simp")
   let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem ite_simp_lem)
@@ -494,7 +508,7 @@ def runAutoGetHints (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM (Lis
   let decide_simp_lem ← Lemma.ofConst ``Auto.Bool.decide_simp (.leaf "hw Auto.Bool.decide_simp")
   let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem decide_simp_lem)
   let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) (minds : Array (Array SimpleIndVal))
-    : LamReif.ReifM (List Expr) := (do
+    : LamReif.ReifM solverLemmas := (do
     let exportFacts ← LamReif.reifFacts uvalids
     let mut exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
     let _ ← LamReif.reifInhabitations uinhs
@@ -509,7 +523,7 @@ def runAutoGetHints (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM (Lis
         return lemmas
     throwError "autoGetHints only implemented for cvc5 (enable option auto.smt)"
     )
-  let (lemmas, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM (List Expr)) do
+  let (lemmas, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM solverLemmas) do
     let s ← get
     let u ← computeMaxLevel s.facts
     (afterReify s.facts s.inhTys s.inds).run' {u := u})
@@ -537,7 +551,8 @@ def evalAutoGetHints : Tactic
       let (lemmas, inhFacts) ← collectAllLemmas hints uords (goalBinders.push ngoal)
       let lemmas ← runAutoGetHints lemmas inhFacts
       IO.println s!"Auto found hints. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
-      let lemmasStx ← lemmas.mapM (fun lemExp => PrettyPrinter.delab lemExp)
+      let allLemmas := lemmas.1 ++ lemmas.2.1 ++ lemmas.2.2.1 ++ (lemmas.2.2.2.foldl (fun acc l => acc ++ l) [])
+      let lemmasStx ← allLemmas.mapM (fun lemExp => PrettyPrinter.delab lemExp)
       if lemmasStx.length = 0 then
         IO.println "SMT solver did not generate any theory lemmas"
       else

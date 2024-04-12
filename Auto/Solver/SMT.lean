@@ -181,10 +181,19 @@ def querySolver (query : Array IR.SMT.Command) : MetaM (Option (Parser.SMTTerm.T
     trace[auto.smt.result] "{name} produces unexpected check-sat response\n {checkSatResponse}"
     return .none
 
+/-- solverHints includes:
+    - preprocessFacts : List (Parser.SMTTerm.Term)
+    - theoryLemmas : List (Parser.SMTTerm.Term)
+    - instantiations : List (Parser.SMTTerm.Term)
+    - rewriteFacts : List (List (Parser.SMTTerm.Term)) -/
+abbrev solverHints :=
+  List (Parser.SMTTerm.Term) × List (Parser.SMTTerm.Term) × List (Parser.SMTTerm.Term) ×
+  List (List (Parser.SMTTerm.Term))
+
 /-- Behaves like `querySolver` but assumes that the output came from cvc5 with `--dump-hints` enabled. The
     additional output is used to return not just the unsatCore and proof, but also a list of theory lemmas. -/
 def querySolverWithHints (query : Array IR.SMT.Command)
-  : MetaM (Option (Parser.SMTTerm.Term × List (Parser.SMTTerm.Term) × String)) := do
+  : MetaM (Option (Parser.SMTTerm.Term × solverHints × String)) := do
   if !(auto.smt.get (← getOptions)) then
     throwError "querySolver :: Unexpected error"
   if (auto.smt.solver.name.get (← getOptions) == .none) then
@@ -223,18 +232,32 @@ def querySolverWithHints (query : Array IR.SMT.Command)
     let [preprocessFacts, stdout] := stdout.splitOn "Theory lemmas:"
       | throwError "Error finding theory lemmas in output"
     let [theoryLemmas, stdout] := stdout.splitOn "Instantiations:"
-      | throwError "Error finding theory lemmas in output"
-    let [_, stdout] := stdout.splitOn "\"Unsat core:\""
+      | throwError "Error finding instantiations in output"
+    let firstRewritesLabel :=
+      "Rewrites (rule defs (if any) and their usages in quantifier-free terms):"
+    let [instantiations, stdout] := stdout.splitOn firstRewritesLabel
+      | throwError "Error finding first rewrites label"
+    let rewriteFacts := stdout.splitOn "Rewrites:"
+    let some stdout := rewriteFacts.getLast?
+      | throwError "Error finding rewrites"
+    let rewriteFacts := rewriteFacts.take (rewriteFacts.length - 1)
+    let [lastRewriteFact, stdout] := stdout.splitOn "\"Unsat core:\""
       | throwError "Error finding unsat core in output"
+    let rewriteFacts := rewriteFacts.append [lastRewriteFact]
     let (unsatCore, stdout) ← getTerm stdout
     let preprocessFacts ← lexAllTerms preprocessFacts 0 []
     let theoryLemmas ← lexAllTerms theoryLemmas 0 []
+    let instantiations ← lexAllTerms instantiations 0 []
+    let rewriteFacts ← rewriteFacts.mapM (fun rwFact => lexAllTerms rwFact 0 [])
     trace[auto.smt.result] "{name} says Unsat, unsat core:\n{unsatCore}"
-    trace[auto.smt.result] "{name} preprocess facts: {preprocessFacts}"
-    trace[auto.smt.result] "{name} theory lemmas: {theoryLemmas}"
+    trace[auto.smt.result] "{name} preprocess facts:\n{preprocessFacts}"
+    trace[auto.smt.result] "{name} theory lemmas:\n{theoryLemmas}"
+    trace[auto.smt.result] "{name} instantiations:\n{instantiations}"
+    trace[auto.smt.result] "{name} rewriteFacts:\n{rewriteFacts}"
     trace[auto.smt.stderr] "stderr:\n{stderr}"
     solver.kill
-    return .some (unsatCore, preprocessFacts ++ theoryLemmas, stdout)
+    let solverHints := (preprocessFacts, theoryLemmas, instantiations, rewriteFacts)
+    return .some (unsatCore, solverHints, stdout)
   | _ =>
     trace[auto.smt.result] "{name} produces unexpected check-sat response\n {checkSatResponse}"
     return .none
