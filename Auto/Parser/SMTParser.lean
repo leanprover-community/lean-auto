@@ -393,7 +393,9 @@ partial def parseImplication (args : List Term) (symbolMap : HashMap String Expr
 partial def parseTerm (e : Term) (symbolMap : HashMap String Expr) : MetaM Expr := do
   match e with
   | atom (num n) => mkAppM ``Int.ofNat #[Expr.lit (Literal.natVal n)]
-  | atom (rat n m) => throwError "parseTerm :: Rationals not implemented yet"
+  | atom (rat n m) =>
+    let numerator ← mkAppM ``Int.ofNat #[Expr.lit (Literal.natVal n)]
+    mkAppM ``mkRat #[numerator, Expr.lit (Literal.natVal m)]
   | atom (str s) => return Expr.lit (Literal.strVal s)
   | atom (symb s) =>
     match symbolMap.find? s with
