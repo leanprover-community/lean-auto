@@ -10,6 +10,18 @@ initialize
   registerTraceClass `auto.tactic
   registerTraceClass `auto.printLemmas
 
+register_option auto.getHints.failOnParseError : Bool := {
+  defValue := false
+  descr := "Whether to throw an error or ignore smt lemmas that can not be parsed"
+}
+
+def auto.getHints.getFailOnParseError (opts : Options) : Bool :=
+  auto.getHints.failOnParseError.get opts
+
+def auto.getHints.getFailOnParseErrorM : CoreM Bool := do
+  let opts ← getOptions
+  return getHints.getFailOnParseError opts
+
 namespace Auto
 
 /-- `*` : LCtxHyps, `* <ident>` : Lemma database -/
@@ -374,13 +386,27 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
       let vExp := varVal[termNum]!.1
       symbolMap := symbolMap.insert varName vExp
     | _ => logWarning s!"varName: {varName} maps to an atom other than term"
-  let preprocessFacts ← preprocessFacts.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap)
-  let theoryLemmas ← theoryLemmas.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap)
-  let instantiations ← instantiations.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap)
-  let rewriteFacts ← rewriteFacts.mapM
-    (fun rwFacts => rwFacts.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap))
-  let solverLemmas := (preprocessFacts, theoryLemmas, instantiations, rewriteFacts)
-  return some solverLemmas
+  if ← auto.getHints.getFailOnParseErrorM then
+    let preprocessFacts ← preprocessFacts.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap)
+    let theoryLemmas ← theoryLemmas.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap)
+    let instantiations ← instantiations.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap)
+    let rewriteFacts ← rewriteFacts.mapM
+      (fun rwFacts => rwFacts.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap))
+    let solverLemmas := (preprocessFacts, theoryLemmas, instantiations, rewriteFacts)
+    return some solverLemmas
+  else
+    let preprocessFacts ← preprocessFacts.mapM (fun lemTerm => Parser.SMTTerm.tryParseTerm lemTerm symbolMap)
+    let theoryLemmas ← theoryLemmas.mapM (fun lemTerm => Parser.SMTTerm.tryParseTerm lemTerm symbolMap)
+    let instantiations ← instantiations.mapM (fun lemTerm => Parser.SMTTerm.tryParseTerm lemTerm symbolMap)
+    let rewriteFacts ← rewriteFacts.mapM
+      (fun rwFacts => rwFacts.mapM (fun lemTerm => Parser.SMTTerm.tryParseTerm lemTerm symbolMap))
+    -- Filter out `none` results from the above lists (so we can gracefully ignore lemmas that we couldn't parse)
+    let preprocessFacts := preprocessFacts.filterMap id
+    let theoryLemmas := theoryLemmas.filterMap id
+    let instantiations := instantiations.filterMap id
+    let rewriteFacts := rewriteFacts.map (fun rwFacts => rwFacts.filterMap id)
+    let solverLemmas := (preprocessFacts, theoryLemmas, instantiations, rewriteFacts)
+    return some solverLemmas
 
 open Embedding.Lam in
 /--

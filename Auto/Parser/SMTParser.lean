@@ -445,6 +445,17 @@ partial def parseTerm (e : Term) (symbolMap : HashMap String Expr) : MetaM Expr 
   | _ => throwError "parseTerm :: Invalid term {e}" -- All other atoms shouldn't exist as standalone terms
 end
 
+initialize
+  registerTraceClass `auto.smt.parseTermErrors
+
+/-- Calls `parseTerm e symbolMap` and returns the result if successful, returning `none` if there is an error -/
+def tryParseTerm (e : Term) (symbolMap : HashMap String Expr) : MetaM (Option Expr) := do
+  try
+    parseTerm e symbolMap
+  catch err =>
+    trace[auto.smt.parseTermErrors] "Error parsing {e}. Error: {err.toMessageData}"
+    return none
+
 /-
 private def testParseTerm (s : String) (p : String.Pos) : MetaM Expr := do
   match ← lexTerm s p {} with
