@@ -253,6 +253,7 @@ def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
 | .icst ic    => return interpIntConstAsUnlifted ic
 | .scst sc    => return interpStringConstAsUnlifted sc
 | .bvcst bvc  => return interpBitVecConstAsUnlifted bvc
+| .ocst _     => throwError ("interpLamTermAsUnlifted :: Attributes not supported")
 | .eqI _      => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
 | .forallEI _ => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
 | .existEI _  => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)

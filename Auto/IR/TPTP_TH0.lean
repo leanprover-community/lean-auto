@@ -82,6 +82,8 @@ def transLamBaseTerm : LamBaseTerm → Except String String
 | .icst ic    => .ok (transIntConst ic)
 | .scst sc    => .ok (transStringConst sc)
 | .bvcst bvc  => .ok (transBitVecConst bvc)
+-- TODO: translate to λx => x?
+| .ocst _     => .error "transLamBaseTerm :: attributes not supported in TPTP"
 | .eqI _      => .error "transLamBaseTerm :: eqI should not occur here"
 | .forallEI _ => .error "transLamBaseTerm :: forallEI should not occur here"
 | .existEI _  => .error "transLamBaseTerm :: existEI should not occur here"
