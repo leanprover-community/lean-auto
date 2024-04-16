@@ -1311,8 +1311,8 @@ def processSimpleApp (fn arg : Expr) : ReifM (Option LamTerm) := do
         return .some (tcon n)
       return .none
     if let .some attrName := reifMapAttributes1.find? name then
-      if lvls.length != 0 then
-        throwError "processSimpleApp :: attribute should have nil level list"
+      if lvls.length != 1 then
+        throwError "processSimpleApp :: Attribute should have one level"
       return .some (.base (.ocst (.attribute attrName (← reifType arg))))
       -- `arg` is the original (un-lifted) type
     if let .some tcon := reifMapIL.find? name then

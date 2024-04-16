@@ -1419,6 +1419,12 @@ def BitVecConst.LamWF.ofCheck (H : b.lamCheck = s) : LamWF b s := by
   case bvshOp n smt? op => cases smt? <;> constructor
 
 inductive OtherConst
+  /--
+    Note that `attribute` has a polymorphic interpretation. However,
+    it does not need special treatment like `∀, ∃, =`. This is because
+    then interpretation `f` of `attribute` satisfies `f A↑ B↑ = (f A B)↑`,
+    where `↑` stands for universe level lifting.
+  -/
   | attribute : String -> LamSort -> OtherConst
 deriving Inhabited, Hashable, Lean.ToExpr
 
@@ -1437,7 +1443,7 @@ def OtherConst.LamWF.ofOtherConst : (oc : OtherConst) → (s : LamSort) × Other
 | .attribute n s  => ⟨.func s (.func (.base .prop) (.base .prop)), .ofAttribute n s⟩
 
 def OtherConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF p s) → s.interp tyVal
-| .ofAttribute _ _ =>  fun _ => fun term => term
+| .ofAttribute _ s => constId (a:=LamSort.interp tyVal s)
 
 def OtherConst.toString : OtherConst → String
 | .attribute n s => s!"attr[{n} : {s}]"

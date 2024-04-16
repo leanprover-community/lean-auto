@@ -245,10 +245,14 @@ def interpBitVecConstAsUnlifted : BitVecConst → Expr
 | .bvzeroExtend w v  => mkApp2 (.const ``BitVec.zeroExtend []) (.lit (.natVal w)) (.lit (.natVal v))
 | .bvsignExtend w v  => mkApp2 (.const ``BitVec.signExtend []) (.lit (.natVal w)) (.lit (.natVal v))
 
--- **TODO**
 open Embedding in
 def interpOtherConstAsUnlifted : OtherConst → ExternM Expr
-| .attribute _ _ => throwError ("interpOtherConstAsUnlifted :: Attribute is not supported")
+| .attribute _ s => do
+  let ty ← interpLamSortAsUnlifted s
+  let sort ← runMetaM <| Expr.normalizeType (← MetaState.inferType ty)
+  let Expr.sort lvl := sort
+    | throwError "interpOtherConstAsUnlifted :: Unexpected sort {sort}"
+  return .app (.const ``constId [lvl, .zero]) ty
 
 open Embedding in
 def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
