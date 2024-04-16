@@ -4,6 +4,7 @@ import Auto.Lib.MonadUtils
 import Auto.Lib.ExprExtra
 import Auto.Lib.MetaExtra
 import Auto.Translation.ReifM
+import Auto.Translation.SMTAttributes
 import Auto.MathlibEmulator
 import Auto.Embedding.LamChecker
 import Auto.Embedding.LamInhReasoning
@@ -1271,9 +1272,9 @@ def reifMapBVConst3 : HashMap Name (Nat → Nat → Nat → LamTerm) :=
     (``BitVec.extractLsb, fun n h l => .base (.bvextract n h l))
   ]
 
-def reifMapAttributes : HashMap Name String :=
+def reifMapAttributes1 : HashMap Name String :=
   HashMap.ofList [
-    (``trigger, "pattern")
+    (``SMT.Attribute.trigger, "pattern")
   ]
 
 def processSimpleLit (l : Literal) : LamTerm :=
@@ -1309,13 +1310,13 @@ def processSimpleApp (fn arg : Expr) : ReifM (Option LamTerm) := do
       if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
         return .some (tcon n)
       return .none
-      -- `arg` is the original (un-lifted) type
-    if let .some tcon := reifMapIL.find? name then
-      return .some (.base (tcon (← reifType arg)))
-    if let .some attrName := reifMapAttributes.find? name then
+    if let .some attrName := reifMapAttributes1.find? name then
       if lvls.length != 0 then
         throwError "processSimpleApp :: attribute should have nil level list"
       return .some (.base (.ocst (.attribute attrName (← reifType arg))))
+      -- `arg` is the original (un-lifted) type
+    if let .some tcon := reifMapIL.find? name then
+      return .some (.base (tcon (← reifType arg)))
     return .none
   | [arg₁, arg₂] =>
     if let .some tcon := reifMapBVConst2.find? name then

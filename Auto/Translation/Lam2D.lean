@@ -245,6 +245,11 @@ def interpBitVecConstAsUnlifted : BitVecConst → Expr
 | .bvzeroExtend w v  => mkApp2 (.const ``BitVec.zeroExtend []) (.lit (.natVal w)) (.lit (.natVal v))
 | .bvsignExtend w v  => mkApp2 (.const ``BitVec.signExtend []) (.lit (.natVal w)) (.lit (.natVal v))
 
+-- **TODO**
+open Embedding in
+def interpOtherConstAsUnlifted : OtherConst → ExternM Expr
+| .attribute _ _ => throwError ("interpOtherConstAsUnlifted :: Attribute is not supported")
+
 open Embedding in
 def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
 | .pcst pc    => interpPropConstAsUnlifted pc
@@ -253,7 +258,7 @@ def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
 | .icst ic    => return interpIntConstAsUnlifted ic
 | .scst sc    => return interpStringConstAsUnlifted sc
 | .bvcst bvc  => return interpBitVecConstAsUnlifted bvc
-| .ocst _     => throwError ("interpLamTermAsUnlifted :: Attributes not supported")
+| .ocst oc    => interpOtherConstAsUnlifted oc
 | .eqI _      => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
 | .forallEI _ => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
 | .existEI _  => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)

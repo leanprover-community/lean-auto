@@ -1473,9 +1473,6 @@ instance : LawfulBEq OtherConst where
 def OtherConst.lamCheck : OtherConst → LamSort
 | .attribute _ as1 => .func as1 (.func (.base .prop) (.base .prop))
 
--- Note: add other attributes as needed
-def trigger {a : Type} (_ : a) (term : Prop) := term
-
 def OtherConst.interp (tyVal : Nat → Type u) : (o : OtherConst) → o.lamCheck.interp tyVal
 | .attribute _ _ => fun _ => fun term => term
 
