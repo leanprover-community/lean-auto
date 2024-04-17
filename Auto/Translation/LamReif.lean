@@ -1272,7 +1272,7 @@ def reifMapBVConst3 : HashMap Name (Nat → Nat → Nat → LamTerm) :=
     (``BitVec.extractLsb, fun n h l => .base (.bvextract n h l))
   ]
 
-def reifMapAttributes1 : HashMap Name String :=
+def reifMapAttributesProp : HashMap Name String :=
   HashMap.ofList [
     (``SMT.Attribute.trigger, "pattern")
   ]
@@ -1310,10 +1310,10 @@ def processSimpleApp (fn arg : Expr) : ReifM (Option LamTerm) := do
       if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
         return .some (tcon n)
       return .none
-    if let .some attrName := reifMapAttributes1.find? name then
+    if let .some attrName := reifMapAttributesProp.find? name then
       if lvls.length != 1 then
         throwError "processSimpleApp :: Attribute should have one level"
-      return .some (.base (.ocst (.attribute attrName (← reifType arg))))
+      return .some (.base (.ocst (.smtAttr1T attrName (← reifType arg) (.base .prop))))
       -- `arg` is the original (un-lifted) type
     if let .some tcon := reifMapIL.find? name then
       return .some (.base (tcon (← reifType arg)))

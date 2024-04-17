@@ -1420,40 +1420,47 @@ def BitVecConst.LamWF.ofCheck (H : b.lamCheck = s) : LamWF b s := by
 
 inductive OtherConst
   /--
-    Note that `attribute` has a polymorphic interpretation. However,
-    it does not need special treatment like `∀, ∃, =`. This is because
-    then interpretation `f` of `attribute` satisfies `f A↑ B↑ = (f A B)↑`,
-    where `↑` stands for universe level lifting.
+    SMT attribute application, with one term as ⟨attribute_value⟩
+    `.app _ (attribute ⟨keyword⟩ ⟨attr_term⟩) ⟨term⟩ ⇔ ⟨term⟩ ⟨keyword⟩ (⟨attr_term⟩)`
+
+    `smtAttr1T n s₁ s₂` is interpreted as `fun (_ : s₁) (x₂ : s₂) => x₂`,
+    which we'll denote as `constId`. Note that the interpretation is
+    polymorphic. However, it does not need special treatment like
+    `∀, ∃, =`. This is because `constId A↑ B↑ = (constId A B)↑`, where
+    `↑` stands for universe level lifting.
   -/
-  | attribute : String -> LamSort -> OtherConst
+  | smtAttr1T : String → LamSort → LamSort → OtherConst
 deriving Inhabited, Hashable, Lean.ToExpr
 
 def OtherConst.reprAux : OtherConst → String
-| .attribute n s => s!"attribute {n} {s}"
+| .smtAttr1T n sattr s₂ => s!"smtAttr1T {n} {sattr} {s₂}"
 
 def OtherConst.reprPrec (p : OtherConst) (n : Nat) :=
   match n with
   | 0 => f!"Auto.Embedding.Lam.OtherConst.{p.reprAux}"
   | _ + 1 => f!"(.{p.reprAux})"
 
+instance : Repr OtherConst where
+reprPrec := OtherConst.reprPrec
+
 inductive OtherConst.LamWF : OtherConst → LamSort → Type
-  | ofAttribute n s    : LamWF (.attribute n s) (.func s (.func (.base .prop) (.base .prop)))
+  | ofSmtAttr1T n sattr sterm : LamWF (.smtAttr1T n sattr sterm) (.func sattr (.func sterm sterm))
 
 def OtherConst.LamWF.ofOtherConst : (oc : OtherConst) → (s : LamSort) × OtherConst.LamWF oc s
-| .attribute n s  => ⟨.func s (.func (.base .prop) (.base .prop)), .ofAttribute n s⟩
+| .smtAttr1T n sattr sterm => ⟨.func sattr (.func sterm sterm), .ofSmtAttr1T n sattr sterm⟩
 
 def OtherConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF p s) → s.interp tyVal
-| .ofAttribute _ s => constId (a:=LamSort.interp tyVal s)
+| .ofSmtAttr1T _ sattr sterm => constId (a:=LamSort.interp tyVal sattr) (b:=LamSort.interp tyVal sterm)
 
 def OtherConst.toString : OtherConst → String
-| .attribute n s => s!"attr[{n} : {s}]"
+| .smtAttr1T n _ _ => s!"attr[{n}]"
 
 instance : ToString OtherConst where
   toString := OtherConst.toString
 
 def OtherConst.beq : OtherConst → OtherConst → Bool
-| .attribute n1 s1, .attribute n2 s2 =>
-  n1 == n2 && s1.beq s2
+| .smtAttr1T n₁ sattr₁ sterm₁, .smtAttr1T n₂ sattr₂ sterm₂ =>
+  n₁ == n₂ && sattr₁.beq sattr₂ && sterm₁.beq sterm₂
 
 instance : BEq OtherConst where
   beq := OtherConst.beq
@@ -1463,24 +1470,22 @@ theorem OtherConst.beq_def {x y : OtherConst} : (x == y) = x.beq y := rfl
 def OtherConst.beq_refl {o : OtherConst} : (o.beq o) = true := by
   cases o <;> unfold OtherConst.beq <;> simp [LamSort.beq_refl]
 
-def OtherConst.eq_of_beq_eq_true {o₁ o₂ : OtherConst} (H : o₁.beq o₂) : o₁ = o₂ :=
-  match o₁, o₂ with
-  | .attribute n1 s1, .attribute n2 s2 => by
-    simp [OtherConst.beq] at H
-    match H with
-    | And.intro neq sbeq =>
-      have seq := LamSort.eq_of_beq_eq_true sbeq
-      rw [neq, seq]
+def OtherConst.eq_of_beq_eq_true {o₁ o₂ : OtherConst} (H : o₁.beq o₂) : o₁ = o₂ := by
+  cases o₁ <;> cases o₂ <;> dsimp [beq] at H <;>
+    rw [Bool.and_eq_true] at H <;> rw [Bool.and_eq_true] at H <;>
+    try rw [LawfulBEq.eq_of_beq H.left.left]
+  case smtAttr1T.smtAttr1T =>
+    rw [LamSort.eq_of_beq_eq_true H.left.right, LamSort.eq_of_beq_eq_true H.right]
 
 instance : LawfulBEq OtherConst where
   eq_of_beq := OtherConst.eq_of_beq_eq_true
   rfl := OtherConst.beq_refl
 
 def OtherConst.lamCheck : OtherConst → LamSort
-| .attribute _ as1 => .func as1 (.func (.base .prop) (.base .prop))
+| .smtAttr1T _ sattr sterm => .func sattr (.func sterm sterm)
 
 def OtherConst.interp (tyVal : Nat → Type u) : (o : OtherConst) → o.lamCheck.interp tyVal
-| .attribute _ _ => fun _ => fun term => term
+| .smtAttr1T _ sattr sterm => fun (_ : sattr.interp tyVal) (term : sterm.interp tyVal) => term
 
 def OtherConst.interp_equiv (tyVal : Nat → Type u) (ocwf : LamWF p s) :
   HEq (LamWF.interp tyVal ocwf) (interp tyVal p) := by

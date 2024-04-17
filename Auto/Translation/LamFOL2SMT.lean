@@ -164,7 +164,7 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
     | .lshr => return .qStrApp "bvlshr" #[arg1, arg2]
     | .ashr => return .qStrApp "bvashr" #[arg1, arg2]
 | .bvcst (.bvappend _ _) => return .qStrApp "concat" #[arg1, arg2]
-| .ocst (.attribute s _) => return .attrApp s arg1 arg2
+| .ocst (.smtAttr1T name _ _) => return .attrApp name arg1 arg2
 | t           => throwError "lamTerm2STerm :: The arity of {repr t} is not 2"
 
 private def lamBaseTerm2STerm_Arity1 (arg : STerm) : LamBaseTerm → TransM LamAtom STerm

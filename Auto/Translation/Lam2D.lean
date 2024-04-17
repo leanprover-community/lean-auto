@@ -246,13 +246,21 @@ def interpBitVecConstAsUnlifted : BitVecConst → Expr
 | .bvsignExtend w v  => mkApp2 (.const ``BitVec.signExtend []) (.lit (.natVal w)) (.lit (.natVal v))
 
 open Embedding in
-def interpOtherConstAsUnlifted : OtherConst → ExternM Expr
-| .attribute _ s => do
-  let ty ← interpLamSortAsUnlifted s
-  let sort ← runMetaM <| Expr.normalizeType (← MetaState.inferType ty)
-  let Expr.sort lvl := sort
-    | throwError "interpOtherConstAsUnlifted :: Unexpected sort {sort}"
-  return .app (.const ``constId [lvl, .zero]) ty
+def interpOtherConstAsUnlifted (oc : OtherConst) : ExternM Expr := do
+  let .some (.defnInfo constIdVal) := (← getEnv).find? ``constId
+    | throwError "interpOtherConstAsUnlifted :: Unexpected error"
+  let constIdExpr := fun params => constIdVal.value.instantiateLevelParams constIdVal.levelParams params
+  match oc with
+  | .smtAttr1T _ sattr sterm => do
+    let tyattr ← interpLamSortAsUnlifted sattr
+    let sortattr ← runMetaM <| Expr.normalizeType (← MetaState.inferType tyattr)
+    let Expr.sort lvlattr := sortattr
+      | throwError "interpOtherConstAsUnlifted :: Unexpected sort {sortattr}"
+    let tyterm ← interpLamSortAsUnlifted sterm
+    let sortterm ← runMetaM <| Expr.normalizeType (← MetaState.inferType tyterm)
+    let Expr.sort lvlterm := sortterm
+      | throwError "interpOtherConstAsUnlifted :: Unexpected sort {sortterm}"
+    return Lean.mkApp2 (constIdExpr [lvlattr, lvlterm]) tyattr tyterm
 
 open Embedding in
 def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
