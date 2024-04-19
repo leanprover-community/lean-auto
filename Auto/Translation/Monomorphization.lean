@@ -623,6 +623,16 @@ namespace FVarRep
       setFfvars ((← getFfvars).push fvarId)
       return fvarId
 
+  -- **TODO** Where should we use this function?
+  def throwUnknownExpr {α : Type} (e : Expr) : FVarRepM α := do
+    let m₁ := m!"Monomorphization failed because currently it cannot deal with expression `{e}`."
+    let m₂ := m!"This is because it contains free variables and has subterms possessing at least one of the following features"
+    let m₃ := m!"· Type argument with free variables, e.g. `@Fin.add (n + 2) a b`"
+    let m₄ := m!"· λ binders whose type contain free variables, e.g. `fun (x : a) => x` where `a` is a free variable"
+    let m₅ := m!"· (TODO)"
+    let m₆ := m!"Enable `auto.mono.printResult` to show the monomorphized lemmas"
+    throwError m₁ ++ "\n" ++ m₂ ++ "\n" ++ m₃ ++ "\n" ++ m₄ ++ "\n" ++ m₅ ++ "\n" ++ m₆
+
   def UnknownExpr2FVarId (e : Expr) : FVarRepM FVarId := do
     trace[auto.mono] "Do not know how to deal with expression {e}. Turning it into free variable ..."
     for (e', fid) in (← getExprMap).toList do
