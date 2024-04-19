@@ -576,6 +576,10 @@ namespace FVarRep
 
   #genMonadState FVarRepM
 
+  def getBfvarSet : FVarRepM (HashSet FVarId) := do
+    let bfvars ← getBfvars
+    return HashSet.empty.insertMany bfvars
+
   /-- Similar to `Monomorphization.processConstInst` -/
   def processConstInst (ci : ConstInst) : FVarRepM Unit := do
     let (old?, insts, ci) ← MetaState.runMetaM <| CiMap.canonicalize? (← getCiMap) ci
@@ -584,25 +588,28 @@ namespace FVarRep
     trace[auto.mono.printConstInst] "New {ci}"
     setCiMap ((← getCiMap).insert ci.fingerPrint (insts.push ci))
 
-  def processTypeAux : Expr → FVarRepM Unit
-  | .forallE _ ty body _ => do
-    if body.hasLooseBVar 0 then
-      return
-    processTypeAux ty
-    processTypeAux body
-  | e => do
-    let e := Expr.eraseMData e
-    if (← getTyCanMap).contains e then
-      return
-    for (e', ec) in (← getTyCanMap).toList do
-      if ← MetaState.isDefEqRigid e e' then
-        setTyCanMap ((← getTyCanMap).insert e ec)
-        return
-    setTyCanMap ((← getTyCanMap).insert e e)
-
   def processType (e : Expr) : FVarRepM Unit := do
     let e ← MetaState.runMetaM <| prepReduceExpr e
-    processTypeAux e
+    let bfvarSet ← getBfvarSet
+    -- If `e` contains no bound variables
+    if !e.hasAnyFVar bfvarSet.contains then
+      processTypeAux e
+  where
+    processTypeAux : Expr → FVarRepM Unit
+    | .forallE _ ty body _ => do
+      if body.hasLooseBVar 0 then
+        return
+      processTypeAux ty
+      processTypeAux body
+    | e => do
+      let e := Expr.eraseMData e
+      if (← getTyCanMap).contains e then
+        return
+      for (e', ec) in (← getTyCanMap).toList do
+        if ← MetaState.isDefEqRigid e e' then
+          setTyCanMap ((← getTyCanMap).insert e ec)
+          return
+      setTyCanMap ((← getTyCanMap).insert e e)
 
   def ConstInst2FVarId (ci : ConstInst) : FVarRepM FVarId := do
     let ciMap ← FVarRep.getCiMap
@@ -623,9 +630,8 @@ namespace FVarRep
       setFfvars ((← getFfvars).push fvarId)
       return fvarId
 
-  -- **TODO** Where should we use this function?
-  def throwUnknownExpr {α : Type} (e : Expr) : FVarRepM α := do
-    let m₁ := m!"Monomorphization failed because currently it cannot deal with expression `{e}`."
+  def throwMonoFail {α : Type} (e : Expr) : FVarRepM α := do
+    let m₁ := m!"Monomorphization failed because currently the procedure cannot deal with expression `{e}`."
     let m₂ := m!"This is because it contains free variables and has subterms possessing at least one of the following features"
     let m₃ := m!"· Type argument with free variables, e.g. `@Fin.add (n + 2) a b`"
     let m₄ := m!"· λ binders whose type contain free variables, e.g. `fun (x : a) => x` where `a` is a free variable"
@@ -634,6 +640,9 @@ namespace FVarRep
     throwError m₁ ++ "\n" ++ m₂ ++ "\n" ++ m₃ ++ "\n" ++ m₄ ++ "\n" ++ m₅ ++ "\n" ++ m₆
 
   def UnknownExpr2FVarId (e : Expr) : FVarRepM FVarId := do
+    let bfvarSet ← getBfvarSet
+    if e.hasAnyFVar bfvarSet.contains then
+      throwMonoFail e
     trace[auto.mono] "Do not know how to deal with expression {e}. Turning it into free variable ..."
     for (e', fid) in (← getExprMap).toList do
       if ← MetaState.isDefEqRigid e e' then
@@ -646,7 +655,15 @@ namespace FVarRep
     setFfvars ((← getFfvars).push fvarId)
     return fvarId
 
-  /-- Since we're now dealing with monomorphized lemmas, there are no bound level parameters -/
+  /--
+    Attempt to abstract parts of a given expression to free variables so
+    that the resulting expression is in the higher-order fragment of Lean.
+
+    Note that it's not always possible to do this since it's possible that
+    the given expression itself is polymorphic
+
+    Since we're now dealing with monomorphized lemmas, there are no bound level parameters
+  -/
   partial def replacePolyWithFVar : Expr → FVarRepM Expr
   | .lam name ty body binfo => do
     processType ty
