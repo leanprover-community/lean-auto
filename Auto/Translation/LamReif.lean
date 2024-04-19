@@ -1133,7 +1133,7 @@ private def reifTypeAux : Expr → ReifM LamSort
 | .mdata _ e => reifTypeAux e
 | e@(.forallE _ ty body _) => do
   if body.hasLooseBVar 0 then
-    throwError "reifType :: Type {e} has dependent ∀"
+    processTypeExpr e
   else
     return .func (← reifTypeAux ty) (← reifTypeAux body)
 | e => processTypeExpr e

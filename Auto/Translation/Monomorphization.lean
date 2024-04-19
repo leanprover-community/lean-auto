@@ -596,12 +596,16 @@ namespace FVarRep
       processTypeAux e
   where
     processTypeAux : Expr → FVarRepM Unit
-    | .forallE _ ty body _ => do
+    | e@(.forallE _ ty body _) => do
       if body.hasLooseBVar 0 then
-        return
-      processTypeAux ty
-      processTypeAux body
-    | e => do
+        -- It's possible that the type can be decomposed further,
+        -- but for simplicity, give up for now
+        addTypeToTyCanMap e
+      else
+        processTypeAux ty
+        processTypeAux body
+    | e => addTypeToTyCanMap e
+    addTypeToTyCanMap (e : Expr) : FVarRepM Unit := do
       let e := Expr.eraseMData e
       if (← getTyCanMap).contains e then
         return
@@ -643,10 +647,12 @@ namespace FVarRep
     let bfvarSet ← getBfvarSet
     if e.hasAnyFVar bfvarSet.contains then
       throwMonoFail e
-    trace[auto.mono] "Do not know how to deal with expression {e}. Turning it into free variable ..."
     for (e', fid) in (← getExprMap).toList do
       if ← MetaState.isDefEqRigid e e' then
         return fid
+    -- Put this trace message after the above for loop
+    --   to avoid duplicated messages
+    trace[auto.mono] "Don't know how to deal with expression {e}. Turning it into free variable ..."
     let userName := (`exfvar).appendIndexAfter (← getExprMap).size
     let ety ← instantiateMVars (← MetaState.inferType e)
     processType ety
@@ -762,7 +768,7 @@ def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State
     initializeMonoM lemmas
     saturate
     postprocessSaturate
-    trace[auto.mono] "Monomorphization took {(← IO.monoMsNow) - startTime}ms"
+    trace[auto.mono] "Monomorphization of lemmas took {(← IO.monoMsNow) - startTime}ms"
     collectMonoMutInds)
   let (inductiveVals, monoSt) ← monoMAction.run {}
   -- Lemma instances
@@ -795,10 +801,10 @@ def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State
         tyCanInhs := tyCanInhs.push ⟨inh, e, .leaf "tyCanInh"⟩
     let inhMatches ← MetaState.runMetaM (Inhabitation.inhFactMatchAtomTys inhFacts tyCans)
     let inhs := tyCanInhs ++ inhMatches
-    trace[auto.mono] "Monomorphizing inhabitation facts took {(← IO.monoMsNow) - startTime}ms"
+    trace[auto.mono] "Monomorphization of inhabitation facts took {(← IO.monoMsNow) - startTime}ms"
     -- Inductive types
     let startTime ← IO.monoMsNow
-    trace[auto.mono] "Monomorphizing inductive types took {(← IO.monoMsNow) - startTime}ms"
+    trace[auto.mono] "Monomorphization of inductive types took {(← IO.monoMsNow) - startTime}ms"
     let (inductiveVals, s) ← (fvarRepMInductAction inductiveVals).run s
     return (s.ffvars, Reif.State.mk s.ffvars uvalids polyVal s.tyCanMap inhs inductiveVals none))
   MetaState.runWithIntroducedFVars metaStateMAction k
