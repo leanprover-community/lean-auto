@@ -388,8 +388,8 @@ def LemmaInst.monomorphic? (li : LemmaInst) : MetaM (Option LemmaInst) := do
 
 /-
   Monomorphization works as follows:
-  (1) Compute the number of `∀` binders for each input assumption.
-      They form the initial elements of `liArr`
+  (1) Turning `Lemma`s into `LemmaInst`s, which constitutes the
+      value of `lisArr` in the beginning
   (2) Scan through all assumptions to find subterms that are
       valid instances of constants (dependent arguments fully
       instantiated). They form the initial elements of `ciMap`
