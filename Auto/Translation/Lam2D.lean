@@ -11,6 +11,7 @@ initialize
   registerTraceClass `auto.lam2D
   registerTraceClass `auto.lam2D.printInhs
   registerTraceClass `auto.lam2D.printHyps
+  registerTraceClass `auto.lam2D.printProof
 
 /-
   Lam2D : Simply-typed lambda calculus to Lean expression
@@ -348,9 +349,18 @@ def withHyps (hyps : Array Expr) : ExternM (Array FVarId) := do
     ret := ret.push newFVarId
   return ret
 
+/--
+  Calling external provere with type atoms, atoms, etoms, inhabitation facts
+  and lemmas as free variables
+
+  Note that `MetaState.withTemporaryLCtx` is used to isolate the prover from the
+  current local context. This is necessary because `lean-auto` assumes that the prover
+  does not use free variables introduced during monomorphization
+-/
 private def callNativeExternMAction
   (nonempties : Array REntry) (validsWithDTr : Array (REntry × DTr)) (prover : Array Lemma → MetaM Expr) :
-  ExternM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := do
+  ExternM (Expr × LamTerm × Array Nat ×
+    Array REntry × Array REntry) := MetaState.withTemporaryLCtx {} {} <| do
   let ss ← nonempties.mapM (fun re => do
     match re with
     | .nonempty s => return s
@@ -413,8 +423,10 @@ private def callNativeExternMAction
       let .some ty := lamEVarTy[etom]?
         | throwError "callNative :: Unexpected error"
       return ty)
+    let proof := mkAppN expr ⟨usedVals⟩
     let proofLamTerm := usedEtomTys.foldr (fun s cur => LamTerm.mkForallEF s cur) proofLamTermPre
-    return (mkAppN expr ⟨usedVals⟩, proofLamTerm, ⟨usedEtoms⟩, ⟨usedInhs.map Prod.fst⟩, ⟨usedHyps.map Prod.fst⟩))
+    trace[auto.lam2D.printProof] "Found proof of {proofLamTerm}\n\n{proof}"
+    return (proof, proofLamTerm, ⟨usedEtoms⟩, ⟨usedInhs.map Prod.fst⟩, ⟨usedHyps.map Prod.fst⟩))
 
 /--
   Given
@@ -432,6 +444,10 @@ private def callNativeExternMAction
   · `[v₀, v₁, ⋯, vᵤ₋₁]` is a subsequence of `[s₀, s₁, ⋯, sᵤ₋₁]`
   · `[w₀, w₁, ⋯, wₗ₋₁]` is a subsequence of `[t₀, t₁, ⋯, kₖ₋₁]`
   · `etoms` are all the etoms present in `w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥`
+
+  Note that `MetaState.withTemporaryLCtx` is used to isolate the prover from the
+  current local context. This is necessary because `lean-auto` assumes that the prover
+  does not use free variables introduced during monomorphization
 -/
 def callNative_checker
   (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → MetaM Expr) :
@@ -450,6 +466,10 @@ def callNative_checker
     be no `etom`s). We invoke the prover to get the same `proof` as
     `callNativeChecker`, but we return a proof of `⊥` by applying `proof`
     to un-reified facts.
+
+  Note that `MetaState.withTemporaryLCtx` is used to isolate the prover from the
+  current local context. This is necessary because `lean-auto` assumes that the prover
+  does not use free variables introduced during monomorphization
 -/
 def callNative_direct
   (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → MetaM Expr) : ReifM Expr := do

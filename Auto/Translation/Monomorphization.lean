@@ -671,25 +671,46 @@ namespace FVarRep
     setFfvars ((← getFfvars).push fvarId)
     return Expr.fvar fvarId
 
+  -- **TODO:** Unify the approach for `general expressions` and `ConstInst`
+  --   because they're inherently the same
   def unknownExpr2Expr (e : Expr) : FVarRepM Expr := do
-    let bfvarSet ← getBfvarSet
+    let (_, collectFVarsState) ← MetaState.runMetaM <| e.collectFVars.run {}
+    let exfvars := collectFVarsState.fvarIds
+    let exfvarSet := collectFVarsState.fvarSet
+    let bfvars := (← getBfvars).filter exfvarSet.contains
+    let mut depChkFVarSet := HashSet.empty
     let ety ← MetaState.runMetaM (Meta.inferType e >>= prepReduceExpr)
+    -- If the type of any bound variable depend on other bound
+    -- variables, then abstracting away these `bfvars` will result
+    -- in a dependently typed expression.
+    -- Note that `ffvars` are essentially monomorphic, so
+    -- it's safe to ignore them when considering whether a
+    -- term will be dependently typed
+    -- **TODO**: but is it?
+    for fid in bfvars do
+      let ty ← MetaState.runMetaM (fid.getType >>= prepReduceExpr)
+      if ty.hasAnyFVar depChkFVarSet.contains then
+        return e
+      depChkFVarSet := depChkFVarSet.insert fid
     -- If `ety` contains any `bfvars`, then abstracting away
-    --   these `bfvars` will result in a dependently typed expression
-    if ety.hasAnyFVar bfvarSet.contains then
+    -- these `bfvars` will result in a dependently typed expression
+    if ety.hasAnyFVar depChkFVarSet.contains then
       return e
+    -- Now, we know that the expression will be essentially monomorphic
+    -- after we abstract away `bfvars`
+    let bfvarSet ← getBfvarSet
     for (e', fid) in (← getExprMap).toList do
       if ← MetaState.isDefEqRigid e e' then
         return Expr.fvar fid
+    -- `e` is a new expression
     let userName := (`exfvar).appendIndexAfter (← getExprMap).size
-    let (_, collectFVarsState) ← MetaState.runMetaM <| e.collectFVars.run {}
     let ffvarSet ← getFfvarSet
-    let fvarOccs := collectFVarsState.fvarIds.filter (ffvarSet.insertMany bfvarSet).contains
+    let fvarOccs := exfvars.filter (ffvarSet.insertMany bfvarSet).contains
     let eabst ← MetaState.runMetaM <|
-      Meta.mkLambdaFVars (fvarOccs.map Expr.fvar) e (usedOnly:=false) (usedLetOnly:=false)
+      Meta.mkLambdaFVars (fvarOccs.map Expr.fvar) e (usedOnly:=false)
     trace[auto.mono] "Turning general expression {eabst} into free variable ..."
     let eabstTy ← MetaState.runMetaM <|
-      Meta.mkForallFVars (fvarOccs.map Expr.fvar) ety (usedOnly:=false) (usedLetOnly:=false)
+      Meta.mkForallFVars (fvarOccs.map Expr.fvar) ety (usedOnly:=false)
     -- Note that `eabst` has type `α₁ → ⋯ → αₖ → ety`. However, since each
     -- `αᵢ` is a type of some `ffvar`, it has already been processed. Therefore,
     -- we don't have to process `αᵢ` again, only `ety` needs to be processed.
@@ -758,7 +779,9 @@ namespace FVarRep
       let ciArgs ← ConstInst.getOtherArgs ci e
       let ciArgs ← ciArgs.mapM replacePolyWithFVar
       return mkAppN (.fvar ciId) ciArgs
-    processUnknownExpr e
+    let eFn := e.getAppFn
+    let eArgs ← e.getAppArgs.mapM replacePolyWithFVar
+    processUnknownExpr (Lean.mkAppN eFn eArgs)
   | e@(.sort _) => return e
   | e@(.lit _) => return e
   | e => do

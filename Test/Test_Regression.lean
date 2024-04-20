@@ -15,6 +15,10 @@ set_option auto.smt.solver.name "z3"
 set_option auto.tptp true
 set_option trace.auto.tptp.printProof true
 
+-- emulate native solver
+-- set_option auto.native true
+-- set_option auto.native.solver.func "Auto.Solver.Native.emulateNative"
+
 -- Manual Check
 
 section ManualCheck

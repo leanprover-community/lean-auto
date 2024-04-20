@@ -144,4 +144,11 @@ def withLetDecl (n : Name) (type : Expr) (val : Expr) (kind : LocalDeclKind) : M
   withNewFVar fvar type
   return fvarId
 
+def withTemporaryLCtx [MonadLiftT MetaStateM n] [Monad n] (lctx : LocalContext) (localInsts : LocalInstances) (k : n α) : n α := do
+  let initlctx ← getToContext
+  MetaState.setToContext {initlctx with lctx := lctx, localInstances := localInsts}
+  let ret ← k
+  MetaState.setToContext initlctx
+  return ret
+
 end Auto.MetaState

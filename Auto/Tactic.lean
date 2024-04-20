@@ -8,6 +8,7 @@ open Lean Elab Tactic
 
 initialize
   registerTraceClass `auto.tactic
+  registerTraceClass `auto.tactic.printProof
   registerTraceClass `auto.printLemmas
 
 namespace Auto
@@ -327,9 +328,7 @@ def queryNative
   LamReif.printProofs
   Reif.setDeclName? declName?
   let checker ← LamReif.buildCheckerExprFor contra
-  let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
-  let proof ← Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra
-  return .some proof
+  Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
 
 /--
   Run `auto`'s monomorphization and preprocessing, then send the problem to different solvers
@@ -375,6 +374,7 @@ def runAuto
     let u ← computeMaxLevel s.facts
     (afterReify s.facts s.inhTys s.inds).run' {u := u})
   trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
+  trace[auto.tactic.printProof] "{proof}"
   return proof
 
 @[tactic auto]
@@ -430,8 +430,7 @@ def monoInterface
     let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
       (fun (s, _) => Embedding.Lam.REntry.nonempty s)
     LamReif.printValuation
-    let proof ← Lam2D.callNative_direct exportInhs exportFacts prover
-    Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) proof)
+    Lam2D.callNative_direct exportInhs exportFacts prover)
   let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
     let uvalids ← liftM <| Reif.getFacts
     let uinhs ← liftM <| Reif.getInhTys

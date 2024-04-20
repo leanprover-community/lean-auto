@@ -39,4 +39,17 @@ private unsafe def queryNativeUnsafe (lemmas : Array Lemma) : MetaM Expr := do
 @[implemented_by queryNativeUnsafe]
 opaque queryNative : Array Lemma → MetaM Expr
 
+/--
+  Emulate a native prover. When given lemmas `h₁, ⋯, hₙ`, the
+  prover returns `sorryAx (h₁ → ⋯ → hₙ → ⊥) Bool.false h₁ ⋯ hₙ`
+-/
+def emulateNative (lemmas : Array Lemma) : MetaM Expr := do
+  let _ ← lemmas.mapM (fun lem => do
+    if lem.params.size != 0 then
+      throwError "Solver.emulateNative :: Universe levels parameters are not supported")
+  let descrs := lemmas.zipWithIndex.map (fun (lem, i) => (s!"lem{i}", lem.type, .default))
+  let sty := Expr.mkForallFromBinderDescrs descrs (.const ``False [])
+  let sorryExpr := Lean.mkApp2 (.const ``sorryAx [.zero]) sty (.const ``Bool.false [])
+  return Lean.mkAppN sorryExpr (lemmas.map (fun lem => lem.proof))
+
 end Auto.Solver.Native
