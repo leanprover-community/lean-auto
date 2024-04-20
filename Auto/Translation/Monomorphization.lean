@@ -29,6 +29,12 @@ register_option auto.mono.recordInstInst : Bool := {
   descr := "Whether to record instances of constants with the `instance` attribute"
 }
 
+register_option auto.mono.allowGeneralExprAbst : Bool := {
+  defValue := true
+  descr := "Apart from `ConstInst`s, allow general expressions to be abstracted" ++
+           " " ++ "as free variables"
+}
+
 namespace Auto.Monomorphization
 open Embedding
 
@@ -565,6 +571,7 @@ namespace FVarRep
 
   structure State where
     bfvars   : Array FVarId             := #[]
+    -- Free variables representing abstracted expressions
     ffvars   : Array FVarId             := #[]
     exprMap  : HashMap Expr FVarId      := {}
     ciMap    : HashMap Expr ConstInsts
@@ -579,6 +586,10 @@ namespace FVarRep
   def getBfvarSet : FVarRepM (HashSet FVarId) := do
     let bfvars ← getBfvars
     return HashSet.empty.insertMany bfvars
+
+  def getFfvarSet : FVarRepM (HashSet FVarId) := do
+    let ffvars ← getFfvars
+    return HashSet.empty.insertMany ffvars
 
   /-- Similar to `Monomorphization.processConstInst` -/
   def processConstInst (ci : ConstInst) : FVarRepM Unit := do
@@ -615,12 +626,12 @@ namespace FVarRep
           return
       setTyCanMap ((← getTyCanMap).insert e e)
 
-  def ConstInst2FVarId (ci : ConstInst) : FVarRepM FVarId := do
+  def constInst2FVarId (ci : ConstInst) : FVarRepM FVarId := do
     let ciMap ← FVarRep.getCiMap
     let ci ← MetaState.runMetaM (do
       match ← CiMap.canonicalize? ciMap ci with
       | (true, _, ci') => return ci'
-      | _ => throwError "ConstInst2FVarId :: Cannot find canonicalized instance of {ci}")
+      | _ => throwError "constInst2FVarId :: Cannot find canonicalized instance of {ci}")
     let ciIdMap ← FVarRep.getCiIdMap
     match ciIdMap.find? ci with
     | .some fid => return fid
@@ -640,16 +651,15 @@ namespace FVarRep
     let m₃ := m!"· Type argument with free variables, e.g. `@Fin.add (n + 2) a b`"
     let m₄ := m!"· λ binders whose type contain free variables, e.g. `fun (x : a) => x` where `a` is a free variable"
     let m₅ := m!"· (TODO)"
-    let m₆ := m!"Enable `auto.mono.printResult` to show the monomorphized lemmas"
-    throwError m₁ ++ "\n" ++ m₂ ++ "\n" ++ m₃ ++ "\n" ++ m₄ ++ "\n" ++ m₅ ++ "\n" ++ m₆
+    throwError m₁ ++ "\n" ++ m₂ ++ "\n" ++ m₃ ++ "\n" ++ m₄ ++ "\n" ++ m₅
 
-  def UnknownExpr2FVarId (e : Expr) : FVarRepM FVarId := do
+  def unknownExpr2FVar (e : Expr) : FVarRepM Expr := do
     let bfvarSet ← getBfvarSet
     if e.hasAnyFVar bfvarSet.contains then
       throwMonoFail e
     for (e', fid) in (← getExprMap).toList do
       if ← MetaState.isDefEqRigid e e' then
-        return fid
+        return Expr.fvar fid
     -- Put this trace message after the above for loop
     --   to avoid duplicated messages
     trace[auto.mono] "Don't know how to deal with expression {e}. Turning it into free variable ..."
@@ -659,8 +669,42 @@ namespace FVarRep
     let fvarId ← MetaState.withLetDecl userName ety e .default
     setExprMap ((← getExprMap).insert e fvarId)
     setFfvars ((← getFfvars).push fvarId)
-    return fvarId
+    return Expr.fvar fvarId
 
+  def unknownExpr2Expr (e : Expr) : FVarRepM Expr := do
+    let bfvarSet ← getBfvarSet
+    let ety ← MetaState.runMetaM (Meta.inferType e >>= prepReduceExpr)
+    -- If `ety` contains any `bfvars`, then abstracting away
+    --   these `bfvars` will result in a dependently typed expression
+    if ety.hasAnyFVar bfvarSet.contains then
+      return e
+    for (e', fid) in (← getExprMap).toList do
+      if ← MetaState.isDefEqRigid e e' then
+        return Expr.fvar fid
+    let userName := (`exfvar).appendIndexAfter (← getExprMap).size
+    let (_, collectFVarsState) ← MetaState.runMetaM <| e.collectFVars.run {}
+    let ffvarSet ← getFfvarSet
+    let fvarOccs := collectFVarsState.fvarIds.filter (ffvarSet.insertMany bfvarSet).contains
+    let eabst ← MetaState.runMetaM <|
+      Meta.mkLambdaFVars (fvarOccs.map Expr.fvar) e (usedOnly:=false) (usedLetOnly:=false)
+    trace[auto.mono] "Turning general expression {eabst} into free variable ..."
+    let eabstTy ← MetaState.runMetaM <|
+      Meta.mkForallFVars (fvarOccs.map Expr.fvar) ety (usedOnly:=false) (usedLetOnly:=false)
+    -- Note that `eabst` has type `α₁ → ⋯ → αₖ → ety`. However, since each
+    -- `αᵢ` is a type of some `ffvar`, it has already been processed. Therefore,
+    -- we don't have to process `αᵢ` again, only `ety` needs to be processed.
+    processType ety
+    let fvarId ← MetaState.withLetDecl userName eabstTy eabst .default
+    setExprMap ((← getExprMap).insert eabst fvarId)
+    setFfvars ((← getFfvars).push fvarId)
+    return Lean.mkAppN (Expr.fvar fvarId) (fvarOccs.map Expr.fvar)
+
+  def processUnknownExpr (e : Expr) : FVarRepM Expr := do
+    let allowGeneralEA := auto.mono.allowGeneralExprAbst.get (← getOptions)
+    if allowGeneralEA then
+      unknownExpr2Expr e
+    else
+      unknownExpr2FVar e
   /--
     Attempt to abstract parts of a given expression to free variables so
     that the resulting expression is in the higher-order fragment of Lean.
@@ -688,7 +732,7 @@ namespace FVarRep
     let body' := body.instantiate1 (.fvar fvarId)
     let bodysort ← MetaState.runMetaM <| do Expr.normalizeType (← Meta.inferType body')
     let .sort bodylvl := bodysort
-      | throwError "replacePolyWithFVars :: Unexpected error"
+      | throwError "replacePolyWithFVar :: Unexpected error"
     let bodyrep ← replacePolyWithFVar body'
     if body.hasLooseBVar 0 ∨
         !(← MetaState.isLevelDefEqRigid tylvl .zero) ∨
@@ -710,11 +754,11 @@ namespace FVarRep
     -- Head is fvar/mvar/const
     let bfexprs := (← getBfvars).map Expr.fvar
     if let .some ci ← MetaState.runMetaM (ConstInst.ofExpr? #[] bfexprs e) then
-      let ciId ← ConstInst2FVarId ci
+      let ciId ← constInst2FVarId ci
       let ciArgs ← ConstInst.getOtherArgs ci e
       let ciArgs ← ciArgs.mapM replacePolyWithFVar
       return mkAppN (.fvar ciId) ciArgs
-    Expr.fvar <$> UnknownExpr2FVarId e
+    processUnknownExpr e
   | e@(.sort _) => return e
   | e@(.lit _) => return e
   | e => do
@@ -723,9 +767,9 @@ namespace FVarRep
         return .fvar id
     let bfexprs := (← getBfvars).map Expr.fvar
     if let .some ci ← MetaState.runMetaM (ConstInst.ofExpr? #[] bfexprs e) then
-      let ciId ← ConstInst2FVarId ci
+      let ciId ← constInst2FVarId ci
       return .fvar ciId
-    Expr.fvar <$> UnknownExpr2FVarId e
+    processUnknownExpr e
   where addForallImpFInst (e : Expr) : FVarRepM Unit := do
     let bfexprs := (← getBfvars).map Expr.fvar
     match ← MetaState.runMetaM (ConstInst.ofExpr? #[] bfexprs e) with
