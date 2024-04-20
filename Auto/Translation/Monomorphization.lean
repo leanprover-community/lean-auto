@@ -673,6 +673,8 @@ namespace FVarRep
 
   -- **TODO:** Unify the approach for `general expressions` and `ConstInst`
   --   because they're inherently the same
+  -- **TODO:** It's not as simple as this. Consider
+  --  F (fun (α : Type) (a : α) (b : α → Nat → Nat) (c : Nat), b a c)
   def unknownExpr2Expr (e : Expr) : FVarRepM Expr := do
     let (_, collectFVarsState) ← MetaState.runMetaM <| e.collectFVars.run {}
     let exfvars := collectFVarsState.fvarIds
