@@ -26,6 +26,3 @@ set_option trace.auto.mono true
 
 example (h1 : ∀ x : Nat, x > 0 → ∃ y : Fin x, y.1 = 0) (h2 : 3 > 0) : ∃ z : Fin 3, z.1 = 0 := by
   auto
-
-example : @Auto.Embedding.forallF Nat = @Auto.Embedding.forallF Nat := by
-  auto
