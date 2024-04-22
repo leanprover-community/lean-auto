@@ -875,7 +875,7 @@ def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State
     let startTime ← IO.monoMsNow
     trace[auto.mono] "Monomorphization of inductive types took {(← IO.monoMsNow) - startTime}ms"
     let (inductiveVals, s) ← (fvarRepMInductAction inductiveVals).run s
-    return (s.ffvars, Reif.State.mk s.ffvars uvalids polyVal s.tyCanMap inhs inductiveVals none))
+    return (s.ffvars, Reif.State.mk uvalids polyVal s.tyCanMap inhs inductiveVals none))
   MetaState.runWithIntroducedFVars metaStateMAction k
 
 end Auto.Monomorphization
