@@ -30,7 +30,7 @@ register_option auto.mono.recordInstInst : Bool := {
 }
 
 register_option auto.mono.allowGeneralExprAbst : Bool := {
-  defValue := true
+  defValue := false
   descr := "Apart from `ConstInst`s, allow general expressions to be abstracted" ++
            " " ++ "as free variables"
 }
@@ -728,6 +728,8 @@ namespace FVarRep
       unknownExpr2Expr e
     else
       unknownExpr2FVar e
+
+  -- **TODO:** Only go into non-dependent arguments for the `.app` case
   /--
     Attempt to abstract parts of a given expression to free variables so
     that the resulting expression is in the higher-order fragment of Lean.
