@@ -52,6 +52,11 @@ register_option auto.smt.dumpHints : Bool := {
   descr := "Enable/Disable dumping cvc5 hints (experimental)"
 }
 
+register_option auto.smt.dumpHints.limitedRws : Bool := {
+  defValue := true
+  descr := "Only dump rewrites from quantifier instantiations as hints (experimental)"
+}
+
 namespace Auto
 
 open IR.SMT
@@ -104,9 +109,14 @@ def createSolver (name : SolverName) : MetaM SolverProc := do
   | .cvc4 => throwError "cvc4 is not supported"
   | .cvc5 =>
     if auto.smt.dumpHints.get (← getOptions) then
-      createAux "cvc5"
-        #[s!"--tlimit={tlim * 1000}", "--produce-models",
-          "--dump-hints", "--proof-granularity=dsl-rewrite"]
+      if auto.smt.dumpHints.limitedRws.get (← getOptions) then
+        createAux "cvc5"
+          #[s!"--tlimit={tlim * 1000}", "--produce-models",
+            "--dump-hints", "--proof-granularity=dsl-rewrite", "--hints-only-rw-insts"]
+      else
+        createAux "cvc5"
+          #[s!"--tlimit={tlim * 1000}", "--produce-models",
+            "--dump-hints", "--proof-granularity=dsl-rewrite"]
     else
       createAux "cvc5" #[s!"--tlimit={tlim * 1000}", "--produce-models"]
 where
@@ -235,8 +245,10 @@ def querySolverWithHints (query : Array IR.SMT.Command)
       | throwError "Error finding instantiations in output"
     let firstRewritesLabel :=
       "Rewrites (rule defs (if any) and their usages in quantifier-free terms):"
-    let [instantiations, stdout] := stdout.splitOn firstRewritesLabel
-      | throwError "Error finding first rewrites label"
+    let (instantiations, stdout) := -- TODO: Revert this once cvc5 output is consistent
+      match stdout.splitOn firstRewritesLabel with
+      | [instantiations, stdout] => (instantiations, stdout)
+      | _ => ("", stdout)
     let rewriteFacts := stdout.splitOn "Rewrites:"
     let some stdout := rewriteFacts.getLast?
       | throwError "Error finding rewrites"
