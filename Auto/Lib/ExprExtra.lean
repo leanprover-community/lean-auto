@@ -214,25 +214,31 @@ def Expr.numLeadingDepArgs : Expr → Nat
     0
 | _ => 0
 
-/-- Turn all `Prop` binders into `True` -/
-private partial def Expr.isMonomorphicFactAux : Expr → MetaM Expr
-| .forallE name ty body bi => do
-  let ty := if (← Meta.isProp ty) ∧ !body.hasLooseBVars then .const ``False [] else ty
-  Meta.withLocalDecl name bi ty fun x => do
-    let body := body.instantiate1 x
-    let body ← isMonomorphicFactAux body
-    Meta.mkForallFVars #[x] body
-| _ => pure (.const ``False [])
-
 /--
-  Test whether `e` is a monomorphic fact.
-  `e` is a monomorphic fact iff for all subterms `t : α` of `e`
-     where `α` is not of type `Prop`, `α` does not depend on bound
-     variables.
+  Check whether the leading `∀` quantifiers of expression `e`
+    violates the quasi-monomorphic condition
 -/
-def Expr.isMonomorphicFact (e : Expr) : MetaM Bool := do
-  let e ← Expr.isMonomorphicFactAux e
-  return (Expr.depArgs e).size == 0
+partial def Expr.leadingForallQuasiMonomorphicAux (fvars : Array FVarId) (e : Expr) : MetaM Bool :=
+  match e with
+  | .forallE name ty body bi => Meta.withLocalDecl name bi ty fun x => do
+    let Expr.fvar xid := x
+      | throwError "Expr.leadingForallQuasiMonomorphic :: Unexpected error"
+    let bodyi := body.instantiate1 x
+    if ← Meta.isProp ty then
+      if !(← Meta.isProp bodyi) then
+        return false
+      if body.hasLooseBVar 0 then
+        return false
+      return (← Expr.leadingForallQuasiMonomorphicAux fvars ty) &&
+             (← Expr.leadingForallQuasiMonomorphicAux (fvars.push xid) bodyi)
+    else
+      let fvarSet := HashSet.empty.insertMany fvars
+      if ty.hasAnyFVar fvarSet.contains then
+        return false
+      Expr.leadingForallQuasiMonomorphicAux (fvars.push xid)  bodyi
+  | _ => return true
+
+def Expr.leadingForallQuasiMonomorphic := Expr.leadingForallQuasiMonomorphicAux #[]
 
 /--
   This should only be used when we're sure that reducing `ty`
