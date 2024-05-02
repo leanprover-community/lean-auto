@@ -386,7 +386,9 @@ def LemmaInst.matchConstInst (ci : ConstInst) (li : LemmaInst) : MetaM (HashSet 
 def LemmaInst.monomorphic? (li : LemmaInst) : MetaM (Option LemmaInst) := do
   if li.params.size != 0 then
     return .none
-  let li := {li with type := ← prepReduceExpr li.type}
+  -- Do not use `prepReduceExpr` because lemmas about
+  --   recursors might be reduced to tautology
+  let li := {li with type := ← Core.betaReduce li.type}
   if !(← Expr.leadingForallQuasiMonomorphic li.type) then
     return .none
   Meta.withNewMCtxDepth do
