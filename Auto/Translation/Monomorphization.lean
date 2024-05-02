@@ -783,7 +783,7 @@ namespace FVarRep
     let .sort bodylvl := bodysort
       | throwError "replacePolyWithFVar :: Unexpected error"
     let bodyrep ← replacePolyWithFVar body'
-    let .inl bodyrep ← replacePolyWithFVar body'
+    let .inl bodyrep := bodyrep
       | return bodyrep
     -- Type of type of bound variable is `Prop`
     -- Requirement: Type of body is `Prop`, and the bound variable
