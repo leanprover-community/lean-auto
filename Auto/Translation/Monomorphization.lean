@@ -892,40 +892,24 @@ def intromono (lemmas : Array Lemma) (mvarId : MVarId) : MetaM MVarId := do
     return mvar.mvarId!)
 
 def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State → MetaM α) : MetaM α := do
-  let ignoreNonQuasiHigherOrder := auto.mono.ignoreNonQuasiHigherOrder.get (← getOptions)
-  let monoMAction : MonoM (Array (Array SimpleIndVal)) := (do
+  let (inductiveVals, monoSt) ← monoMAction.run {}
+  MetaState.runWithIntroducedFVars (metaStateMAction inductiveVals monoSt) k
+where
+  /-- Instantiating quantifiers, collecting inductive types
+    and filtering out non-quasi-monomorphic expressions -/
+  monoMAction : MonoM (Array (Array SimpleIndVal)) := do
     let startTime ← IO.monoMsNow
     initializeMonoM lemmas
     saturate
     postprocessSaturate
     trace[auto.mono] "Monomorphization of lemmas took {(← IO.monoMsNow) - startTime}ms"
-    collectMonoMutInds)
-  let (inductiveVals, monoSt) ← monoMAction.run {}
-  -- Lemma instances
-  let lis := monoSt.lisArr.concatMap id
-  let fvarRepMFactAction : FVarRep.FVarRepM (Array UMonoFact) := lis.filterMapM (fun li => do
-      let liTypeRep? ← FVarRep.replacePolyWithFVar li.type
-      match liTypeRep? with
-      | .inl liTypeRep => return .some ⟨li.proof, liTypeRep, li.deriv⟩
-      | .inr m => if ignoreNonQuasiHigherOrder then return .none else throwError m)
-  let fvarRepMInductAction (ivals : Array (Array SimpleIndVal)) : FVarRep.FVarRepM (Array (Array SimpleIndVal)) :=
-    ivals.mapM (fun svals => svals.mapM (fun ⟨name, type, ctors, projs⟩ => do
-      let (type, _) ← FVarRep.processType type
-      let ctors ← ctors.mapM (fun (val, ty) => do
-        let (ty, _) ← FVarRep.processType ty
-        let valRep? ← FVarRep.replacePolyWithFVar val
-        match valRep? with
-        | .inl valRep => return (valRep, ty)
-        -- If monomorphization fails on one constructor, then fail immediately
-        | .inr m => throwError m)
-      let projs ← projs.mapM (fun arr => arr.mapM (fun e => do
-        match ← FVarRep.replacePolyWithFVar e with
-        | .inl e => return e
-        -- If monomorphization fails on one constructor, then fail immediately
-        | .inr m => throwError m))
-      return ⟨name, type, ctors, projs⟩))
-  let metaStateMAction : MetaState.MetaStateM (Array FVarId × Reif.State) := (do
-    let (uvalids, s) ← fvarRepMFactAction.run { ciMap := monoSt.ciMap }
+    collectMonoMutInds
+  /-- Process lemmas and inductive types, collect inhabited types -/
+  metaStateMAction
+    (inductiveVals : Array (Array SimpleIndVal))
+    (monoSt : State) : MetaState.MetaStateM (Array FVarId × Reif.State) := do
+    let lis := monoSt.lisArr.concatMap id
+    let (uvalids, s) ← (fvarRepMFactAction lis).run { ciMap := monoSt.ciMap }
     for ⟨proof, ty, _⟩ in uvalids do
       trace[auto.mono.printResult] "Monomorphized :: {proof} : {ty}"
     let exlis := s.exprMap.toList.map (fun (e, id) => (id, e))
@@ -945,7 +929,29 @@ def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State
     let startTime ← IO.monoMsNow
     trace[auto.mono] "Monomorphization of inductive types took {(← IO.monoMsNow) - startTime}ms"
     let (inductiveVals, s) ← (fvarRepMInductAction inductiveVals).run s
-    return (s.ffvars, Reif.State.mk uvalids polyVal s.tyCanMap inhs inductiveVals none))
-  MetaState.runWithIntroducedFVars metaStateMAction k
+    return (s.ffvars, Reif.State.mk uvalids polyVal s.tyCanMap inhs inductiveVals none)
+  fvarRepMFactAction (lis : Array LemmaInst) : FVarRep.FVarRepM (Array UMonoFact) := lis.filterMapM (fun li => do
+    let liTypeRep? ← FVarRep.replacePolyWithFVar li.type
+    match liTypeRep? with
+    | .inl liTypeRep => return .some ⟨li.proof, liTypeRep, li.deriv⟩
+    | .inr m => if (← ignoreNonQuasiHigherOrder) then return .none else throwError m)
+  fvarRepMInductAction (ivals : Array (Array SimpleIndVal)) : FVarRep.FVarRepM (Array (Array SimpleIndVal)) :=
+    ivals.mapM (fun svals => svals.mapM (fun ⟨name, type, ctors, projs⟩ => do
+      let (type, _) ← FVarRep.processType type
+      let ctors ← ctors.mapM (fun (val, ty) => do
+        let (ty, _) ← FVarRep.processType ty
+        let valRep? ← FVarRep.replacePolyWithFVar val
+        match valRep? with
+        | .inl valRep => return (valRep, ty)
+        -- If monomorphization fails on one constructor, then fail immediately
+        | .inr m => throwError m)
+      let projs ← projs.mapM (fun arr => arr.mapM (fun e => do
+        match ← FVarRep.replacePolyWithFVar e with
+        | .inl e => return e
+        -- If monomorphization fails on one constructor, then fail immediately
+        | .inr m => throwError m))
+      return ⟨name, type, ctors, projs⟩))
+  ignoreNonQuasiHigherOrder : CoreM Bool := do
+    return auto.mono.ignoreNonQuasiHigherOrder.get (← getOptions)
 
 end Auto.Monomorphization
