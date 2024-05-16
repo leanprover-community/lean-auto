@@ -32,6 +32,18 @@ private inductive LamAtom where
   | compProj : LamTerm → LamAtom
 deriving Inhabited, Hashable, BEq
 
+private def LamAtom.toString : LamAtom → String
+| .sort n     => s!"sort {n}"
+| .term n     => s!"term {n}"
+| .etom n     => s!"etom {n}"
+| .bvOfNat n  => s!"bvOfNat {n}"
+| .bvToNat n  => s!"bvToNat {n}"
+| .compCtor t => s!"compCtor {t}"
+| .compProj t => s!"compProj {t}"
+
+instance : ToString LamAtom where
+  toString := LamAtom.toString
+
 private def lamBaseSort2SSort : LamBaseSort → SSort
 | .prop   => .app (.symb "Bool") #[]
 | .bool   => .app (.symb "Bool") #[]
@@ -342,7 +354,7 @@ where
     (ts.push arg, t)
   | t => (#[], t)
 
-private def lamMutualIndInfo2STerm (tyVal : Array (Expr × Level)) (mind : MutualIndInfo) :
+private def lamMutualIndInfo2STerm (lamVarTy : Array (Expr × LamSort)) (lamEVarTy : Array LamSort) (tyVal : Array (Expr × Level)) (mind : MutualIndInfo) :
   TransM LamAtom (IR.SMT.Command ×
     Array (String × LamSort × LamTerm) ×
     Array (String × LamSort × LamTerm)) := do
@@ -354,11 +366,15 @@ private def lamMutualIndInfo2STerm (tyVal : Array (Expr × Level)) (mind : Mutua
   for ⟨type, _, _⟩ in mind do
     let .atom sn := type
       | throwError "lamMutualIndInfo2STerm :: Inductive type {type} is not a sort atom"
+    let .some (se, _) := tyVal[sn]?
+      | throwError "lamMutualIndInfo2STerm :: Inductive type {type} is not in tyVal"
     -- Do not use `lamSortAtom2String` because we don't want to `declare-sort`
-    let _ ← h2Symb (.sort sn)
+    let _ ← h2Symb (.sort sn) se
   for ⟨type, ctors, projs⟩ in mind do
     let .atom sn := type
       | throwError "lamMutualIndInfo2STerm :: Unexpected error"
+    let .some (se, _) := tyVal[sn]?
+      | throwError "lamMutualIndInfo2STerm :: Inductive type {type} is not in tyVal"
     let mut projInfos : Array (LamSort × String) := #[]
     if let .some projs := projs then
       if ctors.length != 1 then
@@ -366,17 +382,23 @@ private def lamMutualIndInfo2STerm (tyVal : Array (Expr × Level)) (mind : Mutua
       for (s, t) in projs do
         let mut projname := ""
         match t with
-        | .atom n => projname ← h2Symb (.term n)
+        | .atom n =>
+          let .some (e, _) := lamVarTy[n]?
+            | throwError "lamMutualIndInfo2STerm :: {repr t} is not in lamVarTy"
+          projname ← h2Symb (.term n) e
         | .etom n => projname ← h2Symb (.etom n)
         | t       => projname ← h2Symb (.compProj t); compProjs := compProjs.push (projname, s, t)
         projInfos := projInfos.push (s, projname)
-    let sname ← h2Symb (.sort sn)
+    let sname ← h2Symb (.sort sn) se
     let mut cstrDecls : Array ConstrDecl := #[]
     for (s, t) in ctors do
       let mut ctorname := ""
       match t with
       -- Do not use `lamSortAtom2String` because we don't want to `declare-fun`
-      | .atom n => ctorname ← h2Symb (.term n)
+      | .atom n =>
+        let .some (e, _) := lamVarTy[n]?
+          | throwError "lamMutualIndInfo2STerm :: {repr t} is not in lamVarTy"
+        ctorname ← h2Symb (.term n) e
       -- Do not use `lamSortEtom2String` because we don't want to `declare-fun`
       | .etom n => ctorname ← h2Symb (.etom n)
       | t       => ctorname ← h2Symb (.compCtor t); compCtors := compCtors.push (ctorname, s, t)
@@ -439,7 +461,7 @@ def lamFOL2SMT
   let _ ← sortAuxDecls.mapM addCommand
   let _ ← termAuxDecls.mapM addCommand
   for mind in minds do
-    let (dsdecl, compCtors, compProjs) ← lamMutualIndInfo2STerm tyVal mind
+    let (dsdecl, compCtors, compProjs) ← lamMutualIndInfo2STerm lamVarTy lamEVarTy tyVal mind
     trace[auto.lamFOL2SMT] "MutualIndInfo translated to command {dsdecl}"
     addCommand dsdecl
     let compCtorEqns ← compCtors.mapM (compEqn lamVarTy lamEVarTy tyVal)

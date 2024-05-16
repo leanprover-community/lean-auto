@@ -452,7 +452,7 @@ section
     Note that this function is idempotent
     `nameHint` is an expression from which we can extract a name.
   -/
-  partial def h2Symb (cstr : ω) (nameHint : Option Expr := none) : TransM ω String := do
+  partial def h2Symb [ToString ω] (cstr : ω) (nameHint : Option Expr := none) : TransM ω String := do
     let l2hMap ← getL2hMap
     let h2lMap ← getH2lMap
     if let .some name := h2lMap.find? cstr then
@@ -460,7 +460,7 @@ section
     let idx ← getIdx
     let defaultName : String := s!"smti_{idx}"
     let currName ← smtNameFromHint nameHint defaultName
-    trace[auto.lamReif.printValuation] "smti_{idx} := {currName} (from expr: {nameHint})"
+    trace[auto.lamReif.printValuation] "smti_{idx} := {currName} (from expr: {nameHint} | lam: {cstr})"
     if l2hMap.contains currName then
       throwError "h2Symb :: Unexpected error"
     setL2hMap (l2hMap.insert currName cstr)
