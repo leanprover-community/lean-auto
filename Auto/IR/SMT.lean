@@ -425,17 +425,42 @@ section
     setIdx (idx + 1)
     return currName
 
+  -- TODO: make sure we don't generate SMT-LIB reserved words
+  def smtNameFromHint (nameHint : Option Expr) (default: String): TransM ω String := do
+    match nameHint with
+    | none => return default
+    | some nameHint => do
+      match nameHint with
+      | Expr.const name _ => return name.toString
+      | Expr.fvar fvarId =>
+        let lctx ← getLCtx
+        match lctx.find? fvarId with
+        | some localDecl => return localDecl.userName.toString
+        | none => return default
+      -- TODO: Is this what we want?
+      | Expr.app f args =>
+        let fname ← smtNameFromHint f default
+        let argname ← smtNameFromHint args "arg"
+        return s!"{fname}_{argname}"
+      | Expr.proj typeName idx _ => return s!"{typeName.toString}_proj_{idx}"
+      | _ =>
+        trace[auto.lamReif.printValuation] "smtNameFromHint :: Unexpected hint; saw {nameHint.ctorName} {nameHint} ({nameHint.dbgToString})"
+        return default
+
   /--
     Turn high-level construct into low-level symbol
     Note that this function is idempotent
+    `nameHint` is an expression from which we can extract a name.
   -/
-  partial def h2Symb (cstr : ω) : TransM ω String := do
+  partial def h2Symb (cstr : ω) (nameHint : Option Expr := none) : TransM ω String := do
     let l2hMap ← getL2hMap
     let h2lMap ← getH2lMap
     if let .some name := h2lMap.find? cstr then
       return name
     let idx ← getIdx
-    let currName : String := s!"smti_{idx}"
+    let defaultName : String := s!"smti_{idx}"
+    let currName ← smtNameFromHint nameHint defaultName
+    trace[auto.lamReif.printValuation] "smti_{idx} := {currName} (from expr: {nameHint})"
     if l2hMap.contains currName then
       throwError "h2Symb :: Unexpected error"
     setL2hMap (l2hMap.insert currName cstr)
