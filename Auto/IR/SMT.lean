@@ -277,6 +277,17 @@ def SMTOption.toString : SMTOption → String
 instance : ToString SMTOption where
   toString := SMTOption.toString
 
+def SMTReservedWords : HashSet String :=
+  let reserved := #[ "as", "let", "exists", "forall", "match", "par",
+    "assert", "check-sat", "check-sat-assuming",
+    "declare-const", "declare-datatype", "declare-datatypes",
+    "declare-fun", "declare-sort", "define-fun", "define-fun-rec", "define-funs-rec",
+    "define-sort", "echo", "exit", "get-assertions", "get-info",
+    "get-model", "get-option", "get-proof", "get-unsat-assumptions",
+    "get-unsat-core", "get-value", "pop", "push", "reset", "reset-assertions",
+    "set-info", "set-logic", "set-option"]
+  reserved.foldl (fun hs s => hs.insert s) {}
+
 /--
  〈sorted_var〉   ::= ( 〈symbol〉 〈sort〉 )
  〈datatype_dec〉 ::= ( 〈constructor_dec〉+ ) | ( par ( 〈symbol〉+ ) ( 〈constructor_dec〉+ ) )
@@ -379,8 +390,8 @@ section
     -- Map from symbol to high-level construct
     l2hMap   : HashMap String ω := {}
     -- State of low-level name generator
-    --   To avoid collision with keywords, we only
-    --   generate non-annotated identifiers `smti_<idx>`
+    -- To avoid collisions with other identifiers or keywords,
+    -- we append identifiers with an unique index, e.g. `forall_<idx>`
     idx      : Nat              := 0
     -- List of commands
     commands : Array Command    := #[]
@@ -415,17 +426,25 @@ section
   def hIn (e : ω) : TransM ω Bool := do
     return (← getH2lMap).contains e
 
-  /-- Used for e.g. bound variables -/
-  partial def disposableName : TransM ω String := do
+  def binderNamePrefixFromSort (sort : SSort) : String :=
+    match sort with
+    | SSort.bvar _ => "bvar"
+    | SSort.app (SIdent.symb s) _ => s.take 1
+    | SSort.app (SIdent.indexed s _) _ => s.take 1
+
+  /-- Used for e.g. bound variables. -/
+  partial def disposableName (sortHint : SSort): TransM ω String := do
     let l2hMap ← getL2hMap
     let idx ← getIdx
-    let currName := s!"smtd_{idx}"
+    let mut currName := s!"{binderNamePrefixFromSort sortHint}{idx}"
+    -- Try to avoid collisions with other identifiers
     if l2hMap.contains currName then
-      throwError "disposableName :: Unexpected error"
+      currName := s!"{currName}_{idx}"
+      if l2hMap.contains currName then
+        throwError "disposableName :: Unexpected error - binder disposable name already exists!"
     setIdx (idx + 1)
     return currName
 
-  -- TODO: make sure we don't generate SMT-LIB reserved words
   def smtNameFromHint (nameHint : Option Expr) (default: String): TransM ω String := do
     match nameHint with
     | none => return default
@@ -437,7 +456,8 @@ section
         match lctx.find? fvarId with
         | some localDecl => return localDecl.userName.toString
         | none => return default
-      -- TODO: Is this what we want?
+      -- We might have different applications of the same polymorphic function;
+      -- to disambiguate, we use the argument names, not just the function names.
       | Expr.app f args =>
         let fname ← smtNameFromHint f default
         let argname ← smtNameFromHint args "arg"
@@ -459,10 +479,13 @@ section
       return name
     let idx ← getIdx
     let defaultName : String := s!"smti_{idx}"
-    let currName ← smtNameFromHint nameHint defaultName
+    let mut currName ← smtNameFromHint nameHint defaultName
     trace[auto.lamReif.printValuation] "smti_{idx} := {currName} (from expr: {nameHint} | lam: {cstr})"
-    if l2hMap.contains currName then
-      throwError "h2Symb :: Unexpected error"
+    -- NOTE: In the case of duplicate names or SMT reserved words, we append the index to the name
+    if l2hMap.contains currName || SMTReservedWords.contains currName then
+      currName := s!"{currName}_{idx}"
+      if l2hMap.contains currName then
+        throwError "h2Symb :: Unexpected error - identifier {currName} already exists!"
     setL2hMap (l2hMap.insert currName cstr)
     setH2lMap (h2lMap.insert cstr currName)
     setIdx (idx + 1)

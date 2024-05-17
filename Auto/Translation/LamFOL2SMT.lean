@@ -82,7 +82,7 @@ private def addNatConstraint? (tyVal : Array (Expr × Level)) (name : String) (s
   let resTy := s.getResTy
   if !(resTy == .base .nat) then
     return
-  let args ← (Array.mk s.getArgTys).mapM (fun s => do return (s, ← IR.SMT.disposableName))
+  let args ← (Array.mk s.getArgTys).mapM (fun s => do return (s, ← IR.SMT.disposableName (← lamSort2SSortAux tyVal s)))
   let fnApp := STerm.qStrApp name (args.zipWithIndex.map (fun (_, n) => .bvar (args.size - 1 - n)))
   let mut fnConstr := STerm.qStrApp ">=" #[fnApp, .sConst (.num 0)]
   for (argTy, argName) in args.reverse do
@@ -309,7 +309,7 @@ def lamQuantified2STerm (tyVal : Array (Expr × Level)) (forall? : Bool) (s : La
   if s == .base .empty then
     return .qStrApp "true" #[]
   let s' ← lamSort2SSortAux tyVal s
-  let dname ← disposableName
+  let dname ← disposableName s'
   let mut body' ← body
   if s == .base .nat then
     let connective := if forall? then "=>" else "and"
