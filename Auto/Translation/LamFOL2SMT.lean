@@ -97,14 +97,14 @@ private def int2STerm : Int → STerm
 
 private def lamBvOfNat2String (tyVal : Array (Expr × Level)) (n : Nat) : TransM LamAtom String := do
   if !(← hIn (.bvOfNat n)) then
-    let name ← h2Symb (.bvOfNat n)
+    let name ← h2Symb (.bvOfNat n) (Expr.const ``BitVec.ofNat [])
     let (argSorts, resSort) ← lamSort2SSort tyVal (.func (.base .int) (.base (.bv n)))
     addCommand (.declFun name ⟨argSorts⟩ resSort)
   return ← h2Symb (.bvOfNat n)
 
 private def lamBvToNat2String (tyVal : Array (Expr × Level)) (n : Nat) : TransM LamAtom String := do
   if !(← hIn (.bvToNat n)) then
-    let name ← h2Symb (.bvToNat n)
+    let name ← h2Symb (.bvToNat n) (Expr.const ``BitVec.toNat [])
     let (argSorts, resSort) ← lamSort2SSort tyVal (.func (.base (.bv n)) (.base .int))
     addCommand (.declFun name ⟨argSorts⟩ resSort)
   return ← h2Symb (.bvToNat n)

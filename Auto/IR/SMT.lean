@@ -2,6 +2,9 @@ import Lean
 import Auto.Lib.MonadUtils
 open Lean
 
+initialize
+  registerTraceClass `auto.smt.h2symb
+
 -- smt-lib 2
 
 namespace Auto
@@ -364,7 +367,7 @@ def Command.toString : Command → String
 | .declDtype name ddecl                =>
   s!"(declare-datatype {SIdent.symb name} {ddecl.toString})"
 | .declDtypes infos               =>
-  let sort_decs := String.intercalate " " (infos.data.map (fun (name, args, _) => s!"({name} {args})"))
+  let sort_decs := String.intercalate " " (infos.data.map (fun (name, args, _) => s!"({SIdent.symb name} {args})"))
   let datatype_decs := String.intercalate " " (infos.data.map (fun (_, _, ddecl) => ddecl.toString))
   s!"(declare-datatypes ({sort_decs}) ({datatype_decs}))"
 | .exit                                => "(exit)"
@@ -445,27 +448,10 @@ section
     setIdx (idx + 1)
     return currName
 
-  def smtNameFromHint (nameHint : Option Expr) (default: String): TransM ω String := do
-    match nameHint with
-    | none => return default
-    | some nameHint => do
-      match nameHint with
-      | Expr.const name _ => return name.toString
-      | Expr.fvar fvarId =>
-        let lctx ← getLCtx
-        match lctx.find? fvarId with
-        | some localDecl => return localDecl.userName.toString
-        | none => return default
-      -- We might have different applications of the same polymorphic function;
-      -- to disambiguate, we use the argument names, not just the function names.
-      | Expr.app f args =>
-        let fname ← smtNameFromHint f default
-        let argname ← smtNameFromHint args "arg"
-        return s!"{fname}_{argname}"
-      | Expr.proj typeName idx _ => return s!"{typeName.toString}_proj_{idx}"
-      | _ =>
-        trace[auto.lamReif.printValuation] "smtNameFromHint :: Unexpected hint; saw {nameHint.ctorName} {nameHint} ({nameHint.dbgToString})"
-        return default
+  def smtNameFromExpr (e : Expr) : TransM ω String := do
+    let ppSyntax := (← PrettyPrinter.delab e).raw
+    let ppStr := toString (← PrettyPrinter.formatTerm ppSyntax)
+    return ppStr.map (fun c => if c.isAlphanum then c else '_')
 
   /--
     Turn high-level construct into low-level symbol
@@ -478,14 +464,13 @@ section
     if let .some name := h2lMap.find? cstr then
       return name
     let idx ← getIdx
-    let defaultName : String := s!"smti_{idx}"
-    let mut currName ← smtNameFromHint nameHint defaultName
-    trace[auto.lamReif.printValuation] "smti_{idx} := {currName} (from expr: {nameHint} | lam: {cstr})"
+    let mut currName := (← nameHint.mapM smtNameFromExpr).getD "smti"
     -- NOTE: In the case of duplicate names or SMT reserved words, we append the index to the name
     if l2hMap.contains currName || SMTReservedWords.contains currName then
       currName := s!"{currName}_{idx}"
       if l2hMap.contains currName then
         throwError "h2Symb :: Unexpected error - identifier {currName} already exists!"
+    trace[auto.smt.h2symb] "{currName} From LamAtom {cstr})"
     setL2hMap (l2hMap.insert currName cstr)
     setH2lMap (h2lMap.insert cstr currName)
     setIdx (idx + 1)
