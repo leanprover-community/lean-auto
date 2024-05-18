@@ -2,6 +2,9 @@ import Lean
 import Auto.Lib.MonadUtils
 open Lean
 
+initialize
+  registerTraceClass `auto.smt.h2symb
+
 -- smt-lib 2
 
 namespace Auto
@@ -277,6 +280,20 @@ def SMTOption.toString : SMTOption → String
 instance : ToString SMTOption where
   toString := SMTOption.toString
 
+def SMTReservedWords : HashSet String :=
+  let reserved := #[
+    "_", "!",
+    "as", "let", "exists", "forall", "match", "par",
+    "assert", "check-sat", "check-sat-assuming",
+    "declare-const", "declare-datatype", "declare-datatypes",
+    "declare-fun", "declare-sort", "define-fun", "define-fun-rec", "define-funs-rec",
+    "define-sort", "echo", "exit", "get-assertions", "get-info",
+    "get-model", "get-option", "get-proof", "get-unsat-assumptions",
+    "get-unsat-core", "get-value", "pop", "push", "reset", "reset-assertions",
+    "set-info", "set-logic", "set-option"
+  ]
+  reserved.foldl (fun hs s => hs.insert s) {}
+
 /--
  〈sorted_var〉   ::= ( 〈symbol〉 〈sort〉 )
  〈datatype_dec〉 ::= ( 〈constructor_dec〉+ ) | ( par ( 〈symbol〉+ ) ( 〈constructor_dec〉+ ) )
@@ -353,7 +370,7 @@ def Command.toString : Command → String
 | .declDtype name ddecl                =>
   s!"(declare-datatype {SIdent.symb name} {ddecl.toString})"
 | .declDtypes infos               =>
-  let sort_decs := String.intercalate " " (infos.data.map (fun (name, args, _) => s!"({name} {args})"))
+  let sort_decs := String.intercalate " " (infos.data.map (fun (name, args, _) => s!"({SIdent.symb name} {args})"))
   let datatype_decs := String.intercalate " " (infos.data.map (fun (_, _, ddecl) => ddecl.toString))
   s!"(declare-datatypes ({sort_decs}) ({datatype_decs}))"
 | .exit                                => "(exit)"
@@ -379,8 +396,8 @@ section
     -- Map from symbol to high-level construct
     l2hMap   : HashMap String ω := {}
     -- State of low-level name generator
-    --   To avoid collision with keywords, we only
-    --   generate non-annotated identifiers `smti_<idx>`
+    -- To avoid collisions with other identifiers or keywords,
+    -- we append identifiers with an unique index, e.g. `forall_<idx>`
     idx      : Nat              := 0
     -- List of commands
     commands : Array Command    := #[]
@@ -415,29 +432,48 @@ section
   def hIn (e : ω) : TransM ω Bool := do
     return (← getH2lMap).contains e
 
-  /-- Used for e.g. bound variables -/
-  partial def disposableName : TransM ω String := do
+  def binderNamePrefixFromSort (sort : SSort) : String :=
+    match sort with
+    | SSort.bvar _ => "bvar"
+    | SSort.app (SIdent.symb s) _ => s.take 1
+    | SSort.app (SIdent.indexed s _) _ => s.take 1
+
+  /-- Used for e.g. bound variables. -/
+  partial def disposableName (sortHint : SSort): TransM ω String := do
     let l2hMap ← getL2hMap
     let idx ← getIdx
-    let currName := s!"smtd_{idx}"
+    let mut currName := s!"{binderNamePrefixFromSort sortHint}{idx}"
+    -- Try to avoid collisions with other identifiers
     if l2hMap.contains currName then
-      throwError "disposableName :: Unexpected error"
+      currName := s!"{currName}_{idx}"
+      if l2hMap.contains currName then
+        throwError "disposableName :: Unexpected error - binder disposable name already exists!"
     setIdx (idx + 1)
     return currName
+
+  def smtNameFromExpr (e : Expr) : TransM ω String := do
+    let ppSyntax := (← PrettyPrinter.delab e).raw
+    let ppStr := toString (← PrettyPrinter.formatTerm ppSyntax)
+    return ppStr.map (fun c => if c.isAlphanum then c else '_')
 
   /--
     Turn high-level construct into low-level symbol
     Note that this function is idempotent
+    `nameHint` is an expression from which we can extract a name.
   -/
-  partial def h2Symb (cstr : ω) : TransM ω String := do
+  partial def h2Symb [ToString ω] (cstr : ω) (nameHint : Option Expr := none) : TransM ω String := do
     let l2hMap ← getL2hMap
     let h2lMap ← getH2lMap
     if let .some name := h2lMap.find? cstr then
       return name
     let idx ← getIdx
-    let currName : String := s!"smti_{idx}"
-    if l2hMap.contains currName then
-      throwError "h2Symb :: Unexpected error"
+    let mut currName := (← nameHint.mapM smtNameFromExpr).getD "smti"
+    -- NOTE: In the case of duplicate names or SMT reserved words, we append the index to the name
+    if l2hMap.contains currName || SMTReservedWords.contains currName then
+      currName := s!"{currName}_{idx}"
+      if l2hMap.contains currName then
+        throwError "h2Symb :: Unexpected error - identifier {currName} already exists!"
+    trace[auto.smt.h2symb] "{currName} From LamAtom {cstr})"
     setL2hMap (l2hMap.insert currName cstr)
     setH2lMap (h2lMap.insert cstr currName)
     setIdx (idx + 1)
