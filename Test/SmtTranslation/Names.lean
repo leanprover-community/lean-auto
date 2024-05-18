@@ -82,4 +82,3 @@ theorem extracted_paxos_goal {node : Type} [inst : DecidableEq node] {value : Ty
       ¬TotalOrder.le r3 r1 = true ∧ st'_one_b_max_vote n r3 rmax v = true ∧ ¬st'_vote n r1 v1 = true := by
 
       auto [hnext, hinv, h]
-      sorry

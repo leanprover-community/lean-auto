@@ -284,18 +284,15 @@ def queryTPTP (exportFacts : Array REntry) : LamReif.ReifM (Array Embedding.Lam.
 
 open Embedding.Lam in
 def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : LamReif.ReifM (Option Expr) := do
-  -- GEORGE: do we need to pass more of `LamReif:State` to `lamFOL2SMT`?
-  let lamVarTy ← LamReif.getVarVal
-  trace[auto.lamReif.printValuation] "lamVarTy: {lamVarTy}"
+  let lamVarTy := (← LamReif.getVarVal).map Prod.snd
   let lamEVarTy ← LamReif.getLamEVarTy
-  trace[auto.lamReif.printValuation] "lamEVarTy: {lamEVarTy}"
-  let tyVal ← LamReif.getTyVal
-  trace[auto.lamReif.printValuation] "tyVal: {tyVal}"
   let exportLamTerms ← exportFacts.mapM (fun re => do
     match re with
     | .valid [] t => return t
     | _ => throwError "runAuto :: Unexpected error")
-  let commands ← (lamFOL2SMT lamVarTy lamEVarTy tyVal exportLamTerms exportInds).run'
+  let sni : SMTNamingInfo :=
+    {tyVal := (← LamReif.getTyVal), varVal := (← LamReif.getVarVal)}
+  let commands ← (lamFOL2SMT sni lamVarTy lamEVarTy exportLamTerms exportInds).run'
   for cmd in commands do
     trace[auto.smt.printCommands] "{cmd}"
   if (auto.smt.save.get (← getOptions)) then

@@ -92,6 +92,7 @@ section Recursive
 
   end
 
+  -- **Nat** in inductive datatype constructors not properly treated
   set_option trace.auto.lamReif.printResult true
   example (x : tree) : (∃ (y : treelist), x = .node y) ∨ (∃ y, x = .leaf y) := by
     auto

@@ -280,20 +280,6 @@ def SMTOption.toString : SMTOption → String
 instance : ToString SMTOption where
   toString := SMTOption.toString
 
-def SMTReservedWords : HashSet String :=
-  let reserved := #[
-    "_", "!",
-    "as", "let", "exists", "forall", "match", "par",
-    "assert", "check-sat", "check-sat-assuming",
-    "declare-const", "declare-datatype", "declare-datatypes",
-    "declare-fun", "declare-sort", "define-fun", "define-fun-rec", "define-funs-rec",
-    "define-sort", "echo", "exit", "get-assertions", "get-info",
-    "get-model", "get-option", "get-proof", "get-unsat-assumptions",
-    "get-unsat-core", "get-value", "pop", "push", "reset", "reset-assertions",
-    "set-info", "set-logic", "set-option"
-  ]
-  reserved.foldl (fun hs s => hs.insert s) {}
-
 /--
  〈sorted_var〉   ::= ( 〈symbol〉 〈sort〉 )
  〈datatype_dec〉 ::= ( 〈constructor_dec〉+ ) | ( par ( 〈symbol〉+ ) ( 〈constructor_dec〉+ ) )
@@ -391,16 +377,26 @@ section
   -/
   structure State where
     -- Map from high-level construct to symbol
-    h2lMap   : HashMap ω String := {}
+    h2lMap    : HashMap ω String   := {}
     -- Inverse of `h2lMap`
     -- Map from symbol to high-level construct
-    l2hMap   : HashMap String ω := {}
-    -- State of low-level name generator
-    -- To avoid collisions with other identifiers or keywords,
-    -- we append identifiers with an unique index, e.g. `forall_<idx>`
-    idx      : Nat              := 0
+    l2hMap    : HashMap String ω   := {}
+    -- We allow two types of names
+    -- · `"_" ++ s`,
+    -- · `"_" ++ s ++ "_" ++ <num>`
+    -- Where `s` is a string which does not end with a number and
+    --   does not contain `|` and `\` (for SMT-LIB2)
+    -- Each time we want to create a name, we begin by
+    --   suggesting a name `n`. We first preprocess the name
+    --   so that the resulting name `n'` begins with `_`, is
+    --   not `_`, and does not end with a number. Then, we finalize
+    --   the name by avoiding collision: If `n'` hasn't
+    --   been used, we return `n'` as the final name. If `n'` has
+    --   been used for `k` times (`k > 0`), return `n' ++ s!"_{k - 1}"`.
+    -- `usedNames` records the `k - 1` for each `n'`
+    usedNames : HashMap String Nat := {}
     -- List of commands
-    commands : Array Command    := #[]
+    commands  : Array Command      := #[]
 
   abbrev TransM := StateRefT (State ω) MetaM
 
@@ -414,7 +410,7 @@ section
   instance : Inhabited (TransM ω α) where
     default := fun _ => throw default
 
-  variable {ω : Type} [BEq ω] [Hashable ω]
+  variable {ω : Type} [BEq ω] [Hashable ω] [ToString ω]
 
   @[inline] def TransM.run (x : TransM ω α) (s : State ω := {}) : MetaM (α × State ω) :=
     StateRefT'.run x s
@@ -432,52 +428,40 @@ section
   def hIn (e : ω) : TransM ω Bool := do
     return (← getH2lMap).contains e
 
-  def binderNamePrefixFromSort (sort : SSort) : String :=
-    match sort with
-    | SSort.bvar _ => "bvar"
-    | SSort.app (SIdent.symb s) _ => s.take 1
-    | SSort.app (SIdent.indexed s _) _ => s.take 1
+  /- Note that this function will add the processed name to `usedNames` -/
+  def processSuggestedName (nameSuggestion : String) : TransM ω String := do
+    let mut preName := nameSuggestion.map (fun c => if c.isAlphanum then c else '_')
+    if !preName.any (fun c => c.isAlphanum) then
+      preName := "a_" ++ preName
+    if preName.back.isDigit then
+      preName := preName ++ "_"
+    if let .some idx := (← getUsedNames).find? preName then
+      -- Used
+      setUsedNames ((← getUsedNames).insert preName (idx + 1))
+      return "_" ++ preName ++ s!"_{idx}"
+    else
+      -- Unused
+      setUsedNames ((← getUsedNames).insert preName 0)
+      return "_" ++ preName
 
-  /-- Used for e.g. bound variables. -/
-  partial def disposableName (sortHint : SSort): TransM ω String := do
-    let l2hMap ← getL2hMap
-    let idx ← getIdx
-    let mut currName := s!"{binderNamePrefixFromSort sortHint}{idx}"
-    -- Try to avoid collisions with other identifiers
-    if l2hMap.contains currName then
-      currName := s!"{currName}_{idx}"
-      if l2hMap.contains currName then
-        throwError "disposableName :: Unexpected error - binder disposable name already exists!"
-    setIdx (idx + 1)
-    return currName
-
-  def smtNameFromExpr (e : Expr) : TransM ω String := do
-    let ppSyntax := (← PrettyPrinter.delab e).raw
-    let ppStr := toString (← PrettyPrinter.formatTerm ppSyntax)
-    return ppStr.map (fun c => if c.isAlphanum then c else '_')
+  /- Generate names that does not correspond to high-level construct -/
+  partial def disposableName (nameSuggestion : String) : TransM ω String := processSuggestedName nameSuggestion
 
   /--
     Turn high-level construct into low-level symbol
     Note that this function is idempotent
-    `nameHint` is an expression from which we can extract a name.
   -/
-  partial def h2Symb [ToString ω] (cstr : ω) (nameHint : Option Expr := none) : TransM ω String := do
+  partial def h2Symb (cstr : ω) (nameSuggestion : Option String) : TransM ω String := do
     let l2hMap ← getL2hMap
     let h2lMap ← getH2lMap
     if let .some name := h2lMap.find? cstr then
       return name
-    let idx ← getIdx
-    let mut currName := (← nameHint.mapM smtNameFromExpr).getD "smti"
-    -- NOTE: In the case of duplicate names or SMT reserved words, we append the index to the name
-    if l2hMap.contains currName || SMTReservedWords.contains currName then
-      currName := s!"{currName}_{idx}"
-      if l2hMap.contains currName then
-        throwError "h2Symb :: Unexpected error - identifier {currName} already exists!"
-    trace[auto.smt.h2symb] "{currName} From LamAtom {cstr})"
-    setL2hMap (l2hMap.insert currName cstr)
-    setH2lMap (h2lMap.insert cstr currName)
-    setIdx (idx + 1)
-    return currName
+    let .some nameSuggestion := nameSuggestion
+      | throwError "IR.SMT.h2Symb :: Fresh high-level constraint {cstr} without name suggestion"
+    let name ← processSuggestedName nameSuggestion
+    setL2hMap (l2hMap.insert name cstr)
+    setH2lMap (h2lMap.insert cstr name)
+    return name
 
   def addCommand (c : Command) : TransM ω Unit := do
     let commands ← getCommands
