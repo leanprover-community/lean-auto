@@ -281,14 +281,17 @@ instance : ToString SMTOption where
   toString := SMTOption.toString
 
 def SMTReservedWords : HashSet String :=
-  let reserved := #[ "as", "let", "exists", "forall", "match", "par",
+  let reserved := #[
+    "_", "!",
+    "as", "let", "exists", "forall", "match", "par",
     "assert", "check-sat", "check-sat-assuming",
     "declare-const", "declare-datatype", "declare-datatypes",
     "declare-fun", "declare-sort", "define-fun", "define-fun-rec", "define-funs-rec",
     "define-sort", "echo", "exit", "get-assertions", "get-info",
     "get-model", "get-option", "get-proof", "get-unsat-assumptions",
     "get-unsat-core", "get-value", "pop", "push", "reset", "reset-assertions",
-    "set-info", "set-logic", "set-option"]
+    "set-info", "set-logic", "set-option"
+  ]
   reserved.foldl (fun hs s => hs.insert s) {}
 
 /--

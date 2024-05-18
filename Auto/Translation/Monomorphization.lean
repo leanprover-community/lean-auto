@@ -912,9 +912,6 @@ where
     let (uvalids, s) ← (fvarRepMFactAction lis).run { ciMap := monoSt.ciMap }
     for ⟨proof, ty, _⟩ in uvalids do
       trace[auto.mono.printResult] "Monomorphized :: {proof} : {ty}"
-    let exlis := s.exprMap.toList.map (fun (e, id) => (id, e))
-    let cilis ← s.ciIdMap.toList.mapM (fun (ci, id) => do return (id, ← MetaState.runMetaM ci.toExpr))
-    let polyVal := HashMap.ofList (exlis ++ cilis)
     let tyCans := s.tyCanMap.toArray.map Prod.snd
     -- Inhabited types
     let startTime ← IO.monoMsNow
@@ -929,6 +926,9 @@ where
     let startTime ← IO.monoMsNow
     trace[auto.mono] "Monomorphization of inductive types took {(← IO.monoMsNow) - startTime}ms"
     let (inductiveVals, s) ← (fvarRepMInductAction inductiveVals).run s
+    let exlis := s.exprMap.toList.map (fun (e, id) => (id, e))
+    let cilis ← s.ciIdMap.toList.mapM (fun (ci, id) => do return (id, ← MetaState.runMetaM ci.toExpr))
+    let polyVal := HashMap.ofList (exlis ++ cilis)
     return (s.ffvars, Reif.State.mk uvalids polyVal s.tyCanMap inhs inductiveVals none)
   fvarRepMFactAction (lis : Array LemmaInst) : FVarRep.FVarRepM (Array UMonoFact) := lis.filterMapM (fun li => do
     let liTypeRep? ← FVarRep.replacePolyWithFVar li.type
@@ -948,7 +948,7 @@ where
       let projs ← projs.mapM (fun arr => arr.mapM (fun e => do
         match ← FVarRep.replacePolyWithFVar e with
         | .inl e => return e
-        -- If monomorphization fails on one constructor, then fail immediately
+        -- If monomorphization fails on one projection, then fail immediately
         | .inr m => throwError m))
       return ⟨name, type, ctors, projs⟩))
   ignoreNonQuasiHigherOrder : CoreM Bool := do

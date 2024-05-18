@@ -32,7 +32,7 @@ abbrev ReifM := StateT State MetaM
 
 /--
   Given an expression `e`, if it's a `fvar` and is in `polyVal`,
-    return its value recorded in `polyVal`. Otherwise return `e`
+    return its value recorded in `exprFVarVal`. Otherwise return `e`
 -/
 @[inline] def resolveVal (e : Expr) : ReifM Expr :=
   match e with
