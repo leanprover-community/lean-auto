@@ -111,11 +111,11 @@ def createSolver (name : SolverName) : MetaM SolverProc := do
     if auto.smt.dumpHints.get (← getOptions) then
       if auto.smt.dumpHints.limitedRws.get (← getOptions) then
         createAux "cvc5"
-          #[s!"--tlimit={tlim * 1000}", "--produce-models",
+          #[s!"--tlimit={tlim * 1000}", "--produce-models", "--enum-inst",
             "--dump-hints", "--proof-granularity=dsl-rewrite", "--hints-only-rw-insts"]
       else
         createAux "cvc5"
-          #[s!"--tlimit={tlim * 1000}", "--produce-models",
+          #[s!"--tlimit={tlim * 1000}", "--produce-models", "--enum-inst",
             "--dump-hints", "--proof-granularity=dsl-rewrite"]
     else
       createAux "cvc5" #[s!"--tlimit={tlim * 1000}", "--produce-models"]
