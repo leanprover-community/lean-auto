@@ -31,6 +31,7 @@ __Auto Issues:__
 * Benchmarks:
   * GRUNGE: https://arxiv.org/abs/1903.02539
   * Seventeen benchmark: https://matryoshka-project.github.io/pubs/seventeen.pdf
+* Performance: ``collectLamTermAtoms`` have quadratic worst-case performance
 * Fix: Proof parsing too slow
 * Fix: ``SMTNamingInfo`` suggest name for ``compCtor`` and ``compProj``
 
