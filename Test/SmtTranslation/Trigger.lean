@@ -4,7 +4,7 @@ import Auto.Embedding.LamBase
 set_option auto.smt.trust true
 set_option trace.auto.smt.printCommands true
 set_option trace.auto.smt.result true
-set_option trace.auto.smt.unsatCore true
+set_option trace.auto.smt.unsatCore.smtTerms true
 -- set_option auto.smt.save true
 -- set_option auto.smt.savepath "output.smt2"
 

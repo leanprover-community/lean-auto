@@ -9,7 +9,7 @@ set_option trace.auto.lamReif.printResult true
 
 set_option trace.auto.smt.printCommands true
 set_option trace.auto.smt.result true
-set_option trace.auto.smt.unsatCore true
+set_option trace.auto.smt.unsatCore.smtTerms true
 set_option trace.auto.smt.model true
 
 example : forall (n : Nat), n = n := by

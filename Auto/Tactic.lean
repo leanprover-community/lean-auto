@@ -30,7 +30,7 @@ inductive Instruction where
   | none
   | useSorry
 
-def parseInstr : TSyntax ``Auto.autoinstr → TacticM Instruction
+def parseInstr : TSyntax ``autoinstr → TacticM Instruction
 | `(autoinstr|) => return .none
 | `(autoinstr|👍) => throwError "Your flattery is appreciated 😎"
 | `(autoinstr|👎) => do
@@ -290,20 +290,27 @@ def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : L
     match re with
     | .valid [] t => return t
     | _ => throwError "runAuto :: Unexpected error")
-  let sni : SMTNamingInfo :=
-    {tyVal := (← LamReif.getTyVal), varVal := (← LamReif.getVarVal)}
-  let commands ← (lamFOL2SMT sni lamVarTy lamEVarTy exportLamTerms exportInds).run'
+  let sni : SMT.SMTNamingInfo :=
+    {tyVal := (← LamReif.getTyVal), varVal := (← LamReif.getVarVal), lamEVarTy := (← LamReif.getLamEVarTy)}
+  let (commands, validFacts) ← (lamFOL2SMT sni lamVarTy lamEVarTy exportLamTerms exportInds).run'
   for cmd in commands do
     trace[auto.smt.printCommands] "{cmd}"
   if (auto.smt.save.get (← getOptions)) then
     Solver.SMT.saveQuery commands
   let .some (unsatCore, proof) ← Solver.SMT.querySolver commands
     | return .none
-  for id in ← Solver.SMT.validFactOfUnsatCore unsatCore do
+  let unsatCoreIds ← Solver.SMT.validFactOfUnsatCore unsatCore
+  -- **Print STerms corresponding to `validFacts`**
+  for id in unsatCoreIds do
+    let .some sterm := validFacts[id]?
+      | throwError "runAuto :: Index {id} of `validFacts` out of range"
+    trace[auto.smt.unsatCore.smtTerms] "|valid_fact_{id}| : {sterm}"
+  -- **Print derivation of unsatCore**
+  for id in unsatCoreIds do
     let .some t := exportLamTerms[id]?
       | throwError "runAuto :: Index {id} of `exportLamTerm` out of range"
     let vderiv ← LamReif.collectDerivFor (.valid [] t)
-    trace[auto.smt.unsatCore] "valid_fact_{id}: {vderiv}"
+    trace[auto.smt.unsatCore.deriv] "|valid_fact_{id}| : {vderiv}"
   if auto.smt.rconsProof.get (← getOptions) then
     let (_, _) ← Solver.SMT.getSexp proof
     logWarning "Proof reconstruction is not implemented."

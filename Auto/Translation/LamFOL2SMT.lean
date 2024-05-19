@@ -18,6 +18,8 @@ open Embedding.Lam
 -- Open `SMT`
 open IR.SMT
 
+namespace SMT
+
 /-- High-level construct -/
 private inductive LamAtomic where
   /- Sort atom -/
@@ -50,6 +52,7 @@ instance : ToString LamAtomic where
 structure SMTNamingInfo where
   tyVal     : Array (Expr × Level)
   varVal    : Array (Expr × LamSort)
+  lamEVarTy : Array LamSort
 
 def SMTNamingInfo.exprToSuggestion (e : Expr) : MetaM String := do
     let ppSyntax := (← PrettyPrinter.delab e).raw
@@ -489,6 +492,52 @@ def termAuxDecls : Array IR.SMT.Command :=
       (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "y" #[], .sConst (.num 0)], .qStrApp "x" #[], .qStrApp "mod" #[.qStrApp "x" #[], .qStrApp "y" #[]]])
    ]
 
+def printValuation (sni : SMTNamingInfo) : TransM LamAtomic Unit := do
+  let h2lMap ← getH2lMap
+  let tyValMap := HashMap.ofList (sni.tyVal.zipWithIndex.map (fun ((e, _), n) => (n, e))).data
+  let varValMap := HashMap.ofList (sni.varVal.zipWithIndex.map (fun ((e, _), n) => (n, e))).data
+  let etomsWithName := h2lMap.toArray.filterMap (fun (atomic, name) =>
+    match atomic with | .etom n => .some (n, name) | _ => .none)
+  let declInfos ← etomsWithName.mapM (fun (n, name) => do
+    let .some s := sni.lamEVarTy[n]?
+      | throwError "SMT.printValuation :: Unknown etom {n}"
+    let type ← Lam2D.interpLamSortAsUnlifted tyValMap s
+    return ((name : Name), .default, fun _ => pure type))
+  Meta.withLocalDecls declInfos (fun etomFVars => do
+    let etomValMap := HashMap.ofList ((etomsWithName.zip etomFVars).map (fun ((n, _), e) => (n, e))).data
+    for (atomic, name) in h2lMap.toArray do
+      printAtomic tyValMap varValMap etomValMap atomic name)
+where
+  printAtomic tyValMap varValMap etomValMap atomic name :=
+    match atomic with
+    | .sort n => do
+      let .some (e, _) := sni.tyVal[n]?
+        | throwError "SMT.printValuation :: Unknown sort atom {n}"
+      trace[auto.smt.printValuation] "|{name}| : {e}"
+    | .term n => do
+      let .some (e, _) := sni.varVal[n]?
+        | throwError "SMT.printValuation :: Unknown term atom {n}"
+      trace[auto.smt.printValuation] "|{name}| : {e}"
+    | .etom n => do
+      let .some e := etomValMap[n]?
+        | throwError "SMT.printValuation :: Unknown etom {n}"
+      trace[auto.smt.printValuation] "|{name}| : {e}"
+    | .bvOfNat n => do
+      let e := Expr.app (.const ``BitVec.ofNat []) (.lit (.natVal n))
+      trace[auto.smt.printValuation] "|{name}| : {e}"
+    | .bvToNat n => do
+      let e := Expr.app (.const ``BitVec.toNat []) (.lit (.natVal n))
+      trace[auto.smt.printValuation] "|{name}| : {e}"
+    | .compCtor t => do
+      let e ← Lam2D.interpLamTermAsUnlifted tyValMap varValMap etomValMap 0 t
+      trace[auto.smt.printValuation] "|{name}| : {e}"
+    | .compProj t => do
+      let e ← Lam2D.interpLamTermAsUnlifted tyValMap varValMap etomValMap 0 t
+      trace[auto.smt.printValuation] "|{name}| : {e}"
+
+end SMT
+
+open SMT in
 /--
   `facts` should not contain import versions of `eq, ∀` or `∃`
   `valid_fact_{i}` corresponds to the `i`-th entry in `facts`
@@ -496,7 +545,7 @@ def termAuxDecls : Array IR.SMT.Command :=
 def lamFOL2SMT
   (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Array LamSort)
   (facts : Array LamTerm) (minds : Array MutualIndInfo) :
-  TransM LamAtomic (Array IR.SMT.Command) := do
+  TransM LamAtomic (Array IR.SMT.Command × Array STerm) := do
   let _ ← sortAuxDecls.mapM addCommand
   let _ ← termAuxDecls.mapM addCommand
   for mind in minds do
@@ -507,10 +556,14 @@ def lamFOL2SMT
     let _ ← compCtorEqns.mapM addCommand
     let compProjEqns ← compProjs.mapM (compEqn sni lamVarTy lamEVarTy)
     let _ ← compProjEqns.mapM addCommand
+  let mut validFacts := #[]
   for (t, idx) in facts.zipWithIndex do
     let sterm ← lamTerm2STerm sni lamVarTy lamEVarTy t
+    validFacts := validFacts.push sterm
     trace[auto.lamFOL2SMT] "λ term {repr t} translated to SMT term {sterm}"
     addCommand (.assert (.attr sterm #[.symb "named" s!"valid_fact_{idx}"]))
-  getCommands
+  printValuation sni
+  let commands ← getCommands
+  return (commands, validFacts)
 
 end Auto
