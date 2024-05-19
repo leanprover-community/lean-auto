@@ -4,6 +4,7 @@ import Auto.Lib.BoolExtra
 
 namespace Auto.Embedding
 
+
 structure GLift.{u, v} (α : Sort u) : Sort (max u (v + 1)) where
   /-- Lift a value into `GLift α` -/    up ::
   /-- Extract a value from `GLift α` -/ down : α
