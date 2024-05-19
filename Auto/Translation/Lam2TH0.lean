@@ -1,5 +1,5 @@
 import Auto.IR.TPTP_TH0
-import Auto.Translation.LamReif
+import Auto.Translation.LamUtils
 
 namespace Auto
 open Lean Embedding.Lam Lam2TH0

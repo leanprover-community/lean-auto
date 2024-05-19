@@ -1,8 +1,8 @@
 import Lean
-import Auto.Embedding.LamBase
-import Auto.Translation.LamReif
+import Auto.Embedding.LamChecker
 import Auto.IR.SMT
 import Auto.Solver.SMT
+import Auto.Translation.LamUtils
 open Lean
 
 initialize

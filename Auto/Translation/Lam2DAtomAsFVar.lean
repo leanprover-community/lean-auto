@@ -88,18 +88,7 @@ def interpLamSortAsUnlifted : LamSort → ExternM Expr
   let .some fid := (← getTypeAtomFVars).find? n
     | throwError "interpLamSortAsUnlifted :: Cannot find fvarId assigned to type atom {n}"
   return .fvar fid
-| .base b =>
-  match b with
-  | .prop    => return .sort .zero
-  | .bool    => return .const ``Bool []
-  | .nat     => return .const ``Nat []
-  | .int     => return .const ``Int []
-  | .isto0 p =>
-    match p with
-    | .xH => return .const ``String []
-    | .xO .xH => return .const ``Empty []
-    | _   => return .const ``Empty []
-  | .bv n    => return .app (.const ``BitVec []) (.lit (.natVal n))
+| .base b => return Lam2D.interpLamBaseSortAsUnlifted b
 | .func s₁ s₂ => do
   return .forallE `_ (← interpLamSortAsUnlifted s₁) (← interpLamSortAsUnlifted s₂) .default
 
@@ -144,14 +133,14 @@ def interpOtherConstAsUnlifted (oc : OtherConst) : ExternM Expr := do
       | throwError "interpOtherConstAsUnlifted :: Unexpected sort {sortterm}"
     return Lean.mkApp2 (constIdExpr [lvlattr, lvlterm]) tyattr tyterm
 
-open Embedding Lam2D in
+open Embedding in
 def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
-| .pcst pc    => interpPropConstAsUnlifted pc
-| .bcst bc    => return interpBoolConstAsUnlifted bc
-| .ncst nc    => return interpNatConstAsUnlifted nc
-| .icst ic    => return interpIntConstAsUnlifted ic
-| .scst sc    => return interpStringConstAsUnlifted sc
-| .bvcst bvc  => return interpBitVecConstAsUnlifted bvc
+| .pcst pc    => Lam2D.interpPropConstAsUnlifted pc
+| .bcst bc    => return Lam2D.interpBoolConstAsUnlifted bc
+| .ncst nc    => return Lam2D.interpNatConstAsUnlifted nc
+| .icst ic    => return Lam2D.interpIntConstAsUnlifted ic
+| .scst sc    => return Lam2D.interpStringConstAsUnlifted sc
+| .bvcst bvc  => return Lam2D.interpBitVecConstAsUnlifted bvc
 | .ocst oc    => interpOtherConstAsUnlifted oc
 | .eqI _      => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
 | .forallEI _ => throwError ("interpLamTermAsUnlifted :: " ++ exportError.ImpPolyLog)
@@ -177,7 +166,7 @@ def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
   Takes a `t : LamTerm` and produces the `un-lifted` version of `t.interp`.
   This function should be called after we've called
     `withTermAtomAsFVar` on all the term atoms occurring in `t`
-  `lctx` is here for pretty printing
+  `lctx` is for pretty printing
 -/
 def interpLamTermAsUnlifted (lctx : Nat) : LamTerm → ExternM Expr
 | .atom n => do

@@ -1,4 +1,5 @@
 import Lean
+import Auto.Lib.MetaState
 import Auto.Embedding.LamBase
 open Lean
 
@@ -171,7 +172,19 @@ end LamExportUtils
 
 namespace Lam2D
 
-open Embedding Lam LamCstrD
+  open Embedding Lam LamCstrD
+
+  def interpLamBaseSortAsUnlifted : LamBaseSort → Expr
+  | .prop    => .sort .zero
+  | .bool    => .const ``Bool []
+  | .nat     => .const ``Nat []
+  | .int     => .const ``Int []
+  | .isto0 p =>
+    match p with
+    | .xH => .const ``String []
+    | .xO .xH => .const ``Empty []
+    | _   => .const ``Empty []
+  | .bv n    => .app (.const ``BitVec []) (.lit (.natVal n))
 
   def interpPropConstAsUnlifted : PropConst → CoreM Expr
   | .trueE      => return .const ``True []
@@ -285,5 +298,89 @@ open Embedding Lam LamCstrD
   | .bvrepeat w i      => mkApp2 (.const ``BitVec.replicate []) (.lit (.natVal w)) (.lit (.natVal i))
   | .bvzeroExtend w v  => mkApp2 (.const ``BitVec.zeroExtend []) (.lit (.natVal w)) (.lit (.natVal v))
   | .bvsignExtend w v  => mkApp2 (.const ``BitVec.signExtend []) (.lit (.natVal w)) (.lit (.natVal v))
+
+  /--
+    Takes a `s : LamSort` and produces the `un-lifted` version of `s.interp`
+      (note that `s.interp` is lifted)
+  -/
+  def interpLamSortAsUnlifted (tyVal : Array (Expr × Level)) : LamSort → CoreM Expr
+  | .atom n => do
+    let .some (e, _) := tyVal[n]?
+      | throwError "interpLamSortAsUnlifted :: Cannot find fvarId assigned to type atom {n}"
+    return e
+  | .base b => return Lam2D.interpLamBaseSortAsUnlifted b
+  | .func s₁ s₂ => do
+    return .forallE `_ (← interpLamSortAsUnlifted tyVal s₁) (← interpLamSortAsUnlifted tyVal s₂) .default
+
+  def interpOtherConstAsUnlifted (tyVal : Array (Expr × Level)) (oc : OtherConst) : MetaM Expr := do
+    let .some (.defnInfo constIdVal) := (← getEnv).find? ``constId
+      | throwError "interpOtherConstAsUnlifted :: Unexpected error"
+    let constIdExpr := fun params => constIdVal.value.instantiateLevelParams constIdVal.levelParams params
+    match oc with
+    | .smtAttr1T _ sattr sterm => do
+      let tyattr ← interpLamSortAsUnlifted tyVal sattr
+      let sortattr ← Expr.normalizeType (← Meta.inferType tyattr)
+      let Expr.sort lvlattr := sortattr
+        | throwError "interpOtherConstAsUnlifted :: Unexpected sort {sortattr}"
+      let tyterm ← interpLamSortAsUnlifted tyVal sterm
+      let sortterm ← Expr.normalizeType (← Meta.inferType tyterm)
+      let Expr.sort lvlterm := sortterm
+        | throwError "interpOtherConstAsUnlifted :: Unexpected sort {sortterm}"
+      return Lean.mkApp2 (constIdExpr [lvlattr, lvlterm]) tyattr tyterm
+
+  def interpLamBaseTermAsUnlifted (tyVal : Array (Expr × Level)) : LamBaseTerm → MetaM Expr
+  | .pcst pc    => Lam2D.interpPropConstAsUnlifted pc
+  | .bcst bc    => return Lam2D.interpBoolConstAsUnlifted bc
+  | .ncst nc    => return Lam2D.interpNatConstAsUnlifted nc
+  | .icst ic    => return Lam2D.interpIntConstAsUnlifted ic
+  | .scst sc    => return Lam2D.interpStringConstAsUnlifted sc
+  | .bvcst bvc  => return Lam2D.interpBitVecConstAsUnlifted bvc
+  | .ocst oc    => interpOtherConstAsUnlifted tyVal oc
+  | .eqI _      => throwError ("interpLamTermAsUnlifted :: " ++ LamExportUtils.exportError.ImpPolyLog)
+  | .forallEI _ => throwError ("interpLamTermAsUnlifted :: " ++ LamExportUtils.exportError.ImpPolyLog)
+  | .existEI _  => throwError ("interpLamTermAsUnlifted :: " ++ LamExportUtils.exportError.ImpPolyLog)
+  | .iteI _     => throwError ("interpLamTermAsUnlifted :: " ++ LamExportUtils.exportError.ImpPolyLog)
+  | .eq s       => do
+    return ←  Meta.mkAppOptM ``Eq #[← interpLamSortAsUnlifted tyVal s]
+  | .forallE s  => do
+    let ty ← interpLamSortAsUnlifted tyVal s
+    let sort ← Expr.normalizeType (← Meta.inferType ty)
+    let Expr.sort lvl := sort
+      | throwError "interpLamBaseTermAsUnlifted :: Unexpected sort {sort}"
+    let .some (.defnInfo forallVal) := (← getEnv).find? ``forallF
+      | throwError "interpLamBaseTermAsUnlifted :: Unexpected error"
+    let forallFExpr := forallVal.value.instantiateLevelParams forallVal.levelParams [lvl, .zero]
+    return mkAppN forallFExpr #[← interpLamSortAsUnlifted tyVal s]
+  | .existE s  => do
+    return ← Meta.mkAppOptM ``Exists #[← interpLamSortAsUnlifted tyVal s]
+  | .ite s     => do
+    return ← Meta.mkAppOptM ``Bool.ite' #[← interpLamSortAsUnlifted tyVal s]
+
+  /--
+    Takes a `t : LamTerm` and produces the `un-lifted` version of `t.interp`.
+    `lctx` is for pretty printing
+  -/
+  def interpLamTermAsUnlifted
+    (tyVal : Array (Expr × Level)) (varVal : Array (Expr × LamSort)) (etomFVars : HashMap Nat FVarId)
+    (lctx : Nat) : LamTerm → MetaM Expr
+  | .atom n => do
+    let .some (e, _) := varVal[n]?
+      | throwError "interpLamTermAsUnlifted :: Cannot find fvarId assigned to term atom {n}"
+    return e
+  | .etom n => do
+    let .some fid := etomFVars.find? n
+      | throwError "interpLamSortAsUnlifted :: Cannot find fvarId assigned to etom {n}"
+    return .fvar fid
+  | .base b => interpLamBaseTermAsUnlifted tyVal b
+  | .bvar n => return .bvar n
+  | .lam s t => do
+    let sinterp ← interpLamSortAsUnlifted tyVal s
+    let tinterp ← interpLamTermAsUnlifted tyVal varVal etomFVars lctx.succ t
+    let name := (`eb!).appendIndexAfter lctx
+    return .lam name sinterp tinterp .default
+  | .app _ fn arg => do
+    let fninterp ← interpLamTermAsUnlifted tyVal varVal etomFVars lctx fn
+    let arginterp ← interpLamTermAsUnlifted tyVal varVal etomFVars lctx arg
+    return .app fninterp arginterp
 
 end Lam2D
