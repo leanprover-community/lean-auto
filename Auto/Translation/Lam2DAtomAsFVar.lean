@@ -28,7 +28,7 @@ initialize
     in `LamReif.lean`.
 -/
 
-namespace Auto.Lam2AAF
+namespace Auto.Lam2DAAF
 
 open Embedding.Lam LamExportUtils MetaState
 
@@ -211,4 +211,4 @@ def callNativeWithAtomAsFVar
     trace[auto.lam2D.printProof] "Found proof of {proofLamTerm}\n\n{proof}"
     return (proof, proofLamTerm, ⟨usedEtoms⟩, ⟨usedInhs.map Prod.fst⟩, ⟨usedHyps.map Prod.fst⟩))
 
-end Auto.Lam2AAF
+end Auto.Lam2DAAF

@@ -343,7 +343,7 @@ def callNative_checker
   let lamEVarTy ← LamReif.getLamEVarTy
   let validsWithDTr ← valids.mapM (fun re =>
     do return (re, ← collectDerivFor re))
-  MetaState.runAtMetaM' <| (Lam2AAF.callNativeWithAtomAsFVar nonempties validsWithDTr prover).run'
+  MetaState.runAtMetaM' <| (Lam2DAAF.callNativeWithAtomAsFVar nonempties validsWithDTr prover).run'
     { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
 
 open LamReif Embedding.Lam in
@@ -366,7 +366,7 @@ def callNative_direct
   let validsWithDTr ← valids.mapM (fun re =>
     do return (re, ← collectDerivFor re))
   let (proof, _, usedEtoms, usedInhs, usedHyps) ← MetaState.runAtMetaM' <|
-    (Lam2AAF.callNativeWithAtomAsFVar nonempties validsWithDTr prover).run'
+    (Lam2DAAF.callNativeWithAtomAsFVar nonempties validsWithDTr prover).run'
       { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
   if usedEtoms.size != 0 then
     throwError "callNative_direct :: etoms should not occur here"
