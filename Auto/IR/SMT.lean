@@ -11,6 +11,12 @@ namespace Auto
 
 namespace IR.SMT
 
+def isSimpleSymbol (s : String) : Bool :=
+  let symbSpecials := "~!@$%^&*_-+=<>.?/"
+  let front := s.front.isAlpha || (symbSpecials.contains s.front)
+  let body := s.all (fun c => c.isAlphanum || symbSpecials.contains c)
+  s.length != 0 && front && body
+
 -- <index>      ::= <numeral> | <symbol>
 -- <identifier> ::= <symbol>  | (_ <symbol> <index>+)
 
@@ -25,7 +31,7 @@ inductive SIdent where
 deriving BEq, Hashable, Inhabited
 
 def SIdent.toString : SIdent → String
-| .symb s => "|" ++ s ++ "|"
+| .symb s => if isSimpleSymbol s then s else "|" ++ s ++ "|"
 | .indexed s idx =>
   s!"(_ {s} " ++ String.intercalate " " (idx.data.map (fun idx =>
     match idx with
@@ -430,9 +436,9 @@ section
 
   /- Note that this function will add the processed name to `usedNames` -/
   def processSuggestedName (nameSuggestion : String) : TransM ω String := do
-    let mut preName := nameSuggestion.map (fun c => if c.isAlphanum then c else '_')
-    if !preName.any (fun c => c.isAlphanum) then
-      preName := "a_" ++ preName
+    let mut preName := nameSuggestion.map (fun c => if allowed c then c else '_')
+    if preName.all (fun c => c == '_') then
+      preName := "pl_" ++ preName
     if preName.back.isDigit then
       preName := preName ++ "_"
     if let .some idx := (← getUsedNames).find? preName then
@@ -443,6 +449,15 @@ section
       -- Unused
       setUsedNames ((← getUsedNames).insert preName 0)
       return "_" ++ preName
+  where
+    allowed (c : Char) :=
+      let allowedStr : String :=
+        "~!@$%^&*_-+=<>.?/" ++
+        "ΑαΒβΓγΔδΕεΖζΗηΘθΙιΚκΛλΜμΝνΞξΟοΠπΡρΣσςΤτΥυΦφΧχΨψΩω" ++
+        "₀₁₂₃₄₅₆₇₈₉"
+      let allowedSet : HashSet UInt32 := HashSet.insertMany HashSet.empty (List.map Char.val allowedStr.toList)
+      c.isAlphanum || allowedSet.contains c.val
+
 
   /- Generate names that does not correspond to high-level construct -/
   partial def disposableName (nameSuggestion : String) : TransM ω String := processSuggestedName nameSuggestion
