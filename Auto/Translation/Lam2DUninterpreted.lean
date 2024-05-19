@@ -3,9 +3,9 @@ import Auto.Lib.ExprExtra
 import Auto.Lib.MetaExtra
 import Auto.Lib.MetaState
 import Auto.Lib.ToExprExtra
-import Auto.Embedding.LamBase
-import Auto.Translation.LamReif
-import Auto.Translation.Lam2DBase
+import Auto.Embedding.LamChecker
+import Auto.Translation.Assumptions
+import Auto.Translation.LamUtils
 open Lean
 
 initialize
@@ -28,10 +28,9 @@ initialize
     in `LamReif.lean`.
 -/
 
-namespace Auto.Lam2D
+namespace Auto.Lam2DU
 
-open LamReif
-open Embedding.Lam MetaState
+open Embedding.Lam LamExportUtils MetaState
 
 /--
   All the type atoms and term atoms are interpreted as fvars, which
@@ -145,7 +144,7 @@ def interpOtherConstAsUnlifted (oc : OtherConst) : ExternM Expr := do
       | throwError "interpOtherConstAsUnlifted :: Unexpected sort {sortterm}"
     return Lean.mkApp2 (constIdExpr [lvlattr, lvlterm]) tyattr tyterm
 
-open Embedding in
+open Embedding Lam2D in
 def interpLamBaseTermAsUnlifted : LamBaseTerm → ExternM Expr
 | .pcst pc    => interpPropConstAsUnlifted pc
 | .bcst bc    => return interpBoolConstAsUnlifted bc
@@ -239,14 +238,13 @@ def withHyps (hyps : Array Expr) : ExternM (Array FVarId) := do
   current local context. This is necessary because `lean-auto` assumes that the prover
   does not use free variables introduced during monomorphization
 -/
-private def callNativeExternMAction
+def callNativeWithAtomAsFVar
   (nonempties : Array REntry) (validsWithDTr : Array (REntry × DTr)) (prover : Array Lemma → MetaM Expr) :
-  ExternM (Expr × LamTerm × Array Nat ×
-    Array REntry × Array REntry) := MetaState.withTemporaryLCtx {} {} <| do
+  ExternM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := MetaState.withTemporaryLCtx {} {} <| do
   let ss ← nonempties.mapM (fun re => do
     match re with
     | .nonempty s => return s
-    | _ => throwError "callNativeExternMAction :: {re} is not a `nonempty` entry")
+    | _ => throwError "callNativeWithAtomAsFVar :: {re} is not a `nonempty` entry")
   let inhs ← withTranslatedLamSorts ss
   for inh in inhs do
     trace[auto.printInhs] "{inh}"
@@ -256,7 +254,7 @@ private def callNativeExternMAction
   let ts ← valids.mapM (fun re => do
     match re with
     | .valid [] t => return t
-    | _ => throwError "callNativeExternMAction :: {re} is not a `valid` entry")
+    | _ => throwError "callNativeWithAtomAsFVar :: {re} is not a `valid` entry")
   let hyps ← withTranslatedLamTerms ts
   for hyp in hyps do
     if !(← runMetaM <| Meta.isTypeCorrect hyp) then
@@ -310,73 +308,4 @@ private def callNativeExternMAction
     trace[auto.lam2D.printProof] "Found proof of {proofLamTerm}\n\n{proof}"
     return (proof, proofLamTerm, ⟨usedEtoms⟩, ⟨usedInhs.map Prod.fst⟩, ⟨usedHyps.map Prod.fst⟩))
 
-/--
-  Given
-  · `nonempties = #[s₀, s₁, ⋯, sᵤ₋₁]`
-  · `valids = #[t₀, t₁, ⋯, kₖ₋₁]`
-  Invoke prover to get a proof of
-    `proof : (∀ (_ : v₀) (_ : v₁) ⋯ (_ : vᵤ₋₁), w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥).interp`
-  and returns
-  · `fun etoms => proof`
-  · `∀ etoms, ∀ (_ : v₀) (_ : v₁) ⋯ (_ : vᵤ₋₁), w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥)`
-  · `etoms`
-  · `[s₀, s₁, ⋯, sᵤ₋₁]`
-  · `[w₀, w₁, ⋯, wₗ₋₁]`
-  Here
-  · `[v₀, v₁, ⋯, vᵤ₋₁]` is a subsequence of `[s₀, s₁, ⋯, sᵤ₋₁]`
-  · `[w₀, w₁, ⋯, wₗ₋₁]` is a subsequence of `[t₀, t₁, ⋯, kₖ₋₁]`
-  · `etoms` are all the etoms present in `w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥`
-
-  Note that `MetaState.withTemporaryLCtx` is used to isolate the prover from the
-  current local context. This is necessary because `lean-auto` assumes that the prover
-  does not use free variables introduced during monomorphization
--/
-def callNative_checker
-  (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → MetaM Expr) :
-  ReifM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := do
-  let tyVal ← LamReif.getTyVal
-  let varVal ← LamReif.getVarVal
-  let lamEVarTy ← LamReif.getLamEVarTy
-  let validsWithDTr ← valids.mapM (fun re =>
-    do return (re, ← collectDerivFor re))
-  runAtMetaM' <| (callNativeExternMAction nonempties validsWithDTr prover).run'
-    { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
-
-/--
-  Similar in functionality compared to `callNative_checker`, but
-    all `valid` entries are supposed to be reified facts (so there should
-    be no `etom`s). We invoke the prover to get the same `proof` as
-    `callNativeChecker`, but we return a proof of `⊥` by applying `proof`
-    to un-reified facts.
-
-  Note that `MetaState.withTemporaryLCtx` is used to isolate the prover from the
-  current local context. This is necessary because `lean-auto` assumes that the prover
-  does not use free variables introduced during monomorphization
--/
-def callNative_direct
-  (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → MetaM Expr) : ReifM Expr := do
-  let tyVal ← LamReif.getTyVal
-  let varVal ← LamReif.getVarVal
-  let lamEVarTy ← LamReif.getLamEVarTy
-  let validsWithDTr ← valids.mapM (fun re =>
-    do return (re, ← collectDerivFor re))
-  let (proof, _, usedEtoms, usedInhs, usedHyps) ← runAtMetaM' <|
-    (callNativeExternMAction nonempties validsWithDTr prover).run'
-      { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
-  if usedEtoms.size != 0 then
-    throwError "callNative_direct :: etoms should not occur here"
-  let ss ← usedInhs.mapM (fun re => do
-    match ← lookupREntryProof! re with
-    | .inhabitation e _ _ => return e
-    | .chkStep (.n (.nonemptyOfAtom n)) =>
-      match varVal[n]? with
-      | .some (e, _) => return e
-      | .none => throwError "callNative_direct :: Unexpected error"
-    | _ => throwError "callNative_direct :: Cannot find external proof of {re}")
-  let ts ← usedHyps.mapM (fun re => do
-    let .assertion e _ _ ← lookupREntryProof! re
-      | throwError "callNative_direct :: Cannot find external proof of {re}"
-    return e)
-  return mkAppN proof (ss ++ ts)
-
-end Auto.Lam2D
+end Auto.Lam2DU

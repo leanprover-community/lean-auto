@@ -313,6 +313,77 @@ def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : L
   else
     return .none
 
+open LamReif Embedding.Lam in
+/--
+  Given
+  · `nonempties = #[s₀, s₁, ⋯, sᵤ₋₁]`
+  · `valids = #[t₀, t₁, ⋯, kₖ₋₁]`
+  Invoke prover to get a proof of
+    `proof : (∀ (_ : v₀) (_ : v₁) ⋯ (_ : vᵤ₋₁), w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥).interp`
+  and returns
+  · `fun etoms => proof`
+  · `∀ etoms, ∀ (_ : v₀) (_ : v₁) ⋯ (_ : vᵤ₋₁), w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥)`
+  · `etoms`
+  · `[s₀, s₁, ⋯, sᵤ₋₁]`
+  · `[w₀, w₁, ⋯, wₗ₋₁]`
+  Here
+  · `[v₀, v₁, ⋯, vᵤ₋₁]` is a subsequence of `[s₀, s₁, ⋯, sᵤ₋₁]`
+  · `[w₀, w₁, ⋯, wₗ₋₁]` is a subsequence of `[t₀, t₁, ⋯, kₖ₋₁]`
+  · `etoms` are all the etoms present in `w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥`
+
+  Note that `MetaState.withTemporaryLCtx` is used to isolate the prover from the
+  current local context. This is necessary because `lean-auto` assumes that the prover
+  does not use free variables introduced during monomorphization
+-/
+def callNative_checker
+  (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → MetaM Expr) :
+  ReifM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := do
+  let tyVal ← LamReif.getTyVal
+  let varVal ← LamReif.getVarVal
+  let lamEVarTy ← LamReif.getLamEVarTy
+  let validsWithDTr ← valids.mapM (fun re =>
+    do return (re, ← collectDerivFor re))
+  MetaState.runAtMetaM' <| (Lam2DU.callNativeWithAtomAsFVar nonempties validsWithDTr prover).run'
+    { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
+
+open LamReif Embedding.Lam in
+/--
+  Similar in functionality compared to `callNative_checker`, but
+    all `valid` entries are supposed to be reified facts (so there should
+    be no `etom`s). We invoke the prover to get the same `proof` as
+    `callNativeChecker`, but we return a proof of `⊥` by applying `proof`
+    to un-reified facts.
+
+  Note that `MetaState.withTemporaryLCtx` is used to isolate the prover from the
+  current local context. This is necessary because `lean-auto` assumes that the prover
+  does not use free variables introduced during monomorphization
+-/
+def callNative_direct
+  (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → MetaM Expr) : ReifM Expr := do
+  let tyVal ← LamReif.getTyVal
+  let varVal ← LamReif.getVarVal
+  let lamEVarTy ← LamReif.getLamEVarTy
+  let validsWithDTr ← valids.mapM (fun re =>
+    do return (re, ← collectDerivFor re))
+  let (proof, _, usedEtoms, usedInhs, usedHyps) ← MetaState.runAtMetaM' <|
+    (Lam2DU.callNativeWithAtomAsFVar nonempties validsWithDTr prover).run'
+      { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
+  if usedEtoms.size != 0 then
+    throwError "callNative_direct :: etoms should not occur here"
+  let ss ← usedInhs.mapM (fun re => do
+    match ← lookupREntryProof! re with
+    | .inhabitation e _ _ => return e
+    | .chkStep (.n (.nonemptyOfAtom n)) =>
+      match varVal[n]? with
+      | .some (e, _) => return e
+      | .none => throwError "callNative_direct :: Unexpected error"
+    | _ => throwError "callNative_direct :: Cannot find external proof of {re}")
+  let ts ← usedHyps.mapM (fun re => do
+    let .assertion e _ _ ← lookupREntryProof! re
+      | throwError "callNative_direct :: Cannot find external proof of {re}"
+    return e)
+  return mkAppN proof (ss ++ ts)
+
 open Embedding.Lam in
 /--
   If `prover?` is specified, use the specified one.
@@ -322,7 +393,7 @@ def queryNative
   (declName? : Option Name) (exportFacts exportInhs : Array REntry)
   (prover? : Option (Array Lemma → MetaM Expr) := .none) : LamReif.ReifM (Option Expr) := do
   let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ←
-    Lam2D.callNative_checker exportInhs exportFacts (prover?.getD Solver.Native.queryNative)
+    callNative_checker exportInhs exportFacts (prover?.getD Solver.Native.queryNative)
   LamReif.newAssertion proof (.leaf "by_native::queryNative") proofLamTerm
   let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
   let forallElimed ← LamReif.validOfElimForalls etomInstantiated usedInhs
@@ -432,7 +503,7 @@ def monoInterface
     let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
       (fun (s, _) => Embedding.Lam.REntry.nonempty s)
     LamReif.printValuation
-    Lam2D.callNative_direct exportInhs exportFacts prover)
+    callNative_direct exportInhs exportFacts prover)
   let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
     let uvalids ← liftM <| Reif.getFacts
     let uinhs ← liftM <| Reif.getInhTys

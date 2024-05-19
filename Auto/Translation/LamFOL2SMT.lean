@@ -368,13 +368,13 @@ private partial def lamTerm2STerm (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Ar
 | .base b => lamBaseTerm2STerm_Arity0 b
 | .bvar n => return .bvar n
 | .app _ (.app _ (.base (.eqI _)) _) _ =>
-  throwError ("lamTerm2STerm :: " ++ LamReif.exportError.ImpPolyLog)
+  throwError ("lamTerm2STerm :: " ++ LamExportUtils.exportError.ImpPolyLog)
 | .app _ (.base (.forallEI _)) (.lam _ _) =>
-  throwError ("lamTerm2STerm :: " ++ LamReif.exportError.ImpPolyLog)
+  throwError ("lamTerm2STerm :: " ++ LamExportUtils.exportError.ImpPolyLog)
 | .app _ (.base (.existEI _)) (.lam _ _) =>
-  throwError ("lamTerm2STerm :: " ++ LamReif.exportError.ImpPolyLog)
+  throwError ("lamTerm2STerm :: " ++ LamExportUtils.exportError.ImpPolyLog)
 | .app _ (.app _ (.app _ (.base (.iteI _)) _) _) _ =>
-  throwError ("lamTerm2STerm :: " ++ LamReif.exportError.ImpPolyLog)
+  throwError ("lamTerm2STerm :: " ++ LamExportUtils.exportError.ImpPolyLog)
 | .app _ (.app _ (.base (.eq _)) arg₁) arg₂ => do
   let arg₁' ← lamTerm2STerm sni lamVarTy lamEVarTy arg₁
   let arg₂' ← lamTerm2STerm sni lamVarTy lamEVarTy arg₂
