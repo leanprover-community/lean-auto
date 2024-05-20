@@ -198,106 +198,106 @@ namespace Lam2D
     return impVal.value.instantiateLevelParams impVal.levelParams [.zero, .zero]
   | .iff        => return .const ``Iff []
 
-  def interpBoolConstAsUnlifted : BoolConst → Expr
-  | .ofProp => .const ``Bool.ofProp []
-  | .trueb  => .const ``true []
-  | .falseb => .const ``false []
-  | .notb   => .const ``not []
-  | .andb   => .const ``and []
-  | .orb    => .const ``or []
+  def interpBoolConstAsUnlifted : BoolConst → CoreM Expr
+  | .ofProp => return .const ``Bool.ofProp []
+  | .trueb  => return .const ``true []
+  | .falseb => return .const ``false []
+  | .notb   => return .const ``not []
+  | .andb   => return .const ``and []
+  | .orb    => return .const ``or []
 
-  def interpNatConstAsUnlifted : NatConst → Expr
-  | .natVal n => Lean.toExpr n
-  | .nadd     => .const ``Nat.add []
-  | .nsub     => .const ``Nat.sub []
-  | .nmul     => .const ``Nat.mul []
-  | .ndiv     => .const ``Nat.div []
-  | .nmod     => .const ``Nat.mod []
-  | .nle      => .const ``Nat.le []
-  | .nlt      => .const ``Nat.lt []
-  | .nmax     => .const ``Nat.max []
-  | .nmin     => .const ``Nat.min []
+  def interpNatConstAsUnlifted : NatConst → CoreM Expr
+  | .natVal n => return .lit (.natVal n)
+  | .nadd     => return .const ``Nat.add []
+  | .nsub     => return .const ``Nat.sub []
+  | .nmul     => return .const ``Nat.mul []
+  | .ndiv     => return .const ``Nat.div []
+  | .nmod     => return .const ``Nat.mod []
+  | .nle      => return .const ``Nat.le []
+  | .nlt      => return .const ``Nat.lt []
+  | .nmax     => return .const ``Nat.max []
+  | .nmin     => return .const ``Nat.min []
 
-  def interpIntConstAsUnlifted : IntConst → Expr
-  | .iofNat   => .const ``Int.ofNat []
-  | .inegSucc => .const ``Int.negSucc []
-  | .ineg     => .const ``Int.neg []
-  | .iabs     => .const ``Int.abs []
-  | .iadd     => .const ``Int.add []
-  | .isub     => .const ``Int.sub []
-  | .imul     => .const ``Int.mul []
-  | .idiv     => .const ``Int.div []
-  | .imod     => .const ``Int.mod []
-  | .iediv    => .const ``Int.ediv []
-  | .iemod    => .const ``Int.emod []
-  | .ile      => .const ``Int.le []
-  | .ilt      => .const ``Int.lt []
-  | .imax     => .const ``Int.max []
-  | .imin     => .const ``Int.min []
+  def interpIntConstAsUnlifted : IntConst → CoreM Expr
+  | .iofNat   => return .const ``Int.ofNat []
+  | .inegSucc => return .const ``Int.negSucc []
+  | .ineg     => return .const ``Int.neg []
+  | .iabs     => return .const ``Int.abs []
+  | .iadd     => return .const ``Int.add []
+  | .isub     => return .const ``Int.sub []
+  | .imul     => return .const ``Int.mul []
+  | .idiv     => return .const ``Int.div []
+  | .imod     => return .const ``Int.mod []
+  | .iediv    => return .const ``Int.ediv []
+  | .iemod    => return .const ``Int.emod []
+  | .ile      => return .const ``Int.le []
+  | .ilt      => return .const ``Int.lt []
+  | .imax     => return .const ``Int.max []
+  | .imin     => return .const ``Int.min []
 
-  def interpStringConstAsUnlifted : StringConst → Expr
-  | .strVal s  => Lean.toExpr s
-  | .slength   => .const ``String.length []
-  | .sapp      => .const ``String.append []
-  | .sle       => .const ``String.le []
-  | .slt       => .const ``String.lt []
-  | .sprefixof => .const ``String.isPrefixOf []
-  | .srepall   => .const ``String.replace []
+  def interpStringConstAsUnlifted : StringConst → CoreM Expr
+  | .strVal s  => return .lit (.strVal s)
+  | .slength   => return .const ``String.length []
+  | .sapp      => return .const ``String.append []
+  | .sle       => return .const ``String.le []
+  | .slt       => return .const ``String.lt []
+  | .sprefixof => return .const ``String.isPrefixOf []
+  | .srepall   => return .const ``String.replace []
 
-  def interpBitVecConstAsUnlifted : BitVecConst → Expr
-  | .bvVal n i         => mkApp2 (.const ``BitVec.ofNat []) (.lit (.natVal n)) (.lit (.natVal i))
-  | .bvofNat n         => .app (.const ``BitVec.ofNat []) (.lit (.natVal n))
-  | .bvtoNat n         => .app (.const ``BitVec.toNat []) (.lit (.natVal n))
-  | .bvofInt n         => .app (.const ``BitVec.ofInt []) (.lit (.natVal n))
-  | .bvtoInt n         => .app (.const ``BitVec.toInt []) (.lit (.natVal n))
-  | .bvmsb n           => .app (.const ``BitVec.msb []) (.lit (.natVal n))
+  def interpBitVecConstAsUnlifted : BitVecConst → CoreM Expr
+  | .bvVal n i         => return mkApp2 (.const ``BitVec.ofNat []) (.lit (.natVal n)) (.lit (.natVal i))
+  | .bvofNat n         => return .app (.const ``BitVec.ofNat []) (.lit (.natVal n))
+  | .bvtoNat n         => return .app (.const ``BitVec.toNat []) (.lit (.natVal n))
+  | .bvofInt n         => return .app (.const ``BitVec.ofInt []) (.lit (.natVal n))
+  | .bvtoInt n         => return .app (.const ``BitVec.toInt []) (.lit (.natVal n))
+  | .bvmsb n           => return .app (.const ``BitVec.msb []) (.lit (.natVal n))
   | .bvaOp n op =>
     match op with
-    | .add             => .app (.const ``BitVec.add []) (.lit (.natVal n))
-    | .sub             => .app (.const ``BitVec.sub []) (.lit (.natVal n))
-    | .mul             => .app (.const ``BitVec.mul []) (.lit (.natVal n))
-    | .udiv            => .app (.const ``BitVec.smtUDiv []) (.lit (.natVal n))
-    | .urem            => .app (.const ``BitVec.umod []) (.lit (.natVal n))
-    | .sdiv            => .app (.const ``BitVec.smtSDiv []) (.lit (.natVal n))
-    | .srem            => .app (.const ``BitVec.srem []) (.lit (.natVal n))
-    | .smod            => .app (.const ``BitVec.smod []) (.lit (.natVal n))
-  | .bvneg n           => .app (.const ``BitVec.neg []) (.lit (.natVal n))
-  | .bvabs n           => .app (.const ``BitVec.abs []) (.lit (.natVal n))
+    | .add             => return .app (.const ``BitVec.add []) (.lit (.natVal n))
+    | .sub             => return .app (.const ``BitVec.sub []) (.lit (.natVal n))
+    | .mul             => return .app (.const ``BitVec.mul []) (.lit (.natVal n))
+    | .udiv            => return .app (.const ``BitVec.smtUDiv []) (.lit (.natVal n))
+    | .urem            => return .app (.const ``BitVec.umod []) (.lit (.natVal n))
+    | .sdiv            => return .app (.const ``BitVec.smtSDiv []) (.lit (.natVal n))
+    | .srem            => return .app (.const ``BitVec.srem []) (.lit (.natVal n))
+    | .smod            => return .app (.const ``BitVec.smod []) (.lit (.natVal n))
+  | .bvneg n           => return .app (.const ``BitVec.neg []) (.lit (.natVal n))
+  | .bvabs n           => return .app (.const ``BitVec.abs []) (.lit (.natVal n))
   | .bvcmp n prop? op  =>
     match prop? with
     | false =>
       match op with
-      | .ult           => .app (.const ``BitVec.ult []) (.lit (.natVal n))
-      | .ule           => .app (.const ``BitVec.ule []) (.lit (.natVal n))
-      | .slt           => .app (.const ``BitVec.slt []) (.lit (.natVal n))
-      | .sle           => .app (.const ``BitVec.sle []) (.lit (.natVal n))
+      | .ult           => return .app (.const ``BitVec.ult []) (.lit (.natVal n))
+      | .ule           => return .app (.const ``BitVec.ule []) (.lit (.natVal n))
+      | .slt           => return .app (.const ``BitVec.slt []) (.lit (.natVal n))
+      | .sle           => return .app (.const ``BitVec.sle []) (.lit (.natVal n))
     | true =>
       match op with
-      | .ult           => .app (.const ``BitVec.propult []) (.lit (.natVal n))
-      | .ule           => .app (.const ``BitVec.propule []) (.lit (.natVal n))
-      | .slt           => .app (.const ``BitVec.propslt []) (.lit (.natVal n))
-      | .sle           => .app (.const ``BitVec.propsle []) (.lit (.natVal n))
-  | .bvand n           => .app (.const ``BitVec.and []) (.lit (.natVal n))
-  | .bvor n            => .app (.const ``BitVec.or []) (.lit (.natVal n))
-  | .bvxor n           => .app (.const ``BitVec.xor []) (.lit (.natVal n))
-  | .bvnot n           => .app (.const ``BitVec.not []) (.lit (.natVal n))
+      | .ult           => return .app (.const ``BitVec.propult []) (.lit (.natVal n))
+      | .ule           => return .app (.const ``BitVec.propule []) (.lit (.natVal n))
+      | .slt           => return .app (.const ``BitVec.propslt []) (.lit (.natVal n))
+      | .sle           => return .app (.const ``BitVec.propsle []) (.lit (.natVal n))
+  | .bvand n           => return .app (.const ``BitVec.and []) (.lit (.natVal n))
+  | .bvor n            => return .app (.const ``BitVec.or []) (.lit (.natVal n))
+  | .bvxor n           => return .app (.const ``BitVec.xor []) (.lit (.natVal n))
+  | .bvnot n           => return .app (.const ``BitVec.not []) (.lit (.natVal n))
   | .bvshOp n smt? op  =>
     match smt? with
     | false =>
       match op with
-      | .shl           => .app (.const ``BitVec.shiftLeft []) (.lit (.natVal n))
-      | .lshr          => .app (.const ``BitVec.ushiftRight []) (.lit (.natVal n))
-      | .ashr          => .app (.const ``BitVec.sshiftRight []) (.lit (.natVal n))
+      | .shl           => return .app (.const ``BitVec.shiftLeft []) (.lit (.natVal n))
+      | .lshr          => return .app (.const ``BitVec.ushiftRight []) (.lit (.natVal n))
+      | .ashr          => return .app (.const ``BitVec.sshiftRight []) (.lit (.natVal n))
     | true =>
       match op with
-      | .shl           => mkApp2 (.const ``BitVec.smtHshiftLeft []) (.lit (.natVal n)) (.lit (.natVal n))
-      | .lshr          => mkApp2 (.const ``BitVec.smtHushiftRight []) (.lit (.natVal n)) (.lit (.natVal n))
-      | .ashr          => mkApp2 (.const ``BitVec.smtHsshiftRight []) (.lit (.natVal n)) (.lit (.natVal n))
-  | .bvappend n m      => mkApp2 (.const ``BitVec.append []) (.lit (.natVal n)) (.lit (.natVal m))
-  | .bvextract n h l   => mkApp3 (.const ``BitVec.extractLsb []) (.lit (.natVal n)) (.lit (.natVal h)) (.lit (.natVal l))
-  | .bvrepeat w i      => mkApp2 (.const ``BitVec.replicate []) (.lit (.natVal w)) (.lit (.natVal i))
-  | .bvzeroExtend w v  => mkApp2 (.const ``BitVec.zeroExtend []) (.lit (.natVal w)) (.lit (.natVal v))
-  | .bvsignExtend w v  => mkApp2 (.const ``BitVec.signExtend []) (.lit (.natVal w)) (.lit (.natVal v))
+      | .shl           => return mkApp2 (.const ``BitVec.smtHshiftLeft []) (.lit (.natVal n)) (.lit (.natVal n))
+      | .lshr          => return mkApp2 (.const ``BitVec.smtHushiftRight []) (.lit (.natVal n)) (.lit (.natVal n))
+      | .ashr          => return mkApp2 (.const ``BitVec.smtHsshiftRight []) (.lit (.natVal n)) (.lit (.natVal n))
+  | .bvappend n m      => return mkApp2 (.const ``BitVec.append []) (.lit (.natVal n)) (.lit (.natVal m))
+  | .bvextract n h l   => return mkApp3 (.const ``BitVec.extractLsb []) (.lit (.natVal n)) (.lit (.natVal h)) (.lit (.natVal l))
+  | .bvrepeat w i      => return mkApp2 (.const ``BitVec.replicate []) (.lit (.natVal w)) (.lit (.natVal i))
+  | .bvzeroExtend w v  => return mkApp2 (.const ``BitVec.zeroExtend []) (.lit (.natVal w)) (.lit (.natVal v))
+  | .bvsignExtend w v  => return mkApp2 (.const ``BitVec.signExtend []) (.lit (.natVal w)) (.lit (.natVal v))
 
   /--
     Takes a `s : LamSort` and produces the `un-lifted` version of `s.interp`
@@ -330,11 +330,11 @@ namespace Lam2D
 
   def interpLamBaseTermAsUnlifted (tyVal : HashMap Nat Expr) : LamBaseTerm → MetaM Expr
   | .pcst pc    => Lam2D.interpPropConstAsUnlifted pc
-  | .bcst bc    => return Lam2D.interpBoolConstAsUnlifted bc
-  | .ncst nc    => return Lam2D.interpNatConstAsUnlifted nc
-  | .icst ic    => return Lam2D.interpIntConstAsUnlifted ic
-  | .scst sc    => return Lam2D.interpStringConstAsUnlifted sc
-  | .bvcst bvc  => return Lam2D.interpBitVecConstAsUnlifted bvc
+  | .bcst bc    => Lam2D.interpBoolConstAsUnlifted bc
+  | .ncst nc    => Lam2D.interpNatConstAsUnlifted nc
+  | .icst ic    => Lam2D.interpIntConstAsUnlifted ic
+  | .scst sc    => Lam2D.interpStringConstAsUnlifted sc
+  | .bvcst bvc  => Lam2D.interpBitVecConstAsUnlifted bvc
   | .ocst oc    => interpOtherConstAsUnlifted tyVal oc
   | .eqI _      => throwError ("interpLamTermAsUnlifted :: " ++ LamExportUtils.exportError.ImpPolyLog)
   | .forallEI _ => throwError ("interpLamTermAsUnlifted :: " ++ LamExportUtils.exportError.ImpPolyLog)
