@@ -34,6 +34,7 @@ __Auto Issues:__
 * Performance: ``collectLamTermAtoms`` have quadratic worst-case performance
 * Fix: Proof parsing too slow
 * Fix: ``SMTNamingInfo`` suggest name for ``compCtor`` and ``compProj``
+* Fix: Translation of `abs`
 
 __Lean Issues:__
 * ``cases`` fails on some simple examples. E.g, ``cases h : a.beq b`` fails if the goal contains term
