@@ -11,6 +11,7 @@ initialize
   registerTraceClass `auto.smt.stderr
   registerTraceClass `auto.smt.printValuation
   registerTraceClass `auto.smt.unsatCore.smtTerms
+  registerTraceClass `auto.smt.unsatCore.leanExprs
   registerTraceClass `auto.smt.unsatCore.deriv
 
 register_option auto.smt : Bool := {

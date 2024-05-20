@@ -49,6 +49,35 @@ private def LamAtomic.toString : LamAtomic → String
 instance : ToString LamAtomic where
   toString := LamAtomic.toString
 
+def LamAtomic.toLeanExpr
+  (tyValMap varValMap etomValMap : HashMap Nat Expr)
+  (atomic : LamAtomic) : MetaM Expr:=
+  match atomic with
+  | .sort n => do
+    let .some e := tyValMap.find? n
+      | throwError "SMT.printValuation :: Unknown sort atom {n}"
+    return e
+  | .term n => do
+    let .some e := varValMap.find? n
+      | throwError "SMT.printValuation :: Unknown term atom {n}"
+    return e
+  | .etom n => do
+    let .some e := etomValMap.find? n
+      | throwError "SMT.printValuation :: Unknown etom {n}"
+    return e
+  | .bvOfNat n => do
+    let e := Expr.app (.const ``BitVec.ofNat []) (.lit (.natVal n))
+    return e
+  | .bvToNat n => do
+    let e := Expr.app (.const ``BitVec.toNat []) (.lit (.natVal n))
+    return e
+  | .compCtor t => do
+    let e ← Lam2D.interpLamTermAsUnlifted tyValMap varValMap etomValMap 0 t
+    return e
+  | .compProj t => do
+    let e ← Lam2D.interpLamTermAsUnlifted tyValMap varValMap etomValMap 0 t
+    return e
+
 structure SMTNamingInfo where
   tyVal     : Array (Expr × Level)
   varVal    : Array (Expr × LamSort)
@@ -492,8 +521,13 @@ def termAuxDecls : Array IR.SMT.Command :=
       (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "y" #[], .sConst (.num 0)], .qStrApp "x" #[], .qStrApp "mod" #[.qStrApp "x" #[], .qStrApp "y" #[]]])
    ]
 
-def printValuation (sni : SMTNamingInfo) : TransM LamAtomic Unit := do
-  let h2lMap ← getH2lMap
+/--
+  `printFn : (tyValMap : _) → (varValMap : _) → (etomValMap : _) → MetaM α`
+-/
+def withExprValuation
+  {α : Type} [Inhabited α] (sni : SMTNamingInfo) (h2lMap : HashMap LamAtomic String)
+  (printFn : HashMap Nat Expr → HashMap Nat Expr → HashMap Nat Expr → MetaM α) :
+  MetaM α := do
   let tyValMap := HashMap.ofList (sni.tyVal.zipWithIndex.map (fun ((e, _), n) => (n, e))).data
   let varValMap := HashMap.ofList (sni.varVal.zipWithIndex.map (fun ((e, _), n) => (n, e))).data
   let etomsWithName := h2lMap.toArray.filterMap (fun (atomic, name) =>
@@ -505,35 +539,7 @@ def printValuation (sni : SMTNamingInfo) : TransM LamAtomic Unit := do
     return ((name : Name), .default, fun _ => pure type))
   Meta.withLocalDecls declInfos (fun etomFVars => do
     let etomValMap := HashMap.ofList ((etomsWithName.zip etomFVars).map (fun ((n, _), e) => (n, e))).data
-    for (atomic, name) in h2lMap.toArray do
-      printAtomic tyValMap varValMap etomValMap atomic name)
-where
-  printAtomic tyValMap varValMap etomValMap atomic name :=
-    match atomic with
-    | .sort n => do
-      let .some (e, _) := sni.tyVal[n]?
-        | throwError "SMT.printValuation :: Unknown sort atom {n}"
-      trace[auto.smt.printValuation] "|{name}| : {e}"
-    | .term n => do
-      let .some (e, _) := sni.varVal[n]?
-        | throwError "SMT.printValuation :: Unknown term atom {n}"
-      trace[auto.smt.printValuation] "|{name}| : {e}"
-    | .etom n => do
-      let .some e := etomValMap[n]?
-        | throwError "SMT.printValuation :: Unknown etom {n}"
-      trace[auto.smt.printValuation] "|{name}| : {e}"
-    | .bvOfNat n => do
-      let e := Expr.app (.const ``BitVec.ofNat []) (.lit (.natVal n))
-      trace[auto.smt.printValuation] "|{name}| : {e}"
-    | .bvToNat n => do
-      let e := Expr.app (.const ``BitVec.toNat []) (.lit (.natVal n))
-      trace[auto.smt.printValuation] "|{name}| : {e}"
-    | .compCtor t => do
-      let e ← Lam2D.interpLamTermAsUnlifted tyValMap varValMap etomValMap 0 t
-      trace[auto.smt.printValuation] "|{name}| : {e}"
-    | .compProj t => do
-      let e ← Lam2D.interpLamTermAsUnlifted tyValMap varValMap etomValMap 0 t
-      trace[auto.smt.printValuation] "|{name}| : {e}"
+    printFn tyValMap varValMap etomValMap)
 
 end SMT
 
@@ -562,7 +568,6 @@ def lamFOL2SMT
     validFacts := validFacts.push sterm
     trace[auto.lamFOL2SMT] "λ term {repr t} translated to SMT term {sterm}"
     addCommand (.assert (.attr sterm #[.symb "named" s!"valid_fact_{idx}"]))
-  printValuation sni
   let commands ← getCommands
   return (commands, validFacts)
 
