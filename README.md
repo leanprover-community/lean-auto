@@ -21,7 +21,7 @@ Type **"auto 👍"** to see whether auto is set up.
 * Currently, auto supports
   * SMT solver invocation: ``set_option auto.smt true``, but without proof reconstruction. Make sure that SMT solvers are installed, and that ``auto.smt.solver.name`` is correctly set.
   * TPTP Solver invocation: ``set_option auto.tptp true``, but without proof reconstruction. Make sure that TPTP solvers (currently only supports zipperposition) are installed, and that ``auto.tptp.solver.name`` and ``auto.tptp.zeport.path`` are correctly set.
-  * Proof search by native prover. To enable proof search by native prover, use ``set_option auto.native true``, and set ``auto.native.solver.func`` to the name of the interface of the solver, which should be a Lean constant of type ``Array Lemma → MetaM Expr``.
+  * Proof search by native prover. To enable proof search by native prover, use ``set_option auto.native true``, and use ``attribute [rebind Auto.Native.solverFunc] <solve_interface>`` to bind `lean-auto` to the interface of the solver, which should be a Lean constant of type ``Array Lemma → MetaM Expr``.
 
 ## Installing Lean-auto
 * ``z3`` version >= 4.12.2. Lower versions may not be able to deal with smt-lib 2.6 string escape sequence.

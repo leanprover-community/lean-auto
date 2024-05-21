@@ -13,7 +13,7 @@ set_option trace.auto.smt.result true
 set_option auto.smt.solver.name "z3"
 -- Emulate native solver
 set_option trace.auto.native.printFormulas true
-set_option auto.native.solver.func "Auto.Solver.Native.emulateNative"
+attribute [rebind Auto.Native.solverFunc] Auto.Solver.Native.emulateNative
 
 set_option auto.native true
 set_option trace.auto.lamReif.printResult true

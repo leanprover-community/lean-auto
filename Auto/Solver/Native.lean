@@ -1,5 +1,6 @@
 import Lean
 import Auto.Lib.MetaExtra
+import Auto.Lib.Rebind
 import Auto.Translation.Assumptions
 open Lean
 
@@ -8,10 +9,7 @@ register_option auto.native : Bool := {
   descr := "Enable/Disable Native Solver"
 }
 
-register_option auto.native.solver.func : String := {
-  defValue := ""
-  descr := "Lean name of solver function. The function must have type `Array Lemma → MetaM Expr`"
-}
+declare_rebindable Auto.Native.solverFunc : Array Auto.Lemma → MetaM Expr
 
 initialize
   registerTraceClass `auto.native.printFormulas
@@ -22,14 +20,7 @@ namespace Auto.Solver.Native
 private def nativeFuncExpectedType := Array Lemma → MetaM Expr
 
 private unsafe def queryNativeUnsafe (lemmas : Array Lemma) : MetaM Expr := do
-  let nativeFuncStr := auto.native.solver.func.get (← getOptions)
-  let nativeFunc := (nativeFuncStr.splitOn ".").foldl (fun acc s => Name.str acc s) .anonymous
-  let .some (.defnInfo di) := (← getEnv).find? nativeFunc
-    | throwError "queryNative :: {nativeFunc} is not a defined constant"
-  if !(← Meta.isDefEqD (.const ``nativeFuncExpectedType []) di.type) then
-    throwError ("queryNative :: Unexpected type of native solver function." ++
-      " Expected `List (Expr × Expr × Array Name) → MetaM Expr`")
-  let nativeFuncCst ← evalConst nativeFuncExpectedType nativeFunc
+  let nativeFuncCst ← eval_rebind% Auto.Native.solverFunc
   for lem in lemmas do
     trace[auto.native.printFormulas] "{lem.type}"
   let proof ← nativeFuncCst lemmas

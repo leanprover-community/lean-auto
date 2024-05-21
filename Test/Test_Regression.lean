@@ -17,7 +17,7 @@ set_option trace.auto.tptp.printProof true
 
 -- emulate native solver
 set_option auto.native true
-set_option auto.native.solver.func "Auto.Solver.Native.emulateNative"
+attribute [rebind Auto.Native.solverFunc] Auto.Solver.Native.emulateNative
 
 -- Manual Check
 
