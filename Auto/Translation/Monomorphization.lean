@@ -433,7 +433,7 @@ structure State where
   activeCi : Std.Queue (Expr × Nat)  := Std.Queue.empty
   -- During initialization, we supply an array `lemmas` of lemmas
   --   `liArr[i]` are instances of `lemmas[i]`.
-  lisArr    : Array LemmaInsts       := #[]
+  lisArr   : Array LemmaInsts       := #[]
 
 abbrev MonoM := StateRefT State MetaM
 

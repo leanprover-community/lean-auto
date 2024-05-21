@@ -1,5 +1,4 @@
 import Auto.Embedding.LamSystem
-import Std.Data.Array.Basic
 
 namespace Auto.Embedding.Lam
 

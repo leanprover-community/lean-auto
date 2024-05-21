@@ -1,6 +1,4 @@
 import Lean
-import Std.Data.Nat.Lemmas
-import Std.Logic
 import Auto.MathlibEmulator
 import Auto.Lib.BoolExtra
 import Auto.Lib.NatExtra

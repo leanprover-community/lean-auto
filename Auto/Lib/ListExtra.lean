@@ -1,4 +1,3 @@
-import Std.Data.List.Lemmas
 import Auto.Lib.IsomType
 
 namespace Auto

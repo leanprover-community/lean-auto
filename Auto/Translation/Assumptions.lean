@@ -1,5 +1,4 @@
 import Lean
-import Std.Data.Array.Basic
 import Auto.Lib.BoolExtra
 import Auto.Lib.MessageData
 import Auto.Lib.ExprExtra
