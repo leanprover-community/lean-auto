@@ -384,15 +384,20 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
     match varAtom with
     | .term termNum =>
       let vExp := varVal[termNum]!.1
+      trace[auto.smt.result] "{varName} maps to {vExp}"
       match vExp with
       | .fvar fVarId =>
         -- If `vExp` is an fvar, check whether its fVarId appears in `idCiMap`
         -- If it does, have `symbolMap` map `varName` to the original Lean Expr indicated by `idCiMap`
         match idCiMap.find? fVarId with
-        | some ci => symbolMap := symbolMap.insert varName (← ci.toExpr)
-        | none => symbolMap := symbolMap.insert varName vExp
+        | some ci =>
+          trace[auto.smt.result] "fvar {Expr.fvar fVarId} corresponds with {← ci.toExpr}"
+          symbolMap := symbolMap.insert varName (← ci.toExpr)
+        | none =>
+          trace[auto.smt.result] "fvar {Expr.fvar fVarId} not found in idCiMap"
+          symbolMap := symbolMap.insert varName vExp
       | _ => symbolMap := symbolMap.insert varName vExp
-    | .sort _ => logWarning s!"varName: {varName} maps to a sort"
+    | .sort n => logWarning s!"varName: {varName} maps to sort {n}"
     | .etom _ => logWarning s!"varName: {varName} maps to an etom"
     | .bvOfNat n => logWarning s!"varName: {varName} maps to bvOfNat {n}"
     | .bvToNat n => logWarning s!"varName: {varName} maps to bvToNat {n}"
