@@ -4,6 +4,7 @@ import Auto.Lib.BoolExtra
 
 namespace Auto.Embedding
 
+
 structure GLift.{u, v} (α : Sort u) : Sort (max u (v + 1)) where
   /-- Lift a value into `GLift α` -/    up ::
   /-- Extract a value from `GLift α` -/ down : α
@@ -239,6 +240,8 @@ def bvzeroExtendLift.{u} (w v : Nat) (x : GLift.{1, u} (BitVec w)) : GLift.{1, u
 
 def bvsignExtendLift.{u} (w i : Nat) (x : GLift.{1, u} (BitVec w)) : GLift.{1, u} (BitVec i) :=
   GLift.up (BitVec.signExtend i x.down)
+
+def constId {a : Sort u} {b : Sort v} (_ : a) (h : b) := h
 
 @[reducible] def ImpF.{u, v} (p : Sort u) (q : Sort v) := p → q
 

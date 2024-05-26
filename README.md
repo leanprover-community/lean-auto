@@ -1,21 +1,27 @@
-![Logo](Doc/pics/Logo.bmp)
+<p align="center">
+  <img src="Doc/pics/Logo.bmp" width="600" />
+</p>
+  
+Lean-auto is an interface between Lean and automated theorem provers. Up to now, lean-auto is maintained and developed primarily by Yicheng Qian (GitHub: PratherConid). It is currently in active development, and pull requests/issues are welcome. For more information, feel free to reach out to Yicheng Qian on [Lean Zulip](https://leanprover.zulipchat.com).  
+  
+Lean-auto is based on a monomorphization procedure from dependent type theory to higher-order logic and a deep embedding of higher-order logic into dependent type theory. It is capable of handling dependently-typed and/or universe-polymorphic input terms. Currently, proof reconstruction can be handled by [Duper](https://github.com/leanprover-community/duper), a higher-order superposition prover written in Lean.
+    
+Although Lean-auto is still under development, it's already able to solve nontrivial problems. For example the first part of the "snake lemma" in category theory can be solved by a direct invocation to ``auto`` (and the second part can also be partly automated):
 
-Type **"auto 👍"** to see whether auto is set up.
+<p align="center">
+  <img src="Doc/pics/shortfive.png" alt="drawing" width="500"/>
+</p>
 
-## Introduction
-Lean-auto is an interface between Lean and automated theorem provers, based on a monomorphization procedure from dependent type theory to higher-order logic and a deep embedding of higher-order logic into dependent type theory. It is capable of handling dependently-typed and/or universe-polymorphic input terms. Currently, proof reconstruction can be handled by [Duper](https://github.com/leanprover-community/duper), a higher-order superposition prover written in Lean.  
-Lean-auto is still under development, but it's already able to solve nontrivial problems. For example the first part of the "snake lemma" in category theory can be solved by a direct invocation to ``auto`` (and the second part can also be partly automated):
-
-<img src="Doc/pics/shortfive.png" alt="drawing" width="500"/>
+Type **"auto 👍"** to see whether auto is set up.  
 
 ## Usage
 * ``auto [<term>,*] u[<ident>,*] d[<ident>,*]``
   * ``u[<ident>,*]``: Unfold identifiers
   * ``d[<ident>,*]``: Add definitional equality related to identifiers
 * Currently, auto supports
-  * SMT solver invocation: ``set_option auto.smt true``, but without proof reconstruction
-  * TPTP Solver invocation: ``set_option auto.tptp true``, but without proof reconstruction
-  * Proof search by native prover. To enable proof search by native prover, use ``set_option auto.native true``, and set ``auto.native.solver.func`` to the name of the interface of the solver, which should be a Lean constant of type ``Array Lemma → MetaM Expr``.
+  * SMT solver invocation: ``set_option auto.smt true``, but without proof reconstruction. Make sure that SMT solvers are installed, and that ``auto.smt.solver.name`` is correctly set.
+  * TPTP Solver invocation: ``set_option auto.tptp true``, but without proof reconstruction. Make sure that TPTP solvers (currently only supports zipperposition) are installed, and that ``auto.tptp.solver.name`` and ``auto.tptp.zeport.path`` are correctly set.
+  * Proof search by native prover. To enable proof search by native prover, use ``set_option auto.native true``, and use ``attribute [rebind Auto.Native.solverFunc] <solve_interface>`` to bind `lean-auto` to the interface of the solver, which should be a Lean constant of type ``Array Lemma → MetaM Expr``.
 
 ## Installing Lean-auto
 * ``z3`` version >= 4.12.2. Lower versions may not be able to deal with smt-lib 2.6 string escape sequence.

@@ -1,6 +1,5 @@
 import Lean
 import Auto.Parser.LexInit
-import Std.Data.String.Basic
 
 namespace Auto
 namespace Parser.SMTTerm

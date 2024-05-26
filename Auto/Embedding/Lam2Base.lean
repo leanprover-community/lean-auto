@@ -1,5 +1,4 @@
 import Auto.Embedding.Lift
-import Std.Data.List.Lemmas
 
 namespace Auto.Embedding.Lam₂
 
@@ -120,7 +119,7 @@ def Lam₂Type.check_iff_interp
     simp [check, interp, Option.map]
   case bvar n =>
     simp [check, interp]
-    cases hLt : (Nat.decLt n (List.length lctx))
+    cases Nat.decLt n (List.length lctx)
     case isTrue h =>
       simp [h]; simp [List.get?_eq_get h]
     case isFalse h =>
@@ -148,7 +147,7 @@ def Lam₂Type.check_iff_interp
       | .some ⟨n + 1, _⟩, _ => simp
       | .none , _ => simp
     | .some 0, .none =>
-      simp; cases ciarg : interp val lctx arg <;> simp
+      simp; cases interp val lctx arg <;> simp
     | .some (n + 1), _ =>
       simp;
       match cifn : interp val lctx fn, ciarg : interp val lctx arg with
@@ -158,7 +157,7 @@ def Lam₂Type.check_iff_interp
       | .some ⟨n + 1, _⟩, _ => simp
       | .none , _ => simp
     | .none, _ =>
-      simp; cases cifn : interp val lctx fn <;> simp
+      simp; cases interp val lctx fn <;> simp
   case app fn arg IHfn IHarg =>
     revert IHfn IHarg
     simp [check, interp]
@@ -182,7 +181,7 @@ def Lam₂Type.check_iff_interp
       | .some ⟨0, _⟩, _ => simp
       | .none , _ => simp
     | .some (n + 1), none =>
-      simp; cases ciarg : interp val lctx arg <;> simp
+      simp; cases interp val lctx arg <;> simp
     | .some 0, _ =>
       simp;
       match cifn : interp val lctx fn with
@@ -190,6 +189,6 @@ def Lam₂Type.check_iff_interp
       | .some ⟨0, _⟩ => simp
       | .none => simp
     | .none, _ =>
-      simp; cases cifn : interp val lctx fn <;> simp
+      simp; cases interp val lctx fn <;> simp
 
 end Auto.Embedding.Lam₂

@@ -8,6 +8,7 @@ open Lean Elab Tactic
 
 initialize
   registerTraceClass `auto.tactic
+  registerTraceClass `auto.tactic.printProof
   registerTraceClass `auto.printLemmas
 
 register_option auto.getHints.failOnParseError : Bool := {
@@ -41,7 +42,7 @@ inductive Instruction where
   | none
   | useSorry
 
-def parseInstr : TSyntax ``Auto.autoinstr → TacticM Instruction
+def parseInstr : TSyntax ``autoinstr → TacticM Instruction
 | `(autoinstr|) => return .none
 | `(autoinstr|👍) => throwError "Your flattery is appreciated 😎"
 | `(autoinstr|👎) => do
@@ -293,6 +294,7 @@ def queryTPTP (exportFacts : Array REntry) : LamReif.ReifM (Array Embedding.Lam.
       ret := ret.push re
     return ret
 
+/- Tag: querySMT
 -- Note: This code is taken from Aesop's Util/Basic.lean file
 def addTryThisTacticSeqSuggestion (ref : Syntax) (suggestion : TSyntax ``Lean.Parser.Tactic.tacticSeq)
   (origSpan? : Option Syntax := none) : MetaM Unit := do
@@ -319,6 +321,7 @@ where
     s.splitOn "\n"
     |>.map (λ line => line.dropPrefix? "  " |>.map (·.toString) |>.getD line)
     |> String.intercalate "\n"
+-/
 
 open Embedding.Lam in
 def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : LamReif.ReifM (Option Expr) := do
@@ -328,18 +331,41 @@ def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : L
     match re with
     | .valid [] t => return t
     | _ => throwError "runAuto :: Unexpected error")
-  let commands ← (lamFOL2SMT lamVarTy lamEVarTy exportLamTerms exportInds).run'
+  let sni : SMT.SMTNamingInfo :=
+    {tyVal := (← LamReif.getTyVal), varVal := (← LamReif.getVarVal), lamEVarTy := (← LamReif.getLamEVarTy)}
+  let ((commands, validFacts), state) ← (lamFOL2SMT sni lamVarTy lamEVarTy exportLamTerms exportInds).run
   for cmd in commands do
     trace[auto.smt.printCommands] "{cmd}"
   if (auto.smt.save.get (← getOptions)) then
     Solver.SMT.saveQuery commands
   let .some (unsatCore, proof) ← Solver.SMT.querySolver commands
     | return .none
-  for id in ← Solver.SMT.validFactOfUnsatCore unsatCore do
+  let unsatCoreIds ← Solver.SMT.validFactOfUnsatCore unsatCore
+  -- **Print valuation of SMT atoms**
+  SMT.withExprValuation sni state.h2lMap (fun tyValMap varValMap etomValMap => do
+    for (atomic, name) in state.h2lMap.toArray do
+      let e ← SMT.LamAtomic.toLeanExpr tyValMap varValMap etomValMap atomic
+      trace[auto.smt.printValuation] "|{name}| : {e}"
+    )
+  -- **Print STerms corresponding to `validFacts` in unsatCore**
+  for id in unsatCoreIds do
+    let .some sterm := validFacts[id]?
+      | throwError "runAuto :: Index {id} of `validFacts` out of range"
+    trace[auto.smt.unsatCore.smtTerms] "|valid_fact_{id}| : {sterm}"
+  -- **Print Lean expressions correesponding to `validFacts` in unsatCore**
+  SMT.withExprValuation sni state.h2lMap (fun tyValMap varValMap etomValMap => do
+    for id in unsatCoreIds do
+      let .some t := exportLamTerms[id]?
+        | throwError "runAuto :: Index {id} of `exportLamTerms` out of range"
+      let e ← Lam2D.interpLamTermAsUnlifted tyValMap varValMap etomValMap 0 t
+      trace[auto.smt.unsatCore.leanExprs] "|valid_fact_{id}| : {← Core.betaReduce e}"
+    )
+  -- **Print derivation of unsatCore**
+  for id in unsatCoreIds do
     let .some t := exportLamTerms[id]?
       | throwError "runAuto :: Index {id} of `exportLamTerm` out of range"
     let vderiv ← LamReif.collectDerivFor (.valid [] t)
-    trace[auto.smt.unsatCore] "valid_fact_{id}: {vderiv}"
+    trace[auto.smt.unsatCore.deriv] "|valid_fact_{id}| : {vderiv}"
   if auto.smt.rconsProof.get (← getOptions) then
     let (_, _) ← Solver.SMT.getTerm proof
     logWarning "Proof reconstruction is not implemented."
@@ -349,81 +375,76 @@ def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : L
   else
     return .none
 
-/-- solverLemmas includes:
-    - preprcoessFacts : List Expr
-    - theoryLemmas : List Expr
-    - instantiations : List Expr
-    - rewriteFacts : List (List Expr) -/
-abbrev solverLemmas := List Expr × List Expr × List Expr × List (List Expr)
+open LamReif Embedding.Lam in
+/--
+  Given
+  · `nonempties = #[s₀, s₁, ⋯, sᵤ₋₁]`
+  · `valids = #[t₀, t₁, ⋯, kₖ₋₁]`
+  Invoke prover to get a proof of
+    `proof : (∀ (_ : v₀) (_ : v₁) ⋯ (_ : vᵤ₋₁), w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥).interp`
+  and returns
+  · `fun etoms => proof`
+  · `∀ etoms, ∀ (_ : v₀) (_ : v₁) ⋯ (_ : vᵤ₋₁), w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥)`
+  · `etoms`
+  · `[s₀, s₁, ⋯, sᵤ₋₁]`
+  · `[w₀, w₁, ⋯, wₗ₋₁]`
+  Here
+  · `[v₀, v₁, ⋯, vᵤ₋₁]` is a subsequence of `[s₀, s₁, ⋯, sᵤ₋₁]`
+  · `[w₀, w₁, ⋯, wₗ₋₁]` is a subsequence of `[t₀, t₁, ⋯, kₖ₋₁]`
+  · `etoms` are all the etoms present in `w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥`
 
-open Embedding.Lam in
-def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndInfo)
-  (idCiMap : HashMap FVarId Monomorphization.ConstInst) : LamReif.ReifM (Option solverLemmas) := do
-  let lamVarTy := (← LamReif.getVarVal).map Prod.snd
-  let lamEVarTy ← LamReif.getLamEVarTy
-  let exportLamTerms ← exportFacts.mapM (fun re => do
-    match re with
-    | .valid [] t => return t
-    | _ => throwError "runAuto :: Unexpected error")
-  let (commands, l2hMap) ← (lamFOL2SMTWithL2hMap lamVarTy lamEVarTy exportLamTerms exportInds).run'
-  for cmd in commands do
-    trace[auto.smt.printCommands] "{cmd}"
-  if (auto.smt.save.get (← getOptions)) then
-    Solver.SMT.saveQuery commands
-  let .some (unsatCore, solverHints, proof) ← Solver.SMT.querySolverWithHints commands
-    | return .none
-  let (preprocessFacts, theoryLemmas, instantiations, rewriteFacts) := solverHints
-  for id in ← Solver.SMT.validFactOfUnsatCore unsatCore do
-    let .some t := exportLamTerms[id]?
-      | throwError "runAuto :: Index {id} of `exportLamTerm` out of range"
-    let vderiv ← LamReif.collectDerivFor (.valid [] t)
-    trace[auto.smt.unsatCore] "valid_fact_{id}: {vderiv}"
-  let mut symbolMap : HashMap String Expr := HashMap.empty
+  Note that `MetaState.withTemporaryLCtx` is used to isolate the prover from the
+  current local context. This is necessary because `lean-auto` assumes that the prover
+  does not use free variables introduced during monomorphization
+-/
+def callNative_checker
+  (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → MetaM Expr) :
+  ReifM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := do
+  let tyVal ← LamReif.getTyVal
   let varVal ← LamReif.getVarVal
-  for (varName, varAtom) in l2hMap.toArray do
-    match varAtom with
-    | .term termNum =>
-      let vExp := varVal[termNum]!.1
-      trace[auto.smt.result] "{varName} maps to {vExp}"
-      match vExp with
-      | .fvar fVarId =>
-        -- If `vExp` is an fvar, check whether its fVarId appears in `idCiMap`
-        -- If it does, have `symbolMap` map `varName` to the original Lean Expr indicated by `idCiMap`
-        match idCiMap.find? fVarId with
-        | some ci =>
-          trace[auto.smt.result] "fvar {Expr.fvar fVarId} corresponds with {← ci.toExpr}"
-          symbolMap := symbolMap.insert varName (← ci.toExpr)
-        | none =>
-          trace[auto.smt.result] "fvar {Expr.fvar fVarId} not found in idCiMap"
-          symbolMap := symbolMap.insert varName vExp
-      | _ => symbolMap := symbolMap.insert varName vExp
-    | .sort n => logWarning s!"varName: {varName} maps to sort {n}"
-    | .etom _ => logWarning s!"varName: {varName} maps to an etom"
-    | .bvOfNat n => logWarning s!"varName: {varName} maps to bvOfNat {n}"
-    | .bvToNat n => logWarning s!"varName: {varName} maps to bvToNat {n}"
-    | .compCtor lamTerm => logWarning s!"varName: {varName} maps to compCtor {lamTerm}"
-    | .compProj lamTerm => logWarning s!"varName: {varName} maps to compProj {lamTerm}"
-  if ← auto.getHints.getFailOnParseErrorM then
-    let preprocessFacts ← preprocessFacts.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap)
-    let theoryLemmas ← theoryLemmas.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap)
-    let instantiations ← instantiations.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap)
-    let rewriteFacts ← rewriteFacts.mapM
-      (fun rwFacts => rwFacts.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap))
-    let solverLemmas := (preprocessFacts, theoryLemmas, instantiations, rewriteFacts)
-    return some solverLemmas
-  else
-    let preprocessFacts ← preprocessFacts.mapM (fun lemTerm => Parser.SMTTerm.tryParseTerm lemTerm symbolMap)
-    let theoryLemmas ← theoryLemmas.mapM (fun lemTerm => Parser.SMTTerm.tryParseTerm lemTerm symbolMap)
-    let instantiations ← instantiations.mapM (fun lemTerm => Parser.SMTTerm.tryParseTerm lemTerm symbolMap)
-    let rewriteFacts ← rewriteFacts.mapM
-      (fun rwFacts => rwFacts.mapM (fun lemTerm => Parser.SMTTerm.tryParseTerm lemTerm symbolMap))
-    -- Filter out `none` results from the above lists (so we can gracefully ignore lemmas that we couldn't parse)
-    let preprocessFacts := preprocessFacts.filterMap id
-    let theoryLemmas := theoryLemmas.filterMap id
-    let instantiations := instantiations.filterMap id
-    let rewriteFacts := rewriteFacts.map (fun rwFacts => rwFacts.filterMap id)
-    let solverLemmas := (preprocessFacts, theoryLemmas, instantiations, rewriteFacts)
-    return some solverLemmas
+  let lamEVarTy ← LamReif.getLamEVarTy
+  let validsWithDTr ← valids.mapM (fun re =>
+    do return (re, ← collectDerivFor re))
+  MetaState.runAtMetaM' <| (Lam2DAAF.callNativeWithAtomAsFVar nonempties validsWithDTr prover).run'
+    { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
+
+open LamReif Embedding.Lam in
+/--
+  Similar in functionality compared to `callNative_checker`, but
+    all `valid` entries are supposed to be reified facts (so there should
+    be no `etom`s). We invoke the prover to get the same `proof` as
+    `callNativeChecker`, but we return a proof of `⊥` by applying `proof`
+    to un-reified facts.
+
+  Note that `MetaState.withTemporaryLCtx` is used to isolate the prover from the
+  current local context. This is necessary because `lean-auto` assumes that the prover
+  does not use free variables introduced during monomorphization
+-/
+def callNative_direct
+  (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → MetaM Expr) : ReifM Expr := do
+  let tyVal ← LamReif.getTyVal
+  let varVal ← LamReif.getVarVal
+  let lamEVarTy ← LamReif.getLamEVarTy
+  let validsWithDTr ← valids.mapM (fun re =>
+    do return (re, ← collectDerivFor re))
+  let (proof, _, usedEtoms, usedInhs, usedHyps) ← MetaState.runAtMetaM' <|
+    (Lam2DAAF.callNativeWithAtomAsFVar nonempties validsWithDTr prover).run'
+      { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
+  if usedEtoms.size != 0 then
+    throwError "callNative_direct :: etoms should not occur here"
+  let ss ← usedInhs.mapM (fun re => do
+    match ← lookupREntryProof! re with
+    | .inhabitation e _ _ => return e
+    | .chkStep (.n (.nonemptyOfAtom n)) =>
+      match varVal[n]? with
+      | .some (e, _) => return e
+      | .none => throwError "callNative_direct :: Unexpected error"
+    | _ => throwError "callNative_direct :: Cannot find external proof of {re}")
+  let ts ← usedHyps.mapM (fun re => do
+    let .assertion e _ _ ← lookupREntryProof! re
+      | throwError "callNative_direct :: Cannot find external proof of {re}"
+    return e)
+  return mkAppN proof (ss ++ ts)
 
 open Embedding.Lam in
 /--
@@ -434,42 +455,15 @@ def queryNative
   (declName? : Option Name) (exportFacts exportInhs : Array REntry)
   (prover? : Option (Array Lemma → MetaM Expr) := .none) : LamReif.ReifM (Option Expr) := do
   let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ←
-    Lam2D.callNative_checker exportInhs exportFacts (prover?.getD Solver.Native.queryNative)
+    callNative_checker exportInhs exportFacts (prover?.getD Solver.Native.queryNative)
   LamReif.newAssertion proof (.leaf "by_native::queryNative") proofLamTerm
   let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
   let forallElimed ← LamReif.validOfElimForalls etomInstantiated usedInhs
   let contra ← LamReif.validOfImps forallElimed unsatCore
-  LamReif.printValuation
   LamReif.printProofs
   Reif.setDeclName? declName?
   let checker ← LamReif.buildCheckerExprFor contra
-  let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
-  let proof ← Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) contra
-  return .some proof
-
-/--
-  Run native `prover` with monomorphization and preprocessing of `auto`
--/
-def runNativeProverWithAuto
-  (declName? : Option Name) (prover : Array Lemma → MetaM Expr)
-  (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr := do
-  let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) : LamReif.ReifM Expr := (do
-    let exportFacts ← LamReif.reifFacts uvalids
-    let exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
-    let _ ← LamReif.reifInhabitations uinhs
-    let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
-      (fun (s, _) => Embedding.Lam.REntry.nonempty s)
-    let (exportFacts, _) ← LamReif.preprocess exportFacts #[]
-    if let .some expr ← queryNative declName? exportFacts exportInhs prover then
-      return expr
-    else
-      throwError "runNativeProverWithAuto :: Failed to find proof")
-  let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
-    let s ← get
-    let u ← computeMaxLevel s.facts
-    (afterReify s.facts s.inhTys).run' {u := u})
-  trace[auto.tactic] "runNativeProverWithAuto :: Found proof of {← Meta.inferType proof}"
-  return proof
+  Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
 
 /--
   Run `auto`'s monomorphization and preprocessing, then send the problem to different solvers
@@ -488,6 +482,7 @@ def runAuto (declName? : Option Name) (lemmas : Array Lemma) (inhFacts : Array L
     let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
       (fun (s, _) => Embedding.Lam.REntry.nonempty s)
     let exportInds ← LamReif.reifMutInds minds
+    LamReif.printValuation
     -- **Preprocessing in Verified Checker**
     let (exportFacts', exportInds) ← LamReif.preprocess exportFacts exportInds
     exportFacts := exportFacts'
@@ -513,6 +508,7 @@ def runAuto (declName? : Option Name) (lemmas : Array Lemma) (inhFacts : Array L
     let u ← computeMaxLevel s.facts
     (afterReify s.facts s.inhTys s.inds).run' {u := u})
   trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
+  trace[auto.tactic.printProof] "{proof}"
   return proof
 
 @[tactic auto]
@@ -541,6 +537,7 @@ def evalAuto : Tactic
       absurd.assign proof
 | _ => throwUnsupportedSyntax
 
+/- Tag: querySMT
 /-- Run `auto`'s monomorphization and preprocessing, then return the list of preprocessing and theory lemmas output
     by the SMT solver. -/
 def runAutoGetHints (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM solverLemmas := do
@@ -612,6 +609,7 @@ def evalAutoGetHints : Tactic
       let proof ← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []]
       absurd.assign proof
 | _ => throwUnsupportedSyntax
+-/
 
 @[tactic intromono]
 def evalIntromono : Tactic
@@ -629,7 +627,6 @@ def evalIntromono : Tactic
 
 /--
   A monomorphization interface that can be invoked by repos dependent on `lean-auto`.
-  **TODO: Change `prover : Array Lemma → MetaM Expr` to have type `proverName : String`**
 -/
 def monoInterface
   (lemmas : Array Lemma) (inhFacts : Array Lemma)
@@ -640,13 +637,38 @@ def monoInterface
     let _ ← LamReif.reifInhabitations uinhs
     let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
       (fun (s, _) => Embedding.Lam.REntry.nonempty s)
-    let proof ← Lam2D.callNative_direct exportInhs exportFacts prover
-    Meta.mkLetFVars ((← Reif.getFvarsToAbstract).map Expr.fvar) proof)
+    LamReif.printValuation
+    callNative_direct exportInhs exportFacts prover)
   let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
     let uvalids ← liftM <| Reif.getFacts
     let uinhs ← liftM <| Reif.getInhTys
     let u ← computeMaxLevel uvalids
     (afterReify uvalids uinhs).run' {u := u})
+  return proof
+
+/--
+  Run native `prover` with monomorphization and preprocessing of `auto`
+-/
+def runNativeProverWithAuto
+  (declName? : Option Name) (prover : Array Lemma → MetaM Expr)
+  (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr := do
+  let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) : LamReif.ReifM Expr := (do
+    let exportFacts ← LamReif.reifFacts uvalids
+    let exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
+    let _ ← LamReif.reifInhabitations uinhs
+    let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
+      (fun (s, _) => Embedding.Lam.REntry.nonempty s)
+    LamReif.printValuation
+    let (exportFacts, _) ← LamReif.preprocess exportFacts #[]
+    if let .some expr ← queryNative declName? exportFacts exportInhs prover then
+      return expr
+    else
+      throwError "runNativeProverWithAuto :: Failed to find proof")
+  let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
+    let s ← get
+    let u ← computeMaxLevel s.facts
+    (afterReify s.facts s.inhTys).run' {u := u})
+  trace[auto.tactic] "runNativeProverWithAuto :: Found proof of {← Meta.inferType proof}"
   return proof
 
 @[tactic mononative]

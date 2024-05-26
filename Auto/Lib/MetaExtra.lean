@@ -44,13 +44,13 @@ def Meta.trySynthInhabited (e : Expr) : MetaM (Option Expr) := do
   try
     if let .some inh ← Meta.synthInstance? e then
       return .some inh
+    if let .some inh ← Meta.synthInstance? (Lean.mkApp (.const ``Inhabited [lvl]) e) then
+      return .some (Lean.mkApp2 (.const ``Inhabited.default [lvl]) e inh)
+    if let .some inh ← Meta.synthInstance? (Lean.mkApp (.const ``Nonempty [lvl]) e) then
+      return .some (Lean.mkApp2 (.const ``Classical.choice [lvl]) e inh)
+    return .none
   catch _ =>
-    pure .unit
-  if let .some inh ← Meta.synthInstance? (Lean.mkApp (.const ``Inhabited [lvl]) e) then
-    return .some (Lean.mkApp2 (.const ``Inhabited.default [lvl]) e inh)
-  if let .some inh ← Meta.synthInstance? (Lean.mkApp (.const ``Nonempty [lvl]) e) then
-    return .some (Lean.mkApp2 (.const ``Classical.choice [lvl]) e inh)
-  return .none
+    return .none
 
 syntax (name := fromMetaTactic) "fromMetaTactic" "[" ident "]" : tactic
 

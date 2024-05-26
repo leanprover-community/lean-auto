@@ -2,11 +2,20 @@ import Lean
 import Auto.Lib.MonadUtils
 open Lean
 
+initialize
+  registerTraceClass `auto.smt.h2symb
+
 -- smt-lib 2
 
 namespace Auto
 
 namespace IR.SMT
+
+def isSimpleSymbol (s : String) : Bool :=
+  let symbSpecials := "~!@$%^&*_-+=<>.?/"
+  let front := s.front.isAlpha || (symbSpecials.contains s.front)
+  let body := s.all (fun c => c.isAlphanum || symbSpecials.contains c)
+  s.length != 0 && front && body
 
 -- <index>      ::= <numeral> | <symbol>
 -- <identifier> ::= <symbol>  | (_ <symbol> <index>+)
@@ -22,7 +31,7 @@ inductive SIdent where
 deriving BEq, Hashable, Inhabited
 
 def SIdent.toString : SIdent → String
-| .symb s => "|" ++ s ++ "|"
+| .symb s => if isSimpleSymbol s then s else "|" ++ s ++ "|"
 | .indexed s idx =>
   s!"(_ {s} " ++ String.intercalate " " (idx.data.map (fun idx =>
     match idx with
@@ -117,6 +126,22 @@ mutual
 end
 
 def STerm.qStrApp (s : String) (arr : Array STerm) := STerm.qIdApp (.ofString s) arr
+
+def STerm.attrApp (name : String) (attrTerm : STerm) (term : STerm) : STerm :=
+  match term with
+  | .attr term' attrs' => .attr term' (#[attr] ++ attrs')
+  | _ => .attr term #[attr]
+  where
+    attr :=
+      match attrTerm with
+      -- An empty string constant indicates an attribute with no arguments
+      | .sConst (.str "") => .none name
+      -- Other string constants are always symbols here.
+      | .sConst (.str sym) => .symb name sym
+      -- Other constants are constant arguments.
+      | .sConst c => .spec name c
+      -- Non-constant arguments are terms.
+      | t => .sexpr name #[t]
 
 private partial def STerm.toStringAux : STerm → List SIdent → String
   | .sConst c, _         => SpecConst.toString c
@@ -338,7 +363,7 @@ def Command.toString : Command → String
 | .declDtype name ddecl                =>
   s!"(declare-datatype {SIdent.symb name} {ddecl.toString})"
 | .declDtypes infos               =>
-  let sort_decs := String.intercalate " " (infos.data.map (fun (name, args, _) => s!"({name} {args})"))
+  let sort_decs := String.intercalate " " (infos.data.map (fun (name, args, _) => s!"({SIdent.symb name} {args})"))
   let datatype_decs := String.intercalate " " (infos.data.map (fun (_, _, ddecl) => ddecl.toString))
   s!"(declare-datatypes ({sort_decs}) ({datatype_decs}))"
 | .echo s                              => s!"(echo \"{s}\")"
@@ -360,16 +385,26 @@ section
   -/
   structure State where
     -- Map from high-level construct to symbol
-    h2lMap   : HashMap ω String := {}
+    h2lMap    : HashMap ω String   := {}
     -- Inverse of `h2lMap`
     -- Map from symbol to high-level construct
-    l2hMap   : HashMap String ω := {}
-    -- State of low-level name generator
-    --   To avoid collision with keywords, we only
-    --   generate non-annotated identifiers `smti_<idx>`
-    idx      : Nat              := 0
+    l2hMap    : HashMap String ω   := {}
+    -- We allow two types of names
+    -- · `"_" ++ s`,
+    -- · `"_" ++ s ++ "_" ++ <num>`
+    -- Where `s` is a string which does not end with a number and
+    --   does not contain `|` and `\` (for SMT-LIB2)
+    -- Each time we want to create a name, we begin by
+    --   suggesting a name `n`. We first preprocess the name
+    --   so that the resulting name `n'` begins with `_`, is
+    --   not `_`, and does not end with a number. Then, we finalize
+    --   the name by avoiding collision: If `n'` hasn't
+    --   been used, we return `n'` as the final name. If `n'` has
+    --   been used for `k` times (`k > 0`), return `n' ++ s!"_{k - 1}"`.
+    -- `usedNames` records the `k - 1` for each `n'`
+    usedNames : HashMap String Nat := {}
     -- List of commands
-    commands : Array Command    := #[]
+    commands  : Array Command      := #[]
 
   abbrev TransM := StateRefT (State ω) MetaM
 
@@ -383,7 +418,7 @@ section
   instance : Inhabited (TransM ω α) where
     default := fun _ => throw default
 
-  variable {ω : Type} [BEq ω] [Hashable ω]
+  variable {ω : Type} [BEq ω] [Hashable ω] [ToString ω]
 
   @[inline] def TransM.run (x : TransM ω α) (s : State ω := {}) : MetaM (α × State ω) :=
     StateRefT'.run x s
@@ -401,33 +436,49 @@ section
   def hIn (e : ω) : TransM ω Bool := do
     return (← getH2lMap).contains e
 
-  /-- Used for e.g. bound variables -/
-  partial def disposableName : TransM ω String := do
-    let l2hMap ← getL2hMap
-    let idx ← getIdx
-    let currName := s!"smtd_{idx}"
-    if l2hMap.contains currName then
-      throwError "disposableName :: Unexpected error"
-    setIdx (idx + 1)
-    return currName
+  /- Note that this function will add the processed name to `usedNames` -/
+  def processSuggestedName (nameSuggestion : String) : TransM ω String := do
+    let mut preName := nameSuggestion.map (fun c => if allowed c then c else '_')
+    if preName.all (fun c => c == '_') then
+      preName := "pl_" ++ preName
+    if preName.back.isDigit then
+      preName := preName ++ "_"
+    if let .some idx := (← getUsedNames).find? preName then
+      -- Used
+      setUsedNames ((← getUsedNames).insert preName (idx + 1))
+      return "_" ++ preName ++ s!"_{idx}"
+    else
+      -- Unused
+      setUsedNames ((← getUsedNames).insert preName 0)
+      return "_" ++ preName
+  where
+    allowed (c : Char) :=
+      let allowedStr : String :=
+        "~!@$%^&*_-+=<>.?/" ++
+        "ΑαΒβΓγΔδΕεΖζΗηΘθΙιΚκΛλΜμΝνΞξΟοΠπΡρΣσςΤτΥυΦφΧχΨψΩω" ++
+        "₀₁₂₃₄₅₆₇₈₉"
+      let allowedSet : HashSet UInt32 := HashSet.insertMany HashSet.empty (List.map Char.val allowedStr.toList)
+      c.isAlphanum || allowedSet.contains c.val
+
+
+  /- Generate names that does not correspond to high-level construct -/
+  partial def disposableName (nameSuggestion : String) : TransM ω String := processSuggestedName nameSuggestion
 
   /--
     Turn high-level construct into low-level symbol
     Note that this function is idempotent
   -/
-  partial def h2Symb (cstr : ω) : TransM ω String := do
+  partial def h2Symb (cstr : ω) (nameSuggestion : Option String) : TransM ω String := do
     let l2hMap ← getL2hMap
     let h2lMap ← getH2lMap
     if let .some name := h2lMap.find? cstr then
       return name
-    let idx ← getIdx
-    let currName : String := s!"smti_{idx}"
-    if l2hMap.contains currName then
-      throwError "h2Symb :: Unexpected error"
-    setL2hMap (l2hMap.insert currName cstr)
-    setH2lMap (h2lMap.insert cstr currName)
-    setIdx (idx + 1)
-    return currName
+    let .some nameSuggestion := nameSuggestion
+      | throwError "IR.SMT.h2Symb :: Fresh high-level constraint {cstr} without name suggestion"
+    let name ← processSuggestedName nameSuggestion
+    setL2hMap (l2hMap.insert name cstr)
+    setH2lMap (h2lMap.insert cstr name)
+    return name
 
   def addCommand (c : Command) : TransM ω Unit := do
     let commands ← getCommands

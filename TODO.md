@@ -16,7 +16,9 @@ __Auto Issues:__
   #check (fun (x : Nonstruct) => x.1)
   ```
 * Add semantics check for ``BitVec`` operations
-* Unsound translation for SMT: Although we have the option ``auto.smt.trust``, the translation is unsound since types in Lean might be inhabited while SMT-LIB assumes that all types are inhabited.
+* **Unsound translation for SMT:** Although we have the option ``auto.smt.trust``, the translation is unsound since
+  * Types in Lean might be inhabited while SMT-LIB assumes that all types are inhabited.
+  * ``Nat`` in inductive type constructors' arguments' are not properly treated (see ``SmtTranslation/Inductive.lean``)
 * ``autoSMTSorry`` warning?
 * Report errors when monomorphization fails.
 * Better inhabitation reasoning (a new lambaseterm ctor "nonempty"). Support divide and conquer for inhabitation reasoning in verified checker?
@@ -29,8 +31,10 @@ __Auto Issues:__
 * Benchmarks:
   * GRUNGE: https://arxiv.org/abs/1903.02539
   * Seventeen benchmark: https://matryoshka-project.github.io/pubs/seventeen.pdf
-* Fix Josh's issue posted on Zulip. Implement mapping from monomorphized formula to original formula.
+* Performance: ``collectLamTermAtoms`` have quadratic worst-case performance
 * Fix: Proof parsing too slow
+* Fix: ``SMTNamingInfo`` suggest name for ``compCtor`` and ``compProj``
+* Fix: Translation of `abs`
 
 __Lean Issues:__
 * ``cases`` fails on some simple examples. E.g, ``cases h : a.beq b`` fails if the goal contains term

@@ -1,8 +1,5 @@
 import Auto.Embedding.LamConv
 import Auto.Lib.NatExtra
-import Std.Data.Int.Lemmas
-import Std.Data.Fin.Lemmas
-import Std.Data.BitVec.Lemmas
 
 namespace Auto.Embedding.Lam
 
@@ -96,7 +93,7 @@ namespace BVLems
     apply Nat.le_trans (toNat_le _) (Nat.pow_le_pow_of_le_right (.step .refl) h)
 
   theorem ushiftRight_ge_length_eq_zero' (a : BitVec n) (i : Nat) : i ≥ n → (a.toNat >>> i)#n = 0#n := by
-    intro h; apply congr_arg (@BitVec.ofNat n)
+    intro h; apply congrArg (@BitVec.ofNat n)
     rw [Nat.shiftRight_eq_div_pow, Nat.le_iff_div_eq_zero (Nat.two_pow_pos _)]
     apply Nat.le_trans (toNat_le _) (Nat.pow_le_pow_of_le_right (.step .refl) h)
 

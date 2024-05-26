@@ -1,9 +1,10 @@
 import Lean
-import Std.Data.Array.Basic
 import Auto.Lib.MonadUtils
 import Auto.Lib.ExprExtra
 import Auto.Lib.MetaExtra
 import Auto.Translation.ReifM
+import Auto.Translation.LamUtils
+import Auto.Translation.SMTAttributes
 import Auto.MathlibEmulator
 import Auto.Embedding.LamChecker
 import Auto.Embedding.LamInhReasoning
@@ -497,134 +498,6 @@ section ILLifting
 
 end ILLifting
 
--- This section should only be used when exporting terms to external provers
-section ExportUtils
-
-  def exportError.ImpPolyLog :=
-    "Import versions of polymorphic logical " ++
-    "constants should have been eliminated"
-
-  def collectLamSortAtoms : LamSort → HashSet Nat
-  | .atom n => HashSet.empty.insert n
-  | .base _ => HashSet.empty
-  | .func a b => (collectLamSortAtoms a).insertMany (collectLamSortAtoms b)
-
-  def collectLamSortsAtoms (ss : Array LamSort) : HashSet Nat :=
-    ss.foldl (fun hs s => hs.insertMany (collectLamSortAtoms s)) HashSet.empty
-
-  def collectLamSortBitVecLengths : LamSort → HashSet Nat
-  | .base (.bv n) => HashSet.empty.insert n
-  | .func a b => (collectLamSortBitVecLengths a).insertMany (collectLamSortBitVecLengths b)
-  | _ => HashSet.empty
-
-  def collectLamSortsBitVecLengths (ss : Array LamSort) : HashSet Nat :=
-    ss.foldl (fun hs s => hs.insertMany (collectLamSortBitVecLengths s)) HashSet.empty
-
-  /-- Collect type atoms in a LamBaseTerm -/
-  def collectLamBaseTermAtoms (b : LamBaseTerm) : CoreM (HashSet Nat) := do
-    let s? : Option LamSort ← (do
-      match b with
-      | .eqI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
-      | .forallEI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
-      | .existEI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
-      | .iteI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
-      | .eq s => return .some s
-      | .forallE s => return .some s
-      | .existE s => return .some s
-      | .ite s => return .some s
-      | _ => return none)
-    if let .some s := s? then
-      return collectLamSortAtoms s
-    else
-      return HashSet.empty
-
-  /--
-    The first hashset is the type atoms
-    The second hashset is the term atoms
-    The third hashset is the term etoms
-    This function is called when we're trying to export terms
-      from `λ` to external provers, e.g. Lean/Duper
-    Therefore, we expect that `eqI, forallEI, existEI` and ``ite'`
-      does not occur in the `LamTerm`
-  -/
-  def collectLamTermAtoms (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort) :
-    LamTerm → CoreM (HashSet Nat × HashSet Nat × HashSet Nat)
-  | .atom n => do
-    let .some s := lamVarTy[n]?
-      | throwError "collectAtoms :: Unknown term atom {n}"
-    return (collectLamSortAtoms s, HashSet.empty.insert n, HashSet.empty)
-  | .etom n => do
-    let .some s := lamEVarTy[n]?
-      | throwError "collectAtoms :: Unknown etom {n}"
-    return (collectLamSortAtoms s, HashSet.empty, HashSet.empty.insert n)
-  | .base b => do
-    return (← collectLamBaseTermAtoms b, HashSet.empty, HashSet.empty)
-  | .bvar _ => pure (HashSet.empty, HashSet.empty, HashSet.empty)
-  | .lam s t => do
-    let (typeHs, termHs, etomHs) ← collectLamTermAtoms lamVarTy lamEVarTy t
-    let sHs := collectLamSortAtoms s
-    return (mergeHashSet typeHs sHs, termHs, etomHs)
-  | .app _ t₁ t₂ => do
-    let (typeHs₁, termHs₁, etomHs₁) ← collectLamTermAtoms lamVarTy lamEVarTy t₁
-    let (typeHs₂, termHs₂, etomHs₂) ← collectLamTermAtoms lamVarTy lamEVarTy t₂
-    return (mergeHashSet typeHs₁ typeHs₂,
-            mergeHashSet termHs₁ termHs₂,
-            mergeHashSet etomHs₁ etomHs₂)
-
-  def collectLamTermsAtoms (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort)
-    (ts : Array LamTerm) : CoreM (HashSet Nat × HashSet Nat × HashSet Nat) :=
-    ts.foldlM (fun (tyHs, aHs, eHs) t => do
-      let (tyHs', aHs', eHs') ← collectLamTermAtoms lamVarTy lamEVarTy t
-      return (mergeHashSet tyHs tyHs', mergeHashSet aHs aHs', mergeHashSet eHs eHs'))
-      (HashSet.empty, HashSet.empty, HashSet.empty)
-
-  def collectLamTermNatConsts : LamTerm → HashSet NatConst
-  | .base (.ncst nc) => HashSet.empty.insert nc
-  | .lam _ body => collectLamTermNatConsts body
-  | .app _ fn arg => mergeHashSet (collectLamTermNatConsts fn) (collectLamTermNatConsts arg)
-  | _ => HashSet.empty
-
-  def collectLamTermsNatConsts (ts : Array LamTerm) : HashSet NatConst :=
-    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermNatConsts t)) HashSet.empty
-
-  def collectLamTermIntConsts : LamTerm → HashSet IntConst
-  | .base (.icst ic) => HashSet.empty.insert ic
-  | .lam _ body => collectLamTermIntConsts body
-  | .app _ fn arg => mergeHashSet (collectLamTermIntConsts fn) (collectLamTermIntConsts arg)
-  | _ => HashSet.empty
-
-  def collectLamTermsIntConsts (ts : Array LamTerm) : HashSet IntConst :=
-    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermIntConsts t)) HashSet.empty
-
-  def collectLamTermStringConsts : LamTerm → HashSet StringConst
-  | .base (.scst sc) => HashSet.empty.insert sc
-  | .lam _ body => collectLamTermStringConsts body
-  | .app _ fn arg => mergeHashSet (collectLamTermStringConsts fn) (collectLamTermStringConsts arg)
-  | _ => HashSet.empty
-
-  def collectLamTermsStringConsts (ts : Array LamTerm) : HashSet StringConst :=
-    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermStringConsts t)) HashSet.empty
-
-  def collectLamTermBitvecs : LamTerm → HashSet BitVecConst
-  | .base (.bvcst bvc) => HashSet.empty.insert bvc
-  | .lam _ body => collectLamTermBitvecs body
-  | .app _ fn arg => mergeHashSet (collectLamTermBitvecs fn) (collectLamTermBitvecs arg)
-  | _ => HashSet.empty
-
-  def collectLamTermsBitvecs (ts : Array LamTerm) : HashSet BitVecConst :=
-    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermBitvecs t)) HashSet.empty
-
-  def collectLamTermIteSorts : LamTerm → HashSet LamSort
-  | .base (.ite s) => HashSet.empty.insert s
-  | .lam _ body => collectLamTermIteSorts body
-  | .app _ fn arg => mergeHashSet (collectLamTermIteSorts fn) (collectLamTermIteSorts arg)
-  | _ => HashSet.empty
-
-  def collectLamTermsIteSorts (ts : Array LamTerm) : HashSet LamSort :=
-    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermIteSorts t)) HashSet.empty
-
-end ExportUtils
-
 -- Functions that operates on the checker table
 section Checker
 
@@ -1072,7 +945,7 @@ section CheckerUtils
       ret := ret.append (← decomposeAnd factsConj [])
     -- ite specification
     let allLamTerms := (vs.map (fun re => Array.mk (REntry.allLamTerms re))).concatMap id
-    let iteSorts := collectLamTermsIteSorts allLamTerms
+    let iteSorts := LamExportUtils.collectLamTermsIteSorts allLamTerms
     ret := ret.append (← iteSorts.toArray.mapM iteSpec)
     return ret
 
@@ -1132,7 +1005,7 @@ private def reifTypeAux : Expr → ReifM LamSort
 | .mdata _ e => reifTypeAux e
 | e@(.forallE _ ty body _) => do
   if body.hasLooseBVar 0 then
-    throwError "reifType :: Type {e} has dependent ∀"
+    processTypeExpr e
   else
     return .func (← reifTypeAux ty) (← reifTypeAux body)
 | e => processTypeExpr e
@@ -1145,35 +1018,6 @@ def newTermExpr (e : Expr) : ReifM LamTerm := do
   let eTy ← instantiateMVars (← Meta.inferType e)
   let lamTy ← reifType eTy
   newTermExprAux e lamTy
-
--- Auxiliary definitions for reification
-abbrev Nat.modEq (n a b : Nat) := a % n = b % n
-abbrev Nat.ge (x y : Nat) := Nat.le y x
-abbrev Nat.gt (x y : Nat) := Nat.lt y x
-abbrev Nat.max (x y : Nat) : Nat := Max.max x y
-abbrev Nat.min (x y : Nat) : Nat := Min.min x y
-abbrev Int.modEq (n a b : Int) := a % n = b % n
-abbrev Int.ge (a b : Int) := Int.le b a
-abbrev Int.gt (a b : Int) := Int.lt b a
-abbrev Int.max (x y : Int) : Int := Max.max x y
-abbrev Int.min (x y : Int) : Int := Min.min x y
-abbrev String.ge (a b : String) : Prop := b = a ∨ b < a
-abbrev String.gt (a b : String) : Prop := b < a
-abbrev BitVec.uge (a b : BitVec n) : Bool := BitVec.ule b a
-abbrev BitVec.ugt (a b : BitVec n) : Bool := BitVec.ult b a
-abbrev BitVec.sge (a b : BitVec n) : Bool := BitVec.sle b a
-abbrev BitVec.sgt (a b : BitVec n) : Bool := BitVec.slt b a
-abbrev BitVec.propule (a b : BitVec n) : Prop := a.toFin <= b.toFin
-abbrev BitVec.propult (a b : BitVec n) : Prop := a.toFin < b.toFin
-abbrev BitVec.propsle (a b : BitVec n) : Prop := a.toInt <= b.toInt
-abbrev BitVec.propslt (a b : BitVec n) : Prop := a.toInt < b.toInt
-abbrev BitVec.propuge (a b : BitVec n) : Prop := BitVec.propule b a
-abbrev BitVec.propugt (a b : BitVec n) : Prop := BitVec.propult b a
-abbrev BitVec.propsge (a b : BitVec n) : Prop := BitVec.propsle b a
-abbrev BitVec.propsgt (a b : BitVec n) : Prop := BitVec.propslt b a
-abbrev BitVec.smtHshiftLeft (a : BitVec n) (b : BitVec m) := BitVec.shiftLeft a b.toNat
-abbrev BitVec.smtHushiftRight (a : BitVec n) (b : BitVec m) := BitVec.ushiftRight a b.toNat
-abbrev BitVec.smtHsshiftRight (a : BitVec n) (b : BitVec m) := BitVec.sshiftRight a b.toNat
 
 def reifMapIL : HashMap Name (LamSort → LamBaseTerm) :=
   HashMap.ofList [
@@ -1271,6 +1115,11 @@ def reifMapBVConst3 : HashMap Name (Nat → Nat → Nat → LamTerm) :=
     (``BitVec.extractLsb, fun n h l => .base (.bvextract n h l))
   ]
 
+def reifMapAttributesProp : HashMap Name String :=
+  HashMap.ofList [
+    (``SMT.Attribute.trigger, "pattern")
+  ]
+
 def processSimpleLit (l : Literal) : LamTerm :=
   match l with
   | .natVal n => .base (.natVal n)
@@ -1304,6 +1153,10 @@ def processSimpleApp (fn arg : Expr) : ReifM (Option LamTerm) := do
       if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
         return .some (tcon n)
       return .none
+    if let .some attrName := reifMapAttributesProp.find? name then
+      if lvls.length != 1 then
+        throwError "processSimpleApp :: Attribute should have one level"
+      return .some (.base (.ocst (.smtAttr1T attrName (← reifType arg) (.base .prop))))
       -- `arg` is the original (un-lifted) type
     if let .some tcon := reifMapIL.find? name then
       return .some (.base (tcon (← reifType arg)))
@@ -1329,6 +1182,7 @@ def processSimpleApp (fn arg : Expr) : ReifM (Option LamTerm) := do
     return .none
   | _ => return .none
 
+open LamCstrD in
 /--
   fn   : .const _ _
   arg₁ : .const _ _
@@ -1356,6 +1210,7 @@ def reifMapLam0Arg2NoLit : HashMap (Name × Name) (Expr × LamTerm) :=
     ((``Min.min, ``Int),         (.const ``Int.min [], .base .imin))
   ]
 
+open LamCstrD in
 /--
   fn   : .const _ _
   arg₁ : .app (.const _ _) natlit
@@ -1425,6 +1280,7 @@ def reifMapLam0Arg4NatLitNatLitEq : HashMap (Name × Name) (Array ((Nat → Expr
       #[(fun n => .app (.const ``BitVec.xor []) (.lit (.natVal n)), fun n => .base (.bvxor n))])
   ]
 
+open LamCstrD in
 /--
   fn   : .const _ _
   arg₁ : .app (.const _ _) natlit₁

@@ -1,17 +1,17 @@
 import Auto.IR.TPTP_TH0
-import Auto.Translation.LamReif
+import Auto.Translation.LamUtils
 
 namespace Auto
 open Lean Embedding.Lam Lam2TH0
 
 def lam2TH0 (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort) (facts : Array LamTerm) : CoreM String := do
-  let (typeHs, termHs, etomHs) ← LamReif.collectLamTermsAtoms lamVarTy lamEVarTy facts
-  let bvHs := LamReif.collectLamTermsBitvecs facts
-  let bvLengthHs := LamReif.collectLamSortsBitVecLengths (
+  let (typeHs, termHs, etomHs) ← LamExportUtils.collectLamTermsAtoms lamVarTy lamEVarTy facts
+  let bvHs := LamExportUtils.collectLamTermsBitvecs facts
+  let bvLengthHs := LamExportUtils.collectLamSortsBitVecLengths (
     bvHs.toArray.map BitVecConst.lamCheck ++ lamVarTy ++ lamEVarTy)
-  let ncHs := LamReif.collectLamTermsNatConsts facts
-  let icHs := LamReif.collectLamTermsIntConsts facts
-  let scHs := LamReif.collectLamTermsStringConsts facts
+  let ncHs := LamExportUtils.collectLamTermsNatConsts facts
+  let icHs := LamExportUtils.collectLamTermsIntConsts facts
+  let scHs := LamExportUtils.collectLamTermsStringConsts facts
   let sorts :=
     ["thf(sortdecl_nat, type, s_nat: $tType).",
      "thf(sortdecl_int, type, s_int: $tType).",

@@ -1,5 +1,4 @@
 import Auto.Tactic
-import Std.Data.BitVec
 set_option auto.smt true
 set_option auto.smt.trust true
 set_option trace.auto.smt.printCommands true
@@ -22,10 +21,10 @@ def Zone.MinArea1 : Zone → Area
 abbrev Zone.MinArea1.defeq_spec :=
   Zone.MinArea1 .Z1 = 10000 ∧ Zone.MinArea1 .Z2 = 5000 ∧
   Zone.MinArea1 .Z3 = 3500 ∧ Zone.MinArea1 .Z4 = 2500
-theorem Zone.MinArea1.defeq : defeq_spec := by simp
+theorem Zone.MinArea1.defeq : defeq_spec := by trivial
 
 
-example (x: Zone) : x.MinArea1 >= 2500 := by cases x <;> simp -- succeeds
+example (x: Zone) : x.MinArea1 >= 2500 := by cases x <;> trivial -- succeeds
 example (x: Zone) : x.MinArea1 >= 2500 := by auto [Zone.MinArea1.defeq]
 
 def Zone.MinArea2 : Zone → Area
@@ -38,7 +37,7 @@ abbrev Zone.MinArea2.defeq_spec :=
   Zone.MinArea2 .Z1 = 0 ∧ Zone.MinArea2 .Z2 = 5000 ∧
   Zone.MinArea2 .Z3 = 6500 ∧ Zone.MinArea2 .Z4 = 7500
 
-theorem Zone.MinArea2.defeq : defeq_spec := by simp
+theorem Zone.MinArea2.defeq : defeq_spec := by trivial
 
 example (x: Zone) : x.MinArea1 + x.MinArea2 = 10000 := by
   auto [Zone.MinArea1.defeq, Zone.MinArea2.defeq]

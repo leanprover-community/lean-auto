@@ -15,6 +15,10 @@ set_option auto.smt.solver.name "z3"
 set_option auto.tptp true
 set_option trace.auto.tptp.printProof true
 
+-- emulate native solver
+set_option auto.native true
+attribute [rebind Auto.Native.solverFunc] Auto.Solver.Native.emulateNative
+
 -- Manual Check
 
 section ManualCheck
@@ -460,6 +464,16 @@ section DefinitionRecognition
 
 end DefinitionRecognition
 
+-- Complex
+
+section Complex
+
+  set_option auto.mono.ignoreNonQuasiHigherOrder true in
+  example (h1 : ∀ x : Nat, x > 0 → ∃ y : Fin x, y.1 = 0) (h2 : 3 > 0) : ∃ z : Fin 3, z.1 = 0 := by
+    auto
+
+end Complex
+
 -- Ad-hoc support
 
 section Adhoc
@@ -577,6 +591,10 @@ section Issues
   set_option trace.auto.mono true
   set_option trace.auto.mono.printConstInst true
   set_option trace.auto.lamReif.printResult true
+
+  set_option auto.mono.ignoreNonQuasiHigherOrder false in
+  example (h1 : ∀ x : Nat, x > 0 → ∃ y : Fin x, y.1 = 0) (h2 : 3 > 0) : ∃ z : Fin 3, z.1 = 0 := by
+    auto
 
   -- Do not know how to deal with expression ∃ i_1, dvd i x
   -- Non-dependent ∃, but whose domain type is a `Prop`

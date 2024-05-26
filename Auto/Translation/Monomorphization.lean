@@ -29,6 +29,20 @@ register_option auto.mono.recordInstInst : Bool := {
   descr := "Whether to record instances of constants with the `instance` attribute"
 }
 
+register_option auto.mono.ignoreNonQuasiHigherOrder : Bool := {
+  defValue := false
+  descr := "Whether to ignore non quasi-higher-order" ++
+           " " ++ "monomorphization preprocessing outputs or to throw an error"
+}
+
+/-
+register_option auto.mono.allowGeneralExprAbst : Bool := {
+  defValue := false
+  descr := "Apart from `ConstInst`s, allow general expressions to be abstracted" ++
+           " " ++ "as free variables"
+}
+-/
+
 namespace Auto.Monomorphization
 open Embedding
 
@@ -372,7 +386,10 @@ def LemmaInst.matchConstInst (ci : ConstInst) (li : LemmaInst) : MetaM (HashSet 
 def LemmaInst.monomorphic? (li : LemmaInst) : MetaM (Option LemmaInst) := do
   if li.params.size != 0 then
     return .none
-  if !(← Expr.isMonomorphicFact li.type) then
+  -- Do not use `prepReduceExpr` because lemmas about
+  --   recursors might be reduced to tautology
+  let li := {li with type := ← Core.betaReduce li.type}
+  if !(← Expr.leadingForallQuasiMonomorphic li.type) then
     return .none
   Meta.withNewMCtxDepth do
     let (_, mvars, mi) ← MLemmaInst.ofLemmaInst li
@@ -388,8 +405,8 @@ def LemmaInst.monomorphic? (li : LemmaInst) : MetaM (Option LemmaInst) := do
 
 /-
   Monomorphization works as follows:
-  (1) Compute the number of `∀` binders for each input assumption.
-      They form the initial elements of `liArr`
+  (1) Turning `Lemma`s into `LemmaInst`s, which constitutes the
+      value of `lisArr` in the beginning
   (2) Scan through all assumptions to find subterms that are
       valid instances of constants (dependent arguments fully
       instantiated). They form the initial elements of `ciMap`
@@ -416,7 +433,7 @@ structure State where
   activeCi : Std.Queue (Expr × Nat)  := Std.Queue.empty
   -- During initialization, we supply an array `lemmas` of lemmas
   --   `liArr[i]` are instances of `lemmas[i]`.
-  lisArr    : Array LemmaInsts       := #[]
+  lisArr   : Array LemmaInsts       := #[]
 
 abbrev MonoM := StateRefT State MetaM
 
@@ -565,6 +582,7 @@ namespace FVarRep
 
   structure State where
     bfvars   : Array FVarId             := #[]
+    -- Free variables representing abstracted expressions
     ffvars   : Array FVarId             := #[]
     exprMap  : HashMap Expr FVarId      := {}
     ciMap    : HashMap Expr ConstInsts
@@ -578,6 +596,14 @@ namespace FVarRep
 
   #genMonadState FVarRepM
 
+  def getBfvarSet : FVarRepM (HashSet FVarId) := do
+    let bfvars ← getBfvars
+    return HashSet.empty.insertMany bfvars
+
+  def getFfvarSet : FVarRepM (HashSet FVarId) := do
+    let ffvars ← getFfvars
+    return HashSet.empty.insertMany ffvars
+
   /-- Similar to `Monomorphization.processConstInst` -/
   def processConstInst (ci : ConstInst) : FVarRepM Unit := do
     let (old?, insts, ci) ← MetaState.runMetaM <| CiMap.canonicalize? (← getCiMap) ci
@@ -586,32 +612,43 @@ namespace FVarRep
     trace[auto.mono.printConstInst] "New {ci}"
     setCiMap ((← getCiMap).insert ci.fingerPrint (insts.push ci))
 
-  def processTypeAux : Expr → FVarRepM Unit
-  | .forallE _ ty body _ => do
-    if body.hasLooseBVar 0 then
-      return
-    processTypeAux ty
-    processTypeAux body
-  | e => do
-    let e := Expr.eraseMData e
-    if (← getTyCanMap).contains e then
-      return
-    for (e', ec) in (← getTyCanMap).toList do
-      if ← MetaState.isDefEqRigid e e' then
-        setTyCanMap ((← getTyCanMap).insert e ec)
-        return
-    setTyCanMap ((← getTyCanMap).insert e e)
-
-  def processType (e : Expr) : FVarRepM Unit := do
+  /-- Return : (reduce(e), whether reduce(e) contain bfvars) -/
+  def processType (e : Expr) : FVarRepM (Expr × Bool) := do
     let e ← MetaState.runMetaM <| prepReduceExpr e
-    processTypeAux e
+    let bfvarSet ← getBfvarSet
+    -- If `e` contains no bound variables
+    if !e.hasAnyFVar bfvarSet.contains then
+      processTypeAux e
+      return (e, false)
+    else
+      return (e, true)
+  where
+    processTypeAux : Expr → FVarRepM Unit
+    | e@(.forallE _ ty body _) => do
+      if body.hasLooseBVar 0 then
+        -- It's possible that the type can be decomposed further,
+        -- but for simplicity, give up for now
+        addTypeToTyCanMap e
+      else
+        processTypeAux ty
+        processTypeAux body
+    | e => addTypeToTyCanMap e
+    addTypeToTyCanMap (e : Expr) : FVarRepM Unit := do
+      let e := Expr.eraseMData e
+      if (← getTyCanMap).contains e then
+        return
+      for (e', ec) in (← getTyCanMap).toList do
+        if ← MetaState.isDefEqRigid e e' then
+          setTyCanMap ((← getTyCanMap).insert e ec)
+          return
+      setTyCanMap ((← getTyCanMap).insert e e)
 
-  def ConstInst2FVarId (ci : ConstInst) : FVarRepM FVarId := do
+  def constInst2FVarId (ci : ConstInst) : FVarRepM FVarId := do
     let ciMap ← FVarRep.getCiMap
     let ci ← MetaState.runMetaM (do
       match ← CiMap.canonicalize? ciMap ci with
       | (true, _, ci') => return ci'
-      | _ => throwError "ConstInst2FVarId :: Cannot find canonicalized instance of {ci}")
+      | _ => throwError "constInst2FVarId :: Cannot find canonicalized instance of {ci}")
     let ciIdMap ← FVarRep.getCiIdMap
     match ciIdMap.find? ci with
     | .some fid => return fid
@@ -619,83 +656,208 @@ namespace FVarRep
       let userName := (`cifvar).appendIndexAfter (← getCiIdMap).size
       let cie ← MetaState.runMetaM ci.toExpr
       let city ← instantiateMVars (← MetaState.inferType cie)
-      processType city
+      let (city, _) ← processType city
       let fvarId ← MetaState.withLetDecl userName city cie .default
       setCiIdMap ((← getCiIdMap).insert ci fvarId)
       setIdCiMap ((← getIdCiMap).insert fvarId ci)
       setFfvars ((← getFfvars).push fvarId)
       return fvarId
 
-  def UnknownExpr2FVarId (e : Expr) : FVarRepM FVarId := do
-    trace[auto.mono] "Do not know how to deal with expression {e}. Turning it into free variable ..."
+  def throwMonoFail {α : Type} (e : Expr) : FVarRepM α := do
+    let m₁ := m!"Monomorphization failed because currently the procedure cannot deal with expression `{e}`."
+    let m₂ := m!"This is because it contains free variables and has subterms possessing at least one of the following features"
+    let m₃ := m!"· Type argument with free variables, e.g. `@Fin.add (n + 2) a b`"
+    let m₄ := m!"· λ binders whose type contain free variables, e.g. `fun (x : a) => x` where `a` is a free variable"
+    let m₅ := m!"· (TODO)"
+    throwError m₁ ++ "\n" ++ m₂ ++ "\n" ++ m₃ ++ "\n" ++ m₄ ++ "\n" ++ m₅
+
+  def unknownExpr2FVar (e : Expr) : FVarRepM Expr := do
+    let bfvarSet ← getBfvarSet
+    if e.hasAnyFVar bfvarSet.contains then
+      throwMonoFail e
     for (e', fid) in (← getExprMap).toList do
       if ← MetaState.isDefEqRigid e e' then
-        return fid
+        return Expr.fvar fid
+    -- Put this trace message after the above for loop
+    --   to avoid duplicated messages
+    trace[auto.mono] "Don't know how to deal with expression {e}. Turning it into free variable ..."
     let userName := (`exfvar).appendIndexAfter (← getExprMap).size
     let ety ← instantiateMVars (← MetaState.inferType e)
-    processType ety
+    let (ety, _) ← processType ety
     let fvarId ← MetaState.withLetDecl userName ety e .default
     setExprMap ((← getExprMap).insert e fvarId)
     setFfvars ((← getFfvars).push fvarId)
-    return fvarId
+    return Expr.fvar fvarId
 
-  /-- Since we're now dealing with monomorphized lemmas, there are no bound level parameters -/
-  partial def replacePolyWithFVar : Expr → FVarRepM Expr
+  /-
+  -- **TODO:** Unify the approach for `general expressions` and `ConstInst`
+  --   because they're inherently the same
+  -- **TODO:** It's not as simple as this. Consider
+  --  F (fun (α : Type) (a : α) (b : α → Nat → Nat) (c : Nat), b a c)
+  def unknownExpr2Expr (e : Expr) : FVarRepM Expr := do
+    let (_, collectFVarsState) ← MetaState.runMetaM <| e.collectFVars.run {}
+    let exfvars := collectFVarsState.fvarIds
+    let exfvarSet := collectFVarsState.fvarSet
+    let bfvars := (← getBfvars).filter exfvarSet.contains
+    let mut depChkFVarSet := HashSet.empty
+    let ety ← MetaState.runMetaM (Meta.inferType e >>= prepReduceExpr)
+    -- If the type of any bound variable depend on other bound
+    -- variables, then abstracting away these `bfvars` will result
+    -- in a dependently typed expression.
+    -- Note that `ffvars` are essentially monomorphic, so
+    -- it's safe to ignore them when considering whether a
+    -- term will be dependently typed
+    -- **TODO**: but is it?
+    for fid in bfvars do
+      let ty ← MetaState.runMetaM (fid.getType >>= prepReduceExpr)
+      if ty.hasAnyFVar depChkFVarSet.contains then
+        return e
+      depChkFVarSet := depChkFVarSet.insert fid
+    -- If `ety` contains any `bfvars`, then abstracting away
+    -- these `bfvars` will result in a dependently typed expression
+    if ety.hasAnyFVar depChkFVarSet.contains then
+      return e
+    -- Now, we know that the expression will be essentially monomorphic
+    -- after we abstract away `bfvars`
+    let bfvarSet ← getBfvarSet
+    for (e', fid) in (← getExprMap).toList do
+      if ← MetaState.isDefEqRigid e e' then
+        return Expr.fvar fid
+    -- `e` is a new expression
+    let userName := (`exfvar).appendIndexAfter (← getExprMap).size
+    let ffvarSet ← getFfvarSet
+    let fvarOccs := exfvars.filter (ffvarSet.insertMany bfvarSet).contains
+    let eabst ← MetaState.runMetaM <|
+      Meta.mkLambdaFVars (fvarOccs.map Expr.fvar) e (usedOnly:=false)
+    trace[auto.mono] "Turning general expression {eabst} into free variable ..."
+    let eabstTy ← MetaState.runMetaM <|
+      Meta.mkForallFVars (fvarOccs.map Expr.fvar) ety (usedOnly:=false)
+    -- Note that `eabst` has type `α₁ → ⋯ → αₖ → ety`. However, since each
+    -- `αᵢ` is a type of some `ffvar`, it has already been processed. Therefore,
+    -- we don't have to process `αᵢ` again, only `ety` needs to be processed.
+    let _ ← processType ety
+    let fvarId ← MetaState.withLetDecl userName eabstTy eabst .default
+    setExprMap ((← getExprMap).insert eabst fvarId)
+    setFfvars ((← getFfvars).push fvarId)
+    return Lean.mkAppN (Expr.fvar fvarId) (fvarOccs.map Expr.fvar)
+
+  def processUnknownExpr (e : Expr) : FVarRepM Expr := do
+    let allowGeneralEA := auto.mono.allowGeneralExprAbst.get (← getOptions)
+    if allowGeneralEA then
+      unknownExpr2Expr e
+    else
+      unknownExpr2FVar e
+  -/
+
+  /--
+    Attempt to abstract parts of a given expression to free variables so
+    that the resulting expression is in the higher-order fragment of Lean.
+
+    Note that it's not always possible to do this since it's possible that
+    the given expression itself is polymorphic
+
+    Since we're now dealing with monomorphized lemmas, there are no bound level parameters
+
+    Return value:
+    · If abstraction is successful, return the abstracted expression
+    · If abstraction is not successful because the input is not a quasi higher-order
+      term of type `Prop`, return a message indicating the violation of quasi higher-order-ness
+    · Throw an error message if unexpected error happens
+  -/
+  partial def replacePolyWithFVar : Expr → FVarRepM (Expr ⊕ MessageData)
   | .lam name ty body binfo => do
-    processType ty
+    -- Type of λ binder cannot depend on previous bound variables
+    let (ty, hasBfvars) ← processType ty
+    if hasBfvars then
+      return .inr m!"replacePolyWithFVar :: Type {ty} of λ binder contains bound variables"
     let fvarId ← MetaState.withLocalDecl name binfo ty .default
     setBfvars ((← getBfvars).push fvarId)
     let b' ← replacePolyWithFVar (body.instantiate1 (.fvar fvarId))
-    MetaState.runMetaM <| Meta.mkLambdaFVars #[.fvar fvarId] b'
+    let .inl b' := b'
+      | return b'
+    Sum.inl <$> (MetaState.runMetaM <| Meta.mkLambdaFVars #[.fvar fvarId] b')
   -- Turns `∀` into `Embedding.forallF`, `→` into `Embedding.ImpF`
-  | .forallE name ty body binfo => do
+  | e@(.forallE name ty body binfo) => do
     let tysort ← MetaState.runMetaM (do Expr.normalizeType (← Meta.inferType ty))
     let .sort tylvl := tysort
-      | throwError "replacePolyWithFVar :: {tysort} is not a sort"
-    processType ty
+      | throwError "replacePolyWithFVar :: Unexpected error, {tysort} is not a sort"
+    let (ty, tyHasBfvars) ← processType ty
     let fvarId ← MetaState.withLocalDecl name binfo ty .default
     setBfvars ((← getBfvars).push fvarId)
     let body' := body.instantiate1 (.fvar fvarId)
     let bodysort ← MetaState.runMetaM <| do Expr.normalizeType (← Meta.inferType body')
     let .sort bodylvl := bodysort
-      | throwError "replacePolyWithFVars :: Unexpected error"
+      | throwError "replacePolyWithFVar :: Unexpected error"
     let bodyrep ← replacePolyWithFVar body'
-    if body.hasLooseBVar 0 ∨
-        !(← MetaState.isLevelDefEqRigid tylvl .zero) ∨
-        !(← MetaState.isLevelDefEqRigid bodylvl .zero) then
+    let .inl bodyrep := bodyrep
+      | return bodyrep
+    -- Type of type of bound variable is `Prop`
+    -- Requirement: Type of body is `Prop`, and the bound variable
+    --   of this `∀` does not occur in the body
+    if ← MetaState.isLevelDefEqRigid tylvl .zero then
+      if !(← MetaState.isLevelDefEqRigid bodylvl .zero) then
+        return .inr m!"replacePolyWithFVar :: In {e}, type of ∀ bound variable is of sort `Prop`, but body isn't of sort `Prop`"
+      if body.hasLooseBVar 0 then
+        return .inr m!"replacePolyWithFVar :: In {e}, type of dependent ∀ bound variable is of sort `Prop`"
+      let impFun := Expr.const ``ImpF [.zero, .zero]
+      addForallImpFInst impFun
+      let tyrep ← replacePolyWithFVar ty
+      let .inl tyrep := tyrep
+        | return tyrep
+      return Sum.inl <| .app (.app impFun tyrep) bodyrep
+    -- Type of type of bound variable is not `Prop`
+    -- Requirement: Type of bound variable does not contain
+    --   bound variables
+    else
+      if tyHasBfvars then
+        return .inr m!"replacePolyWithFVar :: In {e}, type of ∀ bound variable is not of sort `Prop`, and depends on bound variables"
       let forallFun := Expr.app (.const ``forallF [tylvl, bodylvl]) ty
       addForallImpFInst forallFun
       let forallFunId ← replacePolyWithFVar forallFun
-      return .app forallFunId (← MetaState.runMetaM <| Meta.mkLambdaFVars #[.fvar fvarId] bodyrep)
-    else
-      let impFun := Expr.const ``ImpF [.zero, .zero]
-      addForallImpFInst impFun
-      return .app (.app impFun (← replacePolyWithFVar ty)) bodyrep
+      let .inl forallFunId := forallFunId
+        | return forallFunId
+      return Sum.inl <| .app forallFunId (← MetaState.runMetaM <| Meta.mkLambdaFVars #[.fvar fvarId] bodyrep)
   | e@(.app ..) => do
     -- Head is bvar
     if let .fvar id := e.getAppFn then
       if ((← getBfvars).contains id) then
-        let ciArgs ← e.getAppArgs.mapM replacePolyWithFVar
-        return mkAppN (.fvar id) ciArgs
+        let ciArgs? ← e.getAppArgs.mapM replacePolyWithFVar
+        let mut ciArgs := #[]
+        for ciArg in ciArgs? do
+          let .inl ciArg := ciArg
+            | return ciArg
+          ciArgs := ciArgs.push ciArg
+        return Sum.inl <| mkAppN (.fvar id) ciArgs
     -- Head is fvar/mvar/const
     let bfexprs := (← getBfvars).map Expr.fvar
     if let .some ci ← MetaState.runMetaM (ConstInst.ofExpr? #[] bfexprs e) then
-      let ciId ← ConstInst2FVarId ci
-      let ciArgs ← ConstInst.getOtherArgs ci e
-      let ciArgs ← ciArgs.mapM replacePolyWithFVar
-      return mkAppN (.fvar ciId) ciArgs
-    Expr.fvar <$> UnknownExpr2FVarId e
-  | e@(.sort _) => return e
-  | e@(.lit _) => return e
+      let ciId ← constInst2FVarId ci
+      let ciArgs? ← (← ConstInst.getOtherArgs ci e).mapM replacePolyWithFVar
+      let mut ciArgs := #[]
+      for ciArg in ciArgs? do
+        let .inl ciArg := ciArg
+          | return ciArg
+        ciArgs := ciArgs.push ciArg
+      return Sum.inl <| mkAppN (.fvar ciId) ciArgs
+    let eFn := e.getAppFn
+    let eArgs? ← e.getAppArgs.mapM replacePolyWithFVar
+    let mut eArgs := #[]
+    for eArg in eArgs? do
+      let .inl eArg := eArg
+        | return eArg
+      eArgs := eArgs.push eArg
+    Sum.inl <$> unknownExpr2FVar (Lean.mkAppN eFn eArgs)
+  | e@(.sort _) => return Sum.inl e
+  | e@(.lit _) => return Sum.inl e
   | e => do
     if let .fvar id := e then
       if (← getBfvars).contains id then
-        return .fvar id
+        return Sum.inl <| .fvar id
     let bfexprs := (← getBfvars).map Expr.fvar
     if let .some ci ← MetaState.runMetaM (ConstInst.ofExpr? #[] bfexprs e) then
-      let ciId ← ConstInst2FVarId ci
-      return .fvar ciId
-    Expr.fvar <$> UnknownExpr2FVarId e
+      let ciId ← constInst2FVarId ci
+      return Sum.inl <| .fvar ciId
+    Sum.inl <$> unknownExpr2FVar e
   where addForallImpFInst (e : Expr) : FVarRepM Unit := do
     let bfexprs := (← getBfvars).map Expr.fvar
     match ← MetaState.runMetaM (ConstInst.ofExpr? #[] bfexprs e) with
@@ -733,35 +895,26 @@ def intromono (lemmas : Array Lemma) (mvarId : MVarId) : MetaM MVarId := do
     return mvar.mvarId!)
 
 def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State → MetaM α) : MetaM α := do
-  let monoMAction : MonoM (Array (Array SimpleIndVal)) := (do
+  let (inductiveVals, monoSt) ← monoMAction.run {}
+  MetaState.runWithIntroducedFVars (metaStateMAction inductiveVals monoSt) k
+where
+  /-- Instantiating quantifiers, collecting inductive types
+    and filtering out non-quasi-monomorphic expressions -/
+  monoMAction : MonoM (Array (Array SimpleIndVal)) := do
     let startTime ← IO.monoMsNow
     initializeMonoM lemmas
     saturate
     postprocessSaturate
-    trace[auto.mono] "Monomorphization took {(← IO.monoMsNow) - startTime}ms"
-    collectMonoMutInds)
-  let (inductiveVals, monoSt) ← monoMAction.run {}
-  -- Lemma instances
-  let lis := monoSt.lisArr.concatMap id
-  let fvarRepMFactAction : FVarRep.FVarRepM (Array UMonoFact) :=
-    lis.mapM (fun li => do return ⟨li.proof, ← FVarRep.replacePolyWithFVar li.type, li.deriv⟩)
-  let fvarRepMInductAction (ivals : Array (Array SimpleIndVal)) : FVarRep.FVarRepM (Array (Array SimpleIndVal)) :=
-    ivals.mapM (fun svals => svals.mapM (fun ⟨name, type, ctors, projs⟩ => do
-      FVarRep.processType type
-      let ctors ← ctors.mapM (fun (val, ty) => do
-        FVarRep.processType ty
-        let val' ← FVarRep.replacePolyWithFVar val
-        return (val', ty))
-      let projs ← projs.mapM (fun arr => arr.mapM (fun e => do
-        FVarRep.replacePolyWithFVar e))
-      return ⟨name, type, ctors, projs⟩))
-  let metaStateMAction : MetaState.MetaStateM (Array FVarId × Reif.State) := (do
-    let (uvalids, s) ← fvarRepMFactAction.run { ciMap := monoSt.ciMap }
+    trace[auto.mono] "Monomorphization of lemmas took {(← IO.monoMsNow) - startTime}ms"
+    collectMonoMutInds
+  /-- Process lemmas and inductive types, collect inhabited types -/
+  metaStateMAction
+    (inductiveVals : Array (Array SimpleIndVal))
+    (monoSt : State) : MetaState.MetaStateM (Array FVarId × Reif.State) := do
+    let lis := monoSt.lisArr.concatMap id
+    let (uvalids, s) ← (fvarRepMFactAction lis).run { ciMap := monoSt.ciMap }
     for ⟨proof, ty, _⟩ in uvalids do
       trace[auto.mono.printResult] "Monomorphized :: {proof} : {ty}"
-    let exlis := s.exprMap.toList.map (fun (e, id) => (id, e))
-    let cilis ← s.ciIdMap.toList.mapM (fun (ci, id) => do return (id, ← MetaState.runMetaM ci.toExpr))
-    let polyVal := HashMap.ofList (exlis ++ cilis)
     let tyCans := s.tyCanMap.toArray.map Prod.snd
     -- Inhabited types
     let startTime ← IO.monoMsNow
@@ -771,14 +924,40 @@ def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State
         tyCanInhs := tyCanInhs.push ⟨inh, e, .leaf "tyCanInh"⟩
     let inhMatches ← MetaState.runMetaM (Inhabitation.inhFactMatchAtomTys inhFacts tyCans)
     let inhs := tyCanInhs ++ inhMatches
-    trace[auto.mono] "Monomorphizing inhabitation facts took {(← IO.monoMsNow) - startTime}ms"
+    trace[auto.mono] "Monomorphization of inhabitation facts took {(← IO.monoMsNow) - startTime}ms"
     -- Inductive types
     let startTime ← IO.monoMsNow
-    trace[auto.mono] "Monomorphizing inductive types took {(← IO.monoMsNow) - startTime}ms"
+    trace[auto.mono] "Monomorphization of inductive types took {(← IO.monoMsNow) - startTime}ms"
     let (inductiveVals, s) ← (fvarRepMInductAction inductiveVals).run s
-    return (s.ffvars, Reif.State.mk s.ffvars uvalids polyVal s.tyCanMap inhs inductiveVals none))
-  MetaState.runWithIntroducedFVars metaStateMAction k
+    let exlis := s.exprMap.toList.map (fun (e, id) => (id, e))
+    let cilis ← s.ciIdMap.toList.mapM (fun (ci, id) => do return (id, ← MetaState.runMetaM ci.toExpr))
+    let polyVal := HashMap.ofList (exlis ++ cilis)
+    return (s.ffvars, Reif.State.mk uvalids polyVal s.tyCanMap inhs inductiveVals none)
+  fvarRepMFactAction (lis : Array LemmaInst) : FVarRep.FVarRepM (Array UMonoFact) := lis.filterMapM (fun li => do
+    let liTypeRep? ← FVarRep.replacePolyWithFVar li.type
+    match liTypeRep? with
+    | .inl liTypeRep => return .some ⟨li.proof, liTypeRep, li.deriv⟩
+    | .inr m => if (← ignoreNonQuasiHigherOrder) then return .none else throwError m)
+  fvarRepMInductAction (ivals : Array (Array SimpleIndVal)) : FVarRep.FVarRepM (Array (Array SimpleIndVal)) :=
+    ivals.mapM (fun svals => svals.mapM (fun ⟨name, type, ctors, projs⟩ => do
+      let (type, _) ← FVarRep.processType type
+      let ctors ← ctors.mapM (fun (val, ty) => do
+        let (ty, _) ← FVarRep.processType ty
+        let valRep? ← FVarRep.replacePolyWithFVar val
+        match valRep? with
+        | .inl valRep => return (valRep, ty)
+        -- If monomorphization fails on one constructor, then fail immediately
+        | .inr m => throwError m)
+      let projs ← projs.mapM (fun arr => arr.mapM (fun e => do
+        match ← FVarRep.replacePolyWithFVar e with
+        | .inl e => return e
+        -- If monomorphization fails on one projection, then fail immediately
+        | .inr m => throwError m))
+      return ⟨name, type, ctors, projs⟩))
+  ignoreNonQuasiHigherOrder : CoreM Bool := do
+    return auto.mono.ignoreNonQuasiHigherOrder.get (← getOptions)
 
+/- Tag: querySMT
 /-- Like `monomoprhize` but `k` is also passed in `idCiMap` so that `querySMTForHints` can look up the original Lean expressions corresponding
     to fvars generated by `FVarRep.replacePolyWithFVar` -/
 def monomorphizePreserveMap (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : HashMap FVarId ConstInst × Reif.State → MetaM α) : MetaM α := do
@@ -829,5 +1008,6 @@ def monomorphizePreserveMap (lemmas : Array Lemma) (inhFacts : Array Lemma) (k :
     -- generated fVarIds back to the expressions that generated them
     return (s.ffvars, s.idCiMap, Reif.State.mk s.ffvars uvalids polyVal s.tyCanMap inhs inductiveVals none))
   MetaState.runWithIntroducedFVars metaStateMAction k
+-/
 
 end Auto.Monomorphization

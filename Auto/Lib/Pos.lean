@@ -1,5 +1,4 @@
 import Auto.MathlibEmulator
-import Std.Data.Nat.Lemmas
 
 namespace Auto
 
