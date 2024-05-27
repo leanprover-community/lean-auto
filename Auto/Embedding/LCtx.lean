@@ -916,7 +916,7 @@ section add_nat
 
   def addAt_succ_l (lvl pos : Nat) (n : Nat) :
     addAt (.succ lvl) pos n = succAt pos (addAt lvl pos n) := by
-    dsimp [addAt, Nat.add_succ]
+    dsimp only [addAt, Nat.add_succ]
     rw [mapAt_comp pos Nat.succ (fun x => x + lvl) n]
 
   def addAt_succ_r (lvl pos : Nat) (n : Nat) :
@@ -1015,7 +1015,7 @@ section genericInst
       case cons x xs =>
         simp at heq
         rw [← IH xs heq lctx n]
-        dsimp [pushLCtxs, Nat.blt, Nat.ble, Nat.add_succ]
+        dsimp only [Nat.add_succ, List.length_cons, Nat.blt, Nat.ble, List.getD_cons_succ, pushLCtxs]
         rw [Nat.succ_sub_succ]
 
   theorem contraPair.ofPushsPops (lvl : Nat) (xs : List α) (heq : xs.length = lvl) :
@@ -1039,7 +1039,7 @@ section genericInst
         case cons ty tys x xs =>
           simp at heq
           apply HEq.trans _ (IH xs heq lctx n)
-          dsimp [Nat.blt, Nat.ble, Nat.add_succ]
+          dsimp only [Nat.add_succ, List.length_cons, Nat.blt, Nat.ble, List.getD_cons_succ]
           rw [Nat.succ_sub_succ]; rfl)
 
   theorem contraPairDep.ofPushsDepPopsDep

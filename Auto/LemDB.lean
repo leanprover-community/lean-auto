@@ -47,8 +47,8 @@ partial def LemDB.toHashSet : LemDB → AttrM (HashSet Name)
       ret := ret.insertMany hset
     return ret
 
-private def throwUndeclaredLemDB (dbname action : Name) : AttrM α := do
-  let cmdstr := "#declare_lemdb " ++ dbname
+private def throwUndeclaredLemDB (dbname : Name) (action : String) : AttrM α := do
+  let cmdstr := "#declare_lemdb " ++ dbname.toString
   throwError ("Please declare lemma database using " ++
     s!"command {repr cmdstr} before {action}")
 

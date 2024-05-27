@@ -408,13 +408,13 @@ namespace Lam2D
         (mkApp2 (mkConst ``instHMul [.zero]) natc (mkConst ``instMulNat))),
       (``Nat.div, mkApp4
         (.const ``HDiv.hDiv [.zero, .zero, .zero]) natc natc natc
-        (mkApp2 (mkConst ``instHDiv [.zero]) natc (mkConst ``Nat.instDivNat))),
+        (mkApp2 (mkConst ``instHDiv [.zero]) natc (mkConst ``Nat.instDiv))),
       (``Nat.mod, mkApp4
         (.const ``HMod.hMod [.zero, .zero, .zero]) natc natc natc
-        (mkApp2 (mkConst ``instHMod [.zero]) natc (mkConst ``Nat.instModNat))),
+        (mkApp2 (mkConst ``instHMod [.zero]) natc (mkConst ``Nat.instMod))),
       (``Nat.le, mkApp2 (.const ``LE.le [.zero]) natc (mkConst ``instLENat)),
       (``Nat.lt,  mkApp2 (.const ``LT.lt [.zero]) natc (mkConst ``instLTNat)),
-      (``Nat.max, mkApp2 (.const ``Max.max [.zero]) natc (mkConst ``Nat.instMaxNat)),
+      (``Nat.max, mkApp2 (.const ``Max.max [.zero]) natc (mkConst ``Nat.instMax)),
       (``Nat.min, mkApp2 (.const ``Min.min [.zero]) natc (mkConst ``instMinNat))
     ]
 
@@ -427,23 +427,23 @@ namespace Lam2D
       (``Int.neg    , mkApp2 (.const ``Neg.neg [.zero]) intc (mkConst ``Int.instNegInt)),
       (``Int.add    , mkApp4
         (.const ``HAdd.hAdd [.zero, .zero, .zero]) intc intc intc
-        (mkApp2 (.const ``instHAdd [.zero]) intc (mkConst ``Int.instAddInt))),
+        (mkApp2 (.const ``instHAdd [.zero]) intc (mkConst ``Int.instAdd))),
       (``Int.sub    , mkApp4
         (.const ``HSub.hSub [.zero, .zero, .zero]) intc intc intc
-        (mkApp2 (.const ``instHSub [.zero]) intc (mkConst ``Int.instSubInt))),
+        (mkApp2 (.const ``instHSub [.zero]) intc (mkConst ``Int.instSub))),
       (``Int.mul    , mkApp4
         (.const ``HMul.hMul [.zero, .zero, .zero]) intc intc intc
-        (mkApp2 (.const ``instHMul [.zero]) intc (mkConst ``Int.instMulInt))),
+        (mkApp2 (.const ``instHMul [.zero]) intc (mkConst ``Int.instMul))),
       (``Int.ediv    , mkApp4
         (.const ``HDiv.hDiv [.zero, .zero, .zero]) intc intc intc
-        (mkApp2 (.const ``instHDiv [.zero]) intc (mkConst ``Int.instDivInt))),
+        (mkApp2 (.const ``instHDiv [.zero]) intc (mkConst ``Int.instDiv))),
       (``Int.emod    , mkApp4
         (.const ``HMod.hMod [.zero, .zero, .zero]) intc intc intc
-        (mkApp2 (.const ``instHMod [.zero]) intc (mkConst ``Int.instModInt))),
+        (mkApp2 (.const ``instHMod [.zero]) intc (mkConst ``Int.instMod))),
       (``Int.le     , mkApp2 (.const ``LE.le [.zero]) intc (mkConst ``Int.instLEInt)),
       (``Int.lt     , mkApp2 (.const ``LT.lt [.zero]) intc (mkConst ``Int.instLTInt)),
-      (``Int.max    , mkApp2 (.const ``Max.max [.zero]) intc (mkConst ``Int.instMaxInt)),
-      (``Int.min    , mkApp2 (.const ``Min.min [.zero]) intc (mkConst ``Int.instMinInt))
+      (``Int.max    , mkApp2 (.const ``Max.max [.zero]) intc (mkConst ``Int.instMax)),
+      (``Int.min    , mkApp2 (.const ``Min.min [.zero]) intc (mkConst ``Int.instMin))
     ]
 
   def stringConstSimpNFList : List (Name × Expr) :=
@@ -452,8 +452,8 @@ namespace Lam2D
     [
       (``String.append, mkApp4
         (.const ``HAppend.hAppend [.zero, .zero, .zero]) stringc stringc stringc
-        (mkApp2 (.const ``instHAppend [.zero]) stringc (mkConst ``String.instAppendString))),
-      (``String.lt, mkApp2 (.const ``LT.lt [.zero]) stringc (mkConst ``String.instLTString)),
+        (mkApp2 (.const ``instHAppendOfAppend [.zero]) stringc (mkConst ``String.instAppend))),
+      (``String.lt, mkApp2 (.const ``LT.lt [.zero]) stringc (mkConst ``String.instLT)),
     ]
 
   open LamCstrD in
@@ -464,57 +464,57 @@ namespace Lam2D
     [
       (``BitVec.add             , .lam `n natc (mkApp4
         (.const ``HAdd.hAdd [.zero, .zero, .zero]) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0))
-        (mkApp2 (.const ``instHAdd [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instAddBitVec) (.bvar 0)))) .default),
+        (mkApp2 (.const ``instHAdd [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instAdd) (.bvar 0)))) .default),
       (``BitVec.sub             , .lam `n natc (mkApp4
         (.const ``HSub.hSub [.zero, .zero, .zero]) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0))
-        (mkApp2 (.const ``instHSub [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instSubBitVec) (.bvar 0)))) .default),
+        (mkApp2 (.const ``instHSub [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instSub) (.bvar 0)))) .default),
       (``BitVec.mul             , .lam `n natc (mkApp4
         (.const ``HMul.hMul [.zero, .zero, .zero]) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0))
-        (mkApp2 (.const ``instHMul [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instMulBitVec) (.bvar 0)))) .default),
+        (mkApp2 (.const ``instHMul [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instMul) (.bvar 0)))) .default),
       (``BitVec.udiv            , .lam `n natc (mkApp4
         (.const ``HDiv.hDiv [.zero, .zero, .zero]) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0))
-        (mkApp2 (.const ``instHDiv [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instDivBitVec) (.bvar 0)))) .default),
+        (mkApp2 (.const ``instHDiv [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instDiv) (.bvar 0)))) .default),
       (``BitVec.umod            , .lam `n natc (mkApp4
         (.const ``HMod.hMod [.zero, .zero, .zero]) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0))
-        (mkApp2 (.const ``instHMod [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instModBitVec) (.bvar 0)))) .default),
+        (mkApp2 (.const ``instHMod [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instMod) (.bvar 0)))) .default),
       (``BitVec.neg             , .lam `n natc (mkApp2
-        (.const ``Neg.neg [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instNegBitVec) (.bvar 0))) .default),
+        (.const ``Neg.neg [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instNeg) (.bvar 0))) .default),
       (``BitVec.propult         , .lam `n natc (mkApp2
-        (.const ``LT.lt [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instLTBitVec) (.bvar 0))) .default),
+        (.const ``LT.lt [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instLT) (.bvar 0))) .default),
       (``BitVec.propule         , .lam `n natc (mkApp2
-        (.const ``LE.le [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instLEBitVec) (.bvar 0))) .default),
+        (.const ``LE.le [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instLE) (.bvar 0))) .default),
       (``BitVec.and             , .lam `n natc (mkApp4
         (.const ``HAnd.hAnd [.zero, .zero, .zero]) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0))
-        (mkApp2 (.const ``instHAnd [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instAndOpBitVec) (.bvar 0)))) .default),
+        (mkApp2 (.const ``instHAndOfAndOp [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instAndOp) (.bvar 0)))) .default),
       (``BitVec.or              , .lam `n natc (mkApp4
         (.const ``HOr.hOr [.zero, .zero, .zero]) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0))
-        (mkApp2 (.const ``instHOr [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instOrOpBitVec) (.bvar 0)))) .default),
+        (mkApp2 (.const ``instHOrOfOrOp [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instOrOp) (.bvar 0)))) .default),
       (``BitVec.xor             , .lam `n natc (mkApp4
         (.const ``HXor.hXor [.zero, .zero, .zero]) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0))
-        (mkApp2 (.const ``instHXor [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instXorBitVec) (.bvar 0)))) .default),
+        (mkApp2 (.const ``instHXorOfXor [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instXor) (.bvar 0)))) .default),
       (``BitVec.not             , .lam `n natc (mkApp2
         (.const ``Complement.complement [.zero]) (.app bitVecc (.bvar 0))
-        (.app (mkConst ``BitVec.instComplementBitVec) (.bvar 0))) .default),
+        (.app (mkConst ``BitVec.instComplement) (.bvar 0))) .default),
       (``BitVec.shiftLeft       , .lam `n natc (mkApp4
         (.const ``HShiftLeft.hShiftLeft [.zero, .zero, .zero]) (.app bitVecc (.bvar 0)) natc (.app bitVecc (.bvar 0))
-        (.app (mkConst ``BitVec.instHShiftLeftBitVecNat) (.bvar 0))) .default),
+        (.app (mkConst ``BitVec.instHShiftLeftNat) (.bvar 0))) .default),
       (``BitVec.ushiftRight     , .lam `n natc (mkApp4
         (.const ``HShiftRight.hShiftRight [.zero, .zero, .zero]) (.app bitVecc (.bvar 0)) natc (.app bitVecc (.bvar 0))
-        (.app (mkConst ``BitVec.instHShiftRightBitVecNat) (.bvar 0))) .default),
+        (.app (mkConst ``BitVec.instHShiftRightNat) (.bvar 0))) .default),
       (``BitVec.smtHshiftLeft   , .lam `n natc (.lam `m natc (.lam `a (.app bitVecc (.bvar 1)) (.lam `b (.app bitVecc (.bvar 1)) (mkApp6
           (.const ``HShiftLeft.hShiftLeft [.zero, .zero, .zero]) (.app bitVecc (.bvar 3)) natc (.app bitVecc (.bvar 3))
-          (.app (mkConst ``BitVec.instHShiftLeftBitVecNat) (.bvar 3)) (.bvar 1) (mkApp2 (mkConst ``BitVec.toNat) (.bvar 2) (.bvar 0))
+          (.app (mkConst ``BitVec.instHShiftLeftNat) (.bvar 3)) (.bvar 1) (mkApp2 (mkConst ``BitVec.toNat) (.bvar 2) (.bvar 0))
         ) .default ) .default) .default) .default),
       (``BitVec.smtHushiftRight , .lam `n natc (.lam `m natc (.lam `a (.app bitVecc (.bvar 1)) (.lam `b (.app bitVecc (.bvar 1)) (mkApp6
           (.const ``HShiftRight.hShiftRight [.zero, .zero, .zero]) (.app bitVecc (.bvar 3)) natc (.app bitVecc (.bvar 3))
-          (.app (mkConst ``BitVec.instHShiftRightBitVecNat) (.bvar 3)) (.bvar 1) (mkApp2 (mkConst ``BitVec.toNat) (.bvar 2) (.bvar 0))
+          (.app (mkConst ``BitVec.instHShiftRightNat) (.bvar 3)) (.bvar 1) (mkApp2 (mkConst ``BitVec.toNat) (.bvar 2) (.bvar 0))
         ) .default ) .default) .default) .default),
       (``BitVec.append          , .lam `n natc (.lam `m natc (mkApp4
         (.const ``HAppend.hAppend [.zero, .zero, .zero]) (.app bitVecc (.bvar 1)) (.app bitVecc (.bvar 0))
         (.app bitVecc (mkApp6
           (.const ``HAdd.hAdd [.zero, .zero, .zero]) natc natc natc
           (mkApp2 (.const ``instHAdd [.zero]) natc (mkConst ``instAddNat)) (.bvar 1) (.bvar 0)))
-          (mkApp2 (.const ``BitVec.instHAppendBitVecHAddNatInstHAddInstAddNat []) (.bvar 1) (.bvar 0))) .default) .default),
+          (mkApp2 (.const ``BitVec.instHAppendHAddNat []) (.bvar 1) (.bvar 0))) .default) .default),
     ]
 
   def lamBaseTermSimpNFList : List (Name × Expr) :=

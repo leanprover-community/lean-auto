@@ -38,7 +38,7 @@ def emulateNative (lemmas : Array Lemma) : MetaM Expr := do
   let _ ← lemmas.mapM (fun lem => do
     if lem.params.size != 0 then
       throwError "Solver.emulateNative :: Universe levels parameters are not supported")
-  let descrs := lemmas.zipWithIndex.map (fun (lem, i) => (s!"lem{i}", lem.type, .default))
+  let descrs := lemmas.zipWithIndex.map (fun (lem, i) => (s!"lem{i}".toName, lem.type, .default))
   let sty := Expr.mkForallFromBinderDescrs descrs (.const ``False [])
   let sorryExpr := Lean.mkApp2 (.const ``sorryAx [.zero]) sty (.const ``Bool.false [])
   return Lean.mkAppN sorryExpr (lemmas.map (fun lem => lem.proof))

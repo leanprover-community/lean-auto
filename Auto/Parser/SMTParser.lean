@@ -287,12 +287,12 @@ partial def parseForall (vs : List Term) (symbolMap : HashMap String Expr) : Met
   let [app sortedVars, forallBody] := vs
     | throwError "parseForall :: Unexpected input list {vs}"
   let sortedVars ← sortedVars.mapM (fun sv => parseSortedVar sv symbolMap)
-  withLocalDeclsD (sortedVars.map fun (n, ty) => (n, fun _ => pure ty)) fun _ => do
+  withLocalDeclsD (sortedVars.map fun (n, ty) => (n.toName, fun _ => pure ty)) fun _ => do
     let lctx ← getLCtx
     let mut symbolMap := symbolMap
     let mut sortedVarDecls := #[]
     for sortedVar in sortedVars do
-      let some sortedVarDecl := lctx.findFromUserName? sortedVar.1
+      let some sortedVarDecl := lctx.findFromUserName? sortedVar.1.toName
         | throwError "parseForall :: Unknown sorted var name {sortedVar.1} (parseForall input: {vs})"
       symbolMap := symbolMap.insert sortedVar.1 (mkFVar sortedVarDecl.fvarId)
       sortedVarDecls := sortedVarDecls.push sortedVarDecl
@@ -303,12 +303,12 @@ partial def parseExists (vs : List Term) (symbolMap : HashMap String Expr) : Met
   let [app sortedVars, existsBody] := vs
     | throwError "parseExists :: Unexpected input list {vs}"
   let sortedVars ← sortedVars.mapM (fun sv => parseSortedVar sv symbolMap)
-  withLocalDeclsD (sortedVars.map fun (n, ty) => (n, fun _ => pure ty)) fun _ => do
+  withLocalDeclsD (sortedVars.map fun (n, ty) => (n.toName, fun _ => pure ty)) fun _ => do
     let lctx ← getLCtx
     let mut symbolMap := symbolMap
     let mut sortedVarDecls := #[]
     for sortedVar in sortedVars do
-      let some sortedVarDecl := lctx.findFromUserName? sortedVar.1
+      let some sortedVarDecl := lctx.findFromUserName? sortedVar.1.toName
         | throwError "parseForall :: Unknown sorted var name {sortedVar.1} (parseForall input: {vs})"
       symbolMap := symbolMap.insert sortedVar.1 (mkFVar sortedVarDecl.fvarId)
       sortedVarDecls := sortedVarDecls.push sortedVarDecl
@@ -337,12 +337,12 @@ partial def parseLet (vs : List Term) (symbolMap : HashMap String Expr) : MetaM 
   let [app varBindings, letBody] := vs
     | throwError "parsseLet :: Unexpected input list {vs}"
   let varBindings ← varBindings.mapM (fun vb => parseVarBinding vb symbolMap)
-  withLocalDeclsD (varBindings.map fun (n, ty, val) => (n, fun _ => pure ty)) fun _ => do
+  withLocalDeclsD (varBindings.map fun (n, ty, val) => (n.toName, fun _ => pure ty)) fun _ => do
     let lctx ← getLCtx
     let mut symbolMap := symbolMap
     let mut varBindingDecls := #[]
     for varBinding in varBindings do
-      let some varBindingDecl := lctx.findFromUserName? varBinding.1
+      let some varBindingDecl := lctx.findFromUserName? varBinding.1.toName
         | throwError "parseLet :: Unknown var binding name {varBinding.1} (parseLet input: {vs})"
       symbolMap := symbolMap.insert varBinding.1 (mkFVar varBindingDecl.fvarId)
       varBindingDecls := varBindingDecls.push varBindingDecl
@@ -350,7 +350,7 @@ partial def parseLet (vs : List Term) (symbolMap : HashMap String Expr) : MetaM 
     let abstractedBody ← Expr.abstractM body (varBindingDecls.map (fun decl => mkFVar decl.fvarId))
     let mut res := abstractedBody
     for varBinding in varBindings.reverse do
-      res := .letE varBinding.1 varBinding.2.1 varBinding.2.2 res true
+      res := .letE varBinding.1.toName varBinding.2.1 varBinding.2.2 res true
     return res
 
 partial def parseLeftAssocAppAux (headSymbol : Name) (args : List Term)

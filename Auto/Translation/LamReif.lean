@@ -1581,7 +1581,7 @@ section BuildChecker
 
     -- Given a list of expression of type `ty`, construct the corresponding `BinTree`
   private def exprListToBinTree (l : List Expr) (lvl : Level) (ty : Expr) :=
-    (@instToExprBinTree Expr (instExprToExprId ty) ⟨lvl, Prop⟩).toExpr (BinTree.ofListGet l)
+    (@instToExprBinTreeOfToLevel Expr (instExprToExprId ty) ⟨lvl, Prop⟩).toExpr (BinTree.ofListGet l)
 
     -- Given a list of expression of type `ty`, construct the corresponding `lctx`
   private def exprListToLCtx (l : List Expr) (lvl : Level) (ty : Expr) :=
@@ -1663,7 +1663,7 @@ section BuildChecker
       importedFactsTree := importedFactsTree.insert n vEntry
     let type := Lean.mkApp2 (.const ``PSigma [.succ .zero, .zero])
       (.const ``ImportEntry []) (.app (.const ``importTablePSigmaβ [u]) chkValExpr)
-    let importTableExpr := (@instToExprBinTree Expr
+    let importTableExpr := (@instToExprBinTreeOfToLevel Expr
       (instExprToExprId type) ⟨.zero, Prop⟩).toExpr importTable
     let importedFacts := Lean.toExpr importedFactsTree
     return (importTableExpr, importedFacts)
@@ -1747,23 +1747,23 @@ section BuildChecker
     let runResultExpr := Lean.mkApp3 (.const ``RTable.mk [])
       (Lean.toExpr (← getRTableTree)) (Lean.toExpr (← getMaxEVarSucc))
       (Lean.toExpr (← getLamEVarTyTree))
-    mkNativeAuxDecl "lam_ssrefl_rr" (Lean.mkConst ``RTable) runResultExpr
+    mkNativeAuxDecl "lam_ssrefl_rr".toName (Lean.mkConst ``RTable) runResultExpr
 
   def buildFullCheckerExprFor_indirectReduce_reflection (re : REntry) : ReifM Expr := do
     printCheckerStats
     let startTime ← IO.monoMsNow
     let u ← getU
     let lvtExpr := Lean.toExpr (BinTree.ofListGet ((← getVarVal).map Prod.snd).data)
-    let lvtNativeName ← mkNativeAuxDecl "lam_ssrefl_lvt" (Expr.app (.const ``BinTree [.zero]) (Lean.mkConst ``LamSort)) lvtExpr
+    let lvtNativeName ← mkNativeAuxDecl "lam_ssrefl_lvt".toName (Expr.app (.const ``BinTree [.zero]) (Lean.mkConst ``LamSort)) lvtExpr
     let litExpr := Lean.toExpr (BinTree.ofListGet (← getLamILTy).data)
-    let litNativeName ← mkNativeAuxDecl "lam_ssrefl_lit" (Expr.app (.const ``BinTree [.zero]) (Lean.mkConst ``LamSort)) litExpr
+    let litNativeName ← mkNativeAuxDecl "lam_ssrefl_lit".toName (Expr.app (.const ``BinTree [.zero]) (Lean.mkConst ``LamSort)) litExpr
     let cpvExpr ← buildCPValExpr
     let cpvTy := Expr.const ``CPVal [u]
     let checker ← Meta.withLetDecl `cpval cpvTy cpvExpr fun cpvFVarExpr => do
       let (itExpr, ifExpr) ← buildImportTableExpr cpvFVarExpr
-      let ifNativeName ← mkNativeAuxDecl "lam_ssrefl_if" (Expr.app (.const ``BinTree [.zero]) (Lean.mkConst ``REntry)) ifExpr
+      let ifNativeName ← mkNativeAuxDecl "lam_ssrefl_if".toName (Expr.app (.const ``BinTree [.zero]) (Lean.mkConst ``REntry)) ifExpr
       let csExpr ← buildChkStepsExpr
-      let csNativeName ← mkNativeAuxDecl "lam_ssrefl_cs" (Lean.mkConst ``ChkSteps) csExpr
+      let csNativeName ← mkNativeAuxDecl "lam_ssrefl_cs".toName (Lean.mkConst ``ChkSteps) csExpr
       let .valid lctx t := re
         | throwError "buildFullCheckerExprFor :: {re} is not a `valid` entry"
       let vExpr := Lean.toExpr (← lookupREntryPos! re)
@@ -1773,7 +1773,7 @@ section BuildChecker
       let heqBoolExpr := Lean.mkApp7 (.const ``Checker.getValidExport_indirectReduce_reflection_runEq [])
         (Lean.mkConst lvtNativeName) (Lean.mkConst litNativeName) (Lean.mkConst ifNativeName)
         (Lean.mkConst csNativeName) vExpr (Lean.toExpr lctx) (Lean.toExpr t)
-      let heqNativeName ← mkNativeAuxDecl "lam_ssrefl_hEq" (Lean.mkConst ``Bool) heqBoolExpr
+      let heqNativeName ← mkNativeAuxDecl "lam_ssrefl_hEq".toName (Lean.mkConst ``Bool) heqBoolExpr
       let heqRflPrf ← Meta.mkEqRefl (toExpr true)
       let heqExpr := mkApp3 (Lean.mkConst ``Lean.ofReduceBool) (Lean.mkConst heqNativeName) (toExpr true) heqRflPrf
       let getEntry := Lean.mkAppN (.const ``Checker.getValidExport_indirectReduce_reflection [u])
