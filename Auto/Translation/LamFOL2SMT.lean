@@ -571,29 +571,30 @@ def lamFOL2SMT
   let commands ← getCommands
   return (commands, validFacts)
 
-/- Tag: querySMT
+open SMT in
 /-- Identical to `lamFOL2SMT` but it also outputs `Auto.IR.SMT.State.l2hMap` -/
 def lamFOL2SMTWithL2hMap
-  (lamVarTy lamEVarTy : Array LamSort)
+  (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Array LamSort)
   (facts : Array LamTerm) (minds : Array MutualIndInfo) :
-  TransM LamAtom ((Array IR.SMT.Command) × HashMap String LamAtom) := do
+  TransM LamAtomic (Array IR.SMT.Command × Array STerm × HashMap String LamAtomic) := do
   let _ ← sortAuxDecls.mapM addCommand
   let _ ← termAuxDecls.mapM addCommand
   for mind in minds do
-    let (dsdecl, compCtors, compProjs) ← lamMutualIndInfo2STerm mind
+    let (dsdecl, compCtors, compProjs) ← lamMutualIndInfo2STerm sni mind
     trace[auto.lamFOL2SMT] "MutualIndInfo translated to command {dsdecl}"
     addCommand dsdecl
-    let compCtorEqns ← compCtors.mapM (compEqn lamVarTy lamEVarTy)
+    let compCtorEqns ← compCtors.mapM (compEqn sni lamVarTy lamEVarTy)
     let _ ← compCtorEqns.mapM addCommand
-    let compProjEqns ← compProjs.mapM (compEqn lamVarTy lamEVarTy)
+    let compProjEqns ← compProjs.mapM (compEqn sni lamVarTy lamEVarTy)
     let _ ← compProjEqns.mapM addCommand
+  let mut validFacts := #[]
   for (t, idx) in facts.zipWithIndex do
-    let sterm ← lamTerm2STerm lamVarTy lamEVarTy t
+    let sterm ← lamTerm2STerm sni lamVarTy lamEVarTy t
+    validFacts := validFacts.push sterm
     trace[auto.lamFOL2SMT] "λ term {repr t} translated to SMT term {sterm}"
     addCommand (.assert (.attr sterm #[.symb "named" s!"valid_fact_{idx}"]))
   let commands ← getCommands
   let l2hMap ← Auto.IR.SMT.getL2hMap
-  return (commands, l2hMap)
--/
+  return (commands, validFacts, l2hMap)
 
 end Auto

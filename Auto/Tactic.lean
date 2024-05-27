@@ -294,7 +294,33 @@ def queryTPTP (exportFacts : Array REntry) : LamReif.ReifM (Array Embedding.Lam.
       ret := ret.push re
     return ret
 
-/- Tag: querySMT
+/-- Returns the longest common prefix of two substrings.
+    The returned substring will use the same underlying string as `s`.
+
+    Note: Code taken from Std -/
+def commonPrefix (s t : Substring) : Substring :=
+  { s with stopPos := loop s.startPos t.startPos }
+where
+  /-- Returns the ending position of the common prefix, working up from `spos, tpos`. -/
+  loop spos tpos :=
+    if h : spos < s.stopPos ∧ tpos < t.stopPos then
+      if s.str.get spos == t.str.get tpos then
+        have := Nat.sub_lt_sub_left h.1 (s.str.lt_next spos)
+        loop (s.str.next spos) (t.str.next tpos)
+      else
+        spos
+    else
+      spos
+  termination_by s.stopPos.byteIdx - spos.byteIdx
+
+/-- If `pre` is a prefix of `s`, i.e. `s = pre ++ t`, returns the remainder `t`. -/
+def dropPrefix? (s : Substring) (pre : Substring) : Option Substring :=
+  let t := commonPrefix s pre
+  if t.bsize = pre.bsize then
+    some { s with startPos := t.stopPos }
+  else
+    none
+
 -- Note: This code is taken from Aesop's Util/Basic.lean file
 def addTryThisTacticSeqSuggestion (ref : Syntax) (suggestion : TSyntax ``Lean.Parser.Tactic.tacticSeq)
   (origSpan? : Option Syntax := none) : MetaM Unit := do
@@ -319,9 +345,8 @@ def addTryThisTacticSeqSuggestion (ref : Syntax) (suggestion : TSyntax ``Lean.Pa
 where
   dedent (s : String) : String :=
     s.splitOn "\n"
-    |>.map (λ line => line.dropPrefix? "  " |>.map (·.toString) |>.getD line)
+    |>.map (λ line => dropPrefix? line.toSubstring "  ".toSubstring |>.map (·.toString) |>.getD line)
     |> String.intercalate "\n"
--/
 
 open Embedding.Lam in
 def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : LamReif.ReifM (Option Expr) := do
@@ -374,6 +399,106 @@ def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : L
     return .some (← Meta.mkAppM ``Solver.SMT.autoSMTSorry #[Expr.const ``False []])
   else
     return .none
+
+/-- solverLemmas includes:
+    - preprcoessFacts : List Expr
+    - theoryLemmas : List Expr
+    - instantiations : List Expr
+    - rewriteFacts : List (List Expr) -/
+abbrev solverLemmas := List Expr × List Expr × List Expr × List (List Expr)
+
+open Embedding.Lam in
+def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndInfo)
+  (idCiMap : HashMap FVarId Monomorphization.ConstInst) : LamReif.ReifM (Option solverLemmas) := do
+  let lamVarTy := (← LamReif.getVarVal).map Prod.snd
+  let lamEVarTy ← LamReif.getLamEVarTy
+  let exportLamTerms ← exportFacts.mapM (fun re => do
+    match re with
+    | .valid [] t => return t
+    | _ => throwError "runAuto :: Unexpected error")
+  let sni : SMT.SMTNamingInfo :=
+    {tyVal := (← LamReif.getTyVal), varVal := (← LamReif.getVarVal), lamEVarTy := (← LamReif.getLamEVarTy)}
+  let ((commands, validFacts, l2hMap), state) ← (lamFOL2SMTWithL2hMap sni lamVarTy lamEVarTy exportLamTerms exportInds).run
+  for cmd in commands do
+    trace[auto.smt.printCommands] "{cmd}"
+  if (auto.smt.save.get (← getOptions)) then
+    Solver.SMT.saveQuery commands
+  let .some (unsatCore, solverHints, proof) ← Solver.SMT.querySolverWithHints commands
+    | return .none
+  let unsatCoreIds ← Solver.SMT.validFactOfUnsatCore unsatCore
+  -- **Print valuation of SMT atoms**
+  SMT.withExprValuation sni state.h2lMap (fun tyValMap varValMap etomValMap => do
+    for (atomic, name) in state.h2lMap.toArray do
+      let e ← SMT.LamAtomic.toLeanExpr tyValMap varValMap etomValMap atomic
+      trace[auto.smt.printValuation] "|{name}| : {e}"
+    )
+  -- **Print STerms corresponding to `validFacts` in unsatCore**
+  for id in unsatCoreIds do
+    let .some sterm := validFacts[id]?
+      | throwError "runAuto :: Index {id} of `validFacts` out of range"
+    trace[auto.smt.unsatCore.smtTerms] "|valid_fact_{id}| : {sterm}"
+  -- **Print Lean expressions correesponding to `validFacts` in unsatCore**
+  SMT.withExprValuation sni state.h2lMap (fun tyValMap varValMap etomValMap => do
+    for id in unsatCoreIds do
+      let .some t := exportLamTerms[id]?
+        | throwError "runAuto :: Index {id} of `exportLamTerms` out of range"
+      let e ← Lam2D.interpLamTermAsUnlifted tyValMap varValMap etomValMap 0 t
+      trace[auto.smt.unsatCore.leanExprs] "|valid_fact_{id}| : {← Core.betaReduce e}"
+    )
+  -- **Print derivation of unsatCore**
+  for id in unsatCoreIds do
+    let .some t := exportLamTerms[id]?
+      | throwError "runAuto :: Index {id} of `exportLamTerm` out of range"
+    let vderiv ← LamReif.collectDerivFor (.valid [] t)
+    trace[auto.smt.unsatCore.deriv] "|valid_fact_{id}| : {vderiv}"
+  -- **Extract solverLemmas from solverHints**
+  let (preprocessFacts, theoryLemmas, instantiations, rewriteFacts) := solverHints
+  let mut symbolMap : HashMap String Expr := HashMap.empty
+  let varVal ← LamReif.getVarVal
+  for (varName, varAtom) in l2hMap.toArray do
+    match varAtom with
+    | .term termNum =>
+      let vExp := varVal[termNum]!.1
+      trace[auto.smt.result] "{varName} maps to {vExp}"
+      match vExp with
+      | .fvar fVarId =>
+        -- If `vExp` is an fvar, check whether its fVarId appears in `idCiMap`
+        -- If it does, have `symbolMap` map `varName` to the original Lean Expr indicated by `idCiMap`
+        match idCiMap.find? fVarId with
+        | some ci =>
+          trace[auto.smt.result] "fvar {Expr.fvar fVarId} corresponds with {← ci.toExpr}"
+          symbolMap := symbolMap.insert varName (← ci.toExpr)
+        | none =>
+          trace[auto.smt.result] "fvar {Expr.fvar fVarId} not found in idCiMap"
+          symbolMap := symbolMap.insert varName vExp
+      | _ => symbolMap := symbolMap.insert varName vExp
+    | .sort n => logWarning s!"varName: {varName} maps to sort {n}"
+    | .etom _ => logWarning s!"varName: {varName} maps to an etom"
+    | .bvOfNat n => logWarning s!"varName: {varName} maps to bvOfNat {n}"
+    | .bvToNat n => logWarning s!"varName: {varName} maps to bvToNat {n}"
+    | .compCtor lamTerm => logWarning s!"varName: {varName} maps to compCtor {lamTerm}"
+    | .compProj lamTerm => logWarning s!"varName: {varName} maps to compProj {lamTerm}"
+  if ← auto.getHints.getFailOnParseErrorM then
+    let preprocessFacts ← preprocessFacts.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap)
+    let theoryLemmas ← theoryLemmas.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap)
+    let instantiations ← instantiations.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap)
+    let rewriteFacts ← rewriteFacts.mapM
+      (fun rwFacts => rwFacts.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap))
+    let solverLemmas := (preprocessFacts, theoryLemmas, instantiations, rewriteFacts)
+    return some solverLemmas
+  else
+    let preprocessFacts ← preprocessFacts.mapM (fun lemTerm => Parser.SMTTerm.tryParseTerm lemTerm symbolMap)
+    let theoryLemmas ← theoryLemmas.mapM (fun lemTerm => Parser.SMTTerm.tryParseTerm lemTerm symbolMap)
+    let instantiations ← instantiations.mapM (fun lemTerm => Parser.SMTTerm.tryParseTerm lemTerm symbolMap)
+    let rewriteFacts ← rewriteFacts.mapM
+      (fun rwFacts => rwFacts.mapM (fun lemTerm => Parser.SMTTerm.tryParseTerm lemTerm symbolMap))
+    -- Filter out `none` results from the above lists (so we can gracefully ignore lemmas that we couldn't parse)
+    let preprocessFacts := preprocessFacts.filterMap id
+    let theoryLemmas := theoryLemmas.filterMap id
+    let instantiations := instantiations.filterMap id
+    let rewriteFacts := rewriteFacts.map (fun rwFacts => rwFacts.filterMap id)
+    let solverLemmas := (preprocessFacts, theoryLemmas, instantiations, rewriteFacts)
+    return some solverLemmas
 
 open LamReif Embedding.Lam in
 /--
@@ -537,7 +662,6 @@ def evalAuto : Tactic
       absurd.assign proof
 | _ => throwUnsupportedSyntax
 
-/- Tag: querySMT
 /-- Run `auto`'s monomorphization and preprocessing, then return the list of preprocessing and theory lemmas output
     by the SMT solver. -/
 def runAutoGetHints (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM solverLemmas := do
@@ -609,7 +733,6 @@ def evalAutoGetHints : Tactic
       let proof ← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []]
       absurd.assign proof
 | _ => throwUnsupportedSyntax
--/
 
 @[tactic intromono]
 def evalIntromono : Tactic
