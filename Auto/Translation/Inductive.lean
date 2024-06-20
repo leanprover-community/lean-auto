@@ -165,7 +165,7 @@ def collectExprsSimpleInduct (es : Array Expr) : MetaM (Array (Array SimpleIndVa
 end Auto
 
 section Test
-
+/-
   private def skd (e : Expr) : Elab.Term.TermElabM Unit := do
     let (_, st) ← (Auto.collectExprSimpleInduct (Auto.Expr.eraseMData e)).run {}
     for siw in st.sis do
@@ -202,5 +202,5 @@ section Test
   end
 
   #getExprAndApply[Tree Int|skd]
-
+-/
 end Test

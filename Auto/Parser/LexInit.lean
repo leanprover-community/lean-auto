@@ -144,6 +144,7 @@ def term : ERE := .plus #[
 ]
 
 -- Good property: Each state have at most one attribute!
+/-
 #eval string.toADFA
 #eval specConst.toADFA
 #eval sexpr.toADFA
@@ -151,6 +152,7 @@ def term : ERE := .plus #[
 #eval sort.toADFA -- State 6 has two attributes, not sure if that's a problem
 #eval sorted_var.toADFA -- State 6 has two attributes, not sure if that's a problem
 #eval term.toADFA -- States 9, 36, and 37 have multiple attributes, not sure if that's a problem
+-/
 
 local instance : Hashable Char where
   hash c := hash c.val
