@@ -485,19 +485,19 @@ namespace Lam2D
         (.const ``LE.le [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instLE) (.bvar 0))) .default),
       (``BitVec.and             , .lam `n natc (mkApp4
         (.const ``HAnd.hAnd [.zero, .zero, .zero]) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0))
-        (mkApp2 (.const ``instHAndOfAndOp  [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instAndOp) (.bvar 0)))) .default),
+        (mkApp2 (.const ``instHAndOfAndOp [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instAndOp) (.bvar 0)))) .default),
       (``BitVec.or              , .lam `n natc (mkApp4
         (.const ``HOr.hOr [.zero, .zero, .zero]) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0))
         (mkApp2 (.const ``instHOrOfOrOp [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instOrOp) (.bvar 0)))) .default),
       (``BitVec.xor             , .lam `n natc (mkApp4
         (.const ``HXor.hXor [.zero, .zero, .zero]) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0))
-        (mkApp2 (.const ``instHXorOfXor  [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instXor) (.bvar 0)))) .default),
+        (mkApp2 (.const ``instHXorOfXor [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instXor) (.bvar 0)))) .default),
       (``BitVec.not             , .lam `n natc (mkApp2
         (.const ``Complement.complement [.zero]) (.app bitVecc (.bvar 0))
         (.app (mkConst ``BitVec.instComplement) (.bvar 0))) .default),
       (``BitVec.shiftLeft       , .lam `n natc (mkApp4
         (.const ``HShiftLeft.hShiftLeft [.zero, .zero, .zero]) (.app bitVecc (.bvar 0)) natc (.app bitVecc (.bvar 0))
-        (.app (mkConst ``BitVec.instHShiftLeftNat ) (.bvar 0))) .default),
+        (.app (mkConst ``BitVec.instHShiftLeftNat) (.bvar 0))) .default),
       (``BitVec.ushiftRight     , .lam `n natc (mkApp4
         (.const ``HShiftRight.hShiftRight [.zero, .zero, .zero]) (.app bitVecc (.bvar 0)) natc (.app bitVecc (.bvar 0))
         (.app (mkConst ``BitVec.instHShiftRightNat) (.bvar 0))) .default),

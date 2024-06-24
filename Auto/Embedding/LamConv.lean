@@ -152,7 +152,7 @@ theorem LamTerm.maxEVarSucc_etaExpandN? (heq : etaExpandN? n s t = .some t') :
   dsimp [etaExpandN?] at heq; cases h : s.getArgTysN n <;> rw [h] at heq <;> cases heq
   case refl l => rw [maxEVarSucc_etaExpandWith]
 
-def LamWF.etaExpandN?
+@[irreducible] def LamWF.etaExpandN?
   (heq : LamTerm.etaExpandN? n s t = .some t') (wft : LamWF ltv ⟨lctx, t, s⟩) :
   LamWF ltv ⟨lctx, t', s⟩ := by
   dsimp [LamTerm.etaExpandN?] at heq; cases h₁ : s.getArgTysN n <;> rw [h₁] at heq <;> cases heq
@@ -164,7 +164,7 @@ def LamWF.etaExpandN?
     conv => arg 2; rw [seq]
     apply LamWF.etaExpandWith; rw [← seq]; exact wft
 
-def LamWF.fromEtaExpandN?
+@[irreducible] def LamWF.fromEtaExpandN?
   (heq : LamTerm.etaExpandN? n s t = .some t') (wfEx : LamWF ltv ⟨lctx, t', s⟩) :
   LamWF ltv ⟨lctx, t, s⟩ := by
   dsimp [LamTerm.etaExpandN?] at heq; cases h₁ : s.getArgTysN n <;> rw [h₁] at heq <;> cases heq
@@ -1456,7 +1456,7 @@ def LamTerm.eqSymm? (t : LamTerm) : Option LamTerm :=
 theorem LamTerm.maxEVarSucc_eqSymm?
   (heq : LamTerm.eqSymm? t = .some t') : t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
-  | .app s (.app _ (.base (.eq _)) lhs) rhs, Eq.refl _ => by
+  | .app s (.app _ (.base (.eq _)) lhs) _, Eq.refl _ => by
     simp [maxEVarSucc, Nat.max, Nat.max_zero_left]
     apply Nat.max_comm
 
@@ -1464,7 +1464,7 @@ def LamWF.eqSymm?
   (wft : LamWF ltv ⟨lctx, t, s⟩) (heq : t.eqSymm? = .some t') :
   LamWF ltv ⟨lctx, t', s⟩ :=
   match t, heq with
-  | .app s (.app _ (.base (.eq _)) lhs) rhs, Eq.refl _ => by
+  | .app s (.app _ (.base (.eq _)) lhs) _, Eq.refl _ => by
     cases wft.getFn.getFn.getBase
     match wft with
     | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) Hlhs) Hrhs =>
@@ -1497,7 +1497,7 @@ def LamTerm.neSymm? (t : LamTerm) : Option LamTerm :=
 theorem LamTerm.maxEVarSucc_neSymm?
   (heq : LamTerm.neSymm? t = .some t') : t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
-  | .app _ (.base .not) (.app s (.app _ (.base (.eq _)) lhs) rhs), Eq.refl _ => by
+  | .app _ (.base .not) (.app s (.app _ (.base (.eq _)) lhs) _), Eq.refl _ => by
     simp [maxEVarSucc, Nat.max, Nat.max_zero_left]
     apply Nat.max_comm
 
@@ -1505,7 +1505,7 @@ def LamWF.neSymm?
   (wft : LamWF ltv ⟨lctx, t, s⟩) (heq : t.neSymm? = .some t') :
   LamWF ltv ⟨lctx, t', s⟩ :=
   match t, heq with
-  | .app _ (.base .not) (.app s (.app _ (.base (.eq _)) lhs) rhs), Eq.refl _ => by
+  | .app _ (.base .not) (.app s (.app _ (.base (.eq _)) lhs) _), Eq.refl _ => by
     cases wft.getArg.getFn.getFn.getBase
     match wft with
     | .ofApp _ (.ofBase .ofNot) (.ofApp _ (.ofApp _ (.ofBase (.ofEq _)) Hlhs) Hrhs) =>

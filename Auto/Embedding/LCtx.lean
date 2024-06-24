@@ -916,10 +916,10 @@ section add_nat
 
   def addAt_succ_l (lvl pos : Nat) (n : Nat) :
     addAt (.succ lvl) pos n = succAt pos (addAt lvl pos n) := by
-    dsimp [addAt]
+    unfold addAt
     have heq: (fun x => x + (lvl + 1)) = (fun x => (x + lvl).succ) := by
-      apply funext; omega
-    rw [heq] ; apply mapAt_comp
+      apply funext; intro x; apply Nat.add_succ
+    rw [heq, mapAt_comp pos Nat.succ (fun x => x + lvl) n]
 
   def addAt_succ_r (lvl pos : Nat) (n : Nat) :
     addAt (.succ lvl) pos n = addAt lvl pos (succAt pos n) := by
@@ -1019,7 +1019,7 @@ section genericInst
         rw [← IH xs heq lctx n]
         dsimp [pushLCtxs, Nat.blt, Nat.ble]
         rw [Nat.add_succ, Nat.succ_sub_succ]
-        dsimp
+        rfl
 
   theorem contraPair.ofPushsPops (lvl : Nat) (xs : List α) (heq : xs.length = lvl) :
     contraPair (fun n => n + lvl) (fun lctx => List.ofFun lctx lvl = xs) (pushLCtxs xs) := by

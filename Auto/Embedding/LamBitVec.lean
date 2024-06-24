@@ -130,8 +130,8 @@ namespace BVLems
         rw [Nat.sub_one, Nat.pred_lt_iff_le (Nat.two_pow_pos _)]
         apply Nat.le_trans (Nat.sub_le _ _) (Nat.pow_le_pow_of_le_right (.step .refl) h)
       apply eq_of_val_eq; rw [toNat_ofNatLt, hzero]
-      rw [toNat_neg, Int.mod_def', Int.emod]; dsimp only; rw [Nat.zero_mod]
-      dsimp only [Int.natAbs_ofNat, Nat.succ_eq_add_one, Nat.reduceAdd]
+      rw [toNat_neg, Int.mod_def', Int.emod]; dsimp only;
+      rw [Nat.zero_mod, Int.natAbs_ofNat, Nat.succ_eq_add_one, Nat.zero_add]
       rw [Int.subNatNat_of_sub_eq_zero ((Nat.sub_eq_zero_iff_le).mpr (Nat.two_pow_pos _))]
       rw [Int.toNat_ofNat, BitVec.toNat_ofNat]
       cases n <;> try rfl

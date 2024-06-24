@@ -392,7 +392,7 @@ theorem LamTerm.bvarLowersIdx?_bvar_eq_some :
     cases h₂ : (idx + lvl).ble n <;> simp
     case false =>
       have h₂' := Nat.lt_of_ble_eq_false h₂; clear h₂
-      apply (And.intro ?nlt ?nge)
+      apply And.intro ?nlt ?nge
       case nlt => intro h; have h' := Nat.not_le_of_lt h; contradiction
       case nge => intro h; have h' := Nat.not_le_of_lt h₂'; contradiction
     case true =>

@@ -42,7 +42,8 @@ section Enum
     | .Z3 => 4000
     | .Z4 => 3000
 
-  set_option trace.auto.mono.printResult true in
+  -- **TODO**: Better support for translation of functions with `match`
+  set_option trace.auto.printLemmas true in
   example (x : Zone) : x.MinArea1 <= x.MinArea2 := by
     cases x <;> auto d[Zone.MinArea1, Zone.MinArea2]
 

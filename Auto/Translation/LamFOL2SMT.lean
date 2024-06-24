@@ -536,7 +536,7 @@ def withExprValuation
     let .some s := sni.lamEVarTy[n]?
       | throwError "SMT.printValuation :: Unknown etom {n}"
     let type ← Lam2D.interpLamSortAsUnlifted tyValMap s
-    return (Name.mkSimple name , .default, fun _ => pure type))
+    return (Name.mkSimple name, .default, fun _ => pure type))
   Meta.withLocalDecls declInfos (fun etomFVars => do
     let etomValMap := HashMap.ofList ((etomsWithName.zip etomFVars).map (fun ((n, _), e) => (n, e))).data
     printFn tyValMap varValMap etomValMap)
