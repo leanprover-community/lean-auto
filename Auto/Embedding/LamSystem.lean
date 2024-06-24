@@ -266,11 +266,11 @@ theorem LamValid_substLCtxRecWF
     GLift.down (LamWF.interp (t:=t) (rty:=.base .prop) lval lctx' lctxTerm' ((@id (lctx' = lctx) (funext heq)) ▸ wf))) := by
   cases (@id (lctx' = lctx) (funext heq)); exact Iff.intro id id
 
-theorem LamWF.ofExistsLamWF (H : ∃ (_ : LamWF ltv ⟨lctx, t, s⟩), p) :
+def LamWF.ofExistsLamWF (H : ∃ (_ : LamWF ltv ⟨lctx, t, s⟩), p) :
   LamWF ltv ⟨lctx, t, s⟩ := by
   apply LamWF.ofNonemptyLamWF; cases H; apply Nonempty.intro; assumption
 
-theorem LamThmWF.ofLamThmWFP (H : LamThmWFP lval lctx s t) :
+def LamThmWF.ofLamThmWFP (H : LamThmWFP lval lctx s t) :
   LamThmWF lval lctx s t := by
   intro lctx'; apply LamWF.ofNonemptyLamWF (H lctx')
 
@@ -298,7 +298,7 @@ theorem LamTerm.lamThmWFCheck?_spec
     | false => intro H; cases H
   | .none => intro H; cases H
 
-theorem LamThmWF.ofLamThmWFCheck?
+def LamThmWF.ofLamThmWFCheck?
   {lctx : List LamSort} {rty : LamSort} {t : LamTerm}
   (h : LamTerm.lamThmWFCheck? lval.toLamTyVal lctx t = .some rty) : LamThmWF lval lctx rty t := by
   revert h; dsimp [LamTerm.lamThmWFCheck?]
@@ -317,7 +317,7 @@ theorem LamThmWF.ofLamThmWFCheck?
     | false => intro h; cases h
   | .none => intro h; cases h
 
-theorem LamThmWF.ofLamThmValid (H : LamThmValid lval lctx t) :
+def LamThmWF.ofLamThmValid (H : LamThmValid lval lctx t) :
   LamThmWF lval lctx (.base .prop) t :=
   LamThmWF.ofLamThmWFP (fun lctx => let ⟨wf, _⟩ := H lctx; Nonempty.intro wf)
 
@@ -359,7 +359,7 @@ theorem LamThmValid.maxLooseBVarSucc (H : LamThmValid lval lctx t) :
 theorem LamThmWFD.ofLamThmWF (H : LamThmWF lval lctx rty t) : LamThmWFD lval lctx rty t := by
   exists (H dfLCtxTy); apply LamThmWF.maxLooseBVarSucc H
 
-theorem LamThmWF.ofLamThmWFD (H : LamThmWFD lval lctx rty t) : LamThmWF lval lctx rty t := by
+def LamThmWF.ofLamThmWFD (H : LamThmWFD lval lctx rty t) : LamThmWF lval lctx rty t := by
   apply LamThmWF.ofLamThmWFP; have ⟨H, hSucc⟩ := H; apply LamThmWFP.ofLamThmWF
   intro lctx'; apply LamWF.lctxIrrelevance _ H; intros n hlt
   dsimp [pushLCtxs];
@@ -439,11 +439,11 @@ theorem LamThmValid.eVarIrrelevance
     hLamVarTy hLamILTy hTyVal hVarVal hILVal
     (by rw [hLCtxTy]) hirr (h lctx')
 
-theorem LamThmWF.ofLamThmEquiv_l (teq : LamThmEquiv lval lctx rty t₁ t₂) :
+def LamThmWF.ofLamThmEquiv_l (teq : LamThmEquiv lval lctx rty t₁ t₂) :
   LamThmWF lval lctx rty t₁ := LamThmWF.ofLamThmWFP (fun lctx' =>
     (let ⟨wf, _⟩ := teq lctx'; ⟨wf⟩))
 
-theorem LamThmWF.ofLamThmEquiv_r (teq : LamThmEquiv lval lctx rty t₁ t₂) :
+def LamThmWF.ofLamThmEquiv_r (teq : LamThmEquiv lval lctx rty t₁ t₂) :
   LamThmWF lval lctx rty t₂ := LamThmWF.ofLamThmWFP (fun lctx' =>
     (let ⟨_, ⟨wf, _⟩⟩ := teq lctx'; ⟨wf⟩))
 

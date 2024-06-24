@@ -252,7 +252,7 @@ theorem LamTerm.bvarLifts_add :
   rw [Nat.add_comm]; induction lvl₁
   case zero => rw [bvarLiftsIdx_zero]; rfl
   case succ lvl₁ IH =>
-    rw [Nat.add_succ]; rw [bvarLiftsIdx_succ_r, bvarLiftsIdx_succ_r, IH]    
+    rw [Nat.add_succ]; rw [bvarLiftsIdx_succ_r, bvarLiftsIdx_succ_r, IH]
 
 def LamWF.bvarLiftsIdx
   {lamVarTy lctx} {idx lvl : Nat}
@@ -266,7 +266,7 @@ def LamWF.fromBVarLiftsIdx
   {xs : List LamSort} (heq : xs.length = lvl)
   (rterm : LamTerm) (HWF : LamWF lamVarTy ⟨pushLCtxsAt xs idx lctx, rterm.bvarLiftsIdx idx lvl, rTy⟩) :
   LamWF lamVarTy ⟨lctx, rterm, rTy⟩ :=
-  LamWF.fromMapBVarAt (coPair.ofPushsPops _ _ heq) idx rterm HWF  
+  LamWF.fromMapBVarAt (coPair.ofPushsPops _ _ heq) idx rterm HWF
 
 theorem LamWF.interp_bvarLiftsIdx
   (lval : LamValuation.{u}) {idx lvl : Nat}
@@ -290,7 +290,7 @@ def LamWF.fromBVarLifts
   {xs : List LamSort} (heq : xs.length = lvl)
   (rterm : LamTerm) (HWF : LamWF lamVarTy ⟨pushLCtxs xs lctx, rterm.bvarLifts lvl, rTy⟩) :
   LamWF lamVarTy ⟨lctx, rterm, rTy⟩ :=
-  LamWF.fromBVarLiftsIdx (idx:=0) heq rterm (Eq.mp (by rw [pushLCtxsAt_zero]) HWF) 
+  LamWF.fromBVarLiftsIdx (idx:=0) heq rterm (Eq.mp (by rw [pushLCtxsAt_zero]) HWF)
 
 theorem LamWF.interp_bvarLifts
   (lval : LamValuation.{u}) {lvl : Nat}
@@ -392,9 +392,9 @@ theorem LamTerm.bvarLowersIdx?_bvar_eq_some :
     cases h₂ : (idx + lvl).ble n <;> simp
     case false =>
       have h₂' := Nat.lt_of_ble_eq_false h₂; clear h₂
-      apply not_or.mpr (And.intro ?nlt ?nge)
-      case nlt => intro h; have h' := Nat.not_le_of_lt h.left; apply h' h₁'
-      case nge => intro h; have h' := Nat.not_le_of_lt h₂'; apply h' h.left
+      apply (And.intro ?nlt ?nge)
+      case nlt => intro h; have h' := Nat.not_le_of_lt h; contradiction
+      case nge => intro h; have h' := Nat.not_le_of_lt h₂'; contradiction
     case true =>
       have h₂' := Nat.le_of_ble_eq_true h₂; clear h₂
       apply Iff.intro <;> intro h

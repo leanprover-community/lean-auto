@@ -362,7 +362,7 @@ def RTable.getValidsEnsureLCtx (r : RTable) (lctx : List LamSort) (vs : List Nat
     | .some (.nonempty _) => .none
     | .none => .none
 
-theorem RTable.getValidsEnsureLCtx_correct
+noncomputable def RTable.getValidsEnsureLCtx_correct
   (inv : RTable.inv r cv) (heq : getValidsEnsureLCtx r lctx vs = .some ts) :
   HList (fun t => LamThmValid cv.toLamValuation lctx t ∧ t.maxEVarSucc ≤ r.maxEVarSucc) ts := by
   induction vs generalizing ts

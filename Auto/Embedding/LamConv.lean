@@ -152,7 +152,7 @@ theorem LamTerm.maxEVarSucc_etaExpandN? (heq : etaExpandN? n s t = .some t') :
   dsimp [etaExpandN?] at heq; cases h : s.getArgTysN n <;> rw [h] at heq <;> cases heq
   case refl l => rw [maxEVarSucc_etaExpandWith]
 
-theorem LamWF.etaExpandN?
+def LamWF.etaExpandN?
   (heq : LamTerm.etaExpandN? n s t = .some t') (wft : LamWF ltv ⟨lctx, t, s⟩) :
   LamWF ltv ⟨lctx, t', s⟩ := by
   dsimp [LamTerm.etaExpandN?] at heq; cases h₁ : s.getArgTysN n <;> rw [h₁] at heq <;> cases heq
@@ -164,7 +164,7 @@ theorem LamWF.etaExpandN?
     conv => arg 2; rw [seq]
     apply LamWF.etaExpandWith; rw [← seq]; exact wft
 
-theorem LamWF.fromEtaExpandN?
+def LamWF.fromEtaExpandN?
   (heq : LamTerm.etaExpandN? n s t = .some t') (wfEx : LamWF ltv ⟨lctx, t', s⟩) :
   LamWF ltv ⟨lctx, t, s⟩ := by
   dsimp [LamTerm.etaExpandN?] at heq; cases h₁ : s.getArgTysN n <;> rw [h₁] at heq <;> cases heq
