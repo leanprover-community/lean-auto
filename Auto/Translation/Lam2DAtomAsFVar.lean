@@ -128,8 +128,8 @@ def withTranslatedLamTerms (ts : Array LamTerm) : ExternM (Array Expr) := do
 def withHyps (hyps : Array Expr) : ExternM (Array FVarId) := do
   let mut ret := #[]
   for hyp in hyps do
-    let name := "_exHyp" ++ (← mkFreshId).toString
-    let newFVarId ← withLocalDecl name.toName .default hyp .default
+    let name := Name.mkSimple ("_exHyp" ++ (← mkFreshId).toString)
+    let newFVarId ← withLocalDecl name .default hyp .default
     ret := ret.push newFVarId
   return ret
 

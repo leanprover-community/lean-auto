@@ -916,8 +916,10 @@ section add_nat
 
   def addAt_succ_l (lvl pos : Nat) (n : Nat) :
     addAt (.succ lvl) pos n = succAt pos (addAt lvl pos n) := by
-    dsimp only [addAt, Nat.add_succ]
-    rw [mapAt_comp pos Nat.succ (fun x => x + lvl) n]
+    unfold addAt
+    have heq: (fun x => x + (lvl + 1)) = (fun x => (x + lvl).succ) := by
+      apply funext; intro x; apply Nat.add_succ
+    rw [heq, mapAt_comp pos Nat.succ (fun x => x + lvl) n]
 
   def addAt_succ_r (lvl pos : Nat) (n : Nat) :
     addAt (.succ lvl) pos n = addAt lvl pos (succAt pos n) := by
@@ -1015,8 +1017,9 @@ section genericInst
       case cons x xs =>
         simp at heq
         rw [← IH xs heq lctx n]
-        dsimp only [Nat.add_succ, List.length_cons, Nat.blt, Nat.ble, List.getD_cons_succ, pushLCtxs]
-        rw [Nat.succ_sub_succ]
+        dsimp [pushLCtxs, Nat.blt, Nat.ble]
+        rw [Nat.add_succ, Nat.succ_sub_succ]
+        rfl
 
   theorem contraPair.ofPushsPops (lvl : Nat) (xs : List α) (heq : xs.length = lvl) :
     contraPair (fun n => n + lvl) (fun lctx => List.ofFun lctx lvl = xs) (pushLCtxs xs) := by
@@ -1039,8 +1042,8 @@ section genericInst
         case cons ty tys x xs =>
           simp at heq
           apply HEq.trans _ (IH xs heq lctx n)
-          dsimp only [Nat.add_succ, List.length_cons, Nat.blt, Nat.ble, List.getD_cons_succ]
-          rw [Nat.succ_sub_succ]; rfl)
+          dsimp [Nat.blt, Nat.ble]
+          rw [Nat.add_succ, Nat.succ_sub_succ]; rfl)
 
   theorem contraPairDep.ofPushsDepPopsDep
     {lctxty : α → Sort u} (lvl : Nat) {tys : List α}

@@ -358,12 +358,12 @@ example
   auto [ap_assoc]
 
 example
-  (hap : ∀ {α β γ : Type u} [self : HAppend α β γ], α → β → γ)
+  (hap : ∀ {α β γ : Type u} [HAppend α β γ], α → β → γ)
   (ap_assoc : ∀ (α : Type u) (as bs cs : List α),
-    @hap (List α) (List α) (List α) instHAppend (@hap (List α) (List α) (List α) instHAppend as bs) cs =
-    @hap (List α) (List α) (List α) instHAppend as (@hap (List α) (List α) (List α) instHAppend bs cs)) :
-  @hap (List α) (List α) (List α) instHAppend (@hap (List α) (List α) (List α) instHAppend as bs) (@hap (List α) (List α) (List α) instHAppend cs ds) =
-  @hap (List α) (List α) (List α) instHAppend as (@hap (List α) (List α) (List α) instHAppend bs (@hap (List α) (List α) (List α) instHAppend cs ds)) := by
+    @hap (List α) (List α) (List α) instHAppendOfAppend (@hap (List α) (List α) (List α) instHAppendOfAppend as bs) cs =
+    @hap (List α) (List α) (List α) instHAppendOfAppend as (@hap (List α) (List α) (List α) instHAppendOfAppend bs cs)) :
+  @hap (List α) (List α) (List α) instHAppendOfAppend (@hap (List α) (List α) (List α) instHAppendOfAppend as bs) (@hap (List α) (List α) (List α) instHAppendOfAppend cs ds) =
+  @hap (List α) (List α) (List α) instHAppendOfAppend as (@hap (List α) (List α) (List α) instHAppendOfAppend bs (@hap (List α) (List α) (List α) instHAppendOfAppend cs ds)) := by
   auto [ap_assoc]
 
 -- Metavariable

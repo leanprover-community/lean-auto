@@ -145,8 +145,7 @@ def parseUOrDs (stxs : Array (TSyntax ``uord)) : TacticM (Array Prep.ConstUnfold
 
 def collectLctxLemmas (lctxhyps : Bool) (ngoalAndBinders : Array FVarId) : TacticM (Array Lemma) :=
   Meta.withNewMCtxDepth do
-    let lctx ← getLCtx
-    let fVarIds := (if lctxhyps then lctx.getFVarIds else ngoalAndBinders)
+    let fVarIds ← if lctxhyps then pure (← getLCtx).getFVarIds else pure ngoalAndBinders
     let mut lemmas := #[]
     for fVarId in fVarIds do
       let decl ← FVarId.getDecl fVarId

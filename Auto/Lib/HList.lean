@@ -7,16 +7,20 @@ inductive HList (β : α → Sort _) : List α → Sort _
   | nil  : HList β .nil
   | cons : (x : β ty) → HList β tys → HList β (ty :: tys)
 
-def HList.nil_IsomType : IsomType (HList β .nil) PUnit :=
+@[irreducible] def HList.nil_IsomType
+  {α : Type u} {β : α → Sort v} : IsomType (HList β .nil) PUnit :=
   ⟨fun _ => .unit, fun _ => .nil,
    fun x => match x with | .nil => rfl, fun _ => rfl⟩
 
-def HList.cons_IsomType : IsomType (HList β (a :: as)) (β a × HList β as) :=
+@[irreducible] def HList.cons_IsomType
+  {α : Type u} {β : α → Type v} {a : α} {as : List α} :
+  IsomType (HList β (a :: as)) (β a × HList β as) :=
   ⟨fun xs => match xs with | .cons x xs => (x, xs), fun (x, xs) => .cons x xs,
    fun xs => match xs with | .cons _ _ => rfl,
    fun (_, _) => rfl⟩
 
-def HList.singleton_IsomType : IsomType (HList β [a]) (β a) :=
+@[irreducible] def HList.singleton_IsomType
+  {α : Type u_1} {β : α → Sort u_2} {a : α} : IsomType (HList β [a]) (β a) :=
   ⟨fun xs => match xs with | .cons x .nil => x,
    fun x => .cons x .nil,
    fun xs => match xs with | .cons _ .nil => rfl,
@@ -129,14 +133,14 @@ theorem HList.append_get_append_eq (xs : HList β (as ++ bs)) :
     cases xs; case cons x xs =>
       dsimp [append_get_left, append_get_right, append]; rw [IH]
 
-def HList.append_IsomType {α : Type u} {β : α → Sort v} {xs ys : List α} :
+@[irreducible] def HList.append_IsomType {α : Type u} {β : α → Sort v} {xs ys : List α} :
   IsomType (HList β (xs ++ ys)) (PProd (HList β xs) (HList β ys)) :=
   ⟨fun l => ⟨l.append_get_left, l.append_get_right⟩,
    fun ⟨l₁, l₂⟩ => HList.append l₁ l₂,
    HList.append_get_append_eq,
    fun ⟨l₁, l₂⟩ => by dsimp; congr; rw [append_get_left_eq]; rw [append_get_right_eq]⟩
 
-def HList.append_singleton_IsomType {α : Type u} {β : α → Sort v} {xs : List α} {x : α} :
+@[irreducible] def HList.append_singleton_IsomType {α : Type u} {β : α → Sort v} {xs : List α} {x : α} :
   IsomType (HList β (xs ++ [x])) (PProd (HList β xs) (β x)) :=
   ⟨fun l => ⟨l.append_get_left, match l.append_get_right with | .cons x .nil => x⟩,
    fun ⟨l, e⟩ => HList.append l (.cons e .nil),

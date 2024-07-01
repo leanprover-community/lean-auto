@@ -2565,11 +2565,7 @@ theorem LamTerm.maxLooseBVarSucc.spec (m : Nat) :
     let IH' := Nat.pred_le_pred (IH.mp h)
     rw [Nat.pred_succ] at IH'; exact IH'
   case mpr =>
-    let h' := Nat.succ_le_succ h
-    apply IH.mpr; rw [← Nat.pred_eq_sub_one, Nat.succ_pred] at h'; exact h'
-    revert h; cases (maxLooseBVarSucc t)
-    case zero => intro h; cases h
-    case succ _ => intro _; simp
+    apply IH.mpr; apply Nat.lt_pred_iff_succ_lt.mp; exact h
 | .app _ t₁ t₂ => by
   dsimp [hasLooseBVarGe, maxLooseBVarSucc];
   rw [Bool.or_eq_true]; rw [spec m t₁]; rw [spec m t₂];
@@ -3047,7 +3043,7 @@ theorem LamTerm.getAppArgsAux_eq : getAppArgsAux args t = getAppArgsAux [] t ++ 
     dsimp [getAppArgsAux]; rw [IHFn (args:=(s, arg) :: args), IHFn (args:=[(s, arg)])]
     rw [List.append_assoc]; rfl
 
-noncomputable def LamTerm.maxEVarSucc_getAppArgsAux
+@[irreducible] noncomputable def LamTerm.maxEVarSucc_getAppArgsAux
   (hs : HList (fun (_, arg) => arg.maxEVarSucc ≤ n) args) (ht : t.maxEVarSucc ≤ n) :
   HList (fun (_, arg) => arg.maxEVarSucc ≤ n) (LamTerm.getAppArgsAux args t) := by
   induction t generalizing args <;> try exact hs
@@ -3060,7 +3056,7 @@ def LamTerm.getAppArgs := getAppArgsAux []
 theorem LamTerm.getAppArgs_app : getAppArgs (.app s fn arg) = getAppArgs fn ++ [(s, arg)] := by
   dsimp [getAppArgs, getAppArgsAux]; rw [getAppArgsAux_eq]
 
-noncomputable def LamTerm.maxEVarSucc_getAppArgs :
+@[irreducible] noncomputable def LamTerm.maxEVarSucc_getAppArgs :
   HList (fun (_, arg) => arg.maxEVarSucc ≤ t.maxEVarSucc) (LamTerm.getAppArgs t) :=
   LamTerm.maxEVarSucc_getAppArgsAux .nil (Nat.le_refl _)
 
@@ -3117,7 +3113,7 @@ theorem LamTerm.getAppArgsNAux_eq : getAppArgsNAux n args t = (getAppArgsNAux n 
       cases getAppArgsNAux n [] fn <;> dsimp
       rw [List.append_assoc]; rfl
 
-def LamTerm.maxEVarSucc_getAppArgsNAux
+@[irreducible] def LamTerm.maxEVarSucc_getAppArgsNAux
   (hs : HList (fun (_, arg) => arg.maxEVarSucc ≤ m) args) (ht : t.maxEVarSucc ≤ m)
   (heq : LamTerm.getAppArgsNAux n args t = .some args') :
   HList (fun (_, arg) => arg.maxEVarSucc ≤ m) args' := by
@@ -3131,7 +3127,7 @@ def LamTerm.maxEVarSucc_getAppArgsNAux
 
 def LamTerm.getAppArgsN n := getAppArgsNAux n []
 
-def LamTerm.maxEVarSucc_getAppArgsN
+@[irreducible] def LamTerm.maxEVarSucc_getAppArgsN
   (heq : LamTerm.getAppArgsN n t = .some l) :
   HList (fun (_, arg) => arg.maxEVarSucc ≤ t.maxEVarSucc) l :=
   LamTerm.maxEVarSucc_getAppArgsNAux .nil (Nat.le_refl _) heq
@@ -3920,7 +3916,7 @@ def LamWF.ofLamCheck? {ltv : LamTyVal} :
   | .some (LamSort.base _), _ => intro contra; cases contra
   | .none, _ => intro contra; cases contra
 
-def LamWF.ofNonemptyLamWF (H : Nonempty (LamWF ltv ⟨lctx, t, s⟩)) :
+@[irreducible] def LamWF.ofNonemptyLamWF (H : Nonempty (LamWF ltv ⟨lctx, t, s⟩)) :
   LamWF ltv ⟨lctx, t, s⟩ := by
   cases h₁ : LamTerm.lamCheck? ltv lctx t
   case none =>
@@ -4125,7 +4121,7 @@ theorem LamWF.interp_eqForallEFN'
   case nil =>
     dsimp [mkForallEFN, interp]
     conv =>
-      enter [2]; rw [IsomType.eqForall HList.nil_IsomType.{0, u + 1, 0}]
+      enter [2]; rw [IsomType.eqForall HList.nil_IsomType.{0, u + 1, u + 1}]
       rw [PUnit.eqForall]; unfold HList.nil_IsomType; dsimp
       dsimp [pushLCtxs, pushLCtxsDep, Nat.blt, Nat.ble]
     apply congrArg; apply interp_substWF

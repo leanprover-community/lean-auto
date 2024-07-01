@@ -125,13 +125,13 @@ namespace BVLems
     case true =>
       rw [← Int.subNatNat_eq_coe, Int.subNatNat_of_lt (toNat_le _)]
       simp [BitVec.toInt, BitVec.ofInt]
-      have hzero : Nat.pred (2 ^ n - BitVec.toNat a) >>> i = 0 := by
+      have hzero : (2 ^ n - BitVec.toNat a - 1) >>> i = 0 := by
         rw [Nat.shiftRight_eq_div_pow]; apply (Nat.le_iff_div_eq_zero (Nat.two_pow_pos _)).mpr
-        rw [Nat.pred_lt_iff_le (Nat.two_pow_pos _)]
+        rw [Nat.sub_one, Nat.pred_lt_iff_le (Nat.two_pow_pos _)]
         apply Nat.le_trans (Nat.sub_le _ _) (Nat.pow_le_pow_of_le_right (.step .refl) h)
-      apply eq_of_val_eq; rw [toNat_ofNatLt, ← Nat.pred_eq_sub_one, hzero]
-      rw [toNat_neg, Int.mod_def', Int.emod];
-      dsimp only [Int.ofNat_eq_coe, Int.ofNat_emod, Int.natAbs_ofNat]; rw [Nat.zero_mod]
+      apply eq_of_val_eq; rw [toNat_ofNatLt, hzero]
+      rw [toNat_neg, Int.mod_def', Int.emod]; dsimp only;
+      rw [Nat.zero_mod, Int.natAbs_ofNat, Nat.succ_eq_add_one, Nat.zero_add]
       rw [Int.subNatNat_of_sub_eq_zero ((Nat.sub_eq_zero_iff_le).mpr (Nat.two_pow_pos _))]
       rw [Int.toNat_ofNat, BitVec.toNat_ofNat]
       cases n <;> try rfl

@@ -49,7 +49,7 @@ def ofNat'WF (n : Nat) :=
     | _ => .xI (ofNat'WF (n / 2))
 decreasing_by rw [← h]; apply ofNat'WFAux; assumption
 
-def ofNat'WF.inductionOn.{u}
+@[irreducible] def ofNat'WF.inductionOn.{u}
   {motive : Nat → Sort u} (x : Nat)
   (ind : ∀ x, motive ((x + 2) / 2) → motive (x + 2))
   (base₀ : motive 0) (base₁ : motive 1) : motive x :=
@@ -59,7 +59,7 @@ def ofNat'WF.inductionOn.{u}
   | x' + 2 => ind x' (inductionOn ((x' + 2) / 2) ind base₀ base₁)
 decreasing_by apply ofNat'WFAux; rfl
 
-def ofNat'WF.induction
+@[irreducible] def ofNat'WF.induction
   {motive : Nat → Sort u}
   (ind : ∀ x, motive ((x + 2) / 2) → motive (x + 2))
   (base₀ : motive 0) (base₁ : motive 1) : ∀ x, motive x :=
@@ -98,7 +98,7 @@ theorem ofNat'WF.doubleSucc_xI (n : Nat) :
       rw [Nat.mul_mod]; simp
     rw [heq]; simp
     have heq' : ((2 * n' + 3) / 2) + 1 = n' + 2 := by
-      simp only [Nat.reduceEqDiff]; rw [Nat.add_comm];
+      apply congrArg (f := fun x => Nat.add x 1); rw [Nat.add_comm];
       rw [Nat.add_mul_div_left _ _ (by simp)]; rw [Nat.add_comm]
     rw [heq']
 
