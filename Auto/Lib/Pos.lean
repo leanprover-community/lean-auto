@@ -69,7 +69,8 @@ theorem ofNat'WF.succSucc (n : Nat) :
   ofNat'WF (n + 2) =
     match (n + 2) % 2 with
     | 0 => .xO (ofNat'WF ((n + 2) / 2))
-    | _ => .xI (ofNat'WF ((n + 2) / 2)) := rfl
+    | _ => .xI (ofNat'WF ((n + 2) / 2)) := by
+  rw [ofNat'WF]
 
 theorem ofNat'WF.double_xO (n : Nat) :
   n ≠ 0 → ofNat'WF (n * 2) = xO (ofNat'WF n) :=
@@ -166,8 +167,8 @@ theorem ofNat'.equivAux (rd n : Nat) : rd ≥ n → ofNat'WF n = ofNat'RD rd n :
   case succ rd' IH =>
     dsimp [ofNat'RD]
     match n with
-    | 0 => rfl
-    | 1 => rfl
+    | 0 => rw [ofNat'WF]
+    | 1 => rw [ofNat'WF]
     | n' + 2 =>
       rw [ofNat'WF.succSucc]; simp;
       have heq' : Nat.mod (n' + 2) 2 = n' % 2 := by

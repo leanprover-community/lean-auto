@@ -52,7 +52,7 @@ example : (0#5).rotateLeft n = 0#5 ∧ (0#5).rotateRight n = 0#5 := by auto
 example (x : BitVec 8) : x.rotateLeft (7 - 2 * 2) = x.rotateLeft (1 + 2) := by
   auto
 
-example (x : BitVec 8) : x.rotateLeft 100 = x ∧ x.rotateRight 100 = x := by auto
+example (x : BitVec 8) : x.rotateLeft 104 = x ∧ x.rotateRight 104 = x := by auto
 
 example :
   BitVec.zeroExtend 20 5#10 = 5#20 ∧
@@ -65,13 +65,13 @@ example :
 example : (2 : BitVec 7).rotateLeft 3 = 0b10000#7 := by
   auto
 
-example (x : Nat) : (2+x)#10 = BitVec.ofNat 10 x + (2 : BitVec 10) := by
+example (x : Nat) : BitVec.ofNat 10 (2+x) = BitVec.ofNat 10 x + (2 : BitVec 10) := by
   auto
 
-example (x : Nat) : (2*x)#10 = BitVec.ofNat 10 x * (2 : BitVec 10) := by
+example (x : Nat) : BitVec.ofNat 10 (2*x) = BitVec.ofNat 10 x * (2 : BitVec 10) := by
   auto
 
-example : (BitVec.toNat x + BitVec.toNat y)#10 = x + y := by
+example : BitVec.ofNat 10 (BitVec.toNat x + BitVec.toNat y) = x + y := by
   auto
 
 example :
@@ -84,7 +84,7 @@ example : 101#32 <<< 2#32 = 404#32 := by auto
 
 example : (3#10).toNat = 3 := by auto
 
-example (x : Nat) (h : x > 0) : ((25 * x) / x)#3 = 1#3 := by auto
+example (x : Nat) (h : x > 0) : BitVec.ofNat 3 ((25 * x) / x) = 1#3 := by auto
 
 example : (12#10).toInt = 12 && (686#10).toInt = -338 := by auto
 example : (12#10).toInt = 12 ∧ (686#10).toInt = -338 := by auto

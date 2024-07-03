@@ -131,7 +131,8 @@ theorem get?'WF.succSucc (bt : BinTree α) (n : Nat) :
   get?'WF bt (n + 2) =
     match Nat.mod (n + 2) 2 with
     | 0 => get?'WF bt.left! (Nat.div (n + 2) 2)
-    | _ + 1 => get?'WF bt.right! (Nat.div (n + 2) 2) := rfl
+    | _ + 1 => get?'WF bt.right! (Nat.div (n + 2) 2) := by
+    rw [get?'WF]
 
 def get?'Aux (bt : BinTree α) (n rd : Nat) : Option α :=
   match rd with
@@ -150,12 +151,12 @@ theorem get?'Aux.equiv (bt : BinTree α) (n rd : Nat) :
   induction rd generalizing bt n <;> intro H
   case zero =>
     have hzero : n = 0 := Nat.eq_zero_of_le_zero H
-    rw [hzero]; rfl
+    rw [hzero, get?'Aux, get?'WF]
   case succ rd' IH =>
     dsimp [get?'Aux]
     match n with
-    | 0 => rfl
-    | 1 => rfl
+    | 0 => rw [get?'WF]
+    | 1 => rw [get?'WF]
     | n' + 2 =>
       dsimp;
       rw [get?'WF.succSucc];
@@ -226,7 +227,8 @@ theorem insert'WF.succSucc (bt : BinTree α) (n : Nat) (x : α) :
     | _ + 1 =>
       match bt with
       | .leaf => .node .leaf .none (insert'WF .leaf (Nat.div (n + 2) 2) x)
-      | .node l v r => .node l v (insert'WF r (Nat.div (n + 2) 2) x) := rfl
+      | .node l v r => .node l v (insert'WF r (Nat.div (n + 2) 2) x) := by
+  cases bt <;> rw [insert'WF]
 
 def insert'Aux (bt : BinTree α) (n : Nat) (x : α) (rd : Nat) : BinTree α :=
   match rd with
@@ -254,11 +256,11 @@ theorem insert'Aux.equiv (bt : BinTree α) (n : Nat) (x : α) (rd : Nat) :
   induction rd generalizing bt n <;> intro H
   case zero =>
     have hzero : n = 0 := Nat.eq_zero_of_le_zero H
-    rw [hzero]; rfl
+    rw [hzero, insert'Aux, insert'WF]
   case succ rd' IH =>
     match n with
-    | 0 => rfl
-    | 1 => rfl
+    | 0 => rw [insert'Aux, insert'WF]
+    | 1 => rw [insert'Aux, insert'WF]
     | n' + 2 =>
       dsimp [insert'Aux];
       rw [insert'WF.succSucc];

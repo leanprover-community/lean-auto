@@ -34,7 +34,8 @@ protected def saveState : MetaStateM SavedState :=
   return { core := (← getThe Core.State), meta := (← get) }
 
 def SavedState.restore (b : SavedState) : MetaStateM Unit := do
-  Core.restore b.core
+  -- **TODO: Is this safe?**
+  liftM (m := CoreM) <| modify fun s => { s with env := b.core.env, messages := b.core.messages, infoState := b.core.infoState }
   modify fun s => { s with mctx := b.meta.mctx, zetaDeltaFVarIds := b.meta.zetaDeltaFVarIds, postponed := b.meta.postponed }
 
 instance : MonadBacktrack SavedState MetaStateM where
