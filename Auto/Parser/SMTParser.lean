@@ -272,6 +272,13 @@ def builtInSymbolMap : HashMap String Expr :=
   let map := map.insert "true" (mkConst ``True)
   map
 
+/-- Given an expression `∀ x1 : t1, x2 : t2, ... xn : tn, b`, returns `[t1, t2, ..., tn]`. If the given expression is not
+    a forall expression, then `getForallArgumentTypes` just returns the empty list -/
+partial def getForallArgumentTypes (e : Expr) : List Expr :=
+  match e.consumeMData with
+  | Expr.forallE _ t b _ => t :: (getForallArgumentTypes b)
+  | _ => []
+
 mutual
 /-- Given a sorted var of the form `(symbol type)`, returns the string of the symbol and the type as an Expr -/
 partial def parseSortedVar (sortedVar : Term) (symbolMap : HashMap String Expr) : MetaM (String × Expr) := do
@@ -412,6 +419,23 @@ partial def parseTerm (e : Term) (symbolMap : HashMap String Expr) : MetaM Expr 
     | atom (reserved "exists") :: restVs => parseExists restVs symbolMap
     | atom (reserved "let") :: restVs => parseLet restVs symbolMap
     | atom (symb "=>") :: restVs => parseImplication restVs symbolMap
+    | app #[atom underscore, atom (symb "is"), ctor] :: [testerArg] =>
+      let parsedCtor ← parseTerm ctor symbolMap
+      let parsedTesterArg ← parseTerm testerArg symbolMap
+      let idtType ← inferType parsedTesterArg -- `idtType` is the type of the inductive datatype of which `ctor` is a constructor
+      -- Check that `idtType` is an inductive datatype
+      if ← matchConstInduct idtType.getAppFn (fun _ => pure true) (fun _ _ => pure false) then
+        throwError "parseTerm :: Tester applied not {testerArg} of type {idtType} which is not an inductive datatype"
+      let idtParams := idtType.getAppArgs
+      let ctorWithParams ← mkAppM' parsedCtor idtParams
+      let ctorType ← inferType ctorWithParams
+      let ctorArgTypes := getForallArgumentTypes ctorType
+      withLocalDeclsD (ctorArgTypes.map fun ty => (`_, fun _ => pure ty)).toArray fun ctorArgs => do
+        let mut res ← mkAppM ``Eq #[parsedTesterArg, ← mkAppM' ctorWithParams ctorArgs]
+        for ctorArg in ctorArgs do
+          res ← mkLambdaFVars #[ctorArg] res
+          res ← mkAppM ``Exists #[res]
+        return res
     | atom (symb s) :: restVs =>
       match smtSymbolToLeanName s with
       | some (s, Unary) =>
