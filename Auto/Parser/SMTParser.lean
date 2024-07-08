@@ -17,6 +17,7 @@ inductive LexVal
   | kw (s : String)
   | reserved (s : String) -- e.g. "forall" and "exists"
   | comment (s : String)
+  | underscore
 
 deriving Inhabited, BEq, Hashable
 
@@ -43,6 +44,7 @@ def LexVal.toString : LexVal → String
 | .kw s    => s!":{s}"
 | .reserved s => s
 | .comment s => s!";{s}\n"
+| underscore => "_"
 
 instance : ToString LexVal where
   toString := LexVal.toString
@@ -85,6 +87,7 @@ def LexVal.ofString (s : String) (attr : String) : LexVal :=
   | "forall"       => .reserved "forall"
   | "exists"       => .reserved "exists"
   | "let"          => .reserved "let"
+  | "_"            => .underscore
   | _              => panic! s!"LexVal.ofString :: {repr attr} is not a valid attribute"
 
 inductive Term where
@@ -176,9 +179,9 @@ def lexTerm [Monad m] [Lean.MonadError m] (s : String) (p : String.Pos)
         match (SMT.lexiconADFA.getAttrs state).toList with
         | [attr] => pure attr
         | [attr1, attr2] =>
-          if attr1 == "forall" || attr1 == "exists" || attr1 == "let" then pure attr1
-          else if attr2 == "forall" || attr2 == "exists" || attr2 == "let" then pure attr2
-          else throwError "parseTerm :: Attribute conflict not caused by forall, exists, or let"
+          if attr1 == "forall" || attr1 == "exists" || attr1 == "let" || attr1 == "_" then pure attr1
+          else if attr2 == "forall" || attr2 == "exists" || attr2 == "let" || attr2 == "_" then pure attr2
+          else throwError "parseTerm :: Attribute conflict not caused by forall, exists, let, or _"
         | _ => throwError "parseTerm :: Invalid number of attributes"
 
       p := matched.stopPos

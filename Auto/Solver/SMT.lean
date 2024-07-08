@@ -219,6 +219,7 @@ def querySolverWithHints (query : Array IR.SMT.Command)
   emitCommands solver query
   emitCommand solver .checkSat
   let stdout ← solver.stdout.getLine
+  trace[auto.smt.result] "checkSatResponse: {stdout}"
   let (checkSatResponse, _) ← getTerm stdout
   match checkSatResponse with
   | .atom (.symb "sat") =>

@@ -408,8 +408,7 @@ def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : L
 abbrev solverLemmas := List Expr × List Expr × List Expr × List (List Expr)
 
 open Embedding.Lam in
-def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndInfo)
-  (idCiMap : HashMap FVarId Monomorphization.ConstInst) : LamReif.ReifM (Option solverLemmas) := do
+def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : LamReif.ReifM (Option solverLemmas) := do
   let lamVarTy := (← LamReif.getVarVal).map Prod.snd
   let lamEVarTy ← LamReif.getLamEVarTy
   let exportLamTerms ← exportFacts.mapM (fun re => do
@@ -454,30 +453,11 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
   -- **Extract solverLemmas from solverHints**
   let (preprocessFacts, theoryLemmas, instantiations, rewriteFacts) := solverHints
   let mut symbolMap : HashMap String Expr := HashMap.empty
-  let varVal ← LamReif.getVarVal
   for (varName, varAtom) in l2hMap.toArray do
-    match varAtom with
-    | .term termNum =>
-      let vExp := varVal[termNum]!.1
-      trace[auto.smt.result] "{varName} maps to {vExp}"
-      match vExp with
-      | .fvar fVarId =>
-        -- If `vExp` is an fvar, check whether its fVarId appears in `idCiMap`
-        -- If it does, have `symbolMap` map `varName` to the original Lean Expr indicated by `idCiMap`
-        match idCiMap.find? fVarId with
-        | some ci =>
-          trace[auto.smt.result] "fvar {Expr.fvar fVarId} corresponds with {← ci.toExpr}"
-          symbolMap := symbolMap.insert varName (← ci.toExpr)
-        | none =>
-          trace[auto.smt.result] "fvar {Expr.fvar fVarId} not found in idCiMap"
-          symbolMap := symbolMap.insert varName vExp
-      | _ => symbolMap := symbolMap.insert varName vExp
-    | .sort n => logWarning s!"varName: {varName} maps to sort {n}"
-    | .etom _ => logWarning s!"varName: {varName} maps to an etom"
-    | .bvOfNat n => logWarning s!"varName: {varName} maps to bvOfNat {n}"
-    | .bvToNat n => logWarning s!"varName: {varName} maps to bvToNat {n}"
-    | .compCtor lamTerm => logWarning s!"varName: {varName} maps to compCtor {lamTerm}"
-    | .compProj lamTerm => logWarning s!"varName: {varName} maps to compProj {lamTerm}"
+    let varLeanExp ←
+      SMT.withExprValuation sni state.h2lMap (fun tyValMap varValMap etomValMap => do
+        SMT.LamAtomic.toLeanExpr tyValMap varValMap etomValMap varAtom)
+    symbolMap := symbolMap.insert varName varLeanExp
   if ← auto.getHints.getFailOnParseErrorM then
     let preprocessFacts ← preprocessFacts.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap)
     let theoryLemmas ← theoryLemmas.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap)
@@ -671,8 +651,7 @@ def runAutoGetHints (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM solv
   -- Simplify `decide`
   let decide_simp_lem ← Lemma.ofConst ``Auto.Bool.decide_simp (.leaf "hw Auto.Bool.decide_simp")
   let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem decide_simp_lem)
-  let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) (minds : Array (Array SimpleIndVal))
-    (idCiMap : HashMap FVarId Monomorphization.ConstInst) : LamReif.ReifM solverLemmas := (do
+  let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) (minds : Array (Array SimpleIndVal)) : LamReif.ReifM solverLemmas := (do
     let exportFacts ← LamReif.reifFacts uvalids
     let mut exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
     let _ ← LamReif.reifInhabitations uinhs
@@ -683,14 +662,14 @@ def runAutoGetHints (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM solv
     -- runAutoGetHints only supports SMT right now
     -- **SMT**
     if auto.smt.get (← getOptions) then
-      if let .some lemmas ← querySMTForHints exportFacts exportInds idCiMap then
+      if let .some lemmas ← querySMTForHints exportFacts exportInds then
         return lemmas
     throwError "autoGetHints only implemented for cvc5 (enable option auto.smt)"
     )
-  let (lemmas, _) ← Monomorphization.monomorphizePreserveMap lemmas inhFacts $ fun (idCiMap, s) => do
+  let (lemmas, _) ← Monomorphization.monomorphize lemmas inhFacts $ fun s => do
     let callAfterReify : Reif.ReifM solverLemmas := do
       let u ← computeMaxLevel s.facts
-      (afterReify s.facts s.inhTys s.inds idCiMap).run' {u := u}
+      (afterReify s.facts s.inhTys s.inds).run' {u := u}
     callAfterReify.run s
   trace[auto.tactic] "Auto found preprocessing and theory lemmas: {lemmas}"
   return lemmas

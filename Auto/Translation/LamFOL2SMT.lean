@@ -581,7 +581,7 @@ def lamFOL2SMTWithL2hMap
   let _ ← termAuxDecls.mapM addCommand
   for mind in minds do
     let (dsdecl, compCtors, compProjs) ← lamMutualIndInfo2STerm sni mind
-    trace[auto.lamFOL2SMT] "MutualIndInfo translated to command {dsdecl}"
+    trace[auto.lamFOL2SMT] "MutualIndInfo {mind} translated to command {dsdecl}"
     addCommand dsdecl
     let compCtorEqns ← compCtors.mapM (compEqn sni lamVarTy lamEVarTy)
     let _ ← compCtorEqns.mapM addCommand
