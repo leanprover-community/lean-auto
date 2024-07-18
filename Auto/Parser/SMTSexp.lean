@@ -186,6 +186,7 @@ def parseSexp (s : String) (p : String.Pos) (partialResult : PartialResult) : Pa
             return .complete (.app final) p
           else
             pstk := pstk.modify (pstk.size - 1) (fun arr => arr.push (.app final))
+      | .comment s => pstk := pstk.modify (pstk.size - 1) (fun arr => arr.push (.atom (.comment s)))
       | l       =>
         -- Ordinary lexicons must be separated by whitespace or parentheses
         match s.get? p with
