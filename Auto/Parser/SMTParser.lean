@@ -239,9 +239,13 @@ private def testLexer (s : String) (p : String.Pos) (print := true) : MetaM Unit
 -/
 
 inductive SymbolInput
-| Unary -- Used for symbols that take in exactly one argument
-| LeftAssoc -- Used for symbols like `+` or `or` that ideally take in two symbols but can be chained if given more arguments
-| TwoExact -- Used for symbols like `<` that take in exactly two arguments
+| UnaryNonProp -- Used for symbols that take in exactly one nonProp argument
+| UnaryProp -- Used for symbols that input and output exactly one Prop argument
+| LeftAssocNonProp -- Used for symbols like `+` or `*` that ideally take in two nonProp symbols but can be chained if given more arguments
+| LeftAssocAllProp -- Like LeftAssocNonProp but all input and output must be of type Prop
+| TwoExactNonProp -- Used for symbols like `<` that take in exactly two nonProp arguments
+| TwoExactAllProp -- Like TwoExact but all input and output must be of type Prop
+| TwoExactEq -- Specifically used for `=` which can invoke Prop typing constraints if a Prop and Bool are equated
 | Minus -- Minus is left-associative when given ≥ 2 arguments but is also used for unary negation
 
 open SymbolInput
@@ -249,18 +253,18 @@ open SymbolInput
 /-- If `s` is a theory symbol that we have a hardcoded interpretation for, then return the corresponding constant in Lean. -/
 def smtSymbolToLeanName (s : String) : Option (Name × SymbolInput) :=
   match s with
-  | "<" => some (`LT.lt, TwoExact)
-  | "<=" => some (`LE.le, TwoExact)
-  | ">" => some (`GT.gt, TwoExact)
-  | ">=" => some (`GE.ge, TwoExact)
-  | "+" => some (`HAdd.hAdd, LeftAssoc)
-  | "-" => some (`HSub.hSub, Minus) -- Minus is left-associative when given ≥ 2 arguments but is also used for unary negation
-  | "*" => some (`HMul.hMul, LeftAssoc)
-  | "/" => some (`HDiv.hDiv, LeftAssoc)
-  | "or" => some (`Or, LeftAssoc)
-  | "and" => some (`And, LeftAssoc)
-  | "not" => some (`Not, Unary)
-  | "=" => some (`Eq, TwoExact)
+  | "<" => some (``LT.lt, TwoExactNonProp)
+  | "<=" => some (``LE.le, TwoExactNonProp)
+  | ">" => some (``GT.gt, TwoExactNonProp)
+  | ">=" => some (``GE.ge, TwoExactNonProp)
+  | "+" => some (``HAdd.hAdd, LeftAssocNonProp)
+  | "-" => some (``HSub.hSub, Minus) -- Minus is left-associative when given ≥ 2 arguments but is also used for unary negation
+  | "*" => some (``HMul.hMul, LeftAssocNonProp)
+  | "/" => some (``HDiv.hDiv, LeftAssocNonProp)
+  | "or" => some (``Or, LeftAssocAllProp)
+  | "and" => some (``And, LeftAssocAllProp)
+  | "not" => some (``Not, UnaryProp)
+  | "=" => some (``Eq, TwoExactEq)
   | _ => none
 
 def builtInSymbolMap : HashMap String Expr :=
@@ -288,7 +292,7 @@ partial def parseSortedVar (sortedVar : Term) (symbolMap : HashMap String Expr) 
     | #[var, varType] =>
       let atom (symb varSymbol) := var
         | throwError "parseSortedVar :: Failed to parse {var} as the variable of a sortedVar"
-      let varTypeExp ← parseTerm varType symbolMap
+      let varTypeExp ← parseTerm varType symbolMap false
       return (varSymbol, varTypeExp)
     | _ => throwError "parseSortedVar :: Failed to parse {sortedVar} as a sortedVar"
   | _ => throwError "parseSortedVar :: {sortedVar} is supposed to be a sortedVar, not an atom"
@@ -306,7 +310,7 @@ partial def parseForall (vs : List Term) (symbolMap : HashMap String Expr) : Met
         | throwError "parseForall :: Unknown sorted var name {sortedVar.1} (parseForall input: {vs})"
       symbolMap := symbolMap.insert sortedVar.1 (mkFVar sortedVarDecl.fvarId)
       sortedVarDecls := sortedVarDecls.push sortedVarDecl
-    let body ← parseTerm forallBody symbolMap
+    let body ← parseTerm forallBody symbolMap true
     Meta.mkForallFVars (sortedVarDecls.map (fun decl => mkFVar decl.fvarId)) body
 
 partial def parseExists (vs : List Term) (symbolMap : HashMap String Expr) : MetaM Expr := do
@@ -322,11 +326,11 @@ partial def parseExists (vs : List Term) (symbolMap : HashMap String Expr) : Met
         | throwError "parseForall :: Unknown sorted var name {sortedVar.1} (parseForall input: {vs})"
       symbolMap := symbolMap.insert sortedVar.1 (mkFVar sortedVarDecl.fvarId)
       sortedVarDecls := sortedVarDecls.push sortedVarDecl
-    let lamBody ← parseTerm existsBody symbolMap
+    let lamBody ← parseTerm existsBody symbolMap true
     let mut res := lamBody
     for decl in sortedVarDecls.reverse do
       res ← Meta.mkLambdaFVars #[(mkFVar decl.fvarId)] res
-      res ← Meta.mkAppM `Exists #[res]
+      res ← Meta.mkAppM ``Exists #[res]
     return res
 
 /-- Given a varBinding of the form `(symbol value)` returns the string of the symbol, the type of the value, and the value itself -/
@@ -337,13 +341,13 @@ partial def parseVarBinding (varBinding : Term) (symbolMap : HashMap String Expr
     | #[var, varValue] =>
       let atom (symb var) := var
         | throwError "parseVarBinding :: Failed to parse {var} as the variable of a var binding"
-      let varValue ← parseTerm varValue symbolMap
+      let varValue ← parseTerm varValue symbolMap false
       let varType ← inferType varValue
       return (var, varType, varValue)
     | _ => throwError "parseVarBinding :: Failed to parse {varBinding} as a var binding"
   | _ => throwError "parseVarBinding :: {varBinding} is supposed to be a varBinding, not an atom"
 
-partial def parseLet (vs : List Term) (symbolMap : HashMap String Expr) : MetaM Expr := do
+partial def parseLet (vs : List Term) (symbolMap : HashMap String Expr) (resMustBeProp : Bool) : MetaM Expr := do
   let [app varBindings, letBody] := vs
     | throwError "parsseLet :: Unexpected input list {vs}"
   let varBindings ← varBindings.mapM (fun vb => parseVarBinding vb symbolMap)
@@ -356,7 +360,7 @@ partial def parseLet (vs : List Term) (symbolMap : HashMap String Expr) : MetaM 
         | throwError "parseLet :: Unknown var binding name {varBinding.1} (parseLet input: {vs})"
       symbolMap := symbolMap.insert varBinding.1 (mkFVar varBindingDecl.fvarId)
       varBindingDecls := varBindingDecls.push varBindingDecl
-    let body ← parseTerm letBody symbolMap
+    let body ← parseTerm letBody symbolMap resMustBeProp
     let abstractedBody ← Expr.abstractM body (varBindingDecls.map (fun decl => mkFVar decl.fvarId))
     let mut res := abstractedBody
     for varBinding in varBindings.reverse do
@@ -364,21 +368,21 @@ partial def parseLet (vs : List Term) (symbolMap : HashMap String Expr) : MetaM 
     return res
 
 partial def parseLeftAssocAppAux (headSymbol : Name) (args : List Term)
-  (symbolMap : HashMap String Expr) (acc : Expr) : MetaM Expr := do
+  (symbolMap : HashMap String Expr) (acc : Expr) (allProp : Bool) : MetaM Expr := do
   match args with
   | [] => return acc
   | arg :: restArgs =>
-    let arg ← parseTerm arg symbolMap
+    let arg ← parseTerm arg symbolMap allProp
     let acc ← mkAppM headSymbol #[acc, arg]
-    parseLeftAssocAppAux headSymbol restArgs symbolMap acc
+    parseLeftAssocAppAux headSymbol restArgs symbolMap acc allProp
 
-partial def parseLeftAssocApp (headSymbol : Name) (args : List Term) (symbolMap : HashMap String Expr) : MetaM Expr := do
+partial def parseLeftAssocApp (headSymbol : Name) (args : List Term) (symbolMap : HashMap String Expr) (allProp : Bool) : MetaM Expr := do
   match args with
   | arg1 :: (arg2 :: restArgs) =>
-    let arg1 ← parseTerm arg1 symbolMap
-    let arg2 ← parseTerm arg2 symbolMap
+    let arg1 ← parseTerm arg1 symbolMap allProp
+    let arg2 ← parseTerm arg2 symbolMap allProp
     let acc ← mkAppM headSymbol #[arg1, arg2]
-    parseLeftAssocAppAux headSymbol restArgs symbolMap acc
+    parseLeftAssocAppAux headSymbol restArgs symbolMap acc allProp
   | _ => throwError "parseLeftAssocApplication :: Insufficient arguments given to {headSymbol}. args: {args}"
 
 /-- Note: parseImplicationAux expects to receive args in reverse order
@@ -387,7 +391,7 @@ partial def parseImplicationAux (args : List Term) (symbolMap : HashMap String E
   match args with
   | [] => return acc
   | arg :: restArgs =>
-    let arg ← parseTerm arg symbolMap
+    let arg ← parseTerm arg symbolMap true
     let acc := .forallE `_ arg acc .default
     parseImplicationAux restArgs symbolMap acc
 
@@ -395,33 +399,65 @@ partial def parseImplicationAux (args : List Term) (symbolMap : HashMap String E
 partial def parseImplication (args : List Term) (symbolMap : HashMap String Expr) : MetaM Expr := do
   match args.reverse with
   | lastArg :: (lastArg2 :: restArgs) =>
-    let lastArg ← parseTerm lastArg symbolMap
+    let lastArg ← parseTerm lastArg symbolMap true
     parseImplicationAux (lastArg2 :: restArgs) symbolMap lastArg
   | _ => throwError "parseImplication :: Insufficient arguments given. args: {args}"
 
-partial def parseTerm (e : Term) (symbolMap : HashMap String Expr) : MetaM Expr := do
+partial def parseTerm (e : Term) (symbolMap : HashMap String Expr) (resMustBeProp : Bool) : MetaM Expr := do
+  dbg_trace "Calling parseTerm on {e} (resMustBeProp: {resMustBeProp})"
   match e with
-  | atom (num n) => mkAppM ``Int.ofNat #[Expr.lit (Literal.natVal n)]
+  | atom (num n) =>
+    if resMustBeProp then
+      throwError "parseTerm :: {e} can be parsed but not as a Prop"
+    else
+      mkAppM ``Int.ofNat #[Expr.lit (Literal.natVal n)]
   | atom (rat n m) =>
-    let numerator ← mkAppM ``Int.ofNat #[Expr.lit (Literal.natVal n)]
-    mkAppM ``mkRat #[numerator, Expr.lit (Literal.natVal m)]
-  | atom (str s) => return Expr.lit (Literal.strVal s)
+    if resMustBeProp then
+      throwError "parseTerm :: {e} can be parsed but not as a Prop"
+    else
+      let numerator ← mkAppM ``Int.ofNat #[Expr.lit (Literal.natVal n)]
+      mkAppM ``mkRat #[numerator, Expr.lit (Literal.natVal m)]
+  | atom (str s) =>
+    if resMustBeProp then
+      throwError "parseTerm :: {e} can be parsed but not as a Prop"
+    else
+      return Expr.lit (Literal.strVal s)
   | atom (symb s) =>
     match symbolMap.find? s with
-    | some v => return v
+    | some v =>
+      if resMustBeProp then
+        let vType ← inferType v
+        if vType.isProp then
+          return v
+        else if vType == mkConst ``Bool then
+          mkAppM ``Eq #[v, mkConst ``true]
+        else
+          throwError "parseTerm :: {e} is parsed as {v} which is not a Prop"
+      else
+        return v
     | none =>
       match builtInSymbolMap.find? s with
-      | some v => return v
+      | some v =>
+        if resMustBeProp then
+          let vType ← inferType v
+          if vType.isProp then
+            return v
+          else if vType == mkConst ``Bool then
+            mkAppM ``Eq #[vType, mkConst ``true]
+          else
+            throwError "parseTerm :: {e} is parsed as {v} which is not a Prop"
+        else
+          return v
       | none => throwError "parseTerm :: Unknown symbol {s}"
   | app vs =>
     match vs.toList with
     | atom (reserved "forall") :: restVs => parseForall restVs symbolMap
     | atom (reserved "exists") :: restVs => parseExists restVs symbolMap
-    | atom (reserved "let") :: restVs => parseLet restVs symbolMap
+    | atom (reserved "let") :: restVs => parseLet restVs symbolMap resMustBeProp
     | atom (symb "=>") :: restVs => parseImplication restVs symbolMap
     | app #[atom underscore, atom (symb "is"), ctor] :: [testerArg] =>
-      let parsedCtor ← parseTerm ctor symbolMap
-      let parsedTesterArg ← parseTerm testerArg symbolMap
+      let parsedCtor ← parseTerm ctor symbolMap false
+      let parsedTesterArg ← parseTerm testerArg symbolMap false
       let idtType ← inferType parsedTesterArg -- `idtType` is the type of the inductive datatype of which `ctor` is a constructor
       -- Check that `idtType` is an inductive datatype
       if ← matchConstInduct idtType.getAppFn (fun _ => pure true) (fun _ _ => pure false) then
@@ -438,34 +474,114 @@ partial def parseTerm (e : Term) (symbolMap : HashMap String Expr) : MetaM Expr 
         return res
     | atom (symb s) :: restVs =>
       match smtSymbolToLeanName s with
-      | some (s, Unary) =>
+      | some (s, UnaryNonProp) =>
         match restVs with
         | [arg] =>
-          let arg ← parseTerm arg symbolMap
+          let arg ← parseTerm arg symbolMap false
+          if resMustBeProp then
+            let res ← mkAppM s #[arg]
+            let resType ← inferType res
+            if resType.isProp then
+              return res
+            else if resType == mkConst ``Bool then
+              mkAppM ``Eq #[res, mkConst ``true]
+            else
+              throwError "parseTerm :: {e} is parsed as {res} which is not a Prop"
+          else
+            mkAppM s #[arg]
+        | _ => throwError "parseTerm :: Invalid unary symbol application {e}"
+      | some (s, UnaryProp) =>
+        match restVs with
+        | [arg] =>
+          let arg ← parseTerm arg symbolMap true
           mkAppM s #[arg]
         | _ => throwError "parseTerm :: Invalid unary symbol application {e}"
-      | some (s, TwoExact) =>
+      | some (s, TwoExactNonProp) =>
         match restVs with
         | [arg1, arg2] =>
-          let arg1 ← parseTerm arg1 symbolMap
-          let arg2 ← parseTerm arg2 symbolMap
+          let arg1 ← parseTerm arg1 symbolMap false
+          let arg2 ← parseTerm arg2 symbolMap false
+          if resMustBeProp then
+            let res ← mkAppM s #[arg1, arg2]
+            let resType ← inferType res
+            if resType.isProp then
+              return res
+            else if resType == mkConst ``Bool then
+              mkAppM ``Eq #[res, mkConst ``true]
+            else
+              throwError "parseTerm :: {e} is parsed as {res} which is not a Prop"
+          else
+            mkAppM s #[arg1, arg2]
+        | arg1 :: (arg2 :: restArgs) =>
+          -- TODO: Interpret `(< a b c)` as `(and (< a b) (< b c))`
+          throwError "parseTerm :: TwoExact symbol with more than two arguments not implemented yet (e: {e})"
+        | _ => throwError "parseTerm :: Invalid application {e}"
+      | some (s, TwoExactAllProp) =>
+        match restVs with
+        | [arg1, arg2] =>
+          let arg1 ← parseTerm arg1 symbolMap true
+          let arg2 ← parseTerm arg2 symbolMap true
           mkAppM s #[arg1, arg2]
         | arg1 :: (arg2 :: restArgs) =>
           -- TODO: Interpret `(< a b c)` as `(and (< a b) (< b c))`
           throwError "parseTerm :: TwoExact symbol with more than two arguments not implemented yet (e: {e})"
         | _ => throwError "parseTerm :: Invalid application {e}"
-      | some (s, LeftAssoc) => parseLeftAssocApp s restVs symbolMap
+      | some (s, TwoExactEq) =>
+        match restVs with
+        | [arg1, arg2] =>
+          let arg1 ← parseTerm arg1 symbolMap false
+          let arg1Type ← inferType arg1
+          if arg1Type.isProp then
+            let arg2 ← parseTerm arg2 symbolMap true -- arg2 needs to be a Prop to match arg1
+            mkAppM s #[arg1, arg2] -- Don't need to check `resMustBeProp` because `Eq` always outputs type Prop
+          else if arg1Type == mkConst ``Bool then
+            let arg1 ← mkAppM ``Eq #[arg1, mkConst ``true]
+            let arg2 ← parseTerm arg2 symbolMap true -- arg2 needs to be a Prop to match arg1
+            mkAppM s #[arg1, arg2] -- Don't need to check `resMustBeProp` because `Eq` always outputs type Prop
+          else
+            let arg2 ← parseTerm arg2 symbolMap false
+            mkAppM s #[arg1, arg2] -- Don't need to check `resMustBeProp` because `Eq` always outputs type Prop
+        | arg1 :: (arg2 :: restArgs) =>
+          -- TODO: Interpret `(= a b c)` as `(and (= a b) (= b c))`
+          throwError "parseTerm :: TwoExact symbol with more than two arguments not implemented yet (e: {e})"
+        | _ => throwError "parseTerm :: Invalid application {e}"
+      | some (s, LeftAssocNonProp) =>
+        if resMustBeProp then
+          let res ← parseLeftAssocApp s restVs symbolMap false
+          let resType ← inferType res
+          if resType.isProp then
+            return res
+          else if resType == mkConst ``Bool then
+            mkAppM ``Eq #[res, mkConst ``true]
+          else
+            throwError "parseTerm :: {e} is parsed as {res} which is not a Prop"
+        else
+          parseLeftAssocApp s restVs symbolMap false
+      | some (s, LeftAssocAllProp) => parseLeftAssocApp s restVs symbolMap true
       | some (s, Minus) =>
-        match restVs with -- Subtraction is left associative, but if it takes in just one argument, Minus is interpreted as negation
-        | [arg] =>
-          let arg ← parseTerm arg symbolMap
-          mkAppM ``Neg.neg #[arg]
-        | _ => parseLeftAssocApp s restVs symbolMap
+        if resMustBeProp then
+          throwError "parseTerm :: {e} has minus as a head symbol which cannot yield a result of type Prop"
+        else
+          match restVs with -- Subtraction is left associative, but if it takes in just one argument, Minus is interpreted as negation
+          | [arg] =>
+            let arg ← parseTerm arg symbolMap false
+            mkAppM ``Neg.neg #[arg]
+          | _ => parseLeftAssocApp s restVs symbolMap false
       | none =>
         match symbolMap.find? s with
         | some symbolExp =>
-          let args ← restVs.mapM (fun t => parseTerm t symbolMap)
-          mkAppM' symbolExp args.toArray
+          let args ← restVs.mapM (fun t => parseTerm t symbolMap false)
+          if resMustBeProp then
+            let res ← mkAppM' symbolExp args.toArray
+            let resType ← inferType res
+            if resType.isProp then
+              return res
+            else if resType == mkConst ``Bool then
+              mkAppM ``Eq #[res, mkConst ``true]
+            else
+              throwError "parseTerm :: {e} is parsed as {res} which is not a Prop"
+          else
+            mkAppM' symbolExp args.toArray
         | none => throwError "parseTerm :: Unknown symbol {s} in term {e}"
     | _ => throwError "parseTerm :: Invalid term application {e}"
   | _ => throwError "parseTerm :: Invalid term {e}" -- All other atoms shouldn't exist as standalone terms
@@ -477,7 +593,7 @@ initialize
 /-- Calls `parseTerm e symbolMap` and returns the result if successful, returning `none` if there is an error -/
 def tryParseTerm (e : Term) (symbolMap : HashMap String Expr) : MetaM (Option Expr) := do
   try
-    parseTerm e symbolMap
+    parseTerm e symbolMap false
   catch err =>
     trace[auto.smt.parseTermErrors] "Error parsing {e}. Error: {err.toMessageData}"
     return none
