@@ -564,10 +564,12 @@ section Adhoc
     0b10#(3+0) * 0b101#(1+2) = 0b10#3 * 0b101#3 := by auto
 
   open BitVec in
-  #check (4+5)#(3+2)
+  #check BitVec.ofNat (3+2) (4+5)
 
   open BitVec in
-  example (a b : Nat) : (a + b)#16 = a#16 + b#16 ∧ (a * b)#16 = a#16 * b#16 := by auto
+  example (a b : Nat) :
+    BitVec.ofNat 16 (a + b) = BitVec.ofNat 16 a + BitVec.ofNat 16 b ∧
+    BitVec.ofNat 16 (a * b) = BitVec.ofNat 16 a * BitVec.ofNat 16 b := by auto
 
   example (a : BitVec 5) (b : BitVec k) :
     a.msb = a.msb ∧ b.msb = b.msb ∧

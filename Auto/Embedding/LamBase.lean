@@ -2657,16 +2657,16 @@ theorem LamTerm.maxEVarSucc_bvsmtHashr : maxEVarSucc (bvsmtHashr n m) = 0 := rfl
 abbrev LamTerm.bvrotateLeft (n : Nat) : LamTerm :=
   .lam (.base (.bv n)) (.lam (.base .nat) (.app (.base (.bv n))
     (.app (.base (.bv n)) (.base (.bvor n))
-      (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvshl n)) (.bvar 1)) (.bvar 0)))
+      (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvshl n)) (.bvar 1)) (.app (.base .nat) (.app (.base .nat) (.base .nmod) (.bvar 0)) (.base (.natVal n)))))
     (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvlshr n)) (.bvar 1))
-      (.app (.base .nat) (.app (.base .nat) (.base .nsub) (.base (.natVal n))) (.bvar 0)))))
+      (.app (.base .nat) (.app (.base .nat) (.base .nsub) (.base (.natVal n))) (.app (.base .nat) (.app (.base .nat) (.base .nmod) (.bvar 0)) (.base (.natVal n)))))))
 
 abbrev LamTerm.bvrotateRight (n : Nat) : LamTerm :=
   .lam (.base (.bv n)) (.lam (.base .nat) (.app (.base (.bv n))
     (.app (.base (.bv n)) (.base (.bvor n))
-      (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvlshr n)) (.bvar 1)) (.bvar 0)))
+      (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvlshr n)) (.bvar 1)) (.app (.base .nat) (.app (.base .nat) (.base .nmod) (.bvar 0)) (.base (.natVal n)))))
     (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvshl n)) (.bvar 1))
-      (.app (.base .nat) (.app (.base .nat) (.base .nsub) (.base (.natVal n))) (.bvar 0)))))
+      (.app (.base .nat) (.app (.base .nat) (.base .nsub) (.base (.natVal n))) (.app (.base .nat) (.app (.base .nat) (.base .nmod) (.bvar 0)) (.base (.natVal n)))))))
 
 def LamTerm.mkNot (t : LamTerm) : LamTerm :=
   .app (.base .prop) (.base .not) t

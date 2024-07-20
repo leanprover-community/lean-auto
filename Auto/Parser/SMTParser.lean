@@ -202,6 +202,7 @@ def lexTerm [Monad m] [Lean.MonadError m] (s : String) (p : String.Pos)
             return .complete (.app final) p
           else
             pstk := pstk.modify (pstk.size - 1) (fun arr => arr.push (.app final))
+      | .comment s => pstk := pstk.modify (pstk.size - 1) (fun arr => arr.push (.atom (.comment s)))
       | l       =>
         -- Ordinary lexicons must be separated by whitespace or parentheses
         match s.get? p with
@@ -404,7 +405,6 @@ partial def parseImplication (args : List Term) (symbolMap : HashMap String Expr
   | _ => throwError "parseImplication :: Insufficient arguments given. args: {args}"
 
 partial def parseTerm (e : Term) (symbolMap : HashMap String Expr) (resMustBeProp : Bool) : MetaM Expr := do
-  dbg_trace "Calling parseTerm on {e} (resMustBeProp: {resMustBeProp})"
   match e with
   | atom (num n) =>
     if resMustBeProp then

@@ -21,9 +21,9 @@ def Zone.MinArea1 : Zone → Area
 
 theorem Zone.MinArea1.spec :
   Zone.MinArea1 .Z1 = 10000 ∧ Zone.MinArea1 .Z2 = 5000 ∧
-  Zone.MinArea1 .Z3 = 3500 ∧ Zone.MinArea1 .Z4 = 2500 := by simp
+  Zone.MinArea1 .Z3 = 3500 ∧ Zone.MinArea1 .Z4 = 2500 := by simp [Zone.MinArea1]
 
-example (x : Zone) : x.MinArea1 >= 2500 := by cases x <;> simp -- succeeds
+example (x : Zone) : x.MinArea1 >= 2500 := by cases x <;> simp [Zone.MinArea1] -- succeeds
 example (x : Zone) : x.MinArea1 >= 2500 := by auto [Zone.MinArea1.spec]
 
 def Zone.MinArea2 : Zone → Area
@@ -34,7 +34,7 @@ def Zone.MinArea2 : Zone → Area
 
 theorem Zone.MinArea2.spec :
   Zone.MinArea2 .Z1 = 0 ∧ Zone.MinArea2 .Z2 = 5000 ∧
-  Zone.MinArea2 .Z3 = 6500 ∧ Zone.MinArea2 .Z4 = 7500 := by simp
+  Zone.MinArea2 .Z3 = 6500 ∧ Zone.MinArea2 .Z4 = 7500 := by simp [Zone.MinArea2]
 
 example (x : Zone) : x.MinArea1 + x.MinArea2 = 10000 := by
   auto [Zone.MinArea1.spec, Zone.MinArea2.spec]
