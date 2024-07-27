@@ -463,11 +463,15 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
   -- However, as of right now, it's not entirely clear how exactly I should build the Lean equivalent of selectors
 
   if ← auto.getHints.getFailOnParseErrorM then
-    let preprocessFacts ← preprocessFacts.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap false)
-    let theoryLemmas ← theoryLemmas.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap false)
-    let instantiations ← instantiations.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap false)
+    let preprocessFacts ← preprocessFacts.mapM
+      (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap Parser.SMTTerm.ParseTermConstraint.noConstraint)
+    let theoryLemmas ← theoryLemmas.mapM
+      (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap Parser.SMTTerm.ParseTermConstraint.noConstraint)
+    let instantiations ← instantiations.mapM
+      (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap Parser.SMTTerm.ParseTermConstraint.noConstraint)
     let rewriteFacts ← rewriteFacts.mapM
-      (fun rwFacts => rwFacts.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap false))
+      (fun rwFacts => rwFacts.mapM
+        (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap Parser.SMTTerm.ParseTermConstraint.noConstraint))
     let solverLemmas := (preprocessFacts, theoryLemmas, instantiations, rewriteFacts)
     return some solverLemmas
   else
