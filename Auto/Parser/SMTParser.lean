@@ -458,7 +458,6 @@ partial def parseTerm (e : Term) (symbolMap : HashMap String Expr) (parseTermCon
         if vType == mkConst ``Bool then
           return v
         else if vType.isProp then
-          dbg_trace "About to try to decide symbol {s} which maps to {v} in symbolMap"
           mkAppOptM ``decide #[some v, none]
         else
           throwError "parseTerm :: {e} is parsed as {v} which is not a Bool"
