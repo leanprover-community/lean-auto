@@ -586,7 +586,7 @@ partial def parseTerm (e : Term) (symbolMap : HashMap String Expr) (parseTermCon
           if resType.isProp then
             return res
           else if resType == mkConst ``Bool then
-            mkAppM ``Eq #[res, mkConst ``True]
+            mkAppM ``Eq #[res, mkConst ``true]
           else
             throwError "parseTerm :: {e} is parsed as {res} which is not a Prop"
         | mustBeBool =>
