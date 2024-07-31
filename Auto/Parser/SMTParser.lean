@@ -458,7 +458,7 @@ partial def parseTerm (e : Term) (symbolMap : HashMap String Expr) (parseTermCon
         if vType == mkConst ``Bool then
           return v
         else if vType.isProp then
-          mkAppOptM ``decide #[some v, none]
+          whnf $ ← mkAppOptM ``decide #[some v, none]
         else
           throwError "parseTerm :: {e} is parsed as {v} which is not a Bool"
     | none =>
@@ -479,7 +479,7 @@ partial def parseTerm (e : Term) (symbolMap : HashMap String Expr) (parseTermCon
           if vType == mkConst ``Bool then
             return v
           else if vType.isProp then
-            mkAppOptM ``decide #[some v, none]
+            whnf $ ← mkAppOptM ``decide #[some v, none]
           else
             throwError "parseTerm :: {e} is parsed as {v} which is not a Bool"
       | none => throwError "parseTerm :: Unknown symbol {s}"
@@ -547,7 +547,7 @@ partial def parseTerm (e : Term) (symbolMap : HashMap String Expr) (parseTermCon
             if resType == mkConst ``Bool then
               return res
             else if resType.isProp then
-              mkAppOptM ``decide #[some res, none]
+              whnf $ ← mkAppOptM ``decide #[some res, none]
             else
               throwError "parseTerm :: {e} is parsed as {res} which is not a Bool"
         | arg1 :: (arg2 :: restArgs) =>
@@ -572,7 +572,7 @@ partial def parseTerm (e : Term) (symbolMap : HashMap String Expr) (parseTermCon
           match parseTermConstraint with
           | noConstraint => return res
           | mustBeProp => return res
-          | mustBeBool => mkAppOptM ``decide #[some res, none]
+          | mustBeBool => whnf $ ← mkAppOptM ``decide #[some res, none]
         | arg1 :: (arg2 :: restArgs) =>
           -- TODO: Interpret `(= a b c)` as `(and (= a b) (= b c))`
           throwError "parseTerm :: TwoExact symbol with more than two arguments not implemented yet (e: {e})"
@@ -594,7 +594,7 @@ partial def parseTerm (e : Term) (symbolMap : HashMap String Expr) (parseTermCon
           if resType == mkConst ``Bool then
             return res
           else if resType.isProp then
-            mkAppOptM ``decide #[some res, none]
+            whnf $ ← mkAppOptM ``decide #[some res, none]
           else
             throwError "parseTerm :: {e} is parsed as {res} which is not a Bool"
       | [(s1, LeftAssocAllProp), (s2, LeftAssocAllBool)] =>
@@ -641,7 +641,7 @@ partial def parseTerm (e : Term) (symbolMap : HashMap String Expr) (parseTermCon
             if resType == mkConst ``Bool then
               return res
             else if resType.isProp then
-              mkAppOptM ``decide #[some res, none]
+              whnf $ ← mkAppOptM ``decide #[some res, none]
             else
               throwError "parseTerm :: {e} is parsed as {res} which is not a Bool"
         | none => throwError "parseTerm :: Unknown symbol {s} in term {e}"
