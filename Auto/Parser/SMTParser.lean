@@ -300,6 +300,43 @@ inductive ParseTermConstraint
 
 open ParseTermConstraint
 
+/-- A helper function for `parseForall` and `parseExists`
+
+    When parsing the arguments of SMT forall and exists expressions, the SMT type "Bool" can appear, which sometimes must be interpreted
+    as `Prop` and sometimes must be interpreted as `Bool`. In `parseForall` and `parseExists`, if there are `x` "Bool" binders, then there
+    are `2^x` possible ways to interpret each of those binders. This helper function serves to facilitate the generation of those
+    interpretations.
+
+    `getNextSortedVars` takes as input `originalSortedVars` obtained by `parseSortedVar` and `curPropBoolChoice` which is an Array indicating
+    which of the "Bool" binders should be interpreted as `Prop` (if `curPropBoolChoice` contains `(i, false)`, then the `i`th element of the
+    output `sortedVars` array should be `Prop`, and if `curPropBoolChoice` contains `(i, true)`, then the `i`th element should be `Bool`)
+
+    `getNextSortedVars` outputs the resulting `sortedVars` array (which is identical to `originalSortedVars` except at the indices where
+    `Prop` is replaced with `Bool`) as well as `nextPropBoolChoice` (obtained by incrementing `curPropBoolChoice` like a bitvector with the
+    least significant bit first).
+
+    If `curPropBoolChoice` is an Array where no idx is mapped to `false`, then instead of supplying the next `curPropBoolChoice`, `getNextSortedVars`
+    returns `none` for the second argument -/
+def getNextSortedVars (originalSortedVars : Array (String × Expr)) (curPropBoolChoice : Array (Fin originalSortedVars.size × Bool))
+  : Array (String × Expr) × Option (Array (Fin originalSortedVars.size × Bool)) := Id.run do
+  -- Calculate `sortedVars`
+  let mut sortedVars := originalSortedVars
+  for (idx, interpAsBool) in curPropBoolChoice do
+    sortedVars := sortedVars.set! idx (sortedVars[idx]!.1, if interpAsBool then mkConst ``Bool else .sort 0)
+  -- Calculate `nextPropBoolChoice`
+  let mut nextPropBoolChoice := curPropBoolChoice
+  for h : i in [:curPropBoolChoice.size] do
+    if (curPropBoolChoice[i]'h.2).2 then
+      nextPropBoolChoice := curPropBoolChoice.set! i ((curPropBoolChoice[i]'h.2).1, false)
+    else
+      nextPropBoolChoice := curPropBoolChoice.set! i ((curPropBoolChoice[i]'h.2).1, true)
+      break
+  -- Check whether we should return `some nextPropBoolChoice` or `none`
+  if nextPropBoolChoice.any (fun (_, b) => b) then
+    return (sortedVars, nextPropBoolChoice)
+  else
+    return (sortedVars, none)
+
 mutual
 /-- Given a sorted var of the form `(symbol type)`, returns the string of the symbol and the type as an Expr -/
 partial def parseSortedVar (sortedVar : Term) (symbolMap : HashMap String Expr) : MetaM (String × Expr) := do
@@ -314,10 +351,8 @@ partial def parseSortedVar (sortedVar : Term) (symbolMap : HashMap String Expr) 
     | _ => throwError "parseSortedVar :: Failed to parse {sortedVar} as a sortedVar"
   | _ => throwError "parseSortedVar :: {sortedVar} is supposed to be a sortedVar, not an atom"
 
-partial def parseForall (vs : List Term) (symbolMap : HashMap String Expr) : MetaM Expr := do
-  let [app sortedVars, forallBody] := vs
-    | throwError "parseForall :: Unexpected input list {vs}"
-  let sortedVars ← sortedVars.mapM (fun sv => parseSortedVar sv symbolMap)
+partial def parseForallBodyWithSortedVars (vs : List Term) (sortedVars : Array (String × Expr))
+  (symbolMap : HashMap String Expr) (forallBody : Term) : MetaM Expr := do
   withLocalDeclsD (sortedVars.map fun (n, ty) => (n.toName, fun _ => pure ty)) fun _ => do
     let lctx ← getLCtx
     let mut symbolMap := symbolMap
@@ -330,10 +365,26 @@ partial def parseForall (vs : List Term) (symbolMap : HashMap String Expr) : Met
     let body ← parseTerm forallBody symbolMap mustBeProp
     Meta.mkForallFVars (sortedVarDecls.map (fun decl => mkFVar decl.fvarId)) body
 
-partial def parseExists (vs : List Term) (symbolMap : HashMap String Expr) : MetaM Expr := do
-  let [app sortedVars, existsBody] := vs
-    | throwError "parseExists :: Unexpected input list {vs}"
+partial def parseForall (vs : List Term) (symbolMap : HashMap String Expr) : MetaM Expr := do
+  let [app sortedVars, forallBody] := vs
+    | throwError "parseForall :: Unexpected input list {vs}"
   let sortedVars ← sortedVars.mapM (fun sv => parseSortedVar sv symbolMap)
+  let sortedVarsWithIndices := sortedVars.mapIdx (fun idx val => (val, idx))
+  let mut curPropBoolChoice := some $ (sortedVarsWithIndices.filter (fun ((_, t), _) => t.isProp)).map (fun (_, idx) => (idx, false))
+  let mut possibleSortedVars := #[]
+  while curPropBoolChoice.isSome do
+    let (nextSortedVars, nextCurPropBoolChoice) := getNextSortedVars sortedVars curPropBoolChoice.get!
+    possibleSortedVars := possibleSortedVars.push nextSortedVars
+    curPropBoolChoice := nextCurPropBoolChoice
+  for sortedVars in possibleSortedVars do
+    try
+      return ← parseForallBodyWithSortedVars vs sortedVars symbolMap forallBody
+    catch _ =>
+      continue
+  throwError "parseForall :: Failed to parse for all expression with vs: {vs}"
+
+partial def parseExistsBodyWithSortedVars (vs : List Term) (sortedVars : Array (String × Expr))
+  (symbolMap : HashMap String Expr) (existsBody : Term) : MetaM Expr := do
   withLocalDeclsD (sortedVars.map fun (n, ty) => (n.toName, fun _ => pure ty)) fun _ => do
     let lctx ← getLCtx
     let mut symbolMap := symbolMap
@@ -349,6 +400,24 @@ partial def parseExists (vs : List Term) (symbolMap : HashMap String Expr) : Met
       res ← Meta.mkLambdaFVars #[(mkFVar decl.fvarId)] res
       res ← Meta.mkAppM ``Exists #[res]
     return res
+
+partial def parseExists (vs : List Term) (symbolMap : HashMap String Expr) : MetaM Expr := do
+  let [app sortedVars, existsBody] := vs
+    | throwError "parseExists :: Unexpected input list {vs}"
+  let sortedVars ← sortedVars.mapM (fun sv => parseSortedVar sv symbolMap)
+  let sortedVarsWithIndices := sortedVars.mapIdx (fun idx val => (val, idx))
+  let mut curPropBoolChoice := some $ (sortedVarsWithIndices.filter (fun ((_, t), _) => t.isProp)).map (fun (_, idx) => (idx, false))
+  let mut possibleSortedVars := #[]
+  while curPropBoolChoice.isSome do
+    let (nextSortedVars, nextCurPropBoolChoice) := getNextSortedVars sortedVars curPropBoolChoice.get!
+    possibleSortedVars := possibleSortedVars.push nextSortedVars
+    curPropBoolChoice := nextCurPropBoolChoice
+  for sortedVars in possibleSortedVars do
+    try
+      return ← parseExistsBodyWithSortedVars vs sortedVars symbolMap existsBody
+    catch _ =>
+      continue
+  throwError "parseExists :: Failed to parse exists expression with vs: {vs}"
 
 /-- Given a varBinding of the form `(symbol value)` returns the string of the symbol, the type of the value, and the value itself -/
 partial def parseVarBinding (varBinding : Term) (symbolMap : HashMap String Expr) : MetaM (String × Expr × Expr) := do
@@ -421,6 +490,8 @@ partial def parseImplication (args : List Term) (symbolMap : HashMap String Expr
     parseImplicationAux (lastArg2 :: restArgs) symbolMap lastArg
   | _ => throwError "parseImplication :: Insufficient arguments given. args: {args}"
 
+/-- The entry function for the variety of mutually recursive functions used to parse SMT terms. `symbolMap` is used to map smt constants to the original
+    Lean expressions they are meant to represent. `parseTermConstraint` is used to indicate whether the output expression must be a particular type. -/
 partial def parseTerm (e : Term) (symbolMap : HashMap String Expr) (parseTermConstraint : ParseTermConstraint) : MetaM Expr := do
   match e with
   | atom (num n) =>
