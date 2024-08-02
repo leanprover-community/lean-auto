@@ -470,8 +470,15 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
     let instantiations ← instantiations.mapM
       (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap Parser.SMTTerm.ParseTermConstraint.noConstraint)
     let rewriteFacts ← rewriteFacts.mapM
-      (fun rwFacts => rwFacts.mapM
-        (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap Parser.SMTTerm.ParseTermConstraint.noConstraint))
+      (fun rwFacts => do
+        /- **TODO** Once cvc5 is updated to clarify whether `rwFacts` is a general rule followed by quantifier-free instances,
+           use that information to inform whether we should:
+           - Parse all facts in the section (do this for the evaluation/computation rewrite section and the polynomial normalization
+             rewrite section)
+           - Try to parse the general rule (first fact). If successful, return just the first fact, and if unsuccessful (e.g. if
+             approximate types appear in the general rule), then return all the instances -/
+        rwFacts.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap Parser.SMTTerm.ParseTermConstraint.noConstraint)
+      )
     let solverLemmas := (preprocessFacts, theoryLemmas, instantiations, rewriteFacts)
     return some solverLemmas
   else
