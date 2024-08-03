@@ -309,10 +309,10 @@ open ParseTermConstraint
 
     `getNextSortedVars` takes as input `originalSortedVars` obtained by `parseSortedVar` and `curPropBoolChoice` which is an Array indicating
     which of the "Bool" binders should be interpreted as `Prop` (if `curPropBoolChoice` contains `(i, false)`, then the `i`th element of the
-    output `sortedVars` array should be `Prop`, and if `curPropBoolChoice` contains `(i, true)`, then the `i`th element should be `Bool`)
+    output `sortedVars` array should be `Bool`, and if `curPropBoolChoice` contains `(i, true)`, then the `i`th element should be `Prop`)
 
     `getNextSortedVars` outputs the resulting `sortedVars` array (which is identical to `originalSortedVars` except at the indices where
-    `Prop` is replaced with `Bool`) as well as `nextPropBoolChoice` (obtained by incrementing `curPropBoolChoice` like a bitvector with the
+    `Bool` is replaced with `Prop`) as well as `nextPropBoolChoice` (obtained by incrementing `curPropBoolChoice` like a bitvector with the
     least significant bit first).
 
     If `curPropBoolChoice` is an Array where no idx is mapped to `false`, then instead of supplying the next `curPropBoolChoice`, `getNextSortedVars`
@@ -321,8 +321,8 @@ def getNextSortedVars (originalSortedVars : Array (String × Expr)) (curPropBool
   : Array (String × Expr) × Option (Array (Fin originalSortedVars.size × Bool)) := Id.run do
   -- Calculate `sortedVars`
   let mut sortedVars := originalSortedVars
-  for (idx, interpAsBool) in curPropBoolChoice do
-    sortedVars := sortedVars.set! idx (sortedVars[idx]!.1, if interpAsBool then mkConst ``Bool else .sort 0)
+  for (idx, interpAsProp) in curPropBoolChoice do
+    sortedVars := sortedVars.set! idx (sortedVars[idx]!.1, if interpAsProp then .sort 0 else mkConst ``Bool)
   -- Calculate `nextPropBoolChoice`
   let mut nextPropBoolChoice := curPropBoolChoice
   for h : i in [:curPropBoolChoice.size] do
