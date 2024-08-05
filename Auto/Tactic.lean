@@ -400,12 +400,21 @@ def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : L
   else
     return .none
 
-/-- solverLemmas includes:
-    - preprcoessFacts : List Expr
-    - theoryLemmas : List Expr
-    - instantiations : List Expr
-    - rewriteFacts : List (List Expr) -/
-abbrev solverLemmas := List Expr × List Expr × List Expr × List (List Expr)
+/-- `solverLemmas` includes:
+    - `selectorInfos` which is an array of
+      - The SMT selector name (String)
+      - The constructor that the selector is for (Expr)
+      - The index of the argument it is a selector for (Nat)
+      - The type of the selector function (Expr)
+    - `preprocessFacts` : List Expr
+    - `theoryLemmas` : List Expr
+    - `instantiations` : List Expr
+    - `rewriteFacts` : List (List Expr)
+
+    Note: In `preprocessFacts`, `theoryLemmas`, `instantiations`, and `rewriteFacts`, there may
+    be loose bound variables. The loose bound variable `#i` corresponds to the selector indicated
+    by `selectorInfos[i]` -/
+abbrev solverLemmas := Array (String × Expr × Nat × Expr) × List Expr × List Expr × List Expr × List (List Expr)
 
 open Embedding.Lam in
 def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : LamReif.ReifM (Option solverLemmas) := do
@@ -417,7 +426,7 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
     | _ => throwError "runAuto :: Unexpected error")
   let sni : SMT.SMTNamingInfo :=
     {tyVal := (← LamReif.getTyVal), varVal := (← LamReif.getVarVal), lamEVarTy := (← LamReif.getLamEVarTy)}
-  let ((commands, validFacts, l2hMap), state) ← (lamFOL2SMTWithL2hMap sni lamVarTy lamEVarTy exportLamTerms exportInds).run
+  let ((commands, validFacts, l2hMap, selInfos), state) ← (lamFOL2SMTWithExtraInfo sni lamVarTy lamEVarTy exportLamTerms exportInds).run
   for cmd in commands do
     trace[auto.smt.printCommands] "{cmd}"
   if (auto.smt.save.get (← getOptions)) then
@@ -450,7 +459,7 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
       | throwError "runAuto :: Index {id} of `exportLamTerm` out of range"
     let vderiv ← LamReif.collectDerivFor (.valid [] t)
     trace[auto.smt.unsatCore.deriv] "|valid_fact_{id}| : {vderiv}"
-  -- **Extract solverLemmas from solverHints**
+  -- **Build symbolPrecMap using l2hMap and selInfos**
   let (preprocessFacts, theoryLemmas, instantiations, rewriteFacts) := solverHints
   let mut symbolMap : HashMap String Expr := HashMap.empty
   for (varName, varAtom) in l2hMap.toArray do
@@ -458,17 +467,38 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
       SMT.withExprValuation sni state.h2lMap (fun tyValMap varValMap etomValMap => do
         SMT.LamAtomic.toLeanExpr tyValMap varValMap etomValMap varAtom)
     symbolMap := symbolMap.insert varName varLeanExp
-
-  -- **TODO** Add selectors (i.e. projections) to symbolMap (each should have a signature `idt → fieldType`)
-  -- However, as of right now, it's not entirely clear how exactly I should build the Lean equivalent of selectors
-
+  /- `selectorArr` has entries containing:
+     - The name of an SMT selector function
+     - The constructor it is a selector for
+     - The index of the argument it is a selector for
+     - The mvar used to represent the selector function -/
+  let mut selectorArr : Array (String × Expr × Nat × Expr) := #[]
+  for (selName, selCtor, argIdx, datatypeName, selOutputType) in selInfos do
+    let selCtor ←
+      SMT.withExprValuation sni state.h2lMap (fun tyValMap varValMap etomValMap => do
+        SMT.LamAtomic.toLeanExpr tyValMap varValMap etomValMap selCtor)
+    let selOutputType ←
+      SMT.withExprValuation sni state.h2lMap (fun tyValMap _ _ => Lam2D.interpLamSortAsUnlifted tyValMap selOutputType)
+    let selDatatype ←
+      match symbolMap.find? datatypeName with
+      | some selDatatype => pure selDatatype
+      | none => throwError "querySMTForHints :: Could not find the datatype {datatypeName} corresponding to selector {selName}"
+    let selType := Expr.forallE `x selDatatype selOutputType .default
+    let selMVar ← Meta.mkFreshExprMVar selType
+    selectorArr := selectorArr.push (selName, selCtor, argIdx, selMVar)
+    symbolMap := symbolMap.insert selName selMVar
+  let selectorMVars := selectorArr.map (fun (_, _, _, selMVar) => selMVar)
+  -- Change the last argument of selectorArr from the mvar used to represent the selector function to its type
+  selectorArr ← selectorArr.mapM
+    (fun (selName, selCtor, argIdx, selMVar) => return (selName, selCtor, argIdx, ← Meta.inferType selMVar))
+  -- **Extract solverLemmas from solverHints**
   if ← auto.getHints.getFailOnParseErrorM then
     let preprocessFacts ← preprocessFacts.mapM
-      (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap Parser.SMTTerm.ParseTermConstraint.noConstraint)
+      (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
     let theoryLemmas ← theoryLemmas.mapM
-      (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap Parser.SMTTerm.ParseTermConstraint.noConstraint)
+      (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
     let instantiations ← instantiations.mapM
-      (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap Parser.SMTTerm.ParseTermConstraint.noConstraint)
+      (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
     let rewriteFacts ← rewriteFacts.mapM
       (fun rwFacts => do
         /- **TODO** Once cvc5 is updated to clarify whether `rwFacts` is a general rule followed by quantifier-free instances,
@@ -477,22 +507,22 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
              rewrite section)
            - Try to parse the general rule (first fact). If successful, return just the first fact, and if unsuccessful (e.g. if
              approximate types appear in the general rule), then return all the instances -/
-        rwFacts.mapM (fun lemTerm => Parser.SMTTerm.parseTerm lemTerm symbolMap Parser.SMTTerm.ParseTermConstraint.noConstraint)
+        rwFacts.mapM (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
       )
-    let solverLemmas := (preprocessFacts, theoryLemmas, instantiations, rewriteFacts)
+    let solverLemmas := (selectorArr, preprocessFacts, theoryLemmas, instantiations, rewriteFacts)
     return some solverLemmas
   else
-    let preprocessFacts ← preprocessFacts.mapM (fun lemTerm => Parser.SMTTerm.tryParseTerm lemTerm symbolMap)
-    let theoryLemmas ← theoryLemmas.mapM (fun lemTerm => Parser.SMTTerm.tryParseTerm lemTerm symbolMap)
-    let instantiations ← instantiations.mapM (fun lemTerm => Parser.SMTTerm.tryParseTerm lemTerm symbolMap)
+    let preprocessFacts ← preprocessFacts.mapM (fun lemTerm => Parser.SMTTerm.tryParseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
+    let theoryLemmas ← theoryLemmas.mapM (fun lemTerm => Parser.SMTTerm.tryParseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
+    let instantiations ← instantiations.mapM (fun lemTerm => Parser.SMTTerm.tryParseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
     let rewriteFacts ← rewriteFacts.mapM
-      (fun rwFacts => rwFacts.mapM (fun lemTerm => Parser.SMTTerm.tryParseTerm lemTerm symbolMap))
+      (fun rwFacts => rwFacts.mapM (fun lemTerm => Parser.SMTTerm.tryParseTermAndAbstractSelectors lemTerm symbolMap selectorMVars))
     -- Filter out `none` results from the above lists (so we can gracefully ignore lemmas that we couldn't parse)
     let preprocessFacts := preprocessFacts.filterMap id
     let theoryLemmas := theoryLemmas.filterMap id
     let instantiations := instantiations.filterMap id
     let rewriteFacts := rewriteFacts.map (fun rwFacts => rwFacts.filterMap id)
-    let solverLemmas := (preprocessFacts, theoryLemmas, instantiations, rewriteFacts)
+    let solverLemmas := (selectorArr, preprocessFacts, theoryLemmas, instantiations, rewriteFacts)
     return some solverLemmas
 
 open LamReif Embedding.Lam in
@@ -691,6 +721,117 @@ def runAutoGetHints (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM solv
 
 syntax (name := autoGetHints) "autoGetHints" autoinstr hints (uord)* : tactic
 
+/-- Given an expression `∀ x1 : t1, x2 : t2, ... xn : tn, b`, returns `[t1, t2, ..., tn]`. If the given expression is not
+    a forall expression, then `getForallArgumentTypes` just returns the empty list -/
+partial def getForallArgumentTypes (e : Expr) : List Expr :=
+  match e.consumeMData with
+  | Expr.forallE _ t b _ => t :: (getForallArgumentTypes b)
+  | _ => []
+
+/-- Given the constructor `selCtor` of some inductive datatype and an `argIdx` which is less than `selCtor`'s total number
+    of fields, `buildSelectorForInhabitedType` uses the datatype's recursor to build a function that takes in the datatype
+    and outputs a value of the same type as the argument indicated by `argIdx`. This function has the property that if it is
+    passed in `selCtor`, it returns the `argIdx`th argument of `selCtor`, and if it is passed in a different constructor, it
+    returns the default value of the appropriate type. -/
+def buildSelectorForInhabitedType (selCtor : Expr) (argIdx : Nat) : MetaM Expr := do
+  let (cval, lvls) ← matchConstCtor selCtor.getAppFn'
+    (fun _ => throwError "buildSelectorForInhabitedType :: {selCtor} is not a constructor")
+    (fun cval lvls => pure (cval, lvls))
+  let selCtorParams := selCtor.getAppArgs
+  let selCtorType ← Meta.inferType selCtor
+  let selCtorFieldTypes := (getForallArgumentTypes selCtorType).toArray
+  let selectorOutputType ←
+    match selCtorFieldTypes[argIdx]? with
+    | some outputType => pure outputType
+    | none => throwError "buildSelectorForInhabitedType :: argIdx {argIdx} out of bounds for constructor {selCtor}"
+  let selectorOutputUniverseLevel ← do
+    let selectorOutputTypeSort ← Meta.inferType selectorOutputType
+    pure selectorOutputTypeSort.sortLevel!
+  let datatypeName := cval.induct
+  let datatype ← Meta.mkAppM' (mkConst datatypeName lvls) selCtorParams
+  let ival ← matchConstInduct datatype.getAppFn
+    (fun _ => throwError "buildSelectorForInhabitedType :: The datatype of {selCtor} ({datatype}) is not a datatype")
+    (fun ival _ => pure ival)
+  let recursor := (mkConst (.str datatypeName "rec") (selectorOutputUniverseLevel :: lvls))
+  let mut recursorArgs := selCtorParams
+  let motive := .lam `_ datatype selectorOutputType .default
+  recursorArgs := recursorArgs.push motive
+  for curCtorIdx in [:ival.ctors.length] do
+    if curCtorIdx == cval.cidx then
+      let decls := selCtorFieldTypes.mapIdx fun idx ty => (.str .anonymous ("arg" ++ idx.1.repr), fun prevArgs => pure (ty.instantiate prevArgs))
+      let nextRecursorArg ←
+        Meta.withLocalDeclsD decls fun curCtorFields => do
+          Meta.mkLambdaFVars curCtorFields curCtorFields[argIdx]!
+      recursorArgs := recursorArgs.push nextRecursorArg
+    else
+      let curCtor := mkConst ival.ctors[curCtorIdx]! lvls
+      let curCtor ← Meta.mkAppOptM' curCtor (selCtorParams.map some)
+      let curCtorType ← Meta.inferType curCtor
+      let curCtorFieldTypes := (getForallArgumentTypes curCtorType).toArray
+      let decls := curCtorFieldTypes.mapIdx fun idx ty => (.str .anonymous ("arg" ++ idx.1.repr), fun prevArgs => pure (ty.instantiate prevArgs))
+      let nextRecursorArg ←
+        Meta.withLocalDeclsD decls fun curCtorFields => do
+          Meta.mkLambdaFVars curCtorFields $ ← Meta.mkAppOptM `Inhabited.default #[some selectorOutputType, none]
+      recursorArgs := recursorArgs.push nextRecursorArg
+  Meta.mkAppOptM' recursor $ recursorArgs.map some
+
+/-- Given the constructor `selCtor` of some inductive datatype and an `argIdx` which is less than `selCtor`'s total number
+    of fields, `buildSelectorForInhabitedType` uses the datatype's recursor to build a function that takes in the datatype
+    and outputs a value of the same type as the argument indicated by `argIdx`. This function has the property that if it is
+    passed in `selCtor`, it returns the `argIdx`th argument of `selCtor`, and if it is passed in a different constructor, it
+    returns `sorry`. -/
+def buildSelectorForUninhabitedType (selCtor : Expr) (argIdx : Nat) : MetaM Expr := do
+  let (cval, lvls) ← matchConstCtor selCtor.getAppFn'
+    (fun _ => throwError "buildSelectorForInhabitedType :: {selCtor} is not a constructor")
+    (fun cval lvls => pure (cval, lvls))
+  let selCtorParams := selCtor.getAppArgs
+  let selCtorType ← Meta.inferType selCtor
+  let selCtorFieldTypes := (getForallArgumentTypes selCtorType).toArray
+  let selectorOutputType ←
+    match selCtorFieldTypes[argIdx]? with
+    | some outputType => pure outputType
+    | none => throwError "buildSelectorForInhabitedType :: argIdx {argIdx} out of bounds for constructor {selCtor}"
+  let selectorOutputUniverseLevel ← do
+    let selectorOutputTypeSort ← Meta.inferType selectorOutputType
+    pure selectorOutputTypeSort.sortLevel!
+  let datatypeName := cval.induct
+  let datatype ← Meta.mkAppM' (mkConst datatypeName lvls) selCtorParams
+  let ival ← matchConstInduct datatype.getAppFn
+    (fun _ => throwError "buildSelectorForInhabitedType :: The datatype of {selCtor} ({datatype}) is not a datatype")
+    (fun ival _ => pure ival)
+  let recursor := (mkConst (.str datatypeName "rec") (selectorOutputUniverseLevel :: lvls))
+  let mut recursorArgs := selCtorParams
+  let motive := .lam `_ datatype selectorOutputType .default
+  recursorArgs := recursorArgs.push motive
+  for curCtorIdx in [:ival.ctors.length] do
+    if curCtorIdx == cval.cidx then
+      let decls := selCtorFieldTypes.mapIdx fun idx ty => (.str .anonymous ("arg" ++ idx.1.repr), fun prevArgs => pure (ty.instantiate prevArgs))
+      let nextRecursorArg ←
+        Meta.withLocalDeclsD decls fun curCtorFields => do
+          Meta.mkLambdaFVars curCtorFields curCtorFields[argIdx]!
+      recursorArgs := recursorArgs.push nextRecursorArg
+    else
+      let curCtor := mkConst ival.ctors[curCtorIdx]! lvls
+      let curCtor ← Meta.mkAppOptM' curCtor (selCtorParams.map some)
+      let curCtorType ← Meta.inferType curCtor
+      let curCtorFieldTypes := (getForallArgumentTypes curCtorType).toArray
+      let decls := curCtorFieldTypes.mapIdx fun idx ty => (.str .anonymous ("arg" ++ idx.1.repr), fun prevArgs => pure (ty.instantiate prevArgs))
+      let nextRecursorArg ←
+        Meta.withLocalDeclsD decls fun curCtorFields => do
+          Meta.mkLambdaFVars curCtorFields $ ← Meta.mkSorry selectorOutputType false
+      recursorArgs := recursorArgs.push nextRecursorArg
+  Meta.mkAppOptM' recursor $ recursorArgs.map some
+
+/-- Given the constructor `selCtor` of some inductive datatype and an `argIdx` which is less than `selCtor`'s total number
+    of fields, `buildSelectorForInhabitedType` uses the datatype's recursor to build a function that takes in the datatype
+    and outputs a value of the same type as the argument indicated by `argIdx`. This function has the property that if it is
+    passed in `selCtor`, it returns the `argIdx`th argument of `selCtor`. -/
+def buildSelector (selCtor : Expr) (argIdx : Nat) : MetaM Expr := do
+  try
+    buildSelectorForInhabitedType selCtor argIdx
+  catch _ =>
+    buildSelectorForUninhabitedType selCtor argIdx
+
 @[tactic autoGetHints]
 def evalAutoGetHints : Tactic
 | `(autoGetHints | autoGetHints%$stxRef $instr $hints $[$uords]*) => withMainContext do
@@ -708,21 +849,38 @@ def evalAutoGetHints : Tactic
     match instr with
     | .none =>
       let (lemmas, inhFacts) ← collectAllLemmas hints uords (goalBinders.push ngoal)
-      let lemmas ← runAutoGetHints lemmas inhFacts
+      let (selectorInfos, lemmas) ← runAutoGetHints lemmas inhFacts
       IO.println s!"Auto found hints. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
       let allLemmas := lemmas.1 ++ lemmas.2.1 ++ lemmas.2.2.1 ++ (lemmas.2.2.2.foldl (fun acc l => acc ++ l) [])
-      let lemmasStx ← allLemmas.mapM (fun lemExp => PrettyPrinter.delab lemExp)
-      if lemmasStx.length = 0 then
+      if allLemmas.length = 0 then
         IO.println "SMT solver did not generate any theory lemmas"
       else
-        let mut tacticsArr : Array Syntax.Tactic := #[]
+        let mut tacticsArr := #[]
+        for (selName, selCtor, argIdx, selType) in selectorInfos do
+          let selTypeStx ← withOptions (fun o => (o.set `pp.analyze true).set `pp.proofs true) $ PrettyPrinter.delab selType
+          let selector ← buildSelector selCtor argIdx
+          let selectorStx ← withOptions (fun o => (o.set `pp.analyze true).set `pp.proofs true) $ PrettyPrinter.delab selector
+          tacticsArr := tacticsArr.push $ ← `(tactic| let $(mkIdent (.str .anonymous selName)) : $selTypeStx := $selectorStx)
+          evalTactic $ ← `(tactic| let $(mkIdent (.str .anonymous selName)) : $selTypeStx := $selectorStx) -- Eval to add selector to lctx
+        let lemmasStx ← withMainContext do -- Use updated main context so that newly added selectors are accessible
+          let lctx ← getLCtx
+          let mut selectorFVars := #[]
+          for (selUserName, _, _, _) in selectorInfos do
+            match lctx.findFromUserName? (.str .anonymous selUserName) with
+            | some decl => selectorFVars := selectorFVars.push (.fvar decl.fvarId)
+            | none => throwError "evalAutoGetHints :: Error in trying to access selector definition for {selUserName}"
+          let allLemmas := allLemmas.map (fun lem => lem.instantiateRev selectorFVars)
+          trace[auto.tactic] "allLemmas: {allLemmas}"
+          allLemmas.mapM (fun lemExp => withOptions (fun o => (o.set `pp.analyze true).set `pp.proofs true) $ PrettyPrinter.delab lemExp)
         for lemmaStx in lemmasStx do
           tacticsArr := tacticsArr.push $ ← `(tactic| have : $lemmaStx := sorry)
+        tacticsArr := tacticsArr.push $ ← `(tactic| sorry)
         let tacticSeq ← `(Lean.Parser.Tactic.tacticSeq| $tacticsArr*)
-        withOptions (fun o => (o.set `pp.analyze true).set `pp.funBinderTypes true) $
+        withOptions (fun o => (o.set `pp.analyze true).set `pp.proofs true) $
           addTryThisTacticSeqSuggestion stxRef tacticSeq (← getRef)
       let proof ← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []]
-      absurd.assign proof
+      let finalGoal ← getMainGoal -- Need to update main goal because running evalTactic to add selectors can change the main goal
+      finalGoal.assign proof
     | .useSorry =>
       let proof ← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []]
       absurd.assign proof

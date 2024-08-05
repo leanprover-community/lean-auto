@@ -289,8 +289,8 @@ partial def getForallArgumentTypes (e : Expr) : List Expr :=
 /-- Like `getForallArgumentTypes` but skips over the types of arguments that have implicit binderInfos -/
 partial def getExplicitForallArgumentTypes (e : Expr) : List Expr :=
   match e.consumeMData with
-  | Expr.forallE _ t b .default => t :: (getForallArgumentTypes b)
-  | Expr.forallE _ t b _ => getForallArgumentTypes b -- Skip over t because this binder is implicit
+  | Expr.forallE _ t b .default => t :: (getExplicitForallArgumentTypes b)
+  | Expr.forallE _ t b _ => getExplicitForallArgumentTypes b -- Skip over t because this binder is implicit
   | _ => []
 
 inductive ParseTermConstraint
@@ -561,18 +561,16 @@ partial def parseTerm (e : Term) (symbolMap : HashMap String Expr) (parseTermCon
     | atom (reserved "let") :: restVs => parseLet restVs symbolMap parseTermConstraint
     | atom (symb "=>") :: restVs => parseImplication restVs symbolMap
     | app #[atom underscore, atom (symb "is"), ctor] :: [testerArg] =>
-      let parsedCtor ← parseTerm ctor symbolMap noConstraint
+      let parsedCtor ← parseTerm ctor symbolMap noConstraint -- Note: `parsedCtor` is already instantiated with datatype parameters
       let parsedTesterArg ← parseTerm testerArg symbolMap noConstraint
       let idtType ← inferType parsedTesterArg -- `idtType` is the type of the inductive datatype of which `ctor` is a constructor
       -- Check that `idtType` is an inductive datatype
       if ← matchConstInduct idtType.getAppFn (fun _ => pure true) (fun _ _ => pure false) then
         throwError "parseTerm :: Tester applied not {testerArg} of type {idtType} which is not an inductive datatype"
-      let idtParams := idtType.getAppArgs
-      let ctorWithParams ← mkAppM' parsedCtor idtParams
-      let ctorType ← inferType ctorWithParams
-      let ctorArgTypes := getForallArgumentTypes ctorType
-      withLocalDeclsD (ctorArgTypes.map fun ty => (`_, fun _ => pure ty)).toArray fun ctorArgs => do
-        let mut res ← mkAppM ``Eq #[parsedTesterArg, ← mkAppM' ctorWithParams ctorArgs]
+      let ctorType ← inferType parsedCtor
+      let ctorArgTypes := (getForallArgumentTypes ctorType).toArray
+      withLocalDeclsD (ctorArgTypes.mapIdx fun idx ty => ((.str .anonymous ("arg" ++ idx.1.repr)), fun _ => pure ty)) fun ctorArgs => do
+        let mut res ← mkAppM ``Eq #[parsedTesterArg, ← mkAppM' parsedCtor ctorArgs]
         for ctorArg in ctorArgs do
           res ← mkLambdaFVars #[ctorArg] res
           res ← mkAppM ``Exists #[res]
@@ -622,7 +620,7 @@ partial def parseTerm (e : Term) (symbolMap : HashMap String Expr) (parseTermCon
             else
               throwError "parseTerm :: {e} is parsed as {res} which is not a Bool"
         | arg1 :: (arg2 :: restArgs) =>
-          -- TODO: Interpret `(< a b c)` as `(and (< a b) (< b c))`
+          -- **TODO**: Interpret `(< a b c)` as `(and (< a b) (< b c))`
           throwError "parseTerm :: TwoExact symbol with more than two arguments not implemented yet (e: {e})"
         | _ => throwError "parseTerm :: Invalid application {e}"
       | [(s, TwoExactEq)] =>
@@ -645,7 +643,7 @@ partial def parseTerm (e : Term) (symbolMap : HashMap String Expr) (parseTermCon
           | mustBeProp => return res
           | mustBeBool => whnf $ ← mkAppOptM ``decide #[some res, none]
         | arg1 :: (arg2 :: restArgs) =>
-          -- TODO: Interpret `(= a b c)` as `(and (= a b) (= b c))`
+          -- **TODO**: Interpret `(= a b c)` as `(and (= a b) (= b c))`
           throwError "parseTerm :: TwoExact symbol with more than two arguments not implemented yet (e: {e})"
         | _ => throwError "parseTerm :: Invalid application {e}"
       | [(s, LeftAssocNoConstraint)] =>
@@ -724,10 +722,18 @@ end
 initialize
   registerTraceClass `auto.smt.parseTermErrors
 
-/-- Calls `parseTerm e symbolMap` and returns the result if successful, returning `none` if there is an error -/
-def tryParseTerm (e : Term) (symbolMap : HashMap String Expr) : MetaM (Option Expr) := do
+/-- Calls `parseTerm` on `e` and then abstracts all of the metavariables corresponding to selectors given by `selMVars` (replacing
+    the first metavariable with `selMVars` with `Expr.bvar 0` and so on) -/
+def parseTermAndAbstractSelectors (e : Term) (symbolMap : HashMap String Expr) (selMVars : Array Expr) : MetaM Expr := do
+  let res ← parseTerm e symbolMap noConstraint
+  res.abstractM selMVars
+
+/-- Calls `parseTerm` on `e` and then abstracts all of the metavariables corresponding to selectors given by `selMVars` (replacing
+    the first metavariable with `selMVars` with `Expr.bvar 0` and so on). Returns `none` if any error occurs. -/
+def tryParseTermAndAbstractSelectors (e : Term) (symbolMap : HashMap String Expr) (selMVars : Array Expr) : MetaM (Option Expr) := do
   try
-    parseTerm e symbolMap noConstraint
+    let res ← parseTerm e symbolMap noConstraint
+    res.abstractM selMVars
   catch err =>
     trace[auto.smt.parseTermErrors] "Error parsing {e}. Error: {err.toMessageData}"
     return none
