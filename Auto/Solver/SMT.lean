@@ -198,10 +198,12 @@ def querySolver (query : Array IR.SMT.Command) : MetaM (Option (Parser.SMTTerm.T
     - preprocessFacts : List (Parser.SMTTerm.Term)
     - theoryLemmas : List (Parser.SMTTerm.Term)
     - instantiations : List (Parser.SMTTerm.Term)
+    - computationLemmas : List (Parser.SMTTerm.Term)
+    - polynomialLemmas : List (Parser.SMTTerm.Term)
     - rewriteFacts : List (List (Parser.SMTTerm.Term)) -/
 abbrev solverHints :=
   List (Parser.SMTTerm.Term) × List (Parser.SMTTerm.Term) × List (Parser.SMTTerm.Term) ×
-  List (List (Parser.SMTTerm.Term))
+  List (Parser.SMTTerm.Term) × List (Parser.SMTTerm.Term) × List (List (Parser.SMTTerm.Term))
 
 /-- Behaves like `querySolver` but assumes that the output came from cvc5 with `--dump-hints` enabled. The
     additional output is used to return not just the unsatCore and proof, but also a list of theory lemmas. -/
@@ -247,11 +249,15 @@ def querySolverWithHints (query : Array IR.SMT.Command)
       | throwError "Error finding theory lemmas in output"
     let [theoryLemmas, stdout] := stdout.splitOn "Instantiations:"
       | throwError "Error finding instantiations in output"
+    let [instantiations, stdout] := stdout.splitOn "Evaluation/computation:"
+      | throwError "Error finding evaluation/computation section in output"
+    let [computationLemmas, stdout] := stdout.splitOn "Polynomial normalization:"
+      | throwError "Error finding polymolial normalization section in output"
     let firstRewritesLabel :=
       "Rewrites (rule defs (if any) and their usages in quantifier-free terms):"
-    let (instantiations, stdout) := -- TODO: Revert this once cvc5 output is consistent
+    let (polynomialLemmas, stdout) :=
       match stdout.splitOn firstRewritesLabel with
-      | [instantiations, stdout] => (instantiations, stdout)
+      | [polynomialLemmas, stdout] => (polynomialLemmas, stdout)
       | _ => ("", stdout)
     let rewriteFacts := stdout.splitOn "Rewrites:"
     let some stdout := rewriteFacts.getLast?
@@ -264,15 +270,19 @@ def querySolverWithHints (query : Array IR.SMT.Command)
     let preprocessFacts ← lexAllTerms preprocessFacts 0 []
     let theoryLemmas ← lexAllTerms theoryLemmas 0 []
     let instantiations ← lexAllTerms instantiations 0 []
+    let computationLemmas ← lexAllTerms computationLemmas 0 []
+    let polynomialLemmas ← lexAllTerms polynomialLemmas 0 []
     let rewriteFacts ← rewriteFacts.mapM (fun rwFact => lexAllTerms rwFact 0 [])
     trace[auto.smt.result] "{name} says Unsat, unsat core:\n{unsatCore}"
     trace[auto.smt.result] "{name} preprocess facts:\n{preprocessFacts}"
     trace[auto.smt.result] "{name} theory lemmas:\n{theoryLemmas}"
+    trace[auto.smt.result] "{name} computation/evaluation lemmas:\n{computationLemmas}"
+    trace[auto.smt.result] "{name} polynomial normalization lemmas:\n{polynomialLemmas}"
     trace[auto.smt.result] "{name} instantiations:\n{instantiations}"
     trace[auto.smt.result] "{name} rewriteFacts:\n{rewriteFacts}"
     trace[auto.smt.stderr] "stderr:\n{stderr}"
     solver.kill
-    let solverHints := (preprocessFacts, theoryLemmas, instantiations, rewriteFacts)
+    let solverHints := (preprocessFacts, theoryLemmas, instantiations, computationLemmas, polynomialLemmas, rewriteFacts)
     return .some (unsatCore, solverHints, stdout)
   | _ =>
     trace[auto.smt.result] "{name} produces unexpected check-sat response\n {checkSatResponse}"

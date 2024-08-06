@@ -409,12 +409,13 @@ def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : L
     - `preprocessFacts` : List Expr
     - `theoryLemmas` : List Expr
     - `instantiations` : List Expr
+    - `computationLemmas` : List Expr
+    - `polynomialLemmas` : List Expr
     - `rewriteFacts` : List (List Expr)
 
-    Note: In `preprocessFacts`, `theoryLemmas`, `instantiations`, and `rewriteFacts`, there may
-    be loose bound variables. The loose bound variable `#i` corresponds to the selector indicated
-    by `selectorInfos[i]` -/
-abbrev solverLemmas := Array (String × Expr × Nat × Expr) × List Expr × List Expr × List Expr × List (List Expr)
+    Note: In all fields except `selectorInfos`, there may be loose bound variables. The loose bound variable `#i` corresponds to
+    the selector indicated by `selectorInfos[i]` -/
+abbrev solverLemmas := Array (String × Expr × Nat × Expr) × List Expr × List Expr × List Expr × List Expr × List Expr × List (List Expr)
 
 open Embedding.Lam in
 def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : LamReif.ReifM (Option solverLemmas) := do
@@ -460,7 +461,7 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
     let vderiv ← LamReif.collectDerivFor (.valid [] t)
     trace[auto.smt.unsatCore.deriv] "|valid_fact_{id}| : {vderiv}"
   -- **Build symbolPrecMap using l2hMap and selInfos**
-  let (preprocessFacts, theoryLemmas, instantiations, rewriteFacts) := solverHints
+  let (preprocessFacts, theoryLemmas, instantiations, computationLemmas, polynomialLemmas, rewriteFacts) := solverHints
   let mut symbolMap : HashMap String Expr := HashMap.empty
   for (varName, varAtom) in l2hMap.toArray do
     let varLeanExp ←
@@ -499,30 +500,48 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
       (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
     let instantiations ← instantiations.mapM
       (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
+    let computationLemmas ← computationLemmas.mapM
+      (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
+    let polynomialLemmas ← polynomialLemmas.mapM
+      (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
     let rewriteFacts ← rewriteFacts.mapM
       (fun rwFacts => do
-        /- **TODO** Once cvc5 is updated to clarify whether `rwFacts` is a general rule followed by quantifier-free instances,
-           use that information to inform whether we should:
-           - Parse all facts in the section (do this for the evaluation/computation rewrite section and the polynomial normalization
-             rewrite section)
-           - Try to parse the general rule (first fact). If successful, return just the first fact, and if unsuccessful (e.g. if
-             approximate types appear in the general rule), then return all the instances -/
-        rwFacts.mapM (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
+        match rwFacts with
+        | [] => return []
+        | rwRule :: ruleInstances =>
+          /- Try to parse `rwRule`. If succesful, just return that. If unsuccessful (e.g. because the rule contains approximate types),
+             then parse each quantifier-free instance of `rwRule` in `ruleInstances` and return all of those. -/
+          match ← Parser.SMTTerm.tryParseTermAndAbstractSelectors rwRule symbolMap selectorMVars with
+          | some parsedRule => return [parsedRule]
+          | none => ruleInstances.mapM (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
       )
-    let solverLemmas := (selectorArr, preprocessFacts, theoryLemmas, instantiations, rewriteFacts)
+    let solverLemmas := (selectorArr, preprocessFacts, theoryLemmas, instantiations, computationLemmas, polynomialLemmas, rewriteFacts)
     return some solverLemmas
   else
     let preprocessFacts ← preprocessFacts.mapM (fun lemTerm => Parser.SMTTerm.tryParseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
     let theoryLemmas ← theoryLemmas.mapM (fun lemTerm => Parser.SMTTerm.tryParseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
     let instantiations ← instantiations.mapM (fun lemTerm => Parser.SMTTerm.tryParseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
+    let computationLemmas ← computationLemmas.mapM (fun lemTerm => Parser.SMTTerm.tryParseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
+    let polynomialLemmas ← polynomialLemmas.mapM (fun lemTerm => Parser.SMTTerm.tryParseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
     let rewriteFacts ← rewriteFacts.mapM
-      (fun rwFacts => rwFacts.mapM (fun lemTerm => Parser.SMTTerm.tryParseTermAndAbstractSelectors lemTerm symbolMap selectorMVars))
+      (fun rwFacts => do
+        match rwFacts with
+        | [] => return []
+        | rwRule :: ruleInstances =>
+          /- Try to parse `rwRule`. If succesful, just return that. If unsuccessful (e.g. because the rule contains approximate types),
+             then parse each quantifier-free instance of `rwRule` in `ruleInstances` and return all of those. -/
+          match ← Parser.SMTTerm.tryParseTermAndAbstractSelectors rwRule symbolMap selectorMVars with
+          | some parsedRule => return [some parsedRule]
+          | none => ruleInstances.mapM (fun lemTerm => Parser.SMTTerm.tryParseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
+      )
     -- Filter out `none` results from the above lists (so we can gracefully ignore lemmas that we couldn't parse)
     let preprocessFacts := preprocessFacts.filterMap id
     let theoryLemmas := theoryLemmas.filterMap id
     let instantiations := instantiations.filterMap id
+    let computationLemmas := computationLemmas.filterMap id
+    let polynomialLemmas := polynomialLemmas.filterMap id
     let rewriteFacts := rewriteFacts.map (fun rwFacts => rwFacts.filterMap id)
-    let solverLemmas := (selectorArr, preprocessFacts, theoryLemmas, instantiations, rewriteFacts)
+    let solverLemmas := (selectorArr, preprocessFacts, theoryLemmas, instantiations, computationLemmas, polynomialLemmas, rewriteFacts)
     return some solverLemmas
 
 open LamReif Embedding.Lam in
@@ -851,7 +870,9 @@ def evalAutoGetHints : Tactic
       let (lemmas, inhFacts) ← collectAllLemmas hints uords (goalBinders.push ngoal)
       let (selectorInfos, lemmas) ← runAutoGetHints lemmas inhFacts
       IO.println s!"Auto found hints. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
-      let allLemmas := lemmas.1 ++ lemmas.2.1 ++ lemmas.2.2.1 ++ (lemmas.2.2.2.foldl (fun acc l => acc ++ l) [])
+      let allLemmas :=
+        lemmas.1 ++ lemmas.2.1 ++ lemmas.2.2.1 ++ lemmas.2.2.2.1 ++ lemmas.2.2.2.2.1 ++
+        (lemmas.2.2.2.2.2.foldl (fun acc l => acc ++ l) [])
       if allLemmas.length = 0 then
         IO.println "SMT solver did not generate any theory lemmas"
       else
