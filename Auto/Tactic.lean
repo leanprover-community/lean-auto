@@ -854,6 +854,29 @@ def buildSelector (selCtor : Expr) (argIdx : Nat) : MetaM Expr := do
   catch _ =>
     buildSelectorForUninhabitedType selCtor argIdx
 
+/-- Given the information relating to a selector of type `idt → argType`, returns the selector fact entailed by SMT-Lib's semantics
+    (`∃ f : idt → argType, ∀ ctor_fields, f (ctor ctor_fields) = ctor_fields[argIdx]`)-/
+def buildSelectorFact (selName : String) (selCtor selType : Expr) (argIdx : Nat) : MetaM Expr := do
+  let selCtorType ← Meta.inferType selCtor
+  let selCtorFieldTypes := getForallArgumentTypes selCtorType
+  let selCtorDeclInfos : Array (Name × (Array Expr → MetaM Expr)) ← do
+    let mut declInfos := #[]
+    let mut declCounter := 0
+    let baseName := "arg"
+    for selCtorFieldType in selCtorFieldTypes do
+      let argName := Name.str .anonymous (baseName ++ declCounter.repr)
+      let argConstructor : Array Expr → MetaM Expr := (fun _ => pure selCtorFieldType)
+      declInfos := declInfos.push (argName, argConstructor)
+      declCounter := declCounter + 1
+    pure declInfos
+  Meta.withLocalDeclD (.str .anonymous selName) selType $ fun selectorFVar => do
+    Meta.withLocalDeclsD selCtorDeclInfos $ fun selCtorArgFVars => do
+      let selCtorWithFields ← Meta.mkAppM' selCtor selCtorArgFVars
+      let selectedArg := selCtorArgFVars[argIdx]!
+      let existsBody ← Meta.mkForallFVars selCtorArgFVars $ ← Meta.mkAppM ``Eq #[← Meta.mkAppM' selectorFVar #[selCtorWithFields], selectedArg]
+      let existsArg ← Meta.mkLambdaFVars #[selectorFVar] existsBody (binderInfoForMVars := .default)
+      Meta.mkAppM ``Exists #[existsArg]
+
 @[tactic autoGetHints]
 def evalAutoGetHints : Tactic
 | `(autoGetHints | autoGetHints%$stxRef $instr $hints $[$uords]*) => withMainContext do
@@ -881,11 +904,26 @@ def evalAutoGetHints : Tactic
       else
         let mut tacticsArr := #[]
         for (selName, selCtor, argIdx, selType) in selectorInfos do
-          let selTypeStx ← withOptions (fun o => (o.set `pp.analyze true).set `pp.proofs true) $ PrettyPrinter.delab selType
+          let selFactName := selName ++ "Fact"
           let selector ← buildSelector selCtor argIdx
           let selectorStx ← withOptions (fun o => (o.set `pp.analyze true).set `pp.proofs true) $ PrettyPrinter.delab selector
-          tacticsArr := tacticsArr.push $ ← `(tactic| let $(mkIdent (.str .anonymous selName)) : $selTypeStx := $selectorStx)
-          evalTactic $ ← `(tactic| let $(mkIdent (.str .anonymous selName)) : $selTypeStx := $selectorStx) -- Eval to add selector to lctx
+          let selectorFact ← buildSelectorFact selName selCtor selType argIdx
+          let selectorFactStx ← withOptions (fun o => (o.set `pp.analyze true).set `pp.proofs true) $ PrettyPrinter.delab selectorFact
+          let existsIntroStx ← withOptions (fun o => (o.set `pp.analyze true).set `pp.proofs true) $ PrettyPrinter.delab (mkConst ``Exists.intro)
+          tacticsArr := tacticsArr.push $
+            ← `(tactic|
+                have ⟨$(mkIdent (.str .anonymous selName)), $(mkIdent (.str .anonymous selFactName))⟩ : $selectorFactStx:term := by
+                  apply $existsIntroStx:term $selectorStx:term
+                  intros
+                  rfl
+              )
+          evalTactic $ -- Eval to add selector and its corresponding fact to lctx
+            ← `(tactic|
+                have ⟨$(mkIdent (.str .anonymous selName)), $(mkIdent (.str .anonymous selFactName))⟩ : $selectorFactStx:term := by
+                  apply $existsIntroStx:term $selectorStx:term
+                  intros
+                  rfl
+              )
         let lemmasStx ← withMainContext do -- Use updated main context so that newly added selectors are accessible
           let lctx ← getLCtx
           let mut selectorFVars := #[]
