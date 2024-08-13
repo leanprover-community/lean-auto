@@ -777,13 +777,19 @@ def buildSelectorForInhabitedType (selCtor : Expr) (argIdx : Nat) : MetaM Expr :
   let recursor := (mkConst (.str datatypeName "rec") (selectorOutputUniverseLevel :: lvls))
   let mut recursorArgs := selCtorParams
   let motive := .lam `_ datatype selectorOutputType .default
+  -- **TODO** Multiple motives for mutually recursive datatypes
   recursorArgs := recursorArgs.push motive
   for curCtorIdx in [:ival.ctors.length] do
     if curCtorIdx == cval.cidx then
       let decls := selCtorFieldTypes.mapIdx fun idx ty => (.str .anonymous ("arg" ++ idx.1.repr), fun prevArgs => pure (ty.instantiate prevArgs))
       let nextRecursorArg ←
         Meta.withLocalDeclsD decls fun curCtorFields => do
-          Meta.mkLambdaFVars curCtorFields curCtorFields[argIdx]!
+          let recursiveFieldMotiveDecls ← curCtorFields.filterMapM
+            (fun ctorFieldFVar => do
+              if (← Meta.inferType ctorFieldFVar) == datatype then return some $ (`_, (fun _ => Meta.mkAppM' motive #[ctorFieldFVar]))
+              else return none)
+          Meta.withLocalDeclsD recursiveFieldMotiveDecls fun recursiveFieldMotiveFVars => do
+            Meta.mkLambdaFVars (curCtorFields ++ recursiveFieldMotiveFVars) curCtorFields[argIdx]!
       recursorArgs := recursorArgs.push nextRecursorArg
     else
       let curCtor := mkConst ival.ctors[curCtorIdx]! lvls
@@ -793,18 +799,23 @@ def buildSelectorForInhabitedType (selCtor : Expr) (argIdx : Nat) : MetaM Expr :
       let decls := curCtorFieldTypes.mapIdx fun idx ty => (.str .anonymous ("arg" ++ idx.1.repr), fun prevArgs => pure (ty.instantiate prevArgs))
       let nextRecursorArg ←
         Meta.withLocalDeclsD decls fun curCtorFields => do
-          Meta.mkLambdaFVars curCtorFields $ ← Meta.mkAppOptM `Inhabited.default #[some selectorOutputType, none]
+          let recursiveFieldMotiveDecls ← curCtorFields.filterMapM
+            (fun ctorFieldFVar => do
+              if (← Meta.inferType ctorFieldFVar) == datatype then return some $ (`_, (fun _ => Meta.mkAppM' motive #[ctorFieldFVar]))
+              else return none)
+          Meta.withLocalDeclsD recursiveFieldMotiveDecls fun recursiveFieldMotiveFVars => do
+            Meta.mkLambdaFVars (curCtorFields ++ recursiveFieldMotiveFVars) $ ← Meta.mkAppOptM `Inhabited.default #[some selectorOutputType, none]
       recursorArgs := recursorArgs.push nextRecursorArg
   Meta.mkAppOptM' recursor $ recursorArgs.map some
 
 /-- Given the constructor `selCtor` of some inductive datatype and an `argIdx` which is less than `selCtor`'s total number
-    of fields, `buildSelectorForInhabitedType` uses the datatype's recursor to build a function that takes in the datatype
+    of fields, `buildSelectorForUninhabitedType` uses the datatype's recursor to build a function that takes in the datatype
     and outputs a value of the same type as the argument indicated by `argIdx`. This function has the property that if it is
     passed in `selCtor`, it returns the `argIdx`th argument of `selCtor`, and if it is passed in a different constructor, it
     returns `sorry`. -/
 def buildSelectorForUninhabitedType (selCtor : Expr) (argIdx : Nat) : MetaM Expr := do
   let (cval, lvls) ← matchConstCtor selCtor.getAppFn'
-    (fun _ => throwError "buildSelectorForInhabitedType :: {selCtor} is not a constructor")
+    (fun _ => throwError "buildSelectorForUninhabitedType :: {selCtor} is not a constructor")
     (fun cval lvls => pure (cval, lvls))
   let selCtorParams := selCtor.getAppArgs
   let selCtorType ← Meta.inferType selCtor
@@ -812,25 +823,31 @@ def buildSelectorForUninhabitedType (selCtor : Expr) (argIdx : Nat) : MetaM Expr
   let selectorOutputType ←
     match selCtorFieldTypes[argIdx]? with
     | some outputType => pure outputType
-    | none => throwError "buildSelectorForInhabitedType :: argIdx {argIdx} out of bounds for constructor {selCtor}"
+    | none => throwError "buildSelectorForUninhabitedType :: argIdx {argIdx} out of bounds for constructor {selCtor}"
   let selectorOutputUniverseLevel ← do
     let selectorOutputTypeSort ← Meta.inferType selectorOutputType
     pure selectorOutputTypeSort.sortLevel!
   let datatypeName := cval.induct
   let datatype ← Meta.mkAppM' (mkConst datatypeName lvls) selCtorParams
   let ival ← matchConstInduct datatype.getAppFn
-    (fun _ => throwError "buildSelectorForInhabitedType :: The datatype of {selCtor} ({datatype}) is not a datatype")
+    (fun _ => throwError "buildSelectorForUninhabitedType :: The datatype of {selCtor} ({datatype}) is not a datatype")
     (fun ival _ => pure ival)
   let recursor := (mkConst (.str datatypeName "rec") (selectorOutputUniverseLevel :: lvls))
   let mut recursorArgs := selCtorParams
   let motive := .lam `_ datatype selectorOutputType .default
+  -- **TODO** Multiple motives for mutually recursive datatypes
   recursorArgs := recursorArgs.push motive
   for curCtorIdx in [:ival.ctors.length] do
     if curCtorIdx == cval.cidx then
       let decls := selCtorFieldTypes.mapIdx fun idx ty => (.str .anonymous ("arg" ++ idx.1.repr), fun prevArgs => pure (ty.instantiate prevArgs))
       let nextRecursorArg ←
         Meta.withLocalDeclsD decls fun curCtorFields => do
-          Meta.mkLambdaFVars curCtorFields curCtorFields[argIdx]!
+          let recursiveFieldMotiveDecls ← curCtorFields.filterMapM
+            (fun ctorFieldFVar => do
+              if (← Meta.inferType ctorFieldFVar) == datatype then return some $ (`_, (fun _ => Meta.mkAppM' motive #[ctorFieldFVar]))
+              else return none)
+          Meta.withLocalDeclsD recursiveFieldMotiveDecls fun recursiveFieldMotiveFVars => do
+            Meta.mkLambdaFVars (curCtorFields ++ recursiveFieldMotiveFVars) curCtorFields[argIdx]!
       recursorArgs := recursorArgs.push nextRecursorArg
     else
       let curCtor := mkConst ival.ctors[curCtorIdx]! lvls
@@ -840,7 +857,12 @@ def buildSelectorForUninhabitedType (selCtor : Expr) (argIdx : Nat) : MetaM Expr
       let decls := curCtorFieldTypes.mapIdx fun idx ty => (.str .anonymous ("arg" ++ idx.1.repr), fun prevArgs => pure (ty.instantiate prevArgs))
       let nextRecursorArg ←
         Meta.withLocalDeclsD decls fun curCtorFields => do
-          Meta.mkLambdaFVars curCtorFields $ ← Meta.mkSorry selectorOutputType false
+          let recursiveFieldMotiveDecls ← curCtorFields.filterMapM
+            (fun ctorFieldFVar => do
+              if (← Meta.inferType ctorFieldFVar) == datatype then return some $ (`_, (fun _ => Meta.mkAppM' motive #[ctorFieldFVar]))
+              else return none)
+          Meta.withLocalDeclsD recursiveFieldMotiveDecls fun recursiveFieldMotiveFVars => do
+            Meta.mkLambdaFVars (curCtorFields ++ recursiveFieldMotiveFVars) $ ← Meta.mkSorry selectorOutputType false
       recursorArgs := recursorArgs.push nextRecursorArg
   Meta.mkAppOptM' recursor $ recursorArgs.map some
 
