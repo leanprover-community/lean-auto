@@ -877,6 +877,13 @@ def buildSelectorFact (selName : String) (selCtor selType : Expr) (argIdx : Nat)
       let existsArg ← Meta.mkLambdaFVars #[selectorFVar] existsBody (binderInfoForMVars := .default)
       Meta.mkAppM ``Exists #[existsArg]
 
+/-- `ppOptionsSetting` is used to ensure that the tactics suggested by `autoGetHints` are pretty printed correctly -/
+def ppOptionsSetting (o : Options) : Options :=
+  let o := o.set `pp.analyze true
+  let o := o.set `pp.proofs true
+  let o := o.set `pp.funBinderTypes true
+  o.set `pp.piBinderTypes true
+
 @[tactic autoGetHints]
 def evalAutoGetHints : Tactic
 | `(autoGetHints | autoGetHints%$stxRef $instr $hints $[$uords]*) => withMainContext do
@@ -906,10 +913,10 @@ def evalAutoGetHints : Tactic
         for (selName, selCtor, argIdx, selType) in selectorInfos do
           let selFactName := selName ++ "Fact"
           let selector ← buildSelector selCtor argIdx
-          let selectorStx ← withOptions (fun o => (o.set `pp.analyze true).set `pp.proofs true) $ PrettyPrinter.delab selector
+          let selectorStx ← withOptions ppOptionsSetting $ PrettyPrinter.delab selector
           let selectorFact ← buildSelectorFact selName selCtor selType argIdx
-          let selectorFactStx ← withOptions (fun o => (o.set `pp.analyze true).set `pp.proofs true) $ PrettyPrinter.delab selectorFact
-          let existsIntroStx ← withOptions (fun o => (o.set `pp.analyze true).set `pp.proofs true) $ PrettyPrinter.delab (mkConst ``Exists.intro)
+          let selectorFactStx ← withOptions ppOptionsSetting $ PrettyPrinter.delab selectorFact
+          let existsIntroStx ← withOptions ppOptionsSetting $ PrettyPrinter.delab (mkConst ``Exists.intro)
           tacticsArr := tacticsArr.push $
             ← `(tactic|
                 have ⟨$(mkIdent (.str .anonymous selName)), $(mkIdent (.str .anonymous selFactName))⟩ : $selectorFactStx:term := by
@@ -933,13 +940,12 @@ def evalAutoGetHints : Tactic
             | none => throwError "evalAutoGetHints :: Error in trying to access selector definition for {selUserName}"
           let allLemmas := allLemmas.map (fun lem => lem.instantiateRev selectorFVars)
           trace[auto.tactic] "allLemmas: {allLemmas}"
-          allLemmas.mapM (fun lemExp => withOptions (fun o => (o.set `pp.analyze true).set `pp.proofs true) $ PrettyPrinter.delab lemExp)
+          allLemmas.mapM (fun lemExp => withOptions ppOptionsSetting $ PrettyPrinter.delab lemExp)
         for lemmaStx in lemmasStx do
           tacticsArr := tacticsArr.push $ ← `(tactic| have : $lemmaStx := sorry)
         tacticsArr := tacticsArr.push $ ← `(tactic| sorry)
         let tacticSeq ← `(Lean.Parser.Tactic.tacticSeq| $tacticsArr*)
-        withOptions (fun o => (o.set `pp.analyze true).set `pp.proofs true) $
-          addTryThisTacticSeqSuggestion stxRef tacticSeq (← getRef)
+        withOptions ppOptionsSetting $ addTryThisTacticSeqSuggestion stxRef tacticSeq (← getRef)
       let proof ← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []]
       let finalGoal ← getMainGoal -- Need to update main goal because running evalTactic to add selectors can change the main goal
       finalGoal.assign proof
