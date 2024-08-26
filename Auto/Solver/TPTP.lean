@@ -9,6 +9,7 @@ initialize
   registerTraceClass `auto.tptp.printQuery
   registerTraceClass `auto.tptp.printProof
   registerTraceClass `auto.tptp.premiseSelection
+  registerTraceClass `auto.tptp.unsatCore.deriv
 
 register_option auto.tptp : Bool := {
   defValue := false
