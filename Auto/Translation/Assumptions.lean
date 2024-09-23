@@ -23,6 +23,10 @@ partial def DTr.toString : DTr → String
 instance : ToString DTr where
   toString := DTr.toString
 
+partial def DTr.collectLeafStrings : DTr → Array String
+| .node _ dtrs => dtrs.foldl (fun acc l => acc ++ l.collectLeafStrings) #[]
+| .leaf s => #[s]
+
 /--
   Universe monomprphic facts
   User-supplied facts should have their universe level parameters

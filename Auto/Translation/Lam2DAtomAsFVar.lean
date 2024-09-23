@@ -150,7 +150,7 @@ def callNativeWithAtomAsFVar
     | _ => throwError "callNativeWithAtomAsFVar :: {re} is not a `nonempty` entry")
   let inhs ← withTranslatedLamSorts ss
   for inh in inhs do
-    trace[auto.printInhs] "{inh}"
+    trace[auto.lam2D.printInhs] "{inh}"
   let inhFVars ← withHyps inhs
   let valids := validsWithDTr.map Prod.fst
   let hypDTrs := validsWithDTr.map Prod.snd
@@ -164,7 +164,7 @@ def callNativeWithAtomAsFVar
       throwError "callNative :: Malformed hypothesis {hyp}"
     if !(← runMetaM <| Meta.isProp hyp) then
       throwError "callNative :: Hypothesis {hyp} is not a proposition"
-    trace[auto.printHyps] "{hyp}"
+    trace[auto.lam2D.printHyps] "{hyp}"
   let hyps ← runMetaM <| hyps.mapM (fun e => Core.betaReduce e)
   let hypFvars ← withHyps hyps
   let lemmas : Array Lemma := ((hyps.zip hypFvars).zip hypDTrs).map

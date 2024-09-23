@@ -3774,6 +3774,7 @@ def LamWF.bvarApps
   | .nil => wft
   | .cons ty lctx =>
     let lctxr := pushLCtxs (List.reverseAux ex (ty::lctx)) lctx'
+    have lctxr_def : lctxr = pushLCtxs (List.reverseAux ex (ty::lctx)) lctx' := by rfl
     .ofApp _ (LamWF.bvarApps (ex:=ty::ex) wft) (by
       have tyeq : ty = lctxr ex.length := by
         have exlt : List.length ex < List.length (List.reverse (ty :: ex)) := by

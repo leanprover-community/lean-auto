@@ -486,6 +486,81 @@ private def lamMutualIndInfo2STerm (sni : SMTNamingInfo) (mind : MutualIndInfo) 
     infos := infos.push (sname, 0, ⟨#[], cstrDecls⟩)
   return (.declDtypes infos, compCtors, compProjs)
 
+/-- selectorInfo contains:
+    - The name of the selector
+    - The constructor that the selector is for
+    - The index of the argument that it is selecting
+    - The name of the SMT datatype that the selector is for
+    - The output type of the selector (full type is an arrow type that takes in
+      the datatype and returns the output type) -/
+abbrev SelectorInfo := String × LamAtomic × Nat × String × LamSort
+
+private def lamMutualIndInfo2STermWithSelectorInfo (sni : SMTNamingInfo) (mind : MutualIndInfo) :
+  TransM LamAtomic (IR.SMT.Command ×
+    Array (String × LamSort × LamTerm) ×
+    Array (String × LamSort × LamTerm) ×
+    Array SelectorInfo) := do
+  let mut infos := #[]
+  let mut selInfos : Array SelectorInfo := #[]
+  let mut compCtors := #[]
+  let mut compProjs := #[]
+  -- Go through `type` and call `h2Symb` on all the atoms so that there won't
+  --   be declared during the following `lamSort2SSort`
+  for ⟨type, _, _⟩ in mind do
+    let .atom sn := type
+      | throwError "lamMutualIndInfo2STerm :: Inductive type {type} is not a sort atom"
+    -- Do not use `lamSortAtom2String` because we don't want to `declare-sort`
+    let _ ← h2Symb (.sort sn) (← sni.suggestNameForAtomic (.sort sn))
+  for ⟨type, ctors, projs⟩ in mind do
+    let .atom sn := type
+      | throwError "lamMutualIndInfo2STerm :: Unexpected error"
+    let mut projInfos : Array (LamSort × String) := #[]
+    if let .some projs := projs then
+      if ctors.length != 1 then
+        throwError "lamMutualIndInfo2STerm :: Unexpected error"
+      for (s, t) in projs do
+        let mut projname := ""
+        match t with
+        | .atom n => projname ← h2Symb (.term n) (← sni.suggestNameForAtomic (.term n))
+        | .etom n => projname ← h2Symb (.etom n) (← sni.suggestNameForAtomic (.etom n))
+        | t       =>
+          projname ← h2Symb (.compProj t) (← sni.suggestNameForAtomic (.compProj t))
+          compProjs := compProjs.push (projname, s, t)
+        projInfos := projInfos.push (s, projname)
+    let sname ← h2Symb (.sort sn) .none
+    let mut cstrDecls : Array ConstrDecl := #[]
+    for (s, t) in ctors do
+      let mut ctorname := ""
+      match t with
+      -- Do not use `lamSortAtom2String` because we don't want to `declare-fun`
+      | .atom n => ctorname ← h2Symb (.term n) (← sni.suggestNameForAtomic (.term n))
+      -- Do not use `lamSortEtom2String` because we don't want to `declare-fun`
+      | .etom n => ctorname ← h2Symb (.etom n) (← sni.suggestNameForAtomic (.etom n))
+      | t       =>
+        ctorname ← h2Symb (.compCtor t) (← sni.suggestNameForAtomic (.compCtor t))
+        compCtors := compCtors.push (ctorname, s, t)
+      let (argTys, _) ← lamSort2SSort sni s
+      let lamSortArgTys := s.getArgTys -- `argTys` as `LamSort` rather than `SSort`
+      let mut selDecls := #[]
+      if projs.isSome then
+        if argTys.length != projInfos.size then
+          throwError "lamMutualIndInfo2STerm :: Unexpected error"
+        selDecls := ((Array.mk argTys).zip projInfos).map (fun (argTy, _, name) => (name, argTy))
+        /- We don't update `selInfos` because `projs` exist for this inductive datatype. Since `projs` exists,
+           the selector function we want will already correspond to an existing projection function in Lean,
+           meaning we don't need to define a different selector function to have something to map the current
+           selDecls onto -/
+      else
+        selDecls := (Array.mk argTys).zipWithIndex.map (fun (argTy, idx) =>
+          (ctorname ++ s!"_sel{idx}", argTy))
+        let selDeclsInfos :=
+          (Array.mk lamSortArgTys).zipWithIndex.map
+            (fun (lamSortArgTy, idx) => (ctorname ++ s!"_sel{idx}", (.compCtor t), idx, sname, lamSortArgTy))
+        selInfos := selInfos ++ selDeclsInfos
+      cstrDecls := cstrDecls.push ⟨ctorname, selDecls⟩
+    infos := infos.push (sname, 0, ⟨#[], cstrDecls⟩)
+  return (.declDtypes infos, compCtors, compProjs, selInfos)
+
 private def compEqn
   (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Array LamSort)
   (compInfo : String × LamSort × LamTerm) : TransM LamAtomic IR.SMT.Command := do
@@ -570,5 +645,34 @@ def lamFOL2SMT
     addCommand (.assert (.attr sterm #[.symb "named" s!"valid_fact_{idx}"]))
   let commands ← getCommands
   return (commands, validFacts)
+
+open SMT in
+/-- Identical to `lamFOL2SMT` but it also outputs `Auto.IR.SMT.State.l2hMap` and selector information -/
+def lamFOL2SMTWithExtraInfo
+  (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Array LamSort)
+  (facts : Array LamTerm) (minds : Array MutualIndInfo) :
+  TransM LamAtomic (Array IR.SMT.Command × Array STerm × HashMap String LamAtomic × Array SelectorInfo) := do
+  let _ ← sortAuxDecls.mapM addCommand
+  let _ ← termAuxDecls.mapM addCommand
+  let mut selInfos : Array SelectorInfo := #[]
+  for mind in minds do
+    let (dsdecl, compCtors, compProjs, mindSelInfos) ← lamMutualIndInfo2STermWithSelectorInfo sni mind
+    trace[auto.lamFOL2SMT] "MutualIndInfo {mind} translated to command {dsdecl}"
+    trace[auto.lamFOL2SMT] "Selector infos for {mind}: {mindSelInfos}"
+    addCommand dsdecl
+    let compCtorEqns ← compCtors.mapM (compEqn sni lamVarTy lamEVarTy)
+    let _ ← compCtorEqns.mapM addCommand
+    let compProjEqns ← compProjs.mapM (compEqn sni lamVarTy lamEVarTy)
+    let _ ← compProjEqns.mapM addCommand
+    selInfos := selInfos ++ mindSelInfos
+  let mut validFacts := #[]
+  for (t, idx) in facts.zipWithIndex do
+    let sterm ← lamTerm2STerm sni lamVarTy lamEVarTy t
+    validFacts := validFacts.push sterm
+    trace[auto.lamFOL2SMT] "λ term {repr t} translated to SMT term {sterm}"
+    addCommand (.assert (.attr sterm #[.symb "named" s!"valid_fact_{idx}"]))
+  let commands ← getCommands
+  let l2hMap ← Auto.IR.SMT.getL2hMap
+  return (commands, validFacts, l2hMap, selInfos)
 
 end Auto
