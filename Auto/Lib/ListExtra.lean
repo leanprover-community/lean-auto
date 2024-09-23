@@ -112,12 +112,11 @@ def List.mergeSort (r : α → α → Prop) [DecidableRel r]  : List α → List
   | [] => []
   | [a] => [a]
   | a :: b :: l => by
-    -- Porting note: rewrote to make `mergeSort_cons_cons` proof easier
-    let ls := (split (a :: b :: l))
-    have e : split (a :: b :: l) = ⟨ls.1, ls.2⟩ := rfl
+    let ls := split l
+    have e : split (a :: b :: l) = ⟨a :: ls.1, b :: ls.2⟩ := rfl
     have h := length_split_lt e
-    have := h.1
-    have := h.2
+    have : (split l).fst.length < l.length + 2 := Nat.le_of_lt h.1
+    have : (split l).snd.length < l.length + 2 := Nat.le_of_lt h.2
     exact merge r (mergeSort r ls.1) (mergeSort r ls.2)
   termination_by l => List.length l
 

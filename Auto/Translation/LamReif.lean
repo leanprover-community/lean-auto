@@ -1157,8 +1157,12 @@ def processSimpleApp (fn arg : Expr) : ReifM (Option LamTerm) := do
       if lvls.length != 1 then
         throwError "processSimpleApp :: Attribute should have one level"
       return .some (.base (.ocst (.smtAttr1T attrName (← reifType arg) (.base .prop))))
-      -- `arg` is the original (un-lifted) type
     if let .some tcon := reifMapIL.find? name then
+      if name == ``Embedding.forallF then
+        let [lvl₁, lvl₂] := lvls
+          | throwError "processSimpleApp :: Auto.Embedding.forallF should have two levels"
+        if !(← Meta.isLevelDefEq lvl₁ .zero) || !(← Meta.isLevelDefEq lvl₂ .zero) then
+          return .none
       return .some (.base (tcon (← reifType arg)))
     return .none
   | [arg₁, arg₂] =>

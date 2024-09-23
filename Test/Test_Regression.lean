@@ -6,7 +6,7 @@ set_option auto.redMode "reducible"
 set_option trace.auto.tptp.printQuery true
 set_option trace.auto.tptp.result true
 set_option auto.tptp.solver.name "zeport-lams"
-set_option auto.tptp.zeport.path "/home/indprinciple/Programs/zipperposition/portfolio"
+set_option auto.tptp.zeport.path "/home/indprinciples/Programs/zipperposition/portfolio"
 -- Standard SMT Configs
 set_option trace.auto.smt.printCommands true
 set_option trace.auto.smt.result true

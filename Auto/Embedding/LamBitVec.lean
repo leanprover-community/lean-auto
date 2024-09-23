@@ -68,7 +68,10 @@ namespace BVLems
       rw [Nat.mod_eq_of_lt]; rcases a with ⟨⟨a, isLt⟩⟩;
       apply Nat.le_trans isLt; apply Nat.pow_le_pow_of_le_right (Nat.le_step .refl) hle
 
-  theorem toNat_sub (a b : BitVec n) : (a - b).toNat = (a.toNat + (2 ^ n - b.toNat)) % (2 ^ n) := rfl
+  theorem toNat_sub (a b : BitVec n) : (a - b).toNat = (2 ^ n - b.toNat + a.toNat) % (2 ^ n) := rfl
+
+  theorem toNat_sub' (a b : BitVec n) : (a - b).toNat = (a.toNat + (2 ^ n - b.toNat)) % (2 ^ n) := by
+    rw [toNat_sub]; rw [Nat.add_comm]
 
   theorem toNat_neg (a : BitVec n) : (-a).toNat = (2^n - a.toNat) % (2^n) := by
     rw [neg_def]; unfold BitVec.neg; rw [toNat_ofNat]
@@ -168,7 +171,7 @@ namespace BVLems
     case false =>
       have hnlt := of_decide_eq_false hdec; have hle := Nat.le_of_not_lt hnlt
       rw [Bool.ite_eq_false _ _ _ hnlt]; apply eq_of_val_eq
-      rw [toNat_ofNat, toNat_sub, toNat_ofNat, toNat_ofNat]
+      rw [toNat_ofNat, toNat_sub', toNat_ofNat, toNat_ofNat]
       have exc : ∃ c, a = b + c := ⟨a - b, by rw [Nat.add_comm, Nat.sub_add_cancel hle]⟩
       rcases exc with ⟨c, ⟨⟩⟩
       rw [Nat.add_sub_cancel_left, Nat.mod_add_mod, Nat.add_assoc b c]
