@@ -1161,7 +1161,7 @@ def processSimpleApp (fn arg : Expr) : ReifM (Option LamTerm) := do
       if name == ``Embedding.forallF then
         let [lvl₁, lvl₂] := lvls
           | throwError "processSimpleApp :: Auto.Embedding.forallF should have two levels"
-        if !(← Meta.isLevelDefEq lvl₁ .zero) || !(← Meta.isLevelDefEq lvl₂ .zero) then
+        if !(← Meta.isLevelDefEq lvl₂ .zero) then
           return .none
       return .some (.base (tcon (← reifType arg)))
     return .none
