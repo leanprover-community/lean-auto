@@ -254,7 +254,7 @@ def ConstInst.ofExpr? (params : Array Name) (bvars : Array Expr) (e : Expr) : Me
       | throwError "ConstInst.ofExpr? :: {headType} is not a `∀`"
     if let some _ := ty.find? (fun e => bvarSet.contains e) then
       return .none
-    if body.hasLooseBVar 0 || bi == .instImplicit then
+    if ← shouldInstantiate fn ty body bi then
       if let some _ := arg.find? (fun e => bvarSet.contains e) then
         return .none
       argsIdx := argsIdx.push idx
@@ -264,6 +264,23 @@ def ConstInst.ofExpr? (params : Array Name) (bvars : Array Expr) (e : Expr) : Me
   if (Expr.depArgs headType).size != 0 || (Expr.instArgs headType).size != 0 then
     return .none
   return .some ⟨head, argsInst, argsIdx⟩
+where
+  shouldInstantiate (fn ty body : Expr) (bi : Lean.BinderInfo) : CoreM Bool := do
+    let dep : Bool := body.hasLooseBVar 0
+    let hol : Bool :=
+      match ty with
+      | .forallE _ _ body' _ => !body'.hasLooseBVar 0
+      | _ => false
+    let inst : Bool := (bi == .instImplicit)
+    -- `fn` is `∀` or `∃`. Note that although these two
+    -- are higher-order functions, they're allowed in first-order logic
+    let isPolyIL : Bool :=
+      match fn with
+      | .const name _ => name == ``Embedding.forallF || name == ``Exists
+      | _ => false
+    match (← getMode) with
+    | .hol => return dep || inst
+    | .fol => return dep || (!isPolyIL && hol) || inst
 
 private def ConstInst.toExprAux (args : List (Option Expr))
   (tys : List (Name × Expr × BinderInfo)) (e ty : Expr) : Option Expr :=
@@ -400,6 +417,37 @@ def LemmaInst.matchConstInst (ci : ConstInst) (li : LemmaInst) : MetaM (HashSet 
     MLemmaInst.matchConstInst ci mi mi.type
 
 /--
+  Check whether the leading `∀` quantifiers of expression `e`
+    violates the quasi-monomorphic condition
+-/
+partial def leadingForallQuasiMonomorphic := leadingForallQuasiMonomorphicAux #[]
+where
+  leadingForallQuasiMonomorphicAux (fvars : Array FVarId) (e : Expr) : MetaM Bool :=
+  match e with
+  | .forallE name ty body bi => Meta.withLocalDecl name bi ty fun x => do
+    let Expr.fvar xid := x
+      | throwError "Monomorphization.leadingForallQuasiMonomorphic :: Unexpected error"
+    let bodyi := body.instantiate1 x
+    if ← Meta.isProp ty then
+      if !(← Meta.isProp bodyi) then
+        return false
+      if body.hasLooseBVar 0 then
+        return false
+      return (← leadingForallQuasiMonomorphicAux fvars ty) &&
+             (← leadingForallQuasiMonomorphicAux (fvars.push xid) bodyi)
+    else
+      let hol : Bool :=
+        match ty with
+        | .forallE _ _ body _ => !body.hasLooseBVar 0
+        | _ => false
+      if hol && (← getMode) == .hol then
+        return false
+      let fvarSet := HashSet.empty.insertMany fvars
+      if ty.hasAnyFVar fvarSet.contains then
+        return false
+      leadingForallQuasiMonomorphicAux (fvars.push xid)  bodyi
+  | _ => return true
+/--
   Test whether a lemma is type monomorphic && universe monomorphic
     By universe monomorphic we mean `lem.params = #[]`
   We also require that all instance arguments (argument whose type
@@ -413,7 +461,7 @@ def LemmaInst.monomorphic? (li : LemmaInst) : MetaM (Option LemmaInst) := do
   -- Do not use `prepReduceExpr` because lemmas about
   --   recursors might be reduced to tautology
   let li := {li with type := ← Core.betaReduce li.type}
-  if !(← Expr.leadingForallQuasiMonomorphic li.type) then
+  if !(← leadingForallQuasiMonomorphic li.type) then
     return .none
   Meta.withNewMCtxDepth do
     let (_, mvars, mi) ← MLemmaInst.ofLemmaInst li

@@ -215,32 +215,6 @@ def Expr.numLeadingDepArgs : Expr → Nat
 | _ => 0
 
 /--
-  Check whether the leading `∀` quantifiers of expression `e`
-    violates the quasi-monomorphic condition
--/
-partial def Expr.leadingForallQuasiMonomorphicAux (fvars : Array FVarId) (e : Expr) : MetaM Bool :=
-  match e with
-  | .forallE name ty body bi => Meta.withLocalDecl name bi ty fun x => do
-    let Expr.fvar xid := x
-      | throwError "Expr.leadingForallQuasiMonomorphic :: Unexpected error"
-    let bodyi := body.instantiate1 x
-    if ← Meta.isProp ty then
-      if !(← Meta.isProp bodyi) then
-        return false
-      if body.hasLooseBVar 0 then
-        return false
-      return (← Expr.leadingForallQuasiMonomorphicAux fvars ty) &&
-             (← Expr.leadingForallQuasiMonomorphicAux (fvars.push xid) bodyi)
-    else
-      let fvarSet := HashSet.empty.insertMany fvars
-      if ty.hasAnyFVar fvarSet.contains then
-        return false
-      Expr.leadingForallQuasiMonomorphicAux (fvars.push xid)  bodyi
-  | _ => return true
-
-def Expr.leadingForallQuasiMonomorphic := Expr.leadingForallQuasiMonomorphicAux #[]
-
-/--
   This should only be used when we're sure that reducing `ty`
     won't be too expensive
   e.g. `ty` must be defeq to `Expr.sort <?lvl>`
