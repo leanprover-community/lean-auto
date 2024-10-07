@@ -29,22 +29,46 @@ register_option auto.mono.recordInstInst : Bool := {
   descr := "Whether to record instances of constants with the `instance` attribute"
 }
 
+inductive MonoMode where
+  | fol -- First-order logic
+  | hol -- Monomorphic higher-order logic
+deriving BEq, Hashable, Inhabited
+
+instance : ToString MonoMode where
+  toString : MonoMode → String
+  | .fol => "fol"
+  | .hol => "hol"
+
+instance : Lean.KVMap.Value MonoMode where
+  toDataValue n := toString n
+  ofDataValue?
+  | "fol" => some .fol
+  | "hol" => some .hol
+  | _     => none
+
+register_option auto.mono.mode : MonoMode := {
+  defValue := MonoMode.hol
+  descr := "Operation mode of monomorphization"
+}
+
 register_option auto.mono.ignoreNonQuasiHigherOrder : Bool := {
   defValue := false
   descr := "Whether to ignore non quasi-higher-order" ++
            " " ++ "monomorphization preprocessing outputs or to throw an error"
 }
 
-/-
-register_option auto.mono.allowGeneralExprAbst : Bool := {
-  defValue := false
-  descr := "Apart from `ConstInst`s, allow general expressions to be abstracted" ++
-           " " ++ "as free variables"
-}
--/
 
 namespace Auto.Monomorphization
 open Embedding
+
+def getRecordInstInst : CoreM Bool := do
+  return auto.mono.recordInstInst.get (← getOptions)
+
+def getMode : CoreM MonoMode := do
+  return auto.mono.mode.get (← getOptions)
+
+def getIgnoreNonQuasiHigherOrder : CoreM Bool := do
+  return auto.mono.ignoreNonQuasiHigherOrder.get (← getOptions)
 
 inductive CiHead where
   | fvar  : FVarId → CiHead
@@ -218,7 +242,7 @@ def ConstInst.ofExpr? (params : Array Name) (bvars : Array Expr) (e : Expr) : Me
   if let .some _ := Expr.findParam? (fun n => paramSet.contains n) e then
     return .none
   -- Do not record instances of a constant with attribute `instance`
-  if (← head.isInstanceQuick) && !(auto.mono.recordInstInst.get (← getOptions)) then
+  if (← head.isInstanceQuick) && !(← getRecordInstInst) then
     return .none
   let mut headType ← head.inferType
   let mut argsIdx := #[]
@@ -686,66 +710,6 @@ namespace FVarRep
     setFfvars ((← getFfvars).push fvarId)
     return Expr.fvar fvarId
 
-  /-
-  -- **TODO:** Unify the approach for `general expressions` and `ConstInst`
-  --   because they're inherently the same
-  -- **TODO:** It's not as simple as this. Consider
-  --  F (fun (α : Type) (a : α) (b : α → Nat → Nat) (c : Nat), b a c)
-  def unknownExpr2Expr (e : Expr) : FVarRepM Expr := do
-    let (_, collectFVarsState) ← MetaState.runMetaM <| e.collectFVars.run {}
-    let exfvars := collectFVarsState.fvarIds
-    let exfvarSet := collectFVarsState.fvarSet
-    let bfvars := (← getBfvars).filter exfvarSet.contains
-    let mut depChkFVarSet := HashSet.empty
-    let ety ← MetaState.runMetaM (Meta.inferType e >>= prepReduceExpr)
-    -- If the type of any bound variable depend on other bound
-    -- variables, then abstracting away these `bfvars` will result
-    -- in a dependently typed expression.
-    -- Note that `ffvars` are essentially monomorphic, so
-    -- it's safe to ignore them when considering whether a
-    -- term will be dependently typed
-    -- **TODO**: but is it?
-    for fid in bfvars do
-      let ty ← MetaState.runMetaM (fid.getType >>= prepReduceExpr)
-      if ty.hasAnyFVar depChkFVarSet.contains then
-        return e
-      depChkFVarSet := depChkFVarSet.insert fid
-    -- If `ety` contains any `bfvars`, then abstracting away
-    -- these `bfvars` will result in a dependently typed expression
-    if ety.hasAnyFVar depChkFVarSet.contains then
-      return e
-    -- Now, we know that the expression will be essentially monomorphic
-    -- after we abstract away `bfvars`
-    let bfvarSet ← getBfvarSet
-    for (e', fid) in (← getExprMap).toList do
-      if ← MetaState.isDefEqRigid e e' then
-        return Expr.fvar fid
-    -- `e` is a new expression
-    let userName := (`exfvar).appendIndexAfter (← getExprMap).size
-    let ffvarSet ← getFfvarSet
-    let fvarOccs := exfvars.filter (ffvarSet.insertMany bfvarSet).contains
-    let eabst ← MetaState.runMetaM <|
-      Meta.mkLambdaFVars (fvarOccs.map Expr.fvar) e (usedOnly:=false)
-    trace[auto.mono] "Turning general expression {eabst} into free variable ..."
-    let eabstTy ← MetaState.runMetaM <|
-      Meta.mkForallFVars (fvarOccs.map Expr.fvar) ety (usedOnly:=false)
-    -- Note that `eabst` has type `α₁ → ⋯ → αₖ → ety`. However, since each
-    -- `αᵢ` is a type of some `ffvar`, it has already been processed. Therefore,
-    -- we don't have to process `αᵢ` again, only `ety` needs to be processed.
-    let _ ← processType ety
-    let fvarId ← MetaState.withLetDecl userName eabstTy eabst .default
-    setExprMap ((← getExprMap).insert eabst fvarId)
-    setFfvars ((← getFfvars).push fvarId)
-    return Lean.mkAppN (Expr.fvar fvarId) (fvarOccs.map Expr.fvar)
-
-  def processUnknownExpr (e : Expr) : FVarRepM Expr := do
-    let allowGeneralEA := auto.mono.allowGeneralExprAbst.get (← getOptions)
-    if allowGeneralEA then
-      unknownExpr2Expr e
-    else
-      unknownExpr2FVar e
-  -/
-
   /--
     Attempt to abstract parts of a given expression to free variables so
     that the resulting expression is in the higher-order fragment of Lean.
@@ -934,7 +898,7 @@ where
     let liTypeRep? ← FVarRep.replacePolyWithFVar li.type
     match liTypeRep? with
     | .inl liTypeRep => return .some ⟨li.proof, liTypeRep, li.deriv⟩
-    | .inr m => if (← ignoreNonQuasiHigherOrder) then return .none else throwError m)
+    | .inr m => if (← getIgnoreNonQuasiHigherOrder) then return .none else throwError m)
   fvarRepMInductAction (ivals : Array (Array SimpleIndVal)) : FVarRep.FVarRepM (Array (Array SimpleIndVal)) :=
     ivals.mapM (fun svals => svals.mapM (fun ⟨name, type, ctors, projs⟩ => do
       let (type, _) ← FVarRep.processType type
@@ -951,7 +915,5 @@ where
         -- If monomorphization fails on one projection, then fail immediately
         | .inr m => throwError m))
       return ⟨name, type, ctors, projs⟩))
-  ignoreNonQuasiHigherOrder : CoreM Bool := do
-    return auto.mono.ignoreNonQuasiHigherOrder.get (← getOptions)
 
 end Auto.Monomorphization
