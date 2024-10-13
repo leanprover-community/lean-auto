@@ -541,6 +541,13 @@ namespace Lam2D
       match sub with
       | .const name _ => lamBaseTermSimpNFMap.find? name
       | _ => .none)
-    Core.betaReduce eRep
+    let eRep ← Core.betaReduce eRep
+    let replaceNatCast (e : Expr) : Option Expr :=
+      match e with
+      | mkApp3 (.const ``Nat.cast [.zero]) (.const ``Int []) (.const ``instNatCastInt []) (.lit (.natVal n)) =>
+        let litn : Expr := .lit (.natVal n)
+        mkApp3 (.const ``OfNat.ofNat [.zero]) (.const ``Int []) litn (.app (.const ``instOfNat []) litn)
+      | _ => none
+    return eRep.replace replaceNatCast
 
 end Lam2D

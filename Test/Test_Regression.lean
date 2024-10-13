@@ -76,7 +76,6 @@ section Inhabitation
   example (a : α) (p : α → Prop) : (∃ x, p x → r) ↔ ((∀ x, p x) → r) := by
     auto
 
-  set_option trace.auto.lamReif.printProofs true in
   example (a : α) (p : α → Prop) : (∃ x, r → p x) ↔ (r → ∃ x, p x) := by
     auto
 
@@ -147,8 +146,10 @@ end DSRobust
 
 -- Tactic elaboration
 
+example : True := by auto []
 example : True := by auto d[]
 example : True := by auto u[]
+example : True := by auto [] d[] u[]
 example : True := by auto [] u[] d[]
 example : True := by first | auto 👍| exact True.intro
 example : True := by auto 👎
@@ -206,6 +207,24 @@ section Skolemization
 
 end Skolemization
 
+-- Abstract complicated dependent types to free variables
+
+section DepAbst
+
+  example (f : ∀ (α : Type), α → α) : f = f :=
+    by auto
+
+  example (f₁ f₂ : ∀ (α : Type), α → α) : f₁ = f₂ → f₂ = f₁ :=
+    by auto
+
+  example (g : Type → Type) (f : ∀ (α : Type), g α) : f = f :=
+    by auto
+
+  example : @HAdd.hAdd = @HAdd.hAdd :=
+    by auto
+
+end DepAbst
+
 -- Extensionalization
 
 section Extensionalization
@@ -217,12 +236,6 @@ section Extensionalization
 
   example (f g : (α → α) → β → α) (H : ∀ x, f x = g x) : f = g := by
     auto
-
-  example (f g : α → α → α → α → α → α → α → α → α → α → α → α → α → α → α → α → α) :
-    (f = g) = (g = f) := by auto
-
-  example : (fun f g => @Eq (α → α → α) f g) = (fun f g => ∀ x, f x = g x) :=
-    by auto
 
 end Extensionalization
 
@@ -255,12 +268,18 @@ section UnfoldConst
   example : ∀ b, (not' b) = true ↔ b = false := by
     auto u[not', not'.match_1] d[Bool.rec]
 
+  example (x : α) : List.head? [x] = .some x := by
+    have list_head_unfold : @List.head? α = (fun x =>
+      @List.casesOn α (fun x => (fun x => Option α) x) x ((fun _ => @none α) Unit.unit) fun head tail =>
+        (fun a tail => @some α a) head tail) := by sorry
+    auto [list_head_unfold] d[List.rec]
+
 end UnfoldConst
 
 -- First Order
 
 example : True := by
-  auto [True.intro];
+  auto [True.intro]
 
 example (a b : Prop) : a ∨ b ∨ ¬ a := by
   auto
@@ -322,14 +341,6 @@ example
   (Hw₁₂ : (w₁ = w₂) = (w₂ = w₁)) : True := by
   auto [Hadd, Hmul, Hw₁₂]
 
-example
-  (f : ((Nat → Prop) → Prop) → Prop) (h : f (@Auto.Embedding.forallF Nat)):
-  f (@Auto.Embedding.forallF Nat) := by
-  auto
-
-example : @Auto.Embedding.forallF Nat = @Auto.Embedding.forallF Nat := by
-  auto
-
 -- Polymorphic Constant
 
 set_option auto.redMode "instances" in
@@ -358,12 +369,13 @@ example
   auto [ap_assoc]
 
 example
+  (instHAppend : ∀ {α}, HAppend (List α) (List α) (List α))
   (hap : ∀ {α β γ : Type u} [HAppend α β γ], α → β → γ)
   (ap_assoc : ∀ (α : Type u) (as bs cs : List α),
-    @hap (List α) (List α) (List α) instHAppendOfAppend (@hap (List α) (List α) (List α) instHAppendOfAppend as bs) cs =
-    @hap (List α) (List α) (List α) instHAppendOfAppend as (@hap (List α) (List α) (List α) instHAppendOfAppend bs cs)) :
-  @hap (List α) (List α) (List α) instHAppendOfAppend (@hap (List α) (List α) (List α) instHAppendOfAppend as bs) (@hap (List α) (List α) (List α) instHAppendOfAppend cs ds) =
-  @hap (List α) (List α) (List α) instHAppendOfAppend as (@hap (List α) (List α) (List α) instHAppendOfAppend bs (@hap (List α) (List α) (List α) instHAppendOfAppend cs ds)) := by
+    @hap (List α) (List α) (List α) instHAppend (@hap (List α) (List α) (List α) instHAppend as bs) cs =
+    @hap (List α) (List α) (List α) instHAppend as (@hap (List α) (List α) (List α) instHAppend bs cs)) :
+  @hap (List α) (List α) (List α) instHAppend (@hap (List α) (List α) (List α) instHAppend as bs) (@hap (List α) (List α) (List α) instHAppend cs ds) =
+  @hap (List α) (List α) (List α) instHAppend as (@hap (List α) (List α) (List α) instHAppend bs (@hap (List α) (List α) (List α) instHAppend cs ds)) := by
   auto [ap_assoc]
 
 -- Metavariable
@@ -414,9 +426,9 @@ section TypeDefeq
 
 end TypeDefeq
 
--- Definition Recognition
+-- Definition Recognization
 
-section DefinitionRecognition
+section DefinitionRecognization
 
   set_option trace.auto.lamReif.prep.def true
 
@@ -462,7 +474,7 @@ section DefinitionRecognition
   example {α : Type} (f : α → Nat → Nat → α → Nat) :
     ∀ a b c, f a 1 b c = f a 1 b c := by auto
 
-end DefinitionRecognition
+end DefinitionRecognization
 
 -- Complex
 
@@ -558,18 +570,15 @@ section Adhoc
   example (a : BitVec u) (b : BitVec v) (c : BitVec 2) :
     a ++ b = a ++ b ∧ b ++ c = b ++ c := by auto
 
-  open BitVec in
   example :
     0b10#3 + 0b101#3 = 0b10#3 + 0b101#3 ∧
     0b10#(3+0) * 0b101#(1+2) = 0b10#3 * 0b101#3 := by auto
 
-  open BitVec in
-  #check BitVec.ofNat (3+2) (4+5)
-
-  open BitVec in
   example (a b : Nat) :
-    BitVec.ofNat 16 (a + b) = BitVec.ofNat 16 a + BitVec.ofNat 16 b ∧
-    BitVec.ofNat 16 (a * b) = BitVec.ofNat 16 a * BitVec.ofNat 16 b := by auto
+    let f := BitVec.ofNat 16; f (a + b) = f a + f b ∧ f (a * b) = f a * f b := by auto
+
+  example (a b : BitVec 3) :
+    (a < b) = (b > a) ∧ (a ≤ b) = (b ≥ a) := by auto
 
   example (a : BitVec 5) (b : BitVec k) :
     a.msb = a.msb ∧ b.msb = b.msb ∧
@@ -585,6 +594,12 @@ section Adhoc
   example (f : ((Empty → Prop) → Prop) → Prop) :
     f Exists = f Exists := by auto
 
+  -- SMT attributes
+  open Auto.SMT.Attribute in
+  set_option auto.tptp false in
+  example : trigger (fun (x : Nat) => x) True = True := by
+    auto
+
 end Adhoc
 
 -- Issues
@@ -594,7 +609,7 @@ section Issues
   set_option trace.auto.mono.printConstInst true
   set_option trace.auto.lamReif.printResult true
 
-  set_option auto.mono.ignoreNonQuasiHigherOrder false in
+  -- Can succeed if auto ignores the un-monomorphizable formulas
   example (h1 : ∀ x : Nat, x > 0 → ∃ y : Fin x, y.1 = 0) (h2 : 3 > 0) : ∃ z : Fin 3, z.1 = 0 := by
     auto
 
