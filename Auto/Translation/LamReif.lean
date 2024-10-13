@@ -1158,17 +1158,11 @@ def processSimpleApp (fn arg : Expr) : ReifM (Option LamTerm) := do
         throwError "processSimpleApp :: Attribute should have one level"
       return .some (.base (.ocst (.smtAttr1T attrName (← reifType arg) (.base .prop))))
     if let .some tcon := reifMapIL.find? name then
-      /-
-      **TODO** Discuss the purpose of this code with Yicheng and determine whether it should
-      be included. Notably, including this code causes the following simple example to fail:
-        example : x + Nat.zero = x := by duper [Nat.add] {portfolioInstance := 1}
-
       if name == ``Embedding.forallF then
         let [lvl₁, lvl₂] := lvls
           | throwError "processSimpleApp :: Auto.Embedding.forallF should have two levels"
         if !(← Meta.isLevelDefEq lvl₂ .zero) then
           return .none
-      -/
       return .some (.base (tcon (← reifType arg)))
     return .none
   | [arg₁, arg₂] =>
