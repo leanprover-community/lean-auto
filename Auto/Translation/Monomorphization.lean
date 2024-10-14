@@ -436,12 +436,23 @@ where
       return (← leadingForallQuasiMonomorphicAux fvars ty) &&
              (← leadingForallQuasiMonomorphicAux (fvars.push xid) bodyi)
     else
+      /-
+      **TODO** Discuss the purpose of this code with Yicheng and determine whether it should
+      be included. Notably, including this code causes the following simple example to fail:
+        ```
+        def even_int_fun (f : Int → Int) := ∀ x, f (-x) = f x
+
+        example (f : Int → Int) (hf : ∀ x, f (-x) = f x) : even_int_fun f := by -- The goal is the same as hf
+          duper [hf, even_int_fun] {preprocessing := full}
+        ```
+
       let hol : Bool :=
         match ty with
         | .forallE _ _ body _ => !body.hasLooseBVar 0
         | _ => false
       if hol && (← getMode) == .hol then
         return false
+      -/
       let fvarSet := HashSet.empty.insertMany fvars
       if ty.hasAnyFVar fvarSet.contains then
         return false
