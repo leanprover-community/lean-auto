@@ -440,7 +440,7 @@ where
         match ty with
         | .forallE _ _ body _ => !body.hasLooseBVar 0
         | _ => false
-      if hol && (← getMode) == .hol then
+      if hol && (← getMode) == .fol then
         return false
       let fvarSet := HashSet.empty.insertMany fvars
       if ty.hasAnyFVar fvarSet.contains then
