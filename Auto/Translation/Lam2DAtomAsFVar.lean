@@ -142,9 +142,9 @@ def withHyps (hyps : Array Expr) : ExternM (Array FVarId) := do
   does not use free variables introduced during monomorphization
 -/
 def callNativeWithAtomAsFVar
-  (nonempties : Array REntry) (validsWithDTr : Array (REntry × DTr)) (prover : Array Lemma → MetaM Expr) :
+  (nonemptiesWithDTr : Array (REntry × DTr)) (validsWithDTr : Array (REntry × DTr)) (prover : Array Lemma → Array Lemma → MetaM Expr) :
   ExternM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := MetaState.withTemporaryLCtx {} {} <| do
-  let ss ← nonempties.mapM (fun re => do
+  let ss ← nonemptiesWithDTr.mapM (fun (re, _) => do
     match re with
     | .nonempty s => return s
     | _ => throwError "callNativeWithAtomAsFVar :: {re} is not a `nonempty` entry")
@@ -152,6 +152,7 @@ def callNativeWithAtomAsFVar
   for inh in inhs do
     trace[auto.printInhs] "{inh}"
   let inhFVars ← withHyps inhs
+  let inhDTrs := nonemptiesWithDTr.map Prod.snd
   let valids := validsWithDTr.map Prod.fst
   let hypDTrs := validsWithDTr.map Prod.snd
   let ts ← valids.mapM (fun re => do
@@ -169,6 +170,8 @@ def callNativeWithAtomAsFVar
   let hypFvars ← withHyps hyps
   let lemmas : Array Lemma := ((hyps.zip hypFvars).zip hypDTrs).map
     (fun ((ty, proof), dtr) => ⟨⟨.fvar proof, ty, dtr⟩, #[]⟩)
+  let hypLemmas : Array Lemma := ((inhs.zip inhFVars).zip inhDTrs).map
+    (fun ((ty, proof), dtr) => ⟨⟨.fvar proof, ty, dtr⟩, #[]⟩)
   -- Note that we're not introducing bound variables into local context
   --   in the above action, so it's reasonable to use `runMetaM`
   let atomsToAbstract ← getAtomsToAbstract
@@ -178,14 +181,14 @@ def callNativeWithAtomAsFVar
     -- It is important to add `Meta.withNewMCtxDepth`, otherwise exprmvars
     --   or levelmvars of the current level will be assigned, and we'll
     --   get weird proof reconstruction error
-    let mut expr ← Meta.withNewMCtxDepth <| prover lemmas
+    let mut expr ← Meta.withNewMCtxDepth <| prover lemmas hypLemmas
     let mut usedHyps := []
     for (fvar, re_t) in (hypFvars.zip (valids.zip ts)).reverse do
       if expr.hasAnyFVar (· == fvar) then
         expr ← Meta.mkLambdaFVars #[.fvar fvar] expr
         usedHyps := re_t :: usedHyps
     let mut usedInhs := []
-    for (fvar, re_s) in (inhFVars.zip (nonempties.zip ss)).reverse do
+    for (fvar, re_s) in (inhFVars.zip ((nonemptiesWithDTr.map Prod.fst).zip ss)).reverse do
       if expr.hasAnyFVar (· == fvar) then
         expr ← Meta.mkLambdaFVars #[.fvar fvar] expr
         usedInhs := re_s :: usedInhs
