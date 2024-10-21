@@ -572,14 +572,16 @@ open LamReif Embedding.Lam in
   does not use free variables introduced during monomorphization
 -/
 def callNative_checker
-  (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → MetaM Expr) :
+  (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → Array Lemma → MetaM Expr) :
   ReifM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := do
   let tyVal ← LamReif.getTyVal
   let varVal ← LamReif.getVarVal
   let lamEVarTy ← LamReif.getLamEVarTy
+  let nonemptiesWithDTr ← nonempties.mapM (fun re =>
+    do return (re, ← collectDerivFor re))
   let validsWithDTr ← valids.mapM (fun re =>
     do return (re, ← collectDerivFor re))
-  MetaState.runAtMetaM' <| (Lam2DAAF.callNativeWithAtomAsFVar nonempties validsWithDTr prover).run'
+  MetaState.runAtMetaM' <| (Lam2DAAF.callNativeWithAtomAsFVar nonemptiesWithDTr validsWithDTr prover).run'
     { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
 
 open LamReif Embedding.Lam in
@@ -595,14 +597,16 @@ open LamReif Embedding.Lam in
   does not use free variables introduced during monomorphization
 -/
 def callNative_direct
-  (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → MetaM Expr) : ReifM Expr := do
+  (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → Array Lemma → MetaM Expr) : ReifM Expr := do
   let tyVal ← LamReif.getTyVal
   let varVal ← LamReif.getVarVal
   let lamEVarTy ← LamReif.getLamEVarTy
+  let nonemptiesWithDTr ← nonempties.mapM (fun re =>
+    do return (re, ← collectDerivFor re))
   let validsWithDTr ← valids.mapM (fun re =>
     do return (re, ← collectDerivFor re))
   let (proof, _, usedEtoms, usedInhs, usedHyps) ← MetaState.runAtMetaM' <|
-    (Lam2DAAF.callNativeWithAtomAsFVar nonempties validsWithDTr prover).run'
+    (Lam2DAAF.callNativeWithAtomAsFVar nonemptiesWithDTr validsWithDTr prover).run'
       { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
   if usedEtoms.size != 0 then
     throwError "callNative_direct :: etoms should not occur here"
@@ -627,7 +631,7 @@ open Embedding.Lam in
 -/
 def queryNative
   (declName? : Option Name) (exportFacts exportInhs : Array REntry)
-  (prover? : Option (Array Lemma → MetaM Expr) := .none) : LamReif.ReifM (Option Expr) := do
+  (prover? : Option (Array Lemma → Array Lemma → MetaM Expr) := .none) : LamReif.ReifM (Option Expr) := do
   let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ←
     callNative_checker exportInhs exportFacts (prover?.getD Solver.Native.queryNative)
   LamReif.newAssertion proof (.leaf "by_native::queryNative") proofLamTerm
@@ -1039,7 +1043,7 @@ def evalIntromono : Tactic
 -/
 def monoInterface
   (lemmas : Array Lemma) (inhFacts : Array Lemma)
-  (prover : Array Lemma → MetaM Expr) : MetaM Expr := do
+  (prover : Array Lemma → Array Lemma → MetaM Expr) : MetaM Expr := do
   let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) : LamReif.ReifM Expr := (do
     let exportFacts ← LamReif.reifFacts uvalids
     let exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
@@ -1059,7 +1063,7 @@ def monoInterface
   Run native `prover` with monomorphization and preprocessing of `auto`
 -/
 def runNativeProverWithAuto
-  (declName? : Option Name) (prover : Array Lemma → MetaM Expr)
+  (declName? : Option Name) (prover : Array Lemma → Array Lemma → MetaM Expr)
   (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr := do
   let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) : LamReif.ReifM Expr := (do
     let exportFacts ← LamReif.reifFacts uvalids
