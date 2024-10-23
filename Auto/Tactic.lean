@@ -478,7 +478,6 @@ def runAuto
 @[tactic auto]
 def evalAuto : Tactic
 | `(auto | auto $instr $hints $[$uords]*) => withMainContext do
-  let startTime ← IO.monoMsNow
   -- Suppose the goal is `∀ (x₁ x₂ ⋯ xₙ), G`
   -- First, apply `intros` to put `x₁ x₂ ⋯ xₙ` into the local context,
   --   now the goal is just `G`
@@ -494,7 +493,6 @@ def evalAuto : Tactic
       let (lemmas, inhFacts) ← collectAllLemmas hints uords (goalBinders.push ngoal)
       let declName? ← Elab.Term.getDeclName?
       let proof ← runAuto declName? lemmas inhFacts
-      IO.println s!"Auto found proof. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
       absurd.assign proof
     | .useSorry =>
       let proof ← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []]
@@ -564,7 +562,6 @@ def runNativeProverWithAuto
 @[tactic mononative]
 def evalMonoNative : Tactic
 | `(mononative | mononative $hints $[$uords]*) => withMainContext do
-  let startTime ← IO.monoMsNow
   -- Suppose the goal is `∀ (x₁ x₂ ⋯ xₙ), G`
   -- First, apply `intros` to put `x₁ x₂ ⋯ xₙ` into the local context,
   --   now the goal is just `G`
@@ -576,7 +573,6 @@ def evalMonoNative : Tactic
   withMainContext do
     let (lemmas, inhFacts) ← collectAllLemmas hints uords (goalBinders.push ngoal)
     let proof ← monoInterface lemmas inhFacts Solver.Native.queryNative
-    IO.println s!"Auto found proof. Time spent by auto : {(← IO.monoMsNow) - startTime}ms"
     absurd.assign proof
 | _ => throwUnsupportedSyntax
 
