@@ -60,7 +60,7 @@ def elabDefEq (name : Name) : TacticM (Array Lemma) := do
     addRecAsLemma val
   | some (.defnInfo _) =>
     -- Generate definitional equation for (possibly recursive) declaration
-    match ← getEqnsFor? name (nonRec := true) with
+    match ← getEqnsFor? name with
     | some eqns => eqns.mapIdxM fun i eq =>
       do elabLemma (← `($(mkIdent eq))) (.leaf s!"defeq {i.val} {name}")
     | none => return #[]

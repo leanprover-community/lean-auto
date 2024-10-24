@@ -260,7 +260,11 @@ theorem insert'Aux.equiv (bt : BinTree α) (n : Nat) (x : α) (rd : Nat) :
   case succ rd' IH =>
     match n with
     | 0 => rw [insert'Aux, insert'WF]
-    | 1 => rw [insert'Aux, insert'WF]
+    | 1 =>
+      simp only [eq_def]
+      cases bt
+      . simp only [insert'WF]
+      . simp only [insert'WF]
     | n' + 2 =>
       dsimp [insert'Aux];
       rw [insert'WF.succSucc];
@@ -313,7 +317,7 @@ theorem insert'.correct₁ (bt : BinTree β) (n : Nat) (x : β) : n ≠ 0 → ge
     have hne' : (n + 2) / 2 ≠ 0 := by
       rw [Nat.add_div_right _ (.step .refl)]; intro h; cases h
     let IH' := fun bt => IH bt hne'
-    rw [get?'_succSucc, insert'.succSucc, left!, right!]
+    rw [get?'_succSucc, insert'.succSucc, left!.eq_def, right!.eq_def]
     cases (n + 2) % 2 <;> cases bt <;> dsimp <;> rw [IH']
 
 theorem insert.correct₁ (bt : BinTree β) (n : Nat) (x : β) : get? (insert bt n x) n = .some x :=
@@ -338,7 +342,7 @@ theorem insert'.correct₂ (bt : BinTree β) (n₁ n₂ : Nat) (x : β) : n₁ �
     | 0 => cases bt <;> rfl
     | 1 => cases bt <;> rfl
     | n₁ + 2 =>
-      rw [insert'.succSucc, left!, right!]
+      rw [insert'.succSucc, left!.eq_def, right!.eq_def]
       have hne' : (n₁ + 2) % 2 = (n₂ + 2) % 2 → (n₁ + 2) / 2 ≠ (n₂ + 2) / 2 := by
         intro heq h; apply hne;
         rw [← Nat.div_add_mod (n₁ + 2) 2, ← Nat.div_add_mod (n₂ + 2) 2]
