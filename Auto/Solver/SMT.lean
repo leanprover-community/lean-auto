@@ -222,6 +222,7 @@ def querySolverWithHints (query : Array IR.SMT.Command)
   emitCommand solver .checkSat
   let stdout ← solver.stdout.getLine
   trace[auto.smt.result] "checkSatResponse: {stdout}"
+  -- **TODO** When checkSatResponse is sat, the below getTerm call can throw an error
   let (checkSatResponse, _) ← getTerm stdout
   match checkSatResponse with
   | .atom (.symb "sat") =>
@@ -229,12 +230,15 @@ def querySolverWithHints (query : Array IR.SMT.Command)
     let (_, solver) ← solver.takeStdin
     let stdout ← solver.stdout.readToEnd
     let stderr ← solver.stderr.readToEnd
-    let (model, _) ← getTerm stdout
     solver.kill
-    trace[auto.smt.result] "{name} says Sat"
-    trace[auto.smt.model] "Model:\n{model}"
-    trace[auto.smt.stderr] "stderr:\n{stderr}"
-    return .none
+    try
+      let (model, _) ← getTerm stdout
+      trace[auto.smt.result] "{name} says Sat"
+      trace[auto.smt.model] "Model:\n{model}"
+      trace[auto.smt.stderr] "stderr:\n{stderr}"
+      return .none
+    catch _ => -- Don't let a failure to parse the model prevent `querySolverWithHints` from returning `none`
+      return .none
   | .atom (.symb "unsat") =>
     emitCommand solver (.echo "Unsat core:")
     emitCommand solver .getUnsatCore

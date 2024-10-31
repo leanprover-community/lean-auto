@@ -172,7 +172,7 @@ def collectUserLemmas (terms : Array Term) : TacticM (Array Lemma) :=
     return lemmas
 
 def collectHintDBLemmas (names : Array Name) : TacticM (Array Lemma) := do
-  let mut hs : HashSet Name := HashSet.empty
+  let mut hs : Std.HashSet Name := Std.HashSet.empty
   let mut ret : Array Lemma := #[]
   for name in names do
     let .some db ← findLemDB name
@@ -427,7 +427,7 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
   let lamEVarTy ← LamReif.getLamEVarTy
   let exportLamTerms ← exportFacts.mapM (fun re => do
     match re with
-    | .valid [] t => return t
+    | .valid [] t => pure t
     | _ => throwError "runAuto :: Unexpected error")
   let sni : SMT.SMTNamingInfo :=
     {tyVal := (← LamReif.getTyVal), varVal := (← LamReif.getVarVal), lamEVarTy := (← LamReif.getLamEVarTy)}
@@ -436,8 +436,8 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
     trace[auto.smt.printCommands] "{cmd}"
   if (auto.smt.save.get (← getOptions)) then
     Solver.SMT.saveQuery commands
-  let .some (unsatCore, solverHints, proof) ← Solver.SMT.querySolverWithHints commands
-    | return .none
+  let some (unsatCore, solverHints, _proof) ← Solver.SMT.querySolverWithHints commands
+    | return none
   let unsatCoreIds ← Solver.SMT.validFactOfUnsatCore unsatCore
   -- **Print valuation of SMT atoms**
   SMT.withExprValuation sni state.h2lMap (fun tyValMap varValMap etomValMap => do
@@ -447,13 +447,13 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
     )
   -- **Print STerms corresponding to `validFacts` in unsatCore**
   for id in unsatCoreIds do
-    let .some sterm := validFacts[id]?
+    let some sterm := validFacts[id]?
       | throwError "runAuto :: Index {id} of `validFacts` out of range"
     trace[auto.smt.unsatCore.smtTerms] "|valid_fact_{id}| : {sterm}"
   -- **Print Lean expressions correesponding to `validFacts` in unsatCore**
   SMT.withExprValuation sni state.h2lMap (fun tyValMap varValMap etomValMap => do
     for id in unsatCoreIds do
-      let .some t := exportLamTerms[id]?
+      let some t := exportLamTerms[id]?
         | throwError "runAuto :: Index {id} of `exportLamTerms` out of range"
       let e ← Lam2D.interpLamTermAsUnlifted tyValMap varValMap etomValMap 0 t
       trace[auto.smt.unsatCore.leanExprs] "|valid_fact_{id}| : {← Core.betaReduce e}"
@@ -462,14 +462,14 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
   -- `unsatCoreDerivLeafStrings` contains all of the strings that appear as leaves in any derivation for any fact in the unsat core
   let mut unsatCoreDerivLeafStrings := #[]
   for id in unsatCoreIds do
-    let .some t := exportLamTerms[id]?
+    let some t := exportLamTerms[id]?
       | throwError "runAuto :: Index {id} of `exportLamTerm` out of range"
     let vderiv ← LamReif.collectDerivFor (.valid [] t)
     unsatCoreDerivLeafStrings := unsatCoreDerivLeafStrings ++ vderiv.collectLeafStrings
     trace[auto.smt.unsatCore.deriv] "|valid_fact_{id}| : {vderiv}"
   -- **Build symbolPrecMap using l2hMap and selInfos**
   let (preprocessFacts, theoryLemmas, instantiations, computationLemmas, polynomialLemmas, rewriteFacts) := solverHints
-  let mut symbolMap : HashMap String Expr := HashMap.empty
+  let mut symbolMap : Std.HashMap String Expr := Std.HashMap.empty
   for (varName, varAtom) in l2hMap.toArray do
     let varLeanExp ←
       SMT.withExprValuation sni state.h2lMap (fun tyValMap varValMap etomValMap => do
@@ -488,7 +488,7 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
     let selOutputType ←
       SMT.withExprValuation sni state.h2lMap (fun tyValMap _ _ => Lam2D.interpLamSortAsUnlifted tyValMap selOutputType)
     let selDatatype ←
-      match symbolMap.find? datatypeName with
+      match symbolMap.get? datatypeName with
       | some selDatatype => pure selDatatype
       | none => throwError "querySMTForHints :: Could not find the datatype {datatypeName} corresponding to selector {selName}"
     let selType := Expr.forallE `x selDatatype selOutputType .default
@@ -501,28 +501,31 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
     (fun (selName, selCtor, argIdx, selMVar) => return (selName, selCtor, argIdx, ← Meta.inferType selMVar))
   -- **Extract solverLemmas from solverHints**
   if ← auto.getHints.getFailOnParseErrorM then
-    let preprocessFacts ← preprocessFacts.mapM
-      (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
-    let theoryLemmas ← theoryLemmas.mapM
-      (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
-    let instantiations ← instantiations.mapM
-      (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
-    let computationLemmas ← computationLemmas.mapM
-      (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
-    let polynomialLemmas ← polynomialLemmas.mapM
-      (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
-    let rewriteFacts ← rewriteFacts.mapM
-      (fun rwFacts => do
-        match rwFacts with
-        | [] => return []
-        | rwRule :: ruleInstances =>
-          /- Try to parse `rwRule`. If succesful, just return that. If unsuccessful (e.g. because the rule contains approximate types),
-             then parse each quantifier-free instance of `rwRule` in `ruleInstances` and return all of those. -/
-          match ← Parser.SMTTerm.tryParseTermAndAbstractSelectors rwRule symbolMap selectorMVars with
-          | some parsedRule => return [parsedRule]
-          | none => ruleInstances.mapM (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
-      )
-    return some (unsatCoreDerivLeafStrings, selectorArr, preprocessFacts, theoryLemmas, instantiations, computationLemmas, polynomialLemmas, rewriteFacts)
+    try
+      let preprocessFacts ← preprocessFacts.mapM
+        (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
+      let theoryLemmas ← theoryLemmas.mapM
+        (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
+      let instantiations ← instantiations.mapM
+        (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
+      let computationLemmas ← computationLemmas.mapM
+        (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
+      let polynomialLemmas ← polynomialLemmas.mapM
+        (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
+      let rewriteFacts ← rewriteFacts.mapM
+        (fun rwFacts => do
+          match rwFacts with
+          | [] => return []
+          | rwRule :: ruleInstances =>
+            /- Try to parse `rwRule`. If succesful, just return that. If unsuccessful (e.g. because the rule contains approximate types),
+              then parse each quantifier-free instance of `rwRule` in `ruleInstances` and return all of those. -/
+            match ← Parser.SMTTerm.tryParseTermAndAbstractSelectors rwRule symbolMap selectorMVars with
+            | some parsedRule => return [parsedRule]
+            | none => ruleInstances.mapM (fun lemTerm => Parser.SMTTerm.parseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
+        )
+      return some (unsatCoreDerivLeafStrings, selectorArr, preprocessFacts, theoryLemmas, instantiations, computationLemmas, polynomialLemmas, rewriteFacts)
+    catch e =>
+      throwError "querySMTForHints :: Encountered error trying to parse SMT solver's hints. Error: {e.toMessageData}"
   else
     let preprocessFacts ← preprocessFacts.mapM (fun lemTerm => Parser.SMTTerm.tryParseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
     let theoryLemmas ← theoryLemmas.mapM (fun lemTerm => Parser.SMTTerm.tryParseTermAndAbstractSelectors lemTerm symbolMap selectorMVars)
@@ -751,7 +754,7 @@ def runAutoGetHints (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM solv
       if let .some solverHints ← querySMTForHints exportFacts exportInds then
         return solverHints
       else
-        throwError "runAutoGetHints :: querySMTForHints failed to return solverHints"
+        throwError "runAutoGetHints :: SMT solver was unable to find a proof"
     else
       throwError "runAutoGetHints :: Either auto.smt or auto.tptp must be enabled"
     )
