@@ -16,9 +16,9 @@ structure State where
   -- During monomorphization, constants will be turned
   --   into free variables. This map records the original expression
   --   corresponding to these free variables.
-  exprFVarVal     : HashMap FVarId Expr := {}
+  exprFVarVal     : Std.HashMap FVarId Expr := {}
   -- Canonicalization map for types
-  tyCanMap        : HashMap Expr Expr   := {}
+  tyCanMap        : Std.HashMap Expr Expr   := {}
   -- Inhabited canonicalized types
   -- The second `Expr` should be of the form `ty₁ → ty₂ → ⋯ → tyₙ`,
   --   where `ty₁, ty₂, ⋯, tyₙ` are canonicalized types within `tyCanMap`
@@ -36,11 +36,11 @@ abbrev ReifM := StateT State MetaM
 -/
 @[inline] def resolveVal (e : Expr) : ReifM Expr :=
   match e with
-  | .fvar id => do return ((← getExprFVarVal).find? id).getD e
+  | .fvar id => do return ((← getExprFVarVal).get? id).getD e
   | _ => return e
 
 @[inline] def resolveTy (e : Expr) : ReifM Expr := do
-  match (← getTyCanMap).find? (Expr.eraseMData e) with
+  match (← getTyCanMap).get? (Expr.eraseMData e) with
   | .some id => return id
   | .none => throwError "resolveTy :: Unable to resolve {e}"
 

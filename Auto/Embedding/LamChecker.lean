@@ -2460,9 +2460,9 @@ theorem Checker.getValidExport_indirectReduce_reflection
 structure RTableStatus where
   rTable        : Array REntry := #[]
   rTableTree    : BinTree REntry := BinTree.leaf
-  nonemptyMap   : HashMap LamSort Nat := {}
-  wfMap         : HashMap (List LamSort × LamSort × LamTerm) Nat := {}
-  validMap      : HashMap (List LamSort × LamTerm) Nat := {}
+  nonemptyMap   : Std.HashMap LamSort Nat := {}
+  wfMap         : Std.HashMap (List LamSort × LamSort × LamTerm) Nat := {}
+  validMap      : Std.HashMap (List LamSort × LamTerm) Nat := {}
   -- maxEVarSucc
   maxEVarSucc   : Nat := 0
   -- lamEVarTy
@@ -2470,7 +2470,7 @@ structure RTableStatus where
   -- This works as a cache for `BinTree.ofListGet lamEVarTy.data`
   lamEVarTyTree : BinTree LamSort := BinTree.leaf
   -- `chkMap.find?[re]` returns the checkstep which proves `re`
-  chkMap        : HashMap REntry ChkStep := {}
+  chkMap        : Std.HashMap REntry ChkStep := {}
   deriving Inhabited
 
 def RTableStatus.push (rs : RTableStatus) (re : REntry) :=
@@ -2494,8 +2494,8 @@ def RTableStatus.newEtomWithValid (rs : RTableStatus) (c : ChkStep) (re : REntry
 
 def RTableStatus.findPos? (rs : RTableStatus) (re : REntry) :=
   match re with
-  | .nonempty s => rs.nonemptyMap.find? s
-  | .wf lctx s t => rs.wfMap.find? (lctx, s, t)
-  | .valid lctx t => rs.validMap.find? (lctx, t)
+  | .nonempty s => rs.nonemptyMap.get? s
+  | .wf lctx s t => rs.wfMap.get? (lctx, s, t)
+  | .valid lctx t => rs.validMap.get? (lctx, t)
 
 end Auto.Embedding.Lam

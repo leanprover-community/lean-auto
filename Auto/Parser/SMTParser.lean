@@ -99,7 +99,7 @@ open Term
 
 partial def Term.toString : Term → String
 | .atom l => ToString.toString l
-| .app ls => "(" ++ String.intercalate " " (ls.map toString).data ++ ")"
+| .app ls => "(" ++ String.intercalate " " (ls.map toString).toList ++ ")"
 
 instance : ToString Term where
   toString e := Term.toString e

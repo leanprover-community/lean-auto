@@ -33,7 +33,7 @@ deriving BEq, Hashable, Inhabited
 def SIdent.toString : SIdent → String
 | .symb s => if isSimpleSymbol s then s else "|" ++ s ++ "|"
 | .indexed s idx =>
-  s!"(_ {s} " ++ String.intercalate " " (idx.data.map (fun idx =>
+  s!"(_ {s} " ++ String.intercalate " " (idx.toList.map (fun idx =>
     match idx with
     | .inl idx => s!"{idx}"
     | .inr idx => s!"{idx}")) ++ ")"
@@ -63,7 +63,7 @@ where go : List SSort → List SIdent →  List String
 | a :: as, binders => SSort.toStringAux a binders :: go as binders
 
 def SSort.toString (s : SSort) (binders : Array SIdent) : String :=
-  SSort.toStringAux s binders.data
+  SSort.toStringAux s binders.toList
 
 /-- Caution : Do not use this in define-sort, because sort there might contain bvars -/
 instance : ToString SSort where
@@ -181,7 +181,7 @@ private partial def STerm.toStringAux : STerm → List SIdent → String
     intro ++ body
   | .attr t attrs, binders =>
     let intro := "(! " ++ STerm.toStringAux t binders ++ " "
-    let sattrs := String.intercalate " " (attrs.data.map (attrToStringAux · binders))
+    let sattrs := String.intercalate " " (attrs.toList.map (attrToStringAux · binders))
     intro ++ sattrs ++ ")"
 where
   goQIdApp : List STerm → List SIdent → List String
@@ -194,9 +194,9 @@ where
         let pattern := "(" ++ (ToString.toString (SIdent.symb constr))
         pattern ++ body
       else
-        let binders := args.data.map .symb ++ binders
+        let binders := args.toList.map .symb ++ binders
         let body := " " ++ STerm.toStringAux body binders ++ ")"
-        let args := args.data.map (fun x => ToString.toString (SIdent.symb x))
+        let args := args.toList.map (fun x => ToString.toString (SIdent.symb x))
         let pattern := "((" ++ String.intercalate " " (ToString.toString (SIdent.symb constr) :: args) ++ ")"
         pattern ++ body
   goMatchBody : List (MatchCase STerm) → List SIdent → List String
@@ -206,16 +206,16 @@ where
     | .none s,     _ => ":" ++ s
     | .spec s sc,  _ => s!":{s} {sc.toString}"
     | .symb s s',  _ => s!":{s} {s'}"
-    | .sexpr s ts, binders => s!":{s} (" ++ String.intercalate " " (ts.data.map (STerm.toStringAux · binders)) ++ ")"
+    | .sexpr s ts, binders => s!":{s} (" ++ String.intercalate " " (ts.toList.map (STerm.toStringAux · binders)) ++ ")"
 
 def STerm.toString (t : STerm) (binders : Array SIdent) : String :=
-  STerm.toStringAux t binders.data
+  STerm.toStringAux t binders.toList
 
 instance : ToString STerm where
   toString t := STerm.toString t #[]
 
 def Attribute.toString (attr : Attribute) (binders : Array SIdent) : String :=
-  SMT.STerm.toStringAux.attrToStringAux attr binders.data
+  SMT.STerm.toStringAux.attrToStringAux attr binders.toList
 
 instance : ToString Attribute where
   toString attr := Attribute.toString attr #[]
@@ -232,7 +232,7 @@ private def ConstrDecl.toString : ConstrDecl → Array SIdent → String
 | ⟨name, selDecls⟩, binders =>
   let pre := s!"({SIdent.symb name}"
   let selDecls := selDecls.map (fun (name, sort) => s!"({SIdent.symb name} " ++ SSort.toString sort binders ++ ")")
-  String.intercalate " " (pre :: selDecls.data) ++ ")"
+  String.intercalate " " (pre :: selDecls.toList) ++ ")"
 
 /--
  〈datatype_dec〉 ::= ( 〈constructor_dec〉+ ) | ( par ( 〈symbol 〉+ ) ( 〈constructor_dec〉+ ) )
@@ -243,11 +243,11 @@ structure DatatypeDecl where
 
 private def DatatypeDecl.toString : DatatypeDecl → String := fun ⟨params, cstrDecls⟩ =>
   let scstrDecls := cstrDecls.map (fun d => ConstrDecl.toString d (params.map SIdent.symb))
-  let scstrDecls := "(" ++ String.intercalate " " scstrDecls.data ++ ")"
+  let scstrDecls := "(" ++ String.intercalate " " scstrDecls.toList ++ ")"
   if params.size == 0 then
     scstrDecls
   else
-    "(par ("  ++ String.intercalate " " params.data ++ ") " ++ scstrDecls ++ ")"
+    "(par ("  ++ String.intercalate " " params.toList ++ ") " ++ scstrDecls ++ ")"
 
 inductive SMTOption where
   | diagnosticOC            : String → SMTOption
@@ -345,26 +345,26 @@ def Command.toString : Command → String
 | .checkSat                            => "(check-sat)"
 | .declFun name argSorts resSort       =>
   let pre := s!"(declare-fun {SIdent.symb name} ("
-  let argSorts := String.intercalate " " (argSorts.map ToString.toString).data ++ ") "
+  let argSorts := String.intercalate " " (argSorts.map ToString.toString).toList ++ ") "
   let trail := s!"{resSort})"
   pre ++ argSorts ++ trail
 | .declSort name arity                 => s!"(declare-sort {SIdent.symb name} {arity})"
 | .defFun isRec name args resTy body =>
   let pre := if isRec then "(define-fun-rec " else "(define-fun "
   let pre := pre ++ ToString.toString (SIdent.symb name) ++ " "
-  let binders := "(" ++ String.intercalate " " (args.map (fun (name, sort) => s!"({SIdent.symb name} {sort})")).data ++ ") "
+  let binders := "(" ++ String.intercalate " " (args.map (fun (name, sort) => s!"({SIdent.symb name} {sort})")).toList ++ ") "
   let trail := s!"{resTy} " ++ STerm.toString body (args.map (fun (name, _) => SIdent.symb name)) ++ ")"
   pre ++ binders ++ trail
 | .defSort name args body              =>
   let pre := s!"(define-sort {SIdent.symb name} ("
-  let sargs := String.intercalate " " args.data ++ ") "
+  let sargs := String.intercalate " " args.toList ++ ") "
   let trail := SSort.toString body (args.map SIdent.symb) ++ ")"
   pre ++ sargs ++ trail
 | .declDtype name ddecl                =>
   s!"(declare-datatype {SIdent.symb name} {ddecl.toString})"
 | .declDtypes infos               =>
-  let sort_decs := String.intercalate " " (infos.data.map (fun (name, args, _) => s!"({SIdent.symb name} {args})"))
-  let datatype_decs := String.intercalate " " (infos.data.map (fun (_, _, ddecl) => ddecl.toString))
+  let sort_decs := String.intercalate " " (infos.toList.map (fun (name, args, _) => s!"({SIdent.symb name} {args})"))
+  let datatype_decs := String.intercalate " " (infos.toList.map (fun (_, _, ddecl) => ddecl.toString))
   s!"(declare-datatypes ({sort_decs}) ({datatype_decs}))"
 | .echo s                              => s!"(echo \"{s}\")"
 | .exit                                => "(exit)"
@@ -385,10 +385,10 @@ section
   -/
   structure State where
     -- Map from high-level construct to symbol
-    h2lMap    : HashMap ω String   := {}
+    h2lMap    : Std.HashMap ω String   := {}
     -- Inverse of `h2lMap`
     -- Map from symbol to high-level construct
-    l2hMap    : HashMap String ω   := {}
+    l2hMap    : Std.HashMap String ω   := {}
     -- We allow two types of names
     -- · `"_" ++ s`,
     -- · `"_" ++ s ++ "_" ++ <num>`
@@ -402,7 +402,7 @@ section
     --   been used, we return `n'` as the final name. If `n'` has
     --   been used for `k` times (`k > 0`), return `n' ++ s!"_{k - 1}"`.
     -- `usedNames` records the `k - 1` for each `n'`
-    usedNames : HashMap String Nat := {}
+    usedNames : Std.HashMap String Nat := {}
     -- List of commands
     commands  : Array Command      := #[]
 
@@ -443,7 +443,7 @@ section
       preName := "pl_" ++ preName
     if preName.back.isDigit then
       preName := preName ++ "_"
-    if let .some idx := (← getUsedNames).find? preName then
+    if let .some idx := (← getUsedNames).get? preName then
       -- Used
       setUsedNames ((← getUsedNames).insert preName (idx + 1))
       return "_" ++ preName ++ s!"_{idx}"
@@ -457,7 +457,7 @@ section
         "~!@$%^&*_-+=<>.?/" ++
         "ΑαΒβΓγΔδΕεΖζΗηΘθΙιΚκΛλΜμΝνΞξΟοΠπΡρΣσςΤτΥυΦφΧχΨψΩω" ++
         "₀₁₂₃₄₅₆₇₈₉"
-      let allowedSet : HashSet UInt32 := HashSet.insertMany HashSet.empty (List.map Char.val allowedStr.toList)
+      let allowedSet : Std.HashSet UInt32 := Std.HashSet.insertMany Std.HashSet.empty (List.map Char.val allowedStr.toList)
       c.isAlphanum || allowedSet.contains c.val
 
 
@@ -471,7 +471,7 @@ section
   partial def h2Symb (cstr : ω) (nameSuggestion : Option String) : TransM ω String := do
     let l2hMap ← getL2hMap
     let h2lMap ← getH2lMap
-    if let .some name := h2lMap.find? cstr then
+    if let .some name := h2lMap.get? cstr then
       return name
     let .some nameSuggestion := nameSuggestion
       | throwError "IR.SMT.h2Symb :: Fresh high-level constraint {cstr} without name suggestion"

@@ -62,9 +62,9 @@ def structureProjs (structTy : Expr) : CoreM (Name × Expr × Array (Name × Exp
     | throwError s!"structureProjs :: {structName} is not a structure"
   let structMkExpr := mkAppN (Expr.const structDotMk lvls) structTy.getAppArgs
   let tyArgs := structTy.getAppArgs
-  let nameMap : HashMap Name StructureFieldInfo := HashMap.ofList
-    (structInfo.fieldInfo.map (fun sfi => (sfi.fieldName, sfi))).data
-  let sorted := structInfo.fieldNames.map (fun name => nameMap.find! name)
+  let nameMap : Std.HashMap Name StructureFieldInfo := Std.HashMap.ofList
+    (structInfo.fieldInfo.map (fun sfi => (sfi.fieldName, sfi))).toList
+  let sorted := structInfo.fieldNames.map (fun name => nameMap.get! name)
   let fieldInfos := sorted.map (fun i =>
       -- Field name, Projection function
       (i.fieldName, mkAppN (Expr.const i.projFn lvls) tyArgs))

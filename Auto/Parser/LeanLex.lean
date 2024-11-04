@@ -8,7 +8,7 @@ namespace Auto
 -- **TODO**: Parser for POSIX ERE
 namespace Regex
 
-private def sort : List Nat → List Nat := 
+private def sort : List Nat → List Nat :=
   have : DecidableRel Nat.le := fun (x y : Nat) => inferInstanceAs (Decidable (x <= y))
   List.mergeSort Nat.le
 
@@ -82,17 +82,17 @@ deriving BEq, Hashable, Inhabited
 def EREBracket.neg (b : EREBracket) : EREBracket := .minus b (.cc .all)
 
 -- **TODO**: Why does this need `partial`?
-partial def EREBracket.toHashSet : EREBracket → HashSet Char
-  | .cc cty       => HashSet.empty.insertMany (toString cty).toList
-  | .inStr s      => HashSet.empty.insertMany s.toList
+partial def EREBracket.toHashSet : EREBracket → Std.HashSet Char
+  | .cc cty       => Std.HashSet.empty.insertMany (toString cty).toList
+  | .inStr s      => Std.HashSet.empty.insertMany s.toList
   | .plus ⟨bl⟩     => go bl
   | .minus b1 b2  =>
     let hb := b2.toHashSet
     let b1s := b1.toHashSet.toList
-    HashSet.empty.insertMany (b1s.filter (fun x => !hb.contains x))
+    Std.HashSet.empty.insertMany (b1s.filter (fun x => !hb.contains x))
 where
-  go : List EREBracket → HashSet Char
-    | [] => HashSet.empty
+  go : List EREBracket → Std.HashSet Char
+    | [] => Std.HashSet.empty
     | b :: bl => (go bl).insertMany (toHashSet b)
 
 def EREBracket.toString (e : EREBracket) := String.mk e.toHashSet.toList
@@ -184,9 +184,9 @@ section
   structure CharGrouping where
     ngroup  : Nat
     -- All relevant characters
-    all     : HashSet σ
+    all     : Std.HashSet σ
     -- Map from character to its corresponding group
-    charMap : HashMap σ Nat
+    charMap : Std.HashMap σ Nat
     -- A character is in `all` iff it's in `charMap`.
     -- Group number takes value in `0, 1, ..., ngroups - 1`
     -- For the intermediate `NFA` generated in `ERE.toADFA`,
@@ -213,21 +213,21 @@ section
     --   Refer to `ERE.toADFA`, `ERE.ADFALex` and `DFA.run`
     cg  : CharGrouping σ
   deriving Inhabited
-  
+
   variable {σ : Type} [Hashable σ] [BEq σ] [ToString σ]
-  
+
   def CharGrouping.wf : CharGrouping σ → Bool :=
     fun ⟨ngroup, all, charMap⟩ =>
-      let img := charMap.fold (fun hs _ n => hs.insert n) HashSet.empty
+      let img := charMap.fold (fun hs _ n => hs.insert n) Std.HashSet.empty
       let surj := (sort img.toList) == List.range ngroup
       let allInCharMap := all.toList.all (fun c => charMap.contains c)
       let sizeEq := all.size == charMap.size
       surj && allInCharMap && sizeEq
-  
-  def CharGrouping.groups : CharGrouping σ → Array (HashSet σ) :=
+
+  def CharGrouping.groups : CharGrouping σ → Array (Std.HashSet σ) :=
     fun ⟨ngroup, _, charMap⟩ => Id.run <| do
-      let mut arr : Array (HashSet σ) := 
-        Array.mk ((List.range ngroup).map (fun _ => HashSet.empty))
+      let mut arr : Array (Std.HashSet σ) :=
+        Array.mk ((List.range ngroup).map (fun _ => Std.HashSet.empty))
       for (c, idx) in charMap.toList do
         arr := arr.modify idx (fun hs => hs.insert c)
       return arr
@@ -244,7 +244,7 @@ section
                s!"Group representing beginning of string := {ngroup}" ::
                s!"Group representing end of string := {ngroup + 1}" ::
                s!"Group representing other utf-8 characters := {ngroup + 2}" ::
-               groups.data
+               groups.toList
     String.intercalate "\n  " all ++ "\n⦘⦘"
 
   def CharGrouping.toString (cg : CharGrouping σ) : String :=
@@ -254,7 +254,7 @@ section
     toString := CharGrouping.toString
 
   def CharGrouping.getGroup (cg : CharGrouping σ) (c : σ) : Nat :=
-    match cg.charMap.find? c with
+    match cg.charMap.get? c with
     | .some g => g
     -- Invalid character
     | .none   => cg.ngroup + 2
@@ -278,14 +278,14 @@ section
                  s!"Group representing beginning of string := {cg.ngroup}" ::
                  s!"Group representing end of string := {cg.ngroup + 1}" ::
                  s!"Group representing other utf-8 characters := {cg.ngroup + 2}" ::
-                 "(GroupIdx, Group members):" :: cggroups.data ++
-                 s!"(State, GroupIdx → State'):" :: dtr.data ++
-                 s!"(State, Attributes)" :: attrs.data
+                 "(GroupIdx, Group members):" :: cggroups.toList ++
+                 s!"(State, GroupIdx → State'):" :: dtr.toList ++
+                 s!"(State, Attributes)" :: attrs.toList
       String.intercalate "\n  " all ++ "\n⦘⦘"
 
   def ADFA.toString (a : ADFA σ) : String := ADFA.toStringAux a
     (fun l => ToString.toString l.toList)
-  
+
   instance : ToString (ADFA σ) where
     toString := ADFA.toString
 
@@ -297,7 +297,7 @@ section
 end
 
 def CharGrouping.toStringForChar (cg : CharGrouping Char) : String :=
-  CharGrouping.toStringAux cg (fun l => 
+  CharGrouping.toStringAux cg (fun l =>
     let sorted := sort (l.toList.map Char.toNat)
     let str := String.mk (sorted.map Char.ofNat)
     ToString.toString (repr str))
@@ -306,7 +306,7 @@ instance : ToString (CharGrouping Char) where
   toString := CharGrouping.toStringForChar
 
 def ADFA.toStringForChar (a : ADFA Char) : String :=
-  ADFA.toStringAux a (fun l => 
+  ADFA.toStringAux a (fun l =>
     let sorted := sort (l.toList.map Char.toNat)
     let str := String.mk (sorted.map Char.ofNat)
     ToString.toString (repr str))
@@ -316,38 +316,38 @@ instance : ToString (ADFA Char) where
 
 def ERE.charGrouping (e : ERE) : CharGrouping Char := Id.run <| do
   let hsets := e.brackets.map EREBracket.toHashSet
-  let mut all := hsets.foldl (fun hs nhs => hs.insertMany nhs) HashSet.empty
-  let mut charMap := all.fold (fun hs c => hs.insert c 0) HashMap.empty
+  let mut all := hsets.foldl (fun hs nhs => hs.insertMany nhs) Std.HashSet.empty
+  let mut charMap := all.fold (fun hs c => hs.insert c 0) Std.HashMap.empty
   -- Current number of groups
   let mut curidx := 1
   for hset in hsets do
-    let mut reloc : HashMap Nat Nat := {}
+    let mut reloc : Std.HashMap Nat Nat := {}
     for c in hset do
-      let cidx := charMap.find! c
-      match reloc.find? cidx with
+      let cidx := charMap.get! c
+      match reloc.get? cidx with
       | .some r => charMap := charMap.insert c r
       | .none => reloc := reloc.insert cidx curidx;
                  charMap := charMap.insert c curidx;
                  curidx := curidx + 1
   let mut ridx := 0
-  let mut reloc : HashMap Nat Nat := {}
+  let mut reloc : Std.HashMap Nat Nat := {}
   for (_, i) in charMap.toList do
-    match reloc.find? i with
+    match reloc.get? i with
     | .some _ => continue
     | .none   => reloc := reloc.insert i ridx; ridx := ridx + 1
-  charMap := HashMap.ofList (charMap.toList.map (fun (c, i) => (c, reloc.find! i)))
+  charMap := Std.HashMap.ofList (charMap.toList.map (fun (c, i) => (c, reloc.get! i)))
   return CharGrouping.mk ridx all charMap
 
 private partial def ERE.toNFAAux (cg : CharGrouping Char) : ERE → (NFA Nat)
 | .bracket b     =>
   let bs := toString b
-  let states := bs.foldl (fun hs c => hs.insert (cg.charMap.find! c)) HashSet.empty
+  let states := bs.foldl (fun hs c => hs.insert (cg.charMap.get! c)) Std.HashSet.empty
   NFA.ofSymbPlus states.toArray
 | .bracketN b    =>
   let bs := toString b
   -- All `utf-8` characters
-  let initHs := HashSet.empty.insertMany ((cg.ngroup + 2) :: List.range cg.ngroup)
-  let states := bs.foldl (fun hs c => hs.erase (cg.charMap.find! c)) initHs
+  let initHs := Std.HashSet.empty.insertMany ((cg.ngroup + 2) :: List.range cg.ngroup)
+  let states := bs.foldl (fun hs c => hs.erase (cg.charMap.get! c)) initHs
   NFA.ofSymbPlus states.toArray
 | .startp        => NFA.ofSymb (cg.ngroup)
 | .endp          => NFA.ofSymb (cg.ngroup + 1)

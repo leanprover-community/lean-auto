@@ -55,16 +55,18 @@ namespace BVLems
     unfold BitVec.ushiftRight BitVec.toNat
     dsimp; rw [Nat.shiftRight_eq_div_pow]
 
-  theorem toNat_zeroExtend' {a : BitVec n} (le : n ≤ m) : (a.zeroExtend' le).toNat = a.toNat := rfl
+  theorem toNat_setWidth {a : BitVec n} (le : n ≤ m) : (a.setWidth m).toNat = a.toNat := by
+    unfold setWidth
+    simp only [le, ↓reduceDIte, toNat_setWidth']
 
   theorem toNat_zeroExtend {a : BitVec n} (i : Nat) : (a.zeroExtend i).toNat = a.toNat % (2 ^ i) := by
-    unfold BitVec.zeroExtend; cases hdec : decide (n ≤ i)
+    unfold BitVec.zeroExtend setWidth; cases hdec : decide (n ≤ i)
     case false =>
       have hnle := of_decide_eq_false hdec
       rw [Bool.dite_eq_false (proof:=hnle)]; rfl
     case true =>
       have hle := of_decide_eq_true hdec
-      rw [Bool.dite_eq_true (proof:=hle), toNat_zeroExtend']
+      rw [Bool.dite_eq_true (proof:=hle), toNat_setWidth']
       rw [Nat.mod_eq_of_lt]; rcases a with ⟨⟨a, isLt⟩⟩;
       apply Nat.le_trans isLt; apply Nat.pow_le_pow_of_le_right (Nat.le_step .refl) hle
 
@@ -103,7 +105,7 @@ namespace BVLems
   theorem msb_equiv_lt (a : BitVec n) : !a.msb ↔ a.toNat < 2 ^ (n - 1) := by
     dsimp [BitVec.msb, getMsbD, getLsbD]
     cases n
-    case zero => simp
+    case zero => simp [BitVec.toNat]
     case succ n =>
       have dtrue : decide (0 < n + 1) = true := by simp
       rw [dtrue, Bool.not_eq_true', Bool.true_and, Nat.succ_sub_one, Nat.testBit_false_iff]
@@ -112,7 +114,7 @@ namespace BVLems
   theorem msb_equiv_lt' (a : BitVec n) : !a.msb ↔ 2 * a.toNat < 2 ^ n := by
     rw [msb_equiv_lt]
     cases n
-    case zero => simp
+    case zero => simp [BitVec.toNat]
     case succ n =>
       rw [Nat.succ_sub_one, Nat.pow_succ, Nat.mul_comm (m:=2)]
       apply Iff.symm; apply Nat.mul_lt_mul_left

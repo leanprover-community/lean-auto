@@ -46,7 +46,7 @@ def Expr.forallBinders (e : Expr) : Array (Name × Expr × BinderInfo) :=
     | _ => []
   Array.mk (aux e)
 
-def Expr.collectRawM [Monad m] (p : Expr → m Bool) : Expr → m (HashSet Expr)
+def Expr.collectRawM [Monad m] (p : Expr → m Bool) : Expr → m (Std.HashSet Expr)
 | e@(.forallE _ d b _) => do
   let hd ← collectRawM p d
   let hb ← collectRawM p b
@@ -70,7 +70,7 @@ def Expr.collectRawM [Monad m] (p : Expr → m Bool) : Expr → m (HashSet Expr)
 | e@(.proj _ _ b) => do
   let hb ← collectRawM p b
   addp? p e hb
-| e => addp? p e HashSet.empty
+| e => addp? p e Std.HashSet.empty
 where addp? p e hs := do
   if ← p e then
     return hs.insert e

@@ -17,6 +17,6 @@ def MessageData.list (as : List α) (f : α → MessageData) : MessageData :=
   .compose m!"[" (.compose (MessageData.intercalate m!", " (as.map f)) m!"]")
 
 def MessageData.array (as : Array α) (f : α → MessageData) : MessageData :=
-  MessageData.list as.data f
+  MessageData.list as.toList f
 
 end Auto

@@ -50,19 +50,19 @@ instance : ToString LamAtomic where
   toString := LamAtomic.toString
 
 def LamAtomic.toLeanExpr
-  (tyValMap varValMap etomValMap : HashMap Nat Expr)
+  (tyValMap varValMap etomValMap : Std.HashMap Nat Expr)
   (atomic : LamAtomic) : MetaM Expr:=
   match atomic with
   | .sort n => do
-    let .some e := tyValMap.find? n
+    let .some e := tyValMap.get? n
       | throwError "SMT.printValuation :: Unknown sort atom {n}"
     return e
   | .term n => do
-    let .some e := varValMap.find? n
+    let .some e := varValMap.get? n
       | throwError "SMT.printValuation :: Unknown term atom {n}"
     return e
   | .etom n => do
-    let .some e := etomValMap.find? n
+    let .some e := etomValMap.get? n
       | throwError "SMT.printValuation :: Unknown etom {n}"
     return e
   | .bvOfNat n => do
@@ -600,11 +600,11 @@ def termAuxDecls : Array IR.SMT.Command :=
   `printFn : (tyValMap : _) → (varValMap : _) → (etomValMap : _) → MetaM α`
 -/
 def withExprValuation
-  {α : Type} [Inhabited α] (sni : SMTNamingInfo) (h2lMap : HashMap LamAtomic String)
-  (printFn : HashMap Nat Expr → HashMap Nat Expr → HashMap Nat Expr → MetaM α) :
+  {α : Type} [Inhabited α] (sni : SMTNamingInfo) (h2lMap : Std.HashMap LamAtomic String)
+  (printFn : Std.HashMap Nat Expr → Std.HashMap Nat Expr → Std.HashMap Nat Expr → MetaM α) :
   MetaM α := do
-  let tyValMap := HashMap.ofList (sni.tyVal.zipWithIndex.map (fun ((e, _), n) => (n, e))).data
-  let varValMap := HashMap.ofList (sni.varVal.zipWithIndex.map (fun ((e, _), n) => (n, e))).data
+  let tyValMap := Std.HashMap.ofList (sni.tyVal.zipWithIndex.map (fun ((e, _), n) => (n, e))).toList
+  let varValMap := Std.HashMap.ofList (sni.varVal.zipWithIndex.map (fun ((e, _), n) => (n, e))).toList
   let etomsWithName := h2lMap.toArray.filterMap (fun (atomic, name) =>
     match atomic with | .etom n => .some (n, name) | _ => .none)
   let declInfos ← etomsWithName.mapM (fun (n, name) => do
@@ -613,7 +613,7 @@ def withExprValuation
     let type ← Lam2D.interpLamSortAsUnlifted tyValMap s
     return (Name.mkSimple name, .default, fun _ => pure type))
   Meta.withLocalDecls declInfos (fun etomFVars => do
-    let etomValMap := HashMap.ofList ((etomsWithName.zip etomFVars).map (fun ((n, _), e) => (n, e))).data
+    let etomValMap := Std.HashMap.ofList ((etomsWithName.zip etomFVars).map (fun ((n, _), e) => (n, e))).toList
     printFn tyValMap varValMap etomValMap)
 
 end SMT
@@ -651,7 +651,7 @@ open SMT in
 def lamFOL2SMTWithExtraInfo
   (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Array LamSort)
   (facts : Array LamTerm) (minds : Array MutualIndInfo) :
-  TransM LamAtomic (Array IR.SMT.Command × Array STerm × HashMap String LamAtomic × Array SelectorInfo) := do
+  TransM LamAtomic (Array IR.SMT.Command × Array STerm × Std.HashMap String LamAtomic × Array SelectorInfo) := do
   let _ ← sortAuxDecls.mapM addCommand
   let _ ← termAuxDecls.mapM addCommand
   let mut selInfos : Array SelectorInfo := #[]

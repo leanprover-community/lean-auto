@@ -5,7 +5,7 @@ open Lean
 
 namespace Auto.Inhabitation
 
-private def logicalConsts : HashSet Name := HashSet.empty.insertMany
+private def logicalConsts : Std.HashSet Name := Std.HashSet.empty.insertMany
   #[``Eq, ``Exists, ``And, ``Or, ``Iff, ``Not]
 
 /--
@@ -28,7 +28,7 @@ where go (pos : Array Bool) (e : Expr) : Array (Array Bool) :=
   | _ => #[pos]
 
 def getExprNonImpPosition (pos : Array Bool) (e : Expr) : Option Expr :=
-  go pos.data e
+  go pos.toList e
 where go (pos : List Bool) (e : Expr) : Option Expr :=
   match pos with
   | .nil => .some e
