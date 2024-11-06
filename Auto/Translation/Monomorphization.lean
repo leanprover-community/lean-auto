@@ -381,9 +381,8 @@ def ConstInsts.canonicalize? (cis : ConstInsts) (ci : ConstInst) : MetaM (Option
 private partial def MLemmaInst.matchConstInst (ci : ConstInst) (mi : MLemmaInst) : Expr → MetaM (HashSet LemmaInst)
 | .bvar _ => throwError "MLemmaInst.matchConstInst :: Loose bound variable"
 | e@(.app ..) => do
-  let fn := e.getAppFn
   let args := e.getAppArgs
-  let mut ret ← MLemmaInst.matchConstInst ci mi fn
+  let mut ret := HashSet.empty
   for arg in args do
     ret := mergeHashSet ret (← MLemmaInst.matchConstInst ci mi arg)
   let s ← saveState
