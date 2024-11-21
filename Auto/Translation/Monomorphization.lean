@@ -17,6 +17,7 @@ initialize
   registerTraceClass `auto.mono.printLemmaInst
   registerTraceClass `auto.mono.printConstInst
   registerTraceClass `auto.mono.printResult
+  registerTraceClass `auto.mono.printInputLemmas
 
 register_option auto.mono.saturationThreshold : Nat := {
   defValue := 250
@@ -903,6 +904,8 @@ def intromono (lemmas : Array Lemma) (mvarId : MVarId) : MetaM MVarId := do
     return mvar.mvarId!)
 
 def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State → MetaM α) : MetaM α := do
+  for h in lemmas do
+    trace[auto.mono.printInputLemmas] "Monomorphization got input lemma :: {h.type}"
   let (inductiveVals, monoSt) ← monoMAction.run {}
   MetaState.runWithIntroducedFVars (metaStateMAction inductiveVals monoSt) k
 where

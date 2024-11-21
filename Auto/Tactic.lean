@@ -184,7 +184,6 @@ def unfoldConstAndPreprocessLemma (unfolds : Array Prep.ConstUnfoldInfo) (lem : 
   let type := Prep.unfoldConsts unfolds type
   let type ← Core.betaReduce (← instantiateMVars type)
   let lem := {lem with type := type}
-  let lem ← lem.reorderForallInstDep
   return lem
 
 /--
@@ -202,7 +201,6 @@ def unfoldConstAndprepReduceDefeq (unfolds : Array Prep.ConstUnfoldInfo) (lem : 
   let type := Prep.unfoldConsts unfolds type
   let type ← Core.betaReduce (← instantiateMVars type)
   let lem := {lem with type := type}
-  let lem ← lem.reorderForallInstDep
   return lem
 
 def traceLemmas (pre : String) (lemmas : Array Lemma) : TacticM Unit := do

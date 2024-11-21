@@ -97,7 +97,9 @@ def Lemma.equivQuick (lem₁ lem₂ : Lemma) : MetaM Bool := do
   let s₂₁ ← Lemma.subsumeQuick lem₂ lem₁
   return s₁₂ && s₂₁
 
-/-- Reorder top-level `∀` so that (non-prop / dependent) ones precede other ones -/
+/- **TODO:** Determine whether this is useful -/
+/- Reorder top-level `∀` so that (non-prop / dependent) ones precede other ones -/
+/-
 def Lemma.reorderForallInstDep (lem : Lemma) : MetaM Lemma := do
   let depargs := HashSet.empty.insertMany (Expr.depArgs lem.type)
   Meta.forallTelescope lem.type fun xs body => do
@@ -112,6 +114,7 @@ def Lemma.reorderForallInstDep (lem : Lemma) : MetaM Lemma := do
     let proof ← Meta.mkLambdaFVars prec (← Meta.mkLambdaFVars trail proof)
     let type ← Meta.mkForallFVars prec (← Meta.mkForallFVars trail body)
     return ⟨⟨proof, type, lem.deriv⟩, lem.params⟩
+-/
 
 /--
   Rewrite using a universe-monomorphic rigid equality
