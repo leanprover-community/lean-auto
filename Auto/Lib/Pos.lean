@@ -105,7 +105,7 @@ theorem ofNat'WF.doubleSucc_xI (n : Nat) :
 
 theorem ofNat'WF_toNat' (p : Pos) : ofNat'WF (toNat' p) = p := by
   induction p
-  case xH => rfl
+  case xH => rw [toNat', ofNat'WF]
   case xO p' IH =>
     dsimp [toNat'];
     rw [ofNat'WF.double_xO];
@@ -118,7 +118,7 @@ theorem ofNat'WF_toNat' (p : Pos) : ofNat'WF (toNat' p) = p := by
 theorem toNat'_ofNat'WF (n : Nat) : n ≠ 0 → toNat' (ofNat'WF n) = n := by
   revert n; apply ofNat'WF.induction
   case base₀ => intro H; contradiction
-  case base₁ => intro _; rfl
+  case base₁ => intro _; rw [ofNat'WF, toNat']
   case ind =>
     intro x IH _
     have hne : (x + 2) / 2 ≠ 0 := by
@@ -163,7 +163,7 @@ theorem ofNat'.equivAux (rd n : Nat) : rd ≥ n → ofNat'WF n = ofNat'RD rd n :
   induction rd generalizing n  <;> intro H
   case zero =>
     have hzero : n = 0 := Nat.eq_zero_of_le_zero H
-    rw [hzero]; rfl
+    rw [hzero]; rw [ofNat'WF, ofNat'RD]
   case succ rd' IH =>
     dsimp [ofNat'RD]
     match n with

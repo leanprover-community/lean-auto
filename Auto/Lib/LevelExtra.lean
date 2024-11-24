@@ -17,13 +17,13 @@ def Level.collectLevelMVars (l : Level) : MetaM (Array LMVarId) := do
   let hset := go l
   return hset.toArray
 where
-  go : Level → HashSet LMVarId
+  go : Level → Std.HashSet LMVarId
   | .zero => {}
   | .succ l => go l
   | .max l₁ l₂ => mergeHashSet (go l₁) (go l₂)
   | .imax l₁ l₂ => mergeHashSet (go l₁) (go l₂)
   | .param _ => {}
-  | .mvar id => HashSet.empty.insert id
+  | .mvar id => Std.HashSet.empty.insert id
 
 def Level.findParam? (p : Name → Bool) : Level → Option Name
 | .zero => .none

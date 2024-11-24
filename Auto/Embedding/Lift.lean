@@ -85,10 +85,10 @@ def imulLift.{u} (m n : GLift.{1, u} Int) :=
   GLift.up (Int.mul m.down n.down)
 
 def idivLift.{u} (m n : GLift.{1, u} Int) :=
-  GLift.up (Int.div m.down n.down)
+  GLift.up (Int.tdiv m.down n.down)
 
 def imodLift.{u} (m n : GLift.{1, u} Int) :=
-  GLift.up (Int.mod m.down n.down)
+  GLift.up (Int.tmod m.down n.down)
 
 def iedivLift.{u} (m n : GLift.{1, u} Int) :=
   GLift.up (Int.ediv m.down n.down)

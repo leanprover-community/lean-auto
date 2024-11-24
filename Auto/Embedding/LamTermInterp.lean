@@ -164,7 +164,7 @@ theorem LamTerm.lamCheck?Eq'_bvar
   (h : lctx.get? n = .some ⟨s, val⟩) :
   LamTerm.lamCheck?Eq' lval lctx (.bvar n) s := by
   dsimp [lamCheck?Eq', lamCheck?]; have ⟨hlt, _⟩ := List.get?_eq_some.mp h
-  rw [pushLCtxs_lt hlt, List.getD_eq_get?, h]; rfl
+  rw [pushLCtxs_lt hlt, List.getD_eq_getElem?_getD, ← List.get?_eq_getElem?, h]; rfl
 
 theorem LamTerm.lamCheck?Eq'_lam
   (h : LamTerm.lamCheck?Eq' lval (⟨argTy, val⟩ :: lctx) body s) :
@@ -201,7 +201,7 @@ theorem LamTerm.interpEq_bvar
   (s : LamSort) (val : s.interp lval.tyVal) (h : lctx.get? n = .some ⟨s, val⟩) :
   LamTerm.interpEq lval lctx (.bvar n) val := by
   dsimp [interpEq, interp]; have ⟨hlt, _⟩ := List.get?_eq_some.mp h
-  rw [pushLCtxs_lt hlt, List.getD_eq_get?, h]; rfl
+  rw [pushLCtxs_lt hlt, List.getD_eq_getElem?_getD, ← List.get?_eq_getElem?, h]; rfl
 
 theorem LamTerm.interpEq_lam
   (lval : LamValuation) (lctx : List ((s : LamSort) × s.interp lval.tyVal))
@@ -243,7 +243,7 @@ namespace Interp
 
 structure State where
   sortFVars    : Array FVarId               := #[]
-  sortMap      : HashMap LamSort FVarId     := {}
+  sortMap      : Std.HashMap LamSort FVarId     := {}
   -- Let `n := lctxTyRev.size`
   -- Reversed
   lctxTyRev    : Array LamSort              := #[]
@@ -253,11 +253,11 @@ structure State where
   -- Required : `lctxTyDrop[i] ≝ lctxTyRev[:(i+1)].data ≝ lctxTerm[(n-i-1):]`
   lctxTyDrop   : Array FVarId               := #[]
   -- Required : `tyEqFact[i][j] : lctxTy[i:].drop j = lctxTy[i+j:]`
-  typeEqFact   : HashMap (Nat × Nat) FVarId := {}
+  typeEqFact   : Std.HashMap (Nat × Nat) FVarId := {}
   -- Required : `lctxTermDrop[i] ≝ lctxTermRev[:(i+1)].data ≝ lctxTerm[(n-i-1):]`
   lctxTermDrop : Array FVarId               := #[]
   -- Required : `termEqFact[i][j] : lctxTerm[i:].drop j = lctxTerm[i+j:]`
-  termEqFact   : HashMap (Nat × Nat) FVarId := {}
+  termEqFact   : Std.HashMap (Nat × Nat) FVarId := {}
   -- Required : `lctxCon[i] : lctxTerm[i].map Sigma.snd = lctxTy[i]`
   lctxCon      : Array FVarId               := #[]
 
@@ -282,7 +282,7 @@ def getLCtxTy! (idx : Nat) : InterpM LamSort := do
 def sort2FVarId (s : LamSort) : InterpM FVarId := do
   let sortMap ← getSortMap
   let userName := (`interpsf).appendIndexAfter (← getSortMap).size
-  match sortMap.find? s with
+  match sortMap.get? s with
   | .some id => return id
   | .none =>
     match s with

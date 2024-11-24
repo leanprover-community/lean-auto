@@ -209,7 +209,7 @@ theorem LamTerm.rwGenAllWith_lam : rwGenAllWith conv rty (.lam s body) =
   | .none =>
     match rty with
     | .func _ resTy => (rwGenAllWith conv resTy body).bind (LamTerm.lam s ·)
-    | _ => .none := by simp [rwGenAllWith]
+    | _ => .none := by cases rty <;> simp [rwGenAllWith]
 
 theorem LamTerm.rwGenAllWith_app : rwGenAllWith conv rty (.app s fn arg) =
   match conv rty (.app s fn arg) with
@@ -1492,7 +1492,7 @@ theorem LamTerm.evarBounded_rwGenAllWith (H : ∀ s, evarBounded (conv s) bound)
     case none.refl => apply Nat.le_max_right
     case some.refl => apply H _ _ _ h
   case lam s' body IH =>
-    simp [LamTerm.rwGenAllWith]
+    rw [LamTerm.rwGenAllWith_lam]
     match h₁ : conv s (.lam s' body) with
     | .some t' => intro h₂; cases h₂; apply H _ _ _ h₁
     | .none =>
@@ -1547,7 +1547,7 @@ theorem LamTerm.evarEquiv_rwGenAllWith (H : ∀ s, evarEquiv (conv s)) :
     case none.refl => rfl
     case some.refl => apply H _ _ _ h
   case lam s' body IH =>
-    simp [LamTerm.rwGenAllWith]
+    rw [LamTerm.rwGenAllWith_lam]
     match h₁ : conv s (.lam s' body) with
     | .some t' => intro h₂; cases h₂; apply H _ _ _ h₁
     | .none =>
@@ -1592,7 +1592,7 @@ theorem LamGenConvWith.rwGenAllWith (H : LamGenConvWith lval conv) : LamGenConvW
     case none.refl => apply LamGenEquivWith.refl
     case some.refl => apply H _ _ _ h
   case lam s' body IH =>
-    simp [LamTerm.rwGenAllWith]
+    rw [LamTerm.rwGenAllWith_lam]
     match h₁ : conv s (.lam s' body) with
     | .some t' => intro h₂; cases h₂; apply H _ _ _ h₁
     | .none =>

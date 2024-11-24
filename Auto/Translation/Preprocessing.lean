@@ -60,7 +60,7 @@ def elabDefEq (name : Name) : TacticM (Array Lemma) := do
     addRecAsLemma val
   | some (.defnInfo _) =>
     -- Generate definitional equation for (possibly recursive) declaration
-    match ← getEqnsFor? name (nonRec := true) with
+    match ← getEqnsFor? name with
     | some eqns => eqns.mapIdxM fun i eq =>
       do elabLemma (← `($(mkIdent eq))) (.leaf s!"defeq {i.val} {name}")
     | none => return #[]
@@ -99,28 +99,28 @@ def getConstUnfoldInfo (name : Name) : MetaM ConstUnfoldInfo := do
   If there is cyclic dependency, `topoSortUnfolds` throws an error
 -/
 partial def topoSortUnfolds (unfolds : Array ConstUnfoldInfo) : MetaM (Array ConstUnfoldInfo) := do
-  let mut depMap : HashMap Name (HashSet Name) := {}
+  let mut depMap : Std.HashMap Name (Std.HashSet Name) := {}
   for ⟨i, val, _⟩ in unfolds do
     for ⟨j, _, _⟩ in unfolds do
       if (val.find? (fun e => e.constName? == .some j)).isSome then
-        let deps := (depMap.find? i).getD {}
+        let deps := (depMap.get? i).getD {}
         depMap := depMap.insert i (deps.insert j)
   let (_, _, nameArr) ← (unfolds.mapM (fun n => go depMap {} n.name)).run ({}, #[])
-  let nameMap : HashMap Name _ := HashMap.ofList (unfolds.data.map (fun ui => (ui.name, ui)))
+  let nameMap : Std.HashMap Name _ := Std.HashMap.ofList (unfolds.toList.map (fun ui => (ui.name, ui)))
   let mut ret := #[]
   for name in nameArr do
-    let .some ui := nameMap.find? name
+    let .some ui := nameMap.get? name
       | throwError "topoSortUnfolds :: Unexpected error"
     ret := ret.push ui
   return ret.reverse
 where
-  go (depMap : HashMap Name (HashSet Name)) (stack : HashSet Name) (n : Name) : StateRefT (HashSet Name × Array Name) MetaM Unit := do
+  go (depMap : Std.HashMap Name (Std.HashSet Name)) (stack : Std.HashSet Name) (n : Name) : StateRefT (Std.HashSet Name × Array Name) MetaM Unit := do
     if stack.contains n then
       throwError "topoSortUnfolds :: Cyclic dependency"
     let (done, ret) ← get
     if done.contains n then
       return
-    let deps := (depMap.find? n).getD {}
+    let deps := (depMap.get? n).getD {}
     set (done.insert n, ret)
     for dep in deps do
       go depMap (stack.insert n) dep
@@ -139,7 +139,7 @@ def unfoldConsts (unfolds : Array Prep.ConstUnfoldInfo) (e : Expr) : Expr := Id.
       match e with
       | .const name lvls =>
         if name == uiname then
-          val.instantiateLevelParams params.data lvls
+          val.instantiateLevelParams params.toList lvls
         else
           .none
       | _ => .none)

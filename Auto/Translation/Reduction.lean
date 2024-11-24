@@ -32,9 +32,9 @@ def unfoldProj (e : Expr) : MetaM Expr :=
       | throwError s!"unfoldProj :: {name} is not a inductive type"
     let some structInfo := getStructureInfo? (← getEnv) name
       | throwError s!"unfoldProj :: {name} is not a structure"
-    let nameMap : HashMap Name StructureFieldInfo := HashMap.ofList
-      (structInfo.fieldInfo.map (fun sfi => (sfi.fieldName, sfi))).data
-    let sorted := structInfo.fieldNames.map (fun name => nameMap.find? name)
+    let nameMap : Std.HashMap Name StructureFieldInfo := Std.HashMap.ofList
+      (structInfo.fieldInfo.map (fun sfi => (sfi.fieldName, sfi))).toList
+    let sorted := structInfo.fieldNames.map (fun name => nameMap.get? name)
     let .some (.some sfi) := sorted[idx]?
       | throwError s!"unfoldProj :: Projection index out of bound"
     let nones : List (Option Expr) := (List.range indi.numParams).map (fun _ => .none)

@@ -89,7 +89,7 @@ deriving Inhabited, BEq, Hashable
 
 partial def Sexp.toString : Sexp → String
 | .atom l => ToString.toString l
-| .app ls => "(" ++ String.intercalate " " (ls.map toString).data ++ ")"
+| .app ls => "(" ++ String.intercalate " " (ls.map toString).toList ++ ")"
 
 instance : ToString Sexp where
   toString e := Sexp.toString e

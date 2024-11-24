@@ -3780,7 +3780,7 @@ def LamWF.bvarApps
           rw [List.length_reverse]; apply Nat.le_refl
         dsimp [lctxr]; rw [← List.reverseAux, List.reverseAux_eq]
         rw [pushLCtxs_lt (by rw [List.length_append]; apply Nat.le_trans exlt (Nat.le_add_right _ _))]
-        rw [List.getD_eq_getElem?_getD]; rw [List.getElem?_append exlt];
+        rw [List.getD_eq_getElem?_getD]; rw [List.getElem?_append_left exlt];
         rw [List.getElem?_reverse (by dsimp [List.length]; apply Nat.le_refl _)]
         dsimp [List.length]; simp
       conv => enter [2, 3]; rw [tyeq]

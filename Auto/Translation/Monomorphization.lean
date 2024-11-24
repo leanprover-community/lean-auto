@@ -86,7 +86,7 @@ def CiHead.ofExpr? : Expr → Option CiHead
 def CiHead.toExpr : CiHead → Expr
 | .fvar id => .fvar id
 | .mvar id => .mvar id
-| .const name lvls => .const name lvls.data
+| .const name lvls => .const name lvls.toList
 
 /-- Ignore constant's levels -/
 def CiHead.fingerPrint : CiHead → Expr
@@ -169,7 +169,7 @@ private def ConstInst.toMessageDataAux (ci : ConstInst) : MessageData :=
     let arr : Array (Option Expr) := Array.mk ((List.range narg).map (fun _ => .none))
     let arr := (ci.argsInst.zip ci.argsIdx).foldl (fun acc (arg, idx) => acc.setD idx (.some arg)) arr
     let arr := arr.map (fun e? => match e? with | .some e => m!" ({e})" | .none => m!" _")
-    MessageData.intercalate "" arr.data
+    MessageData.intercalate "" arr.toList
 
 instance : ToMessageData ConstInst where
   toMessageData ci := m!"ConstInst ⦗⦗ {ci.head}{ci.toMessageDataAux} ⦘⦘"
@@ -229,8 +229,8 @@ def ConstInst.matchExpr (e : Expr) (ci : ConstInst) : MetaM Bool := do
   · The expression does not contain level parameters in `params`
 -/
 def ConstInst.ofExpr? (params : Array Name) (bvars : Array Expr) (e : Expr) : MetaM (Option ConstInst) := do
-  let paramSet := HashSet.empty.insertMany params
-  let bvarSet := HashSet.empty.insertMany bvars
+  let paramSet := Std.HashSet.empty.insertMany params
+  let bvarSet := Std.HashSet.empty.insertMany bvars
   let fn := e.getAppFn
   -- If the head contains bound variable, then this is not
   --   a valid instance
@@ -307,7 +307,7 @@ def ConstInst.toExpr (ci : ConstInst) : MetaM Expr := do
   let mut args : Array (Option Expr) := (Array.mk (List.range nargs)).map (fun n => .none)
   for (arg, idx) in ci.argsInst.zip ci.argsIdx do
     args := args.setD idx (.some arg)
-  let .some ret := ConstInst.toExprAux args.data [] ci.head.toExpr type
+  let .some ret := ConstInst.toExprAux args.toList [] ci.head.toExpr type
     | throwError "ConstInst.toExpr :: Unexpected error"
   return ret
 
@@ -379,11 +379,11 @@ def ConstInsts.canonicalize? (cis : ConstInsts) (ci : ConstInst) : MetaM (Option
     try to match `e` and the subexpressions of `e` against `ci`.
   This function is used by `LemmaInst.matchConstInst` only
 -/
-private partial def MLemmaInst.matchConstInst (ci : ConstInst) (mi : MLemmaInst) : Expr → MetaM (HashSet LemmaInst)
+private partial def MLemmaInst.matchConstInst (ci : ConstInst) (mi : MLemmaInst) : Expr → MetaM (Std.HashSet LemmaInst)
 | .bvar _ => throwError "MLemmaInst.matchConstInst :: Loose bound variable"
 | e@(.app ..) => do
   let args := e.getAppArgs
-  let mut ret := HashSet.empty
+  let mut ret := Std.HashSet.empty
   for arg in args do
     ret := mergeHashSet ret (← MLemmaInst.matchConstInst ci mi arg)
   let s ← saveState
@@ -406,14 +406,14 @@ private partial def MLemmaInst.matchConstInst (ci : ConstInst) (mi : MLemmaInst)
 | .letE .. => throwError "MLemmaInst.matchConstInst :: Let-expressions should have been reduced"
 | .mdata .. => throwError "MLemmaInst.matchConstInst :: mdata should have been consumed"
 | .proj .. => throwError "MLemmaInst.matchConstInst :: Projections should have been turned into ordinary expressions"
-| _ => return HashSet.empty
+| _ => return Std.HashSet.empty
 
 /-- Given a LemmaInst `li` and a ConstInst `ci`, try to match all subexpressions of `li` against `ci` -/
-def LemmaInst.matchConstInst (ci : ConstInst) (li : LemmaInst) : MetaM (HashSet LemmaInst) :=
+def LemmaInst.matchConstInst (ci : ConstInst) (li : LemmaInst) : MetaM (Std.HashSet LemmaInst) :=
   Meta.withNewMCtxDepth do
     let (lmvars, mvars, mi) ← MLemmaInst.ofLemmaInst li
     if lmvars.size == 0 && mvars.size == 0 then
-      return HashSet.empty
+      return Std.HashSet.empty
     MLemmaInst.matchConstInst ci mi mi.type
 
 /--
@@ -442,7 +442,7 @@ where
         | _ => false
       if hol && (← getMode) == .fol then
         return false
-      let fvarSet := HashSet.empty.insertMany fvars
+      let fvarSet := Std.HashSet.empty.insertMany fvars
       if ty.hasAnyFVar fvarSet.contains then
         return false
       leadingForallQuasiMonomorphicAux (fvars.push xid)  bodyi
@@ -500,7 +500,7 @@ def LemmaInst.monomorphic? (li : LemmaInst) : MetaM (Option LemmaInst) := do
 -/
 structure State where
   -- The `Expr` is the fingerprint of the `ConstInst`
-  ciMap    : HashMap Expr ConstInsts := {}
+  ciMap    : Std.HashMap Expr ConstInsts := {}
   -- The `Expr` is the fingerprint of the `ConstInst`
   activeCi : Std.Queue (Expr × Nat)  := Std.Queue.empty
   -- During initialization, we supply an array `lemmas` of lemmas
@@ -517,9 +517,9 @@ abbrev MonoM := StateRefT State MetaM
   2. `(ciMap.find? ci.name).getD #[]`
   3. Canonicalized ConstInst
 -/
-def CiMap.canonicalize? (ciMap : HashMap Expr ConstInsts) (ci : ConstInst) :
+def CiMap.canonicalize? (ciMap : Std.HashMap Expr ConstInsts) (ci : ConstInst) :
   MetaM (Bool × ConstInsts × ConstInst) := do
-  match ciMap.find? ci.fingerPrint with
+  match ciMap.get? ci.fingerPrint with
   | .some insts =>
     match ← insts.canonicalize? ci with
     | .some ci' => return (true, insts, ci')
@@ -570,7 +570,7 @@ def dequeueActiveCi? : MonoM (Option (Expr × Nat)) := do
   | .none => return .none
 
 def lookupActiveCi! (fgp : Expr) (idx : Nat) : MonoM ConstInst := do
-  let .some cis := (← getCiMap).find? fgp
+  let .some cis := (← getCiMap).get? fgp
     | throwError "lookupActiveCi :: Unknown CiHead {fgp}"
   let .some ci := cis[idx]?
     | throwError "lookupActiveCi :: Index {idx} out of bound"
@@ -656,23 +656,23 @@ namespace FVarRep
     bfvars   : Array FVarId             := #[]
     -- Free variables representing abstracted expressions
     ffvars   : Array FVarId             := #[]
-    exprMap  : HashMap Expr FVarId      := {}
-    ciMap    : HashMap Expr ConstInsts
-    ciIdMap  : HashMap ConstInst FVarId := {}
+    exprMap  : Std.HashMap Expr FVarId      := {}
+    ciMap    : Std.HashMap Expr ConstInsts
+    ciIdMap  : Std.HashMap ConstInst FVarId := {}
     -- Canonicalization map for types
-    tyCanMap : HashMap Expr Expr        := {}
+    tyCanMap : Std.HashMap Expr Expr        := {}
 
   abbrev FVarRepM := StateRefT State MetaState.MetaStateM
 
   #genMonadState FVarRepM
 
-  def getBfvarSet : FVarRepM (HashSet FVarId) := do
+  def getBfvarSet : FVarRepM (Std.HashSet FVarId) := do
     let bfvars ← getBfvars
-    return HashSet.empty.insertMany bfvars
+    return Std.HashSet.empty.insertMany bfvars
 
-  def getFfvarSet : FVarRepM (HashSet FVarId) := do
+  def getFfvarSet : FVarRepM (Std.HashSet FVarId) := do
     let ffvars ← getFfvars
-    return HashSet.empty.insertMany ffvars
+    return Std.HashSet.empty.insertMany ffvars
 
   /-- Similar to `Monomorphization.processConstInst` -/
   def processConstInst (ci : ConstInst) : FVarRepM Unit := do
@@ -720,7 +720,7 @@ namespace FVarRep
       | (true, _, ci') => return ci'
       | _ => throwError "constInst2FVarId :: Cannot find canonicalized instance of {ci}")
     let ciIdMap ← FVarRep.getCiIdMap
-    match ciIdMap.find? ci with
+    match ciIdMap.get? ci with
     | .some fid => return fid
     | .none => do
       let userName := (`cifvar).appendIndexAfter (← getCiIdMap).size
@@ -942,7 +942,7 @@ where
     let (inductiveVals, s) ← (fvarRepMInductAction inductiveVals).run s
     let exlis := s.exprMap.toList.map (fun (e, id) => (id, e))
     let cilis ← s.ciIdMap.toList.mapM (fun (ci, id) => do return (id, ← MetaState.runMetaM ci.toExpr))
-    let polyVal := HashMap.ofList (exlis ++ cilis)
+    let polyVal := Std.HashMap.ofList (exlis ++ cilis)
     return (s.ffvars, Reif.State.mk uvalids polyVal s.tyCanMap inhs inductiveVals none)
   fvarRepMFactAction (lis : Array LemmaInst) : FVarRep.FVarRepM (Array UMonoFact) := lis.filterMapM (fun li => do
     let liTypeRep? ← FVarRep.replacePolyWithFVar li.type

@@ -543,7 +543,7 @@ section Adhoc
 
   example
     (a b : Int)
-    : a * b - a % (Int.mod b a) = a * b - a % (Int.mod b a) := by auto
+    : a * b - a % (Int.tmod b a) = a * b - a % (Int.tmod b a) := by auto
 
   example (a : Int)
     (h₁ : a ≥ 0) (h₂ : -a ≤ 0) (h₃ : 0 < 1) (h₄ : 2 > 0)

@@ -80,7 +80,7 @@ def SimpleIndVal.zetaReduce (si : SimpleIndVal) : MetaM SimpleIndVal := do
     is an array of `(instantiated_tyctor, [SimpleIndVal associated to tyctor])`
 -/
 structure CollectInduct.State where
-  recorded : HashMap Name (Array Expr)     := {}
+  recorded : Std.HashMap Name (Array Expr)     := {}
   sis      : Array (Array SimpleIndVal) := #[]
 
 abbrev IndCollectM := StateRefT CollectInduct.State MetaM
@@ -127,7 +127,7 @@ mutual
       return
     if !(← getRecorded).contains tyctor then
       setRecorded ((← getRecorded).insert tyctor #[])
-    let .some arr := (← getRecorded).find? tyctor
+    let .some arr := (← getRecorded).get? tyctor
       | throwError "collectAppInstSimpleInduct :: Unexpected error"
     for e' in arr do
       if ← Meta.isDefEq e e' then

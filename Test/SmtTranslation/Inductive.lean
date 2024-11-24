@@ -42,7 +42,6 @@ section Enum
     | .Z3 => 4000
     | .Z4 => 3000
 
-  -- **TODO**: Better support for translation of functions with `match`
   set_option trace.auto.printLemmas true in
   example (x : Zone) : x.MinArea1 <= x.MinArea2 := by
     cases x <;> auto d[Zone.MinArea1, Zone.MinArea2]
@@ -116,7 +115,6 @@ section Mixed
     have h₂ : ∀ (x : α) (ys : _), List.head? (x :: ys) = .some x := fun _ _ => rfl
     auto
 
-  -- **TODO**: Did not get desired definitional equation
   example (x : α) : List.head? [x] = .some x := by
     auto d[List.head?]
 

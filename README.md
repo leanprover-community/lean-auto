@@ -6,6 +6,9 @@ Lean-auto is an interface between Lean and automated theorem provers. Up to now,
   
 Lean-auto is based on a monomorphization procedure from dependent type theory to higher-order logic and a deep embedding of higher-order logic into dependent type theory. It is capable of handling dependently-typed and/or universe-polymorphic input terms. Currently, proof reconstruction can be handled by [Duper](https://github.com/leanprover-community/duper), a higher-order superposition prover written in Lean. To enable Duper, please import the duper repo in your project, and set the following options:
 ```lean
+import Auto.Tactic
+import Duper.Tactic
+
 open Lean Auto in
 def Auto.duperRaw (lemmas : Array Lemma) (_ : Array Lemma) : MetaM Expr := do
   let lemmas : Array (Expr × Expr × Array Name × Bool) ← lemmas.mapM

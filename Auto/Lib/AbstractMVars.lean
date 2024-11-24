@@ -18,8 +18,8 @@ structure State where
   nextParamIdx : Nat := 0
   paramNames   : Array Name := #[]
   fvars        : Array Expr  := #[]
-  lmap         : HashMap LMVarId Level := {}
-  emap         : HashMap MVarId Expr  := {}
+  lmap         : Std.HashMap LMVarId Level := {}
+  emap         : Std.HashMap MVarId Expr  := {}
 
 abbrev M := StateM State
 
@@ -58,7 +58,7 @@ private partial def abstractLevelMVars (u : Level) : M Level := do
         if l != lNew then
           abstractLevelMVars lNew
         else
-          match s.lmap.find? mvarId with
+          match s.lmap.get? mvarId with
           | some u => pure u
           | none   =>
             let paramId := Name.mkNum `_abstMVar s.nextParamIdx
@@ -91,7 +91,7 @@ partial def abstractExprMVars (e : Expr) : M Expr := do
         if e != eNew then
           abstractExprMVars eNew
         else
-          match (← get).emap.find? mvarId with
+          match (← get).emap.get? mvarId with
           | some e =>
             return e
           | none   =>
@@ -155,20 +155,20 @@ def abstractMVarsLambdaWithIds (e : Expr) : MetaM (Expr × Array Expr × Array N
   let e := s.lctx.mkLambda s.fvars e
   -- Restore the corresponding expr mvarId
   let sfvars := s.fvars
-  let mut fvarpos : HashMap FVarId Nat := {}
+  let mut fvarpos : Std.HashMap FVarId Nat := {}
   for i in [:sfvars.size] do
     fvarpos := fvarpos.insert sfvars[i]!.fvarId! i
   let mut mvars := sfvars
   for (mid, fvar) in s.emap.toList do
-    mvars := mvars.set! (fvarpos.find! fvar.fvarId!) (mkMVar mid)
+    mvars := mvars.set! (fvarpos.get! fvar.fvarId!) (mkMVar mid)
   -- Restore the corresponding level mvarId
   let sparams := s.paramNames
-  let mut parampos : HashMap Name Nat := {}
+  let mut parampos : Std.HashMap Name Nat := {}
   for i in [:sparams.size] do
     parampos := parampos.insert sparams[i]! i
   let mut lmvars := sparams.map (Level.param)
   for (lmid, paramname) in s.lmap.toList do
-    lmvars := lmvars.set! (parampos.find! (getParamLevelName! paramname)) (mkLevelMVar lmid)
+    lmvars := lmvars.set! (parampos.get! (getParamLevelName! paramname)) (mkLevelMVar lmid)
   pure (e, mvars, sparams, lmvars)
 where getParamLevelName! : Level → Name
 | .param name => name

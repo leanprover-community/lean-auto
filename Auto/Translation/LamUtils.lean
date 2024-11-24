@@ -48,24 +48,24 @@ namespace LamExportUtils
     "Import versions of polymorphic logical " ++
     "constants should have been eliminated"
 
-  def collectLamSortAtoms : LamSort → HashSet Nat
-  | .atom n => HashSet.empty.insert n
-  | .base _ => HashSet.empty
+  def collectLamSortAtoms : LamSort → Std.HashSet Nat
+  | .atom n => Std.HashSet.empty.insert n
+  | .base _ => Std.HashSet.empty
   | .func a b => (collectLamSortAtoms a).insertMany (collectLamSortAtoms b)
 
-  def collectLamSortsAtoms (ss : Array LamSort) : HashSet Nat :=
-    ss.foldl (fun hs s => hs.insertMany (collectLamSortAtoms s)) HashSet.empty
+  def collectLamSortsAtoms (ss : Array LamSort) : Std.HashSet Nat :=
+    ss.foldl (fun hs s => hs.insertMany (collectLamSortAtoms s)) Std.HashSet.empty
 
-  def collectLamSortBitVecLengths : LamSort → HashSet Nat
-  | .base (.bv n) => HashSet.empty.insert n
+  def collectLamSortBitVecLengths : LamSort → Std.HashSet Nat
+  | .base (.bv n) => Std.HashSet.empty.insert n
   | .func a b => (collectLamSortBitVecLengths a).insertMany (collectLamSortBitVecLengths b)
-  | _ => HashSet.empty
+  | _ => Std.HashSet.empty
 
-  def collectLamSortsBitVecLengths (ss : Array LamSort) : HashSet Nat :=
-    ss.foldl (fun hs s => hs.insertMany (collectLamSortBitVecLengths s)) HashSet.empty
+  def collectLamSortsBitVecLengths (ss : Array LamSort) : Std.HashSet Nat :=
+    ss.foldl (fun hs s => hs.insertMany (collectLamSortBitVecLengths s)) Std.HashSet.empty
 
   /-- Collect type atoms in a LamBaseTerm -/
-  def collectLamBaseTermAtoms (b : LamBaseTerm) : CoreM (HashSet Nat) := do
+  def collectLamBaseTermAtoms (b : LamBaseTerm) : CoreM (Std.HashSet Nat) := do
     let s? : Option LamSort ← (do
       match b with
       | .eqI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
@@ -80,7 +80,7 @@ namespace LamExportUtils
     if let .some s := s? then
       return collectLamSortAtoms s
     else
-      return HashSet.empty
+      return Std.HashSet.empty
 
   /--
     The first hashset is the type atoms
@@ -92,18 +92,18 @@ namespace LamExportUtils
       does not occur in the `LamTerm`
   -/
   def collectLamTermAtoms (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort) :
-    LamTerm → CoreM (HashSet Nat × HashSet Nat × HashSet Nat)
+    LamTerm → CoreM (Std.HashSet Nat × Std.HashSet Nat × Std.HashSet Nat)
   | .atom n => do
     let .some s := lamVarTy[n]?
       | throwError "collectAtoms :: Unknown term atom {n}"
-    return (collectLamSortAtoms s, HashSet.empty.insert n, HashSet.empty)
+    return (collectLamSortAtoms s, Std.HashSet.empty.insert n, Std.HashSet.empty)
   | .etom n => do
     let .some s := lamEVarTy[n]?
       | throwError "collectAtoms :: Unknown etom {n}"
-    return (collectLamSortAtoms s, HashSet.empty, HashSet.empty.insert n)
+    return (collectLamSortAtoms s, Std.HashSet.empty, Std.HashSet.empty.insert n)
   | .base b => do
-    return (← collectLamBaseTermAtoms b, HashSet.empty, HashSet.empty)
-  | .bvar _ => pure (HashSet.empty, HashSet.empty, HashSet.empty)
+    return (← collectLamBaseTermAtoms b, Std.HashSet.empty, Std.HashSet.empty)
+  | .bvar _ => pure (Std.HashSet.empty, Std.HashSet.empty, Std.HashSet.empty)
   | .lam s t => do
     let (typeHs, termHs, etomHs) ← collectLamTermAtoms lamVarTy lamEVarTy t
     let sHs := collectLamSortAtoms s
@@ -116,56 +116,56 @@ namespace LamExportUtils
             mergeHashSet etomHs₁ etomHs₂)
 
   def collectLamTermsAtoms (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort)
-    (ts : Array LamTerm) : CoreM (HashSet Nat × HashSet Nat × HashSet Nat) :=
+    (ts : Array LamTerm) : CoreM (Std.HashSet Nat × Std.HashSet Nat × Std.HashSet Nat) :=
     ts.foldlM (fun (tyHs, aHs, eHs) t => do
       let (tyHs', aHs', eHs') ← collectLamTermAtoms lamVarTy lamEVarTy t
       return (mergeHashSet tyHs tyHs', mergeHashSet aHs aHs', mergeHashSet eHs eHs'))
-      (HashSet.empty, HashSet.empty, HashSet.empty)
+      (Std.HashSet.empty, Std.HashSet.empty, Std.HashSet.empty)
 
-  def collectLamTermNatConsts : LamTerm → HashSet NatConst
-  | .base (.ncst nc) => HashSet.empty.insert nc
+  def collectLamTermNatConsts : LamTerm → Std.HashSet NatConst
+  | .base (.ncst nc) => Std.HashSet.empty.insert nc
   | .lam _ body => collectLamTermNatConsts body
   | .app _ fn arg => mergeHashSet (collectLamTermNatConsts fn) (collectLamTermNatConsts arg)
-  | _ => HashSet.empty
+  | _ => Std.HashSet.empty
 
-  def collectLamTermsNatConsts (ts : Array LamTerm) : HashSet NatConst :=
-    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermNatConsts t)) HashSet.empty
+  def collectLamTermsNatConsts (ts : Array LamTerm) : Std.HashSet NatConst :=
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermNatConsts t)) Std.HashSet.empty
 
-  def collectLamTermIntConsts : LamTerm → HashSet IntConst
-  | .base (.icst ic) => HashSet.empty.insert ic
+  def collectLamTermIntConsts : LamTerm → Std.HashSet IntConst
+  | .base (.icst ic) => Std.HashSet.empty.insert ic
   | .lam _ body => collectLamTermIntConsts body
   | .app _ fn arg => mergeHashSet (collectLamTermIntConsts fn) (collectLamTermIntConsts arg)
-  | _ => HashSet.empty
+  | _ => Std.HashSet.empty
 
-  def collectLamTermsIntConsts (ts : Array LamTerm) : HashSet IntConst :=
-    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermIntConsts t)) HashSet.empty
+  def collectLamTermsIntConsts (ts : Array LamTerm) : Std.HashSet IntConst :=
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermIntConsts t)) Std.HashSet.empty
 
-  def collectLamTermStringConsts : LamTerm → HashSet StringConst
-  | .base (.scst sc) => HashSet.empty.insert sc
+  def collectLamTermStringConsts : LamTerm → Std.HashSet StringConst
+  | .base (.scst sc) => Std.HashSet.empty.insert sc
   | .lam _ body => collectLamTermStringConsts body
   | .app _ fn arg => mergeHashSet (collectLamTermStringConsts fn) (collectLamTermStringConsts arg)
-  | _ => HashSet.empty
+  | _ => Std.HashSet.empty
 
-  def collectLamTermsStringConsts (ts : Array LamTerm) : HashSet StringConst :=
-    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermStringConsts t)) HashSet.empty
+  def collectLamTermsStringConsts (ts : Array LamTerm) : Std.HashSet StringConst :=
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermStringConsts t)) Std.HashSet.empty
 
-  def collectLamTermBitvecs : LamTerm → HashSet BitVecConst
-  | .base (.bvcst bvc) => HashSet.empty.insert bvc
+  def collectLamTermBitvecs : LamTerm → Std.HashSet BitVecConst
+  | .base (.bvcst bvc) => Std.HashSet.empty.insert bvc
   | .lam _ body => collectLamTermBitvecs body
   | .app _ fn arg => mergeHashSet (collectLamTermBitvecs fn) (collectLamTermBitvecs arg)
-  | _ => HashSet.empty
+  | _ => Std.HashSet.empty
 
-  def collectLamTermsBitvecs (ts : Array LamTerm) : HashSet BitVecConst :=
-    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermBitvecs t)) HashSet.empty
+  def collectLamTermsBitvecs (ts : Array LamTerm) : Std.HashSet BitVecConst :=
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermBitvecs t)) Std.HashSet.empty
 
-  def collectLamTermIteSorts : LamTerm → HashSet LamSort
-  | .base (.ite s) => HashSet.empty.insert s
+  def collectLamTermIteSorts : LamTerm → Std.HashSet LamSort
+  | .base (.ite s) => Std.HashSet.empty.insert s
   | .lam _ body => collectLamTermIteSorts body
   | .app _ fn arg => mergeHashSet (collectLamTermIteSorts fn) (collectLamTermIteSorts arg)
-  | _ => HashSet.empty
+  | _ => Std.HashSet.empty
 
-  def collectLamTermsIteSorts (ts : Array LamTerm) : HashSet LamSort :=
-    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermIteSorts t)) HashSet.empty
+  def collectLamTermsIteSorts (ts : Array LamTerm) : Std.HashSet LamSort :=
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermIteSorts t)) Std.HashSet.empty
 
 end LamExportUtils
 
@@ -226,8 +226,8 @@ namespace Lam2D
   | .iadd     => return .const ``Int.add []
   | .isub     => return .const ``Int.sub []
   | .imul     => return .const ``Int.mul []
-  | .idiv     => return .const ``Int.div []
-  | .imod     => return .const ``Int.mod []
+  | .idiv     => return .const ``Int.tdiv []
+  | .imod     => return .const ``Int.tmod []
   | .iediv    => return .const ``Int.ediv []
   | .iemod    => return .const ``Int.emod []
   | .ile      => return .const ``Int.le []
@@ -303,16 +303,16 @@ namespace Lam2D
     Takes a `s : LamSort` and produces the `un-lifted` version of `s.interp`
       (note that `s.interp` is lifted)
   -/
-  def interpLamSortAsUnlifted (tyVal : HashMap Nat Expr) : LamSort → CoreM Expr
+  def interpLamSortAsUnlifted (tyVal : Std.HashMap Nat Expr) : LamSort → CoreM Expr
   | .atom n => do
-    let .some e := tyVal.find? n
+    let .some e := tyVal.get? n
       | throwError "interpLamSortAsUnlifted :: Cannot find fvarId assigned to type atom {n}"
     return e
   | .base b => return Lam2D.interpLamBaseSortAsUnlifted b
   | .func s₁ s₂ => do
     return .forallE `_ (← interpLamSortAsUnlifted tyVal s₁) (← interpLamSortAsUnlifted tyVal s₂) .default
 
-  def interpOtherConstAsUnlifted (tyVal : HashMap Nat Expr) (oc : OtherConst) : MetaM Expr := do
+  def interpOtherConstAsUnlifted (tyVal : Std.HashMap Nat Expr) (oc : OtherConst) : MetaM Expr := do
     let .some (.defnInfo constIdVal) := (← getEnv).find? ``constId
       | throwError "interpOtherConstAsUnlifted :: Unexpected error"
     let constIdExpr := fun params => constIdVal.value.instantiateLevelParams constIdVal.levelParams params
@@ -328,7 +328,7 @@ namespace Lam2D
         | throwError "interpOtherConstAsUnlifted :: Unexpected sort {sortterm}"
       return Lean.mkApp2 (constIdExpr [lvlattr, lvlterm]) tyattr tyterm
 
-  def interpLamBaseTermAsUnlifted (tyVal : HashMap Nat Expr) : LamBaseTerm → MetaM Expr
+  def interpLamBaseTermAsUnlifted (tyVal : Std.HashMap Nat Expr) : LamBaseTerm → MetaM Expr
   | .pcst pc    => Lam2D.interpPropConstAsUnlifted pc
   | .bcst bc    => Lam2D.interpBoolConstAsUnlifted bc
   | .ncst nc    => Lam2D.interpNatConstAsUnlifted nc
@@ -365,14 +365,14 @@ namespace Lam2D
     represent `etom`s.
   -/
   def interpLamTermAsUnlifted
-    (tyVal : HashMap Nat Expr) (varVal : HashMap Nat Expr) (etomVal : HashMap Nat Expr)
+    (tyVal : Std.HashMap Nat Expr) (varVal : Std.HashMap Nat Expr) (etomVal : Std.HashMap Nat Expr)
     (lctx : Nat) : LamTerm → MetaM Expr
   | .atom n => do
-    let .some e := varVal.find? n
+    let .some e := varVal.get? n
       | throwError "interpLamTermAsUnlifted :: Cannot find fvarId assigned to term atom {n}"
     return e
   | .etom n => do
-    let .some efvar := etomVal.find? n
+    let .some efvar := etomVal.get? n
       | throwError "interpLamSortAsUnlifted :: Cannot find fvarId assigned to etom {n}"
     return efvar
   | .base b => interpLamBaseTermAsUnlifted tyVal b
@@ -520,7 +520,7 @@ namespace Lam2D
   def lamBaseTermSimpNFList : List (Name × Expr) :=
     natConstSimpNFList ++ intConstSimpNFList ++ stringConstSimpNFList ++ bitVecConstSimpNFList
 
-  def lamBaseTermSimpNFMap : HashMap Name Expr := HashMap.ofList lamBaseTermSimpNFList
+  def lamBaseTermSimpNFMap : Std.HashMap Name Expr := Std.HashMap.ofList lamBaseTermSimpNFList
 
   section CheckDefEq
 
@@ -539,7 +539,7 @@ namespace Lam2D
   def approxSimpNF (e : Expr) : CoreM Expr := do
     let eRep := e.replace (fun sub =>
       match sub with
-      | .const name _ => lamBaseTermSimpNFMap.find? name
+      | .const name _ => lamBaseTermSimpNFMap.get? name
       | _ => .none)
     let eRep ← Core.betaReduce eRep
     let replaceNatCast (e : Expr) : Option Expr :=

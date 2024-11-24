@@ -50,11 +50,11 @@ structure State where
   -- Etoms to be abstracted
   etomsToAbstract : Array (FVarId × Nat)  := #[]
   -- Type atoms that are used in the expressions sent to external prover
-  typeAtomFVars   : HashMap Nat Expr      := {}
+  typeAtomFVars   : Std.HashMap Nat Expr      := {}
   -- Term atoms that are used in the expressions sent to external prover
-  termAtomFVars   : HashMap Nat Expr      := {}
+  termAtomFVars   : Std.HashMap Nat Expr      := {}
   -- Etoms that are used in the expression sent to external prover
-  etomFVars       : HashMap Nat Expr      := {}
+  etomFVars       : Std.HashMap Nat Expr      := {}
 
 abbrev ExternM := StateRefT State MetaStateM
 

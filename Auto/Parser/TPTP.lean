@@ -33,11 +33,11 @@ def tokens := [
   "~", ",", "(", ")", "*", "!", "?", "^", ":", "[", "]", "!>", ".", "*"
 ]
 
-def tokenHashMap : HashSet String :=
-  HashSet.empty.insertMany tokens
+def tokenHashMap : Std.HashSet String :=
+  Std.HashSet.empty.insertMany tokens
 
-def tokenPrefixes : HashSet String :=
-  HashSet.empty.insertMany $ tokens.bind (fun t => Id.run do
+def tokenPrefixes : Std.HashSet String :=
+  Std.HashSet.empty.insertMany $ tokens.bind (fun t => Id.run do
     let mut res := []
     let mut pref := ""
     for c in t.data do
@@ -605,7 +605,7 @@ open Embedding.Lam in
 structure ParsingInfo where
   lamVarTy     : Array LamSort
   lamEVarTy    : Array LamSort
-  proverSkolem : HashMap String (LamSort × Nat) := {}
+  proverSkolem : Std.HashMap String (LamSort × Nat) := {}
 
 open Embedding.Lam in
 def ParsingInfo.toLamTyVal (pi : ParsingInfo) : LamTyVal :=
@@ -623,7 +623,7 @@ def LamConstr.ofBaseTerm (pi : ParsingInfo) (b : LamBaseTerm) : LamConstr :=
 
 open Embedding.Lam in
 def ident2LamConstr (pi : ParsingInfo) (s : String) : LamConstr :=
-  match pi.proverSkolem.find? s with
+  match pi.proverSkolem.get? s with
   | .some (s, n) => .term s (.etom (n + pi.lamEVarTy.size))
   | .none =>
     match s.get ⟨0⟩ with
@@ -668,7 +668,7 @@ def ident2LamConstr (pi : ParsingInfo) (s : String) : LamConstr :=
 
 open Embedding.Lam in
 /-- This function is only for zipperposition's output -/
-partial def term2LamTerm (pi : ParsingInfo) (t : Term) (lctx : HashMap String (Nat × LamSort) := {}) : LamConstr :=
+partial def term2LamTerm (pi : ParsingInfo) (t : Term) (lctx : Std.HashMap String (Nat × LamSort) := {}) : LamConstr :=
   match t with
   | ⟨.ident "$i", []⟩ => .error "Does not have iota"
   | ⟨.ident "$tType", []⟩ => .kind
@@ -811,7 +811,7 @@ partial def term2LamTerm (pi : ParsingInfo) (t : Term) (lctx : HashMap String (N
     | _, r => .error s!"Unexpected term {t} produces ({r})"
   | _ => .error s!"term2LamTerm :: Could not translate to Lean Expr: {t}"
 where
-  processVar (pi : ParsingInfo) (var : Term) (lctx : HashMap String (Nat × LamSort)) : Option (String × LamSort) :=
+  processVar (pi : ParsingInfo) (var : Term) (lctx : Std.HashMap String (Nat × LamSort)) : Option (String × LamSort) :=
     match var with
     | ⟨.ident v, ty⟩ =>
       match ty with
@@ -821,8 +821,8 @@ where
         | _ => .none
       | _ => .none
     | _ => .none
-  deBruijnAndSort? (lctx : HashMap String (Nat × LamSort)) (id : String) : Option (Nat × LamSort) :=
-    match lctx.find? id with
+  deBruijnAndSort? (lctx : Std.HashMap String (Nat × LamSort)) (id : String) : Option (Nat × LamSort) :=
+    match lctx.get? id with
     | .some (n, s) => (lctx.size - 1 - n, s)
     | .none => none
   lamConstrMkAppN (head : LamConstr) (args : List LamConstr) :=

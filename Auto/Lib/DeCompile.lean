@@ -13,7 +13,7 @@ namespace ExprDeCompile
 --   as explicit
 
 structure Context where
-  usedNames : HashSet String
+  usedNames : Std.HashSet String
 
 structure State where
   binderNames : Array String := #[]
@@ -69,7 +69,7 @@ private partial def exprDeCompileAux (final : Bool) (e : Expr) : ExprDeCompM Str
       return ret
     let fs ← exprDeCompileAux final f
     let argss ← args.mapM (exprDeCompileAux final)
-    let argssC := String.intercalate " " argss.data
+    let argssC := String.intercalate " " argss.toList
     return s!"({fs} {argssC})"
   | Expr.proj _ idx b =>
     let bs ← exprDeCompileAux final b
@@ -94,7 +94,7 @@ private partial def exprDeCompileAux (final : Bool) (e : Expr) : ExprDeCompM Str
   | Expr.bvar n =>
     let bn := (← get).binderNames
     return bn[bn.size - n - 1]!
-where 
+where
   constFinalDeComp (name : Name) (us : List Level) :=
     if List.length us == 0 then
       "@" ++ name.toString
@@ -118,7 +118,7 @@ where
       e := .lam `_ (ty.instantiateLevelParams lparams cst.constLevels!) e .default
     return e
 
-def levelCollectNames (l : Level) : StateT (HashSet String) MetaM Unit := do
+def levelCollectNames (l : Level) : StateT (Std.HashSet String) MetaM Unit := do
   match l with
   | .zero => return
   | .succ l => levelCollectNames l
@@ -127,7 +127,7 @@ def levelCollectNames (l : Level) : StateT (HashSet String) MetaM Unit := do
   | .max l1 l2 => levelCollectNames l1; levelCollectNames l2
   | .imax l1 l2 => levelCollectNames l1; levelCollectNames l2
 
-def exprCollectNames (e : Expr) : StateT (HashSet String) MetaM Unit := do
+def exprCollectNames (e : Expr) : StateT (Std.HashSet String) MetaM Unit := do
   match e with
   | Expr.forallE _ d b _ => exprCollectNames d; exprCollectNames b
   | Expr.lam _ d b _ => exprCollectNames d; exprCollectNames b
@@ -143,7 +143,7 @@ def exprCollectNames (e : Expr) : StateT (HashSet String) MetaM Unit := do
   | Expr.lit _ => return
   | Expr.sort l => levelCollectNames l
   | Expr.mvar .. => return
-  | Expr.fvar f => 
+  | Expr.fvar f =>
     let some decl := (← getLCtx).find? f
       | throwError "Unknown free variable {e}"
     let name := decl.userName.toString

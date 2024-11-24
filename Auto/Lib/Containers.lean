@@ -3,7 +3,7 @@ open Lean
 
 namespace Auto
 
-def mergeHashSet {α : Type u} [BEq α] [Hashable α] (a1 a2 : HashSet α) :=
+def mergeHashSet {α : Type u} [BEq α] [Hashable α] (a1 a2 : Std.HashSet α) :=
   if a1.size < a2.size then
     a2.insertMany a1.toArray
   else
