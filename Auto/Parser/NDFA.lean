@@ -336,8 +336,8 @@ section NFA
     hash c := hash c.val
 
   def test₁ : NFA String := ⟨#[
-      HashMap.ofList [(.inr "a", #[5]), (.inr "b", #[1, 0])],
-      HashMap.ofList [(.inl .unit, #[1]), (.inr "c", #[2, 4]), (.inr "a", #[6,1,2])]
+      Std.HashMap.ofList [(.inr "a", #[5]), (.inr "b", #[1, 0])],
+      Std.HashMap.ofList [(.inl .unit, #[1]), (.inr "c", #[2, 4]), (.inr "a", #[6,1,2])]
     ], #[]⟩
 
   def test₂ : NFA String := test₁.normalize
@@ -474,8 +474,8 @@ section DFA
   /-
 
   def test₄ : DFA String := ⟨HashSet.empty.insert 3, #[
-    HashMap.ofList [("a", 5), ("b", 0)],
-    HashMap.ofList [("q", 1), ("c", 4), ("a", 2)]], #[.empty, .empty]⟩
+    Std.HashMap.ofList [("a", 5), ("b", 0)],
+    Std.HashMap.ofList [("q", 1), ("c", 4), ("a", 2)]], #[.empty, .empty]⟩
 
   local instance : Hashable Char where
     hash c := hash c.val

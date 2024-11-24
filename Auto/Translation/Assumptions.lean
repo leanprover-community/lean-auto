@@ -101,7 +101,7 @@ def Lemma.equivQuick (lem₁ lem₂ : Lemma) : MetaM Bool := do
 /- Reorder top-level `∀` so that (non-prop / dependent) ones precede other ones -/
 /-
 def Lemma.reorderForallInstDep (lem : Lemma) : MetaM Lemma := do
-  let depargs := HashSet.empty.insertMany (Expr.depArgs lem.type)
+  let depargs := Std.HashSet.empty.insertMany (Expr.depArgs lem.type)
   Meta.forallTelescope lem.type fun xs body => do
     let mut prec := #[]
     let mut trail := #[]
