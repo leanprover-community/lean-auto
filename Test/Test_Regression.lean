@@ -334,12 +334,31 @@ example (H : (fun (x y z t : Nat) => x) = (fun x y z t => x)) : True := by
 example
   {α : Sort u}
   (add : ((α → α) → (α → α)) → ((α → α) → (α → α)) → ((α → α) → (α → α)))
-  (Hadd : ∀ x y f n, add x y f n = (x f) ((y f) n))
+  (hadd : ∀ x y f n, add x y f n = (x f) ((y f) n))
   (mul : ((α → α) → (α → α)) → ((α → α) → (α → α)) → ((α → α) → (α → α)))
-  (Hmul : ∀ x y f, mul x y f = x (y f))
+  (hmul : ∀ x y f, mul x y f = x (y f))
   (w₁ w₂ : ((α → α) → (α → α)) → ((α → α) → (α → α)) → ((α → α) → (α → α)))
   (Hw₁₂ : (w₁ = w₂) = (w₂ = w₁)) : True := by
-  auto [Hadd, Hmul, Hw₁₂]
+  auto [hadd, hmul, Hw₁₂]
+
+example
+  (P : (α → γ) → Prop) (f : α → β) (g : β → γ) (h : β → β)
+  : P ((g ∘ h) ∘ f) = P (fun x => g (h (f x))) := by
+  auto [Function.comp_def]
+
+example
+  (A : Sort u)
+  (add : ∀ {α}, ((α → α) → (α → α)) → ((α → α) → (α → α)) → ((α → α) → (α → α)))
+  (hadd : ∀ {α} x y f n, @add α x y f n = (x f) ((y f) n))
+  (mul : ∀ {α}, ((α → α) → (α → α)) → ((α → α) → (α → α)) → ((α → α) → (α → α)))
+  (hmul : ∀ {α} x y f, @mul α x y f = x (y f))
+  (two : (A → A) → (A → A))
+  (htwo : ∀ f x, two f x = f (f x))
+  (three : (A → A) → (A → A))
+  (hthree : ∀ f x, three f x = f (f (f x))) :
+  mul three (add two (add three three)) =
+  mul three (mul two (add two two)) := by
+  auto [hadd, hmul, htwo, hthree]
 
 -- Polymorphic Constant
 

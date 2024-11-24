@@ -1351,11 +1351,13 @@ def LamTerm.betaBounded (n : Nat) (t : LamTerm) :=
     | .bvar _ => t
     | .lam s t => .lam s (t.betaBounded n')
     | .app .. =>
-      let tb := t.headBetaBounded n'
-      let fn := tb.getAppFn
-      let args := tb.getAppArgs
-      let argsb := args.map (fun ((s, arg) : LamSort × _) => (s, betaBounded n' arg))
-      LamTerm.mkAppN fn argsb
+      match t.isHeadBetaTarget with
+      | true => LamTerm.betaBounded n' (t.headBetaBounded n')
+      | false =>
+        let fn := t.getAppFn
+        let args := t.getAppArgs
+        let argsb := args.map (fun ((s, arg) : LamSort × _) => (s, betaBounded n' arg))
+        LamTerm.mkAppN fn argsb
 
 theorem LamTerm.maxEVarSucc_betaBounded :
   (LamTerm.betaBounded n t).maxEVarSucc ≤ t.maxEVarSucc := by
@@ -1366,16 +1368,20 @@ theorem LamTerm.maxEVarSucc_betaBounded :
     case lam s t => apply IH
     case app s fn arg =>
       dsimp [betaBounded, maxEVarSucc]
-      apply LamTerm.maxEVarSucc_mkAppN
-      case hs =>
-        apply HList.toMapTy; dsimp [Function.comp]
-        apply HList.map _ LamTerm.maxEVarSucc_getAppArgs
-        intro a; cases a; dsimp; intro h
-        apply Nat.le_trans _ (Nat.le_trans h _)
-        apply IH; apply maxEVarSucc_headBetaBounded
-      case ht =>
-        apply Nat.le_trans maxEVarSucc_getAppFn
-        apply maxEVarSucc_headBetaBounded
+      cases (app s fn arg).isHeadBetaTarget
+      case true =>
+        apply Nat.le_trans IH
+        apply Nat.le_trans LamTerm.maxEVarSucc_headBetaBounded (Nat.le_refl _)
+      case false =>
+        apply LamTerm.maxEVarSucc_mkAppN
+        case hs =>
+          apply HList.toMapTy; dsimp [Function.comp]
+          apply HList.map _ LamTerm.maxEVarSucc_getAppArgs
+          intro a; cases a; dsimp; intro h
+          apply Nat.le_trans _ (Nat.le_trans h _)
+          apply IH; exact Nat.le_refl _
+        case ht =>
+          apply Nat.le_trans maxEVarSucc_getAppFn (Nat.le_refl _)
 
 def LamTerm.betaReduced (t : LamTerm) :=
   match t with
@@ -1395,30 +1401,33 @@ theorem LamEquiv.ofBetaBounded
       match wf with
       | .ofLam _ wf => apply LamEquiv.ofLam; apply IH wf
     case app s fn arg =>
-      dsimp;
-      have ⟨_, ⟨wfhbb, _⟩⟩ := LamEquiv.ofHeadBetaBounded (n:=n) wf
-      apply LamEquiv.trans (LamEquiv.ofHeadBetaBounded (n:=n) wf)
-      apply LamEquiv.trans (LamEquiv.eq wfhbb (LamTerm.appFn_appArg_eq _))
-      let masterArr := (LamTerm.getAppArgs (LamTerm.headBetaBounded n (.app s fn arg))).map (fun (s, arg) => (s, arg, arg.betaBounded n))
-      have eq₁ : (LamTerm.getAppArgs (LamTerm.headBetaBounded n (.app s fn arg))) = masterArr.map (fun (s, arg₁, _) => (s, arg₁)) := by
-        dsimp; rw [List.map_map]; rw [List.map_equiv _ id, List.map_id]
-        intro x; cases x; rfl
-      have eq₂ : List.map
-        (fun x => (x.fst, LamTerm.betaBounded n x.snd))
-        (LamTerm.getAppArgs (LamTerm.headBetaBounded n (.app s fn arg))) = masterArr.map (fun (s, _, arg₂) => (s, arg₂)) := by
-        dsimp; rw [List.map_map]; apply List.map_equiv;
-        intro x; cases x; rfl
-      rw [eq₂, eq₁]; have ⟨fnTy, wfFn⟩ := wfhbb.getAppFn
-      apply LamEquiv.congrs (fnTy:=fnTy)
-      case wfApp => rw [← eq₁, ← LamTerm.appFn_appArg_eq]; exact wfhbb
-      case hFn => apply LamEquiv.refl wfFn
-      case hArgs =>
-        dsimp;
-        apply HList.toMapTy; dsimp [Function.comp]
-        apply HList.map
-          (β:=fun (s, t) => LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
-          (fun (s, t) => @IH lctx t s)
-        apply LamWF.getAppArgs wfhbb
+      cases (LamTerm.app s fn arg).isHeadBetaTarget <;> dsimp
+      case true =>
+        apply LamEquiv.trans (LamEquiv.ofHeadBetaBounded (n:=n) wf)
+        have ⟨_, ⟨wfhbb, _⟩⟩ := LamEquiv.ofHeadBetaBounded (n:=n) wf
+        apply IH wfhbb
+      case false =>
+        apply LamEquiv.trans (LamEquiv.eq wf (LamTerm.appFn_appArg_eq _))
+        let masterArr := (LamTerm.getAppArgs (.app s fn arg)).map (fun (s, arg) => (s, arg, arg.betaBounded n))
+        have eq₁ : (LamTerm.getAppArgs (.app s fn arg)) = masterArr.map (fun (s, arg₁, _) => (s, arg₁)) := by
+          dsimp; rw [List.map_map]; rw [List.map_equiv _ id, List.map_id]
+          intro x; cases x; rfl
+        have eq₂ : List.map
+          (fun x => (x.fst, LamTerm.betaBounded n x.snd))
+          (LamTerm.getAppArgs (.app s fn arg)) = masterArr.map (fun (s, _, arg₂) => (s, arg₂)) := by
+          dsimp; rw [List.map_map]; apply List.map_equiv;
+          intro x; cases x; rfl
+        rw [eq₂, eq₁]; have ⟨fnTy, wfFn⟩ := wf.getAppFn
+        apply LamEquiv.congrs (fnTy:=fnTy)
+        case wfApp => rw [← eq₁, ← LamTerm.appFn_appArg_eq]; exact wf
+        case hFn => apply LamEquiv.refl wfFn
+        case hArgs =>
+          dsimp;
+          apply HList.toMapTy; dsimp [Function.comp]
+          apply HList.map
+            (β:=fun (s, t) => LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
+            (fun (s, t) => @IH lctx t s)
+          apply LamWF.getAppArgs wf
 
 theorem LamThmEquiv.ofBetaBounded (wf : LamThmWF lval lctx rty t) :
   LamThmEquiv lval lctx rty t (t.betaBounded n) := fun lctx => LamEquiv.ofBetaBounded (wf lctx)
