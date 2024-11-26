@@ -532,6 +532,16 @@ section Adhoc
     (h : if (a = b) then True else a = b) : a = b := by
     auto
 
+  -- Cond
+  example : cond true a b = a ∧ cond false a b = b := by
+    auto
+
+  example (h : p = true) : cond p a b = a := by
+    auto
+
+  example (h : p = false) : cond p a b = b := by
+    auto
+
   -- Decide
   example : ∀ b, !(b = true) ↔ b = false := by auto
 
