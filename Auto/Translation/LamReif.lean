@@ -1628,7 +1628,6 @@ section BuildChecker
       (.app (.const ``ilβ [u]) tyValExpr))
 
   def buildCPValExpr : ReifM Expr := do
-    -- let startTime ← IO.monoMsNow
     let u ← getU
     let tyValExpr ← buildTyVal
     let tyValTy := Expr.forallE `_ (.const ``Nat []) (.sort (.succ u)) .default
@@ -1637,9 +1636,6 @@ section BuildChecker
       let ilExpr ← buildILExpr tyValFVarExpr
       let checkerValuationExpr := Lean.mkApp3 (.const ``CPVal.mk [u]) tyValExpr varExpr ilExpr
       Meta.mkLetFVars #[tyValFVarExpr] checkerValuationExpr
-    -- if !(← Meta.isTypeCorrectCore lamValuationExpr) then
-    --   throwError "buildLamValuation :: Malformed LamValuation"
-    -- trace[auto.buildChecker] "LamValuation typechecked in time {(← IO.monoMsNow) - startTime}"
     return lamValuationExpr
 
   /-- `lvalExpr` is the `LamValuation` -/

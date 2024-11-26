@@ -65,22 +65,9 @@ unsafe def evalFromMetaTactic : Tactic.Tactic
   Tactic.liftMetaTactic mt
 | _ => Elab.throwUnsupportedSyntax
 
-/-- We assume that `value` contains no free variables or metavariables -/
-def Meta.exprAddAndCompile (value : Expr) (declName : Name) : MetaM Unit := do
-  let type ← inferType value
-  let us := collectLevelParams {} value |>.params
-  let decl := Declaration.defnDecl {
-    name        := declName
-    levelParams := us.toList
-    type        := type
-    value       := value
-    hints       := ReducibilityHints.opaque
-    safety      := DefinitionSafety.unsafe
-  }
-  addDecl decl
-
-def Meta.coreCheck (e : Expr) : MetaM Unit := do
-  let startTime ← IO.monoMsNow
+-- **-TODO: Deal with mutual dependencies between mvar and fvar**
+-- **-      Maybe inspect the LocalContext in the metavariable declaration**
+def Meta.abstractAllMVarFVar (e : Expr) : MetaM Expr := do
   let mut curr := e
   -- **TODO: Fix**
   while true do
@@ -90,8 +77,8 @@ def Meta.coreCheck (e : Expr) : MetaM Unit := do
     curr := next
   let e := curr
   -- Now `(e == (← instantiateMVars) e) && (e == (← zetaReduce e))`
-  let res ← Meta.abstractMVars e
-  -- Now metavariables in `e` are abstracted
+  let res ← Meta.abstractMVars (levels := false) e
+  -- Now expr mvars in `e` are abstracted
   let mut e := res.expr
   -- **TODO: Fix**
   while true do
@@ -100,23 +87,20 @@ def Meta.coreCheck (e : Expr) : MetaM Unit := do
     e ← mkLambdaFVars (collectFVarsState.fvarIds.map Expr.fvar) e
     if !e.hasFVar then
       break
-  -- Use `Core.addAndCompile` to typecheck `e`
-  let coreChkStart ← IO.monoMsNow
-  trace[auto.metaExtra] "Meta.coreCheck :: Preprocessing done in {coreChkStart - startTime}"
-  let env ← getEnv
-  try
-    Meta.exprAddAndCompile e `_coreCheck
-  finally
-    trace[auto.metaExtra] "Meta.coreCheck :: Core check done in {(← IO.monoMsNow) - coreChkStart}"
-    setEnv env
+  let res ← Meta.abstractMVars (levels := true) e
+  -- Now level mvars in `e` are abstracted
+  -- Level mvars must be abstracted after fvars are abstracted,
+  --   because they may occur in fvars
+  return res.expr
+
+def Meta.coreCheck (e : Expr) : MetaM (Option Expr) := do
+  let e ← Meta.abstractAllMVarFVar e
+  match Kernel.check (← getEnv) {} e with
+  | Except.ok type => return .some type
+  | Except.error _ => return .none
 
 def Meta.isTypeCorrectCore (e : Expr) : MetaM Bool := do
-  try
-    Meta.coreCheck e
-    pure true
-  catch e =>
-    let msg := MessageData.compose "Meta.isTypeCorrectCore failed with message : \n" e.toMessageData
-    trace[auto.metaExtra] msg
-    pure false
+  let type? ← Meta.coreCheck e
+  return type?.isSome
 
 end Auto
