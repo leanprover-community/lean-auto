@@ -39,7 +39,8 @@ def runAutoOnAutoLemma (declName? : Option Name) (lem : Auto.Lemma) : MetaM Resu
     let negGoalImpFalse ← Meta.withLocalDeclD `negGoal negGoal fun negGoalFVar => do
       let inhLemmas ← Auto.Inhabitation.getInhFactsFromLCtx
       let lctxLemmas ← Auto.collectLctxLemmas true #[]
-      let proofOfFalse ← Auto.runAuto declName? (lctxLemmas ++ usedThms) inhLemmas
+      let allLemmas ← (lctxLemmas ++ usedThms).mapM (Auto.unfoldConstAndPreprocessLemma #[])
+      let proofOfFalse ← Auto.runAuto declName? allLemmas inhLemmas
       Meta.mkLambdaFVars #[negGoalFVar] proofOfFalse
     let goal := mkApp2 (.const ``Classical.byContradiction []) body negGoalImpFalse
     Meta.mkLambdaFVars bs goal
