@@ -10,6 +10,7 @@ initialize
   registerTraceClass `auto.tactic
   registerTraceClass `auto.tactic.printProof
   registerTraceClass `auto.printLemmas
+  registerTraceClass `auto.runAuto.printLemmas
 
 namespace Auto
 
@@ -203,13 +204,14 @@ def unfoldConstAndprepReduceDefeq (unfolds : Array Prep.ConstUnfoldInfo) (lem : 
   let lem := {lem with type := type}
   return lem
 
-def traceLemmas (pre : String) (lemmas : Array Lemma) : TacticM Unit := do
+def traceLemmas (traceClass : Name) (pre : String) (lemmas : Array Lemma) : CoreM Unit := do
   let mut cnt : Nat := 0
   let mut mdatas : Array MessageData := #[]
   for lem in lemmas do
     mdatas := mdatas.push m!"\n{cnt}: {lem}"
     cnt := cnt + 1
-  trace[auto.printLemmas] mdatas.foldl MessageData.compose pre
+  if ← isTracingEnabledFor traceClass then
+    addTrace traceClass (mdatas.foldl MessageData.compose pre)
 
 def checkDuplicatedFact (terms : Array Term) : TacticM Unit :=
   let n := terms.size
@@ -236,19 +238,19 @@ def collectAllLemmas
   let startTime ← IO.monoMsNow
   let lctxLemmas ← collectLctxLemmas inputHints.lctxhyps ngoalAndBinders
   let lctxLemmas ← lctxLemmas.mapM (m:=MetaM) (unfoldConstAndPreprocessLemma unfoldInfos)
-  traceLemmas "Lemmas collected from local context:" lctxLemmas
+  traceLemmas `auto.printLemmas "Lemmas collected from local context:" lctxLemmas
   checkDuplicatedFact inputHints.terms
   checkDuplicatedLemmaDB inputHints.lemdbs
   let userLemmas := (← collectUserLemmas inputHints.terms) ++ (← collectHintDBLemmas inputHints.lemdbs)
   let userLemmas ← userLemmas.mapM (m:=MetaM) (unfoldConstAndPreprocessLemma unfoldInfos)
-  traceLemmas "Lemmas collected from user-provided terms:" userLemmas
+  traceLemmas `auto.printLemmas "Lemmas collected from user-provided terms:" userLemmas
   let defeqLemmas ← collectDefeqLemmas defeqNames
   let defeqLemmas ← defeqLemmas.mapM (m:=MetaM) (unfoldConstAndprepReduceDefeq unfoldInfos)
-  traceLemmas "Lemmas collected from user-provided defeq hints:" defeqLemmas
+  traceLemmas `auto.printLemmas "Lemmas collected from user-provided defeq hints:" defeqLemmas
   trace[auto.tactic] "Preprocessing took {(← IO.monoMsNow) - startTime}ms"
   let inhFacts ← Inhabitation.getInhFactsFromLCtx
   let inhFacts ← inhFacts.mapM (m:=MetaM) (unfoldConstAndPreprocessLemma unfoldInfos)
-  traceLemmas "Inhabitation lemmas :" inhFacts
+  traceLemmas `auto.printLemmas "Inhabitation lemmas :" inhFacts
   return (lctxLemmas ++ userLemmas ++ defeqLemmas, inhFacts)
 
 open Embedding.Lam in
@@ -431,6 +433,7 @@ def queryNative
 -/
 def runAuto
   (declName? : Option Name) (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr := do
+  traceLemmas `auto.runAuto.printLemmas s!"All lemmas received by {decl_name%}:" lemmas
   -- Simplify `ite`
   let ite_simp_lem ← Lemma.ofConst ``Auto.Bool.ite_simp (.leaf "hw Auto.Bool.ite_simp")
   let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem ite_simp_lem)
