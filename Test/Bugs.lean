@@ -1,4 +1,5 @@
 import Auto.Tactic
+import Auto.EvaluateAuto.TestCode
 
 -- Standard Preprocessing Configs
 set_option auto.redMode "reducible"
@@ -79,3 +80,9 @@ end Set
 example (x : Nat) (primeset : Nat → Prop) (dvd : Nat → Nat → Prop) :
   ((∃ (i : _) (i_1 : primeset i), dvd i x) ↔ (∃ p, primeset p ∧ dvd p x)) := by
   auto
+
+-- bug
+set_option trace.auto.tactic true in
+#eval do
+  let m ← Auto.runAutoOnConst ``Nat.sub_one_lt_of_lt
+  trace[auto.tactic] m!"{m}"
