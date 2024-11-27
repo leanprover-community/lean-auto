@@ -53,13 +53,13 @@ syntax (name := genMonadState) "#genMonadState" term : command
 -/
 def structureProjs (structTy : Expr) : CoreM (Name × Expr × Array (Name × Expr)) := do
   let .const structName lvls := structTy.getAppFn
-    | throwError s!"structureProjs :: Head symbol of {structTy} is not a constant"
+    | throwError s!"{decl_name%} :: Head symbol of {structTy} is not a constant"
   let some structInfo := getStructureInfo? (← getEnv) structName
-    | throwError s!"structureProjs :: {structName} is not a structure"
+    | throwError s!"{decl_name%} :: {structName} is not a structure"
   let .some (.inductInfo structi) := (← getEnv).find? structName
-    | throwError s!"structureProjs :: Unknown identifier {structName}"
+    | throwError s!"{decl_name%} :: Unknown identifier {structName}"
   let [structDotMk] := structi.ctors
-    | throwError s!"structureProjs :: {structName} is not a structure"
+    | throwError s!"{decl_name%} :: {structName} is not a structure"
   let structMkExpr := mkAppN (Expr.const structDotMk lvls) structTy.getAppArgs
   let tyArgs := structTy.getAppArgs
   let nameMap : Std.HashMap Name StructureFieldInfo := Std.HashMap.ofList
@@ -75,7 +75,7 @@ private def elabStx (stx : Term) : TermElabM Expr := do
   Term.synthesizeSyntheticMVarsNoPostponing (ignoreStuckTC := true)
   let e ← instantiateMVars expr
   if e.hasMVar then
-    throwError "elabStx :: {e} contains metavariables"
+    throwError "{decl_name%} :: {e} contains metavariables"
   return e
 
 private def addDefnitionValFromExpr (e : Expr) (name : Name) : MetaM Unit := do
@@ -91,9 +91,9 @@ private def addDefnitionValFromExpr (e : Expr) (name : Name) : MetaM Unit := do
 private def elabGenMonadContextAux (m : Term) (stx : Syntax) : CommandElabM Unit := runTermElabM <| fun xs => do
   let mexpr ← elabStx m
   let .const mname _ := mexpr.getAppFn
-    | throwError "elabGenMonadContext :: Unknown monad"
+    | throwError "{decl_name%} :: Unknown monad"
   let .str pre _ := mname
-    | throwError "elabGenMonadContext :: {mname} is not a valid constant name"
+    | throwError "{decl_name%} :: {mname} is not a valid constant name"
   let pureInst ← elabStx (← `(inferInstanceAs (Pure $m)))
   let mctxInst ← elabStx (← `(inferInstanceAs (MonadReader _ $m)))
   let mctxInstTy ← Meta.inferType mctxInst
@@ -122,9 +122,9 @@ where
 private def elabGenMonadStateAux (m : Term) (stx : Syntax) : CommandElabM Unit := runTermElabM <| fun xs => do
   let mexpr ← elabStx m
   let .const mname _ := mexpr.getAppFn
-    | throwError "elabGenMonadState :: Unknown monad"
+    | throwError "{decl_name%} :: Unknown monad"
   let .str pre _ := mname
-    | throwError "elabGenMonadState :: {mname} is not a valid constant name"
+    | throwError "{decl_name%} :: {mname} is not a valid constant name"
   let pureInst ← elabStx (← `(inferInstanceAs (Pure $m)))
   let mstateInst ← elabStx (← `(inferInstanceAs (MonadState _ $m)))
   let mstateInstTy ← Meta.inferType mstateInst

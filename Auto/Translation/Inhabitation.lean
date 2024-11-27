@@ -96,7 +96,7 @@ private def inhFactMatchAtomTysAux (inhTy : Lemma) (atomTys : Array Expr) : Meta
         let s ← saveState
         let (_, _, mi) ← MLemmaInst.ofLemmaInst li
         let .some e := getExprNonImpPosition mip mi.type
-          | throwError "inhFactMatchAtomTys :: Unexpected error, cannot get position {mip} from {mi.type}"
+          | throwError "{decl_name%} :: Unexpected error, cannot get position {mip} from {mi.type}"
         for a in atomTys do
           let s' ← saveState
           if (← Meta.isDefEq e a) then
@@ -134,6 +134,6 @@ where
     for a in atomTys do
       if (← Meta.withNewMCtxDepth (Meta.isDefEq inhTy a)) then
         return inhTy
-    throwError "inhFactMatchAtomTys :: Unable to canonicalize {inhTy}"
+    throwError "{decl_name%} :: Unable to canonicalize {inhTy}"
 
 end Auto.Inhabitation

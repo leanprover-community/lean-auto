@@ -26,11 +26,11 @@ def lam2TH0 (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort) (facts : Arra
     bvHs.toList.map (fun bvc => s!"thf(typedecl_bv{transBitVecConst bvc}, type, t_bv{transBitVecConst bvc}: {transBitVecConstSort bvc}).") ++
      (← termHs.toList.mapM (fun i => do
       let .some s := lamVarTy.get? i
-        | throwError "lam2TH0 :: Unexpected error"
+        | throwError "{decl_name%} :: Unexpected error"
       return s!"thf(typedecl_t_a{i}, type, t_a{i}: {transLamSort s}).")) ++
      (← etomHs.toList.mapM (fun i => do
       let .some s := lamEVarTy.get? i
-        | throwError "lam2TH0 :: Unexpected error"
+        | throwError "{decl_name%} :: Unexpected error"
       return s!"thf(typedecl_t_e{i}, type, t_e{i}: {transLamSort s})."))
   -- Empty type is not inhabited
   if (lamVarTy ++ lamEVarTy).any (fun s => s == .base .empty) then

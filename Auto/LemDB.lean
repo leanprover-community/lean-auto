@@ -42,7 +42,7 @@ partial def LemDB.toHashSet : LemDB → AttrM (Std.HashSet Name)
     let mut ret := Std.HashSet.empty
     for hdb in hdbs do
       let some hdb := state.get? hdb
-        | throwError "LemDB.toHashSet :: Unknown lemma database {hdb}"
+        | throwError "{decl_name%} :: Unknown lemma database {hdb}"
       let hset ← hdb.toHashSet
       ret := ret.insertMany hset
     return ret

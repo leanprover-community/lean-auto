@@ -40,7 +40,7 @@ def Meta.inspectMVarAssignments : MetaM Unit := do
 def Meta.trySynthInhabited (e : Expr) : MetaM (Option Expr) := do
   let eSort ← Expr.normalizeType (← instantiateMVars (← Meta.inferType e))
   let .sort lvl := eSort
-    | throwError "trySynthInhabited :: {e} is not a type"
+    | throwError "{decl_name%} :: {e} is not a type"
   try
     if let .some inh ← Meta.synthInstance? e then
       return .some inh
@@ -58,10 +58,10 @@ syntax (name := fromMetaTactic) "fromMetaTactic" "[" ident "]" : tactic
 unsafe def evalFromMetaTactic : Tactic.Tactic
 | `(fromMetaTactic | fromMetaTactic [ $i ]) => do
   let some iexpr ← Term.resolveId? i
-    | throwError "evalFromMetaTactic :: Unknown identifier {i}"
+    | throwError "{decl_name%} :: Unknown identifier {i}"
   let mtname := iexpr.constName!
   let Except.ok mt := (← getEnv).evalConst (MVarId → MetaM (List MVarId)) (← getOptions) mtname
-    | throwError "evalFromMetaTactic :: Failed to evaluate {mtname} to a term of type (Expr → TermElabM Unit)"
+    | throwError "{decl_name%} :: Failed to evaluate {mtname} to a term of type (Expr → TermElabM Unit)"
   Tactic.liftMetaTactic mt
 | _ => Elab.throwUnsupportedSyntax
 

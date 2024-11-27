@@ -854,8 +854,8 @@ def getProof (lamVarTy lamEVarTy : Array LamSort) (cmds : Array Command) : MetaM
           match term2LamTerm pi val with
           | .term (.base .prop) t =>
             ret := ret.push t
-          | .error e => throwError ("getProof :: " ++ e)
-          | lc => throwError "getProof :: Unexpected LamConstr {lc}, expected term"
+          | .error e => throwError (decl_name% ++ " :: " ++ e)
+          | lc => throwError "{decl_name%} :: Unexpected LamConstr {lc}, expected term"
         else
           match val with
           | ⟨.ident name, [ty]⟩ =>
@@ -863,13 +863,13 @@ def getProof (lamVarTy lamEVarTy : Array LamSort) (cmds : Array Command) : MetaM
             if name.take 3 == "sk_" then
               match term2LamTerm pi ty with
               | .sort s => pi := pi.addSkolem name s
-              | lc => throwError "getProof :: Unexpected LamConstr {lc}, expected sort"
+              | lc => throwError "{decl_name%} :: Unexpected LamConstr {lc}, expected sort"
             else
               continue
           | _ => continue
       | _ => continue
-    | "include" => throwError "getProof :: `include` should not occur in proof output of TPTP solvers"
-    | _ => throwError "getProof :: Unknown command {cmd}"
+    | "include" => throwError "{decl_name%} :: `include` should not occur in proof output of TPTP solvers"
+    | _ => throwError "{decl_name%} :: Unknown command {cmd}"
   return ret
 
 /-- Returns the unsat core of an array of TSTP steps -/

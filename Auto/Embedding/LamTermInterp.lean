@@ -268,10 +268,10 @@ abbrev InterpM := StateRefT State MetaState.MetaStateM
 def getLCtxTy! (idx : Nat) : InterpM LamSort := do
   let lctxTyRev ← getLctxTyRev
   if idx ≥ lctxTyRev.size then
-    throwError "getLCtxTy! :: Index out of bound"
+    throwError "{decl_name%} :: Index out of bound"
   match lctxTyRev[idx]? with
   | .some s => return s
-  | .none => throwError "getLCtxTy! :: Unexpected error"
+  | .none => throwError "{decl_name%} :: Unexpected error"
 
 /--
   Turning a sort into `fvar` in a hash-consing manner
@@ -303,7 +303,7 @@ def collectSortFor (ltv : LamTyVal) : LamTerm → InterpM LamSort
 | .atom n => do
   let _ ← sort2FVarId (ltv.lamVarTy n)
   return ltv.lamVarTy n
-| .etom _ => throwError "collectSortFor :: etoms should not occur here"
+| .etom _ => throwError "{decl_name%} :: etoms should not occur here"
 | .base b => do
   let s := b.lamCheck ltv
   let _ ← sort2FVarId s
@@ -325,8 +325,8 @@ def collectSortFor (ltv : LamTyVal) : LamTerm → InterpM LamSort
     if argTy' == argTy && argTy' == s then
       return resTy
     else
-      throwError "collectSortFor :: Application type mismatch"
-  | _ => throwError "collectSortFor :: Malformed application"
+      throwError "{decl_name%} :: Application type mismatch"
+  | _ => throwError "{decl_name%} :: Malformed application"
 where withLCtxTy {α : Type} (s : LamSort) (k : InterpM α) : InterpM α := do
   let lctxTyRev ← getLctxTyRev
   setLctxTyRev (lctxTyRev.push s)

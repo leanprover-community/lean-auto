@@ -87,11 +87,11 @@ def parseUnfolds : TSyntax ``unfolds → TacticM (Array Prep.ConstUnfoldInfo)
 | `(unfolds| u[ $[$hs],* ]) => do
   let exprs ← hs.mapM (fun i => do
     let some expr ← Term.resolveId? i
-      | throwError "parseUnfolds :: Unknown identifier {i}. {defeqUnfoldErrHint}"
+      | throwError "{decl_name%} :: Unknown identifier {i}. {defeqUnfoldErrHint}"
     return expr)
   exprs.mapM (fun expr => do
     let some name := expr.constName?
-      | throwError "parseUnfolds :: Unknown declaration {expr}. {defeqUnfoldErrHint}"
+      | throwError "{decl_name%} :: Unknown declaration {expr}. {defeqUnfoldErrHint}"
     Prep.getConstUnfoldInfo name)
 | _ => throwUnsupportedSyntax
 
@@ -99,11 +99,11 @@ def parseDefeqs : TSyntax ``defeqs → TacticM (Array Name)
 | `(defeqs| d[ $[$hs],* ]) => do
   let exprs ← hs.mapM (fun i => do
     let some expr ← Term.resolveId? i
-      | throwError "parseDefeqs :: Unknown identifier {i}. {defeqUnfoldErrHint}"
+      | throwError "{decl_name%} :: Unknown identifier {i}. {defeqUnfoldErrHint}"
     return expr)
   exprs.mapM (fun expr => do
     let some name := expr.constName?
-      | throwError "parseDefeqs :: Unknown declaration {expr}. {defeqUnfoldErrHint}"
+      | throwError "{decl_name%} :: Unknown declaration {expr}. {defeqUnfoldErrHint}"
     return name)
 | _ => throwUnsupportedSyntax
 
@@ -121,12 +121,12 @@ def parseUOrDs (stxs : Array (TSyntax ``uord)) : TacticM (Array Prep.ConstUnfold
     match ← parseUOrD stx with
     | .inl u =>
       if hasUnfolds then
-        throwError "Auto :: Duplicated unfold hint"
+        throwError "{decl_name%} :: Duplicated unfold hint"
       hasUnfolds := true
       unfolds := u
     | .inr d =>
       if hasDefeqs then
-        throwError "Auto :: Duplicated defeq hint"
+        throwError "{decl_name%} :: Duplicated defeq hint"
       hasDefeqs := true
       defeqs := defeqs.append d
   return (unfolds, defeqs)
@@ -262,7 +262,7 @@ def queryTPTP (exportFacts : Array REntry) : LamReif.ReifM (Array Embedding.Lam.
     let exportLamTerms ← exportFacts.mapM (fun re => do
       match re with
       | .valid [] t => return t
-      | _ => throwError "runAuto :: Unexpected error")
+      | _ => throwError "{decl_name%} :: Unexpected error")
     let query ← lam2TH0 lamVarTy lamEVarTy exportLamTerms
     trace[auto.tptp.printQuery] "\n{query}"
     let tptpProof ← Solver.TPTP.querySolver query
@@ -276,7 +276,7 @@ def queryTPTP (exportFacts : Array REntry) : LamReif.ReifM (Array Embedding.Lam.
     let mut ret := #[]
     for n in unsatCore do
       let .some re := exportFacts[n]?
-        | throwError "queryTPTP :: Index {n} out of range"
+        | throwError "{decl_name%} :: Index {n} out of range"
       ret := ret.push re
     return ret
 
@@ -287,7 +287,7 @@ def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : L
   let exportLamTerms ← exportFacts.mapM (fun re => do
     match re with
     | .valid [] t => return t
-    | _ => throwError "runAuto :: Unexpected error")
+    | _ => throwError "{decl_name%} :: Unexpected error")
   let sni : SMT.SMTNamingInfo :=
     {tyVal := (← LamReif.getTyVal), varVal := (← LamReif.getVarVal), lamEVarTy := (← LamReif.getLamEVarTy)}
   let ((commands, validFacts), state) ← (lamFOL2SMT sni lamVarTy lamEVarTy exportLamTerms exportInds).run
@@ -307,20 +307,20 @@ def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : L
   -- **Print STerms corresponding to `validFacts` in unsatCore**
   for id in unsatCoreIds do
     let .some sterm := validFacts[id]?
-      | throwError "runAuto :: Index {id} of `validFacts` out of range"
+      | throwError "{decl_name%} :: Index {id} of `validFacts` out of range"
     trace[auto.smt.unsatCore.smtTerms] "|valid_fact_{id}| : {sterm}"
   -- **Print Lean expressions correesponding to `validFacts` in unsatCore**
   SMT.withExprValuation sni state.h2lMap (fun tyValMap varValMap etomValMap => do
     for id in unsatCoreIds do
       let .some t := exportLamTerms[id]?
-        | throwError "runAuto :: Index {id} of `exportLamTerms` out of range"
+        | throwError "{decl_name%} :: Index {id} of `exportLamTerms` out of range"
       let e ← Lam2D.interpLamTermAsUnlifted tyValMap varValMap etomValMap 0 t
       trace[auto.smt.unsatCore.leanExprs] "|valid_fact_{id}| : {← Core.betaReduce e}"
     )
   -- **Print derivation of unsatCore**
   for id in unsatCoreIds do
     let .some t := exportLamTerms[id]?
-      | throwError "runAuto :: Index {id} of `exportLamTerm` out of range"
+      | throwError "{decl_name%} :: Index {id} of `exportLamTerm` out of range"
     let vderiv ← LamReif.collectDerivFor (.valid [] t)
     trace[auto.smt.unsatCore.deriv] "|valid_fact_{id}| : {vderiv}"
   if auto.smt.rconsProof.get (← getOptions) then
@@ -392,18 +392,18 @@ def callNative_direct
     (Lam2DAAF.callNativeWithAtomAsFVar nonemptiesWithDTr validsWithDTr prover).run'
       { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
   if usedEtoms.size != 0 then
-    throwError "callNative_direct :: etoms should not occur here"
+    throwError "{decl_name%} :: etoms should not occur here"
   let ss ← usedInhs.mapM (fun re => do
     match ← lookupREntryProof! re with
     | .inhabitation e _ _ => return e
     | .chkStep (.n (.nonemptyOfAtom n)) =>
       match varVal[n]? with
       | .some (e, _) => return e
-      | .none => throwError "callNative_direct :: Unexpected error"
-    | _ => throwError "callNative_direct :: Cannot find external proof of {re}")
+      | .none => throwError "{decl_name%} :: Unexpected error"
+    | _ => throwError "{decl_name%} :: Cannot find external proof of {re}")
   let ts ← usedHyps.mapM (fun re => do
     let .assertion e _ _ ← lookupREntryProof! re
-      | throwError "callNative_direct :: Cannot find external proof of {re}"
+      | throwError "{decl_name%} :: Cannot find external proof of {re}"
     return e)
   return mkAppN proof (ss ++ ts)
 
@@ -484,7 +484,7 @@ def evalAuto : Tactic
   --   now the goal is just `G`
   let (goalBinders, newGoal) ← (← getMainGoal).intros
   let [nngoal] ← newGoal.apply (.const ``Classical.byContradiction [])
-    | throwError "evalAuto :: Unexpected result after applying Classical.byContradiction"
+    | throwError "{decl_name%} :: Unexpected result after applying Classical.byContradiction"
   let (ngoal, absurd) ← MVarId.intro1 nngoal
   replaceMainGoal [absurd]
   withMainContext do
@@ -505,7 +505,7 @@ def evalIntromono : Tactic
 | `(intromono | intromono $hints $[$uords]*) => withMainContext do
   let (goalBinders, newGoal) ← (← getMainGoal).intros
   let [nngoal] ← newGoal.apply (.const ``Classical.byContradiction [])
-    | throwError "evalAuto :: Unexpected result after applying Classical.byContradiction"
+    | throwError "{decl_name%} :: Unexpected result after applying Classical.byContradiction"
   let (ngoal, absurd) ← MVarId.intro1 nngoal
   replaceMainGoal [absurd]
   withMainContext do
@@ -552,12 +552,12 @@ def runNativeProverWithAuto
     if let .some expr ← queryNative declName? exportFacts exportInhs prover then
       return expr
     else
-      throwError "runNativeProverWithAuto :: Failed to find proof")
+      throwError "{decl_name%} :: Failed to find proof")
   let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
     let s ← get
     let u ← computeMaxLevel s.facts
     (afterReify s.facts s.inhTys).run' {u := u})
-  trace[auto.tactic] "runNativeProverWithAuto :: Found proof of {← Meta.inferType proof}"
+  trace[auto.tactic] "{decl_name%} :: Found proof of {← Meta.inferType proof}"
   return proof
 
 @[tactic mononative]
@@ -568,7 +568,7 @@ def evalMonoNative : Tactic
   --   now the goal is just `G`
   let (goalBinders, newGoal) ← (← getMainGoal).intros
   let [nngoal] ← newGoal.apply (.const ``Classical.byContradiction [])
-    | throwError "evalAuto :: Unexpected result after applying Classical.byContradiction"
+    | throwError "{decl_name%} :: Unexpected result after applying Classical.byContradiction"
   let (ngoal, absurd) ← MVarId.intro1 nngoal
   replaceMainGoal [absurd]
   withMainContext do

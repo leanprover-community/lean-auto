@@ -114,7 +114,7 @@ def queryZEPort (zept : ZEPortType) (query : String) : MetaM String := do
     catch e =>
       let estr := toString (← (Exception.toMessageData e).format)
       if estr.extract ⟨0⟩ ⟨44⟩ != "already exists (error code: 17, file exists)" then
-        throwError "queryZEPort :: Unexpected error"
+        throwError "{decl_name%} :: Unexpected error"
       idx := idx + (← IO.rand 0 100)
   IO.FS.withFile s!"./.zeport_ignore/problem{idx}.p" .writeNew (fun stream => stream.putStr query)
   let solver ← createSolver path idx
@@ -149,7 +149,7 @@ def queryE (query : String) : MetaM String := do
 
 def querySolver (query : String) : MetaM (Array Parser.TPTP.Command) := do
   if !(auto.tptp.get (← getOptions)) then
-    throwError "querySolver :: Unexpected error"
+    throwError "{decl_name%} :: Unexpected error"
   let stdout ← (do
     match auto.tptp.solver.name.get (← getOptions) with
     | .zipperposition => queryZipperposition query

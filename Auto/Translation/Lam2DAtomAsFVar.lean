@@ -71,7 +71,7 @@ def withTypeAtomsAsFVar (atoms : Array Nat) : ExternM Unit :=
     if (← getTypeAtomFVars).contains atom then
       continue
     let .some (e, lvl) := (← getTyVal)[atom]?
-      | throwError "withTypeAtomAsFVar :: Unknown type atom {atom}"
+      | throwError "{decl_name%} :: Unknown type atom {atom}"
     let name := (`_exTy).appendIndexAfter (← getTypeAtomFVars).size
     let newFVarId ← withLocalDecl name .default (.sort lvl) .default
     setAtomsToAbstract ((← getAtomsToAbstract).push (newFVarId, e))
@@ -82,7 +82,7 @@ def withTermAtomsAsFVar (atoms : Array Nat) : ExternM Unit :=
     if (← getTermAtomFVars).contains atom then
       continue
     let .some (e, s) := (← getVarVal)[atom]?
-      | throwError "withTermAtomAsFVar :: Unknown term atom {atom}"
+      | throwError "{decl_name%} :: Unknown term atom {atom}"
     let sinterp ← Lam2D.interpLamSortAsUnlifted (← getTypeAtomFVars) s
     let name := (`e!).appendIndexAfter (← getTermAtomFVars).size
     let newFVarId ← withLocalDecl name .default sinterp .default
@@ -94,7 +94,7 @@ def withEtomsAsFVar (etoms : Array Nat) : ExternM Unit :=
     if (← getEtomFVars).contains etom then
       return
     let .some s := (← getLamEVarTy)[etom]?
-      | throwError "withEtomAsFVar :: Unknown etom {etom}"
+      | throwError "{decl_name%} :: Unknown etom {etom}"
     let sinterp ← Lam2D.interpLamSortAsUnlifted (← getTypeAtomFVars) s
     let name := (`e?).appendIndexAfter (← getEtomFVars).size
     let newFVarId ← withLocalDecl name .default sinterp .default
@@ -147,7 +147,7 @@ def callNativeWithAtomAsFVar
   let ss ← nonemptiesWithDTr.mapM (fun (re, _) => do
     match re with
     | .nonempty s => return s
-    | _ => throwError "callNativeWithAtomAsFVar :: {re} is not a `nonempty` entry")
+    | _ => throwError "{decl_name%} :: {re} is not a `nonempty` entry")
   let inhs ← withTranslatedLamSorts ss
   for inh in inhs do
     trace[auto.lam2D.printInhs] "{inh}"
@@ -158,13 +158,13 @@ def callNativeWithAtomAsFVar
   let ts ← valids.mapM (fun re => do
     match re with
     | .valid [] t => return t
-    | _ => throwError "callNativeWithAtomAsFVar :: {re} is not a `valid` entry")
+    | _ => throwError "{decl_name%} :: {re} is not a `valid` entry")
   let hyps ← withTranslatedLamTerms ts
   for hyp in hyps do
     if !(← runMetaM <| Meta.isTypeCorrect hyp) then
-      throwError "callNative :: Malformed hypothesis {hyp}"
+      throwError "{decl_name%} :: Malformed hypothesis {hyp}"
     if !(← runMetaM <| Meta.isProp hyp) then
-      throwError "callNative :: Hypothesis {hyp} is not a proposition"
+      throwError "{decl_name%} :: Hypothesis {hyp} is not a proposition"
     trace[auto.lam2D.printHyps] "{hyp}"
   let hyps ← runMetaM <| hyps.mapM (fun e => Core.betaReduce e)
   let hypFvars ← withHyps hyps
@@ -207,7 +207,7 @@ def callNativeWithAtomAsFVar
     let proofLamTermPre := proofLamTermPre.abstractsRevImp ((Array.mk usedEtoms).map LamTerm.etom)
     let usedEtomTys ← usedEtoms.mapM (fun etom => do
       let .some ty := lamEVarTy[etom]?
-        | throwError "callNative :: Unexpected error"
+        | throwError "{decl_name%} :: Unexpected error"
       return ty)
     let proof := mkAppN expr ⟨usedVals⟩
     let proofLamTerm := usedEtomTys.foldr (fun s cur => LamTerm.mkForallEF s cur) proofLamTermPre

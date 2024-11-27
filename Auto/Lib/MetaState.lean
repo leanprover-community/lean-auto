@@ -75,7 +75,7 @@ private def runWithFVars (lctx : LocalContext) (fvarids : Array FVarId) (k : Met
         newlctx := newlctx.mkLocalDecl fvarId userName type bi kind
       | .ldecl _ fvarId userName type value nonDep kind =>
         newlctx := newlctx.mkLetDecl fvarId userName type value nonDep kind
-    | .none => throwError "runWithFVars :: Unknown free variable {Expr.fvar fid}"
+    | .none => throwError "{decl_name%} :: Unknown free variable {Expr.fvar fid}"
   withReader (fun ctx => {ctx with lctx := newlctx}) k
 
 private def runWithIntroducedFVarsImp (m : MetaStateM (Array FVarId × α)) (k : α → MetaM β) : MetaM β := do

@@ -68,10 +68,10 @@ namespace LamExportUtils
   def collectLamBaseTermAtoms (b : LamBaseTerm) : CoreM (Std.HashSet Nat) := do
     let s? : Option LamSort ← (do
       match b with
-      | .eqI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
-      | .forallEI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
-      | .existEI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
-      | .iteI _ => throwError ("collectAtoms :: " ++ exportError.ImpPolyLog)
+      | .eqI _ => throwError (decl_name% ++ " :: " ++ exportError.ImpPolyLog)
+      | .forallEI _ => throwError (decl_name% ++ " :: " ++ exportError.ImpPolyLog)
+      | .existEI _ => throwError (decl_name% ++ " :: " ++ exportError.ImpPolyLog)
+      | .iteI _ => throwError (decl_name% ++ " :: " ++ exportError.ImpPolyLog)
       | .eq s => return .some s
       | .forallE s => return .some s
       | .existE s => return .some s
@@ -95,11 +95,11 @@ namespace LamExportUtils
     LamTerm → CoreM (Std.HashSet Nat × Std.HashSet Nat × Std.HashSet Nat)
   | .atom n => do
     let .some s := lamVarTy[n]?
-      | throwError "collectAtoms :: Unknown term atom {n}"
+      | throwError "{decl_name%} :: Unknown term atom {n}"
     return (collectLamSortAtoms s, Std.HashSet.empty.insert n, Std.HashSet.empty)
   | .etom n => do
     let .some s := lamEVarTy[n]?
-      | throwError "collectAtoms :: Unknown etom {n}"
+      | throwError "{decl_name%} :: Unknown etom {n}"
     return (collectLamSortAtoms s, Std.HashSet.empty, Std.HashSet.empty.insert n)
   | .base b => do
     return (← collectLamBaseTermAtoms b, Std.HashSet.empty, Std.HashSet.empty)
@@ -194,7 +194,7 @@ namespace Lam2D
   | .or         => return .const ``Or []
   | .imp        => do
     let .some (.defnInfo impVal) := (← getEnv).find? ``ImpF
-      | throwError "interpLamBaseTermAsUnlifted :: Unexpected error"
+      | throwError "{decl_name%} :: Unexpected error"
     return impVal.value.instantiateLevelParams impVal.levelParams [.zero, .zero]
   | .iff        => return .const ``Iff []
 
@@ -306,7 +306,7 @@ namespace Lam2D
   def interpLamSortAsUnlifted (tyVal : Std.HashMap Nat Expr) : LamSort → CoreM Expr
   | .atom n => do
     let .some e := tyVal.get? n
-      | throwError "interpLamSortAsUnlifted :: Cannot find fvarId assigned to type atom {n}"
+      | throwError "{decl_name%} :: Cannot find fvarId assigned to type atom {n}"
     return e
   | .base b => return Lam2D.interpLamBaseSortAsUnlifted b
   | .func s₁ s₂ => do
@@ -314,18 +314,18 @@ namespace Lam2D
 
   def interpOtherConstAsUnlifted (tyVal : Std.HashMap Nat Expr) (oc : OtherConst) : MetaM Expr := do
     let .some (.defnInfo constIdVal) := (← getEnv).find? ``constId
-      | throwError "interpOtherConstAsUnlifted :: Unexpected error"
+      | throwError "{decl_name%} :: Unexpected error"
     let constIdExpr := fun params => constIdVal.value.instantiateLevelParams constIdVal.levelParams params
     match oc with
     | .smtAttr1T _ sattr sterm => do
       let tyattr ← interpLamSortAsUnlifted tyVal sattr
       let sortattr ← Expr.normalizeType (← Meta.inferType tyattr)
       let Expr.sort lvlattr := sortattr
-        | throwError "interpOtherConstAsUnlifted :: Unexpected sort {sortattr}"
+        | throwError "{decl_name%} :: Unexpected sort {sortattr}"
       let tyterm ← interpLamSortAsUnlifted tyVal sterm
       let sortterm ← Expr.normalizeType (← Meta.inferType tyterm)
       let Expr.sort lvlterm := sortterm
-        | throwError "interpOtherConstAsUnlifted :: Unexpected sort {sortterm}"
+        | throwError "{decl_name%} :: Unexpected sort {sortterm}"
       return Lean.mkApp2 (constIdExpr [lvlattr, lvlterm]) tyattr tyterm
 
   def interpLamBaseTermAsUnlifted (tyVal : Std.HashMap Nat Expr) : LamBaseTerm → MetaM Expr
@@ -336,19 +336,19 @@ namespace Lam2D
   | .scst sc    => Lam2D.interpStringConstAsUnlifted sc
   | .bvcst bvc  => Lam2D.interpBitVecConstAsUnlifted bvc
   | .ocst oc    => interpOtherConstAsUnlifted tyVal oc
-  | .eqI _      => throwError ("interpLamTermAsUnlifted :: " ++ LamExportUtils.exportError.ImpPolyLog)
-  | .forallEI _ => throwError ("interpLamTermAsUnlifted :: " ++ LamExportUtils.exportError.ImpPolyLog)
-  | .existEI _  => throwError ("interpLamTermAsUnlifted :: " ++ LamExportUtils.exportError.ImpPolyLog)
-  | .iteI _     => throwError ("interpLamTermAsUnlifted :: " ++ LamExportUtils.exportError.ImpPolyLog)
+  | .eqI _      => throwError (decl_name% ++ " :: " ++ LamExportUtils.exportError.ImpPolyLog)
+  | .forallEI _ => throwError (decl_name% ++ " :: " ++ LamExportUtils.exportError.ImpPolyLog)
+  | .existEI _  => throwError (decl_name% ++ " :: " ++ LamExportUtils.exportError.ImpPolyLog)
+  | .iteI _     => throwError (decl_name% ++ " :: " ++ LamExportUtils.exportError.ImpPolyLog)
   | .eq s       => do
     return ←  Meta.mkAppOptM ``Eq #[← interpLamSortAsUnlifted tyVal s]
   | .forallE s  => do
     let ty ← interpLamSortAsUnlifted tyVal s
     let sort ← Expr.normalizeType (← Meta.inferType ty)
     let Expr.sort lvl := sort
-      | throwError "interpLamBaseTermAsUnlifted :: Unexpected sort {sort}"
+      | throwError "{decl_name%} :: Unexpected sort {sort}"
     let .some (.defnInfo forallVal) := (← getEnv).find? ``forallF
-      | throwError "interpLamBaseTermAsUnlifted :: Unexpected error"
+      | throwError "{decl_name%} :: Unexpected error"
     let forallFExpr := forallVal.value.instantiateLevelParams forallVal.levelParams [lvl, .zero]
     return mkAppN forallFExpr #[← interpLamSortAsUnlifted tyVal s]
   | .existE s  => do
@@ -369,11 +369,11 @@ namespace Lam2D
     (lctx : Nat) : LamTerm → MetaM Expr
   | .atom n => do
     let .some e := varVal.get? n
-      | throwError "interpLamTermAsUnlifted :: Cannot find fvarId assigned to term atom {n}"
+      | throwError "{decl_name%} :: Cannot find fvarId assigned to term atom {n}"
     return e
   | .etom n => do
     let .some efvar := etomVal.get? n
-      | throwError "interpLamSortAsUnlifted :: Cannot find fvarId assigned to etom {n}"
+      | throwError "{decl_name%} :: Cannot find fvarId assigned to etom {n}"
     return efvar
   | .base b => interpLamBaseTermAsUnlifted tyVal b
   | .bvar n => return .bvar n
