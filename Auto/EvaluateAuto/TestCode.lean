@@ -3,9 +3,14 @@ import Auto.EvaluateAuto.ConstAnalysis
 import Auto.EvaluateAuto.EnvAnalysis
 import Auto.Tactic
 
-open Lean
+open Lean Auto
 
-namespace Auto
+initialize
+  registerTraceClass `auto.eval.printConfig
+  registerTraceClass `auto.eval.printProblem
+  registerTraceClass `auto.eval.printResult
+
+namespace EvalAuto
 
 inductive Result
   | success
@@ -20,7 +25,20 @@ instance : ToMessageData Result where
   | .nonProp         => "Result.nonProp"
   | .typeCheckFail   => "Result.typeCheckFail"
   | .typeUnequal     => "Result.typeUnequal"
-  | .autoException e => m!"Result.autoException :: {e.toMessageData}"
+  | .autoException e => m!"Result.autoException ::\n{e.toMessageData}"
+
+structure EvalConfig where
+  maxHeartbeats : Nat           := 65536
+  logFile       : Option String := .none
+
+instance : ToString EvalConfig where
+  toString : EvalConfig → String
+  | ⟨maxHeartbeats, logFile⟩ =>
+    let logFileStr :=
+      match logFile with
+      | .some logFile => s!", logFile := {logFile}"
+      | .none => ""
+    s!"\{maxHeartbeats := {maxHeartbeats}{logFileStr}}"
 
 /--
   Run `Lean-auto` on `lem.type`, using premises collected from `lem.proof`
@@ -70,4 +88,24 @@ def runAutoOnConst (name : Name) : MetaM Result := do
   let lemmaV := {lemmaPre with proof := v}
   runAutoOnAutoLemma (.some name) lemmaV
 
-end Auto
+def runAutoOnConsts (config : EvalConfig) (names : Array Name) : MetaM Unit := do
+  let logFileHandle : Option IO.FS.Handle ← config.logFile.mapM (fun fname => IO.FS.Handle.mk fname .write)
+  trace[auto.eval.printConfig] m!"Config = {config}"
+  if let .some fhandle := logFileHandle then
+    fhandle.putStrLn s!"Config = {config}"
+  for name in names do
+    let ci ← Name.getCi name decl_name%
+    trace[auto.eval.printProblem] m!"Testing || {name} : {ci.type}"
+    if let .some fhandle := logFileHandle then
+      fhandle.putStrLn ""
+      fhandle.putStrLn s!"Testing || {name} : {← Lean.Meta.ppExpr ci.type}"
+    let result ←
+      -- **TODO: Setting maxHeartbeats not working**
+      withOptions (fun opts => Lean.maxHeartbeats.set opts config.maxHeartbeats) <|
+        withCurrHeartbeats <| do
+          runAutoOnConst name
+    trace[auto.eval.printResult] m!"{result}"
+    if let .some fhandle := logFileHandle then
+      fhandle.putStrLn (toString (← MessageData.format m!"{result}"))
+
+end EvalAuto

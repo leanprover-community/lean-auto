@@ -2,7 +2,7 @@ import Lean
 
 open Lean
 
-namespace Auto
+namespace EvalAuto
 
 def Name.getConstsOfModule (module : Name) : CoreM (Array Name) := do
   let mFile ← findOLean module
@@ -124,4 +124,4 @@ def analyze : CoreM (Array (Array Name)) := do
     return (!(← Name.onlyBoolLogicInType name)) && (← Name.onlyNatBoolLogicInType name))
   return #[logicThms, boolThms, natThms]
 
-end Auto
+end EvalAuto
