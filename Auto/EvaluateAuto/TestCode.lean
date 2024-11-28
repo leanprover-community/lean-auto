@@ -45,7 +45,7 @@ instance : ToString EvalConfig where
   Premises which only contain logic constants are filtered because they
     are assumed to be known by the prover
 -/
-def runAutoOnAutoLemma (declName? : Option Name) (lem : Auto.Lemma) : MetaM Result := do
+private def runAutoOnAutoLemmaMeta (declName? : Option Name) (lem : Auto.Lemma) : MetaM Result := do
   if !(← Meta.isProp lem.type) then
     return .nonProp
   -- **TODO: Aux theorem like those ending in `.proof_1`**
@@ -74,13 +74,16 @@ def runAutoOnAutoLemma (declName? : Option Name) (lem : Auto.Lemma) : MetaM Resu
     | _ => return .typeUnequal
   | Except.error _ => return .typeCheckFail
 
+def runAutoOnAutoLemma (declName? : Option Name) (lem : Auto.Lemma) : CoreM Result := do
+  (runAutoOnAutoLemmaMeta declName? lem).run'
+
 /--
   Run `Lean-auto` on the type of ``name``, using premises collected
     from the proof of `name`
   Premises which only contain logic constants are filtered because they
     are assumed to be known by the prover
 -/
-def runAutoOnConst (name : Name) : MetaM Result := do
+def runAutoOnConst (name : Name) : CoreM Result := do
   let ci ← Name.getCi name decl_name%
   let .some v := ci.value?
     | throwError "{decl_name%} :: {name} has no value"
@@ -88,7 +91,7 @@ def runAutoOnConst (name : Name) : MetaM Result := do
   let lemmaV := {lemmaPre with proof := v}
   runAutoOnAutoLemma (.some name) lemmaV
 
-def runAutoOnConsts (config : EvalConfig) (names : Array Name) : MetaM Unit := do
+def runAutoOnConsts (config : EvalConfig) (names : Array Name) : CoreM Unit := do
   let logFileHandle : Option IO.FS.Handle ← config.logFile.mapM (fun fname => IO.FS.Handle.mk fname .write)
   trace[auto.eval.printConfig] m!"Config = {config}"
   if let .some fhandle := logFileHandle then
@@ -98,10 +101,9 @@ def runAutoOnConsts (config : EvalConfig) (names : Array Name) : MetaM Unit := d
     trace[auto.eval.printProblem] m!"Testing || {name} : {ci.type}"
     if let .some fhandle := logFileHandle then
       fhandle.putStrLn ""
-      fhandle.putStrLn s!"Testing || {name} : {← Lean.Meta.ppExpr ci.type}"
+      fhandle.putStrLn s!"Testing || {name} : {← (Lean.Meta.ppExpr ci.type).run'}"
     let result ←
-      -- **TODO: Setting maxHeartbeats not working**
-      withOptions (fun opts => Lean.maxHeartbeats.set opts config.maxHeartbeats) <|
+      withReader (fun ctx => {ctx with maxHeartbeats := config.maxHeartbeats * 1000}) <|
         withCurrHeartbeats <| do
           runAutoOnConst name
     trace[auto.eval.printResult] m!"{result}"
