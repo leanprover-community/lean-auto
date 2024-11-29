@@ -27,18 +27,38 @@ instance : ToMessageData Result where
   | .typeUnequal     => "Result.typeUnequal"
   | .autoException e => m!"Result.autoException ::\n{e.toMessageData}"
 
+inductive SolverConfig where
+  | native
+  | leanSmt
+  | smt (solverName : Solver.SMT.SolverName)
+  | tptp (solverName : Solver.TPTP.SolverName) (path : String)
+
+instance : ToString SolverConfig where
+  toString : SolverConfig → String
+  | .native       => "native"
+  | .leanSmt      => "leanSmt"
+  | .smt sn       => s!"smt {sn}"
+  | .tptp sn path => s!"tptp {sn} {path}"
+
 structure EvalConfig where
+  /-- Timeout for native prover, e.g. Duper and Lean-smt -/
   maxHeartbeats : Nat           := 65536
+  /-- Timeout for external provers, i.e. TPTP solvers and SMT solvers -/
+  timeout       : Nat           := 10
+  /-- Solver configuration -/
+  solverConfig  : SolverConfig
+  /-- Optional logfile for saving the result of the evaluation -/
   logFile       : Option String := .none
 
 instance : ToString EvalConfig where
   toString : EvalConfig → String
-  | ⟨maxHeartbeats, logFile⟩ =>
+  | ⟨maxHeartbeats, timeout, solverConfig, logFile⟩ =>
     let logFileStr :=
       match logFile with
       | .some logFile => s!", logFile := {logFile}"
       | .none => ""
-    s!"\{maxHeartbeats := {maxHeartbeats}{logFileStr}}"
+    s!"\{maxHeartbeats := {maxHeartbeats}, timeout := {timeout}, " ++
+    s!"solverConfig = {solverConfig}{logFileStr}}"
 
 /--
   Run `Lean-auto` on `lem.type`, using premises collected from `lem.proof`
@@ -91,6 +111,12 @@ def runAutoOnConst (name : Name) : CoreM Result := do
   let lemmaV := {lemmaPre with proof := v}
   runAutoOnAutoLemma (.some name) lemmaV
 
+def disableAllSolvers (o : Options) : Options :=
+  let o := auto.native.set o false
+  let o := auto.smt.set o false
+  let o := auto.tptp.set o false
+  o
+
 def runAutoOnConsts (config : EvalConfig) (names : Array Name) : CoreM Unit := do
   let logFileHandle : Option IO.FS.Handle ← config.logFile.mapM (fun fname => IO.FS.Handle.mk fname .write)
   trace[auto.eval.printConfig] m!"Config = {config}"
@@ -102,10 +128,35 @@ def runAutoOnConsts (config : EvalConfig) (names : Array Name) : CoreM Unit := d
     if let .some fhandle := logFileHandle then
       fhandle.putStrLn ""
       fhandle.putStrLn s!"Testing || {name} : {← (Lean.Meta.ppExpr ci.type).run'}"
-    let result ←
-      withReader (fun ctx => {ctx with maxHeartbeats := config.maxHeartbeats * 1000}) <|
-        withCurrHeartbeats <| do
-          runAutoOnConst name
+    let result : Result ←
+      match config.solverConfig with
+      | .native    =>
+        withOptions (fun o =>
+          let o := disableAllSolvers o
+          let o := auto.native.set o true
+          o) <|
+          withReader (fun ctx => {ctx with maxHeartbeats := config.maxHeartbeats * 1000}) <|
+            withCurrHeartbeats <| runAutoOnConst name
+      | .leanSmt  =>
+        throwError "Lean-SMT is currently not supported"
+      | .smt sn   =>
+        withOptions (fun o =>
+          let o := disableAllSolvers o
+          let o := auto.smt.set o true
+          let o := auto.smt.solver.name.set o sn
+          let o := auto.smt.trust.set o true
+          o) <| runAutoOnConst name
+      | .tptp sn path =>
+        withOptions (fun o =>
+          let o := disableAllSolvers o
+          let o := auto.tptp.set o true
+          let o := auto.tptp.solver.name.set o sn
+          match sn with
+          | .zipperposition => auto.tptp.zipperposition.path.set o path
+          | .zeport _       => auto.tptp.eproverHo.path.set o path
+          | .eproverHo      => auto.tptp.zeport.path.set o path
+          | .vampire        => auto.tptp.vampire.path.set o path) <|
+            runAutoOnConst name
     trace[auto.eval.printResult] m!"{result}"
     if let .some fhandle := logFileHandle then
       fhandle.putStrLn (toString (← MessageData.format m!"{result}"))

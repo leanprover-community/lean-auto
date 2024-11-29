@@ -52,9 +52,6 @@ register_option auto.smt.rconsProof : Bool := {
 
 namespace Auto
 
-open IR.SMT
-open Parser.SMTSexp
-
 namespace Solver.SMT
 
 inductive SolverName where
@@ -80,10 +77,18 @@ instance : Lean.KVMap.Value SolverName where
   | "cvc5" => some .cvc5
   | _      => none
 
+end Auto.Solver.SMT
+
+open Auto.Solver.SMT in
 register_option auto.smt.solver.name : SolverName := {
   defValue := SolverName.z3
   descr := "Name of the designated SMT solver. Use `none` to disable solver querying."
 }
+
+namespace Auto.Solver.SMT
+
+open IR.SMT
+open Parser.SMTSexp
 
 abbrev SolverProc := IO.Process.Child ⟨.piped, .piped, .piped⟩
 

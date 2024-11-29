@@ -254,10 +254,6 @@ def collectAllLemmas
   return (lctxLemmas ++ userLemmas ++ defeqLemmas, inhFacts)
 
 open Embedding.Lam in
-/--
-  If TPTP succeeds, return unsat core
-  If TPTP fails, return none
--/
 def queryTPTP (exportFacts : Array REntry) : LamReif.ReifM (Array Embedding.Lam.REntry) := do
     let lamVarTy := (← LamReif.getVarVal).map Prod.snd
     let lamEVarTy ← LamReif.getLamEVarTy

@@ -319,7 +319,7 @@ private def lamBaseTerm2STerm_Arity1 (sni : SMTNamingInfo) (arg : STerm) : LamBa
 | t               => throwError "{decl_name%} :: The arity of {repr t} is not 1"
 where
   solverName : MetaM Solver.SMT.SolverName := do
-    return Solver.SMT.auto.smt.solver.name.get (← getOptions)
+    return auto.smt.solver.name.get (← getOptions)
   mkSMTMsbExpr (n : Nat) (arg : STerm) : STerm :=
     let andExpr := .qStrApp "bvand" #[arg, .qStrApp "bvshl" #[bitVec2STerm n 1, bitVec2STerm n (n - 1)]]
     .qStrApp "not" #[.qStrApp "=" #[andExpr, bitVec2STerm n 0]]

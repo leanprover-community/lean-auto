@@ -43,6 +43,7 @@ inductive SolverName where
   | zeport (zept : ZEPortType)
   -- E prover, higher-order version
   | eproverHo
+  | vampire
 deriving BEq, Hashable, Inhabited
 
 instance : ToString SolverName where
@@ -53,6 +54,7 @@ instance : ToString SolverName where
     | .fo => "zeport-fo"
     | .lams => "zeport-lams"
   | .eproverHo => "eprover-ho"
+  | .vampire => "vampire"
 
 instance : Lean.KVMap.Value SolverName where
   toDataValue n := toString n
@@ -61,8 +63,12 @@ instance : Lean.KVMap.Value SolverName where
   | "zeport-fo" => some (.zeport .fo)
   | "zeport-lams" => some (.zeport .lams)
   | "eprover-ho" => some .eproverHo
+  | "vampire" => some .vampire
   | _ => none
 
+end Auto.Solver.TPTP
+
+open Auto.Solver.TPTP in
 register_option auto.tptp.solver.name : SolverName := {
   defValue := SolverName.zipperposition
   descr := "Name of the designated TPTP solver"
@@ -73,15 +79,22 @@ register_option auto.tptp.zipperposition.path : String := {
   descr := "Path to zipperposition, defaults to \"zipperposition\""
 }
 
+register_option auto.tptp.zeport.path : String := {
+  defValue := "zeport"
+  descr := "Path to the zipperposition-E portfolio"
+}
+
 register_option auto.tptp.eproverHo.path : String := {
   defValue := "eprover-ho"
   descr := "Path to higher-order version of E theorem prover"
 }
 
-register_option auto.tptp.zeport.path : String := {
-  defValue := "zeport"
-  descr := "Path to the zipperposition-E portfolio"
+register_option auto.tptp.vampire.path : String := {
+  defValue := "vampire"
+  descr := "Path to vampire prover"
 }
+
+namespace Auto.Solver.TPTP
 
 abbrev SolverProc := IO.Process.Child ⟨.piped, .piped, .piped⟩
 
@@ -147,14 +160,27 @@ def queryE (query : String) : MetaM String := do
   solver.kill
   return stdout
 
+def queryVampire (query : String) : MetaM String := do
+  let path := auto.tptp.vampire.path.get (← getOptions)
+  let tlim := auto.tptp.timeout.get (← getOptions)
+  let solver ← createAux path #["--mode", "casc", "--time_limit", s!"{tlim}"]
+  solver.stdin.putStr s!"{query}\n"
+  let (_, solver) ← solver.takeStdin
+  let stdout ← solver.stdout.readToEnd
+  let stderr ← solver.stderr.readToEnd
+  trace[auto.tptp.result] "Result: \nstderr:\n{stderr}\nstdout:\n{stdout}"
+  solver.kill
+  return stdout
+
 def querySolver (query : String) : MetaM (Array Parser.TPTP.Command) := do
   if !(auto.tptp.get (← getOptions)) then
     throwError "{decl_name%} :: Unexpected error"
   let stdout ← (do
     match auto.tptp.solver.name.get (← getOptions) with
     | .zipperposition => queryZipperposition query
-    | .zeport zept => queryZEPort zept query
-    | .eproverHo => queryE query)
+    | .zeport zept    => queryZEPort zept query
+    | .eproverHo      => queryE query
+    | .vampire        => queryVampire query)
   return ← Parser.TPTP.parse stdout
 
 end Solver.TPTP
