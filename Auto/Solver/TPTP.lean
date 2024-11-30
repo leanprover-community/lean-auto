@@ -15,6 +15,15 @@ register_option auto.tptp : Bool := {
   descr := "Enable/Disable TPTP"
 }
 
+register_option auto.tptp.trust : Bool := {
+  defValue := false
+  descr :=
+    "When this option is set to `true`, auto closes the " ++
+    "goal by `autoTPTPSorry` if TPTP solver proves the problem"
+}
+
+axiom autoTPTPSorry.{u} (α : Sort u) : α
+
 register_option auto.tptp.premiseSelection : Bool := {
   defValue := true
   descr := "Enable/Disable premise selection by TPTP solvers"
@@ -102,7 +111,7 @@ private def createAux (path : String) (args : Array String) : MetaM SolverProc :
     IO.Process.spawn {stdin := .piped, stdout := .piped, stderr := .piped,
                       cmd := path, args := args}
 
-def queryZipperposition (query : String) : MetaM String := do
+def queryZipperposition (query : String) : MetaM (Bool × String) := do
   let path := auto.tptp.zipperposition.path.get (← getOptions)
   let tlim := auto.tptp.timeout.get (← getOptions)
   let solver ← createAux path #["-i=tptp", "-o=tptp", "--mode=ho-competitive", s!"-t={tlim}"]
@@ -112,9 +121,10 @@ def queryZipperposition (query : String) : MetaM String := do
   let stderr ← solver.stderr.readToEnd
   trace[auto.tptp.result] "Result: \nstderr:\n{stderr}\nstdout:\n{stdout}"
   solver.kill
-  return stdout
+  let proven := (stdout.splitOn "SZS status Unsatisfiable").length >= 2
+  return (proven, stdout)
 
-def queryZEPort (zept : ZEPortType) (query : String) : MetaM String := do
+def queryZEPort (zept : ZEPortType) (query : String) : MetaM (Bool × String) := do
   let path := auto.tptp.zeport.path.get (← getOptions)
   -- To avoid concurrency issue, use `attempt`
   attempt <| IO.FS.createDir "./.zeport_ignore"
@@ -138,7 +148,8 @@ def queryZEPort (zept : ZEPortType) (query : String) : MetaM String := do
   IO.FS.removeFile s!"./.zeport_ignore/problem{idx}.p"
   -- For synchronization, remove directory in the end
   IO.FS.removeDirAll s!"./.zeport_ignore/tmp{idx}"
-  return stdout
+  let proven := (stdout.splitOn "SZS status Unsatisfiable").length >= 2
+  return (proven, stdout)
 where
   attempt (action : MetaM Unit) : MetaM Unit := try action catch _ => pure ()
   createSolver (path : String) (idx : Nat) := do
@@ -148,19 +159,20 @@ where
     | .fo => createAux "python3" #[path ++ "portfolio.fo.parallel.py", s!"./.zeport_ignore/problem{idx}.p", s!"{tlim}", "true"]
     | .lams => createAux "python3" #[path ++ "portfolio.lams.parallel.py", s!"./.zeport_ignore/problem{idx}.p", s!"{tlim}", s!"./.zeport_ignore/tmp{idx}", "true"]
 
-def queryE (query : String) : MetaM String := do
+def queryE (query : String) : MetaM (Bool × String) := do
   let path := auto.tptp.eproverHo.path.get (← getOptions)
   let tlim := auto.tptp.timeout.get (← getOptions)
-  let solver ← createAux path #["--tptp-format", s!"--cpu-limit={tlim}"]
+  let solver ← createAux path #["--tstp-format", s!"--cpu-limit={tlim}"]
   solver.stdin.putStr s!"{query}\n"
   let (_, solver) ← solver.takeStdin
   let stdout ← solver.stdout.readToEnd
   let stderr ← solver.stderr.readToEnd
   trace[auto.tptp.result] "Result: \nstderr:\n{stderr}\nstdout:\n{stdout}"
   solver.kill
-  return stdout
+  let proven := (stdout.splitOn "Proof found!").length >= 2
+  return (proven, stdout)
 
-def queryVampire (query : String) : MetaM String := do
+def queryVampire (query : String) : MetaM (Bool × String) := do
   let path := auto.tptp.vampire.path.get (← getOptions)
   let tlim := auto.tptp.timeout.get (← getOptions)
   let solver ← createAux path #["--mode", "casc", "--time_limit", s!"{tlim}"]
@@ -170,18 +182,19 @@ def queryVampire (query : String) : MetaM String := do
   let stderr ← solver.stderr.readToEnd
   trace[auto.tptp.result] "Result: \nstderr:\n{stderr}\nstdout:\n{stdout}"
   solver.kill
-  return stdout
+  let proven := (stdout.splitOn "Refutation found. Thanks to Tanya!").length >= 2
+  return (proven, stdout)
 
-def querySolver (query : String) : MetaM (Array Parser.TPTP.Command) := do
+def querySolver (query : String) : MetaM (Bool × Array Parser.TPTP.Command) := do
   if !(auto.tptp.get (← getOptions)) then
     throwError "{decl_name%} :: Unexpected error"
-  let stdout ← (do
+  let (proven, stdout) ← (do
     match auto.tptp.solver.name.get (← getOptions) with
     | .zipperposition => queryZipperposition query
     | .zeport zept    => queryZEPort zept query
     | .eproverHo      => queryE query
     | .vampire        => queryVampire query)
-  return ← Parser.TPTP.parse stdout
+  return (proven, ← Parser.TPTP.parse stdout)
 
 end Solver.TPTP
 

@@ -254,32 +254,38 @@ def collectAllLemmas
   return (lctxLemmas ++ userLemmas ++ defeqLemmas, inhFacts)
 
 open Embedding.Lam in
-def queryTPTP (exportFacts : Array REntry) : LamReif.ReifM (Array Embedding.Lam.REntry) := do
-    let lamVarTy := (← LamReif.getVarVal).map Prod.snd
-    let lamEVarTy ← LamReif.getLamEVarTy
-    let exportLamTerms ← exportFacts.mapM (fun re => do
-      match re with
-      | .valid [] t => return t
-      | _ => throwError "{decl_name%} :: Unexpected error")
-    let query ← lam2TH0 lamVarTy lamEVarTy exportLamTerms
-    trace[auto.tptp.printQuery] "\n{query}"
-    let tptpProof ← Solver.TPTP.querySolver query
-    try
-      let proofSteps ← Parser.TPTP.getProof lamVarTy lamEVarTy tptpProof
-      for step in proofSteps do
-        trace[auto.tptp.printProof] "{step}"
-    catch e =>
-      trace[auto.tptp.printProof] "TPTP proof reification failed with {e.toMessageData}"
-    let unsatCore ← Parser.TPTP.unsatCore tptpProof
-    let mut ret := #[]
-    for n in unsatCore do
-      let .some re := exportFacts[n]?
-        | throwError "{decl_name%} :: Index {n} out of range"
-      ret := ret.push re
-    return ret
+def queryTPTP (exportFacts : Array REntry) : LamReif.ReifM (Option Expr × Option (Array REntry)) := do
+  let lamVarTy := (← LamReif.getVarVal).map Prod.snd
+  let lamEVarTy ← LamReif.getLamEVarTy
+  let exportLamTerms ← exportFacts.mapM (fun re => do
+    match re with
+    | .valid [] t => return t
+    | _ => throwError "{decl_name%} :: Unexpected error")
+  let query ← lam2TH0 lamVarTy lamEVarTy exportLamTerms
+  trace[auto.tptp.printQuery] "\n{query}"
+  let (proven, tptpProof) ← Solver.TPTP.querySolver query
+  if !proven then
+    return (.none, .none)
+  try
+    let proofSteps ← Parser.TPTP.getProof lamVarTy lamEVarTy tptpProof
+    for step in proofSteps do
+      trace[auto.tptp.printProof] "{step}"
+  catch e =>
+    trace[auto.tptp.printProof] "TPTP proof reification failed with {e.toMessageData}"
+  let unsatCoreIds ← Parser.TPTP.unsatCore tptpProof
+  let mut unsatCore := #[]
+  for n in unsatCoreIds do
+    let .some re := exportFacts[n]?
+      | throwError "{decl_name%} :: Index {n} out of range"
+    unsatCore := unsatCore.push re
+  if (auto.tptp.trust.get (← getOptions)) then
+    logWarning "Trusting TPTP solvers. `autoTPTPSorry` is used to discharge the goal."
+    return (← Meta.mkAppM ``autoTPTPSorry #[Expr.const ``False []], unsatCore)
+  else
+    return (.none, unsatCore)
 
 open Embedding.Lam in
-def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : LamReif.ReifM (Option Expr) := do
+def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : LamReif.ReifM (Option Expr × Option (Array REntry)) := do
   let lamVarTy := (← LamReif.getVarVal).map Prod.snd
   let lamEVarTy ← LamReif.getLamEVarTy
   let exportLamTerms ← exportFacts.mapM (fun re => do
@@ -294,7 +300,7 @@ def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : L
   if (auto.smt.save.get (← getOptions)) then
     Solver.SMT.saveQuery commands
   let .some (unsatCore, proof) ← Solver.SMT.querySolver commands
-    | return .none
+    | return (.none, .none)
   let unsatCoreIds ← Solver.SMT.validFactOfUnsatCore unsatCore
   -- **Print valuation of SMT atoms**
   SMT.withExprValuation sni state.h2lMap (fun tyValMap varValMap etomValMap => do
@@ -321,14 +327,20 @@ def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : L
       | throwError "{decl_name%} :: Index {id} of `exportLamTerm` out of range"
     let vderiv ← LamReif.collectDerivFor (.valid [] t)
     trace[auto.smt.unsatCore.deriv] "|valid_fact_{id}| : {vderiv}"
+  -- **Getting unsatCore**
+  let mut unsatCore := #[]
+  for id in unsatCoreIds do
+    let .some re := exportFacts[id]?
+      | throwError "{decl_name%} :: Index {id}  of `exportFacts` out of range"
+    unsatCore := unsatCore.push re
   if auto.smt.rconsProof.get (← getOptions) then
     let (_, _) ← Solver.SMT.getSexp proof
     logWarning "Proof reconstruction is not implemented."
   if (auto.smt.trust.get (← getOptions)) then
     logWarning "Trusting SMT solvers. `autoSMTSorry` is used to discharge the goal."
-    return .some (← Meta.mkAppM ``Solver.SMT.autoSMTSorry #[Expr.const ``False []])
+    return (← Meta.mkAppM ``autoSMTSorry #[Expr.const ``False []], unsatCore)
   else
-    return .none
+    return (.none, unsatCore)
 
 open LamReif Embedding.Lam in
 /--
@@ -452,13 +464,17 @@ def runAuto
     exportFacts := exportFacts'
     -- **TPTP invocation and Premise Selection**
     if auto.tptp.get (← getOptions) then
+      let (proof, unsatCore) ← queryTPTP exportFacts
+      if let .some proof := proof then
+        return proof
       let premiseSel? := auto.tptp.premiseSelection.get (← getOptions)
-      let unsatCore ← queryTPTP exportFacts
       if premiseSel? then
-        exportFacts := unsatCore
+        if let .some unsatCore := unsatCore then
+          exportFacts := unsatCore
     -- **SMT**
     if auto.smt.get (← getOptions) then
-      if let .some proof ← querySMT exportFacts exportInds then
+      let (proof, _) ← querySMT exportFacts exportInds
+      if let .some proof := proof then
         return proof
     -- **Native Prover**
     exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)

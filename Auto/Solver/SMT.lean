@@ -21,9 +21,12 @@ register_option auto.smt : Bool := {
 
 register_option auto.smt.trust : Bool := {
   defValue := false
-  descr := "When this option is set to `true`, auto closes the " ++
-    "goal by `sorry` if SMT solver returns `unsat`"
+  descr :=
+    "When this option is set to `true`, auto closes the " ++
+    "goal by `autoSMTSorry` if SMT solver returns `unsat`"
 }
+
+axiom autoSMTSorry.{u} (α : Sort u) : α
 
 register_option auto.smt.timeout : Nat := {
   defValue := 10
@@ -110,8 +113,6 @@ where
   createAux (path : String) (args : Array String) : MetaM SolverProc :=
     IO.Process.spawn {stdin := .piped, stdout := .piped, stderr := .piped,
                       cmd := path, args := args}
-
-axiom autoSMTSorry.{u} (α : Sort u) : α
 
 def getSexp (s : String) : MetaM (Sexp × String) :=
   match parseSexp s ⟨0⟩ {} with
