@@ -135,8 +135,9 @@ def runAutoOnConsts (config : EvalConfig) (names : Array Name) : CoreM Unit := d
           let o := disableAllSolvers o
           let o := auto.native.set o true
           o) <|
-          withReader (fun ctx => {ctx with maxHeartbeats := config.maxHeartbeats * 1000}) <|
-            withCurrHeartbeats <| runAutoOnConst name
+          withCurrHeartbeats <|
+            withReader (fun ctx => {ctx with maxHeartbeats := config.maxHeartbeats * 1000}) <|
+              runAutoOnConst name
       | .leanSmt  =>
         throwError "Lean-SMT is currently not supported"
       | .smt sn   =>
@@ -161,5 +162,10 @@ def runAutoOnConsts (config : EvalConfig) (names : Array Name) : CoreM Unit := d
     trace[auto.eval.printResult] m!"{result}"
     if let .some fhandle := logFileHandle then
       fhandle.putStrLn (toString (← MessageData.format m!"{result}"))
+
+def randEval (cfg : EvalConfig) (n : Nat) : CoreM Unit := do
+  let hthms ← allHumanTheorems
+  let asel ← Array.randPick hthms n
+  runAutoOnConsts cfg asel
 
 end EvalAuto
