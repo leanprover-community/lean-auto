@@ -859,8 +859,8 @@ def getProof (lamVarTy lamEVarTy : Array LamSort) (cmds : Array Command) : MetaM
         else
           match val with
           | ⟨.ident name, [ty]⟩ =>
-            -- In zipperposition, skolems start with `sk_`
-            if name.take 3 == "sk_" then
+            -- In zipperposition, skolems start with `sk_` or `#sk_`
+            if name.take 3 == "sk_" || name.take 3 == "#sk" then
               match term2LamTerm pi ty with
               | .sort s => pi := pi.addSkolem name s
               | lc => throwError "{decl_name%} :: Unexpected LamConstr {lc}, expected sort"

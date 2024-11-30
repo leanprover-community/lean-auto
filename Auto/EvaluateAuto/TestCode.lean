@@ -151,10 +151,11 @@ def runAutoOnConsts (config : EvalConfig) (names : Array Name) : CoreM Unit := d
           let o := disableAllSolvers o
           let o := auto.tptp.set o true
           let o := auto.tptp.solver.name.set o sn
+          let o := auto.tptp.trust.set o true
           match sn with
           | .zipperposition => auto.tptp.zipperposition.path.set o path
-          | .zeport _       => auto.tptp.eproverHo.path.set o path
-          | .eproverHo      => auto.tptp.zeport.path.set o path
+          | .zeport _       => auto.tptp.zeport.path.set o path
+          | .eproverHo      => auto.tptp.eproverHo.path.set o path
           | .vampire        => auto.tptp.vampire.path.set o path) <|
             runAutoOnConst name
     trace[auto.eval.printResult] m!"{result}"
