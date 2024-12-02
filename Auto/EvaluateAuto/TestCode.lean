@@ -145,6 +145,7 @@ def runAutoOnConsts (config : EvalConfig) (names : Array Name) : CoreM Unit := d
           let o := disableAllSolvers o
           let o := auto.smt.set o true
           let o := auto.smt.solver.name.set o sn
+          let o := auto.smt.timeout.set o config.timeout
           let o := auto.smt.trust.set o true
           o) <| runAutoOnConst name
       | .tptp sn path =>
@@ -152,6 +153,7 @@ def runAutoOnConsts (config : EvalConfig) (names : Array Name) : CoreM Unit := d
           let o := disableAllSolvers o
           let o := auto.tptp.set o true
           let o := auto.tptp.solver.name.set o sn
+          let o := auto.tptp.timeout.set o config.timeout
           let o := auto.tptp.trust.set o true
           match sn with
           | .zipperposition => auto.tptp.zipperposition.path.set o path
