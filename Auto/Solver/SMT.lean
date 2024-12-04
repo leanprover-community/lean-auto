@@ -108,7 +108,7 @@ def createSolver (name : SolverName) : MetaM SolverProc := do
   | .none => throwError "{decl_name%} :: Unexpected error"
   | .z3   => createAux "z3" #["-in", "-smt2", s!"-T:{tlim}"]
   | .cvc4 => throwError "cvc4 is not supported"
-  | .cvc5 => createAux "cvc5" #[s!"--tlimit={tlim * 1000}", "--produce-models"]
+  | .cvc5 => createAux "cvc5" #[s!"--tlimit={tlim * 1000}", "--produce-models", "--enum-inst"]
 where
   createAux (path : String) (args : Array String) : MetaM SolverProc :=
     IO.Process.spawn {stdin := .piped, stdout := .piped, stderr := .piped,
