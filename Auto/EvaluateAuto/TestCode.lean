@@ -1,6 +1,7 @@
 import Lean
 import Auto.EvaluateAuto.ConstAnalysis
 import Auto.EvaluateAuto.EnvAnalysis
+import Auto.EvaluateAuto.NameArr
 import Auto.Tactic
 
 open Lean Auto
@@ -122,6 +123,7 @@ def runAutoOnConsts (config : EvalConfig) (names : Array Name) : CoreM Unit := d
   trace[auto.eval.printConfig] m!"Config = {config}"
   if let .some fhandle := logFileHandle then
     fhandle.putStrLn s!"Config = {config}"
+  let startTime ← IO.monoMsNow
   for name in names do
     let ci ← Name.getCi name decl_name%
     trace[auto.eval.printProblem] m!"Testing || {name} : {ci.type}"
@@ -164,6 +166,13 @@ def runAutoOnConsts (config : EvalConfig) (names : Array Name) : CoreM Unit := d
     trace[auto.eval.printResult] m!"{result}"
     if let .some fhandle := logFileHandle then
       fhandle.putStrLn (toString (← MessageData.format m!"{result}"))
+  if let .some fhandle := logFileHandle then
+    fhandle.putStrLn ""
+    fhandle.putStrLn s!"Elapsed time: {(← IO.monoMsNow) - startTime} ms"
+
+def namesFileEval (cfg : EvalConfig) (fname : String) : CoreM Unit := do
+  let names ← NameArray.load fname
+  runAutoOnConsts cfg names
 
 def randEval (cfg : EvalConfig) (n : Nat) : CoreM Unit := do
   let hthms ← allHumanTheorems
