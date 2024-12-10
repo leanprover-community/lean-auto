@@ -30,6 +30,8 @@ register_option auto.mono.recordInstInst : Bool := {
   descr := "Whether to record instances of constants with the `instance` attribute"
 }
 
+namespace Auto
+
 inductive MonoMode where
   | fol -- First-order logic
   | hol -- Monomorphic higher-order logic
@@ -47,8 +49,10 @@ instance : Lean.KVMap.Value MonoMode where
   | "hol" => some .hol
   | _     => none
 
-register_option auto.mono.mode : MonoMode := {
-  defValue := MonoMode.hol
+end Auto
+
+register_option auto.mono.mode : Auto.MonoMode := {
+  defValue := Auto.MonoMode.hol
   descr := "Operation mode of monomorphization"
 }
 

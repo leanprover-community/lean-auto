@@ -137,6 +137,7 @@ def runAutoOnConsts (config : EvalConfig) (names : Array Name) : CoreM Unit := d
           withOptions (fun o =>
             let o := disableAllSolvers o
             let o := auto.native.set o true
+            let o := auto.mono.mode.set o MonoMode.hol
             o) <| runAutoOnConst name
         | .leanSmt  =>
           throwError "Lean-SMT is currently not supported"
@@ -147,6 +148,7 @@ def runAutoOnConsts (config : EvalConfig) (names : Array Name) : CoreM Unit := d
             let o := auto.smt.solver.name.set o sn
             let o := auto.smt.timeout.set o config.timeout
             let o := auto.smt.trust.set o true
+            let o := auto.mono.mode.set o MonoMode.fol
             o) <| runAutoOnConst name
         | .tptp sn path =>
           withOptions (fun o =>
@@ -155,6 +157,7 @@ def runAutoOnConsts (config : EvalConfig) (names : Array Name) : CoreM Unit := d
             let o := auto.tptp.solver.name.set o sn
             let o := auto.tptp.timeout.set o config.timeout
             let o := auto.tptp.trust.set o true
+            let o := auto.mono.mode.set o MonoMode.fol
             match sn with
             | .zipperposition => auto.tptp.zipperposition.path.set o path
             | .zeport _       => auto.tptp.zeport.path.set o path
