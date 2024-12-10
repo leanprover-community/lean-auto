@@ -42,7 +42,7 @@ instance : ToString SolverConfig where
   | .tptp sn path => s!"tptp {sn} {path}"
 
 structure EvalConfig where
-  /-- Timeout for native prover, e.g. Duper and Lean-smt -/
+  /-- Timeout for Lean code (Lean-auto + native provers) -/
   maxHeartbeats : Nat           := 65536
   /-- Timeout for external provers, i.e. TPTP solvers and SMT solvers -/
   timeout       : Nat           := 10
@@ -130,39 +130,37 @@ def runAutoOnConsts (config : EvalConfig) (names : Array Name) : CoreM Unit := d
     if let .some fhandle := logFileHandle then
       fhandle.putStrLn ""
       fhandle.putStrLn s!"Testing || {name} : {← (Lean.Meta.ppExpr ci.type).run'}"
-    let result : Result ←
-      match config.solverConfig with
-      | .native    =>
-        withOptions (fun o =>
-          let o := disableAllSolvers o
-          let o := auto.native.set o true
-          o) <|
-          withCurrHeartbeats <|
-            withReader (fun ctx => {ctx with maxHeartbeats := config.maxHeartbeats * 1000}) <|
+    let result : Result ← withCurrHeartbeats <|
+      withReader (fun ctx => {ctx with maxHeartbeats := config.maxHeartbeats * 1000}) <|
+        match config.solverConfig with
+        | .native    =>
+          withOptions (fun o =>
+            let o := disableAllSolvers o
+            let o := auto.native.set o true
+            o) <| runAutoOnConst name
+        | .leanSmt  =>
+          throwError "Lean-SMT is currently not supported"
+        | .smt sn   =>
+          withOptions (fun o =>
+            let o := disableAllSolvers o
+            let o := auto.smt.set o true
+            let o := auto.smt.solver.name.set o sn
+            let o := auto.smt.timeout.set o config.timeout
+            let o := auto.smt.trust.set o true
+            o) <| runAutoOnConst name
+        | .tptp sn path =>
+          withOptions (fun o =>
+            let o := disableAllSolvers o
+            let o := auto.tptp.set o true
+            let o := auto.tptp.solver.name.set o sn
+            let o := auto.tptp.timeout.set o config.timeout
+            let o := auto.tptp.trust.set o true
+            match sn with
+            | .zipperposition => auto.tptp.zipperposition.path.set o path
+            | .zeport _       => auto.tptp.zeport.path.set o path
+            | .eproverHo      => auto.tptp.eproverHo.path.set o path
+            | .vampire        => auto.tptp.vampire.path.set o path) <|
               runAutoOnConst name
-      | .leanSmt  =>
-        throwError "Lean-SMT is currently not supported"
-      | .smt sn   =>
-        withOptions (fun o =>
-          let o := disableAllSolvers o
-          let o := auto.smt.set o true
-          let o := auto.smt.solver.name.set o sn
-          let o := auto.smt.timeout.set o config.timeout
-          let o := auto.smt.trust.set o true
-          o) <| runAutoOnConst name
-      | .tptp sn path =>
-        withOptions (fun o =>
-          let o := disableAllSolvers o
-          let o := auto.tptp.set o true
-          let o := auto.tptp.solver.name.set o sn
-          let o := auto.tptp.timeout.set o config.timeout
-          let o := auto.tptp.trust.set o true
-          match sn with
-          | .zipperposition => auto.tptp.zipperposition.path.set o path
-          | .zeport _       => auto.tptp.zeport.path.set o path
-          | .eproverHo      => auto.tptp.eproverHo.path.set o path
-          | .vampire        => auto.tptp.vampire.path.set o path) <|
-            runAutoOnConst name
     trace[auto.eval.printResult] m!"{result}"
     if let .some fhandle := logFileHandle then
       fhandle.putStrLn (toString (← MessageData.format m!"{result}"))
