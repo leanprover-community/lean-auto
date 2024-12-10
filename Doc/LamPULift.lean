@@ -30,7 +30,7 @@ initialize
   Note that `types/terms depending on types` are not fully supported
   For example, if we have const/fvar `f : ∀ (α : Type), α → Prop`
     and `h : Nat → Nat`, then calling `termLift` on `f (Nat → Nat) h`
-    would fail. This is because 
+    would fail. This is because
   (1) `h` will be lifted to `hLift : GLift Nat → GLift Nat`, so
       The lifted version of `f (Nat → Nat)` must have type
       `(GLift Nat → GLift Nat) → GLift Prop`
@@ -78,11 +78,11 @@ mutual
   -- In the return type, the first `Expr` is `e↑`, and the second `Expr` is
   --   the type of `e↑`
   partial def cstULiftPos (u : Level) (e : Expr) : (ty : Expr) → MetaM (Expr × Expr)
-  | .bvar idx => throwError "Auto.cstULift :: Loose bound variable"
-  | .lam .. => throwError "Auto.cstULift :: Please β-reduce type before calling cstULift"
-  | .letE .. => throwError "Auto.cstULift :: Please ζ-reduce type before calling cstULift"
-  | .lit .. => throwError "Auto.cstULift :: Malformed type"
-  | .proj .. => throwError "Auto.cstULift :: Please unfold projections in type before calling cstULift"
+  | .bvar idx => throwError "{decl_name%} :: Loose bound variable"
+  | .lam .. => throwError "{decl_name%} :: Please β-reduce type before calling cstULift"
+  | .letE .. => throwError "{decl_name%} :: Please ζ-reduce type before calling cstULift"
+  | .lit .. => throwError "{decl_name%} :: Malformed type"
+  | .proj .. => throwError "{decl_name%} :: Please unfold projections in type before calling cstULift"
   | .forallE name biTy body binfo => do
     -- We want to reate a free variable (intended) of type `bity↑`.
     --   However, we still don't what's `bity↑`, so we first
@@ -120,7 +120,7 @@ mutual
     -- The same holds for `cstULiftNeg`
     let sort ← instantiateMVars (← Meta.inferType ty)
     if !sort.isSort then
-      throwError "Auto.ULift :: Expected sort"
+      throwError "{decl_name%} :: Expected sort"
     let lvl := sort.sortLevel!
     let eUpTy := mkApp (.const ``GLift [lvl, u]) ty
     let eUp := mkAppN (.const ``GLift.up [lvl, u]) #[ty, e]
@@ -128,11 +128,11 @@ mutual
 
   /-- In the return type, the first `Expr` is `eUp↓`, and the second `Expr` is the type of `e↑` -/
   partial def cstULiftNeg (u : Level) (eUp : Expr) : (ty : Expr) → MetaM (Expr × Expr)
-  | .bvar idx => throwError "Auto.cstULift :: Loose bound variable"
-  | .lam .. => throwError "Auto.cstULift :: Please β-reduce type before calling cstULift"
-  | .letE .. => throwError "Auto.cstULift :: Please ζ-reduce type before calling cstULift"
-  | .lit .. => throwError "Auto.cstULift :: Malformed type"
-  | .proj .. => throwError "Auto.cstULift :: Please unfold projections in type before calling cstULift"
+  | .bvar idx => throwError "{decl_name%} :: Loose bound variable"
+  | .lam .. => throwError "{decl_name%} :: Please β-reduce type before calling cstULift"
+  | .letE .. => throwError "{decl_name%} :: Please ζ-reduce type before calling cstULift"
+  | .lit .. => throwError "{decl_name%} :: Malformed type"
+  | .proj .. => throwError "{decl_name%} :: Please unfold projections in type before calling cstULift"
   | .mdata data ty' => cstULiftNeg u eUp ty'
   | .forallE name biTy body binfo => do
     -- `upFunc` is such that `upFunc binder` is equivalent to `binder↑`
@@ -163,7 +163,7 @@ mutual
   | ty => do
     let sort ← instantiateMVars (← Meta.inferType ty)
     if !sort.isSort then
-      throwError "Auto.ULift :: Expected sort"
+      throwError "{decl_name%} :: Expected sort"
     let lvl := sort.sortLevel!
     let eUpTy := mkApp (.const ``GLift [lvl, u]) ty
     let eUpDown := mkAppN (.const ``GLift.down [lvl, u]) #[ty, eUp]
@@ -191,10 +191,9 @@ section TestcstULift
     let (eup, eupTy) ← cstULiftPos (.param `tmp) e ety
     let eup ← postProcessULift eup
     logInfo eup
-  
+
   set_option pp.universes true
   set_option pp.funBinderTypes true
-  set_option pp.structureProjections false
 
   private def f₁ := fun (x : Nat) => x
   #getExprAndApply [f₁ | ulift]
@@ -270,7 +269,7 @@ noncomputable def A_Constant.Lift.{u} := fun
 
 /-
   Now, we want to implement a function `termULift` which lifts an expressions
-    `e` to `GLift.up e`, such that all the constants occurring in `e↑` are [lifted 
+    `e` to `GLift.up e`, such that all the constants occurring in `e↑` are [lifted
     counterparts of constants in `e`]. To do this, the function requires that
     all the constants in `e` has already had their lifted counterparts calculated.
   Before we implement this function, let's first look at what we'll obtain

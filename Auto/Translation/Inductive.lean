@@ -18,7 +18,7 @@ namespace Auto
 -/
 def isFamily (tyctorname : Name) : CoreM Bool := do
   let .some (.inductInfo val) := (← getEnv).find? tyctorname
-    | throwError "isFamily :: {tyctorname} is not a type constructor"
+    | throwError "{decl_name%} :: {tyctorname} is not a type constructor"
   return (Expr.forallBinders val.type).size != val.numParams
 
 /--
@@ -26,7 +26,7 @@ def isFamily (tyctorname : Name) : CoreM Bool := do
 -/
 def isIndProp (tyctorname : Name) : CoreM Bool := do
   let .some (.inductInfo val) := (← getEnv).find? tyctorname
-    | throwError "isIndProp :: {tyctorname} is not a type constructor"
+    | throwError "{decl_name%} :: {tyctorname} is not a type constructor"
   (Meta.withTransparency (n := MetaM) .all <|
     Meta.forallTelescopeReducing val.type fun _ body =>
       Meta.isDefEq body (.sort .zero)).run' {}
@@ -36,7 +36,7 @@ def isIndProp (tyctorname : Name) : CoreM Bool := do
 -/
 def isSimpleCtor (ctorname : Name) : CoreM Bool := do
   let .some (.ctorInfo val) := (← getEnv).find? ctorname
-    | throwError "isSimpleCtor :: {ctorname} is not a type constructor"
+    | throwError "{decl_name%} :: {ctorname} is not a type constructor"
   Meta.MetaM.run' <| Meta.forallBoundedTelescope val.type val.numParams fun _ body =>
     pure ((Expr.depArgs body).size == 0)
 
@@ -46,7 +46,7 @@ def isSimpleCtor (ctorname : Name) : CoreM Bool := do
 -/
 def isSimpleInductive (tyctorname : Name) : CoreM Bool := do
   let .some (.inductInfo val) := (← getEnv).find? tyctorname
-    | throwError "isSimple :: {tyctorname} is not a type constructor"
+    | throwError "{decl_name%} :: {tyctorname} is not a type constructor"
   return (← val.ctors.allM isSimpleCtor) && !(← isFamily tyctorname)
 
 structure SimpleIndVal where
@@ -80,7 +80,7 @@ def SimpleIndVal.zetaReduce (si : SimpleIndVal) : MetaM SimpleIndVal := do
     is an array of `(instantiated_tyctor, [SimpleIndVal associated to tyctor])`
 -/
 structure CollectInduct.State where
-  recorded : HashMap Name (Array Expr)     := {}
+  recorded : Std.HashMap Name (Array Expr)     := {}
   sis      : Array (Array SimpleIndVal) := #[]
 
 abbrev IndCollectM := StateRefT CollectInduct.State MetaM
@@ -90,7 +90,7 @@ abbrev IndCollectM := StateRefT CollectInduct.State MetaM
 private def collectSimpleInduct
   (tyctor : Name) (lvls : List Level) (args : Array Expr) : MetaM SimpleIndVal := do
   let .some (.inductInfo val) := (← getEnv).find? tyctor
-    | throwError "collectSimpleInduct :: Unexpected error"
+    | throwError "{decl_name%} :: Unexpected error"
   let ctors ← (Array.mk val.ctors).mapM (fun ctorname => do
     let instctor := mkAppN (Expr.const ctorname lvls) args
     let type ← Meta.inferType instctor
@@ -100,7 +100,7 @@ private def collectSimpleInduct
   let projs ← (getStructureInfo? env tyctor).mapM (fun si => do
     si.fieldNames.mapM (fun fieldName => do
       let .some projFn := getProjFnForField? env tyctor fieldName
-        | throwError "collectSimpleInduct :: Unexpected error"
+        | throwError "{decl_name%} :: Unexpected error"
       return mkAppN (Expr.const projFn lvls) args))
   return ⟨tyctor, mkAppN (Expr.const tyctor lvls) args, ctors, projs⟩
 
@@ -127,8 +127,8 @@ mutual
       return
     if !(← getRecorded).contains tyctor then
       setRecorded ((← getRecorded).insert tyctor #[])
-    let .some arr := (← getRecorded).find? tyctor
-      | throwError "collectAppInstSimpleInduct :: Unexpected error"
+    let .some arr := (← getRecorded).get? tyctor
+      | throwError "{decl_name%} :: Unexpected error"
     for e' in arr do
       if ← Meta.isDefEq e e' then
         return
@@ -151,9 +151,9 @@ mutual
       return
     collectExprSimpleInduct ty
     collectExprSimpleInduct body
-  | .letE .. => throwError "collectExprSimpleInduct :: Let-expressions should have been reduced"
-  | .mdata .. => throwError "collectExprSimpleInduct :: mdata should have been consumed"
-  | .proj .. => throwError "collectExprSimpleInduct :: Projections should have been turned into ordinary expressions"
+  | .letE .. => throwError "{decl_name%} :: Let-expressions should have been reduced"
+  | .mdata .. => throwError "{decl_name%} :: mdata should have been consumed"
+  | .proj .. => throwError "{decl_name%} :: Projections should have been turned into ordinary expressions"
   | e => collectAppInstSimpleInduct e
 
 end

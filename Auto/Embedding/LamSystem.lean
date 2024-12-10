@@ -209,7 +209,7 @@ theorem LamTerm.rwGenAllWith_lam : rwGenAllWith conv rty (.lam s body) =
   | .none =>
     match rty with
     | .func _ resTy => (rwGenAllWith conv resTy body).bind (LamTerm.lam s ·)
-    | _ => .none := by delta rwGenAllWith; simp only
+    | _ => .none := by cases rty <;> simp [rwGenAllWith]
 
 theorem LamTerm.rwGenAllWith_app : rwGenAllWith conv rty (.app s fn arg) =
   match conv rty (.app s fn arg) with

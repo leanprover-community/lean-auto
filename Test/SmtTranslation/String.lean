@@ -21,4 +21,5 @@ example : String.length "abc" = 3 := by auto
 
 example : String.isPrefixOf "ab" "abcd" := by auto
 
+set_option auto.smt.solver.name "cvc5"
 example : String.replace "aaaaa" "aa" "ba" = "babaa" := by auto

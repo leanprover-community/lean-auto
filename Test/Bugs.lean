@@ -1,4 +1,5 @@
 import Auto.Tactic
+import Auto.EvaluateAuto.TestCode
 
 -- Standard Preprocessing Configs
 set_option auto.redMode "reducible"

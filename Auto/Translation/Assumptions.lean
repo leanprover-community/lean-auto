@@ -77,7 +77,7 @@ def Lemma.betaReduceType (lem : Lemma) : CoreM Lemma := do
 /-- Create a `Lemma` out of a constant, given the name of the constant -/
 def Lemma.ofConst (name : Name) (deriv : DTr) : CoreM Lemma := do
   let .some decl := (← getEnv).find? name
-    | throwError "Lemma.ofConst :: Unknown constant {name}"
+    | throwError "{decl_name%} :: Unknown constant {name}"
   let type := decl.type
   let params := decl.levelParams
   return ⟨⟨.const name (params.map Level.param), type, deriv⟩, ⟨params⟩⟩
@@ -101,7 +101,9 @@ def Lemma.equivQuick (lem₁ lem₂ : Lemma) : MetaM Bool := do
   let s₂₁ ← Lemma.subsumeQuick lem₂ lem₁
   return s₁₂ && s₂₁
 
-/-- Reorder top-level `∀` so that (non-prop / dependent) ones precede other ones -/
+/- **TODO:** Determine whether this is useful -/
+/- Reorder top-level `∀` so that (non-prop / dependent) ones precede other ones -/
+/-
 def Lemma.reorderForallInstDep (lem : Lemma) : MetaM Lemma := do
   let depargs := Std.HashSet.empty.insertMany (Expr.depArgs lem.type)
   Meta.forallTelescope lem.type fun xs body => do
@@ -116,6 +118,7 @@ def Lemma.reorderForallInstDep (lem : Lemma) : MetaM Lemma := do
     let proof ← Meta.mkLambdaFVars prec (← Meta.mkLambdaFVars trail proof)
     let type ← Meta.mkForallFVars prec (← Meta.mkForallFVars trail body)
     return ⟨⟨proof, type, lem.deriv⟩, lem.params⟩
+-/
 
 /--
   Rewrite using a universe-monomorphic rigid equality
@@ -126,7 +129,7 @@ def Lemma.reorderForallInstDep (lem : Lemma) : MetaM Lemma := do
 def Lemma.rewriteUMonoRigid? (lem : Lemma) (rw : UMonoFact) : MetaM (Option Lemma) := do
   let ⟨rwproof, rwtype, rwDeriv⟩ := rw
   let .some (α, lhs, rhs) ← Meta.matchEq? rwtype
-    | throwError "Lemma.rewriteUMonoRigid :: {rwtype} is not an equality"
+    | throwError "{decl_name%} :: {rwtype} is not an equality"
   let ⟨⟨proof, e, lemDeriv⟩, params⟩ := lem
   let eAbst ← Meta.kabstract e lhs
   unless eAbst.hasLooseBVars do
@@ -134,7 +137,7 @@ def Lemma.rewriteUMonoRigid? (lem : Lemma) (rw : UMonoFact) : MetaM (Option Lemm
   let eNew := eAbst.instantiate1 rhs
   let motive := mkLambda `_a BinderInfo.default α eAbst
   unless (← Meta.isTypeCorrect motive) do
-    throwError "Lemma.rewriteUMonoRigid :: Motive {motive} is not type correct"
+    throwError "{decl_name%} :: Motive {motive} is not type correct"
   let eqPrf ← Meta.mkEqNDRec motive proof rwproof
   return .some ⟨⟨eqPrf, eNew, .node "rw" #[lemDeriv, rwDeriv]⟩, params⟩
 
@@ -150,16 +153,16 @@ def Lemma.rewriteUPolyRigid (lem : Lemma) (rw : Lemma) : MetaM Lemma := do
   let s ← saveState
   -- Test whether `rhs` contains `lhs
   let .some (_, lhs, rhs) ← Meta.matchEq? rw.type
-    | throwError "Lemma.rewriteUMonoRigid :: {rw.type} is not an equality"
+    | throwError "{decl_name%} :: {rw.type} is not an equality"
   let lhs' := lhs.instantiateLevelParamsArray rw.params (← rw.params.mapM (fun _ => Meta.mkFreshLevelMVar))
   let rhs' := rhs.instantiateLevelParamsArray rw.params (← rw.params.mapM (fun _ => Meta.mkFreshLevelMVar))
   if (← Meta.kabstract rhs' lhs').hasLooseBVars then
-    throwError "Lemma.rewriteUPolyRigid :: Right-hand side {rhs} of equality contains left-hand side {lhs}"
+    throwError "{decl_name%} :: Right-hand side {rhs} of equality contains left-hand side {lhs}"
   restoreState s
   while true do
     let umvars ← rw.params.mapM (fun _ => Meta.mkFreshLevelMVar)
     let .some urw := (rw.instantiateLevelParamsArray umvars).toUMonoFact?
-      | throwError "Lemma.rewriteUPolyRigid :: Unexpected error"
+      | throwError "{decl_name%} :: Unexpected error"
     let .some lem' ← Lemma.rewriteUMonoRigid? lem urw
       | break
     let restmvars := (← umvars.mapM Level.collectLevelMVars).concatMap id
@@ -220,7 +223,7 @@ def LemmaInst.ofLemmaLeadingDepOnly (lem : Lemma) : MetaM LemmaInst := do
   let nld := Expr.numLeadingDepArgs type
   Meta.forallBoundedTelescope type nld fun xs _ => do
     if xs.size != nld then
-      throwError "LemmaInst.ofLemmaLeadingDepOnly :: Unexpected error"
+      throwError "{decl_name%} :: Unexpected error"
     let proof ← Meta.mkLambdaFVars xs (mkAppN proof xs)
     let lem' : Lemma := ⟨⟨proof, type, deriv⟩, params⟩
     return ⟨lem', xs.size, xs.size⟩
@@ -236,19 +239,19 @@ instance : ToMessageData LemmaInst where
 
 def LemmaInst.subsumeQuick (li₁ li₂ : LemmaInst) : MetaM Bool := Meta.withNewMCtxDepth <| do
   if li₁.nargs != li₂.nargs then
-    throwError "LemmaInst.subsumeQuick :: {li₁} and {li₂} are not instance of the same lemma"
+    throwError "{decl_name%} :: {li₁} and {li₂} are not instance of the same lemma"
   let lem₁ := li₁.toLemma
   let lem₂ := li₂.toLemma
   let (_, _, body₂) ← Meta.lambdaMetaTelescope lem₂.proof li₂.nbinders
   let args₂ := Expr.getAppBoundedArgs li₂.nargs body₂
   if args₂.size != li₂.nargs then
-    throwError "LemmaInst.subsumeQuick :: {li₂} is expected to have {li₂.nargs} args, but actually has {args₂.size}"
+    throwError "{decl_name%} :: {li₂} is expected to have {li₂.nargs} args, but actually has {args₂.size}"
   Meta.withNewMCtxDepth do
     let paramInst₁ ← lem₁.params.mapM (fun _ => Meta.mkFreshLevelMVar)
     let (_, _, body₁) ← Meta.lambdaMetaTelescope lem₁.proof li₁.nbinders
     let args₁ := Expr.getAppBoundedArgs li₁.nargs body₁
     if args₁.size != li₁.nargs then
-      throwError "LemmaInst.subsumeQuick :: {li₁} is expected to have {li₁.nargs} args, but actually has {args₁.size}"
+      throwError "{decl_name%} :: {li₁} is expected to have {li₁.nargs} args, but actually has {args₁.size}"
     let args₁ := args₁.map (fun e => e.instantiateLevelParamsArray lem₁.params paramInst₁)
     for (arg₁, arg₂) in args₁.zip args₂ do
       if !(← Meta.isDefEq arg₁ arg₂) then
@@ -289,10 +292,10 @@ def MLemmaInst.ofLemmaInst (li : LemmaInst) : MetaM (Array Level × Array Expr �
   let type := type.instantiateLevelParamsArray params lvls
   let (mvars, _, proof) ← Meta.lambdaMetaTelescope proof li.nbinders
   let .some origProof := Expr.getAppFnN li.nargs proof
-    | throwError "MLemmaInst.ofLemmaInst :: Insufficient number of arguments"
+    | throwError "{decl_name%} :: Insufficient number of arguments"
   let args := Expr.getAppBoundedArgs li.nargs proof
   if args.size != li.nargs then
-    throwError "MLemmaInst.ofLemmaInst :: Unexpected error"
+    throwError "{decl_name%} :: Unexpected error"
   let type ← Meta.instantiateForall type mvars
   return (lvls, mvars, ⟨origProof, args, type, deriv⟩)
 
@@ -341,7 +344,7 @@ partial def collectUniverseLevels : Expr → MetaM (Std.HashSet Level)
   return mergeHashSet (mergeHashSet tys vs) bodys
 | .lit _ => return Std.HashSet.empty.insert (.succ .zero)
 | .mdata _ e' => collectUniverseLevels e'
-| .proj .. => throwError "Please unfold projections before collecting universe levels"
+| .proj .. => throwError "{decl_name%} :: Please unfold projections before collecting universe levels"
 
 def computeMaxLevel (facts : Array UMonoFact) : MetaM Level := do
   let levels ← facts.foldlM (fun hs ⟨_, ty, _⟩ => do

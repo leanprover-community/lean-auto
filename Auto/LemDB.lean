@@ -20,7 +20,7 @@ inductive LemDB where
 deriving BEq, Hashable, Inhabited, Repr
 
 abbrev LemDBExtension :=
-  PersistentEnvExtension (Name × LemDB) (Name × LemDB) (HashMap Name LemDB)
+  PersistentEnvExtension (Name × LemDB) (Name × LemDB) (Std.HashMap Name LemDB)
 
 initialize lemDBExt : LemDBExtension ← registerPersistentEnvExtension {
   name            := `LemDBExt
@@ -28,21 +28,21 @@ initialize lemDBExt : LemDBExtension ← registerPersistentEnvExtension {
   addEntryFn      := fun s n => s.insert n.1 n.2
   -- **Note** We suppose that, if module `a` imports module `b`,
   --   then the index of `a` within the `arr` is greater than the index of `b` in `arr`
-  addImportedFn   := fun arr => pure <| HashMap.ofList (arr.concatMap id).toList,
+  addImportedFn   := fun arr => pure <| Std.HashMap.ofList (arr.concatMap id).toList,
   exportEntriesFn := fun s => s.toArray
 }
 
-partial def LemDB.toHashSet : LemDB → AttrM (HashSet Name)
-| .empty => pure HashSet.empty
+partial def LemDB.toHashSet : LemDB → AttrM (Std.HashSet Name)
+| .empty => pure Std.HashSet.empty
 | .addLemma lem hdb => do
     let hset ← hdb.toHashSet
     return hset.insert lem
 | .compose hdbs => do
     let state := lemDBExt.getState (← getEnv)
-    let mut ret := HashSet.empty
+    let mut ret := Std.HashSet.empty
     for hdb in hdbs do
-      let some hdb := state.find? hdb
-        | throwError "LemDB.toHashSet :: Unknown lemma database {hdb}"
+      let some hdb := state.get? hdb
+        | throwError "{decl_name%} :: Unknown lemma database {hdb}"
       let hset ← hdb.toHashSet
       ret := ret.insertMany hset
     return ret
@@ -60,7 +60,7 @@ def registerAddLemToDB : IO Unit :=
     add   := fun decl stx _ => do
       let dbname := (← Attribute.Builtin.getIdent stx).getId
       let state := lemDBExt.getState (← getEnv)
-      if let some db := state.find? dbname then
+      if let some db := state.get? dbname then
         let state' := state.insert dbname (.addLemma decl db)
         modifyEnv fun env => lemDBExt.modifyState env fun _ => state'
       else
@@ -74,7 +74,7 @@ initialize registerAddLemToDB
 def findLemDB (dbname : Name) : CoreM (Option LemDB) := do
   let dbname := dbname
   let state := lemDBExt.getState (← getEnv)
-  if let some db := state.find? dbname then
+  if let some db := state.get? dbname then
     return .some db
   else
     return .none
@@ -91,7 +91,7 @@ def elabdeclarelemdb : CommandElab := fun stx => do
   | `(declarelemdb | #declare_lemdb $dbname) =>
     let dbname := dbname.getId
     let state := lemDBExt.getState (← getEnv)
-    if let some db := state.find? dbname then
+    if let some db := state.get? dbname then
       throwError "Lemma database {repr db} has already been declared"
     else
       let state' := state.insert dbname .empty
@@ -118,7 +118,7 @@ def elabcomposelemdb : CommandElab := fun stx => do
     for db in dbs do
       if !state.contains db then
         throwError "Unknown lemma database {repr db}"
-    if let some db := state.find? db then
+    if let some db := state.get? db then
       throwError "Lemma database {repr db} has already been declared"
     else
       let state' := state.insert db (.compose dbs)

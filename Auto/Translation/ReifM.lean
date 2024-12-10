@@ -42,11 +42,11 @@ abbrev ReifM := StateT State MetaM
 @[inline] def resolveTy (e : Expr) : ReifM Expr := do
   match (← getTyCanMap).get? (Expr.eraseMData e) with
   | .some id => return id
-  | .none => throwError "resolveTy :: Unable to resolve {e}"
+  | .none => throwError "{decl_name%} :: Unable to resolve {e}"
 
 def mkAuxName (suffix : Name) : ReifM Name := do
   match (← getDeclName?) with
-  | none          => throwError "ReifM.mkAuxName :: auxiliary declaration cannot be created when declaration name is not available"
+  | none          => throwError "{decl_name%} :: auxiliary declaration cannot be created when declaration name is not available"
   | some declName => Lean.mkAuxName (declName ++ suffix) 1
 
 end Auto.Reif

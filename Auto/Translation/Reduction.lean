@@ -29,14 +29,14 @@ def unfoldProj (e : Expr) : MetaM Expr :=
   match e with
   | .proj name idx struct => do
     let some (.inductInfo indi) := (← getEnv).find? name
-      | throwError s!"unfoldProj :: {name} is not a inductive type"
+      | throwError s!"{decl_name%} :: {name} is not a inductive type"
     let some structInfo := getStructureInfo? (← getEnv) name
-      | throwError s!"unfoldProj :: {name} is not a structure"
+      | throwError s!"{decl_name%} :: {name} is not a structure"
     let nameMap : Std.HashMap Name StructureFieldInfo := Std.HashMap.ofList
       (structInfo.fieldInfo.map (fun sfi => (sfi.fieldName, sfi))).toList
     let sorted := structInfo.fieldNames.map (fun name => nameMap.get? name)
     let .some (.some sfi) := sorted[idx]?
-      | throwError s!"unfoldProj :: Projection index out of bound"
+      | throwError s!"{decl_name%} :: Projection index out of bound"
     let nones : List (Option Expr) := (List.range indi.numParams).map (fun _ => .none)
     Meta.mkAppOptM sfi.projFn ((Array.mk nones).push struct)
   | _ => return e

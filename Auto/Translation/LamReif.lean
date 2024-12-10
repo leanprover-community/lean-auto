@@ -33,13 +33,13 @@ open Embedding.Lam
 -/
 structure State where
   -- Maps previously reified type to their type atom index
-  tyVarMap      : Std.HashMap Expr Nat                := {}
+  tyVarMap      : Std.HashMap Expr Nat            := {}
   -- Maps previously reified expressions to their term atom index
   -- Whenever we encounter an atomic expression, we look up
   --   `varMap`. If it's already reified, then `varMap`
   --   tells us about its index. If it's not reified, insert
   --   it to `varMap`.
-  varMap        : Std.HashMap Expr Nat                := {}
+  varMap        : Std.HashMap Expr Nat            := {}
   -- `tyVal` is the inverse of `tyVarMap`
   -- The `e : Expr` is the un-lifted valuation of the type atom
   -- The `lvl : level` is the sort level of `e`
@@ -54,7 +54,7 @@ structure State where
   -- lamILTy
   lamILTy       : Array LamSort                   := #[]
   -- Inverse of `lamILTy`
-  isomTyMap     : Std.HashMap LamSort Nat             := {}
+  isomTyMap     : Std.HashMap LamSort Nat         := {}
   /-
     This hashmap contains assertions that have external (lean) proof
     · The key `t : LamTerm` is the corresponding λ term,
@@ -80,7 +80,7 @@ structure State where
   --   that produce etoms
   chkStepCache  : Std.HashMap ChkStep (EvalResult × Array Nat) := {}
   -- The check step that produces a given etom
-  etomChkStep   : Std.HashMap Nat ChkStep             := {}
+  etomChkStep   : Std.HashMap Nat ChkStep         := {}
   -- We insert entries into `rTable` through two different ways
   -- 1. Calling `newChkStep`
   -- 2. Validness facts from the ImportTable are treated in `newAssertions`
@@ -141,7 +141,7 @@ def printProofs : ReifM Unit := do
   for re in (← getRTable) do
     if let .some cs := chkMap.get? re then
       let .some n := (← getRst).findPos? re
-        | throwError "printProofs :: Unexpected error"
+        | throwError "{decl_name%} :: Unexpected error"
       let etoms :=
         match (← getChkStepCache).get? cs with
         | .some (_, arr) =>
@@ -152,13 +152,13 @@ def printProofs : ReifM Unit := do
       match re with
       | .valid [] t =>
         let .some (expr, _, n) := (← getAssertions).get? t
-          | throwError "printProofs :: Unable to find assertion associated with {t}"
+          | throwError "{decl_name%} :: Unable to find assertion associated with {t}"
         trace[auto.lamReif.printProofs] "{n} : External fact ⦗⦗{← Meta.inferType expr}⦘⦘ proves ⦗⦗{re}⦘⦘"
       | .nonempty s =>
         let .some (expr, _, n) := (← getInhabitations).get? s
-          | throwError "printProofs :: Unable to find inhabitation fact associated with {s}"
+          | throwError "{decl_name%} :: Unable to find inhabitation fact associated with {s}"
         trace[auto.lamReif.printProofs] "{n} : Inhabitation fact ⦗⦗{← Meta.inferType expr}⦘⦘ proves ⦗⦗{re}⦘⦘"
-      | _ => throwError "printProofs :: Unexpected entry {re}"
+      | _ => throwError "{decl_name%} :: Unexpected entry {re}"
 
 def sort2LamILTyIdx (s : LamSort) : ReifM Nat := do
   let isomTyMap ← getIsomTyMap
@@ -175,32 +175,32 @@ def lookupTyVal! (n : Nat) : ReifM (Expr × Level) := do
   if let .some r := (← getTyVal)[n]? then
     return r
   else
-    throwError "lookupTyVal! :: Unknown type atom {n}"
+    throwError "{decl_name%} :: Unknown type atom {n}"
 
 /-- Lookup valuation of term atom -/
 def lookupVarVal! (n : Nat) : ReifM (Expr × LamSort) := do
   if let .some r := (← getVarVal)[n]? then
     return r
   else
-    throwError "lookupVarVal! :: Unknown term atom {n}"
+    throwError "{decl_name%} :: Unknown term atom {n}"
 
 def lookupLamILTy! (idx : Nat) : ReifM LamSort := do
   if let .some s := (← getLamILTy)[idx]? then
     return s
   else
-    throwError "lookupLamILTy! :: Unknown index {idx}"
+    throwError "{decl_name%} :: Unknown index {idx}"
 
 def lookupAssertion! (t : LamTerm) : ReifM (Expr × DTr × LamTerm × Nat) := do
   if let .some r := (← getAssertions).get? t then
     return r
   else
-    throwError "lookupAssertion! :: Unknown assertion {t}"
+    throwError "{decl_name%} :: Unknown assertion {t}"
 
 def lookupRTable! (pos : Nat) : ReifM REntry := do
   if let .some r := (← getRTable).get? pos then
     return r
   else
-    throwError "lookupRTable! :: Unknown REntry {pos}"
+    throwError "{decl_name%} :: Unknown REntry {pos}"
 
 def lookupREntryPos! (re : REntry) : ReifM Nat := do
   match (← getRst).findPos? re with
@@ -210,12 +210,12 @@ def lookupREntryPos! (re : REntry) : ReifM Nat := do
     | .valid [] t =>
       match (← getAssertions).get? t with
       | .some (_, _, _, n) => return n
-      | .none => throwError "lookupREntryPos! :: Unknown REntry {re}"
+      | .none => throwError "{decl_name%} :: Unknown REntry {re}"
     | .nonempty s =>
       match (← getInhabitations).get? s with
       | .some (_, _, n) => return n
-      | .none => throwError "lookupREntryPos! :: Unknown REntry {re}"
-    | _ => throwError "lookupREntryPos! :: Unknown REntry {re}"
+      | .none => throwError "{decl_name%} :: Unknown REntry {re}"
+    | _ => throwError "{decl_name%} :: Unknown REntry {re}"
 
 inductive REntryProof where
   | chkStep      : ChkStep → REntryProof
@@ -240,31 +240,31 @@ def lookupREntryProof? (re : REntry) : ReifM (Option REntryProof) := do
 def lookupREntryProof! (re : REntry) : ReifM REntryProof := do
   match ← lookupREntryProof? re with
   | .some proof => return proof
-  | .none => throwError "lookupREntryProof! :: Unknown REntry {re}"
+  | .none => throwError "{decl_name%} :: Unknown REntry {re}"
 
 def lookupLamEVarTy! (idx : Nat) : ReifM LamSort := do
   if let .some s := (← getLamEVarTy)[idx]? then
     return s
   else
-    throwError "lookupLamEVarTy! :: Unknown etom {idx}"
+    throwError "{decl_name%} :: Unknown etom {idx}"
 
 def lookupChkStepEtom! (cs : ChkStep) : ReifM (Array Nat) := do
   if let .some (_, arr) := (← getChkStepCache).get? cs then
     return arr
   else
-    throwError "lookupChkStepEtom! :: ChkStep {cs} did not produce new etom"
+    throwError "{decl_name%} :: ChkStep {cs} did not produce new etom"
 
 def lookupChkStepResult! (cs : ChkStep) : ReifM EvalResult := do
   if let .some (er, _) := (← getChkStepCache).get? cs then
     return er
   else
-    throwError "lookupChkStepEtom! :: ChkStep {cs} did not produce new etom"
+    throwError "{decl_name%} :: ChkStep {cs} did not produce new etom"
 
 def lookupEtomChkStep! (eidx : Nat) : ReifM ChkStep := do
   if let .some c := (← getEtomChkStep).get? eidx then
     return c
   else
-    throwError "lookupEtomChkStep! :: Unknown etom {eidx}"
+    throwError "{decl_name%} :: Unknown etom {eidx}"
 
 /--
   This should only be used at the meta level, i.e. in code that will
@@ -289,7 +289,7 @@ def resolveLamBaseTermImport : LamBaseTerm → ReifM LamBaseTerm
 /-- Models `resolveImport` on the `meta` level -/
 def resolveImport : LamTerm → ReifM LamTerm
 | .atom n       => return .atom n
-| .etom _       => throwError "resolveImport :: etom should not occur here"
+| .etom _       => throwError "{decl_name%} :: etom should not occur here"
 | .base b       => return .base (← resolveLamBaseTermImport b)
 | .bvar n       => return .bvar n
 | .lam s t      => return .lam s (← resolveImport t)
@@ -311,7 +311,7 @@ def resolveImport : LamTerm → ReifM LamTerm
 -/
 def mkImportVersion : LamTerm → ReifM LamTerm
 | .atom n => return (.atom n)
-| .etom _ => throwError "mkImportVersion :: etom should not occur here"
+| .etom _ => throwError "{decl_name%} :: etom should not occur here"
 | .base b =>
   match b with
   | .eq s      => return .base (.eqI (← sort2LamILTyIdx s))
@@ -343,9 +343,9 @@ def newChkStep (c : ChkStep) (res? : Option EvalResult) : ReifM (Bool × EvalRes
   let res := c.eval ltv.lamVarTy ltv.lamILTy ⟨← getRTableTree, ← getMaxEVarSucc, ← getLamEVarTyTree⟩
   if let .some res' := res? then
     if res' != res then
-      throwError "newChkStep :: Result {res} of ChkStep {c} does not match with expected {res'}"
+      throwError "{decl_name%} :: Result {res} of ChkStep {c} does not match with expected {res'}"
   match res with
-  | .fail => throwError "newChkStep :: Evaluation of ChkStep {c} produces `fail`"
+  | .fail => throwError "{decl_name%} :: Evaluation of ChkStep {c} produces `fail`"
   | .addEntry re =>
     -- If `re` is already provable, do nothing
     if let .some _ ← lookupREntryProof? re then
@@ -478,7 +478,7 @@ section ILLifting
     let (upFunc, downFunc, ty, upTy) ← updownFunc s
     let sortOrig ← Expr.normalizeType (← Meta.inferType ty)
     let .sort uOrig := sortOrig
-      | throwError "mkImportAux :: Unexpected sort {sortOrig} when processing sort {s}"
+      | throwError "{decl_name%} :: Unexpected sort {sortOrig} when processing sort {s}"
     return (upFunc, downFunc, ty, upTy, uOrig)
 
   set_option pp.universes true
@@ -503,20 +503,20 @@ section Checker
 
   def nonemptyOfAtom (n : Nat) : ReifM (Option REntry) := do
     let .some (_, s) := (← getVarVal).get? n
-      | throwError "nonemptyOfAtom :: Index {n} out of bound"
+      | throwError "{decl_name%} :: Index {n} out of bound"
     if !(← inhSubsumptionCheck s) then
       return .none
     let (_, .addEntry re) ← newChkStep (.n (.nonemptyOfAtom n)) (.some (.addEntry (.nonempty s)))
-      | throwError "nonemptyOfAtom :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return .some re
 
   def nonemptyOfEtom (n : Nat) : ReifM (Option REntry) := do
     let .some s := (← getLamEVarTy).get? n
-      | throwError "nonemptyOfEtom :: Index {n} out of bound"
+      | throwError "{decl_name%} :: Index {n} out of bound"
     if !(← inhSubsumptionCheck s) then
       return .none
     let (_, .addEntry re) ← newChkStep (.n (.nonemptyOfEtom n)) (.some (.addEntry (.nonempty s)))
-      | throwError "nonemptyOfEtom :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return .some re
 
   def validOfIntros (v : REntry) (idx : Nat) : ReifM REntry := do
@@ -524,12 +524,12 @@ section Checker
       return v
     let p ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.l (.validOfIntros p idx)) .none
-      | throwError "validOfIntros :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfIntroMost (v : REntry) : ReifM REntry := do
     let .valid _ t := v
-      | throwError "validOfIntroMost :: Unexpected entry {v}"
+      | throwError "{decl_name%} :: Unexpected entry {v}"
     let mut idx := 0
     let mut t := t
     while true do
@@ -543,12 +543,12 @@ section Checker
   def validOfReverts (v : REntry) (idx : Nat) : ReifM REntry := do
     let p ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.l (.validOfReverts p idx)) .none
-      | throwError "validOfReverts :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfRevertAll (v : REntry) : ReifM REntry := do
     let .valid lctx _ := v
-      | throwError "validOfRevertAll :: Unexpected entry {v}"
+      | throwError "{decl_name%} :: Unexpected entry {v}"
     if lctx.length == 0 then
       return v
     validOfReverts v lctx.length
@@ -556,26 +556,26 @@ section Checker
   def validOfAppend (v : REntry) (ex : Array LamSort) : ReifM REntry := do
     let p ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.l (.validOfAppend p ex.toList)) .none
-      | throwError "validOfAppend :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfPrepend (v : REntry) (ex : Array LamSort) : ReifM REntry := do
     let p ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.l (.validOfPrepend p ex.toList)) .none
-      | throwError "validOfPrepend :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfHeadBeta (v : REntry) : ReifM REntry := do
     let p ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.c (.validOfHeadBeta p)) .none
-      | throwError "validOfHeadBeta :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfHnf (v : REntry) : ReifM REntry := do
     let mut v := v
     while true do
       let .valid _ t := v
-        | throwError "validOfHnf :: Unexpected entry {v}"
+        | throwError "{decl_name%} :: Unexpected entry {v}"
       if !t.isHeadBetaTarget then
         break
       v ← validOfHeadBeta v
@@ -584,50 +584,50 @@ section Checker
   def validOfBetaBounded (v : REntry) (bound : Nat) : ReifM REntry := do
     let p ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.c (.validOfBetaBounded p bound)) .none
-      | throwError "validOfBetaBounded :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfBetaReduce (v : REntry) : ReifM REntry := do
     let .valid _ t := v
-      | throwError "validOfBetaReduce :: Unexpected entry {v}"
+      | throwError "{decl_name%} :: Unexpected entry {v}"
     validOfBetaBounded v t.betaReduceHackyIdx
 
   def validOfExtensionalize (v : REntry) : ReifM REntry := do
     let p ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.c (.validOfExtensionalize p)) .none
-      | throwError "validOfExtensionalize :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfEqSymm (v : REntry) : ReifM REntry := do
     let p ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.c (.validOfEqSymm p)) .none
-      | throwError "validOfEqSymm :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfMp (vp : REntry) (vrw : REntry) : ReifM REntry := do
     let pp ← lookupREntryPos! vp
     let prw ← lookupREntryPos! vrw
     let (_, .addEntry re) ← newChkStep (.c (.validOfMp pp prw)) .none
-      | throwError "validOfMp :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfMpAll (vp : REntry) (vrw : REntry) : ReifM REntry := do
     let pp ← lookupREntryPos! vp
     let prw ← lookupREntryPos! vrw
     let (_, .addEntry re) ← newChkStep (.c (.validOfMpAll pp prw)) .none
-      | throwError "validOfMpAll :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfEtaExpand1At (v : REntry) (occ : List Bool) : ReifM REntry := do
     let pv ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.ca (.validOfEtaExpand1At pv occ)) .none
-      | throwError "validOfEtaExpand1At :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfEtaReduce1At (v : REntry) (occ : List Bool) : ReifM REntry := do
     let pv ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.ca (.validOfEtaReduce1At pv occ)) .none
-      | throwError "validOfEtaReduce1At :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfEtaExpandNAt (v : REntry) (n : Nat) (occ : List Bool) : ReifM REntry := do
@@ -637,7 +637,7 @@ section Checker
     if n == 1 then
       return ← validOfEtaExpand1At v occ
     let (_, .addEntry re) ← newChkStep (.ca (.validOfEtaExpandNAt pv n occ)) .none
-      | throwError "validOfEtaExpandNAt :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfEtaReduceNAt (v : REntry) (n : Nat) (occ : List Bool) : ReifM REntry := do
@@ -647,55 +647,55 @@ section Checker
     if n == 1 then
       return ← validOfEtaReduce1At v occ
     let (_, .addEntry re) ← newChkStep (.ca (.validOfEtaReduceNAt pv n occ)) .none
-      | throwError "validOfEtaReduceNAt :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfEtaExpandAt (v : REntry) (occ : List Bool) : ReifM REntry := do
     let .valid _ t := v
-      | throwError "validOfEtaExpandAt :: Unexpected entry {v}"
+      | throwError "{decl_name%} :: Unexpected entry {v}"
     let .some (rty, _) := LamTerm.getPosWith occ (.base .prop) t
-      | throwError "validOfEtaExpandAt :: {occ} is not a valid position of {t}"
+      | throwError "{decl_name%} :: {occ} is not a valid position of {t}"
     let n := rty.getArgTys.length
     validOfEtaExpandNAt v n occ
 
   def validOfEtaReduceAt (v : REntry) (occ : List Bool) : ReifM REntry := do
     let .valid _ t := v
-      | throwError "validOfEtaReduceAt :: Unexpected entry {v}"
+      | throwError "{decl_name%} :: Unexpected entry {v}"
     let .some tocc := LamTerm.getPos occ t
-      | throwError "validOfEtaReduceAt :: {occ} is not a valid position of {t}"
+      | throwError "{decl_name%} :: {occ} is not a valid position of {t}"
     let n := tocc.getLamTys.length
     validOfEtaReduceNAt v n occ
 
   def validOfExtensionalizeEqAt (v : REntry) (occ : List Bool) : ReifM REntry := do
     let pv ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.ca (.validOfExtensionalizeEqAt pv occ)) .none
-      | throwError "validOfExtensionalizeEqAt :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfExtensionalizeEqFNAt (v : REntry) (n : Nat) (occ : List Bool) : ReifM REntry := do
     let pv ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.ca (.validOfExtensionalizeEqFNAt pv n occ)) .none
-      | throwError "validOfExtensionalizeEqFNAt :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfIntensionalizeEqAt (v : REntry) (occ : List Bool) : ReifM REntry := do
     let pv ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.ca (.validOfIntensionalizeEqAt pv occ)) .none
-      | throwError "validOfIntensionalizeEqAt :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfBVarLower (v : REntry) (n : REntry) : ReifM REntry := do
     let pv ← lookupREntryPos! v
     let pn ← lookupREntryPos! n
     let (_, .addEntry re) ← newChkStep (.i (.validOfBVarLower pv pn)) .none
-      | throwError "validOfBVarLower :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfBVarLowers (v : REntry) (ns : Array REntry) : ReifM REntry := do
     let pv ← lookupREntryPos! v
     let pns ← ns.mapM lookupREntryPos!
     let (_, .addEntry re) ← newChkStep (.i (.validOfBVarLowers pv pns.toList)) .none
-      | throwError "validOfBVarLowers :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   /--
@@ -710,27 +710,27 @@ section Checker
     let p₁₂ ← lookupREntryPos! v₁₂
     let p₁ ← lookupREntryPos! v₁
     let (_, .addEntry re) ← newChkStep (.i (.validOfImp p₁₂ p₁)) .none
-      | throwError "validOfImp :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfImps (impV : REntry) (hypVs : Array REntry) : ReifM REntry := do
     let imp ← lookupREntryPos! impV
     let ps ← hypVs.mapM lookupREntryPos!
     let (_, .addEntry re) ← newChkStep (.i (.validOfImps imp ps.toList)) .none
-      | throwError "validOfImps :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   /-- Repeated instantiation -/
   def validOfInstantiate (v : REntry) (args : Array LamTerm) : ReifM REntry := do
     let p ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.i (.validOfInstantiate p args.toList)) .none
-      | throwError "validOfInstantiate :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfInstantiateRev (v : REntry) (args : Array LamTerm) : ReifM REntry := do
     let p ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.i (.validOfInstantiateRev p args.toList)) .none
-      | throwError "validOfInstantiateRev :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   /--
@@ -746,22 +746,22 @@ section Checker
   def validOfAndLeft (v : REntry) (occ : List Bool) : ReifM REntry := do
     let p ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.i (.validOfAndLeft p occ)) .none
-      | throwError "validOfAndLeft :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def validOfAndRight (v : REntry) (occ : List Bool) : ReifM REntry := do
     let p ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.i (.validOfAndRight p occ)) .none
-      | throwError "validOfAndRight :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   /-- Exhaustively decompose `∧` at position `occ` -/
   partial def decomposeAnd (v : REntry) (occ : List Bool) : ReifM (Array REntry) := do
     let .valid _ t := v
-      | throwError "decomposeAnd :: Unexpected entry"
-    if !(t.isSign true occ) then throwError "decomposeAnd :: {occ} is not a positive position of {t}"
+      | throwError "{decl_name%} :: Unexpected entry"
+    if !(t.isSign true occ) then throwError "{decl_name%} :: {occ} is not a positive position of {t}"
     let .some sub := t.getPos occ
-      | throwError "decomposeAnd :: Unexpected error"
+      | throwError "{decl_name%} :: Unexpected error"
     if sub.getAppFn == .base .and && sub.getAppArgs.length == 2 then
       let left ← validOfAndLeft v occ
       let right ← validOfAndRight v occ
@@ -771,19 +771,19 @@ section Checker
 
   def boolFacts : ReifM REntry := do
     let (_, .addEntry re) ← newChkStep (.f .boolFacts) .none
-      | throwError "boolFacts :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def iteSpec (s : LamSort) : ReifM REntry := do
     let (_, .addEntry re) ← newChkStep (.f (.iteSpec s)) .none
-      | throwError "iteSpec :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
   def skolemize (exV : REntry) : ReifM REntry := do
     let eidx ← getMaxEVarSucc
     let ex ← lookupREntryPos! exV
     let (new?, .newEtomWithValid _ lctx t) ← newChkStep (.e (.skolemize ex)) .none
-      | throwError "skolemize :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     if new? then
       let _ ← nonemptyOfEtom eidx
     return .valid lctx t
@@ -793,11 +793,11 @@ section Checker
     let mut exV := exV
     while true do
       let .valid _ t := exV
-        | throwError "skolemizeMostIntoForall :: Unexpected entry {exV}"
+        | throwError "{decl_name%} :: Unexpected entry {exV}"
       if t.isMkForallE then
         exV ← validOfIntroMost exV
       let .valid _ t := exV
-        | throwError "skolemizeMostIntoForall :: Unexpected entry {exV}"
+        | throwError "{decl_name%} :: Unexpected entry {exV}"
       if t.isMkExistE then
         exV ← skolemize exV
         exV ← validOfHnf exV
@@ -808,7 +808,7 @@ section Checker
   def define (t : LamTerm) : ReifM REntry := do
     let eidx ← getMaxEVarSucc
     let (new?, .newEtomWithValid _ [] t) ← newChkStep (.e (.define t)) .none
-      | throwError "define :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     if new? then
       let _ ← nonemptyOfEtom eidx
     return .valid [] t
@@ -816,7 +816,7 @@ section Checker
   def validOfPrepConv (pc : PrepConvStep) (v : REntry) (occ : List Bool) : ReifM REntry := do
     let p ← lookupREntryPos! v
     let (_, .addEntry re) ← newChkStep (.p pc p occ) .none
-      | throwError "validOfPrepConv :: Unexpected evaluation result"
+      | throwError "{decl_name%} :: Unexpected evaluation result"
     return re
 
 end Checker
@@ -829,17 +829,17 @@ section CheckerUtils
   -/
   def reorderLCtx (v : REntry) (rmap : Array Nat) : ReifM REntry := do
     let .valid lctx _ := v
-      | throwError "reorderLCtx :: Unexpected entry {v}"
+      | throwError "{decl_name%} :: Unexpected entry {v}"
     let lsize := lctx.length
     if rmap.size != lsize then
-      throwError "reorderLCtx :: Length of lctx does not equal size of reorder map"
+      throwError "{decl_name%} :: Length of lctx does not equal size of reorder map"
     let mut ex : Array LamSort := rmap.map (fun _ => .atom 0)
     let mut argBVarIdx : Array Nat := #[]
     for (s, i) in (Array.mk lctx).zipWithIndex do
       let .some i' := rmap[i]?
-        | throwError "reorderLCtx :: Does not know where does `.bvar i` map to"
+        | throwError "{decl_name%} :: Does not know where does `.bvar i` map to"
       if i' >= lsize then
-        throwError "reorderLCtx :: Index {i'} out of bound {lsize}"
+        throwError "{decl_name%} :: Index {i'} out of bound {lsize}"
       ex := ex.set! i' s
       argBVarIdx := argBVarIdx.push (lsize - i - 1 + i')
     let v ← validOfAppend v ex
@@ -848,7 +848,7 @@ section CheckerUtils
   /-- Refer to docstring of `LamTerm.isGeneral` -/
   def toDefinition? (v : REntry) : ReifM (Option REntry) := do
     let .valid lctx t := v
-      | throwError "toDefinition :: Unexpected entry {v}"
+      | throwError "{decl_name%} :: Unexpected entry {v}"
     let mut introed := t.betaReduceHacky
     let mut lctx' := lctx
     while true do
@@ -863,7 +863,7 @@ section CheckerUtils
     let mr := rhs.getLamBody.isGeneral (lctx'.length + rhs.getLamTys.length)
     if ml.isNone && mr.isNone then return .none
     let .some m := ml <|> mr
-      | throwError "toDefinition? :: Unexpected error"
+      | throwError "{decl_name%} :: Unexpected error"
     let v ← validOfBetaReduce v
     let v ← validOfIntroMost v
     let v ← (do if (head == .iff) then validOfPrepConv .validOfPropext v [] else pure v)
@@ -897,7 +897,7 @@ section CheckerUtils
         | passive := passive.push back; continue
       trace[auto.lamReif.prep.def] "Entry {back} is def-like and is turned into {v'}"
       let .valid [] rw@(.app _ (.app _ (.base (.eq _)) lhs) rhs) := v'
-        | throwError "recognizeDefsAndUnfold :: Unexpected definition entry {v'}"
+        | throwError "{decl_name%} :: Unexpected definition entry {v'}"
       -- If the left-hand-side occurs inside the right-hand-side,
       --   then this definition is recursive and we will not unfold it
       if rhs.abstractsImp #[lhs] != rhs then
@@ -906,7 +906,7 @@ section CheckerUtils
       active ← active.mapM (validOfMpAll · v')
       minds ← minds.mapM (fun mind => do
         let .some mind := mind.mpAll? rw
-          | throwError "recognizeDefsAndUnfold :: Unexpected error"
+          | throwError "{decl_name%} :: Unexpected error"
         return mind)
     return (passive, minds)
 
@@ -972,7 +972,7 @@ def newTypeExpr (e : Expr) : ReifM LamSort := do
   let origSort ← Meta.inferType e
   let origSort := (← instantiateMVars origSort).headBeta
   let .sort lvl := origSort
-    | throwError "newTypeExpr :: Unexpected sort {origSort}"
+    | throwError "{decl_name%} :: Unexpected sort {origSort}"
   setTyVal (tyVal.push (e, lvl))
   setTyVarMap (tyVarMap.insert e idx)
   return .atom idx
@@ -1057,8 +1057,8 @@ def reifMapConstNilLvl : Std.HashMap Name LamTerm :=
     (``Int.add,           .base .iadd),
     (``Int.sub,           .base .isub),
     (``Int.mul,           .base .imul),
-    (``Int.div,           .base .idiv),
-    (``Int.mod,           .base .imod),
+    (``Int.tdiv,          .base .idiv),
+    (``Int.tmod,          .base .imod),
     (``Int.ediv,          .base .iediv),
     (``Int.emod,          .base .iemod),
     (``Int.le,            .base .ile),
@@ -1107,6 +1107,7 @@ def reifMapBVConst2 : Std.HashMap Name (Nat → Nat → LamTerm) :=
     (``BitVec.append,     fun n m => .base (.bvappend n m)),
     (``BitVec.replicate,  fun w i => .base (.bvrepeat w i)),
     (``BitVec.zeroExtend, fun w v => .base (.bvzeroExtend w v)),
+    (``BitVec.setWidth,   fun w v => .base (.bvzeroExtend w v)),
     (``BitVec.signExtend, fun w v => .base (.bvsignExtend w v))
   ]
 
@@ -1128,15 +1129,15 @@ def processSimpleLit (l : Literal) : LamTerm :=
 def processSimpleConst (name : Name) (lvls : List Level) : ReifM (Option LamTerm) := do
   if let .some t := reifMapConstNilLvl.get? name then
     if lvls.length != 0 then
-      throwError "processSimpleConst :: ConstNilLvl constants should have nil level list"
+      throwError "{decl_name%} :: ConstNilLvl constants should have nil level list"
     return t
   if name == ``Embedding.ImpF then
     let [u, v] := lvls
-      | throwError "processSimpleConst :: Invalid levels {lvls} for Auto.Embedding.ImpF"
+      | throwError "{decl_name%} :: Invalid levels {lvls} for Auto.Embedding.ImpF"
     if (← Meta.isLevelDefEq u .zero) ∧ (← Meta.isLevelDefEq v .zero) then
       return .some (.base .imp)
     else
-      throwError "processSimpleConst :: Non-propositional implication is not supported"
+      throwError "{decl_name%} :: Non-propositional implication is not supported"
   return .none
 
 def processSimpleApp (fn arg : Expr) : ReifM (Option LamTerm) := do
@@ -1145,22 +1146,22 @@ def processSimpleApp (fn arg : Expr) : ReifM (Option LamTerm) := do
   let .const name lvls := fn
     | return .none
   match args.toList with
-  | [] => throwError "processSimpleApp :: Unexpected error"
+  | [] => throwError "{decl_name%} :: Unexpected error"
   | [arg] =>
     if let .some tcon := reifMapBVConst1.get? name then
       if lvls.length != 0 then
-        throwError "processSimpleApp :: BVConst1 should have nil level list"
+        throwError "{decl_name%} :: BVConst1 should have nil level list"
       if let .some n ← @id (MetaM _) (Meta.evalNat arg) then
         return .some (tcon n)
       return .none
     if let .some attrName := reifMapAttributesProp.get? name then
       if lvls.length != 1 then
-        throwError "processSimpleApp :: Attribute should have one level"
+        throwError "{decl_name%} :: Attribute should have one level"
       return .some (.base (.ocst (.smtAttr1T attrName (← reifType arg) (.base .prop))))
     if let .some tcon := reifMapIL.get? name then
       if name == ``Embedding.forallF then
         let [lvl₁, lvl₂] := lvls
-          | throwError "processSimpleApp :: Auto.Embedding.forallF should have two levels"
+          | throwError "{decl_name%} :: Auto.Embedding.forallF should have two levels"
         if !(← Meta.isLevelDefEq lvl₂ .zero) then
           return .none
       return .some (.base (tcon (← reifType arg)))
@@ -1168,7 +1169,7 @@ def processSimpleApp (fn arg : Expr) : ReifM (Option LamTerm) := do
   | [arg₁, arg₂] =>
     if let .some tcon := reifMapBVConst2.get? name then
       if lvls.length != 0 then
-        throwError "processSimpleApp :: BVConst2 should have nil level list"
+        throwError "{decl_name%} :: BVConst2 should have nil level list"
       match ← @id (MetaM _) (Meta.evalNat arg₁),
             ← @id (MetaM _) (Meta.evalNat arg₂) with
       | .some n, .some m => return .some (tcon n m)
@@ -1177,7 +1178,7 @@ def processSimpleApp (fn arg : Expr) : ReifM (Option LamTerm) := do
   | [arg₁, arg₂, arg₃] =>
     if let .some tcon := reifMapBVConst3.get? name then
       if lvls.length != 0 then
-        throwError "processSimpleApp :: BVConst2 should have nil level list"
+        throwError "{decl_name%} :: BVConst2 should have nil level list"
       match ← @id (MetaM _) (Meta.evalNat arg₁),
             ← @id (MetaM _) (Meta.evalNat arg₂),
             ← @id (MetaM _) (Meta.evalNat arg₃) with
@@ -1255,7 +1256,7 @@ def reifMapLam0Arg4NoLit : Std.HashMap (Name × Name × Name) (Expr × LamTerm) 
     ((``HMul.hMul, ``Nat, ``Nat),             (.const ``Nat.mul [], .base .nmul)),
     ((``HMul.hMul, ``Int, ``Int),             (.const ``Int.mul [], .base .imul)),
     ((``HDiv.hDiv, ``Nat, ``Nat),             (.const ``Nat.div [], .base .ndiv)),
-    ((``HDiv.hDiv, ``Int, ``Int),             (.const ``Int.div [], .base .idiv)),
+    ((``HDiv.hDiv, ``Int, ``Int),             (.const ``Int.tdiv [], .base .idiv)),
     ((``HAppend.hAppend, ``String, ``String), (.const ``String.append [], .base .sapp))
   ]
 
@@ -1321,13 +1322,13 @@ def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
     | return .none
   if arg₁.isConst then
     let .const arg₁Name _ := arg₁
-      | throwError "processLam0Arg2 :: Unexpected error"
+      | throwError "{decl_name%} :: Unexpected error"
     if let .some (e', t) := reifMapLam0Arg2NoLit.get? (fnName, arg₁Name) then
       if (← Meta.isDefEqD e e') then
         return .some t
   if arg₁.isApp then
     let .app arg₁fn arg₁arg := arg₁
-      | throwError "processLam0Arg2 :: Unexpected error"
+      | throwError "{decl_name%} :: Unexpected error"
     if let .const arg₁FnName _ := arg₁fn then
       if let .some candidates := reifMapLam0Arg2Natlit.get? (fnName, arg₁FnName) then
         if let .some n ← Meta.evalNat arg₁arg then
@@ -1343,20 +1344,20 @@ def processLam0Arg3 (e fn arg₁ arg₂ arg₃ : Expr) : MetaM (Option LamTerm) 
     | .const ``Nat _ =>
       if (← Meta.isDefEqD e arg₂) then
         let .lit (.natVal nv) := arg₂
-          | throwError "processLam0Arg3 :: OfNat.ofNat instance is not based on a nat literal"
+          | throwError "{decl_name%} :: OfNat.ofNat instance is not based on a nat literal"
         return .some (.base (.natVal nv))
       return .none
     | .const ``Int _ =>
       if (← Meta.isDefEqD e (.app (.const ``Int.ofNat []) arg₂)) then
         let .lit (.natVal nv) := arg₂
-          | throwError "processLam0Arg3 :: OfNat.ofNat instance is not based on a nat literal"
+          | throwError "{decl_name%} :: OfNat.ofNat instance is not based on a nat literal"
         return .some (.mkIOfNat (.base (.natVal nv)))
       return .none
     | .app (.const ``BitVec []) nExpr =>
       if let .some n ← Meta.evalNat nExpr then
         if (← Meta.isDefEqD e (mkApp2 (.const ``BitVec.ofNat []) (.lit (.natVal n)) arg₂)) then
           let .lit (.natVal nv) := arg₂
-            | throwError "processLam0Arg3 :: OfNat.ofNat instance is not based on a nat literal"
+            | throwError "{decl_name%} :: OfNat.ofNat instance is not based on a nat literal"
           return .some (.base (.bvVal n nv))
       return .none
     | _ => return .none
@@ -1367,19 +1368,19 @@ def processLam0Arg4 (e fn arg₁ arg₂ arg₃ arg₄ : Expr) : MetaM (Option La
     | return .none
   if arg₁.isConst && arg₂.isConst then
     let .const arg₁name _ := arg₁
-      | throwError "processLam0Arg4 :: Unexpected error"
+      | throwError "{decl_name%} :: Unexpected error"
     let .const arg₂name _ := arg₂
-      | throwError "processLam0Arg4 :: Unexpected error"
+      | throwError "{decl_name%} :: Unexpected error"
     if let .some (e', t) := reifMapLam0Arg4NoLit.get? (fnName, arg₁name, arg₂name) then
       if (← Meta.isDefEqD e e') then
         return .some t
       return .none
   if arg₁.isApp && arg₂.isConst then
     let .app arg₁fn arg₁arg := arg₁
-      | throwError "processLam0Arg4 :: Unexpected error"
+      | throwError "{decl_name%} :: Unexpected error"
     if arg₁fn.isConst then
       let .const arg₁fnName _ := arg₁fn
-        | throwError "processLam0Arg4 :: Unexpected error {arg₁fn}"
+        | throwError "{decl_name%} :: Unexpected error {arg₁fn}"
       if let .some candidates := reifMapLam0Arg4NatLit.get? (fnName, arg₁fnName) then
         for (e'con, tcon) in candidates do
           if let .some n ← Meta.evalNat arg₁arg then
@@ -1387,12 +1388,12 @@ def processLam0Arg4 (e fn arg₁ arg₂ arg₃ arg₄ : Expr) : MetaM (Option La
               return tcon n
   if arg₁.isApp && arg₂.isApp then
     let .app arg₁fn arg₁arg := arg₁
-      | throwError "processLam0Arg4 :: Unexpected error"
+      | throwError "{decl_name%} :: Unexpected error"
     let .app arg₂fn arg₂arg := arg₂
-      | throwError "processLam0Arg4 :: Unexpected error"
+      | throwError "{decl_name%} :: Unexpected error"
     if arg₁fn.isConst && arg₂fn.isConst then
       let .const arg₁fnName _ := arg₁fn
-        | throwError "processLam0Arg4 :: Unexpected error"
+        | throwError "{decl_name%} :: Unexpected error"
       if let .some candidates := reifMapLam0Arg4NatLitNatLitEq.get? (fnName, arg₁fnName) then
         for (e'con, tcon) in candidates do
           if let .some n ← Meta.evalNat arg₁arg then
@@ -1480,7 +1481,7 @@ def reifTermCheckType (e : Expr) : ReifM (LamSort × LamTerm) := do
   let t ← reifTerm .empty e
   let ltv ← getLamTyValAtMeta
   let .some s := t.lamCheck? ltv Embedding.Lam.dfLCtxTy
-    | throwError "reifTermCheckType :: LamTerm {t} is not type correct"
+    | throwError "{decl_name%} :: LamTerm {t} is not type correct"
   return (s, t)
 
 /-- Return the positions of the reified and `resolveImport`-ed facts within the `validTable` -/
@@ -1488,7 +1489,7 @@ def reifFacts (facts : Array UMonoFact) : ReifM (Array LamTerm) :=
   facts.mapM (fun ⟨proof, ty, deriv⟩ => do
     let (s, lamty) ← reifTermCheckType ty
     if s != .base .prop then
-      throwError "reifFacts :: Fact {lamty} is not of type `prop`"
+      throwError "{decl_name%} :: Fact {lamty} is not of type `prop`"
     trace[auto.lamReif.printResult] "Successfully reified proof of {← Meta.zetaReduce ty} to λterm `{lamty}`"
     newAssertion proof deriv lamty
     return lamty)
@@ -1575,9 +1576,9 @@ section BuildChecker
     let rst ← getRst
     let mut chkSteps := #[]
     for re in (← getRTable) do
-      if let .some cs := rst.chkMap.find? re then
+      if let .some cs := rst.chkMap.get? re then
         let .some n := rst.findPos? re
-          | throwError "buildChkStepsExpr :: Unexpected error"
+          | throwError "{decl_name%} :: Unexpected error"
         chkSteps := chkSteps.push (cs, n)
     -- `ChkMap` are run using `foldl`, so we use `BinTree.ofListFoldl`
     let e := Lean.toExpr (BinTree.ofListFoldl chkSteps.toList)
@@ -1627,7 +1628,6 @@ section BuildChecker
       (.app (.const ``ilβ [u]) tyValExpr))
 
   def buildCPValExpr : ReifM Expr := do
-    -- let startTime ← IO.monoMsNow
     let u ← getU
     let tyValExpr ← buildTyVal
     let tyValTy := Expr.forallE `_ (.const ``Nat []) (.sort (.succ u)) .default
@@ -1636,9 +1636,6 @@ section BuildChecker
       let ilExpr ← buildILExpr tyValFVarExpr
       let checkerValuationExpr := Lean.mkApp3 (.const ``CPVal.mk [u]) tyValExpr varExpr ilExpr
       Meta.mkLetFVars #[tyValFVarExpr] checkerValuationExpr
-    -- if !(← Meta.isTypeCorrectCore lamValuationExpr) then
-    --   throwError "buildLamValuation :: Malformed LamValuation"
-    -- trace[auto.buildChecker] "LamValuation typechecked in time {(← IO.monoMsNow) - startTime}"
     return lamValuationExpr
 
   /-- `lvalExpr` is the `LamValuation` -/
@@ -1653,7 +1650,7 @@ section BuildChecker
       let itEntry := Lean.mkApp3 (.const ``importTablePSigmaMk [u]) chkValExpr ieExpr e
       importTable := importTable.insert n itEntry
       if t.maxLooseBVarSucc != 0 || t.maxEVarSucc != 0 then
-        throwError "buildImportTableExpr :: Invalid imported fact {t}"
+        throwError "{decl_name%} :: Invalid imported fact {t}"
       let veEntry := REntry.valid [] t
       importedFactsTree := importedFactsTree.insert n veEntry
     for (s, (inh, _, n)) in (← getInhabitations).toList do
@@ -1686,7 +1683,7 @@ section BuildChecker
       let (itExpr, _) ← buildImportTableExpr cpvFVarExpr
       let csExpr ← buildChkStepsExpr
       let .valid lctx t := re
-        | throwError "buildFullCheckerExprFor :: {re} is not a `valid` entry"
+        | throwError "{decl_name%} :: {re} is not a `valid` entry"
       let vExpr := Lean.toExpr (← lookupREntryPos! re)
       let eqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr (lctx, t)]]
       let getEntry := Lean.mkApp7 (.const ``Checker.getValidExport_directReduce [u])
@@ -1712,7 +1709,7 @@ section BuildChecker
       let (itExpr, ifExpr) ← buildImportTableExpr cpvFVarExpr
       let csExpr ← buildChkStepsExpr
       let .valid lctx t := re
-        | throwError "buildFullCheckerExprFor :: {re} is not a `valid` entry"
+        | throwError "{decl_name%} :: {re} is not a `valid` entry"
       let vExpr := Lean.toExpr (← lookupREntryPos! re)
       let hImportExpr ← Meta.mkAppM ``Eq.refl #[ifExpr]
       let hLvtExpr ← Meta.mkAppM ``Eq.refl #[lvtExpr]
@@ -1769,7 +1766,7 @@ section BuildChecker
       let csExpr ← buildChkStepsExpr
       let csNativeName ← mkNativeAuxDecl `lam_ssrefl_cs (Lean.mkConst ``ChkSteps) csExpr
       let .valid lctx t := re
-        | throwError "buildFullCheckerExprFor :: {re} is not a `valid` entry"
+        | throwError "{decl_name%} :: {re} is not a `valid` entry"
       let vExpr := Lean.toExpr (← lookupREntryPos! re)
       let hImportExpr ← Meta.mkAppM ``Eq.refl #[Lean.mkConst ifNativeName]
       let hLvtExpr ← Meta.mkAppM ``Eq.refl #[Lean.mkConst lvtNativeName]
@@ -1894,7 +1891,7 @@ open Embedding.Lam LamReif
         trace[auto.buildChecker] "Collecting for etom {e} by ChkStep {cs}"
         let _ ← processChkStep ref cs
       let .some n := (← getEtomH2lMap).get? e
-        | throwError "transEtom :: Cannot find translation of etom {e}"
+        | throwError "{decl_name%} :: Cannot find translation of etom {e}"
       return n
 
     partial def transLamTerm (ref : State) : LamTerm → TransM LamTerm
@@ -1977,11 +1974,11 @@ open Embedding.Lam LamReif
       match cs with
       | .nonemptyOfAtom n => do
         let .atom n' ← transLamTerm ref (.atom n)
-          | throwError "transChkStep :: Unexpected error"
+          | throwError "{decl_name%} :: Unexpected error"
         return .nonemptyOfAtom n'
       | .nonemptyOfEtom n => do
         let .etom n' ← transLamTerm ref (.etom n)
-          | throwError "transChkStep :: Unexpected error"
+          | throwError "{decl_name%} :: Unexpected error"
         return .nonemptyOfEtom n'
     | .p cs pos occ => return ChkStep.p cs (← transPos ref pos) occ
     | .w cs => ChkStep.w <$>
@@ -1998,7 +1995,7 @@ open Embedding.Lam LamReif
       let cs' ← transChkStep ref cs
       setCsH2lMap ((← getCsH2lMap).insert cs cs')
       let (true, er) ← newChkStep cs' .none
-        | throwError "processChkStep :: Unexpected error"
+        | throwError "{decl_name%} :: Unexpected error"
       trace[auto.buildChecker] "Checkstep {cs} translated to {cs'}, producing {er}"
       match er with
       | .newEtomWithValid .. => do
@@ -2020,22 +2017,22 @@ open Embedding.Lam LamReif
         trace[auto.buildChecker] "Collecting for {hre} by ChkStep {cs}"
         let er ← processChkStep ref cs
         match er with
-        | .fail => throwError "collectProofFor :: Unexpected evaluation result"
+        | .fail => throwError "{decl_name%} :: Unexpected evaluation result"
         | .addEntry reNew => do
           let expectedEntry ← transREntry ref hre
-          if expectedEntry != reNew then throwError "collectProofFor :: Entry mismatch"
+          if expectedEntry != reNew then throwError "{decl_name%} :: Entry mismatch"
         | .newEtomWithValid _ lctx t => do
           let expectedEntry ← transREntry ref hre
-          if expectedEntry != .valid lctx t then throwError "collectProofFor :: Entry mismatch"
+          if expectedEntry != .valid lctx t then throwError "{decl_name%} :: Entry mismatch"
       | .inhabitation e deriv _ =>
         let .nonempty hs := hre
-          | throwError "collectProofFor :: Unexpected error"
+          | throwError "{decl_name%} :: Unexpected error"
         let s ← transLamSort ref hs
         newInhabitation e deriv s
         trace[auto.buildChecker] "Inhabitation fact {hs} translated to {s}"
       | .assertion e deriv _ =>
         let .valid [] ht := hre
-          | throwError "collectProofFor :: Unexpected error"
+          | throwError "{decl_name%} :: Unexpected error"
         let t ← transLamTerm ref ht
         newAssertion e deriv t
         trace[auto.buildChecker] "Import fact {ht} translated to {t}"

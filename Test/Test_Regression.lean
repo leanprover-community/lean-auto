@@ -334,12 +334,31 @@ example (H : (fun (x y z t : Nat) => x) = (fun x y z t => x)) : True := by
 example
   {α : Sort u}
   (add : ((α → α) → (α → α)) → ((α → α) → (α → α)) → ((α → α) → (α → α)))
-  (Hadd : ∀ x y f n, add x y f n = (x f) ((y f) n))
+  (hadd : ∀ x y f n, add x y f n = (x f) ((y f) n))
   (mul : ((α → α) → (α → α)) → ((α → α) → (α → α)) → ((α → α) → (α → α)))
-  (Hmul : ∀ x y f, mul x y f = x (y f))
+  (hmul : ∀ x y f, mul x y f = x (y f))
   (w₁ w₂ : ((α → α) → (α → α)) → ((α → α) → (α → α)) → ((α → α) → (α → α)))
   (Hw₁₂ : (w₁ = w₂) = (w₂ = w₁)) : True := by
-  auto [Hadd, Hmul, Hw₁₂]
+  auto [hadd, hmul, Hw₁₂]
+
+example
+  (P : (α → γ) → Prop) (f : α → β) (g : β → γ) (h : β → β)
+  : P ((g ∘ h) ∘ f) = P (fun x => g (h (f x))) := by
+  auto [Function.comp_def]
+
+example
+  (A : Sort u)
+  (add : ∀ {α}, ((α → α) → (α → α)) → ((α → α) → (α → α)) → ((α → α) → (α → α)))
+  (hadd : ∀ {α} x y f n, @add α x y f n = (x f) ((y f) n))
+  (mul : ∀ {α}, ((α → α) → (α → α)) → ((α → α) → (α → α)) → ((α → α) → (α → α)))
+  (hmul : ∀ {α} x y f, @mul α x y f = x (y f))
+  (two : (A → A) → (A → A))
+  (htwo : ∀ f x, two f x = f (f x))
+  (three : (A → A) → (A → A))
+  (hthree : ∀ f x, three f x = f (f (f x))) :
+  mul three (add two (add three three)) =
+  mul three (mul two (add two two)) := by
+  auto [hadd, hmul, htwo, hthree]
 
 -- Polymorphic Constant
 
@@ -513,6 +532,16 @@ section Adhoc
     (h : if (a = b) then True else a = b) : a = b := by
     auto
 
+  -- Cond
+  example : cond true a b = a ∧ cond false a b = b := by
+    auto
+
+  example (h : p = true) : cond p a b = a := by
+    auto
+
+  example (h : p = false) : cond p a b = b := by
+    auto
+
   -- Decide
   example : ∀ b, !(b = true) ↔ b = false := by auto
 
@@ -543,7 +572,7 @@ section Adhoc
 
   example
     (a b : Int)
-    : a * b - a % (Int.mod b a) = a * b - a % (Int.mod b a) := by auto
+    : a * b - a % (Int.tmod b a) = a * b - a % (Int.tmod b a) := by auto
 
   example (a : Int)
     (h₁ : a ≥ 0) (h₂ : -a ≤ 0) (h₃ : 0 < 1) (h₄ : 2 > 0)

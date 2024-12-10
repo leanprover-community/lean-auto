@@ -55,12 +55,10 @@ namespace BVLems
     unfold BitVec.ushiftRight BitVec.toNat
     dsimp; rw [Nat.shiftRight_eq_div_pow]
 
-  theorem toNat_setWidth {a : BitVec n} (le : n ≤ m) : (a.setWidth m).toNat = a.toNat := by
-    unfold setWidth
-    simp only [le, ↓reduceDIte, toNat_setWidth']
+  theorem toNat_zeroExtend' {a : BitVec n} (le : n ≤ m) : (a.setWidth' le).toNat = a.toNat := rfl
 
   theorem toNat_zeroExtend {a : BitVec n} (i : Nat) : (a.zeroExtend i).toNat = a.toNat % (2 ^ i) := by
-    unfold BitVec.zeroExtend setWidth; cases hdec : decide (n ≤ i)
+    unfold BitVec.zeroExtend BitVec.setWidth; cases hdec : decide (n ≤ i)
     case false =>
       have hnle := of_decide_eq_false hdec
       rw [Bool.dite_eq_false (proof:=hnle)]; rfl
@@ -103,9 +101,9 @@ namespace BVLems
     apply Nat.le_trans (toNat_le _) (Nat.pow_le_pow_of_le_right (.step .refl) h)
 
   theorem msb_equiv_lt (a : BitVec n) : !a.msb ↔ a.toNat < 2 ^ (n - 1) := by
-    dsimp [BitVec.msb, getMsbD, getLsbD]
+    dsimp [BitVec.msb, BitVec.getMsbD, BitVec.getLsbD]
     cases n
-    case zero => simp [BitVec.toNat]
+    case zero => cases a <;> simp
     case succ n =>
       have dtrue : decide (0 < n + 1) = true := by simp
       rw [dtrue, Bool.not_eq_true', Bool.true_and, Nat.succ_sub_one, Nat.testBit_false_iff]
@@ -114,7 +112,7 @@ namespace BVLems
   theorem msb_equiv_lt' (a : BitVec n) : !a.msb ↔ 2 * a.toNat < 2 ^ n := by
     rw [msb_equiv_lt]
     cases n
-    case zero => simp [BitVec.toNat]
+    case zero => cases a <;> simp
     case succ n =>
       rw [Nat.succ_sub_one, Nat.pow_succ, Nat.mul_comm (m:=2)]
       apply Iff.symm; apply Nat.mul_lt_mul_left
@@ -135,7 +133,7 @@ namespace BVLems
         rw [Nat.sub_one, Nat.pred_lt_iff_le (Nat.two_pow_pos _)]
         apply Nat.le_trans (Nat.sub_le _ _) (Nat.pow_le_pow_of_le_right (.step .refl) h)
       apply eq_of_val_eq; rw [toNat_ofNatLt, hzero]
-      rw [toNat_neg, Int.mod_def', Int.emod];
+      rw [toNat_neg, Int.mod_def', Int.emod]
       rw [Nat.zero_mod, Int.natAbs_ofNat, Nat.succ_eq_add_one, Nat.zero_add]
       rw [Int.subNatNat_of_sub_eq_zero ((Nat.sub_eq_zero_iff_le).mpr (Nat.two_pow_pos _))]
       rw [Int.toNat_ofNat, BitVec.toNat_ofNat]

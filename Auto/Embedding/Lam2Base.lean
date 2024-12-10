@@ -121,9 +121,9 @@ def Lam₂Type.check_iff_interp
     simp [check, interp]
     cases Nat.decLt n (List.length lctx)
     case isTrue h =>
-      simp [h]; simp [List.get?_eq_get h]
+      simp [h]
     case isFalse h =>
-      simp [h]; simp at h; simp [List.get?_len_le h]
+      simp [h, List.getElem?_eq]
   case func fn arg IHfn IHarg =>
     revert IHfn IHarg
     simp [check, interp]
@@ -134,9 +134,9 @@ def Lam₂Type.check_iff_interp
       simp;
       match cifn : interp val lctx fn, ciarg : interp val lctx arg with
       | .some ⟨0, _⟩, .some ⟨0, _⟩ => simp
-      | .some ⟨0, _⟩, .some ⟨n + 1, _⟩ => simp; simp_arith
+      | .some ⟨0, _⟩, .some ⟨n + 1, _⟩ => simp
       | .some ⟨0, _⟩, .none => simp
-      | .some ⟨n + 1, _⟩, _ => simp; simp_arith
+      | .some ⟨n + 1, _⟩, _ => simp
       | .none , _ => simp
     | .some 0, .some (n + 1) =>
       simp;
@@ -168,7 +168,7 @@ def Lam₂Type.check_iff_interp
       simp;
       match cifn : interp val lctx fn, ciarg : interp val lctx arg with
       | .some ⟨n + 1, _⟩, .some ⟨0, _⟩ => simp
-      | .some ⟨n + 1, _⟩, .some ⟨m + 1, _⟩ => simp; simp_arith
+      | .some ⟨n + 1, _⟩, .some ⟨m + 1, _⟩ => simp
       | .some ⟨n + 1, _⟩, .none => simp
       | .some ⟨0, _⟩, _ => simp
       | .none , _ => simp
@@ -185,7 +185,7 @@ def Lam₂Type.check_iff_interp
     | .some 0, _ =>
       simp;
       match cifn : interp val lctx fn with
-      | .some ⟨n + 1, _⟩ => simp; simp_arith
+      | .some ⟨n + 1, _⟩ => simp
       | .some ⟨0, _⟩ => simp
       | .none => simp
     | .none, _ =>

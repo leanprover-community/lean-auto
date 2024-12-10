@@ -86,7 +86,7 @@ private partial def exprDeCompileAux (final : Bool) (e : Expr) : ExprDeCompM Str
     | .natVal l => return toString l
     | .strVal s => return toString s
   | Expr.sort l => return s!"Sort ({l})"
-  | Expr.mvar .. => throwError "exprDeCompile :: Metavariable is not supported"
+  | Expr.mvar .. => throwError "{decl_name%} :: Metavariable is not supported"
   | Expr.fvar f =>
     let some decl := (← getLCtx).find? f
       | throwError "Unknown free variable {e}"
@@ -103,9 +103,9 @@ where
         String.intercalate ", " (us.map toString) ++ "}"
   etaExpandConst (cst : Expr) (appliedArgs : Nat) := do
     if !cst.isConst then
-      throwError s!"exprDeCompile :: etaExpandConst received non-const {cst}"
+      throwError s!"{decl_name%} :: etaExpandConst received non-const {cst}"
     let some val := (← getEnv).find? cst.constName!
-      | throwError s!"exprDeCompile :: Unknown identifier {cst.constName!}"
+      | throwError s!"{decl_name%} :: Unknown identifier {cst.constName!}"
     let ty := val.type
     let lparams := val.levelParams
     let bs := Expr.forallBinders ty
@@ -145,7 +145,7 @@ def exprCollectNames (e : Expr) : StateT (Std.HashSet String) MetaM Unit := do
   | Expr.mvar .. => return
   | Expr.fvar f =>
     let some decl := (← getLCtx).find? f
-      | throwError "Unknown free variable {e}"
+      | throwError "{decl_name%} :: Unknown free variable {e}"
     let name := decl.userName.toString
     modify (fun s => s.insert name)
   | Expr.bvar .. => return

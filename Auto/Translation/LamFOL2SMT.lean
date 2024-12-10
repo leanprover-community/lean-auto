@@ -55,15 +55,15 @@ def LamAtomic.toLeanExpr
   match atomic with
   | .sort n => do
     let .some e := tyValMap.get? n
-      | throwError "SMT.printValuation :: Unknown sort atom {n}"
+      | throwError "{decl_name%} :: Unknown sort atom {n}"
     return e
   | .term n => do
     let .some e := varValMap.get? n
-      | throwError "SMT.printValuation :: Unknown term atom {n}"
+      | throwError "{decl_name%} :: Unknown term atom {n}"
     return e
   | .etom n => do
     let .some e := etomValMap.get? n
-      | throwError "SMT.printValuation :: Unknown etom {n}"
+      | throwError "{decl_name%} :: Unknown etom {n}"
     return e
   | .bvOfNat n => do
     let e := Expr.app (.const ``BitVec.ofNat []) (.lit (.natVal n))
@@ -95,7 +95,7 @@ where
   go : LamSort → MetaM String
   | .atom n => do
     let .some (e, _) := sni.tyVal[n]?
-      | throwError "lamSortAtom2String :: Unexpected sort atom {repr (LamSort.atom n)}"
+      | throwError "{decl_name%} :: Unexpected sort atom {repr (LamSort.atom n)}"
     exprToSuggestion e
   | .base b => return b.toString
   -- Suggest name based on return type
@@ -109,11 +109,11 @@ where
   go : LamAtomic → MetaM String
   | .sort n => do
     let .some (e, _) := sni.tyVal[n]?
-      | throwError "lamSortAtom2String :: Unexpected sort atom {repr (LamSort.atom n)}"
+      | throwError "{decl_name%} :: Unexpected sort atom {repr (LamSort.atom n)}"
     exprToSuggestion e
   | .term n => do
     let .some (e, _) := sni.varVal[n]?
-      | throwError "lamTermAtom2String :: Unexpected term atom {repr (LamTerm.atom n)}"
+      | throwError "{decl_name%} :: Unexpected term atom {repr (LamTerm.atom n)}"
     exprToSuggestion e
   | .etom n => return s!"sk{n}"
   | .bvOfNat n => exprToSuggestion (Expr.app (.const ``BitVec.ofNat []) (.lit (.natVal n)))
@@ -145,7 +145,7 @@ private def lamSortAtom2String (sni : SMTNamingInfo) (n : Nat) : TransM LamAtomi
 private def lamSort2SSortAux (sni : SMTNamingInfo) : LamSort → TransM LamAtomic SSort
 | .atom n => do return .app (.symb (← lamSortAtom2String sni n)) #[]
 | .base b => return lamBaseSort2SSort b
-| .func _ _ => throwError "lamSort2STermAux :: Unexpected error. Higher order input?"
+| .func _ _ => throwError "{decl_name%} :: Unexpected error. Higher order input?"
 
 /-- Only translates first-order types -/
 private def lamSort2SSort (sni : SMTNamingInfo) : LamSort → TransM LamAtomic (List SSort × SSort)
@@ -193,7 +193,7 @@ private def bitVec2STerm (n i : Nat) : STerm :=
 
 private def lamBaseTerm2STerm_Arity3 (arg1 arg2 arg3 : STerm) : LamBaseTerm → TransM LamAtomic STerm
 | .scst .srepall => return .qStrApp "str.replace_all" #[arg1, arg2, arg3]
-| t              => throwError "lamTerm2STerm :: The arity of {repr t} is not 3"
+| t              => throwError "{decl_name%} :: The arity of {repr t} is not 3"
 
 private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → TransM LamAtomic STerm
 | .pcst .and  => return .qStrApp "and" #[arg1, arg2]
@@ -248,7 +248,7 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .bvcst (.bvshOp _ smt? op) =>
   match smt? with
   | false =>
-    throwError "lamTerm2STerm :: Non-smt shift operations should not occur here"
+    throwError "{decl_name%} :: Non-smt shift operations should not occur here"
   | true =>
     match op with
     | .shl => return .qStrApp "bvshl" #[arg1, arg2]
@@ -256,7 +256,7 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
     | .ashr => return .qStrApp "bvashr" #[arg1, arg2]
 | .bvcst (.bvappend _ _) => return .qStrApp "concat" #[arg1, arg2]
 | .ocst (.smtAttr1T name _ _) => return .attrApp name arg1 arg2
-| t           => throwError "lamTerm2STerm :: The arity of {repr t} is not 2"
+| t           => throwError "{decl_name%} :: The arity of {repr t} is not 2"
 
 private def lamBaseTerm2STerm_Arity1 (sni : SMTNamingInfo) (arg : STerm) : LamBaseTerm → TransM LamAtomic STerm
 | .pcst .not             => return .qStrApp "not" #[arg]
@@ -316,10 +316,10 @@ private def lamBaseTerm2STerm_Arity1 (sni : SMTNamingInfo) (arg : STerm) : LamBa
     return .qIdApp (.ident (.indexed "sign_extend" #[.inr (v - w)])) #[arg]
   else
     return .qIdApp (.ident (.indexed "extract" #[.inr (v - 1), .inr 0])) #[arg]
-| t               => throwError "lamTerm2STerm :: The arity of {repr t} is not 1"
+| t               => throwError "{decl_name%} :: The arity of {repr t} is not 1"
 where
   solverName : MetaM Solver.SMT.SolverName := do
-    return Solver.SMT.auto.smt.solver.name.get (← getOptions)
+    return auto.smt.solver.name.get (← getOptions)
   mkSMTMsbExpr (n : Nat) (arg : STerm) : STerm :=
     let andExpr := .qStrApp "bvand" #[arg, .qStrApp "bvshl" #[bitVec2STerm n 1, bitVec2STerm n (n - 1)]]
     .qStrApp "not" #[.qStrApp "=" #[andExpr, bitVec2STerm n 0]]
@@ -332,11 +332,11 @@ private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtomic STerm
 | .ncst (.natVal n)   => return .sConst (.num n)
 | .scst (.strVal s)   => return .sConst (.str s)
 | .bvcst (.bvVal n i) => return bitVec2STerm n i
-| t                   => throwError "lamTerm2STerm :: The arity of {repr t} is not 0"
+| t                   => throwError "{decl_name%} :: The arity of {repr t} is not 0"
 
 def lamTermAtom2String (sni : SMTNamingInfo) (lamVarTy : Array LamSort) (n : Nat) : TransM LamAtomic (LamSort × String) := do
   let .some s := lamVarTy[n]?
-    | throwError "lamTermAtom2String :: Unexpected term atom {repr (LamTerm.atom n)}"
+    | throwError "{decl_name%} :: Unexpected term atom {repr (LamTerm.atom n)}"
   -- Empty type is not inhabited
   if s == .base .empty then
     addCommand (.assert (.qStrApp "false" #[]))
@@ -349,7 +349,7 @@ def lamTermAtom2String (sni : SMTNamingInfo) (lamVarTy : Array LamSort) (n : Nat
 
 def lamTermEtom2String (sni : SMTNamingInfo) (lamEVarTy : Array LamSort) (n : Nat) : TransM LamAtomic (LamSort × String) := do
   let .some s := lamEVarTy[n]?
-    | throwError "lamTerm2STerm :: Unexpected etom {repr (LamTerm.etom n)}"
+    | throwError "{decl_name%} :: Unexpected etom {repr (LamTerm.etom n)}"
   -- Empty type is not inhabited
   if s == .base .empty then
     addCommand (.assert (.qStrApp "false" #[]))
@@ -365,12 +365,12 @@ private def lamTerm2STermAux (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Array L
 | .atom n => do
   let (s, name) ← lamTermAtom2String sni lamVarTy n
   if args.size != s.getArgTys.length then
-    throwError "lamTerm2STerm :: Argument number mismatch. Higher order input?"
+    throwError "{decl_name%} :: Argument number mismatch. Higher order input?"
   return .qIdApp (QualIdent.ofString name) args
 | .etom n => do
   let (s, name) ← lamTermEtom2String sni lamEVarTy n
   if args.size != s.getArgTys.length then
-    throwError "lamTerm2STerm :: Argument number mismatch. Higher order input?"
+    throwError "{decl_name%} :: Argument number mismatch. Higher order input?"
   return .qIdApp (QualIdent.ofString name) args
 | .base b =>
   match args with
@@ -378,8 +378,8 @@ private def lamTerm2STermAux (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Array L
   | #[u₁]         => lamBaseTerm2STerm_Arity1 sni u₁ b
   | #[u₁, u₂]     => lamBaseTerm2STerm_Arity2 u₁ u₂ b
   | #[u₁, u₂, u₃] => lamBaseTerm2STerm_Arity3 u₁ u₂ u₃ b
-  | _         => throwError "lamTerm2STerm :: Argument number mismatch. Higher order input?"
-| t => throwError "lamTerm2STerm :: Unexpected head term {repr t}"
+  | _         => throwError "{decl_name%} :: Argument number mismatch. Higher order input?"
+| t => throwError "{decl_name%} :: Unexpected head term {repr t}"
 
 def lamQuantified2STerm (sni : SMTNamingInfo) (forall? : Bool) (s : LamSort) (body : TransM LamAtomic STerm) : TransM LamAtomic STerm := do
   -- Empty type is not inhabited
@@ -400,13 +400,13 @@ private partial def lamTerm2STerm (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Ar
 | .base b => lamBaseTerm2STerm_Arity0 b
 | .bvar n => return .bvar n
 | .app _ (.app _ (.base (.eqI _)) _) _ =>
-  throwError ("lamTerm2STerm :: " ++ LamExportUtils.exportError.ImpPolyLog)
+  throwError (decl_name% ++ " :: " ++ LamExportUtils.exportError.ImpPolyLog)
 | .app _ (.base (.forallEI _)) (.lam _ _) =>
-  throwError ("lamTerm2STerm :: " ++ LamExportUtils.exportError.ImpPolyLog)
+  throwError (decl_name% ++ " :: " ++ LamExportUtils.exportError.ImpPolyLog)
 | .app _ (.base (.existEI _)) (.lam _ _) =>
-  throwError ("lamTerm2STerm :: " ++ LamExportUtils.exportError.ImpPolyLog)
+  throwError (decl_name% ++ " :: " ++ LamExportUtils.exportError.ImpPolyLog)
 | .app _ (.app _ (.app _ (.base (.iteI _)) _) _) _ =>
-  throwError ("lamTerm2STerm :: " ++ LamExportUtils.exportError.ImpPolyLog)
+  throwError (decl_name% ++ " :: " ++ LamExportUtils.exportError.ImpPolyLog)
 | .app _ (.app _ (.base (.eq _)) arg₁) arg₂ => do
   let arg₁' ← lamTerm2STerm sni lamVarTy lamEVarTy arg₁
   let arg₂' ← lamTerm2STerm sni lamVarTy lamEVarTy arg₂
@@ -442,16 +442,16 @@ private def lamMutualIndInfo2STerm (sni : SMTNamingInfo) (mind : MutualIndInfo) 
   --   be declared during the following `lamSort2SSort`
   for ⟨type, _, _⟩ in mind do
     let .atom sn := type
-      | throwError "lamMutualIndInfo2STerm :: Inductive type {type} is not a sort atom"
+      | throwError "{decl_name%} :: Inductive type {type} is not a sort atom"
     -- Do not use `lamSortAtom2String` because we don't want to `declare-sort`
     let _ ← h2Symb (.sort sn) (← sni.suggestNameForAtomic (.sort sn))
   for ⟨type, ctors, projs⟩ in mind do
     let .atom sn := type
-      | throwError "lamMutualIndInfo2STerm :: Unexpected error"
+      | throwError "{decl_name%} :: Unexpected error"
     let mut projInfos : Array (LamSort × String) := #[]
     if let .some projs := projs then
       if ctors.length != 1 then
-        throwError "lamMutualIndInfo2STerm :: Unexpected error"
+        throwError "{decl_name%} :: Unexpected error"
       for (s, t) in projs do
         let mut projname := ""
         match t with
@@ -477,7 +477,7 @@ private def lamMutualIndInfo2STerm (sni : SMTNamingInfo) (mind : MutualIndInfo) 
       let mut selDecls := #[]
       if projs.isSome then
         if argTys.length != projInfos.size then
-          throwError "lamMutualIndInfo2STerm :: Unexpected error"
+          throwError "{decl_name%} :: Unexpected error"
         selDecls := ((Array.mk argTys).zip projInfos).map (fun (argTy, _, name) => (name, argTy))
       else
         selDecls := (Array.mk argTys).zipWithIndex.map (fun (argTy, idx) =>
@@ -609,7 +609,7 @@ def withExprValuation
     match atomic with | .etom n => .some (n, name) | _ => .none)
   let declInfos ← etomsWithName.mapM (fun (n, name) => do
     let .some s := sni.lamEVarTy[n]?
-      | throwError "SMT.printValuation :: Unknown etom {n}"
+      | throwError "{decl_name%} :: Unknown etom {n}"
     let type ← Lam2D.interpLamSortAsUnlifted tyValMap s
     return (Name.mkSimple name, .default, fun _ => pure type))
   Meta.withLocalDecls declInfos (fun etomFVars => do

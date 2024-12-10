@@ -42,7 +42,7 @@ opaque queryNative : Array Lemma → Array Lemma → MetaM Expr
 def emulateNative (lemmas : Array Lemma) (_ : Array Lemma) : MetaM Expr := do
   let _ ← lemmas.mapM (fun lem => do
     if lem.params.size != 0 then
-      throwError "Solver.emulateNative :: Universe levels parameters are not supported")
+      throwError "{decl_name%} :: Universe levels parameters are not supported")
   let descrs := lemmas.zipWithIndex.map (fun (lem, i) => (Name.mkSimple s!"lem{i}", lem.type, .default))
   let sty := Expr.mkForallFromBinderDescrs descrs (.const ``False [])
   let sorryExpr := Lean.mkApp2 (.const ``sorryAx [.zero]) sty (.const ``Bool.false [])

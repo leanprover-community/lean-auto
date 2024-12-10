@@ -474,7 +474,7 @@ section
     if let .some name := h2lMap.get? cstr then
       return name
     let .some nameSuggestion := nameSuggestion
-      | throwError "IR.SMT.h2Symb :: Fresh high-level constraint {cstr} without name suggestion"
+      | throwError "{decl_name%} :: Fresh high-level constraint {cstr} without name suggestion"
     let name ← processSuggestedName nameSuggestion
     setL2hMap (l2hMap.insert name cstr)
     setH2lMap (h2lMap.insert cstr name)

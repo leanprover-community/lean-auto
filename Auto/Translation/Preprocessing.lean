@@ -28,7 +28,7 @@ def elabLemma (stx : Term) (deriv : DTr) : TacticM Lemma :=
 
 def addRecAsLemma (recVal : RecursorVal) : MetaM (Array Lemma) := do
   let some (.inductInfo indVal) := (← getEnv).find? recVal.getInduct
-    | throwError "Expected inductive datatype: {recVal.getInduct}"
+    | throwError "{decl_name%} :: Expected inductive datatype: {recVal.getInduct}"
   let expr := mkConst recVal.name (recVal.levelParams.map Level.param)
   let res ← forallBoundedTelescope (← inferType expr) recVal.getMajorIdx fun xs _ => do
     let expr := mkAppN expr xs
@@ -39,7 +39,7 @@ def addRecAsLemma (recVal : RecursorVal) : MetaM (Array Lemma) := do
         let ctor := mkAppN ctor ys
         let expr := mkApp expr ctor
         let some redExpr ← reduceRecMatcher? expr
-          | throwError "Could not reduce recursor application: {expr}"
+          | throwError "{decl_name%} :: Could not reduce recursor application: {expr}"
         let redExpr ← Core.betaReduce redExpr
         let eq ← mkEq expr redExpr
         let proof ← mkEqRefl expr
@@ -50,7 +50,7 @@ def addRecAsLemma (recVal : RecursorVal) : MetaM (Array Lemma) := do
   for lem in res do
     let ty' ← Meta.inferType lem.proof
     if !(← Meta.isDefEq ty' lem.type) then
-      throwError "addRecAsLemma :: Application type mismatch"
+      throwError "{decl_name%} :: Application type mismatch"
   return Array.mk res
 
 def elabDefEq (name : Name) : TacticM (Array Lemma) := do
@@ -69,10 +69,10 @@ def elabDefEq (name : Name) : TacticM (Array Lemma) := do
   -- If we have inductively defined propositions, we might
   --   need to add constructors as lemmas
   | some (.ctorInfo _)   => return #[]
-  | some (.opaqueInfo _) => throwError "Opaque constants cannot be provided as lemmas"
-  | some (.quotInfo _)   => throwError "Quotient constants cannot be provided as lemmas"
-  | some (.inductInfo _) => throwError "Inductive types cannot be provided as lemmas"
-  | none => throwError "Unknown constant {name}"
+  | some (.opaqueInfo _) => throwError "{decl_name%} :: Opaque constants cannot be provided as lemmas"
+  | some (.quotInfo _)   => throwError "{decl_name%} :: Quotient constants cannot be provided as lemmas"
+  | some (.inductInfo _) => throwError "{decl_name%} :: Inductive types cannot be provided as lemmas"
+  | none => throwError "{decl_name%} :: Unknown constant {name}"
 
 def isNonemptyInhabited (ty : Expr) : MetaM Bool := do
   let .some name ← Meta.isClass? ty
@@ -86,9 +86,9 @@ structure ConstUnfoldInfo where
 
 def getConstUnfoldInfo (name : Name) : MetaM ConstUnfoldInfo := do
   let .some ci := (← getEnv).find? name
-    | throwError "getConstUnfoldInfo :: Unknown declaration {name}"
+    | throwError "{decl_name%} :: Unknown declaration {name}"
   let .some val := ci.value?
-    | throwError "getConstUnfoldInfo :: {name} is not a definition, thus cannot be unfolded"
+    | throwError "{decl_name%} :: {name} is not a definition, thus cannot be unfolded"
   let val ← prepReduceExpr val
   let params := ci.levelParams
   return ⟨name, val, ⟨params⟩⟩
@@ -110,13 +110,13 @@ partial def topoSortUnfolds (unfolds : Array ConstUnfoldInfo) : MetaM (Array Con
   let mut ret := #[]
   for name in nameArr do
     let .some ui := nameMap.get? name
-      | throwError "topoSortUnfolds :: Unexpected error"
+      | throwError "{decl_name%} :: Unexpected error"
     ret := ret.push ui
   return ret.reverse
 where
   go (depMap : Std.HashMap Name (Std.HashSet Name)) (stack : Std.HashSet Name) (n : Name) : StateRefT (Std.HashSet Name × Array Name) MetaM Unit := do
     if stack.contains n then
-      throwError "topoSortUnfolds :: Cyclic dependency"
+      throwError "{decl_name%} :: Cyclic dependency"
     let (done, ret) ← get
     if done.contains n then
       return

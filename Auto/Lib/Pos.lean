@@ -163,7 +163,7 @@ theorem ofNat'.equivAux (rd n : Nat) : rd ≥ n → ofNat'WF n = ofNat'RD rd n :
   induction rd generalizing n  <;> intro H
   case zero =>
     have hzero : n = 0 := Nat.eq_zero_of_le_zero H
-    rw [hzero, ofNat'WF]; rfl
+    rw [hzero]; rw [ofNat'WF, ofNat'RD]
   case succ rd' IH =>
     dsimp [ofNat'RD]
     match n with

@@ -260,11 +260,7 @@ theorem insert'Aux.equiv (bt : BinTree α) (n : Nat) (x : α) (rd : Nat) :
   case succ rd' IH =>
     match n with
     | 0 => rw [insert'Aux, insert'WF]
-    | 1 =>
-      simp only [eq_def]
-      cases bt
-      . simp only [insert'WF]
-      . simp only [insert'WF]
+    | 1 => cases bt <;> rw [insert'Aux, insert'WF]
     | n' + 2 =>
       dsimp [insert'Aux];
       rw [insert'WF.succSucc];

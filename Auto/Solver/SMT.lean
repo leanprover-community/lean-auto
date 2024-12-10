@@ -21,9 +21,12 @@ register_option auto.smt : Bool := {
 
 register_option auto.smt.trust : Bool := {
   defValue := false
-  descr := "When this option is set to `true`, auto closes the " ++
-    "goal by `sorry` if SMT solver returns `unsat`"
+  descr :=
+    "When this option is set to `true`, auto closes the " ++
+    "goal by `autoSMTSorry` if SMT solver returns `unsat`"
 }
+
+axiom autoSMTSorry.{u} (α : Sort u) : α
 
 register_option auto.smt.timeout : Nat := {
   defValue := 10
@@ -62,9 +65,6 @@ register_option auto.smt.dumpHints.limitedRws : Bool := {
 
 namespace Auto
 
-open IR.SMT
-open Parser.SMTTerm
-
 namespace Solver.SMT
 
 inductive SolverName where
@@ -90,10 +90,18 @@ instance : Lean.KVMap.Value SolverName where
   | "cvc5" => some .cvc5
   | _      => none
 
+end Auto.Solver.SMT
+
+open Auto.Solver.SMT in
 register_option auto.smt.solver.name : SolverName := {
   defValue := SolverName.z3
   descr := "Name of the designated SMT solver. Use `none` to disable solver querying."
 }
+
+namespace Auto.Solver.SMT
+
+open IR.SMT
+open Parser.SMTTerm
 
 abbrev SolverProc := IO.Process.Child ⟨.piped, .piped, .piped⟩
 
@@ -107,7 +115,7 @@ private def emitCommands (p : SolverProc) (c : Array IR.SMT.Command) : IO Unit :
 def createSolver (name : SolverName) : MetaM SolverProc := do
   let tlim := auto.smt.timeout.get (← getOptions)
   match name with
-  | .none => throwError "createSolver :: Unexpected error"
+  | .none => throwError "{decl_name%} :: Unexpected error"
   | .z3   => createAux "z3" #["-in", "-smt2", s!"-T:{tlim}"]
   | .cvc4 => throwError "cvc4 is not supported"
   | .cvc5 =>
@@ -121,7 +129,7 @@ def createSolver (name : SolverName) : MetaM SolverProc := do
           #[s!"--tlimit={tlim * 1000}", "--produce-models", "--enum-inst",
             "--dump-hints", "--proof-granularity=dsl-rewrite"]
     else
-      createAux "cvc5" #[s!"--tlimit={tlim * 1000}", "--produce-models"]
+      createAux "cvc5" #[s!"--tlimit={tlim * 1000}", "--produce-models", "--enum-inst"]
 where
   createAux (path : String) (args : Array String) : MetaM SolverProc :=
     IO.Process.spawn {stdin := .piped, stdout := .piped, stderr := .piped,
@@ -132,31 +140,31 @@ axiom autoSMTSorry.{u} (α : Sort u) : α
 def getTerm (s : String) : MetaM (Parser.SMTTerm.Term × String) := do
   match ← lexTerm s ⟨0⟩ {} with
   | .complete se p => return (se, Substring.toString ⟨s, p, s.endPos⟩)
-  | .incomplete _ _ => throwError s!"getTerm :: Incomplete input {s}"
-  | .malformed => throwError s!"getTerm :: Malformed (prefix of) input {s}"
+  | .incomplete _ _ => throwError s!"getTerm {decl_name%} :: Incomplete input {s}"
+  | .malformed => throwError s!"getTerm {decl_name%} :: Malformed (prefix of) input {s}"
 
 /--
   Recover id of valid facts from unsat core. Refer to `lamFOL2SMT`
 -/
 def validFactOfUnsatCore (unsatCore : Parser.SMTTerm.Term) : MetaM (Array Nat) := do
   let .app unsatCore := unsatCore
-    | throwError "validFactOfUnsatCore :: Malformed unsat core `{unsatCore}`"
+    | throwError "{decl_name%} :: Malformed unsat core `{unsatCore}`"
   let mut ret := #[]
   for sexp in unsatCore do
     let .atom (.symb name) := sexp
       | continue
     if name.take 11 == "valid_fact_" then
       let .some n := (name.drop 11).toNat?
-        | throwError "validFactOfUnsatCore :: The id {name.drop 11} of {name} is invalid"
+        | throwError "{decl_name%} :: The id {name.drop 11} of {name} is invalid"
       ret := ret.push n
   return ret
 
 /-- Only put declarations in the query -/
 def querySolver (query : Array IR.SMT.Command) : MetaM (Option (Parser.SMTTerm.Term × String)) := do
   if !(auto.smt.get (← getOptions)) then
-    throwError "querySolver :: Unexpected error"
+    throwError "{decl_name%} :: Unexpected error"
   if (auto.smt.solver.name.get (← getOptions) == .none) then
-    logInfo "querySolver :: Skipped"
+    logInfo s!"{decl_name%} :: Skipped"
     return .none
   let name := auto.smt.solver.name.get (← getOptions)
   let solver ← createSolver name
@@ -294,7 +302,7 @@ def querySolverWithHints (query : Array IR.SMT.Command)
 
 def saveQuery (query : Array IR.SMT.Command) : MetaM Unit := do
   if !(auto.smt.save.get (← getOptions)) then
-    throwError "querySolver :: Unexpected error"
+    throwError "{decl_name%} :: Unexpected error"
   let path := auto.smt.savepath.get (← getOptions)
   IO.FS.withFile path IO.FS.Mode.write fun fd =>
     for cmd in query do

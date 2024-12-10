@@ -17,6 +17,7 @@ initialize
   registerTraceClass `auto.mono.printLemmaInst
   registerTraceClass `auto.mono.printConstInst
   registerTraceClass `auto.mono.printResult
+  registerTraceClass `auto.mono.printInputLemmas
 
 register_option auto.mono.saturationThreshold : Nat := {
   defValue := 250
@@ -28,6 +29,8 @@ register_option auto.mono.recordInstInst : Bool := {
   defValue := false
   descr := "Whether to record instances of constants with the `instance` attribute"
 }
+
+namespace Auto
 
 inductive MonoMode where
   | fol -- First-order logic
@@ -46,8 +49,10 @@ instance : Lean.KVMap.Value MonoMode where
   | "hol" => some .hol
   | _     => none
 
-register_option auto.mono.mode : MonoMode := {
-  defValue := MonoMode.hol
+end Auto
+
+register_option auto.mono.mode : Auto.MonoMode := {
+  defValue := Auto.MonoMode.hol
   descr := "Operation mode of monomorphization"
 }
 
@@ -183,7 +188,7 @@ def ConstInst.equiv (ci₁ ci₂ : ConstInst) : MetaM Bool := do
   let ⟨head₁, argsInst₁, idx₁⟩ := ci₁
   let ⟨head₂, argsInst₂, idx₂⟩ := ci₂
   if head₁.fingerPrint != head₂.fingerPrint then
-    throwError "ConstInst.equiv :: {ci₁.head} and {ci₂.head} have different fingerprints"
+    throwError "{decl_name%} :: {ci₁.head} and {ci₂.head} have different fingerprints"
   if !(← head₁.equiv head₂) then
     return false
   if argsInst₁.size != argsInst₂.size || idx₁ != idx₂ then
@@ -206,7 +211,7 @@ def ConstInst.matchExpr (e : Expr) (ci : ConstInst) : MetaM Bool := do
     return false
   let argsIdx := ci.argsIdx
   if argsIdx.size != ci.argsInst.size then
-    throwError "ConstInst.matchExpr :: Unexpected error"
+    throwError "{decl_name%} :: Unexpected error"
   let args := e.getAppArgs
   for (idx, ciarg) in argsIdx.zip ci.argsInst do
     let .some arg := args[idx]?
@@ -251,7 +256,7 @@ def ConstInst.ofExpr? (params : Array Name) (bvars : Array Expr) (e : Expr) : Me
   for (arg, idx) in args.zipWithIndex do
     headType ← Core.betaReduce headType
     let .forallE _ ty body bi := headType
-      | throwError "ConstInst.ofExpr? :: {headType} is not a `∀`"
+      | throwError "{decl_name%} :: {headType} is not a `∀`"
     if let some _ := ty.find? (fun e => bvarSet.contains e) then
       return .none
     if ← shouldInstantiate fn ty body bi then
@@ -307,7 +312,7 @@ def ConstInst.toExpr (ci : ConstInst) : MetaM Expr := do
   for (arg, idx) in ci.argsInst.zip ci.argsIdx do
     args := args.setD idx (.some arg)
   let .some ret := ConstInst.toExprAux args.toList [] ci.head.toExpr type
-    | throwError "ConstInst.toExpr :: Unexpected error"
+    | throwError "{decl_name%} :: Unexpected error"
   return ret
 
 /--
@@ -349,9 +354,9 @@ private partial def collectConstInsts (params : Array Name) (bvars : Array Expr)
     return insts
   else
     return insts ++ (← collectConstInsts params bvars ty)
-| .letE .. => throwError "collectConstInsts :: Let-expressions should have been reduced"
-| .mdata .. => throwError "collectConstInsts :: mdata should have been consumed"
-| .proj .. => throwError "collectConstInsts :: Projections should have been turned into ordinary expressions"
+| .letE .. => throwError "{decl_name%} :: Let-expressions should have been reduced"
+| .mdata .. => throwError "{decl_name%} :: mdata should have been consumed"
+| .proj .. => throwError "{decl_name%} :: Projections should have been turned into ordinary expressions"
 | _ => return #[]
 where processOther (params : Array Name) (e : Expr) : MetaM (Array ConstInst) := do
   match ← ConstInst.ofExpr? params bvars e with
@@ -379,11 +384,10 @@ def ConstInsts.canonicalize? (cis : ConstInsts) (ci : ConstInst) : MetaM (Option
   This function is used by `LemmaInst.matchConstInst` only
 -/
 private partial def MLemmaInst.matchConstInst (ci : ConstInst) (mi : MLemmaInst) : Expr → MetaM (Std.HashSet LemmaInst)
-| .bvar _ => throwError "MLemmaInst.matchConstInst :: Loose bound variable"
+| .bvar _ => throwError "{decl_name%} :: Loose bound variable"
 | e@(.app ..) => do
-  let fn := e.getAppFn
   let args := e.getAppArgs
-  let mut ret ← MLemmaInst.matchConstInst ci mi fn
+  let mut ret := Std.HashSet.empty
   for arg in args do
     ret := mergeHashSet ret (← MLemmaInst.matchConstInst ci mi arg)
   let s ← saveState
@@ -395,7 +399,7 @@ private partial def MLemmaInst.matchConstInst (ci : ConstInst) (mi : MLemmaInst)
     let mut ret ← MLemmaInst.matchConstInst ci mi body
     for x in xs do
       let .fvar id := x
-        | throwError "MLemmaInst.matchConstInst :: Unexpected error"
+        | throwError "{decl_name%} :: Unexpected error"
       let type ← id.getType
       ret := mergeHashSet ret (← MLemmaInst.matchConstInst ci mi type)
     return ret
@@ -403,9 +407,9 @@ private partial def MLemmaInst.matchConstInst (ci : ConstInst) (mi : MLemmaInst)
     let tyInst ← MLemmaInst.matchConstInst ci mi ty
     let bodyInst ← MLemmaInst.matchConstInst ci mi (body.instantiate1 x)
     return mergeHashSet tyInst bodyInst
-| .letE .. => throwError "MLemmaInst.matchConstInst :: Let-expressions should have been reduced"
-| .mdata .. => throwError "MLemmaInst.matchConstInst :: mdata should have been consumed"
-| .proj .. => throwError "MLemmaInst.matchConstInst :: Projections should have been turned into ordinary expressions"
+| .letE .. => throwError "{decl_name%} :: Let-expressions should have been reduced"
+| .mdata .. => throwError "{decl_name%} :: mdata should have been consumed"
+| .proj .. => throwError "{decl_name%} :: Projections should have been turned into ordinary expressions"
 | _ => return Std.HashSet.empty
 
 /-- Given a LemmaInst `li` and a ConstInst `ci`, try to match all subexpressions of `li` against `ci` -/
@@ -426,7 +430,7 @@ where
   match e with
   | .forallE name ty body bi => Meta.withLocalDecl name bi ty fun x => do
     let Expr.fvar xid := x
-      | throwError "Monomorphization.leadingForallQuasiMonomorphic :: Unexpected error"
+      | throwError "{decl_name%} :: Unexpected error"
     let bodyi := body.instantiate1 x
     if ← Meta.isProp ty then
       if !(← Meta.isProp bodyi) then
@@ -472,7 +476,7 @@ def LemmaInst.monomorphic? (li : LemmaInst) : MetaM (Option LemmaInst) := do
           | return .none
         match mvar with
         | .mvar id => id.assign inst
-        | _ => throwError "LemmaInst.monomorphic? :: Unexpected error"
+        | _ => throwError "{decl_name%} :: Unexpected error"
     LemmaInst.ofMLemmaInst mi
 
 /-
@@ -571,9 +575,9 @@ def dequeueActiveCi? : MonoM (Option (Expr × Nat)) := do
 
 def lookupActiveCi! (fgp : Expr) (idx : Nat) : MonoM ConstInst := do
   let .some cis := (← getCiMap).get? fgp
-    | throwError "lookupActiveCi :: Unknown CiHead {fgp}"
+    | throwError "{decl_name%} :: Unknown CiHead {fgp}"
   let .some ci := cis[idx]?
-    | throwError "lookupActiveCi :: Index {idx} out of bound"
+    | throwError "{decl_name%} :: Index {idx} out of bound"
   return ci
 
 def saturationThresholdReached? (cnt : Nat) : CoreM Bool := do
@@ -720,7 +724,7 @@ namespace FVarRep
     let ci ← MetaState.runMetaM (do
       match ← CiMap.canonicalize? ciMap ci with
       | (true, _, ci') => return ci'
-      | _ => throwError "constInst2FVarId :: Cannot find canonicalized instance of {ci}")
+      | _ => throwError "{decl_name%} :: Cannot find canonicalized instance of {ci}")
     let ciIdMap ← FVarRep.getCiIdMap
     match ciIdMap.get? ci with
     | .some fid => return fid
@@ -781,7 +785,7 @@ namespace FVarRep
     -- Type of λ binder cannot depend on previous bound variables
     let (ty, hasBfvars) ← processType ty
     if hasBfvars then
-      return .inr m!"replacePolyWithFVar :: Type {ty} of λ binder contains bound variables"
+      return .inr m!"{decl_name%} :: Type {ty} of λ binder contains bound variables"
     let fvarId ← MetaState.withLocalDecl name binfo ty .default
     setBfvars ((← getBfvars).push fvarId)
     let b' ← replacePolyWithFVar (body.instantiate1 (.fvar fvarId))
@@ -792,14 +796,14 @@ namespace FVarRep
   | e@(.forallE name ty body binfo) => do
     let tysort ← MetaState.runMetaM (do Expr.normalizeType (← Meta.inferType ty))
     let .sort tylvl := tysort
-      | throwError "replacePolyWithFVar :: Unexpected error, {tysort} is not a sort"
+      | throwError "{decl_name%} :: Unexpected error, {tysort} is not a sort"
     let (ty, tyHasBfvars) ← processType ty
     let fvarId ← MetaState.withLocalDecl name binfo ty .default
     setBfvars ((← getBfvars).push fvarId)
     let body' := body.instantiate1 (.fvar fvarId)
     let bodysort ← MetaState.runMetaM <| do Expr.normalizeType (← Meta.inferType body')
     let .sort bodylvl := bodysort
-      | throwError "replacePolyWithFVar :: Unexpected error"
+      | throwError "{decl_name%} :: Unexpected error"
     let bodyrep ← replacePolyWithFVar body'
     let .inl bodyrep := bodyrep
       | return bodyrep
@@ -808,9 +812,9 @@ namespace FVarRep
     --   of this `∀` does not occur in the body
     if ← MetaState.isLevelDefEqRigid tylvl .zero then
       if !(← MetaState.isLevelDefEqRigid bodylvl .zero) then
-        return .inr m!"replacePolyWithFVar :: In {e}, type of ∀ bound variable is of sort `Prop`, but body isn't of sort `Prop`"
+        return .inr m!"{decl_name%} :: In {e}, type of ∀ bound variable is of sort `Prop`, but body isn't of sort `Prop`"
       if body.hasLooseBVar 0 then
-        return .inr m!"replacePolyWithFVar :: In {e}, type of dependent ∀ bound variable is of sort `Prop`"
+        return .inr m!"{decl_name%} :: In {e}, type of dependent ∀ bound variable is of sort `Prop`"
       let impFun := Expr.const ``ImpF [.zero, .zero]
       addForallImpFInst impFun
       let tyrep ← replacePolyWithFVar ty
@@ -822,7 +826,7 @@ namespace FVarRep
     --   bound variables
     else
       if tyHasBfvars then
-        return .inr m!"replacePolyWithFVar :: In {e}, type of ∀ bound variable is not of sort `Prop`, and depends on bound variables"
+        return .inr m!"{decl_name%} :: In {e}, type of ∀ bound variable is not of sort `Prop`, and depends on bound variables"
       let forallFun := Expr.app (.const ``forallF [tylvl, bodylvl]) ty
       addForallImpFInst forallFun
       let forallFunId ← replacePolyWithFVar forallFun
@@ -907,6 +911,8 @@ def intromono (lemmas : Array Lemma) (mvarId : MVarId) : MetaM MVarId := do
     return mvar.mvarId!)
 
 def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State → MetaM α) : MetaM α := do
+  for h in lemmas do
+    trace[auto.mono.printInputLemmas] "Monomorphization got input lemma :: {h.type}"
   let (inductiveVals, monoSt) ← monoMAction.run {}
   MetaState.runWithIntroducedFVars (metaStateMAction inductiveVals monoSt) k
 where

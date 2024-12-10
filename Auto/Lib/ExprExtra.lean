@@ -203,7 +203,7 @@ def Expr.depArgs (e : Expr) : Array Nat := ⟨Expr.depArgsIdx e 0⟩
 -/
 def Expr.constDepArgs (c : Name) : CoreM (Array Nat) := do
   let .some decl := (← getEnv).find? c
-    | throwError "Expr.constDepArgs :: Unknown constant {c}"
+    | throwError "{decl_name%} :: Unknown constant {c}"
   return Expr.depArgs decl.type
 
 def Expr.numLeadingDepArgs : Expr → Nat
@@ -234,14 +234,14 @@ def Expr.formatWithUsername (e : Expr) : MetaM Format := do
   let names ← fvarIds.mapM (fun fid => do
     match ← fid.findDecl? with
     | .some decl => return decl.userName
-    | .none => throwError "Expr.formatWithUsername :: Unknown free variable {(Expr.fvar fid).dbgToString}")
+    | .none => throwError "{decl_name%}e :: Unknown free variable {(Expr.fvar fid).dbgToString}")
   let e := e.replaceFVars (fvarIds.map Expr.fvar) (names.map (Expr.const · []))
   let e ← instantiateMVars e
   let mvarIds := (Expr.collectMVars {} e).result
   let names ← mvarIds.mapM (fun mid => do
     match ← mid.findDecl? with
     | .some decl => return decl.userName
-    | .none => throwError "xpr.formatWithUsername :: Unknown metavariable {(Expr.mvar mid).dbgToString}")
+    | .none => throwError "{decl_name%} :: Unknown metavariable {(Expr.mvar mid).dbgToString}")
   let e := (e.abstract (mvarIds.map Expr.mvar)).instantiateRev (names.map (Expr.const · []))
   return f!"{e}"
 
@@ -257,14 +257,14 @@ unsafe def elabGetExprAndApply : CommandElab := fun stx =>
     match stx with
     | `(command | #getExprAndApply[ $t:term | $i:ident ]) => withRef stx <| do
       let some iexpr ← Term.resolveId? i
-        | throwError "elabGetExprAndApply :: Unknown identifier {i}"
+        | throwError "{decl_name%} :: Unknown identifier {i}"
       let e ← Term.elabTerm t none
       Term.synthesizeSyntheticMVarsNoPostponing (ignoreStuckTC := true)
       let e ← Term.levelMVarToParam (← instantiateMVars e)
       let fname := iexpr.constName!
       match (← getEnv).evalConst (Expr → TermElabM Unit) (← getOptions) fname with
       | Except.ok f => f e
-      | Except.error err => throwError "elabGetExprAndApply :: Failed to evaluate {fname} to a term of type (Expr → TermElabM Unit), error : {err}"
+      | Except.error err => throwError "{decl_name%} :: Failed to evaluate {fname} to a term of type (Expr → TermElabM Unit), error : {err}"
     | _ => throwUnsupportedSyntax
 
 /--
@@ -274,7 +274,7 @@ unsafe def elabGetExprAndApply : CommandElab := fun stx =>
 unsafe def exprFromExpr (eToExpr : Expr) : TermElabM Expr := do
   let ty ← Meta.inferType eToExpr
   if ! (← Meta.isDefEq ty (.const ``Expr [])) then
-    throwError "exprFromExpr :: Type `{ty}` of input is not definitionally equal to `Expr`"
+    throwError "{decl_name%} :: Type `{ty}` of input is not definitionally equal to `Expr`"
   let declName := `_exprFromExpr
   let addAndCompile (value : Expr) : TermElabM Unit := do
     let value ← Term.levelMVarToParam (← instantiateMVars value)
@@ -359,7 +359,7 @@ section EvalAtTermElabM
           let α ← reduce (skipTypes := false) α
           synthInstance (mkApp (Lean.mkConst evalClassName [u]) α)
         catch _ =>
-          throwError "expression{indentExpr e}\nhas type{indentExpr α}\nbut instance{indentExpr inst}\nfailed to be synthesized, this instance instructs Lean on how to display the resulting value, recall that any type implementing the `Repr` class also implements the `{evalClassName}` class"
+          throwError "{decl_name%} :: expression{indentExpr e}\nhas type{indentExpr α}\nbut instance{indentExpr inst}\nfailed to be synthesized, this instance instructs Lean on how to display the resulting value, recall that any type implementing the `Repr` class also implements the `{evalClassName}` class"
 
   private def mkRunMetaEval (e : Expr) : MetaM Expr :=
     withLocalDeclD `env (mkConst ``Lean.Environment) fun env =>
