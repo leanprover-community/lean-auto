@@ -135,7 +135,7 @@ section Empty
   example : (∃ (x : Empty), True) := by
     auto
 
-  -- The translation to smt solver is unsound.
+  -- **TODO:** The translation to smt solver is unsound.
   -- SMT-LIB assume that all types are inhabited, while in DTT it's not.
   example : (∃ (x : Empty'), True) := by
     auto
