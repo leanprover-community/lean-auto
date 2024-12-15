@@ -454,10 +454,8 @@ where
 /--
   Test whether a lemma is type monomorphic && universe monomorphic
     By universe monomorphic we mean `lem.params = #[]`
-  We also require that all instance arguments (argument whose type
-    is a class) are instantiated. If all dependent arguments are
-    instantiated, but some instance arguments are not instantiated,
-    we will try to synthesize the instance arguments
+  If all dependent arguments are instantiated, but some instance
+    arguments are not instantiated, we will try to synthesize the instance arguments
 -/
 def LemmaInst.monomorphic? (li : LemmaInst) : MetaM (Option LemmaInst) := do
   if li.params.size != 0 then
@@ -472,11 +470,10 @@ def LemmaInst.monomorphic? (li : LemmaInst) : MetaM (Option LemmaInst) := do
     for mvar in mvars do
       let mvarTy ← instantiateMVars (← Meta.inferType mvar)
       if let .some _ ← Meta.isClass? mvarTy then
-        let .some inst ← Meta.trySynthInstance mvarTy
-          | return .none
-        match mvar with
-        | .mvar id => id.assign inst
-        | _ => throwError "{decl_name%} :: Unexpected error"
+        if let .some inst ← Meta.trySynthInstance mvarTy then
+          match mvar with
+          | .mvar id => id.assign inst
+          | _ => throwError "{decl_name%} :: Unexpected error"
     LemmaInst.ofMLemmaInst mi
 
 /-
@@ -738,10 +735,10 @@ namespace FVarRep
 
   def throwMonoFail {α : Type} (e : Expr) : FVarRepM α := do
     let m₁ := m!"Monomorphization failed because currently the procedure cannot deal with expression `{e}`."
-    let m₂ := m!"This is because it contains free variables and has subterms possessing at least one of the following features"
-    let m₃ := m!"· Type argument with free variables, e.g. `@Fin.add (n + 2) a b`"
-    let m₄ := m!"· λ binders whose type contain free variables, e.g. `fun (x : a) => x` where `a` is a free variable"
-    let m₅ := m!"· (TODO)"
+    let m₂ := m!"This is because it has subterms possessing at least one of the following features"
+    let m₃ := m!"· Type argument with bound variables, e.g. `@Fin.add (n + 2) a b` where `n` is a bound variable"
+    let m₄ := m!"· λ binders whose type contain bound variables, e.g. `fun (x : a) => x` where `a` is a bound variable"
+    let m₅ := m!"· Other (TODO)"
     throwError m₁ ++ "\n" ++ m₂ ++ "\n" ++ m₃ ++ "\n" ++ m₄ ++ "\n" ++ m₅
 
   def unknownExpr2FVar (e : Expr) : FVarRepM Expr := do
