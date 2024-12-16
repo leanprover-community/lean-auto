@@ -397,6 +397,36 @@ example
   @hap (List α) (List α) (List α) instHAppend as (@hap (List α) (List α) (List α) instHAppend bs (@hap (List α) (List α) (List α) instHAppend cs ds)) := by
   auto [ap_assoc]
 
+-- Matching with leading propositional ∀ quantifiers
+
+example
+  (p : ∀ (α : Type), List α → Prop)
+  (h1 : ∀ α x, p α x → q)
+  (h2 : p A x) : q := by
+  auto
+
+example
+  (p q : ∀ (α : Type), List α → Prop)
+  (h1 : ∀ α β x y, p α x → q β y → r)
+  (h2 : p A x)
+  (h3 : q B y) : r := by
+  auto
+
+-- One LemmaInst match multiple ConstInst
+
+example
+  (p1 p2 : ∀ (α : Type), List α → Prop)
+  (h1 : ∀ α β x y, p1 α x → p2 β y)
+  (h2 : p1 A x) : p2 B y := by
+  auto
+
+example
+  (p1 p2 p3 : ∀ (α β : Type), List α → List β → Prop)
+  (h1 : ∀ α β γ δ ε π x y z t u v, p1 α β x y → p2 γ δ z t → p3 ε π u v)
+  (h2 : p1 A B x y)
+  (h3 : p2 C D z t) : p3 E F u v := by
+  auto
+
 -- Metavariable
 
 example (u : α) (h : ∀ (z : α), x = z ∧ z = y) : x = y := by
