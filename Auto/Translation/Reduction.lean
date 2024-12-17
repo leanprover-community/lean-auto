@@ -47,13 +47,11 @@ partial def prepReduceExpr (term : Expr) : MetaM Expr := do
     let e := e.consumeMData
     let e ← Meta.whnf e
     return .continue e
-  -- Reduce
   let trMode := auto.redMode.get (← getOptions)
+  -- Reduce
   let term ← Meta.withTransparency trMode <| Meta.transform term (pre := red) (usedLetOnly := false)
-  let redProj (e : Expr) : MetaM TransformStep := do
-    let e ← unfoldProj e
-    return .continue e
-  let term ← Meta.transform term (pre := redProj)
+  -- Unfold projection
+  let term ← Meta.transform term (pre := fun e => do return .continue (← unfoldProj e))
   return term
 
 /--

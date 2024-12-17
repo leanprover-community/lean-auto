@@ -9,6 +9,7 @@ import Auto.Lib.MonadUtils
 import Auto.Lib.Containers
 import Auto.Lib.MetaState
 import Auto.Lib.MetaExtra
+import Auto.Translation.SMTAttributes
 open Lean
 
 initialize
@@ -19,6 +20,7 @@ initialize
   registerTraceClass `auto.mono.printConstInst
   registerTraceClass `auto.mono.printResult
   registerTraceClass `auto.mono.printInputLemmas
+  registerTraceClass `auto.mono.ciInstDefEq
 
 register_option auto.mono.saturationThreshold : Nat := {
   defValue := 1024
@@ -486,35 +488,27 @@ def LemmaInst.monomorphic? (li : LemmaInst) : MetaM (Option LemmaInst) := do
           | _ => throwError "{decl_name%} :: Unexpected error"
     LemmaInst.ofMLemmaInst mi
 
-/-
-  Monomorphization works as follows:
+/--
+  Monomorphization works as follows:\
   (1) Turning `Lemma`s into `LemmaInst`s, which constitutes the
-      value of `lisArr` in the beginning
+      value of `lisArr` in the beginning\
   (2) Scan through all assumptions to find subterms that are
       valid instances of constants (dependent arguments fully
       instantiated). They form the initial elements of `ciMap`
-      and `activeCi`
-  (3) Repeat: **TODO**
-      · Dequeue an element `(name, n)` from `activeCi`
-      · For each element `ais : LemmaInsts` in `liArr`,
-        for each expression `e` in `ais`, traverse `e` to
-        find applications `app := name ...` of constant `name`.
-        Try unifying `app` with `ciMap[name][n].snd`.
-        If we get a new instance `i` of an assumption (which means
-        that its `type` is not defeq to any existing ones in `ais`)
-        · We add `i` to `ais`.
-        · We traverse `i` to collect instances of constants.
-          If we find an instance `ci` of constant `name'`, we
-          first look at `ciMap[name']` to see whether it's
-          a new instance. If it's new, we add it to `ciMap`
-          and `activeCi`.
+      and `activeCi`\
+  (3) Repeat:\
+      · Dequeue an element `active`\
+      · If it is a `ConstInst`, match against all existing `LemmaInst`;
+        If it is a `LemmaInst`, match against all existing `ConstInst`\
+      · For all the new `LemmaInst`s generated and all the `ConstInst`s
+        occurring in them to `active`
 -/
 structure State where
   -- The `Expr` is the fingerprint of the `ConstInst`
   ciMap  : Std.HashMap Expr ConstInsts := {}
   -- During initialization, we supply an array `lemmas` of lemmas
   --   `liArr[i]` are instances of `lemmas[i]`.
-  lisArr : Array LemmaInsts       := #[]
+  lisArr : Array LemmaInsts            := #[]
   -- The `Nat` in `LemmaInst × Nat` indicates the `LemmaInst`'s
   --   position in ``lisArr``
   active : Std.Queue (ConstInst ⊕ (LemmaInst × Nat)) := Std.Queue.empty
@@ -585,6 +579,7 @@ def saturationThresholdReached? (cnt : Nat) : CoreM Bool := do
   else
     return false
 
+@[inherit_doc State]
 def saturate : MonoM Unit := do
   let mut cnt := 0
   while true do
@@ -653,15 +648,39 @@ where
     return (newLis, cnt)
 
 /-- Remove non-monomorphic lemma instances -/
-def postprocessSaturate : MonoM Unit := do
+def postprocessSaturate : MonoM LemmaInsts := do
   let lisArr ← getLisArr
   let lisArr ← liftM <| lisArr.mapM (fun lis => lis.filterMapM LemmaInst.monomorphic?)
-  -- Since typeclasses might have been instantiated, we need to collectConstInst again
-  for li in lisArr.flatMap id do
+  -- Collect definitional equalities related to `ConstInst`s
+  let mut cieqs : Array LemmaInst := #[]
+  let cis := ((← getCiMap).toArray.map Prod.snd).flatMap id
+  for (ci₁, idx₁) in cis.zipWithIndex do
+    for (ci₂, idx₂) in cis.zipWithIndex do
+      if idx₁ < idx₂ && !(isTrigger ci₁.head) && !(isTrigger ci₂.head) then
+        if let .some (proof, eq) ← bidirectionalOfInstanceEq ci₁ ci₂ then
+          let eq := Expr.eraseMData (← Core.betaReduce eq)
+          let eq ← Meta.transform eq (pre := fun e => do return .continue (← unfoldProj e))
+          let newLi ← LemmaInst.ofLemma ⟨⟨proof, eq, .leaf "ciInstDefEq"⟩, #[]⟩
+          cieqs := cieqs.push newLi
+          trace[auto.mono.ciInstDefEq] "{eq}"
+  -- Since typeclasses might have been instantiated during `LemmaInst.monomorphic?`,
+  --   and new `ConstInst`s might be produced during definitional equality
+  --   generation, we need to ``collectConstInst`` again
+  let ret := lisArr.flatMap id ++ cieqs
+  for li in ret do
     let newCis ← collectConstInsts li.params #[] li.type
     for newCi in newCis do
       processConstInst newCi
-  setLisArr lisArr
+  return ret
+where
+  bidirectionalOfInstanceEq (ci₁ ci₂ : ConstInst) : MetaM (Option (Expr × Expr)) :=
+    Meta.withNewMCtxDepth <| Meta.withDefault <| do
+      return (← Expr.instanceOf? (← ci₁.toExpr) (← ci₂.toExpr)) <|>
+        (← Expr.instanceOf? (← ci₂.toExpr) (← ci₁.toExpr))
+  isTrigger (cih : CiHead) :=
+    match cih with
+    | .const name _ => name == ``SMT.Attribute.trigger
+    | _ => false
 
 /-- Collect inductive types -/
 def collectMonoMutInds : MonoM (Array (Array SimpleIndVal)) := do
@@ -800,9 +819,9 @@ namespace FVarRep
 
     Since we're now dealing with monomorphized lemmas, there are no bound level parameters
 
-    Return value:
-    · If abstraction is successful, return the abstracted expression
-    · If abstraction is not successful because the input is not a quasi higher-order
+    Return value:\
+    · If abstraction is successful, return the abstracted expression\
+    · If abstraction is not successful because the input is not a quasi higher-order\
       term of type `Prop`, return a message indicating the violation of quasi higher-order-ness
     · Throw an error message if unexpected error happens
   -/
@@ -915,13 +934,13 @@ end FVarRep
 -/
 def intromono (lemmas : Array Lemma) (mvarId : MVarId) : MetaM MVarId := do
   let startTime ← IO.monoMsNow
-  let monoMAction : MonoM Unit := (do
+  let monoMAction : MonoM LemmaInsts := (do
     initializeMonoM lemmas
     saturate
-    postprocessSaturate
-    trace[auto.mono] "Monomorphization took {(← IO.monoMsNow) - startTime}ms")
-  let (_, monoSt) ← monoMAction.run {}
-  let monoLemmas := monoSt.lisArr.flatMap id
+    let monoLemmas ← postprocessSaturate
+    trace[auto.mono] "Monomorphization took {(← IO.monoMsNow) - startTime}ms"
+    return monoLemmas)
+  let (monoLemmas, _) ← monoMAction.run {}
   MetaState.runAtMetaM' (do
     let mut fids := #[]
     for ml in monoLemmas do
@@ -939,24 +958,25 @@ def intromono (lemmas : Array Lemma) (mvarId : MVarId) : MetaM MVarId := do
 def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State → MetaM α) : MetaM α := do
   for h in lemmas do
     trace[auto.mono.printInputLemmas] "Monomorphization got input lemma :: {h.type}"
-  let (inductiveVals, monoSt) ← monoMAction.run {}
-  MetaState.runWithIntroducedFVars (metaStateMAction inductiveVals monoSt) k
+  let ((monoLemmas, monoIndVals), monoSt) ← monoMAction.run {}
+  MetaState.runWithIntroducedFVars (metaStateMAction monoLemmas monoIndVals monoSt) k
 where
   /-- Instantiating quantifiers, collecting inductive types
     and filtering out non-quasi-monomorphic expressions -/
-  monoMAction : MonoM (Array (Array SimpleIndVal)) := do
+  monoMAction : MonoM (LemmaInsts × Array (Array SimpleIndVal)) := do
     let startTime ← IO.monoMsNow
     initializeMonoM lemmas
     saturate
-    postprocessSaturate
+    let monoLemmas ← postprocessSaturate
+    let monoIndVals ← collectMonoMutInds
     trace[auto.mono] "Monomorphization of lemmas took {(← IO.monoMsNow) - startTime}ms"
-    collectMonoMutInds
+    return (monoLemmas, monoIndVals)
   /-- Process lemmas and inductive types, collect inhabited types -/
   metaStateMAction
-    (inductiveVals : Array (Array SimpleIndVal))
+    (monoLemmas : LemmaInsts)
+    (monoIndVals : Array (Array SimpleIndVal))
     (monoSt : State) : MetaState.MetaStateM (Array FVarId × Reif.State) := do
-    let lis := monoSt.lisArr.flatMap id
-    let (uvalids, s) ← (fvarRepMFactAction lis).run { ciMap := monoSt.ciMap }
+    let (uvalids, s) ← (fvarRepMFactAction monoLemmas).run { ciMap := monoSt.ciMap }
     for ⟨proof, ty, _⟩ in uvalids do
       trace[auto.mono.printResult] "Monomorphized :: {proof} : {ty}"
     let tyCans := s.tyCanMap.toArray.map Prod.snd
@@ -972,11 +992,11 @@ where
     -- Inductive types
     let startTime ← IO.monoMsNow
     trace[auto.mono] "Monomorphization of inductive types took {(← IO.monoMsNow) - startTime}ms"
-    let (inductiveVals, s) ← (fvarRepMInductAction inductiveVals).run s
+    let (monoIndVals, s) ← (fvarRepMInductAction monoIndVals).run s
     let exlis := s.exprMap.toList.map (fun (e, id) => (id, e))
     let cilis ← s.ciIdMap.toList.mapM (fun (ci, id) => do return (id, ← MetaState.runMetaM ci.toExpr))
     let polyVal := Std.HashMap.ofList (exlis ++ cilis)
-    return (s.ffvars, Reif.State.mk uvalids polyVal s.tyCanMap inhs inductiveVals none)
+    return (s.ffvars, Reif.State.mk uvalids polyVal s.tyCanMap inhs monoIndVals none)
   fvarRepMFactAction (lis : Array LemmaInst) : FVarRep.FVarRepM (Array UMonoFact) := lis.filterMapM (fun li => do
     let liTypeRep? ← FVarRep.replacePolyWithFVar li.type
     match liTypeRep? with
@@ -990,12 +1010,12 @@ where
         let valRep? ← FVarRep.replacePolyWithFVar val
         match valRep? with
         | .inl valRep => return (valRep, ty)
-        -- If monomorphization fails on one constructor, then fail immediately
+        -- If monomorphization fails on one constructor, fail immediately
         | .inr m => throwError m)
       let projs ← projs.mapM (fun arr => arr.mapM (fun e => do
         match ← FVarRep.replacePolyWithFVar e with
         | .inl e => return e
-        -- If monomorphization fails on one projection, then fail immediately
+        -- If monomorphization fails on one projection, fail immediately
         | .inr m => throwError m))
       return ⟨name, type, ctors, projs⟩))
 

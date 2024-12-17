@@ -66,8 +66,8 @@ instance : ToString EvalConfig where
   Premises which only contain logic constants are filtered because they
     are assumed to be known by the prover
 -/
-private def runAutoOnAutoLemmaMeta (declName? : Option Name) (lem : Auto.Lemma) : MetaM Result := do
-  if !(← Meta.isProp lem.type) then
+private def runAutoOnAutoLemma (declName? : Option Name) (lem : Auto.Lemma) : CoreM Result := do
+  if !(← Meta.MetaM.run' <| Meta.isProp lem.type) then
     return .nonProp
   -- **TODO: Aux theorem like those ending in `.proof_1`**
   let usedThmNames ← (← Expr.getUsedTheorems lem.proof).filterM (fun name =>
@@ -83,20 +83,19 @@ private def runAutoOnAutoLemmaMeta (declName? : Option Name) (lem : Auto.Lemma) 
       Meta.mkLambdaFVars #[negGoalFVar] proofOfFalse
     let goal := mkApp2 (.const ``Classical.byContradiction []) body negGoalImpFalse
     Meta.mkLambdaFVars bs goal
-  let mut autoProof : Expr := Expr.sort .zero
-  try
-    autoProof ← autoProofFn
-  catch e =>
-    return .autoException e
-  match Kernel.check (← getEnv) {} autoProof with
-  | Except.ok autoProofType =>
-    match Kernel.isDefEq (← getEnv) {} autoProofType lem.type with
-    | Except.ok true => return .success
-    | _ => return .typeUnequal
-  | Except.error _ => return .typeCheckFail
-
-def runAutoOnAutoLemma (declName? : Option Name) (lem : Auto.Lemma) : CoreM Result := do
-  (runAutoOnAutoLemmaMeta declName? lem).run'
+  let result : Expr ⊕ Exception ←
+    Lean.Core.tryCatchRuntimeEx
+      (do let autoProof ← Meta.MetaM.run' autoProofFn; return .inl autoProof)
+      (fun e => return .inr e)
+  match result with
+  | .inl autoProof =>
+    match Kernel.check (← getEnv) {} autoProof with
+    | Except.ok autoProofType =>
+      match Kernel.isDefEq (← getEnv) {} autoProofType lem.type with
+      | Except.ok true => return .success
+      | _ => return .typeUnequal
+    | Except.error _ => return .typeCheckFail
+  | .inr e => return .autoException e
 
 /--
   Run `Lean-auto` on the type of ``name``, using premises collected

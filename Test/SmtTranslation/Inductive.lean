@@ -121,6 +121,8 @@ section Mixed
   inductive IndCtor₁ where
     | ctor : Nat → Bool → IndCtor₁
 
+  -- **TODO:** Inductive types with one constructor and not declared as `structure`
+  set_option trace.auto.mono.ciInstDefEq true
   example
     (f : Nat → Nat → Bool → IndCtor₁)
     (h₁ : IndCtor₁.ctor = f 1) (h₂ : IndCtor₁.ctor = f 2) : f 1 = f 2 := by

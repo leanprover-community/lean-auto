@@ -276,6 +276,25 @@ section UnfoldConst
 
 end UnfoldConst
 
+-- Definitional Equality from Constant Instances
+
+section ConstInstDefEq
+
+  def Nat.add₁ := Nat.add
+
+  example : Nat.add₁ = Nat.add := by
+    auto
+
+  def Nat.add₂ {α β γ} (_ : α) (_ : β) (_ : γ) (u v : Nat) (_ : δ) := Nat.add u v
+
+  example (x : α) (y : β) (z : γ) (t : δ) : Nat.add₂ x y z n m t = Nat.add n m := by
+    auto
+
+  example (x y : Int) (xs ys : List α) : x + y = Int.add x y ∧ xs ++ ys = List.append xs ys := by
+    auto
+
+end ConstInstDefEq
+
 -- First Order
 
 example : True := by
