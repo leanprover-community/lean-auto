@@ -765,21 +765,21 @@ namespace FVarRep
       setFfvars ((← getFfvars).push fvarId)
       return fvarId
 
-  def throwMonoFail {α : Type} (e : Expr) : FVarRepM α := do
+  def monoFailMsg (e : Expr) : MessageData :=
     let m₁ := m!"Monomorphization failed because currently the procedure cannot deal with expression `{e}`."
     let m₂ := m!"This is because it has subterms possessing at least one of the following features"
     let m₃ := m!"· Type argument with bound variables, e.g. `@Fin.add (n + 2) a b` where `n` is a bound variable"
     let m₄ := m!"· λ binders whose type contain bound variables, e.g. `fun (x : a) => x` where `a` is a bound variable"
     let m₅ := m!"· Other (TODO)"
-    throwError m₁ ++ "\n" ++ m₂ ++ "\n" ++ m₃ ++ "\n" ++ m₄ ++ "\n" ++ m₅
+    m₁ ++ "\n" ++ m₂ ++ "\n" ++ m₃ ++ "\n" ++ m₄ ++ "\n" ++ m₅
 
-  def unknownExpr2FVar (e : Expr) : FVarRepM Expr := do
+  def unknownExpr2FVar (e : Expr) : FVarRepM (Expr ⊕ MessageData) := do
     let bfvarSet ← getBfvarSet
     if e.hasAnyFVar bfvarSet.contains then
-      throwMonoFail e
+      return .inr (monoFailMsg e)
     for (e', fid) in (← getExprMap).toList do
       if ← MetaState.isDefEqRigid e e' then
-        return Expr.fvar fid
+        return .inl (.fvar fid)
     -- Put this trace message after the above for loop
     --   to avoid duplicated messages
     trace[auto.mono] "Don't know how to deal with expression {e}. Turning it into free variable ..."
@@ -789,7 +789,7 @@ namespace FVarRep
     let fvarId ← MetaState.withLetDecl userName ety e .default
     setExprMap ((← getExprMap).insert e fvarId)
     setFfvars ((← getFfvars).push fvarId)
-    return Expr.fvar fvarId
+    return .inl (.fvar fvarId)
 
   /--
     Attempt to abstract parts of a given expression to free variables so
@@ -888,7 +888,7 @@ namespace FVarRep
       let .inl eArg := eArg
         | return eArg
       eArgs := eArgs.push eArg
-    Sum.inl <$> unknownExpr2FVar (Lean.mkAppN eFn eArgs)
+    unknownExpr2FVar (Lean.mkAppN eFn eArgs)
   | e@(.sort _) => return Sum.inl e
   | e@(.lit _) => return Sum.inl e
   | e => do
@@ -899,7 +899,7 @@ namespace FVarRep
     if let .some ci ← MetaState.runMetaM (ConstInst.ofExpr? #[] bfexprs e) then
       let ciId ← constInst2FVarId ci
       return Sum.inl <| .fvar ciId
-    Sum.inl <$> unknownExpr2FVar e
+    unknownExpr2FVar e
   where addForallImpFInst (e : Expr) : FVarRepM Unit := do
     let bfexprs := (← getBfvars).map Expr.fvar
     match ← MetaState.runMetaM (ConstInst.ofExpr? #[] bfexprs e) with
