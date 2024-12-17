@@ -165,7 +165,7 @@ def Lemma.rewriteUPolyRigid (lem : Lemma) (rw : Lemma) : MetaM Lemma := do
       | throwError "{decl_name%} :: Unexpected error"
     let .some lem' ← Lemma.rewriteUMonoRigid? lem urw
       | break
-    let restmvars := (← umvars.mapM Level.collectLevelMVars).concatMap id
+    let restmvars := (← umvars.mapM Level.collectLevelMVars).flatMap id
     for lmvar in restmvars do
       if !(← Meta.isLevelDefEq (.mvar lmvar) .zero) then
         break

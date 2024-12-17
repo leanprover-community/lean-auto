@@ -154,8 +154,8 @@ partial def ERE.brackets : ERE → Array EREBracket
 | .repGe e _     => e.brackets
 | .repLe e _     => e.brackets
 | .repGeLe e _ _ => e.brackets
-| .comp es       => (es.map ERE.brackets).concatMap id
-| .plus es       => (es.map ERE.brackets).concatMap id
+| .comp es       => (es.map ERE.brackets).flatMap id
+| .plus es       => (es.map ERE.brackets).flatMap id
 | .attr e s      => e.brackets
 
 partial def ERE.normalizeBrackets : ERE → ERE
@@ -236,7 +236,7 @@ section
     fun cg@⟨ngroup, all, _⟩ symbListToString =>
     let groups := cg.groups.mapIdx (
       fun idx c =>
-        s!"{idx.val} : {symbListToString c.toArray}"
+        s!"{idx} : {symbListToString c.toArray}"
     )
     let all := "CharGrouping ⦗⦗" ::
                s!"Number of groups := {ngroup}" ::
@@ -263,11 +263,11 @@ section
     fun ⟨d, cg⟩ symbListToString =>
       let dsnatS (s : Nat) (sn : _ × Nat) := s!"  ({s}, {sn.fst} → {sn.snd})"
       let dtr := d.tr.mapIdx (fun idx c => c.toArray.map (fun el => dsnatS idx el))
-      let dtr := dtr.concatMap id
+      let dtr := dtr.flatMap id
       let attrs := d.attrs.mapIdx (fun idx attrs => s!"  {idx} : {attrs.toList}")
       let cggroups := cg.groups.mapIdx (
         fun idx c =>
-          s!"  {idx.val} : {symbListToString c.toArray}"
+          s!"  {idx} : {symbListToString c.toArray}"
       )
       let cgalls := symbListToString cg.all.toArray
       let all := "ADFA ⦗⦗" ::

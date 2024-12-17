@@ -6,14 +6,14 @@ namespace Auto.Parser.TPTP
 
 namespace Tokenizer
 
-inductive Status :=
+inductive Status where
   | default
   | ident
   | string
   | comment
   deriving Repr, BEq
 
-inductive Token :=
+inductive Token where
   | op (op : String)
   | ident (ident : String)
   deriving Repr, Inhabited, BEq
@@ -37,7 +37,7 @@ def tokenHashMap : Std.HashSet String :=
   Std.HashSet.empty.insertMany tokens
 
 def tokenPrefixes : Std.HashSet String :=
-  Std.HashSet.empty.insertMany $ tokens.bind (fun t => Id.run do
+  Std.HashSet.empty.insertMany $ tokens.flatMap (fun t => Id.run do
     let mut res := []
     let mut pref := ""
     for c in t.data do

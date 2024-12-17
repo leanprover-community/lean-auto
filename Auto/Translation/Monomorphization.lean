@@ -9,20 +9,23 @@ import Auto.Lib.MonadUtils
 import Auto.Lib.Containers
 import Auto.Lib.MetaState
 import Auto.Lib.MetaExtra
+import Auto.Translation.SMTAttributes
 open Lean
 
 initialize
   registerTraceClass `auto.mono
   registerTraceClass `auto.mono.match
+  registerTraceClass `auto.mono.match.verbose
   registerTraceClass `auto.mono.printLemmaInst
   registerTraceClass `auto.mono.printConstInst
   registerTraceClass `auto.mono.printResult
   registerTraceClass `auto.mono.printInputLemmas
+  registerTraceClass `auto.mono.ciInstDefEq
 
 register_option auto.mono.saturationThreshold : Nat := {
-  defValue := 250
-  descr := "Threshold for number of potentially new lemma" ++
-    " instances generated during the saturation loop of monomorphization"
+  defValue := 1024
+  descr := "Threshold for number of matches performed" ++
+    " during the saturation loop of monomorphization"
 }
 
 register_option auto.mono.recordInstInst : Bool := {
@@ -220,16 +223,16 @@ def ConstInst.matchExpr (e : Expr) (ci : ConstInst) : MetaM Bool := do
       return false
   return true
 
-/-
-  Given an hypothesis `t`, we will traverse the hypothesis to find
-    instances of polymorphic constants
+/--
+  Given an hypothesis `t`, we will traverse the hypothesis and
+    call `ConstInst.ofExpr?` to find instances of polymorphic constants\
   · Binders of the hypothesis are introduced as fvars, these fvars are
-    recorded in `bvars`
-  · `param` records universe level parameters of the hypothesis are
+    recorded in `bvars`\
+  · `param` records universe level parameters of the hypothesis\
   So, the criterion that an expression `e` is a valid instance is that
-  · All dependent arguments and instance arguments are applied
-  · The head does not contain expressions in `bvars`
-  · Dependent arguments does not contains expressions in `bvars`
+  · All dependent arguments and instance arguments are present\
+  · The head does not contain expressions in `bvars`\
+  · Dependent arguments does not contains expressions in `bvars`\
   · The expression does not contain level parameters in `params`
 -/
 def ConstInst.ofExpr? (params : Array Name) (bvars : Array Expr) (e : Expr) : MetaM (Option ConstInst) := do
@@ -336,7 +339,7 @@ private partial def collectConstInsts (params : Array Name) (bvars : Array Expr)
 | e@(.app ..) => do
   let fn := e.getAppFn
   let args := e.getAppArgs
-  let insts := (← (args.push fn).mapM (collectConstInsts params bvars)).concatMap id
+  let insts := (← (args.push fn).mapM (collectConstInsts params bvars)).flatMap id
   match ← ConstInst.ofExpr? params bvars e with
   | .some ci => return insts.push ci
   | .none => return insts
@@ -418,7 +421,16 @@ def LemmaInst.matchConstInst (ci : ConstInst) (li : LemmaInst) : MetaM (Std.Hash
     let (lmvars, mvars, mi) ← MLemmaInst.ofLemmaInst li
     if lmvars.size == 0 && mvars.size == 0 then
       return Std.HashSet.empty
-    MLemmaInst.matchConstInst ci mi mi.type
+    -- Match with `b` in `∀ (x₁ : α₁) ⋯ (xₙ : αₙ). b := li.type`
+    let mut ret ← MLemmaInst.matchConstInst ci mi mi.type
+    -- Match with `α₁ ⋯ αₙ` in `∀ (x₁ : α₁) ⋯ (xₙ : αₙ). b := li.type`
+    for mvar in mvars do
+      let .mvar m := mvar
+        | throwError "{decl_name%} :: Unexpected error"
+      let mtype ← m.getType
+      if ← Meta.isProp mtype then
+        ret := mergeHashSet ret (← MLemmaInst.matchConstInst ci mi (← m.getType))
+    return ret
 
 /--
   Check whether the leading `∀` quantifiers of expression `e`
@@ -454,10 +466,8 @@ where
 /--
   Test whether a lemma is type monomorphic && universe monomorphic
     By universe monomorphic we mean `lem.params = #[]`
-  We also require that all instance arguments (argument whose type
-    is a class) are instantiated. If all dependent arguments are
-    instantiated, but some instance arguments are not instantiated,
-    we will try to synthesize the instance arguments
+  If all dependent arguments are instantiated, but some instance
+    arguments are not instantiated, we will try to synthesize the instance arguments
 -/
 def LemmaInst.monomorphic? (li : LemmaInst) : MetaM (Option LemmaInst) := do
   if li.params.size != 0 then
@@ -472,44 +482,36 @@ def LemmaInst.monomorphic? (li : LemmaInst) : MetaM (Option LemmaInst) := do
     for mvar in mvars do
       let mvarTy ← instantiateMVars (← Meta.inferType mvar)
       if let .some _ ← Meta.isClass? mvarTy then
-        let .some inst ← Meta.trySynthInstance mvarTy
-          | return .none
-        match mvar with
-        | .mvar id => id.assign inst
-        | _ => throwError "{decl_name%} :: Unexpected error"
+        if let .some inst ← Meta.trySynthInstance mvarTy then
+          match mvar with
+          | .mvar id => id.assign inst
+          | _ => throwError "{decl_name%} :: Unexpected error"
     LemmaInst.ofMLemmaInst mi
 
-/-
-  Monomorphization works as follows:
+/--
+  Monomorphization works as follows:\
   (1) Turning `Lemma`s into `LemmaInst`s, which constitutes the
-      value of `lisArr` in the beginning
+      value of `lisArr` in the beginning\
   (2) Scan through all assumptions to find subterms that are
       valid instances of constants (dependent arguments fully
       instantiated). They form the initial elements of `ciMap`
-      and `activeCi`
-  (3) Repeat:
-      · Dequeue an element `(name, n)` from `activeCi`
-      · For each element `ais : LemmaInsts` in `liArr`,
-        for each expression `e` in `ais`, traverse `e` to
-        find applications `app := name ...` of constant `name`.
-        Try unifying `app` with `ciMap[name][n].snd`.
-        If we get a new instance `i` of an assumption (which means
-        that its `type` is not defeq to any existing ones in `ais`)
-        · We add `i` to `ais`.
-        · We traverse `i` to collect instances of constants.
-          If we find an instance `ci` of constant `name'`, we
-          first look at `ciMap[name']` to see whether it's
-          a new instance. If it's new, we add it to `ciMap`
-          and `activeCi`.
+      and `activeCi`\
+  (3) Repeat:\
+      · Dequeue an element `active`\
+      · If it is a `ConstInst`, match against all existing `LemmaInst`;
+        If it is a `LemmaInst`, match against all existing `ConstInst`\
+      · For all the new `LemmaInst`s generated and all the `ConstInst`s
+        occurring in them to `active`
 -/
 structure State where
   -- The `Expr` is the fingerprint of the `ConstInst`
-  ciMap    : Std.HashMap Expr ConstInsts := {}
-  -- The `Expr` is the fingerprint of the `ConstInst`
-  activeCi : Std.Queue (Expr × Nat)  := Std.Queue.empty
+  ciMap  : Std.HashMap Expr ConstInsts := {}
   -- During initialization, we supply an array `lemmas` of lemmas
   --   `liArr[i]` are instances of `lemmas[i]`.
-  lisArr   : Array LemmaInsts       := #[]
+  lisArr : Array LemmaInsts            := #[]
+  -- The `Nat` in `LemmaInst × Nat` indicates the `LemmaInst`'s
+  --   position in ``lisArr``
+  active : Std.Queue (ConstInst ⊕ (LemmaInst × Nat)) := Std.Queue.empty
 
 abbrev MonoM := StateRefT State MetaM
 
@@ -540,19 +542,8 @@ def processConstInst (ci : ConstInst) : MonoM Unit := do
     return
   trace[auto.mono.printConstInst] "New {ci}"
   setCiMap ((← getCiMap).insert ci.fingerPrint (insts.push ci))
-  -- Do not match against ConstInsts that do not have dependent or
-  --   instance arguments
-  if ci.argsIdx.size == 0 then
-    return
-  -- Do not match against `=` and `∃`
-  -- If some polymorphic argument of the a theorem only occurs
-  --   as the first argument of `=` or `∃`, the theorem is probably
-  --   implied by the axioms of higher order logic, e.g.
-  -- `Eq.trans : ∀ {α} (x y z : α), x = y → y = z → x = z`
-  if ci.head.isNamedConst ``Exists || ci.head.isNamedConst ``Eq then
-    return
   -- Insert `ci` into `activeCi` so that we can later match on it
-  setActiveCi ((← getActiveCi).enqueue (ci.fingerPrint, insts.size))
+  setActive ((← getActive).enqueue (.inl ci))
 
 def initializeMonoM (lemmas : Array Lemma) : MonoM Unit := do
   let lemmaInsts ← liftM <| lemmas.mapM (fun lem => do
@@ -566,10 +557,10 @@ def initializeMonoM (lemmas : Array Lemma) : MonoM Unit := do
     for ci in cis do
       processConstInst ci
 
-def dequeueActiveCi? : MonoM (Option (Expr × Nat)) := do
-  match (← getActiveCi).dequeue? with
-  | .some (elem, ci') =>
-    setActiveCi ci'
+def dequeueActive? : MonoM (Option (ConstInst ⊕ (LemmaInst × Nat))) := do
+  match (← getActive).dequeue? with
+  | .some (elem, ac') =>
+    setActive ac'
     return .some elem
   | .none => return .none
 
@@ -588,61 +579,127 @@ def saturationThresholdReached? (cnt : Nat) : CoreM Bool := do
   else
     return false
 
+@[inherit_doc State]
 def saturate : MonoM Unit := do
   let mut cnt := 0
   while true do
     cnt := cnt + 1
     if (← saturationThresholdReached? cnt) then
       return
-    match ← dequeueActiveCi? with
-    | .some (name, cisIdx) =>
-      let ci ← lookupActiveCi! name cisIdx
+    match ← dequeueActive? with
+    | .some (.inl ci) =>
       let lisArr ← getLisArr
       trace[auto.mono.match] "Matching against {ci}"
       for (lis, idx) in lisArr.zipWithIndex do
         cnt := cnt + 1
-        let mut newLis := lis
         for li in lis do
-          cnt := cnt + 1
-          let matchLis := (← LemmaInst.matchConstInst ci li).toArray
-          for matchLi in matchLis do
-            -- `matchLi` is a result of matching a subterm of `li` against `ci`
-            cnt := cnt + 1
-            if (← saturationThresholdReached? cnt) then
-              return
-            let new? ← newLis.newInst? matchLi
-            -- A new instance of an assumption
-            if new? then
-              trace[auto.mono.printLemmaInst] "New {matchLi}"
-              newLis := newLis.push matchLi
-              let newCis ← collectConstInsts matchLi.params #[] matchLi.type
-              for newCi in newCis do
-                processConstInst newCi
+          let newLis_cnt ← matchCiAndLi ci li idx cnt
+          let newLis := newLis_cnt.fst
+          setLisArr ((← getLisArr).set! idx newLis)
+          cnt := newLis_cnt.snd
+          if (← saturationThresholdReached? cnt) then
+            return
+    | .some (.inr (li, idx)) =>
+      trace[auto.mono.match] "Matching against {li}"
+      let cis := ((← getCiMap).toArray.map Prod.snd).flatMap id
+      for ci in cis do
+        cnt := cnt + 1
+        let newLis_cnt ← matchCiAndLi ci li idx cnt
+        let newLis := newLis_cnt.fst
         setLisArr ((← getLisArr).set! idx newLis)
+        cnt := newLis_cnt.snd
+        if (← saturationThresholdReached? cnt) then
+          return
     | .none =>
       trace[auto.mono] "Monomorphization Saturated after {cnt} small steps"
       return
+where
+  matchCiAndLi (ci : ConstInst) (li : LemmaInst) (idx : Nat) (cnt : Nat) :
+    MonoM (LemmaInsts × Nat) := do
+    let mut cnt := cnt
+    let mut newLis := (← getLisArr)[idx]!
+    -- Do not match against ConstInsts that have no dependent or instance arguments
+    if ci.argsIdx.size == 0 then
+      return (newLis, cnt)
+    -- Do not match against `=` and `∃`
+    -- If some polymorphic argument of the a theorem only occurs
+    --   as the first argument of `=` or `∃`, the theorem is probably
+    --   implied by the axioms of higher order logic, e.g.
+    -- `Eq.trans : ∀ {α} (x y z : α), x = y → y = z → x = z`
+    if ci.head.isNamedConst ``Exists || ci.head.isNamedConst ``Eq then
+      return (newLis, cnt)
+    trace[auto.mono.match.verbose] "Matching {ci} against {li}"
+    cnt := cnt + 1
+    let matchLis := (← LemmaInst.matchConstInst ci li).toArray
+    for matchLi in matchLis do
+      -- `matchLi` is a result of matching a subterm of `li` against `ci`
+      cnt := cnt + 1
+      if (← saturationThresholdReached? cnt) then
+        return (newLis, cnt)
+      let new? ← newLis.newInst? matchLi
+      -- A new instance of an assumption
+      if new? then
+        trace[auto.mono.printLemmaInst] "New {matchLi}"
+        newLis := newLis.push matchLi
+        setActive ((← getActive).enqueue (.inr (matchLi, idx)))
+        let newCis ← collectConstInsts matchLi.params #[] matchLi.type
+        for newCi in newCis do
+          processConstInst newCi
+    return (newLis, cnt)
 
 /-- Remove non-monomorphic lemma instances -/
-def postprocessSaturate : MonoM Unit := do
+def postprocessSaturate : MonoM LemmaInsts := do
   let lisArr ← getLisArr
   let lisArr ← liftM <| lisArr.mapM (fun lis => lis.filterMapM LemmaInst.monomorphic?)
-  -- Since typeclasses might have been instantiated, we need to collectConstInst again
-  for li in lisArr.concatMap id do
-    let newCis ← collectConstInsts li.params #[] li.type
-    for newCi in newCis do
-      processConstInst newCi
-  setLisArr lisArr
+  let lis := lisArr.flatMap id
+  -- Since typeclasses might have been instantiated during `LemmaInst.monomorphic?`,
+  --   we need to run ``collectConstInst`` again. Also, this must precede
+  --   collecting definitional equalities related to `ConstInst`s
+  refreshConstInsts lis
+  -- Collect definitional equalities related to `ConstInst`s
+  -- **TODO:** Collect definitional equalities during monomorphization
+  --   and make uses of the `active` field. This is because new `ConstInst`s
+  --   might be generated during collection of definitional equalities,
+  --   and they may produce more definitional equalities
+  let mut cieqs : Array LemmaInst := #[]
+  let cis := ((← getCiMap).toArray.map Prod.snd).flatMap id
+  for (ci₁, idx₁) in cis.zipWithIndex do
+    for (ci₂, idx₂) in cis.zipWithIndex do
+      if idx₁ < idx₂ && !(isTrigger ci₁.head) && !(isTrigger ci₂.head) then
+        if let .some (proof, eq) ← bidirectionalOfInstanceEq ci₁ ci₂ then
+          let eq := Expr.eraseMData (← Core.betaReduce eq)
+          let eq ← Meta.transform eq (pre := fun e => do return .continue (← unfoldProj e))
+          let newLi ← LemmaInst.ofLemma ⟨⟨proof, eq, .leaf "ciInstDefEq"⟩, #[]⟩
+          cieqs := cieqs.push newLi
+          trace[auto.mono.ciInstDefEq] "{eq}"
+  -- Since new `ConstInst`s might be produced during definitional equality
+  --   generation, we need to ``collectConstInst`` again
+  refreshConstInsts cieqs
+  return lis ++ cieqs
+where
+  refreshConstInsts (lis : LemmaInsts) : MonoM Unit :=
+    for li in lis do
+      let newCis ← collectConstInsts li.params #[] li.type
+      for newCi in newCis do
+        processConstInst newCi
+  bidirectionalOfInstanceEq (ci₁ ci₂ : ConstInst) : MetaM (Option (Expr × Expr)) :=
+    Meta.withNewMCtxDepth <| Meta.withDefault <| do
+      return (← Expr.instanceOf? (← ci₁.toExpr) (← ci₂.toExpr)) <|>
+        (← Expr.instanceOf? (← ci₂.toExpr) (← ci₁.toExpr))
+  isTrigger (cih : CiHead) :=
+    match cih with
+    | .const name _ => name == ``SMT.Attribute.trigger
+    | _ => false
 
 /-- Collect inductive types -/
 def collectMonoMutInds : MonoM (Array (Array SimpleIndVal)) := do
-  let cis := (Array.mk ((← getCiMap).toList.map Prod.snd)).concatMap id
+  let cis := (Array.mk ((← getCiMap).toList.map Prod.snd)).flatMap id
   let citys ← cis.mapM (fun ci => do
     let cie ← ci.toExpr
     let ty ← Meta.inferType cie
     return Expr.eraseMData ty)
   let minds ← collectExprsSimpleInduct citys
-  let cis ← (minds.concatMap id).mapM (fun ⟨_, type, ctors, projs⟩ => do
+  let cis ← (minds.flatMap id).mapM (fun ⟨_, type, ctors, projs⟩ => do
     let cis₁ ← collectConstInsts #[] #[] type
     let cis₂ ← ctors.mapM (fun (val, ty) => do
       let cis₁ ← collectConstInsts #[] #[] val
@@ -650,8 +707,8 @@ def collectMonoMutInds : MonoM (Array (Array SimpleIndVal)) := do
       return cis₁ ++ cis₂)
     let projs := (match projs with | .some projs => projs | .none => #[])
     let cis₃ ← projs.mapM (fun e => collectConstInsts #[] #[] e)
-    return cis₁ ++ cis₂.concatMap id ++ cis₃.concatMap id)
-  let _ ← (cis.concatMap id).mapM processConstInst
+    return cis₁ ++ cis₂.flatMap id ++ cis₃.flatMap id)
+  let _ ← (cis.flatMap id).mapM processConstInst
   return minds
 
 namespace FVarRep
@@ -739,21 +796,21 @@ namespace FVarRep
       setFfvars ((← getFfvars).push fvarId)
       return fvarId
 
-  def throwMonoFail {α : Type} (e : Expr) : FVarRepM α := do
+  def monoFailMsg (e : Expr) : MessageData :=
     let m₁ := m!"Monomorphization failed because currently the procedure cannot deal with expression `{e}`."
-    let m₂ := m!"This is because it contains free variables and has subterms possessing at least one of the following features"
-    let m₃ := m!"· Type argument with free variables, e.g. `@Fin.add (n + 2) a b`"
-    let m₄ := m!"· λ binders whose type contain free variables, e.g. `fun (x : a) => x` where `a` is a free variable"
-    let m₅ := m!"· (TODO)"
-    throwError m₁ ++ "\n" ++ m₂ ++ "\n" ++ m₃ ++ "\n" ++ m₄ ++ "\n" ++ m₅
+    let m₂ := m!"This is because it has subterms possessing at least one of the following features"
+    let m₃ := m!"· Type argument with bound variables, e.g. `@Fin.add (n + 2) a b` where `n` is a bound variable"
+    let m₄ := m!"· λ binders whose type contain bound variables, e.g. `fun (x : a) => x` where `a` is a bound variable"
+    let m₅ := m!"· Other (TODO)"
+    m₁ ++ "\n" ++ m₂ ++ "\n" ++ m₃ ++ "\n" ++ m₄ ++ "\n" ++ m₅
 
-  def unknownExpr2FVar (e : Expr) : FVarRepM Expr := do
+  def unknownExpr2FVar (e : Expr) : FVarRepM (Expr ⊕ MessageData) := do
     let bfvarSet ← getBfvarSet
     if e.hasAnyFVar bfvarSet.contains then
-      throwMonoFail e
+      return .inr (monoFailMsg e)
     for (e', fid) in (← getExprMap).toList do
       if ← MetaState.isDefEqRigid e e' then
-        return Expr.fvar fid
+        return .inl (.fvar fid)
     -- Put this trace message after the above for loop
     --   to avoid duplicated messages
     trace[auto.mono] "Don't know how to deal with expression {e}. Turning it into free variable ..."
@@ -763,7 +820,7 @@ namespace FVarRep
     let fvarId ← MetaState.withLetDecl userName ety e .default
     setExprMap ((← getExprMap).insert e fvarId)
     setFfvars ((← getFfvars).push fvarId)
-    return Expr.fvar fvarId
+    return .inl (.fvar fvarId)
 
   /--
     Attempt to abstract parts of a given expression to free variables so
@@ -774,9 +831,9 @@ namespace FVarRep
 
     Since we're now dealing with monomorphized lemmas, there are no bound level parameters
 
-    Return value:
-    · If abstraction is successful, return the abstracted expression
-    · If abstraction is not successful because the input is not a quasi higher-order
+    Return value:\
+    · If abstraction is successful, return the abstracted expression\
+    · If abstraction is not successful because the input is not a quasi higher-order\
       term of type `Prop`, return a message indicating the violation of quasi higher-order-ness
     · Throw an error message if unexpected error happens
   -/
@@ -862,7 +919,7 @@ namespace FVarRep
       let .inl eArg := eArg
         | return eArg
       eArgs := eArgs.push eArg
-    Sum.inl <$> unknownExpr2FVar (Lean.mkAppN eFn eArgs)
+    unknownExpr2FVar (Lean.mkAppN eFn eArgs)
   | e@(.sort _) => return Sum.inl e
   | e@(.lit _) => return Sum.inl e
   | e => do
@@ -873,7 +930,7 @@ namespace FVarRep
     if let .some ci ← MetaState.runMetaM (ConstInst.ofExpr? #[] bfexprs e) then
       let ciId ← constInst2FVarId ci
       return Sum.inl <| .fvar ciId
-    Sum.inl <$> unknownExpr2FVar e
+    unknownExpr2FVar e
   where addForallImpFInst (e : Expr) : FVarRepM Unit := do
     let bfexprs := (← getBfvars).map Expr.fvar
     match ← MetaState.runMetaM (ConstInst.ofExpr? #[] bfexprs e) with
@@ -889,13 +946,13 @@ end FVarRep
 -/
 def intromono (lemmas : Array Lemma) (mvarId : MVarId) : MetaM MVarId := do
   let startTime ← IO.monoMsNow
-  let monoMAction : MonoM Unit := (do
+  let monoMAction : MonoM LemmaInsts := (do
     initializeMonoM lemmas
     saturate
-    postprocessSaturate
-    trace[auto.mono] "Monomorphization took {(← IO.monoMsNow) - startTime}ms")
-  let (_, monoSt) ← monoMAction.run {}
-  let monoLemmas := monoSt.lisArr.concatMap id
+    let monoLemmas ← postprocessSaturate
+    trace[auto.mono] "Monomorphization took {(← IO.monoMsNow) - startTime}ms"
+    return monoLemmas)
+  let (monoLemmas, _) ← monoMAction.run {}
   MetaState.runAtMetaM' (do
     let mut fids := #[]
     for ml in monoLemmas do
@@ -913,24 +970,25 @@ def intromono (lemmas : Array Lemma) (mvarId : MVarId) : MetaM MVarId := do
 def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State → MetaM α) : MetaM α := do
   for h in lemmas do
     trace[auto.mono.printInputLemmas] "Monomorphization got input lemma :: {h.type}"
-  let (inductiveVals, monoSt) ← monoMAction.run {}
-  MetaState.runWithIntroducedFVars (metaStateMAction inductiveVals monoSt) k
+  let ((monoLemmas, monoIndVals), monoSt) ← monoMAction.run {}
+  MetaState.runWithIntroducedFVars (metaStateMAction monoLemmas monoIndVals monoSt) k
 where
   /-- Instantiating quantifiers, collecting inductive types
     and filtering out non-quasi-monomorphic expressions -/
-  monoMAction : MonoM (Array (Array SimpleIndVal)) := do
+  monoMAction : MonoM (LemmaInsts × Array (Array SimpleIndVal)) := do
     let startTime ← IO.monoMsNow
     initializeMonoM lemmas
     saturate
-    postprocessSaturate
+    let monoLemmas ← postprocessSaturate
+    let monoIndVals ← collectMonoMutInds
     trace[auto.mono] "Monomorphization of lemmas took {(← IO.monoMsNow) - startTime}ms"
-    collectMonoMutInds
+    return (monoLemmas, monoIndVals)
   /-- Process lemmas and inductive types, collect inhabited types -/
   metaStateMAction
-    (inductiveVals : Array (Array SimpleIndVal))
+    (monoLemmas : LemmaInsts)
+    (monoIndVals : Array (Array SimpleIndVal))
     (monoSt : State) : MetaState.MetaStateM (Array FVarId × Reif.State) := do
-    let lis := monoSt.lisArr.concatMap id
-    let (uvalids, s) ← (fvarRepMFactAction lis).run { ciMap := monoSt.ciMap }
+    let (uvalids, s) ← (fvarRepMFactAction monoLemmas).run { ciMap := monoSt.ciMap }
     for ⟨proof, ty, _⟩ in uvalids do
       trace[auto.mono.printResult] "Monomorphized :: {proof} : {ty}"
     let tyCans := s.tyCanMap.toArray.map Prod.snd
@@ -946,11 +1004,11 @@ where
     -- Inductive types
     let startTime ← IO.monoMsNow
     trace[auto.mono] "Monomorphization of inductive types took {(← IO.monoMsNow) - startTime}ms"
-    let (inductiveVals, s) ← (fvarRepMInductAction inductiveVals).run s
+    let (monoIndVals, s) ← (fvarRepMInductAction monoIndVals).run s
     let exlis := s.exprMap.toList.map (fun (e, id) => (id, e))
     let cilis ← s.ciIdMap.toList.mapM (fun (ci, id) => do return (id, ← MetaState.runMetaM ci.toExpr))
     let polyVal := Std.HashMap.ofList (exlis ++ cilis)
-    return (s.ffvars, Reif.State.mk uvalids polyVal s.tyCanMap inhs inductiveVals none)
+    return (s.ffvars, Reif.State.mk uvalids polyVal s.tyCanMap inhs monoIndVals none)
   fvarRepMFactAction (lis : Array LemmaInst) : FVarRep.FVarRepM (Array UMonoFact) := lis.filterMapM (fun li => do
     let liTypeRep? ← FVarRep.replacePolyWithFVar li.type
     match liTypeRep? with
@@ -964,12 +1022,12 @@ where
         let valRep? ← FVarRep.replacePolyWithFVar val
         match valRep? with
         | .inl valRep => return (valRep, ty)
-        -- If monomorphization fails on one constructor, then fail immediately
+        -- If monomorphization fails on one constructor, fail immediately
         | .inr m => throwError m)
       let projs ← projs.mapM (fun arr => arr.mapM (fun e => do
         match ← FVarRep.replacePolyWithFVar e with
         | .inl e => return e
-        -- If monomorphization fails on one projection, then fail immediately
+        -- If monomorphization fails on one projection, fail immediately
         | .inr m => throwError m))
       return ⟨name, type, ctors, projs⟩))
 

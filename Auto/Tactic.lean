@@ -187,7 +187,7 @@ def collectHintDBLemmas (names : Array Name) : TacticM (Array Lemma) := do
 
 def collectDefeqLemmas (names : Array Name) : TacticM (Array Lemma) :=
   Meta.withNewMCtxDepth do
-    let lemmas ← names.concatMapM Prep.elabDefEq
+    let lemmas ← names.flatMapM Prep.elabDefEq
     lemmas.mapM (fun (⟨⟨proof, type, deriv⟩, params⟩ : Lemma) => do
       let type ← instantiateMVars type
       return ⟨⟨proof, type, deriv⟩, params⟩)
@@ -827,7 +827,7 @@ def buildSelectorForInhabitedType (selCtor : Expr) (argIdx : Nat) : MetaM Expr :
   for (curDatatype, curDatatypeInfo) in mutuallyRecursiveDatatypes do
     for curCtorIdx in [:curDatatypeInfo.ctors.length] do
       if curDatatype == datatype && curCtorIdx == cval.cidx then
-        let decls := selCtorFieldTypes.mapIdx fun idx ty => (.str .anonymous ("arg" ++ idx.1.repr), fun prevArgs => pure (ty.instantiate prevArgs))
+        let decls := selCtorFieldTypes.mapFinIdx fun idx ty => (.str .anonymous ("arg" ++ idx.1.repr), fun prevArgs => pure (ty.instantiate prevArgs))
         let nextRecursorArg ←
           Meta.withLocalDeclsD decls fun curCtorFields => do
             let recursiveFieldMotiveDecls ← curCtorFields.filterMapM
@@ -845,7 +845,7 @@ def buildSelectorForInhabitedType (selCtor : Expr) (argIdx : Nat) : MetaM Expr :
         let curCtor ← Meta.mkAppOptM' curCtor (selCtorParams.map some)
         let curCtorType ← Meta.inferType curCtor
         let curCtorFieldTypes := (getForallArgumentTypes curCtorType).toArray
-        let decls := curCtorFieldTypes.mapIdx fun idx ty => (.str .anonymous ("arg" ++ idx.1.repr), fun prevArgs => pure (ty.instantiate prevArgs))
+        let decls := curCtorFieldTypes.mapFinIdx fun idx ty => (.str .anonymous ("arg" ++ idx.1.repr), fun prevArgs => pure (ty.instantiate prevArgs))
         let nextRecursorArg ←
           Meta.withLocalDeclsD decls fun curCtorFields => do
             let recursiveFieldMotiveDecls ← curCtorFields.filterMapM
@@ -898,7 +898,7 @@ def buildSelectorForUninhabitedType (selCtor : Expr) (argIdx : Nat) : MetaM Expr
   for (curDatatype, curDatatypeInfo) in mutuallyRecursiveDatatypes do
     for curCtorIdx in [:curDatatypeInfo.ctors.length] do
       if curDatatype == datatype && curCtorIdx == cval.cidx then
-        let decls := selCtorFieldTypes.mapIdx fun idx ty => (.str .anonymous ("arg" ++ idx.1.repr), fun prevArgs => pure (ty.instantiate prevArgs))
+        let decls := selCtorFieldTypes.mapFinIdx fun idx ty => (.str .anonymous ("arg" ++ idx.1.repr), fun prevArgs => pure (ty.instantiate prevArgs))
         let nextRecursorArg ←
           Meta.withLocalDeclsD decls fun curCtorFields => do
             let recursiveFieldMotiveDecls ← curCtorFields.filterMapM
@@ -916,7 +916,7 @@ def buildSelectorForUninhabitedType (selCtor : Expr) (argIdx : Nat) : MetaM Expr
         let curCtor ← Meta.mkAppOptM' curCtor (selCtorParams.map some)
         let curCtorType ← Meta.inferType curCtor
         let curCtorFieldTypes := (getForallArgumentTypes curCtorType).toArray
-        let decls := curCtorFieldTypes.mapIdx fun idx ty => (.str .anonymous ("arg" ++ idx.1.repr), fun prevArgs => pure (ty.instantiate prevArgs))
+        let decls := curCtorFieldTypes.mapFinIdx fun idx ty => (.str .anonymous ("arg" ++ idx.1.repr), fun prevArgs => pure (ty.instantiate prevArgs))
         let nextRecursorArg ←
           Meta.withLocalDeclsD decls fun curCtorFields => do
             let recursiveFieldMotiveDecls ← curCtorFields.filterMapM

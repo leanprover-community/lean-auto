@@ -116,7 +116,7 @@ where
       let fnBodyPre ← Meta.mkLambdaFVars xs fnBodyPre (usedOnly := true)
       let fnBody ← instantiateMVars fnBodyPre
       trace[auto.genMonadContext] "{getFnName}"
-      Elab.addDeclarationRanges getFnName stx
+      Elab.addDeclarationRangesFromSyntax getFnName stx
       addDefnitionValFromExpr fnBody getFnName
 
 private def elabGenMonadStateAux (m : Term) (stx : Syntax) : CommandElabM Unit := runTermElabM <| fun xs => do
@@ -149,7 +149,7 @@ where
       let fnBodyPre ← Meta.mkLambdaFVars xs fnBodyPre (usedOnly := true)
       let fnBody ← instantiateMVars fnBodyPre
       trace[auto.genMonadState] "{getFnName}"
-      Elab.addDeclarationRanges getFnName stx
+      Elab.addDeclarationRangesFromSyntax getFnName stx
       addDefnitionValFromExpr fnBody getFnName
   genMonadSets
       (xs : Array Expr) (stateTy : Expr) (stateMkExpr : Expr) (mstateInst : Expr)
@@ -170,7 +170,7 @@ where
           Meta.mkLambdaFVars #[f] modifyBody)
       let fnBody := ← instantiateMVars (← Meta.mkLambdaFVars xs fnBodyPre (usedOnly := true))
       trace[auto.genMonadState] "{setFnName}"
-      Elab.addDeclarationRanges setFnName stx
+      Elab.addDeclarationRangesFromSyntax setFnName stx
       addDefnitionValFromExpr fnBody setFnName
       fieldCnt := fieldCnt + 1
 

@@ -121,6 +121,8 @@ section Mixed
   inductive IndCtor₁ where
     | ctor : Nat → Bool → IndCtor₁
 
+  -- **TODO:** Inductive types with one constructor and not declared as `structure`
+  set_option trace.auto.mono.ciInstDefEq true
   example
     (f : Nat → Nat → Bool → IndCtor₁)
     (h₁ : IndCtor₁.ctor = f 1) (h₂ : IndCtor₁.ctor = f 2) : f 1 = f 2 := by
@@ -135,7 +137,7 @@ section Empty
   example : (∃ (x : Empty), True) := by
     auto
 
-  -- The translation to smt solver is unsound.
+  -- **TODO:** The translation to smt solver is unsound.
   -- SMT-LIB assume that all types are inhabited, while in DTT it's not.
   example : (∃ (x : Empty'), True) := by
     auto

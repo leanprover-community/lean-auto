@@ -455,7 +455,7 @@ namespace Lam2D
         (mkApp2 (.const ``instHAppendOfAppend [.zero]) stringc (mkConst ``String.instAppend))),
       (``String.lt, mkApp2 (.const ``LT.lt [.zero]) stringc (mkConst ``String.instLT)),
     ]
-
+#check LT.lt (α := BitVec 3)
   open LamCstrD in
   def bitVecConstSimpNFList : List (Name × Expr) :=
     let natc := mkConst ``Nat
@@ -480,9 +480,9 @@ namespace Lam2D
       (``BitVec.neg             , .lam `n natc (mkApp2
         (.const ``Neg.neg [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instNeg) (.bvar 0))) .default),
       (``BitVec.propult         , .lam `n natc (mkApp2
-        (.const ``LT.lt [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instLT) (.bvar 0))) .default),
+        (.const ``LT.lt [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``instLTBitVec) (.bvar 0))) .default),
       (``BitVec.propule         , .lam `n natc (mkApp2
-        (.const ``LE.le [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instLE) (.bvar 0))) .default),
+        (.const ``LE.le [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``instLEBitVec) (.bvar 0))) .default),
       (``BitVec.and             , .lam `n natc (mkApp4
         (.const ``HAnd.hAnd [.zero, .zero, .zero]) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0)) (.app bitVecc (.bvar 0))
         (mkApp2 (.const ``instHAndOfAndOp [.zero]) (.app bitVecc (.bvar 0)) (.app (mkConst ``BitVec.instAndOp) (.bvar 0)))) .default),

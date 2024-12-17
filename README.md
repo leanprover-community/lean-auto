@@ -96,8 +96,9 @@ Type **"auto 👍"** to see whether auto is set up.
 * `hw <name>`: Lemmas hard-wired into Lean-auto
 * `lctxInh`: Inhabitation fact from local context
 * `lctxLem`: Lemma from local context
-* `queryNative::<func_name>`: Proved by native prover
 * `rec <indName>.<ctorName>`
 * `rw [0, 1]`: Rewrite `0` using `1` (`1` must be an equality)
 * `tyCanInh`: Inhabitation instance synthesized for canonicalized type
+* `ciInstDefEq`: Definitional equality resulting from instance relations between ``ConstInst``s
 * `❰<term>❱`: User-provided lemma `<term>`
+* `queryNative::<func_name>`: Proved by native prover

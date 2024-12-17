@@ -39,8 +39,11 @@ def Name.isTheorem (name : Name) : CoreM Bool := do
   declaration range. Roughly speaking, a constant have a declaration
   range iff it is defined (presumably by a human) in a `.lean` file
 -/
-def Name.isHumanTheorem (name : Name) : CoreM Bool :=
-  return (← Lean.findDeclarationRanges? name).isSome && (← Name.isTheorem name)
+def Name.isHumanTheorem (name : Name) : CoreM Bool := do
+  let hasDeclRange := (← Lean.findDeclarationRanges? name).isSome
+  let isTheorem ← Name.isTheorem name
+  let notProjFn := !(← Lean.isProjectionFn name)
+  return hasDeclRange && isTheorem && notProjFn
 
 def allHumanTheorems : CoreM (Array Name) := do
   let allConsts := (← getEnv).constants.toList.map Prod.fst

@@ -944,7 +944,7 @@ section CheckerUtils
       let factsConj ← boolFacts
       ret := ret.append (← decomposeAnd factsConj [])
     -- ite specification
-    let allLamTerms := (vs.map (fun re => Array.mk (REntry.allLamTerms re))).concatMap id
+    let allLamTerms := (vs.map (fun re => Array.mk (REntry.allLamTerms re))).flatMap id
     let iteSorts := LamExportUtils.collectLamTermsIteSorts allLamTerms
     ret := ret.append (← iteSorts.toArray.mapM iteSpec)
     return ret

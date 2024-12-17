@@ -1965,7 +1965,7 @@ section UnsafeOps
 
   /-- Turn `ts[i]` into `.bvar i` -/
   def LamTerm.abstractsImp (t : LamTerm) (ts : Array LamTerm) :=
-    let ts := ts.mapIdx (fun i x => (x, LamTerm.bvar i.val))
+    let ts := ts.mapIdx (fun i x => (x, LamTerm.bvar i))
     let tmap := @Std.HashMap.ofList _ _ inferInstance inferInstance ts.toList
     t.replace (fun x => tmap.get? x) 0
 

@@ -59,7 +59,7 @@ section NFA
       let snatS (s : Nat) (sn : _ × Array Nat) := s!"({s}, {us2s sn.fst} ↦ {sn.snd.toList})"
       let tr := n.tr.mapIdx (fun idx c =>
         c.toArray.map (fun el => snatS idx el))
-      let tr := tr.concatMap id
+      let tr := tr.flatMap id
       let attrs := n.attrs.mapIdx (fun idx attrs => s!"{idx} : {attrs.toList}")
       let all := "NFA ⦗⦗" :: s!"Accept state := {n.tr.size}" :: tr.toList ++ attrs.toList
       String.intercalate "\n  " all ++ "\n⦘⦘"
@@ -90,7 +90,7 @@ section NFA
       let mut cur := 0
       let mut ret := ss
       while front.size > 0 do
-        cur := front.back
+        cur := front.back!
         front := front.pop
         let curNexts := NFA.nextStatesOfState r cur (.inl .unit)
         for n in curNexts do
@@ -227,9 +227,9 @@ section NFA
           let new_a := a.tr.map (relocateHMap · off)
           new_a.push (Std.HashMap.empty.insert (.inl .unit) #[acc'])
         )
-      let new_tr := (#[#[initTrans]] ++ trs).concatMap id
+      let new_tr := (#[#[initTrans]] ++ trs).flatMap id
       let new_attrs := #[Std.HashSet.empty] ++
-                       (as.map (fun (⟨_, attrs⟩ : NFA σ) => attrs)).concatMap id ++
+                       (as.map (fun (⟨_, attrs⟩ : NFA σ) => attrs)).flatMap id ++
                        #[Std.HashSet.empty]
       NFA.mk new_tr new_attrs
 
@@ -308,9 +308,9 @@ section NFA
           -- Add an edge from initial state to new accept state
           new_r.modify 0 (fun hm => NFA.addEdgesToHMap hm (.inl .unit, #[acc']))
         )
-      let new_tr := new_trs.concatMap id
+      let new_tr := new_trs.flatMap id
       let new_attrs : Array (Std.HashSet String) :=
-        ((Array.mk (List.range (n - 1))).map (fun _ => r.attrs[:r.tr.size].toArray)).concatMap id ++
+        ((Array.mk (List.range (n - 1))).map (fun _ => r.attrs[:r.tr.size].toArray)).flatMap id ++
         r.attrs
       NFA.mk new_tr new_attrs
 
@@ -326,7 +326,7 @@ section NFA
 
   /-- An `NFA UInt32` that accepts exactly a string -/
   def NFA.ofSymbComp (s : Array σ) : NFA σ :=
-    let tr := (Array.mk s.toList).mapIdx (fun idx c => Std.HashMap.empty.insert (.inr c) #[idx.val + 1])
+    let tr := (Array.mk s.toList).mapIdx (fun idx c => Std.HashMap.empty.insert (.inr c) #[idx + 1])
     let attrs := Array.mk ((List.range (s.size + 1)).map (fun _ => .empty))
     NFA.mk tr attrs
 
@@ -397,7 +397,7 @@ section DFA
   def DFA.toString (d : DFA σ) : String :=
     let snatS (s : Nat) (sn : σ × Nat) := s!"({s}, {sn.fst} → {sn.snd})"
     let tr := d.tr.mapIdx (fun idx c => c.toArray.map (fun el => snatS idx el))
-    let tr := tr.concatMap id
+    let tr := tr.flatMap id
     let attrs := d.attrs.mapIdx (fun idx attrs => s!"{idx} : {attrs.toList}")
     let all := "DFA ⦗⦗" ::
                s!"Accept states := {d.accepts.toList}" ::
@@ -465,7 +465,7 @@ section DFA
           | .inr .unit => (s, tr.size)
       ))
     )
-    let accepts := dstates.mapIdx (fun idx l => if l.contains n.tr.size then some idx.val else none)
+    let accepts := dstates.mapIdx (fun idx l => if l.contains n.tr.size then some idx else none)
     let accepts := accepts.foldl (fun hs o => if let some x := o then hs.insert x else hs) Std.HashSet.empty
     let attrs := dstates.map (fun l =>
       (Array.mk l).foldl (fun acc s => if let some x := n.attrs[s]? then acc.insertMany x else acc) Std.HashSet.empty)
