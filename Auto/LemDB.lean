@@ -28,7 +28,7 @@ initialize lemDBExt : LemDBExtension ← registerPersistentEnvExtension {
   addEntryFn      := fun s n => s.insert n.1 n.2
   -- **Note** We suppose that, if module `a` imports module `b`,
   --   then the index of `a` within the `arr` is greater than the index of `b` in `arr`
-  addImportedFn   := fun arr => pure <| Std.HashMap.ofList (arr.concatMap id).toList,
+  addImportedFn   := fun arr => pure <| Std.HashMap.ofList (arr.flatMap id).toList,
   exportEntriesFn := fun s => s.toArray
 }
 

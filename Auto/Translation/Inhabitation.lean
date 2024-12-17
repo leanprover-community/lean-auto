@@ -111,7 +111,7 @@ private def inhFactMatchAtomTysAux (inhTy : Lemma) (atomTys : Array Expr) : Meta
 def inhFactMatchAtomTys (inhTys : Array Lemma) (atomTys : Array Expr) : MetaM (Array UMonoFact) := do
   let liss ← inhTys.mapM (fun inhTy => inhFactMatchAtomTysAux inhTy atomTys)
   let mut ret : Array UMonoFact := #[]
-  for li in liss.concatMap id do
+  for li in liss.flatMap id do
     if li.params.size != 0 || li.nbinders != 0 then continue
     let mut new? := true
     let canTy ← canonicalize li.type atomTys

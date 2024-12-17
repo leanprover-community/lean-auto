@@ -27,8 +27,8 @@ def elabLemma (stx : Term) (deriv : DTr) : TacticM Lemma :=
     return Lemma.mk ⟨e, ← inferType e, deriv⟩ paramNames
 
 def addRecAsLemma (recVal : RecursorVal) : MetaM (Array Lemma) := do
-  let some (.inductInfo indVal) := (← getEnv).find? recVal.getInduct
-    | throwError "{decl_name%} :: Expected inductive datatype: {recVal.getInduct}"
+  let some (.inductInfo indVal) := (← getEnv).find? recVal.getMajorInduct
+    | throwError "{decl_name%} :: Expected inductive datatype: {recVal.getMajorInduct}"
   let expr := mkConst recVal.name (recVal.levelParams.map Level.param)
   let res ← forallBoundedTelescope (← inferType expr) recVal.getMajorIdx fun xs _ => do
     let expr := mkAppN expr xs
@@ -62,7 +62,7 @@ def elabDefEq (name : Name) : TacticM (Array Lemma) := do
     -- Generate definitional equation for (possibly recursive) declaration
     match ← getEqnsFor? name with
     | some eqns => eqns.mapIdxM fun i eq =>
-      do elabLemma (← `($(mkIdent eq))) (.leaf s!"defeq {i.val} {name}")
+      do elabLemma (← `($(mkIdent eq))) (.leaf s!"defeq {i} {name}")
     | none => return #[]
   | some (.axiomInfo _)  => return #[]
   | some (.thmInfo _)    => return #[]

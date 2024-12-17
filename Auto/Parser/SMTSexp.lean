@@ -180,7 +180,7 @@ def parseSexp (s : String) (p : String.Pos) (partialResult : PartialResult) : Pa
           -- Too many right parentheses
           return .malformed
         else
-          let final := pstk.back
+          let final := pstk.back!
           pstk := pstk.pop
           if pstk.size == 0 then
             return .complete (.app final) p

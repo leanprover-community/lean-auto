@@ -175,7 +175,7 @@ def collectHintDBLemmas (names : Array Name) : TacticM (Array Lemma) := do
 
 def collectDefeqLemmas (names : Array Name) : TacticM (Array Lemma) :=
   Meta.withNewMCtxDepth do
-    let lemmas ← names.concatMapM Prep.elabDefEq
+    let lemmas ← names.flatMapM Prep.elabDefEq
     lemmas.mapM (fun (⟨⟨proof, type, deriv⟩, params⟩ : Lemma) => do
       let type ← instantiateMVars type
       return ⟨⟨proof, type, deriv⟩, params⟩)

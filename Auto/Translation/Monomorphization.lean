@@ -337,7 +337,7 @@ private partial def collectConstInsts (params : Array Name) (bvars : Array Expr)
 | e@(.app ..) => do
   let fn := e.getAppFn
   let args := e.getAppArgs
-  let insts := (← (args.push fn).mapM (collectConstInsts params bvars)).concatMap id
+  let insts := (← (args.push fn).mapM (collectConstInsts params bvars)).flatMap id
   match ← ConstInst.ofExpr? params bvars e with
   | .some ci => return insts.push ci
   | .none => return insts
@@ -606,7 +606,7 @@ def saturate : MonoM Unit := do
             return
     | .some (.inr (li, idx)) =>
       trace[auto.mono.match] "Matching against {li}"
-      let cis := ((← getCiMap).toArray.map Prod.snd).concatMap id
+      let cis := ((← getCiMap).toArray.map Prod.snd).flatMap id
       for ci in cis do
         cnt := cnt + 1
         let newLis_cnt ← matchCiAndLi ci li idx cnt
@@ -657,7 +657,7 @@ def postprocessSaturate : MonoM Unit := do
   let lisArr ← getLisArr
   let lisArr ← liftM <| lisArr.mapM (fun lis => lis.filterMapM LemmaInst.monomorphic?)
   -- Since typeclasses might have been instantiated, we need to collectConstInst again
-  for li in lisArr.concatMap id do
+  for li in lisArr.flatMap id do
     let newCis ← collectConstInsts li.params #[] li.type
     for newCi in newCis do
       processConstInst newCi
@@ -665,13 +665,13 @@ def postprocessSaturate : MonoM Unit := do
 
 /-- Collect inductive types -/
 def collectMonoMutInds : MonoM (Array (Array SimpleIndVal)) := do
-  let cis := (Array.mk ((← getCiMap).toList.map Prod.snd)).concatMap id
+  let cis := (Array.mk ((← getCiMap).toList.map Prod.snd)).flatMap id
   let citys ← cis.mapM (fun ci => do
     let cie ← ci.toExpr
     let ty ← Meta.inferType cie
     return Expr.eraseMData ty)
   let minds ← collectExprsSimpleInduct citys
-  let cis ← (minds.concatMap id).mapM (fun ⟨_, type, ctors, projs⟩ => do
+  let cis ← (minds.flatMap id).mapM (fun ⟨_, type, ctors, projs⟩ => do
     let cis₁ ← collectConstInsts #[] #[] type
     let cis₂ ← ctors.mapM (fun (val, ty) => do
       let cis₁ ← collectConstInsts #[] #[] val
@@ -679,8 +679,8 @@ def collectMonoMutInds : MonoM (Array (Array SimpleIndVal)) := do
       return cis₁ ++ cis₂)
     let projs := (match projs with | .some projs => projs | .none => #[])
     let cis₃ ← projs.mapM (fun e => collectConstInsts #[] #[] e)
-    return cis₁ ++ cis₂.concatMap id ++ cis₃.concatMap id)
-  let _ ← (cis.concatMap id).mapM processConstInst
+    return cis₁ ++ cis₂.flatMap id ++ cis₃.flatMap id)
+  let _ ← (cis.flatMap id).mapM processConstInst
   return minds
 
 namespace FVarRep
@@ -921,7 +921,7 @@ def intromono (lemmas : Array Lemma) (mvarId : MVarId) : MetaM MVarId := do
     postprocessSaturate
     trace[auto.mono] "Monomorphization took {(← IO.monoMsNow) - startTime}ms")
   let (_, monoSt) ← monoMAction.run {}
-  let monoLemmas := monoSt.lisArr.concatMap id
+  let monoLemmas := monoSt.lisArr.flatMap id
   MetaState.runAtMetaM' (do
     let mut fids := #[]
     for ml in monoLemmas do
@@ -955,7 +955,7 @@ where
   metaStateMAction
     (inductiveVals : Array (Array SimpleIndVal))
     (monoSt : State) : MetaState.MetaStateM (Array FVarId × Reif.State) := do
-    let lis := monoSt.lisArr.concatMap id
+    let lis := monoSt.lisArr.flatMap id
     let (uvalids, s) ← (fvarRepMFactAction lis).run { ciMap := monoSt.ciMap }
     for ⟨proof, ty, _⟩ in uvalids do
       trace[auto.mono.printResult] "Monomorphized :: {proof} : {ty}"
