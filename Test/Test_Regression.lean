@@ -293,6 +293,26 @@ section ConstInstDefEq
   example (x y : Int) (xs ys : List α) : x + y = Int.add x y ∧ xs ++ ys = List.append xs ys := by
     auto
 
+  opaque mpop₁ {α} [Mul α] : α → α → α := fun _ => id
+  def mpop₂ := @mpop₁
+
+  /-
+    To solve this problem, Lean-auto must succeed in doing all of
+      the following steps consecutively
+    · Instantiate `α` in `h` by unifying the `@op α` in `h`
+      with the `@op α` in the goal.
+    · The `[inst : Mul α]` in `h` is instantiated by `Lemma.monomorphic?`
+    · The constant instance `@mpop₁ α inst` is collected and processed
+    · During constant instance definitional equality production
+      `@mpop₁ α inst` is matched with `@mpop₂ α inst` by `Expr.instanceOf?`
+  -/
+  example
+    (α : Type)
+    (op : ∀ {α}, α → α → α)
+    (h : ∀ α [inst : Mul α] (x y : α), op x y = mpop₁ x y) :
+    ∀ α [inst : Mul α] (x y : α), op x y = mpop₂ x y := by
+    auto
+
 end ConstInstDefEq
 
 -- First Order

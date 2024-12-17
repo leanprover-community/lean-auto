@@ -223,16 +223,16 @@ def ConstInst.matchExpr (e : Expr) (ci : ConstInst) : MetaM Bool := do
       return false
   return true
 
-/-
-  Given an hypothesis `t`, we will traverse the hypothesis to find
-    instances of polymorphic constants
+/--
+  Given an hypothesis `t`, we will traverse the hypothesis and
+    call `ConstInst.ofExpr?` to find instances of polymorphic constants\
   · Binders of the hypothesis are introduced as fvars, these fvars are
-    recorded in `bvars`
-  · `param` records universe level parameters of the hypothesis are
+    recorded in `bvars`\
+  · `param` records universe level parameters of the hypothesis\
   So, the criterion that an expression `e` is a valid instance is that
-  · All dependent arguments and instance arguments are applied
-  · The head does not contain expressions in `bvars`
-  · Dependent arguments does not contains expressions in `bvars`
+  · All dependent arguments and instance arguments are present\
+  · The head does not contain expressions in `bvars`\
+  · Dependent arguments does not contains expressions in `bvars`\
   · The expression does not contain level parameters in `params`
 -/
 def ConstInst.ofExpr? (params : Array Name) (bvars : Array Expr) (e : Expr) : MetaM (Option ConstInst) := do
@@ -651,7 +651,16 @@ where
 def postprocessSaturate : MonoM LemmaInsts := do
   let lisArr ← getLisArr
   let lisArr ← liftM <| lisArr.mapM (fun lis => lis.filterMapM LemmaInst.monomorphic?)
+  let lis := lisArr.flatMap id
+  -- Since typeclasses might have been instantiated during `LemmaInst.monomorphic?`,
+  --   we need to run ``collectConstInst`` again. Also, this must precede
+  --   collecting definitional equalities related to `ConstInst`s
+  refreshConstInsts lis
   -- Collect definitional equalities related to `ConstInst`s
+  -- **TODO:** Collect definitional equalities during monomorphization
+  --   and make uses of the `active` field. This is because new `ConstInst`s
+  --   might be generated during collection of definitional equalities,
+  --   and they may produce more definitional equalities
   let mut cieqs : Array LemmaInst := #[]
   let cis := ((← getCiMap).toArray.map Prod.snd).flatMap id
   for (ci₁, idx₁) in cis.zipWithIndex do
@@ -663,16 +672,16 @@ def postprocessSaturate : MonoM LemmaInsts := do
           let newLi ← LemmaInst.ofLemma ⟨⟨proof, eq, .leaf "ciInstDefEq"⟩, #[]⟩
           cieqs := cieqs.push newLi
           trace[auto.mono.ciInstDefEq] "{eq}"
-  -- Since typeclasses might have been instantiated during `LemmaInst.monomorphic?`,
-  --   and new `ConstInst`s might be produced during definitional equality
+  -- Since new `ConstInst`s might be produced during definitional equality
   --   generation, we need to ``collectConstInst`` again
-  let ret := lisArr.flatMap id ++ cieqs
-  for li in ret do
-    let newCis ← collectConstInsts li.params #[] li.type
-    for newCi in newCis do
-      processConstInst newCi
-  return ret
+  refreshConstInsts cieqs
+  return lis ++ cieqs
 where
+  refreshConstInsts (lis : LemmaInsts) : MonoM Unit :=
+    for li in lis do
+      let newCis ← collectConstInsts li.params #[] li.type
+      for newCi in newCis do
+        processConstInst newCi
   bidirectionalOfInstanceEq (ci₁ ci₂ : ConstInst) : MetaM (Option (Expr × Expr)) :=
     Meta.withNewMCtxDepth <| Meta.withDefault <| do
       return (← Expr.instanceOf? (← ci₁.toExpr) (← ci₂.toExpr)) <|>
