@@ -813,7 +813,9 @@ namespace FVarRep
     let m₃ := m!"· Type argument with bound variables, e.g. `@Fin.add (n + 2) a b` where `n` is a bound variable"
     let m₄ := m!"· λ binders whose type contain bound variables, e.g. `fun (x : a) => x` where `a` is a bound variable"
     let m₅ := m!"· Other (TODO)"
-    m₁ ++ "\n" ++ m₂ ++ "\n" ++ m₃ ++ "\n" ++ m₄ ++ "\n" ++ m₅
+    let m₆ := m!"`set_option auto.mono.ignoreNonQuasiHigherOrder true` will instruct Lean-auto to ignore " ++
+              m!"all the `LemmaInst`s which contain expressions that cannot be handeled by the current procedure"
+    m₁ ++ "\n" ++ m₂ ++ "\n" ++ m₃ ++ "\n" ++ m₄ ++ "\n" ++ m₅ ++ "\n" ++ m₆
 
   def unknownExpr2FVar (e : Expr) : FVarRepM (Expr ⊕ MessageData) := do
     let bfvarSet ← getBfvarSet
