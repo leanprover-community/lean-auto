@@ -41,18 +41,21 @@ def unfoldProj (e : Expr) : MetaM Expr :=
     Meta.mkAppOptM sfi.projFn ((Array.mk nones).push struct)
   | _ => return e
 
-/-- This function is expensive -/
-partial def prepReduceExpr (term : Expr) : MetaM Expr := do
+def prepReduceExprWithMode (term : Expr) (mode : TransparencyMode) : MetaM Expr := do
   let red (e : Expr) : MetaM TransformStep := do
     let e := e.consumeMData
     let e ← Meta.whnf e
     return .continue e
-  let trMode := auto.redMode.get (← getOptions)
   -- Reduce
-  let term ← Meta.withTransparency trMode <| Meta.transform term (pre := red) (usedLetOnly := false)
+  let term ← Meta.withTransparency mode <| Meta.transform term (pre := red) (usedLetOnly := false)
   -- Unfold projection
   let term ← Meta.transform term (pre := fun e => do return .continue (← unfoldProj e))
   return term
+
+/-- This function is expensive -/
+def prepReduceExpr (term : Expr) : MetaM Expr := do
+  let mode := auto.redMode.get (← getOptions)
+  prepReduceExprWithMode term mode
 
 /--
   We assume that all defeq facts have the form

@@ -33,6 +33,17 @@ register_option auto.mono.recordInstInst : Bool := {
   descr := "Whether to record instances of constants with the `instance` attribute"
 }
 
+register_option auto.mono.ciInstDefEq.mode : Meta.TransparencyMode := {
+  defValue := .default
+  descr := "Transparency level used when collecting definitional equality" ++
+    " arising from instance relations between `ConstInst`s"
+}
+
+register_option auto.mono.tyCan.mode : Meta.TransparencyMode := {
+  defValue := .reducible
+  descr := "Transparency level used when canonicalizing types"
+}
+
 namespace Auto
 
 inductive MonoMode where
@@ -463,6 +474,7 @@ where
         return false
       leadingForallQuasiMonomorphicAux (fvars.push xid)  bodyi
   | _ => return true
+
 /--
   Test whether a lemma is type monomorphic && universe monomorphic
     By universe monomorphic we mean `lem.params = #[]`
@@ -682,8 +694,9 @@ where
       let newCis ← collectConstInsts li.params #[] li.type
       for newCi in newCis do
         processConstInst newCi
-  bidirectionalOfInstanceEq (ci₁ ci₂ : ConstInst) : MetaM (Option (Expr × Expr)) :=
-    Meta.withNewMCtxDepth <| Meta.withDefault <| do
+  bidirectionalOfInstanceEq (ci₁ ci₂ : ConstInst) : MetaM (Option (Expr × Expr)) := do
+    let mode := auto.mono.ciInstDefEq.mode.get (← getOptions)
+    Meta.withNewMCtxDepth <| Meta.withTransparency mode <| do
       return (← Expr.instanceOf? (← ci₁.toExpr) (← ci₂.toExpr)) <|>
         (← Expr.instanceOf? (← ci₂.toExpr) (← ci₁.toExpr))
   isTrigger (cih : CiHead) :=
@@ -745,7 +758,8 @@ namespace FVarRep
 
   /-- Return : (reduce(e), whether reduce(e) contain bfvars) -/
   def processType (e : Expr) : FVarRepM (Expr × Bool) := do
-    let e ← MetaState.runMetaM <| prepReduceExpr e
+    let mode := auto.mono.tyCan.mode.get (← getOptions)
+    let e ← MetaState.runMetaM <| prepReduceExprWithMode e mode
     let bfvarSet ← getBfvarSet
     -- If `e` contains no bound variables
     if !e.hasAnyFVar bfvarSet.contains then
