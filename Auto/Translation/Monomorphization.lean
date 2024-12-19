@@ -39,9 +39,14 @@ register_option auto.mono.ciInstDefEq.mode : Meta.TransparencyMode := {
     " arising from instance relations between `ConstInst`s"
 }
 
-register_option auto.mono.tyCan.mode : Meta.TransparencyMode := {
+register_option auto.mono.tyRed.mode : Meta.TransparencyMode := {
   defValue := .reducible
-  descr := "Transparency level used when canonicalizing types"
+  descr := "Transparency level used when reducing types"
+}
+
+register_option auto.mono.tyDefEq.mode : Meta.TransparencyMode := {
+  defValue := .default
+  descr := "Transparency level used when testing definitional equality of types"
 }
 
 namespace Auto
@@ -758,7 +763,7 @@ namespace FVarRep
 
   /-- Return : (reduce(e), whether reduce(e) contain bfvars) -/
   def processType (e : Expr) : FVarRepM (Expr × Bool) := do
-    let mode := auto.mono.tyCan.mode.get (← getOptions)
+    let mode := auto.mono.tyRed.mode.get (← getOptions)
     let e ← MetaState.runMetaM <| prepReduceExprWithMode e mode
     let bfvarSet ← getBfvarSet
     -- If `e` contains no bound variables
@@ -783,7 +788,8 @@ namespace FVarRep
       if (← getTyCanMap).contains e then
         return
       for (e', ec) in (← getTyCanMap).toList do
-        if ← MetaState.isDefEqRigid e e' then
+        let mode := auto.mono.tyDefEq.mode.get (← getOptions)
+        if ← MetaState.isDefEqRigidWith e e' mode then
           setTyCanMap ((← getTyCanMap).insert e ec)
           return
       setTyCanMap ((← getTyCanMap).insert e e)
