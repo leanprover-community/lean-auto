@@ -242,16 +242,19 @@ def Expr.whnfIfNotForall (e : Expr) : MetaM Expr := do
 def Expr.instanceOf? (e₁ e₂ : Expr) : MetaM (Option (Expr × Expr)) := do
   let ty₁ ← Meta.inferType e₁
   let ty₂ ← Meta.inferType e₂
-  Meta.forallTelescope ty₁ fun xs _ => do
-    let (ms, _, _) ← Meta.forallMetaTelescope ty₂
-    let e₁app := mkAppN e₁ xs
-    let e₂app := mkAppN e₂ ms
+  Meta.forallTelescope ty₂ fun xs _ => do
+    let (ms, _, _) ← Meta.forallMetaTelescope ty₁
+    let e₁app := mkAppN e₁ ms
+    let e₂app := mkAppN e₂ xs
     if ← Meta.isDefEq e₁app e₂app then
-      let e₂app ← instantiateMVars e₂app
-      let (e₂app, s) := AbstractMVars.abstractExprMVars e₂app { mctx := (← getMCtx), lctx := (← getLCtx), ngen := (← getNGen)}
+      let e₁app ← instantiateMVars e₁app
+      -- **TODO:** Why is this necessary?
+      if !(← Meta.isTypeCorrect e₁app) then
+        return .none
+      let (e₁app, s) := AbstractMVars.abstractExprMVars e₁app { mctx := (← getMCtx), lctx := (← getLCtx), ngen := (← getNGen)}
       setNGen s.ngen; setMCtx s.mctx
       Meta.withLCtx s.lctx (← Meta.getLocalInstances) <| do
-        let proof ← Meta.mkLambdaFVars (xs ++ s.fvars) (← Meta.mkAppM ``Eq.refl #[e₁app])
+        let proof ← Meta.mkLambdaFVars (xs ++ s.fvars) (← Meta.mkAppM ``Eq.refl #[e₂app])
         let eq ← Meta.mkForallFVars (xs ++ s.fvars) (← Meta.mkAppM ``Eq #[e₁app, e₂app])
         return (proof, eq)
     else
