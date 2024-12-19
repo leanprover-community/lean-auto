@@ -255,7 +255,6 @@ section UnfoldConst
   example : c₂ = 2 := by auto u[c₂] d[c₁]
   example (h : c₃ = c₁) : c₃ = 2 := by auto [h] u[c₁]
   example : let c := 2; c = 2 := by
-    try auto u[c];
     auto
 
   example : True := by auto d[Nat.rec]
