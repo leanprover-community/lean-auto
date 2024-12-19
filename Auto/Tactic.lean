@@ -436,12 +436,28 @@ def queryNative
   let checker ← LamReif.buildCheckerExprFor contra
   Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
 
+-- **TODO:** This is a dirty trick
+def dirtyTryRflInRunAuto (lemmas : Array Lemma) : MetaM (Option Lemma) := do
+  for ⟨⟨_, type, _⟩, params⟩ in lemmas do
+    let_expr Not g := type | continue
+    let_expr Eq _ lhs rhs := g | continue
+    if ← Meta.withNewMCtxDepth <| Meta.withDefault <| Meta.isDefEq lhs rhs then
+      let proof ← Meta.mkAppM ``Eq.refl #[lhs]
+      let prop ← prepReduceExpr (← Meta.mkAppM ``Eq #[lhs, rhs])
+      return .some ⟨⟨proof, prop, .leaf "dirtyTryRfl"⟩, params⟩
+  return .none
+
 /--
   Run `auto`'s monomorphization and preprocessing, then send the problem to different solvers
 -/
 def runAuto
   (declName? : Option Name) (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr := do
   traceLemmas `auto.runAuto.printLemmas s!"All lemmas received by {decl_name%}:" lemmas
+  -- **TODO:** This is a dirty trick
+  let lemmas ← (do
+    match ← dirtyTryRflInRunAuto lemmas with
+    | .some lem => return lemmas.push lem
+    | .none => return lemmas)
   -- Simplify `ite`
   let ite_simp_lem ← Lemma.ofConst ``Auto.Bool.ite_simp (.leaf "hw Auto.Bool.ite_simp")
   let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem ite_simp_lem)
