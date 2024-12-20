@@ -246,11 +246,10 @@ def Expr.instanceOf? (e₁ e₂ : Expr) : MetaM (Option (Expr × Expr)) := do
     let (ms, _, _) ← Meta.forallMetaTelescope ty₁
     let e₁app := mkAppN e₁ ms
     let e₂app := mkAppN e₂ xs
+    if !(← Meta.isDefEq (← Meta.inferType e₁app) (← Meta.inferType e₂app)) then
+      return .none
     if ← Meta.isDefEq e₁app e₂app then
       let e₁app ← instantiateMVars e₁app
-      -- **TODO:** Why is this necessary?
-      if !(← Meta.isTypeCorrect e₁app) then
-        return .none
       let (e₁app, s) := AbstractMVars.abstractExprMVars e₁app { mctx := (← getMCtx), lctx := (← getLCtx), ngen := (← getNGen)}
       setNGen s.ngen; setMCtx s.mctx
       Meta.withLCtx s.lctx (← Meta.getLocalInstances) <| do
