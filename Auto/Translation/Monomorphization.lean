@@ -41,7 +41,7 @@ register_option auto.mono.ciInstDefEq.mode : Meta.TransparencyMode := {
 }
 
 register_option auto.mono.ciInstDefEq.maxHeartbeats : Nat := {
-  defValue := 1024
+  defValue := 2048
   descr := "Heartbeats allocated to each unification of constant instance"
 }
 
@@ -52,7 +52,7 @@ register_option auto.mono.termLikeDefEq.mode : Meta.TransparencyMode := {
 }
 
 register_option auto.mono.termLikeDefEq.maxHeartbeats : Nat := {
-  defValue := 1024
+  defValue := 2048
   descr := "Heartbeats allocated to each unification of term-like expression"
 }
 

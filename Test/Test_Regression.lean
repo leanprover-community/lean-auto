@@ -277,6 +277,9 @@ end UnfoldConst
 
 section ConstInstDefEq
 
+  -- Effectively disable `termLikeDefEq`
+  set_option auto.mono.termLikeDefEq.mode "reducible"
+
   def Nat.add₁ := Nat.add
 
   example : Nat.add₁ = Nat.add := by
@@ -311,6 +314,16 @@ section ConstInstDefEq
     auto
 
 end ConstInstDefEq
+
+-- Definitional Equality from Term-like expressions
+
+section TermLikeDefEq
+
+  set_option auto.tptp false
+  example (h : List.append [1, 2] [3, 4] = [2, 3]) : [1, 2, 3, 4] = [2, 3] := by
+    auto
+
+end TermLikeDefEq
 
 -- First Order
 
