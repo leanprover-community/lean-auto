@@ -21,6 +21,7 @@ initialize
   registerTraceClass `auto.mono.printResult
   registerTraceClass `auto.mono.printInputLemmas
   registerTraceClass `auto.mono.ciInstDefEq
+  registerTraceClass `auto.mono.termLikeDefEq
 
 register_option auto.mono.saturationThreshold : Nat := {
   defValue := 1024
@@ -37,6 +38,22 @@ register_option auto.mono.ciInstDefEq.mode : Meta.TransparencyMode := {
   defValue := .default
   descr := "Transparency level used when collecting definitional equality" ++
     " arising from instance relations between `ConstInst`s"
+}
+
+register_option auto.mono.ciInstDefEq.maxHeartbeats : Nat := {
+  defValue := 1024
+  descr := "Heartbeats allocated to each unification of constant instance"
+}
+
+register_option auto.mono.termLikeDefEq.mode : Meta.TransparencyMode := {
+  defValue := .default
+  descr := "Transparency level used when collecting definitional equalities" ++
+    " between term-like subterms"
+}
+
+register_option auto.mono.termLikeDefEq.maxHeartbeats : Nat := {
+  defValue := 1024
+  descr := "Heartbeats allocated to each unification of term-like expression"
 }
 
 register_option auto.mono.tyRed.mode : Meta.TransparencyMode := {
@@ -564,7 +581,63 @@ def processConstInst (ci : ConstInst) : MonoM Unit := do
   -- Insert `ci` into `activeCi` so that we can later match on it
   setActive ((← getActive).enqueue (.inl ci))
 
+partial def termLikeSubexprs (bvars : Array Expr) : Expr → MetaM (Array Expr)
+| e@(.lam _ _ _ _) =>
+  Meta.lambdaBoundedTelescope e 1 fun xs b => termLikeSubexprs (bvars ++ xs) b
+| e@(.forallE _ ty body _) => do
+  if body.hasLooseBVar 0 then
+    Meta.forallBoundedTelescope e (.some 1) fun xs b => termLikeSubexprs (bvars ++ xs) b
+  else
+    let mut ret ← termLikeSubexprs bvars (body.instantiate1 (.fvar ⟨`dummy⟩))
+    if (← Meta.isProp ty) then
+      ret := ret ++ (← termLikeSubexprs bvars ty)
+    return ret
+| e@(.app _ _) => do
+  let fn := e.getAppFn
+  let args := e.getAppArgs
+  let mut ret := #[]
+  if fn.constName? == .some ``Eq then
+    for arg in args[1:] do
+      ret := ret ++ (← termLikeSubexprs bvars arg)
+    return ret
+  if fn.constName? == .some ``Not then
+    if let #[body] := args then
+      return ← termLikeSubexprs bvars body
+  if fn.constName? == .some ``Iff || fn.constName? == .some ``And || fn.constName? == .some ``Or then
+    for arg in args do
+      ret := ret ++ (← termLikeSubexprs bvars arg)
+    return ret
+  return #[← Meta.mkLambdaFVars (usedOnly := true) bvars e]
+| e => return #[← Meta.mkLambdaFVars (usedOnly := true) bvars e]
+
+def termLikeDefEqDefEqs (lemmas : Array Lemma) : MetaM (Array Lemma) := do
+  let nses := (← lemmas.mapM (fun lem => do
+    let subs ← termLikeSubexprs #[] lem.type
+    return subs.map (fun e => (e, lem.params)))).flatMap id
+  let nses := nses.map (fun (e, params) =>
+    let params := params.filter (fun n => (Std.HashSet.ofArray (collectLevelParams {} e).params).contains n)
+    (e, params))
+  let mut ret := #[]
+  let mode := auto.mono.termLikeDefEq.mode.get (← getOptions)
+  let heartbeats := auto.mono.termLikeDefEq.maxHeartbeats.get (← getOptions)
+  for ((n₁, params₁), idx₁) in nses.zipWithIndex do
+    if n₁.isLambda || params₁.size != 0 then continue
+    for ((n₂, params₂), idx₂) in nses.zipWithIndex do
+      if idx₁ >= idx₂ then continue
+        let computation := Meta.withNewMCtxDepth <| Meta.withTransparency mode <| Expr.instanceOf? n₂ params₂ n₁
+        let computation := Meta.runtimeExToExcept <| Meta.withMaxHeartbeats heartbeats <| computation
+        if let .ok (.some (proof, eq, params)) ← computation then
+          let eq := Expr.eraseMData (← Core.betaReduce eq)
+          let eq ← Meta.transform eq (pre := fun e => do return .continue (← unfoldProj e))
+          let_expr Eq _ lhs rhs := eq | continue
+          if lhs == rhs then
+            continue
+          trace[auto.mono.termLikeDefEq] "{eq}"
+          ret := ret.push ⟨⟨proof, eq, .leaf "termLikeDefEq"⟩, params⟩
+  return ret
+
 def initializeMonoM (lemmas : Array Lemma) : MonoM Unit := do
+  let lemmas := lemmas ++ (← termLikeDefEqDefEqs lemmas)
   let lemmaInsts ← liftM <| lemmas.mapM (fun lem => do
     let li ← LemmaInst.ofLemmaHOL lem
     trace[auto.mono.printLemmaInst] "New {li}"
@@ -677,7 +750,7 @@ where
     let cis := ((← getCiMap).toArray.map Prod.snd).flatMap id
     for (ci', _) in cis.zipWithIndex do
       if (← ci.toExpr) != (← ci'.toExpr) && !(isTrigger ci'.head) then
-        if let .some (proof, eq) ← bidirectionalOfInstanceEq ci ci' then
+        if let .some (proof, eq, _) ← bidirectionalOfInstanceEq ci ci' then
           let eq := Expr.eraseMData (← Core.betaReduce eq)
           let eq ← Meta.transform eq (pre := fun e => do return .continue (← unfoldProj e))
           trace[auto.mono.ciInstDefEq] "{eq}"
@@ -688,11 +761,15 @@ where
     let newCis ← collectConstInsts li.params #[] li.type
     for newCi in newCis do
       processConstInst newCi
-  bidirectionalOfInstanceEq (ci₁ ci₂ : ConstInst) : MetaM (Option (Expr × Expr)) := do
+  bidirectionalOfInstanceEq (ci₁ ci₂ : ConstInst) : MetaM (Option (Expr × Expr × Array Name)) := do
     let mode := auto.mono.ciInstDefEq.mode.get (← getOptions)
-    Meta.withNewMCtxDepth <| Meta.withTransparency mode <| do
-      return (← Expr.instanceOf? (← ci₁.toExpr) (← ci₂.toExpr)) <|>
-        (← Expr.instanceOf? (← ci₂.toExpr) (← ci₁.toExpr))
+    let heartbeats := auto.mono.ciInstDefEq.maxHeartbeats.get (← getOptions)
+    let result ← Meta.runtimeExToExcept <| Meta.withMaxHeartbeats heartbeats <| Meta.withNewMCtxDepth <| Meta.withTransparency mode <| do
+      return (← Expr.instanceOf? (← ci₁.toExpr) #[] (← ci₂.toExpr)) <|>
+        (← Expr.instanceOf? (← ci₂.toExpr) #[] (← ci₁.toExpr))
+    match result with
+    | .ok r => return r
+    | .error _ => return .none
   isTrigger (cih : CiHead) :=
     match cih with
     | .const name _ => name == ``SMT.Attribute.trigger

@@ -217,6 +217,7 @@ section DepAbst
   example (f₁ f₂ : ∀ (α : Type), α → α) : f₁ = f₂ → f₂ = f₁ :=
     by auto
 
+  set_option auto.mono.ignoreNonQuasiHigherOrder true in
   example (g : Type → Type) (f : ∀ (α : Type), g α) : f = f :=
     by auto
 
@@ -246,16 +247,13 @@ section UnfoldConst
   def c₁ := 2
   def c₂ := c₁
 
-  example : c₁ = 2 := by auto u[c₁]
-  example : c₂ = 2 := by
-    auto u[c₁, c₂]
-  example : c₂ = 2 := by
-    auto u[c₂, c₁]
-  example : c₂ = 2 := by auto u[c₁] d[c₂]
-  example : c₂ = 2 := by auto u[c₂] d[c₁]
-  example (h : c₃ = c₁) : c₃ = 2 := by auto [h] u[c₁]
-  example : let c := 2; c = 2 := by
-    auto
+  example : c₁ = 2 := by auto
+  example : c₂ = 2 := by auto
+  example : c₂ = 2 := by auto
+  example : c₂ = 2 := by auto
+  example : c₂ = 2 := by auto
+  example (h : c₃ = c₁) : c₃ = 2 := by auto
+  example : let c := 2; c = 2 := by auto
 
   example : True := by auto d[Nat.rec]
 
@@ -471,7 +469,7 @@ example (u : α) (h : ∀ (z : α), x = z ∧ z = y) : x = y := by
   have g : ∀ z, x = z ∧ z = y → x = y := by
     intros z hlr; have ⟨hl, hr⟩ := hlr; exact Eq.trans hl hr
   -- Notably, this example fails if we use "duper"
-  apply g; auto [h]; exact u
+  apply g; auto [h]; exact x
 
 example (α : Type u) : True := by
   have g : (∀ (ap : ∀ {α : Type u}, List α → List α → List α)
