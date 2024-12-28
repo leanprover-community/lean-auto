@@ -16,6 +16,7 @@ initialize
   registerTraceClass `auto.mono
   registerTraceClass `auto.mono.match
   registerTraceClass `auto.mono.match.verbose
+  registerTraceClass `auto.mono.fvarRepFact
   registerTraceClass `auto.mono.printLemmaInst
   registerTraceClass `auto.mono.printConstInst
   registerTraceClass `auto.mono.printResult
@@ -731,15 +732,20 @@ where
       cnt := cnt + 1
       if (← saturationThresholdReached? cnt) then
         return (newLis, cnt)
+      -- Attempt to instantiate instance arguments and get monomoprhic lemma instance
+      let matchLi := (← LemmaInst.monomorphic? matchLi).getD matchLi
       let new? ← newLis.newInst? matchLi
       -- A new instance of an assumption
       if new? then
         trace[auto.mono.printLemmaInst] "New {matchLi}"
-        -- Attempt to instantiate instance arguments and get monomoprhic lemma instance
-        let matchLi := (← LemmaInst.monomorphic? matchLi).getD matchLi
         newLis := newLis.push matchLi
         setActive ((← getActive).enqueue (.inr (matchLi, idx)))
         collectAndProcessConstInsts matchLi
+        if let .some monoLi ← LemmaInst.monomorphic? matchLi then
+          if monoLi != matchLi && (← LemmaInsts.newInst? newLis monoLi) then
+            newLis := newLis.push monoLi
+            setActive ((← getActive).enqueue (.inr (monoLi, idx)))
+            collectAndProcessConstInsts monoLi
     return (newLis, cnt)
   /-
     This `ci` comes from `active`, so it is already canonicalized
@@ -1102,6 +1108,7 @@ where
     let polyVal := Std.HashMap.ofList (exlis ++ cilis)
     return (s.ffvars, Reif.State.mk uvalids polyVal s.tyCanMap inhs monoIndVals none)
   fvarRepMFactAction (lis : Array LemmaInst) : FVarRep.FVarRepM (Array UMonoFact) := lis.filterMapM (fun li => do
+    trace[auto.mono.fvarRepFact] "{li.type}"
     let liTypeRep? ← FVarRep.replacePolyWithFVar li.type
     match liTypeRep? with
     | .inl liTypeRep => return .some ⟨li.proof, liTypeRep, li.deriv⟩
