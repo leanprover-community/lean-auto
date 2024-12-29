@@ -28,6 +28,13 @@ instance : ToMessageData Result where
   | .typeUnequal     => "Result.typeUnequal"
   | .autoException e => m!"Result.autoException ::\n{e.toMessageData}"
 
+def Result.concise : Result → String
+| .success => "S"
+| .nonProp => "N"
+| .typeCheckFail => "F"
+| .typeUnequal => "U"
+| .autoException _ => "E"
+
 inductive SolverConfig where
   | native
   | leanSmt
@@ -123,6 +130,7 @@ def runAutoOnConsts (config : EvalConfig) (names : Array Name) : CoreM Unit := d
   if let .some fhandle := logFileHandle then
     fhandle.putStrLn s!"Config = {config}"
   let startTime ← IO.monoMsNow
+  let mut results := #[]
   for name in names do
     let ci ← Name.getCi name decl_name%
     trace[auto.eval.printProblem] m!"Testing || {name} : {ci.type}"
@@ -164,11 +172,15 @@ def runAutoOnConsts (config : EvalConfig) (names : Array Name) : CoreM Unit := d
             | .vampire        => auto.tptp.vampire.path.set o path) <|
               runAutoOnConst name
     trace[auto.eval.printResult] m!"{result}"
+    results := results.push result
     if let .some fhandle := logFileHandle then
       fhandle.putStrLn (toString (← MessageData.format m!"{result}"))
   if let .some fhandle := logFileHandle then
     fhandle.putStrLn ""
     fhandle.putStrLn s!"Elapsed time: {(← IO.monoMsNow) - startTime} ms"
+    fhandle.putStrLn s!"\nSummary:\n"
+    for ((name, result), idx) in (names.zip results).zipWithIndex do
+      fhandle.putStrLn s!"{idx} {result.concise} {name}"
 
 def namesFileEval (cfg : EvalConfig) (fname : String) : CoreM Unit := do
   let names ← NameArray.load fname

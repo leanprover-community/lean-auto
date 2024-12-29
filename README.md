@@ -100,5 +100,6 @@ Type **"auto 👍"** to see whether auto is set up.
 * `rw [0, 1]`: Rewrite `0` using `1` (`1` must be an equality)
 * `tyCanInh`: Inhabitation instance synthesized for canonicalized type
 * `ciInstDefEq`: Definitional equality resulting from instance relations between ``ConstInst``s
+* `termLikeDefEq`: Definitional equality resulting from definitional equalities between term-like subexpressions
 * `❰<term>❱`: User-provided lemma `<term>`
 * `queryNative::<func_name>`: Proved by native prover

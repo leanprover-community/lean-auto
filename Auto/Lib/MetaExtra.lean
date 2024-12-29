@@ -103,4 +103,24 @@ def Meta.isTypeCorrectCore (e : Expr) : MetaM Bool := do
   let type? ← Meta.coreCheck e
   return type?.isSome
 
+def Meta.withMaxHeartbeats [Monad m] [MonadLiftT BaseIO m]
+    [MonadWithReaderOf Core.Context m] (n : Nat) (x : m α) : m α := do
+  let numHeartbeats ← IO.getNumHeartbeats
+  let f s := {
+    s with
+    initHeartbeats := numHeartbeats
+    maxHeartbeats := n * 1000
+  }
+  withReader f x
+
+def Meta.exToExcept (x : MetaM α) : MetaM (Except Exception α) :=
+  try
+    let v ← x
+    return .ok v
+  catch e =>
+    return .error e
+
+def Meta.runtimeExToExcept (x : MetaM α) : MetaM (Except Exception α) :=
+  tryCatchRuntimeEx (do let v ← x; return .ok v) (fun e => return .error e)
+
 end Auto

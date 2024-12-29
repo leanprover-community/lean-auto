@@ -231,29 +231,33 @@ def Expr.whnfIfNotForall (e : Expr) : MetaM Expr := do
     return (← Meta.whnf e)
 
 /--
-  Given expression `e₁, e₂`, attempt to find variables `x₁, ⋯, xₗ`,
-  terms `t₁, ⋯, tₖ` and a `m ≤ l` such that `∀ x₁ ⋯ xₗ. e₁ x₁ ⋯ xₘ = e₂ t₁ ⋯ tₖ`
+  Given expression `e₁, e₂` where `e₁` have universe level parameters
+  `params`, attempt to find variables `x₁, ⋯, xₗ`,
+  terms `t₁, ⋯, tₖ` and a `m ≤ l` such that `∀ x₁ ⋯ xₗ. e₁ t₁ ⋯ tₖ = e₂ x₁ ⋯ xₘ`
   Note that universe polymorphism is not supported
 
   If successful, return
-    `(fun x₁ ⋯ xₗ => Eq.refl (e₁ x₁ ⋯ xₘ), ∀ x₁ ⋯ xₗ. e₁ x₁ ⋯ xₘ = e₂ t₁ ⋯ tₖ)`\
+    `(fun x₁ ⋯ xₗ => Eq.refl (e₂ x₁ ⋯ xₘ), ∀ x₁ ⋯ xₗ. e₁ t₁ ⋯ tₖ = e₂ x₁ ⋯ xₘ)`\
   Otherwise, return `.none`
 -/
-def Expr.instanceOf? (e₁ e₂ : Expr) : MetaM (Option (Expr × Expr)) := do
+def Expr.instanceOf? (e₁ : Expr) (params : Array Name) (e₂ : Expr) : MetaM (Option (Expr × Expr × Array Name)) := do
+  let e₁ := e₁.instantiateLevelParamsArray params (← params.mapM (fun _ => Meta.mkFreshLevelMVar))
   let ty₁ ← Meta.inferType e₁
   let ty₂ ← Meta.inferType e₂
-  Meta.forallTelescope ty₁ fun xs _ => do
-    let (ms, _, _) ← Meta.forallMetaTelescope ty₂
-    let e₁app := mkAppN e₁ xs
-    let e₂app := mkAppN e₂ ms
+  Meta.forallTelescope ty₂ fun xs _ => do
+    let (ms, _, _) ← Meta.forallMetaTelescope ty₁
+    let e₁app := mkAppN e₁ ms
+    let e₂app := mkAppN e₂ xs
+    if !(← Meta.isDefEq (← Meta.inferType e₁app) (← Meta.inferType e₂app)) then
+      return .none
     if ← Meta.isDefEq e₁app e₂app then
-      let e₂app ← instantiateMVars e₂app
-      let (e₂app, s) := AbstractMVars.abstractExprMVars e₂app { mctx := (← getMCtx), lctx := (← getLCtx), ngen := (← getNGen)}
+      let e₁app ← instantiateMVars e₁app
+      let (e₁app, s) := AbstractMVars.abstractExprMVars e₁app { mctx := (← getMCtx), lctx := (← getLCtx), ngen := (← getNGen)}
       setNGen s.ngen; setMCtx s.mctx
       Meta.withLCtx s.lctx (← Meta.getLocalInstances) <| do
-        let proof ← Meta.mkLambdaFVars (xs ++ s.fvars) (← Meta.mkAppM ``Eq.refl #[e₁app])
+        let proof ← Meta.mkLambdaFVars (xs ++ s.fvars) (← Meta.mkAppM ``Eq.refl #[e₂app])
         let eq ← Meta.mkForallFVars (xs ++ s.fvars) (← Meta.mkAppM ``Eq #[e₁app, e₂app])
-        return (proof, eq)
+        return (proof, eq, s.paramNames)
     else
       return .none
 

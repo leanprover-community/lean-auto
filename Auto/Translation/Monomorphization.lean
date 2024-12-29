@@ -16,11 +16,13 @@ initialize
   registerTraceClass `auto.mono
   registerTraceClass `auto.mono.match
   registerTraceClass `auto.mono.match.verbose
+  registerTraceClass `auto.mono.fvarRepFact
   registerTraceClass `auto.mono.printLemmaInst
   registerTraceClass `auto.mono.printConstInst
   registerTraceClass `auto.mono.printResult
   registerTraceClass `auto.mono.printInputLemmas
   registerTraceClass `auto.mono.ciInstDefEq
+  registerTraceClass `auto.mono.termLikeDefEq
 
 register_option auto.mono.saturationThreshold : Nat := {
   defValue := 1024
@@ -31,6 +33,38 @@ register_option auto.mono.saturationThreshold : Nat := {
 register_option auto.mono.recordInstInst : Bool := {
   defValue := false
   descr := "Whether to record instances of constants with the `instance` attribute"
+}
+
+register_option auto.mono.ciInstDefEq.mode : Meta.TransparencyMode := {
+  defValue := .default
+  descr := "Transparency level used when collecting definitional equality" ++
+    " arising from instance relations between `ConstInst`s"
+}
+
+register_option auto.mono.ciInstDefEq.maxHeartbeats : Nat := {
+  defValue := 2048
+  descr := "Heartbeats allocated to each unification of constant instance"
+}
+
+register_option auto.mono.termLikeDefEq.mode : Meta.TransparencyMode := {
+  defValue := .default
+  descr := "Transparency level used when collecting definitional equalities" ++
+    " between term-like subterms"
+}
+
+register_option auto.mono.termLikeDefEq.maxHeartbeats : Nat := {
+  defValue := 2048
+  descr := "Heartbeats allocated to each unification of term-like expression"
+}
+
+register_option auto.mono.tyRed.mode : Meta.TransparencyMode := {
+  defValue := .reducible
+  descr := "Transparency level used when reducing types"
+}
+
+register_option auto.mono.tyDefEq.mode : Meta.TransparencyMode := {
+  defValue := .default
+  descr := "Transparency level used when testing definitional equality of types"
 }
 
 namespace Auto
@@ -463,6 +497,7 @@ where
         return false
       leadingForallQuasiMonomorphicAux (fvars.push xid)  bodyi
   | _ => return true
+
 /--
   Test whether a lemma is type monomorphic && universe monomorphic
     By universe monomorphic we mean `lem.params = #[]`
@@ -509,6 +544,8 @@ structure State where
   -- During initialization, we supply an array `lemmas` of lemmas
   --   `liArr[i]` are instances of `lemmas[i]`.
   lisArr : Array LemmaInsts            := #[]
+  -- Definitional equalities from instance relations between `ConstInst`s
+  ciInstDefEqs : Array LemmaInst       := #[]
   -- The `Nat` in `LemmaInst × Nat` indicates the `LemmaInst`'s
   --   position in ``lisArr``
   active : Std.Queue (ConstInst ⊕ (LemmaInst × Nat)) := Std.Queue.empty
@@ -545,11 +582,69 @@ def processConstInst (ci : ConstInst) : MonoM Unit := do
   -- Insert `ci` into `activeCi` so that we can later match on it
   setActive ((← getActive).enqueue (.inl ci))
 
+partial def termLikeSubexprs (bvars : Array Expr) : Expr → MetaM (Array Expr)
+| e@(.lam _ _ _ _) =>
+  Meta.lambdaBoundedTelescope e 1 fun xs b => termLikeSubexprs (bvars ++ xs) b
+| e@(.forallE _ ty body _) => do
+  if body.hasLooseBVar 0 then
+    Meta.forallBoundedTelescope e (.some 1) fun xs b => termLikeSubexprs (bvars ++ xs) b
+  else
+    let mut ret ← termLikeSubexprs bvars (body.instantiate1 (.fvar ⟨`dummy⟩))
+    if (← Meta.isProp ty) then
+      ret := ret ++ (← termLikeSubexprs bvars ty)
+    return ret
+| e@(.app _ _) => do
+  let fn := e.getAppFn
+  let args := e.getAppArgs
+  let mut ret := #[]
+  if fn.constName? == .some ``Eq then
+    for arg in args[1:] do
+      ret := ret ++ (← termLikeSubexprs bvars arg)
+    return ret
+  if fn.constName? == .some ``Not then
+    if let #[body] := args then
+      return ← termLikeSubexprs bvars body
+  if fn.constName? == .some ``Iff || fn.constName? == .some ``And || fn.constName? == .some ``Or then
+    for arg in args do
+      ret := ret ++ (← termLikeSubexprs bvars arg)
+    return ret
+  return #[← Meta.mkLambdaFVars (usedOnly := true) bvars e]
+| e => return #[← Meta.mkLambdaFVars (usedOnly := true) bvars e]
+
+def termLikeDefEqDefEqs (lemmas : Array Lemma) : MetaM (Array Lemma) := do
+  let nses := (← lemmas.mapM (fun lem => do
+    let subs ← termLikeSubexprs #[] lem.type
+    return subs.map (fun e => (e, lem.params)))).flatMap id
+  let nses := nses.map (fun (e, params) =>
+    let params := params.filter (fun n => (Std.HashSet.ofArray (collectLevelParams {} e).params).contains n)
+    (e, params))
+  let mut ret := #[]
+  let mode := auto.mono.termLikeDefEq.mode.get (← getOptions)
+  let heartbeats := auto.mono.termLikeDefEq.maxHeartbeats.get (← getOptions)
+  for ((n₁, params₁), idx₁) in nses.zipWithIndex do
+    if n₁.isLambda || params₁.size != 0 then continue
+    for ((n₂, params₂), idx₂) in nses.zipWithIndex do
+      if idx₁ >= idx₂ then continue
+        let computation := Meta.withNewMCtxDepth <| Meta.withTransparency mode <| Expr.instanceOf? n₂ params₂ n₁
+        let computation := Meta.runtimeExToExcept <| Meta.withMaxHeartbeats heartbeats <| computation
+        if let .ok (.some (proof, eq, params)) ← computation then
+          let eq := Expr.eraseMData (← Core.betaReduce eq)
+          let eq ← Meta.transform eq (pre := fun e => do return .continue (← unfoldProj e))
+          let_expr Eq _ lhs rhs := eq | continue
+          if lhs == rhs then
+            continue
+          trace[auto.mono.termLikeDefEq] "{eq}"
+          ret := ret.push ⟨⟨proof, eq, .leaf "termLikeDefEq"⟩, params⟩
+  return ret
+
 def initializeMonoM (lemmas : Array Lemma) : MonoM Unit := do
+  let lemmas := lemmas ++ (← termLikeDefEqDefEqs lemmas)
   let lemmaInsts ← liftM <| lemmas.mapM (fun lem => do
     let li ← LemmaInst.ofLemmaHOL lem
     trace[auto.mono.printLemmaInst] "New {li}"
     return li)
+  for (li, idx) in lemmaInsts.zipWithIndex do
+    setActive ((← getActive).enqueue (.inr (li, idx)))
   let lemmaInsts := lemmaInsts.map (fun x => #[x])
   setLisArr lemmaInsts
   for lem in lemmas do
@@ -588,6 +683,7 @@ def saturate : MonoM Unit := do
       return
     match ← dequeueActive? with
     | .some (.inl ci) =>
+      generateCiInstDefEq ci
       let lisArr ← getLisArr
       trace[auto.mono.match] "Matching against {ci}"
       for (lis, idx) in lisArr.zipWithIndex do
@@ -636,60 +732,61 @@ where
       cnt := cnt + 1
       if (← saturationThresholdReached? cnt) then
         return (newLis, cnt)
+      -- Attempt to instantiate instance arguments and get monomoprhic lemma instance
+      let matchLi := (← LemmaInst.monomorphic? matchLi).getD matchLi
       let new? ← newLis.newInst? matchLi
       -- A new instance of an assumption
       if new? then
         trace[auto.mono.printLemmaInst] "New {matchLi}"
         newLis := newLis.push matchLi
         setActive ((← getActive).enqueue (.inr (matchLi, idx)))
-        let newCis ← collectConstInsts matchLi.params #[] matchLi.type
-        for newCi in newCis do
-          processConstInst newCi
+        collectAndProcessConstInsts matchLi
+        if let .some monoLi ← LemmaInst.monomorphic? matchLi then
+          if monoLi != matchLi && (← LemmaInsts.newInst? newLis monoLi) then
+            newLis := newLis.push monoLi
+            setActive ((← getActive).enqueue (.inr (monoLi, idx)))
+            collectAndProcessConstInsts monoLi
     return (newLis, cnt)
-
-/-- Remove non-monomorphic lemma instances -/
-def postprocessSaturate : MonoM LemmaInsts := do
-  let lisArr ← getLisArr
-  let lisArr ← liftM <| lisArr.mapM (fun lis => lis.filterMapM LemmaInst.monomorphic?)
-  let lis := lisArr.flatMap id
-  -- Since typeclasses might have been instantiated during `LemmaInst.monomorphic?`,
-  --   we need to run ``collectConstInst`` again. Also, this must precede
-  --   collecting definitional equalities related to `ConstInst`s
-  refreshConstInsts lis
-  -- Collect definitional equalities related to `ConstInst`s
-  -- **TODO:** Collect definitional equalities during monomorphization
-  --   and make uses of the `active` field. This is because new `ConstInst`s
-  --   might be generated during collection of definitional equalities,
-  --   and they may produce more definitional equalities
-  let mut cieqs : Array LemmaInst := #[]
-  let cis := ((← getCiMap).toArray.map Prod.snd).flatMap id
-  for (ci₁, idx₁) in cis.zipWithIndex do
-    for (ci₂, idx₂) in cis.zipWithIndex do
-      if idx₁ < idx₂ && !(isTrigger ci₁.head) && !(isTrigger ci₂.head) then
-        if let .some (proof, eq) ← bidirectionalOfInstanceEq ci₁ ci₂ then
+  /-
+    This `ci` comes from `active`, so it is already canonicalized
+  -/
+  generateCiInstDefEq (ci : ConstInst) : MonoM Unit := do
+    if isTrigger ci.head then
+      return
+    let cis := ((← getCiMap).toArray.map Prod.snd).flatMap id
+    for (ci', _) in cis.zipWithIndex do
+      if (← ci.toExpr) != (← ci'.toExpr) && !(isTrigger ci'.head) then
+        if let .some (proof, eq, _) ← bidirectionalOfInstanceEq ci ci' then
           let eq := Expr.eraseMData (← Core.betaReduce eq)
           let eq ← Meta.transform eq (pre := fun e => do return .continue (← unfoldProj e))
-          let newLi ← LemmaInst.ofLemma ⟨⟨proof, eq, .leaf "ciInstDefEq"⟩, #[]⟩
-          cieqs := cieqs.push newLi
           trace[auto.mono.ciInstDefEq] "{eq}"
-  -- Since new `ConstInst`s might be produced during definitional equality
-  --   generation, we need to ``collectConstInst`` again
-  refreshConstInsts cieqs
-  return lis ++ cieqs
-where
-  refreshConstInsts (lis : LemmaInsts) : MonoM Unit :=
-    for li in lis do
-      let newCis ← collectConstInsts li.params #[] li.type
-      for newCi in newCis do
-        processConstInst newCi
-  bidirectionalOfInstanceEq (ci₁ ci₂ : ConstInst) : MetaM (Option (Expr × Expr)) :=
-    Meta.withNewMCtxDepth <| Meta.withDefault <| do
-      return (← Expr.instanceOf? (← ci₁.toExpr) (← ci₂.toExpr)) <|>
-        (← Expr.instanceOf? (← ci₂.toExpr) (← ci₁.toExpr))
+          let newLi ← LemmaInst.ofLemma ⟨⟨proof, eq, .leaf "ciInstDefEq"⟩, #[]⟩
+          setCiInstDefEqs ((← getCiInstDefEqs).push newLi)
+          collectAndProcessConstInsts newLi
+  collectAndProcessConstInsts (li : LemmaInst) : MonoM Unit := do
+    let newCis ← collectConstInsts li.params #[] li.type
+    for newCi in newCis do
+      processConstInst newCi
+  bidirectionalOfInstanceEq (ci₁ ci₂ : ConstInst) : MetaM (Option (Expr × Expr × Array Name)) := do
+    let mode := auto.mono.ciInstDefEq.mode.get (← getOptions)
+    let heartbeats := auto.mono.ciInstDefEq.maxHeartbeats.get (← getOptions)
+    let result ← Meta.runtimeExToExcept <| Meta.withMaxHeartbeats heartbeats <| Meta.withNewMCtxDepth <| Meta.withTransparency mode <| do
+      return (← Expr.instanceOf? (← ci₁.toExpr) #[] (← ci₂.toExpr)) <|>
+        (← Expr.instanceOf? (← ci₂.toExpr) #[] (← ci₁.toExpr))
+    match result with
+    | .ok r => return r
+    | .error _ => return .none
   isTrigger (cih : CiHead) :=
     match cih with
     | .const name _ => name == ``SMT.Attribute.trigger
     | _ => false
+
+/-- Remove non-monomorphic lemma instances -/
+def getAllMonoLemmaInsts : MonoM LemmaInsts := do
+  let lisArr ← getLisArr
+  let lisArr ← liftM <| lisArr.mapM (fun lis => lis.filterMapM LemmaInst.monomorphic?)
+  let lis := lisArr.flatMap id
+  return lis ++ (← getCiInstDefEqs)
 
 /-- Collect inductive types -/
 def collectMonoMutInds : MonoM (Array (Array SimpleIndVal)) := do
@@ -747,7 +844,8 @@ namespace FVarRep
 
   /-- Return : (reduce(e), whether reduce(e) contain bfvars) -/
   def processType (e : Expr) : FVarRepM (Expr × Bool) := do
-    let e ← MetaState.runMetaM <| prepReduceExpr e
+    let mode := auto.mono.tyRed.mode.get (← getOptions)
+    let e ← MetaState.runMetaM <| prepReduceExprWithMode e mode
     let bfvarSet ← getBfvarSet
     -- If `e` contains no bound variables
     if !e.hasAnyFVar bfvarSet.contains then
@@ -771,7 +869,8 @@ namespace FVarRep
       if (← getTyCanMap).contains e then
         return
       for (e', ec) in (← getTyCanMap).toList do
-        if ← MetaState.isDefEqRigid e e' then
+        let mode := auto.mono.tyDefEq.mode.get (← getOptions)
+        if ← MetaState.isDefEqRigidWith e e' mode then
           setTyCanMap ((← getTyCanMap).insert e ec)
           return
       setTyCanMap ((← getTyCanMap).insert e e)
@@ -802,7 +901,9 @@ namespace FVarRep
     let m₃ := m!"· Type argument with bound variables, e.g. `@Fin.add (n + 2) a b` where `n` is a bound variable"
     let m₄ := m!"· λ binders whose type contain bound variables, e.g. `fun (x : a) => x` where `a` is a bound variable"
     let m₅ := m!"· Other (TODO)"
-    m₁ ++ "\n" ++ m₂ ++ "\n" ++ m₃ ++ "\n" ++ m₄ ++ "\n" ++ m₅
+    let m₆ := m!"`set_option auto.mono.ignoreNonQuasiHigherOrder true` will instruct Lean-auto to ignore " ++
+              m!"all the `LemmaInst`s which contain expressions that cannot be handeled by the current procedure"
+    m₁ ++ "\n" ++ m₂ ++ "\n" ++ m₃ ++ "\n" ++ m₄ ++ "\n" ++ m₅ ++ "\n" ++ m₆
 
   def unknownExpr2FVar (e : Expr) : FVarRepM (Expr ⊕ MessageData) := do
     let bfvarSet ← getBfvarSet
@@ -949,7 +1050,7 @@ def intromono (lemmas : Array Lemma) (mvarId : MVarId) : MetaM MVarId := do
   let monoMAction : MonoM LemmaInsts := (do
     initializeMonoM lemmas
     saturate
-    let monoLemmas ← postprocessSaturate
+    let monoLemmas ← getAllMonoLemmaInsts
     trace[auto.mono] "Monomorphization took {(← IO.monoMsNow) - startTime}ms"
     return monoLemmas)
   let (monoLemmas, _) ← monoMAction.run {}
@@ -979,7 +1080,7 @@ where
     let startTime ← IO.monoMsNow
     initializeMonoM lemmas
     saturate
-    let monoLemmas ← postprocessSaturate
+    let monoLemmas ← getAllMonoLemmaInsts
     let monoIndVals ← collectMonoMutInds
     trace[auto.mono] "Monomorphization of lemmas took {(← IO.monoMsNow) - startTime}ms"
     return (monoLemmas, monoIndVals)
@@ -1010,6 +1111,7 @@ where
     let polyVal := Std.HashMap.ofList (exlis ++ cilis)
     return (s.ffvars, Reif.State.mk uvalids polyVal s.tyCanMap inhs monoIndVals none)
   fvarRepMFactAction (lis : Array LemmaInst) : FVarRep.FVarRepM (Array UMonoFact) := lis.filterMapM (fun li => do
+    trace[auto.mono.fvarRepFact] "{li.type}"
     let liTypeRep? ← FVarRep.replacePolyWithFVar li.type
     match liTypeRep? with
     | .inl liTypeRep => return .some ⟨li.proof, liTypeRep, li.deriv⟩
