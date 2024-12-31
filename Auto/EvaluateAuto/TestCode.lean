@@ -70,9 +70,11 @@ private def runAutoOnAutoLemma (declName? : Option Name) (lem : Auto.Lemma) : Co
       Meta.mkLambdaFVars #[negGoalFVar] proofOfFalse
     let goal := mkApp2 (.const ``Classical.byContradiction []) body negGoalImpFalse
     Meta.mkLambdaFVars bs goal
+  -- Align with tactic elaboration (see `Lean.Elab.Term.TermElabM.run`)
+  let metaContext : Meta.Context := { config := Elab.Term.setElabConfig {} }
   let result : Expr ⊕ Exception ←
     Lean.Core.tryCatchRuntimeEx
-      (do let autoProof ← Meta.MetaM.run' autoProofFn; return .inl autoProof)
+      (do let autoProof ← Meta.MetaM.run' autoProofFn (ctx := metaContext); return .inl autoProof)
       (fun e => return .inr e)
   match result with
   | .inl autoProof =>
