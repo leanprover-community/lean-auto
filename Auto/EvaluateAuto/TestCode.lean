@@ -1,7 +1,9 @@
 import Lean
+import Auto.EvaluateAuto.Result
 import Auto.EvaluateAuto.ConstAnalysis
 import Auto.EvaluateAuto.EnvAnalysis
 import Auto.EvaluateAuto.NameArr
+import Auto.EvaluateAuto.CommandAnalysis
 import Auto.Tactic
 
 open Lean Auto
@@ -12,28 +14,6 @@ initialize
   registerTraceClass `auto.eval.printResult
 
 namespace EvalAuto
-
-inductive Result
-  | success
-  | nonProp
-  | typeCheckFail
-  | typeUnequal
-  | autoException (e : Exception)
-
-instance : ToMessageData Result where
-  toMessageData : Result → MessageData
-  | .success         => "Result.success"
-  | .nonProp         => "Result.nonProp"
-  | .typeCheckFail   => "Result.typeCheckFail"
-  | .typeUnequal     => "Result.typeUnequal"
-  | .autoException e => m!"Result.autoException ::\n{e.toMessageData}"
-
-def Result.concise : Result → String
-| .success => "S"
-| .nonProp => "N"
-| .typeCheckFail => "F"
-| .typeUnequal => "U"
-| .autoException _ => "E"
 
 inductive SolverConfig where
   | native
@@ -102,7 +82,7 @@ private def runAutoOnAutoLemma (declName? : Option Name) (lem : Auto.Lemma) : Co
       | Except.ok true => return .success
       | _ => return .typeUnequal
     | Except.error _ => return .typeCheckFail
-  | .inr e => return .autoException e
+  | .inr e => return .exception e
 
 /--
   Run `Lean-auto` on the type of ``name``, using premises collected

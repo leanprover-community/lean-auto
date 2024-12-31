@@ -50,6 +50,17 @@ def allHumanTheorems : CoreM (Array Name) := do
   let allHumanTheorems ← allConsts.filterM Name.isHumanTheorem
   return Array.mk allHumanTheorems
 
+def Name.isFromPackage (name : Name) (pkgPrefix : String) : CoreM Bool := do
+  let .some mod ← Lean.findModuleOf? name
+    | throwError "{decl_name%} :: Cannot find {name}"
+  return mod.components[0]? == .some (.str .anonymous pkgPrefix)
+
+def allHumanTheoremsFromPackage (pkgPrefix : String) : CoreM (Array Name) := do
+  let allConsts := (← getEnv).constants.toList.map Prod.fst
+  let allHumanTheoremsFromPackage ← allConsts.filterM (fun n =>
+    return (← Name.isHumanTheorem n) && (← Name.isFromPackage n pkgPrefix))
+  return Array.mk allHumanTheoremsFromPackage
+
 /-- Return the theorems that occurs in an expression -/
 def Expr.getUsedTheorems (e : Expr) : CoreM (Array Name) :=
   e.getUsedConstants.filterM Name.isTheorem
