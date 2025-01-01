@@ -9,6 +9,25 @@ namespace Auto
 
 def Meta.isDefEqD (t s : Expr) : MetaM Bool := Meta.withDefault <| Meta.isDefEq t s
 
+def Meta.whnfNondependentForall (e : Expr) : MetaM Expr := do
+  let e' ← Meta.whnf e
+  match e' with
+  | .forallE _ _ body _ =>
+    if body.hasLooseBVar 0 then
+      return e
+    else
+      return e'
+  | _ => return e
+
+partial def Meta.normalizeNondependentForall (e : Expr) : MetaM Expr := do
+  let e' ← whnfNondependentForall e
+  match e' with
+  | .forallE name ty body bi =>
+    let ty' ← normalizeNondependentForall ty
+    let body' ← normalizeNondependentForall body
+    return .forallE name ty' body' bi
+  | _ => return e
+
 def Meta.withoutMVarAssignments (m : MetaM α) : MetaM α := do
   let mctx ← getMCtx
   Meta.withMCtx {mctx with eAssignment := {}, lAssignment := {}} m

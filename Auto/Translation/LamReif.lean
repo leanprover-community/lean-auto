@@ -1011,7 +1011,7 @@ private def reifTypeAux : Expr → ReifM LamSort
 | e => processTypeExpr e
 
 def reifType (e : Expr) : ReifM LamSort := do
-  let e ← prepReduceExpr e
+  let e ← prepReduceTypeForall e
   reifTypeAux e
 
 def newTermExpr (e : Expr) : ReifM LamTerm := do

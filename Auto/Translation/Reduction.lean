@@ -1,5 +1,6 @@
 import Lean
 import Auto.Lib.ExprExtra
+import Auto.Lib.MetaExtra
 open Lean Meta
 
 private instance : ToString TransparencyMode where
@@ -21,6 +22,16 @@ private instance : Lean.KVMap.Value TransparencyMode where
 register_option auto.redMode : TransparencyMode := {
   defValue := .reducible
   descr := "TransparencyMode used when reducing collected facts"
+}
+
+register_option auto.mono.tyRed.mode : Meta.TransparencyMode := {
+  defValue := .reducible
+  descr := "Transparency level used when reducing types. The default mode `reducible` does nothing."
+}
+
+register_option auto.mono.tyDefEq.mode : Meta.TransparencyMode := {
+  defValue := .default
+  descr := "Transparency level used when testing definitional equality of types"
 }
 
 namespace Auto
@@ -78,5 +89,10 @@ def prepReduceDefeq (type : Expr) : MetaM (Option Expr) := do
     let rhs ← prepReduceExpr rhs
     let eq' := Lean.mkApp3 (.const ``Eq lvls) ty lhs rhs
     return .some (← mkForallFVars xs eq')
+
+def prepReduceTypeForall (e : Expr) : MetaM Expr := do
+  let e ← prepReduceExpr e
+  let mode := auto.mono.tyRed.mode.get (← getOptions)
+  Meta.withTransparency mode <| Meta.normalizeNondependentForall e
 
 end Auto
