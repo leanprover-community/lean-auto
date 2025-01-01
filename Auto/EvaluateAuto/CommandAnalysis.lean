@@ -54,6 +54,8 @@ open Elab Tactic in
 def runTacticAtConstantDeclaration
   (name : Name) (searchPath : SearchPath)
   (tactic : ConstantInfo → TacticM Unit) : CoreM Result := do
+  if ← isInitializerExecutionEnabled then
+    throwError "{decl_name%} :: Running this function with execution of `initialize` code enabled is unsafe"
   let .some modName ← Lean.findModuleOf? name
     | throwError "{decl_name%} :: Cannot find constant {name}"
   let .some uri ← Server.documentUriFromModule searchPath modName
