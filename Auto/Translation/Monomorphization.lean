@@ -57,16 +57,6 @@ register_option auto.mono.termLikeDefEq.maxHeartbeats : Nat := {
   descr := "Heartbeats allocated to each unification of term-like expression"
 }
 
-register_option auto.mono.tyRed.mode : Meta.TransparencyMode := {
-  defValue := .reducible
-  descr := "Transparency level used when reducing types"
-}
-
-register_option auto.mono.tyDefEq.mode : Meta.TransparencyMode := {
-  defValue := .default
-  descr := "Transparency level used when testing definitional equality of types"
-}
-
 namespace Auto
 
 inductive MonoMode where
@@ -844,8 +834,7 @@ namespace FVarRep
 
   /-- Return : (reduce(e), whether reduce(e) contain bfvars) -/
   def processType (e : Expr) : FVarRepM (Expr × Bool) := do
-    let mode := auto.mono.tyRed.mode.get (← getOptions)
-    let e ← MetaState.runMetaM <| prepReduceExprWithMode e mode
+    let e ← MetaState.runMetaM <| prepReduceTypeForall e
     let bfvarSet ← getBfvarSet
     -- If `e` contains no bound variables
     if !e.hasAnyFVar bfvarSet.contains then

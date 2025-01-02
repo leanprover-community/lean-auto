@@ -1,7 +1,9 @@
 import Lean
+import Auto.EvaluateAuto.Result
 import Auto.EvaluateAuto.ConstAnalysis
 import Auto.EvaluateAuto.EnvAnalysis
 import Auto.EvaluateAuto.NameArr
+import Auto.EvaluateAuto.CommandAnalysis
 import Auto.Tactic
 
 open Lean Auto
@@ -12,28 +14,6 @@ initialize
   registerTraceClass `auto.eval.printResult
 
 namespace EvalAuto
-
-inductive Result
-  | success
-  | nonProp
-  | typeCheckFail
-  | typeUnequal
-  | autoException (e : Exception)
-
-instance : ToMessageData Result where
-  toMessageData : Result → MessageData
-  | .success         => "Result.success"
-  | .nonProp         => "Result.nonProp"
-  | .typeCheckFail   => "Result.typeCheckFail"
-  | .typeUnequal     => "Result.typeUnequal"
-  | .autoException e => m!"Result.autoException ::\n{e.toMessageData}"
-
-def Result.concise : Result → String
-| .success => "S"
-| .nonProp => "N"
-| .typeCheckFail => "F"
-| .typeUnequal => "U"
-| .autoException _ => "E"
 
 inductive SolverConfig where
   | native
@@ -90,9 +70,11 @@ private def runAutoOnAutoLemma (declName? : Option Name) (lem : Auto.Lemma) : Co
       Meta.mkLambdaFVars #[negGoalFVar] proofOfFalse
     let goal := mkApp2 (.const ``Classical.byContradiction []) body negGoalImpFalse
     Meta.mkLambdaFVars bs goal
+  -- Align with tactic elaboration (see `Lean.Elab.Term.TermElabM.run`)
+  let metaContext : Meta.Context := { config := Elab.Term.setElabConfig {} }
   let result : Expr ⊕ Exception ←
     Lean.Core.tryCatchRuntimeEx
-      (do let autoProof ← Meta.MetaM.run' autoProofFn; return .inl autoProof)
+      (do let autoProof ← Meta.MetaM.run' autoProofFn (ctx := metaContext); return .inl autoProof)
       (fun e => return .inr e)
   match result with
   | .inl autoProof =>
@@ -102,7 +84,7 @@ private def runAutoOnAutoLemma (declName? : Option Name) (lem : Auto.Lemma) : Co
       | Except.ok true => return .success
       | _ => return .typeUnequal
     | Except.error _ => return .typeCheckFail
-  | .inr e => return .autoException e
+  | .inr e => return .exception e
 
 /--
   Run `Lean-auto` on the type of ``name``, using premises collected
