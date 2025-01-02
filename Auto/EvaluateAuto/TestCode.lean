@@ -164,13 +164,62 @@ def runAutoOnConsts (config : EvalConfig) (names : Array Name) : CoreM Unit := d
     for ((name, result), idx) in (names.zip results).zipWithIndex do
       fhandle.putStrLn s!"{idx} {result.concise} {name}"
 
-def namesFileEval (cfg : EvalConfig) (fname : String) : CoreM Unit := do
+def runAutoOnNamesFile (cfg : EvalConfig) (fname : String) : CoreM Unit := do
   let names ← NameArray.load fname
   runAutoOnConsts cfg names
 
-def randEval (cfg : EvalConfig) (n : Nat) : CoreM Unit := do
-  let hthms ← allHumanTheorems
-  let asel ← Array.randPick hthms n
-  runAutoOnConsts cfg asel
+open Elab Tactic
+def useRfl : TacticM Unit := do evalTactic (← `(tactic| intros; rfl))
+
+def useSimp : TacticM Unit := do evalTactic (← `(tactic| intros; simp))
+
+def useSimpAll : TacticM Unit := do evalTactic (← `(tactic| intros; simp_all))
+
+def useSimpAllWithPremises (ci : ConstantInfo) : TacticM Unit := do
+  let .some proof := ci.value?
+    | throwError "{decl_name%} :: ConstantInfo of {ci.name} has no value"
+  let usedThmNames ← (← Expr.getUsedTheorems proof).filterM (fun name =>
+    return !(← Name.onlyLogicInType name))
+  let usedThmTerms : Array Term := usedThmNames.map (fun name => ⟨mkIdent name⟩)
+  evalTactic (← `(tactic| intros; simp_all [$[$usedThmTerms:term],*]))
+
+private def mkAesopStx (addClauses : Array Syntax) : TSyntax `tactic :=
+  let synth : SourceInfo := SourceInfo.synthetic default default false
+  TSyntax.mk (
+    Syntax.node synth `Aesop.Frontend.Parser.aesopTactic
+      #[Syntax.atom synth "aesop", Syntax.node synth `null addClauses]
+  )
+
+-- Only guaranteed to work for `aesop @ Lean v4.14.0`
+def useAesop : TacticM Unit := evalTactic (mkAesopStx #[])
+
+-- Only guaranteed to work for `aesop @ Lean v4.14.0`
+def useAesopWithPremises (ci : ConstantInfo) : TacticM Unit := do
+  let .some proof := ci.value?
+    | throwError "{decl_name%} :: ConstantInfo of {ci.name} has no value"
+  let usedThmNames ← (← Expr.getUsedTheorems proof).filterM (fun name =>
+    return !(← Name.onlyLogicInType name))
+  let usedThmIdents := usedThmNames.map Lean.mkIdent
+  let addClauses := usedThmIdents.map mkAddIdentStx
+  let aesopStx := mkAesopStx addClauses
+  evalTactic aesopStx
+where
+  synth : SourceInfo := SourceInfo.synthetic default default false
+  mkAddIdentStx (ident : Ident) : Syntax :=
+    Syntax.node synth `Aesop.Frontend.Parser.«tactic_clause(Add_)»
+      #[Syntax.atom synth "(", Syntax.atom synth "add",
+        Syntax.node synth `null
+          #[Syntax.node synth `Aesop.Frontend.Parser.rule_expr___
+            #[Syntax.node synth `Aesop.Frontend.Parser.feature_
+              #[Syntax.node synth `Aesop.Frontend.Parser.phaseUnsafe
+                #[Syntax.atom synth "unsafe"]
+              ],
+              Syntax.node synth `Aesop.Frontend.Parser.rule_expr_
+                #[Lean.Syntax.node synth `Aesop.Frontend.Parser.featIdent #[ident]]
+            ]
+          ],
+          Syntax.atom synth ")"
+      ]
+
 
 end EvalAuto
