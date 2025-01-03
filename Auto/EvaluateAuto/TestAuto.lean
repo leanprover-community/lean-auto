@@ -3,7 +3,6 @@ import Auto.EvaluateAuto.Result
 import Auto.EvaluateAuto.ConstAnalysis
 import Auto.EvaluateAuto.EnvAnalysis
 import Auto.EvaluateAuto.NameArr
-import Auto.EvaluateAuto.CommandAnalysis
 import Auto.Tactic
 
 open Lean Auto

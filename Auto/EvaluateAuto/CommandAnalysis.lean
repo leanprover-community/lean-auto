@@ -4,9 +4,27 @@ import Auto.EvaluateAuto.ConstAnalysis
 import Auto.EvaluateAuto.Result
 open Lean
 
+register_option auto.evalAuto.ensureAesop : Bool := {
+  defValue := false
+  descr := "Enable/Disable enforcement of importing `aesop`"
+}
+
 namespace EvalAuto
 
 open Elab Frontend
+
+def processHeaderEnsuring (header : Syntax) (opts : Options) (messages : MessageLog)
+    (inputCtx : Parser.InputContext) (trustLevel : UInt32 := 0) (leakEnv := false) (ensuring : Array Import := #[])
+    : IO (Environment × MessageLog) := do
+  try
+    let env ← importModules (leakEnv := leakEnv) (headerToImports header ++ ensuring) opts trustLevel
+    pure (env, messages)
+  catch e =>
+    let env ← mkEmptyEnvironment
+    let spos := header.getPos?.getD 0
+    let pos  := inputCtx.fileMap.toPosition spos
+    pure (env, messages.add { fileName := inputCtx.fileName, data := toString e, pos := pos })
+
 def runWithEffectOfCommandsCore
   (cnt? : Option Nat)
   (action : Context → State → State → ConstantInfo → IO (Option α)) : FrontendM (Array α) := do
@@ -40,40 +58,22 @@ def runWithEffectOfCommandsCore
 -/
 def runWithEffectOfCommands
   (input : String) (fileName : String) (opts : Options := {}) (cnt? : Option Nat)
-  (action : Context → State → State → ConstantInfo → IO (Option α)) : IO (Array α) := do
+  (action : Context → State → State → ConstantInfo → IO (Option α)) : CoreM (Array α) := do
   let inputCtx := Parser.mkInputContext input fileName
   let (header, parserState, messages) ← Parser.parseHeader inputCtx
-  let (env, messages) ← processHeader header opts messages inputCtx
+  let mut ensuring := #[]
+  if auto.evalAuto.ensureAesop.get (← getOptions) then
+    ensuring := ensuring.push { module := `Aesop }
+  let (env, messages) ← processHeaderEnsuring header opts messages inputCtx (ensuring := ensuring)
   let commandState := Command.mkState env messages opts
   (runWithEffectOfCommandsCore cnt? action { inputCtx }).run'
     { commandState := commandState, parserState := parserState, cmdPos := parserState.pos }
 
-open Elab Tactic in
+open Tactic in
 /--
-  Run `tactic` on a metavariable with type `e` and obtain the result
--/
-def Result.ofTacticOnExpr (e : Expr) (tactic : TacticM Unit) : TermElabM Result := do
-  let .mvar mid ← Meta.mkFreshExprMVar e
-    | throwError "{decl_name%} : Unexpected error"
-  let result : List MVarId ⊕ Exception ← tryCatchRuntimeEx
-    (do let goals ← Term.TermElabM.run' (Tactic.run mid tactic) {}; return .inl goals)
-    (fun e => return .inr e)
-  match result with
-  | .inl goals =>
-    if goals.length >= 1 then
-      return .subGoals
-    let proof ← instantiateMVars (.mvar mid)
-    match Kernel.check (← getEnv) {} proof with
-    | Except.ok autoProofType =>
-      match Kernel.isDefEq (← getEnv) {} autoProofType e with
-      | Except.ok true => return .success
-      | _ => return .typeUnequal
-    | Except.error _ => return .typeCheckFail
-  | .inr e => return (.exception e)
-
-open Elab Tactic in
-/--
-  Note: Use `initSrcSearchPath` to get SearchPath of Lean4's builtin source files
+  Use `runWithEffectOfCommands` to run tactics at the place just before
+  the command that created the constant `name`\
+  Note: Use `initSrcSearchPath` to get SearchPath of source files
 -/
 def runTacticsAtConstantDeclaration
   (name : Name) (searchPath : SearchPath)
@@ -103,72 +103,31 @@ def runTacticsAtConstantDeclaration
     | throwError "{decl_name%} :: Unexpected error"
   return result
 
-section Tactics
-
-  open Elab Tactic
-
-  def useRfl : TacticM Unit := do evalTactic (← `(tactic| intros; rfl))
-
-  def useSimp : TacticM Unit := do evalTactic (← `(tactic| intros; simp))
-
-  def useSimpAll : TacticM Unit := do evalTactic (← `(tactic| intros; simp_all))
-
-  def useSimpAllWithPremises (ci : ConstantInfo) : TacticM Unit := do
-    let .some proof := ci.value?
-      | throwError "{decl_name%} :: ConstantInfo of {ci.name} has no value"
-    let usedThmNames ← (← Expr.getUsedTheorems proof).filterM (fun name =>
-      return !(← Name.onlyLogicInType name))
-    let usedThmTerms : Array Term := usedThmNames.map (fun name => ⟨mkIdent name⟩)
-    evalTactic (← `(tactic| intros; simp_all [$[$usedThmTerms:term],*]))
-
-  private def mkAesopStx (addClauses : Array Syntax) : TSyntax `tactic :=
-    let synth : SourceInfo := SourceInfo.synthetic default default false
-    TSyntax.mk (
-      Syntax.node synth `Aesop.Frontend.Parser.aesopTactic
-        #[Syntax.atom synth "aesop", Syntax.node synth `null addClauses]
-    )
-
-  /--
-    Tactic sequence: `intros; aesop`
-    Only guaranteed to work for `aesop @ Lean v4.14.0`
-  -/
-  def useAesop : TacticM Unit := do
-    let aesopStx := mkAesopStx #[]
-    let stx ← `(tactic|intros; $aesopStx)
-    evalTactic stx
-
-  /--
-    Tactic sequence: `intros; aesop (add unsafe premise₁) ⋯ (add unsafe premiseₙ)`
-    Only guaranteed to work for `aesop @ Lean v4.14.0`
-  -/
-  def useAesopWithPremises (ci : ConstantInfo) : TacticM Unit := do
-    let .some proof := ci.value?
-      | throwError "{decl_name%} :: ConstantInfo of {ci.name} has no value"
-    let usedThmNames ← (← Expr.getUsedTheorems proof).filterM (fun name =>
-      return !(← Name.onlyLogicInType name))
-    let usedThmIdents := usedThmNames.map Lean.mkIdent
-    let addClauses := usedThmIdents.map mkAddIdentStx
-    let aesopStx := mkAesopStx addClauses
-    let stx ← `(tactic|intros; $aesopStx)
-    evalTactic stx
-  where
-    synth : SourceInfo := SourceInfo.synthetic default default false
-    mkAddIdentStx (ident : Ident) : Syntax :=
-      Syntax.node synth `Aesop.Frontend.Parser.«tactic_clause(Add_)»
-        #[Syntax.atom synth "(", Syntax.atom synth "add",
-          Syntax.node synth `null
-            #[Syntax.node synth `Aesop.Frontend.Parser.rule_expr___
-              #[Syntax.node synth `Aesop.Frontend.Parser.feature_
-                #[Syntax.node synth `Aesop.Frontend.Parser.phaseUnsafe
-                  #[Syntax.atom synth "unsafe"]
-                ],
-                Syntax.node synth `Aesop.Frontend.Parser.rule_expr_
-                  #[Lean.Syntax.node synth `Aesop.Frontend.Parser.featIdent #[ident]]
-              ]
-            ],
-            Syntax.atom synth ")"
-        ]
-
-end Tactics
+open Tactic in
+/--
+  Effectively, `runTacticsAtConstantDeclaration` at each constant of the module `modName`\
+  Note: Use `initSrcSearchPath` to get SearchPath of source files
+-/
+def runTacticsAtModule
+  (modName : Name) (searchPath : SearchPath)
+  (tactics : Array (ConstantInfo → TacticM Unit)) : CoreM (Array Result) := do
+  let .some uri ← Server.documentUriFromModule searchPath modName
+    | throwError "{decl_name%} :: Cannot find module {modName}"
+  let .some path := System.Uri.fileUriToPath? uri
+    | throwError "{decl_name%} :: URI {uri} of {modName} is not a file"
+  let path := path.normalize
+  let inputHandle ← IO.FS.Handle.mk path .read
+  let input ← inputHandle.readToEnd
+  let results : Array (Array Result) ← runWithEffectOfCommands input path.toString {} .none (fun ctx st₁ st₂ ci => do
+    let metaAction (tactic : ConstantInfo → TacticM Unit) : MetaM Result :=
+      Term.TermElabM.run' <| Result.ofTacticOnExpr ci.type (tactic ci)
+    let coreAction tactic : CoreM Result := (metaAction tactic).run'
+    let ioAction tactic : IO (Result × _) :=
+      (coreAction tactic).toIO {fileName := path.toString, fileMap := FileMap.ofString input } { env := st₁.commandState.env }
+    let resultsWithState ← tactics.mapM (fun tactic => ioAction tactic)
+    return .some (resultsWithState.map Prod.fst))
+  let #[result] := results
+    | throwError "{decl_name%} :: Unexpected error"
+  return result
 
 end EvalAuto
