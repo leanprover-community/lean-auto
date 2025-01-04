@@ -1,6 +1,11 @@
 import Lean
 open Lean
 
+initialize
+  registerTraceClass `auto.eval.printConfig
+  registerTraceClass `auto.eval.printProblem
+  registerTraceClass `auto.eval.printResult
+
 namespace EvalAuto
 
 inductive Result

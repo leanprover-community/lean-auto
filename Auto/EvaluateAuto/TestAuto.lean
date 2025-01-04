@@ -7,11 +7,6 @@ import Auto.Tactic
 
 open Lean Auto
 
-initialize
-  registerTraceClass `auto.eval.printConfig
-  registerTraceClass `auto.eval.printProblem
-  registerTraceClass `auto.eval.printResult
-
 namespace EvalAuto
 
 inductive SolverConfig where
@@ -27,7 +22,7 @@ instance : ToString SolverConfig where
   | .smt sn       => s!"smt {sn}"
   | .tptp sn path => s!"tptp {sn} {path}"
 
-structure EvalConfig where
+structure EvalAutoConfig where
   /-- Timeout for Lean code (Lean-auto + native provers) -/
   maxHeartbeats : Nat           := 65536
   /-- Timeout for external provers, i.e. TPTP solvers and SMT solvers -/
@@ -37,15 +32,15 @@ structure EvalConfig where
   /-- Optional logfile for saving the result of the evaluation -/
   logFile       : Option String := .none
 
-instance : ToString EvalConfig where
-  toString : EvalConfig → String
+instance : ToString EvalAutoConfig where
+  toString : EvalAutoConfig → String
   | ⟨maxHeartbeats, timeout, solverConfig, logFile⟩ =>
     let logFileStr :=
       match logFile with
       | .some logFile => s!", logFile := {logFile}"
       | .none => ""
     s!"\{maxHeartbeats := {maxHeartbeats}, timeout := {timeout}, " ++
-    s!"solverConfig = {solverConfig}{logFileStr}}"
+    s!"solverConfig := {solverConfig}{logFileStr}}"
 
 /--
   Run `Lean-auto` on `lem.type`, using premises collected from `lem.proof`
@@ -105,17 +100,17 @@ def disableAllSolvers (o : Options) : Options :=
   let o := auto.tptp.set o false
   o
 
-def runAutoOnConsts (config : EvalConfig) (names : Array Name) : CoreM Unit := do
-  let logFileHandle : Option IO.FS.Handle ← config.logFile.mapM (fun fname => IO.FS.Handle.mk fname .write)
+def runAutoOnConsts (config : EvalAutoConfig) (names : Array Name) : CoreM Unit := do
+  let logFileHandle? : Option IO.FS.Handle ← config.logFile.mapM (fun fname => IO.FS.Handle.mk fname .write)
   trace[auto.eval.printConfig] m!"Config = {config}"
-  if let .some fhandle := logFileHandle then
+  if let .some fhandle := logFileHandle? then
     fhandle.putStrLn s!"Config = {config}"
   let startTime ← IO.monoMsNow
   let mut results := #[]
   for name in names do
     let ci ← Name.getCi name decl_name%
     trace[auto.eval.printProblem] m!"Testing || {name} : {ci.type}"
-    if let .some fhandle := logFileHandle then
+    if let .some fhandle := logFileHandle? then
       fhandle.putStrLn ""
       fhandle.putStrLn s!"Testing || {name} : {← (Lean.Meta.ppExpr ci.type).run'}"
     let result : Result ← withCurrHeartbeats <|
@@ -154,16 +149,16 @@ def runAutoOnConsts (config : EvalConfig) (names : Array Name) : CoreM Unit := d
               runAutoOnConst name
     trace[auto.eval.printResult] m!"{result}"
     results := results.push result
-    if let .some fhandle := logFileHandle then
+    if let .some fhandle := logFileHandle? then
       fhandle.putStrLn (toString (← MessageData.format m!"{result}"))
-  if let .some fhandle := logFileHandle then
+  if let .some fhandle := logFileHandle? then
     fhandle.putStrLn ""
     fhandle.putStrLn s!"Elapsed time: {(← IO.monoMsNow) - startTime} ms"
     fhandle.putStrLn s!"\nSummary:\n"
     for ((name, result), idx) in (names.zip results).zipWithIndex do
       fhandle.putStrLn s!"{idx} {result.concise} {name}"
 
-def runAutoOnNamesFile (cfg : EvalConfig) (fname : String) : CoreM Unit := do
+def runAutoOnNamesFile (cfg : EvalAutoConfig) (fname : String) : CoreM Unit := do
   let names ← NameArray.load fname
   runAutoOnConsts cfg names
 

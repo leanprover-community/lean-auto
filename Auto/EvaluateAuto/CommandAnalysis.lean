@@ -57,77 +57,16 @@ def runWithEffectOfCommandsCore
   the procedure is terminated.
 -/
 def runWithEffectOfCommands
-  (input : String) (fileName : String) (opts : Options := {}) (cnt? : Option Nat)
+  (input : String) (fileName : String) (cnt? : Option Nat)
   (action : Context → State → State → ConstantInfo → IO (Option α)) : CoreM (Array α) := do
   let inputCtx := Parser.mkInputContext input fileName
   let (header, parserState, messages) ← Parser.parseHeader inputCtx
   let mut ensuring := #[]
   if auto.evalAuto.ensureAesop.get (← getOptions) then
     ensuring := ensuring.push { module := `Aesop }
-  let (env, messages) ← processHeaderEnsuring header opts messages inputCtx (ensuring := ensuring)
-  let commandState := Command.mkState env messages opts
+  let (env, messages) ← processHeaderEnsuring header {} messages inputCtx (ensuring := ensuring)
+  let commandState := Command.mkState env messages {}
   (runWithEffectOfCommandsCore cnt? action { inputCtx }).run'
     { commandState := commandState, parserState := parserState, cmdPos := parserState.pos }
-
-open Tactic in
-/--
-  Use `runWithEffectOfCommands` to run tactics at the place just before
-  the command that created the constant `name`\
-  Note: Use `initSrcSearchPath` to get SearchPath of source files
--/
-def runTacticsAtConstantDeclaration
-  (name : Name) (searchPath : SearchPath)
-  (tactics : Array (ConstantInfo → TacticM Unit)) : CoreM (Array Result) := do
-  if ← isInitializerExecutionEnabled then
-    throwError "{decl_name%} :: Running this function with execution of `initialize` code enabled is unsafe"
-  let .some modName ← Lean.findModuleOf? name
-    | throwError "{decl_name%} :: Cannot find constant {name}"
-  let .some uri ← Server.documentUriFromModule searchPath modName
-    | throwError "{decl_name%} :: Cannot find module {modName}"
-  let .some path := System.Uri.fileUriToPath? uri
-    | throwError "{decl_name%} :: URI {uri} of {modName} is not a file"
-  let path := path.normalize
-  let inputHandle ← IO.FS.Handle.mk path .read
-  let input ← inputHandle.readToEnd
-  let results : Array (Array Result) ← runWithEffectOfCommands input path.toString {} (.some 1) (fun ctx st₁ st₂ ci => do
-    if name != ci.name then
-      return .none
-    let metaAction (tactic : ConstantInfo → TacticM Unit) : MetaM Result :=
-      Term.TermElabM.run' <| Result.ofTacticOnExpr ci.type (tactic ci)
-    let coreAction tactic : CoreM Result := (metaAction tactic).run'
-    let ioAction tactic : IO (Result × _) :=
-      (coreAction tactic).toIO {fileName := path.toString, fileMap := FileMap.ofString input } { env := st₁.commandState.env }
-    let resultsWithState ← tactics.mapM (fun tactic => ioAction tactic)
-    return .some (resultsWithState.map Prod.fst))
-  let #[result] := results
-    | throwError "{decl_name%} :: Unexpected error"
-  return result
-
-open Tactic in
-/--
-  Effectively, `runTacticsAtConstantDeclaration` at each constant of the module `modName`\
-  Note: Use `initSrcSearchPath` to get SearchPath of source files
--/
-def runTacticsAtModule
-  (modName : Name) (searchPath : SearchPath)
-  (tactics : Array (ConstantInfo → TacticM Unit)) : CoreM (Array Result) := do
-  let .some uri ← Server.documentUriFromModule searchPath modName
-    | throwError "{decl_name%} :: Cannot find module {modName}"
-  let .some path := System.Uri.fileUriToPath? uri
-    | throwError "{decl_name%} :: URI {uri} of {modName} is not a file"
-  let path := path.normalize
-  let inputHandle ← IO.FS.Handle.mk path .read
-  let input ← inputHandle.readToEnd
-  let results : Array (Array Result) ← runWithEffectOfCommands input path.toString {} .none (fun ctx st₁ st₂ ci => do
-    let metaAction (tactic : ConstantInfo → TacticM Unit) : MetaM Result :=
-      Term.TermElabM.run' <| Result.ofTacticOnExpr ci.type (tactic ci)
-    let coreAction tactic : CoreM Result := (metaAction tactic).run'
-    let ioAction tactic : IO (Result × _) :=
-      (coreAction tactic).toIO {fileName := path.toString, fileMap := FileMap.ofString input } { env := st₁.commandState.env }
-    let resultsWithState ← tactics.mapM (fun tactic => ioAction tactic)
-    return .some (resultsWithState.map Prod.fst))
-  let #[result] := results
-    | throwError "{decl_name%} :: Unexpected error"
-  return result
 
 end EvalAuto
