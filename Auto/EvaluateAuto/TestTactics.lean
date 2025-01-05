@@ -81,6 +81,7 @@ section Tactics
     | useSimpAllWithPremises
     | useAesop
     | useAesopWithPremises
+  deriving BEq, Hashable
 
   instance : ToString RegisteredTactic where
     toString : RegisteredTactic → String
@@ -139,17 +140,32 @@ structure EvalTacticConfig where
   maxHeartbeats : Nat           := 65536
   /-- Tactics to run at each constant declaration -/
   tactics       : Array RegisteredTactic
-  /-- Optional logfile for saving the result of the evaluation -/
+  /-- Optional file for saving the log of the evaluation -/
   logFile       : Option String := .none
+  /-- Optional file for saving the result of the evaluation -/
+  resultFile    : Option String := .none
+  /--
+    On some problems, certain tactics may go into infinite loops not
+    guarded by `Core.checkMaxHeartbeats`. These instances should be
+    recorded here and avoided (throw error immediately) during evaluation.
+  -/
+  nonterminates : Array (RegisteredTactic × Name)
 
 instance : ToString EvalTacticConfig where
   toString : EvalTacticConfig → String
-  | ⟨maxHeartbeats, tactics, logFile⟩ =>
+  | ⟨maxHeartbeats, tactics, logFile, resultFile, nonterminates⟩ =>
     let logFileStr :=
       match logFile with
       | .some logFile => s!", logFile := {logFile}"
       | .none => ""
-    s!"\{maxHeartbeats := {maxHeartbeats}, tactics := {tactics}{logFileStr}}"
+    let resultFileStr :=
+      match resultFile with
+      | .some resultFile => s!", resultFile := {resultFile}"
+      | .none => ""
+    let nontermStr := String.intercalate ",\n" (nonterminates.map (fun (rt, n) => s!"    ({rt}, {n})")).toList
+    let nontermStr := if nonterminates.size != 0 then nontermStr ++ "\n" else nontermStr
+    s!"\{\n  maxHeartbeats := {maxHeartbeats}, tactics := {tactics}{logFileStr}{resultFileStr}" ++
+    s!"\n  nonterminates := #[\n{nontermStr}  ]\n}"
 
 /--
   Effectively `runTacticsAtConstantDeclaration` at each constant in `modName` which satisfies `filter`\
@@ -159,6 +175,7 @@ def evalAtModule
   (modName : Name) (searchPath : SearchPath) (filter : ConstantInfo → Bool)
   (config : EvalTacticConfig) : CoreM Unit:= do
   let logFileHandle? : Option IO.FS.Handle ← config.logFile.mapM (fun fname => IO.FS.Handle.mk fname .write)
+  let resultFileHandle? : Option IO.FS.Handle ← config.resultFile.mapM (fun fname => IO.FS.Handle.mk fname .write)
   trace[auto.eval.printConfig] m!"Config = {config}"
   if let .some fhandle := logFileHandle? then
     fhandle.putStrLn s!"Config = {config}"
@@ -170,16 +187,16 @@ def evalAtModule
   let inputHandle ← IO.FS.Handle.mk path .read
   let input ← inputHandle.readToEnd
   let startTime ← IO.monoMsNow
+  let nonterms := Std.HashSet.ofArray config.nonterminates
   let results ← runWithEffectOfCommands input path.toString .none (fun ctx st₁ st₂ ci => do
     if filter ci then
       let result ← evalAction
         {fileName := path.toString, fileMap := FileMap.ofString input } { env := st₁.commandState.env }
-        ci logFileHandle? config
+        ci logFileHandle? config nonterms
       return .some (ci.name, result)
     else
       return .none)
-  if let .some fhandle := logFileHandle? then
-    fhandle.putStrLn ""
+  if let .some fhandle := resultFileHandle? then
     fhandle.putStrLn s!"Elapsed time : {(← IO.monoMsNow) - startTime} ms"
     fhandle.putStrLn s!"\nSummary:\n"
     for ((name, result), idx) in results.zipWithIndex do
@@ -187,7 +204,8 @@ def evalAtModule
 where
   evalAction
     (context : Core.Context) (state : Core.State) (ci : ConstantInfo)
-    (logFileHandle? : Option IO.FS.Handle) (config : EvalTacticConfig) : IO (Array Result) := do
+    (logFileHandle? : Option IO.FS.Handle) (config : EvalTacticConfig)
+    (nonterms : Std.HashSet (RegisteredTactic × Name)) : IO (Array Result) := do
   config.tactics.zipWithIndex.mapM (fun (tactic, idx) => do
     let metaAction : MetaM Result :=
       Term.TermElabM.run' <| Result.ofTacticOnExpr ci.type (tactic.toCiTactic ci)
@@ -196,14 +214,62 @@ where
       if let .some fhandle := logFileHandle? then
         fhandle.putStrLn ""
         fhandle.putStrLn s!"Testing tactic {idx} || {ci.name} : {← (Lean.Meta.ppExpr ci.type).run'}"
-      let result ← withCurrHeartbeats <|
-        withReader (fun ctx => { ctx with maxHeartbeats := config.maxHeartbeats * 1000 }) <|
-          Meta.MetaM.run' metaAction
+        fhandle.flush
+      let result ← (do
+        if nonterms.contains (tactic, ci.name) then
+          return Result.nonterminate
+        else
+          withCurrHeartbeats <|
+            withReader (fun ctx => { ctx with maxHeartbeats := config.maxHeartbeats * 1000 }) <|
+              Meta.MetaM.run' metaAction)
       trace[auto.eval.printResult] m!"{result}"
       if let .some fhandle := logFileHandle? then
         fhandle.putStrLn (toString (← MessageData.format m!"{result}"))
       return result)
     let (result, _) ← coreAction.toIO context state
     return result)
+
+structure EvalTacticOnMathlibConfig where
+  /-- Timeout for each tactic -/
+  maxHeartbeats : Nat           := 65536
+  /-- Tactics to run at each constant declaration -/
+  tactics       : Array RegisteredTactic
+  /-- Folder for saving the result of the evaluation -/
+  resultFolder  : String
+  /--
+    On some problems, certain tactics may go into infinite loops not
+    guarded by `Core.checkMaxHeartbeats`. These instances should be
+    recorded here and avoided (throw error immediately) during evaluation.
+  -/
+  nonterminates : Array (RegisteredTactic × Name)
+
+/--
+  This should be run after `import Mathlib`
+-/
+def evalTacticsAtMathlibHumanTheorems (config : EvalTacticOnMathlibConfig) : CoreM Unit := do
+  let mms ← mathlibModules
+  if !(← allMathlibModuleNamesCanBeFilename) then
+    throwError "{decl_name%} :: Some mathlib modules have extra-ordinary names. Evaluation code needs to be changed!"
+  if !(← System.FilePath.isDir config.resultFolder) then
+    IO.FS.createDir config.resultFolder
+  let evaluateFilesHandle ← IO.FS.Handle.mk (config.resultFolder ++ "/evaluateFiles.txt") .write
+  let all ← allHumanTheorems
+  for mm in mms do
+    evaluateFilesHandle.putStrLn mm.toString
+    evaluateFilesHandle.flush
+    let nComps := mm.components.length
+    let paths := (List.range nComps).map (fun i =>
+      String.join <| (mm.components.take (i + 1)).map (fun n => "/" ++ n.toString))
+    for extraDirPath in paths.dropLast do
+      let dirPath := config.resultFolder ++ extraDirPath
+      if !(← System.FilePath.isDir dirPath) then
+        IO.FS.createDir dirPath
+    let .some extraLogPath := paths.getLast?
+      | throwError "evalAtMathlibHumanTheorems :: Module name {mm} has zero components"
+    let logPath := config.resultFolder ++ extraLogPath
+    evalAtModule mm (← initSrcSearchPath) (fun ci => all.contains ci.name)
+      {maxHeartbeats := config.maxHeartbeats, tactics := config.tactics,
+       logFile := .some (logPath ++ ".log"), resultFile := .some (logPath ++ ".result")
+       nonterminates := config.nonterminates}
 
 end EvalAuto

@@ -1,4 +1,5 @@
 import Lean
+import Auto.EvaluateAuto.NameArr
 
 open Lean
 
@@ -16,6 +17,11 @@ def Environment.newLocalConstants (env₁ env₂ : Environment) :=
 def mathlibModules : CoreM (Array Name) := do
   let u := (← getEnv).header.moduleNames
   return u.filter (fun name => name.components[0]? == .some `Mathlib)
+
+/- Check that all mathlib modules names are ordinary -/
+def allMathlibModuleNamesCanBeFilename : CoreM Bool := do
+  let mms ← mathlibModules
+  return mms.all Name.canBeFilename
 
 /-- Pick `n` elements from array `xs`. Elements may duplicate -/
 def Array.randPick {α} (xs : Array α) (n : Nat) : IO (Array α) := do

@@ -29,18 +29,24 @@ structure EvalAutoConfig where
   timeout       : Nat           := 10
   /-- Solver configuration -/
   solverConfig  : SolverConfig
-  /-- Optional logfile for saving the result of the evaluation -/
+  /-- Optional file for saving the log of the evaluation -/
   logFile       : Option String := .none
+  /-- Optional file for saving the result of the evaluation -/
+  resultFile    : Option String := .none
 
 instance : ToString EvalAutoConfig where
   toString : EvalAutoConfig → String
-  | ⟨maxHeartbeats, timeout, solverConfig, logFile⟩ =>
+  | ⟨maxHeartbeats, timeout, solverConfig, logFile, resultFile⟩ =>
     let logFileStr :=
       match logFile with
       | .some logFile => s!", logFile := {logFile}"
       | .none => ""
+    let resultFileStr :=
+      match resultFile with
+      | .some resultFile => s!", logFile := {resultFile}"
+      | .none => ""
     s!"\{maxHeartbeats := {maxHeartbeats}, timeout := {timeout}, " ++
-    s!"solverConfig := {solverConfig}{logFileStr}}"
+    s!"solverConfig := {solverConfig}{logFileStr}{resultFileStr}}"
 
 /--
   Run `Lean-auto` on `lem.type`, using premises collected from `lem.proof`
@@ -102,6 +108,7 @@ def disableAllSolvers (o : Options) : Options :=
 
 def runAutoOnConsts (config : EvalAutoConfig) (names : Array Name) : CoreM Unit := do
   let logFileHandle? : Option IO.FS.Handle ← config.logFile.mapM (fun fname => IO.FS.Handle.mk fname .write)
+  let resultFileHandle? : Option IO.FS.Handle ← config.resultFile.mapM (fun fname => IO.FS.Handle.mk fname .write)
   trace[auto.eval.printConfig] m!"Config = {config}"
   if let .some fhandle := logFileHandle? then
     fhandle.putStrLn s!"Config = {config}"
@@ -113,6 +120,7 @@ def runAutoOnConsts (config : EvalAutoConfig) (names : Array Name) : CoreM Unit 
     if let .some fhandle := logFileHandle? then
       fhandle.putStrLn ""
       fhandle.putStrLn s!"Testing || {name} : {← (Lean.Meta.ppExpr ci.type).run'}"
+      fhandle.flush
     let result : Result ← withCurrHeartbeats <|
       withReader (fun ctx => {ctx with maxHeartbeats := config.maxHeartbeats * 1000}) <|
         match config.solverConfig with
@@ -151,8 +159,7 @@ def runAutoOnConsts (config : EvalAutoConfig) (names : Array Name) : CoreM Unit 
     results := results.push result
     if let .some fhandle := logFileHandle? then
       fhandle.putStrLn (toString (← MessageData.format m!"{result}"))
-  if let .some fhandle := logFileHandle? then
-    fhandle.putStrLn ""
+  if let .some fhandle := resultFileHandle? then
     fhandle.putStrLn s!"Elapsed time: {(← IO.monoMsNow) - startTime} ms"
     fhandle.putStrLn s!"\nSummary:\n"
     for ((name, result), idx) in (names.zip results).zipWithIndex do

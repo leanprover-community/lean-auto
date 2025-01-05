@@ -4,6 +4,18 @@ open Lean
 namespace EvalAuto
 
 /--
+  Whether a name is a valid filename
+-/
+def Name.canBeFilename (n : Name) : Bool :=
+  n.components.all (fun n =>
+    match n with
+    | .str _ s =>
+      match s.get? 0 with
+      | .some c => s.all (fun c => c.isAlphanum || c == '_' || c == '\'')
+      | .none => false
+    | _ => false)
+
+/--
   Unique string representation of array of names
   We use `.` to separate fields of a name, and `\n` to separate names.
   A `.` is appended to the end of each name.

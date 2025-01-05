@@ -13,6 +13,7 @@ inductive Result
   | nonProp
   | typeCheckFail
   | typeUnequal
+  | nonterminate
   -- `auto` does not produce subgoals, but other tactics we test might (such as `simp`)
   | subGoals
   | exception (e : Exception)
@@ -23,6 +24,7 @@ instance : ToMessageData Result where
   | .nonProp         => "Result.nonProp"
   | .typeCheckFail   => "Result.typeCheckFail"
   | .typeUnequal     => "Result.typeUnequal"
+  | .nonterminate    => "Result.nonterminate"
   | .subGoals        => "Result.subGoals"
   | .exception e     => m!"Result.exception ::\n{e.toMessageData}"
 
@@ -31,6 +33,7 @@ def Result.concise : Result → String
 | .nonProp => "N"
 | .typeCheckFail => "F"
 | .typeUnequal => "U"
+| .nonterminate => "T"
 | .subGoals => "G"
 | .exception _ => "E"
 
