@@ -252,6 +252,10 @@ structure EvalTacticOnMathlibConfig where
     recorded here and avoided (throw error immediately) during evaluation.
   -/
   nonterminates : Array (RegisteredTactic × Name)
+  /--
+    Number of threads to use
+  -/
+  nthreads      : Nat
 
 abbrev EvalProc := IO.Process.Child ⟨.piped, .piped, .piped⟩
 
@@ -270,8 +274,9 @@ def evalTacticsAtMathlibHumanTheorems (config : EvalTacticOnMathlibConfig) : Cor
     IO.FS.createDir config.resultFolder
   let evaluateFilesHandle ← IO.FS.Handle.mk (config.resultFolder ++ "/evaluateFiles.txt") .write
   let allTally ← tallyNamesByModule (← allHumanTheorems)
+  let mut running := #[]
   for mm in mms do
-    evaluateFilesHandle.putStr mm.toString
+    evaluateFilesHandle.putStrLn mm.toString
     evaluateFilesHandle.flush
     let nComps := mm.components.length
     let paths := (List.range nComps).map (fun i =>
@@ -287,10 +292,22 @@ def evalTacticsAtMathlibHumanTheorems (config : EvalTacticOnMathlibConfig) : Cor
     let validThms := (allTally.get? mm).getD #[]
     evalProc.stdin.putStr (evalFile mm validThms logPath config.tactics)
     let (_, evalProc) ← evalProc.takeStdin
-    let retCode ← evalProc.wait
-    evaluateFilesHandle.putStrLn s!" : {retCode}"
-    evaluateFilesHandle.flush
+    running := running.push (mm, evalProc)
+    while running.size >= config.nthreads do
+      running ← tryWaitOn evaluateFilesHandle running
+  while running.size != 0 do
+    running ← tryWaitOn evaluateFilesHandle running
 where
+  tryWaitOn (evaluateFilesHandle : IO.FS.Handle) (running : Array (Name × _)) : CoreM (Array (Name × _)) := do
+    let mut running' := #[]
+    for (mm, proc) in running do
+      let retCode? ← proc.tryWait
+      match retCode? with
+      | .some retCode =>
+        evaluateFilesHandle.putStrLn s!"{mm} : {retCode}"
+        evaluateFilesHandle.flush
+      | .none => running' := running'.push (mm, proc)
+    return running'
   evalFile
     (mm : Name) (validThms : Array Name)
     (logPath : String) (tacs : Array RegisteredTactic) : String :=
