@@ -11,6 +11,15 @@ def Name.getConstsOfModule (module : Name) : CoreM (Array Name) := do
   let (mod, _) ← readModuleData mFile
   return mod.constNames
 
+def tallyNamesByModule (names : Array Name) : CoreM (Std.HashMap Name (Array Name)) := do
+  let mut ret : Std.HashMap Name (Array Name) := {}
+  for name in names do
+    let .some modName ← Lean.findModuleOf? name
+      | throwError "{decl_name%} :: Cannot find module of {name}"
+    let orig := (ret.get? modName).getD #[]
+    ret := ret.insert modName (orig.push name)
+  return ret
+
 /-- Used as a wrapper in other functions -/
 def Name.getCi (name : Name) (parentFunc : Name) : CoreM ConstantInfo := do
   let .some ci := (← getEnv).find? name

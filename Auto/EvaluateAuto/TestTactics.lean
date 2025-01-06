@@ -253,8 +253,14 @@ structure EvalTacticOnMathlibConfig where
   -/
   nonterminates : Array (RegisteredTactic × Name)
 
+abbrev EvalProc := IO.Process.Child ⟨.piped, .piped, .piped⟩
+
+def EvalProc.create (path : String) (args : Array String) : IO EvalProc :=
+  IO.Process.spawn {stdin := .piped, stdout := .piped, stderr := .piped, cmd := path, args := args}
+
 /--
-  This should be run after `import Mathlib`
+  This should be run after `import Mathlib`, and should be run with a `cwd` where
+    `lake env` creates an environment in which `Mathlib` and `lean-auto` are available
 -/
 def evalTacticsAtMathlibHumanTheorems (config : EvalTacticOnMathlibConfig) : CoreM Unit := do
   let mms ← mathlibModules
@@ -263,9 +269,9 @@ def evalTacticsAtMathlibHumanTheorems (config : EvalTacticOnMathlibConfig) : Cor
   if !(← System.FilePath.isDir config.resultFolder) then
     IO.FS.createDir config.resultFolder
   let evaluateFilesHandle ← IO.FS.Handle.mk (config.resultFolder ++ "/evaluateFiles.txt") .write
-  let all ← allHumanTheorems
+  let allTally ← tallyNamesByModule (← allHumanTheorems)
   for mm in mms do
-    evaluateFilesHandle.putStrLn mm.toString
+    evaluateFilesHandle.putStr mm.toString
     evaluateFilesHandle.flush
     let nComps := mm.components.length
     let paths := (List.range nComps).map (fun i =>
@@ -276,10 +282,46 @@ def evalTacticsAtMathlibHumanTheorems (config : EvalTacticOnMathlibConfig) : Cor
         IO.FS.createDir dirPath
     let .some extraLogPath := paths.getLast?
       | throwError "evalAtMathlibHumanTheorems :: Module name {mm} has zero components"
+    let evalProc ← EvalProc.create "lake" #["env", "lean", "--stdin"]
     let logPath := config.resultFolder ++ extraLogPath
-    evalAtModule mm (← initSrcSearchPath) (fun ci => all.contains ci.name)
-      {maxHeartbeats := config.maxHeartbeats, tactics := config.tactics,
-       logFile := .some (logPath ++ ".log"), resultFile := .some (logPath ++ ".result")
-       nonterminates := config.nonterminates}
+    let validThms := (allTally.get? mm).getD #[]
+    evalProc.stdin.putStr (evalFile mm validThms logPath config.tactics)
+    let (_, evalProc) ← evalProc.takeStdin
+    let retCode ← evalProc.wait
+    evaluateFilesHandle.putStrLn s!" : {retCode}"
+    evaluateFilesHandle.flush
+where
+  evalFile
+    (mm : Name) (validThms : Array Name)
+    (logPath : String) (tacs : Array RegisteredTactic) : String :=
+    let lb := "{"
+    let rb := "}"
+    let thmsStrs : List String :=
+      match validThms.toList.getLast? with
+      | .some last =>
+        validThms.toList.dropLast.map (fun n => s!"  {repr n},") ++ [s!"  {repr last}"]
+      | .none => []
+    let tacsStr := String.intercalate ", " (tacs.map (fun tac => "." ++ toString tac)).toList
+    let lines := [
+        s!"import {mm}",
+        "import Auto.EvaluateAuto.TestTactics",
+        "import Aesop",
+        "open Lean EvalAuto",
+        "",
+        "def humanThms : Std.HashSet Name := Std.HashSet.ofList ["
+      ] ++ thmsStrs ++ [
+        "]",
+        "",
+        "def action : CoreM Unit := do",
+        "  let p ← initSrcSearchPath",
+        s!"  let _ ← evalAtModule ({repr mm}) p (fun ci => humanThms.contains ci.name)",
+        s!"    {lb} tactics := #[{tacsStr}],",
+        s!"      logFile := {repr (logPath ++ ".log")}, resultFile := {repr (logPath ++ ".result")},",
+        s!"      nonterminates := #[] {rb}",
+        "",
+        "set_option auto.evalAuto.ensureAesop true",
+        "#eval action"
+      ]
+    String.intercalate "\n" lines
 
 end EvalAuto
