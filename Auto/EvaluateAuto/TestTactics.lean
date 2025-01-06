@@ -355,9 +355,10 @@ def readTacticEvalResult (config : EvalTacticOnMathlibConfig) :
     if !(← System.FilePath.isDir path) && path.toString.takeRight 7 == ".result" then
       let suffix := (path.toString.drop (resultFolder.length + 1)).dropRight 7
       let modName := (suffix.splitOn "/").foldl (fun a b => Name.str a b) .anonymous
-      let lines := (← IO.FS.readFile path).splitOn "\n"
-      if lines[3]? != .some "Summary:" || lines[4]? != .some "" then
-        throwError "{decl_name%} :: Format of result file changed, please change analysis code"
+      let content ← IO.FS.readFile path
+      let lines := content.splitOn "\n"
+      if lines[2]? != .some "Summary:" || lines[3]? != .some "" then
+        throwError "{decl_name%} :: Format of result file changed, please change analysis code. Result file : {path}"
       let lines := (lines.drop 4).filter (fun s => s != "")
       let lineAnalysis ← (Array.mk lines).mapM analyzeLine
       ret := ret.push (modName, lineAnalysis)

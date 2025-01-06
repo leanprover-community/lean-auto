@@ -18,6 +18,9 @@ inductive Result
   | subGoals
   | exception (e : Exception)
 
+instance : Inhabited Result where
+  default := .success
+
 instance : ToMessageData Result where
   toMessageData : Result → MessageData
   | .success         => "Result.success"
@@ -36,7 +39,7 @@ def Result.concise : Result → String
 | .nonterminate => "T"
 | .subGoals => "G"
 | .exception _ => "E"
-#check Exception
+
 def Result.ofConcise? : String → Option Result
 | "S" => .some .success
 | "N" => .some .nonProp
