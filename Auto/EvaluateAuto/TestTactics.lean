@@ -26,19 +26,28 @@ section Tactics
     let usedThmTerms : Array Term := usedThmNames.map (fun name => ⟨mkIdent name⟩)
     evalTactic (← `(tactic| intros; simp_all [$[$usedThmTerms:term],*]))
 
-  private def mkAesopStx (addClauses : Array Syntax) : TSyntax `tactic :=
+  private def mkAesopConfigStx (subHeartbeats : Nat) : CoreM Syntax := do
+    let synth : SourceInfo := SourceInfo.synthetic default default false
+    let shStx := Syntax.node synth `num #[Syntax.atom synth (toString subHeartbeats)]
+    let shStx := TSyntax.mk shStx
+    let stx ← `(term | { maxSimpHeartbeats := $shStx, maxRuleHeartbeats := $shStx, maxUnfoldHeartbeats := $shStx })
+    return Syntax.node synth `Aesop.Frontend.Parser.«tactic_clause(Config:=_)»
+           #[Syntax.atom synth "(", Syntax.atom synth "config", Syntax.atom synth ":=", stx]
+
+  private def mkAesopStx (tacticClauses : Array Syntax) : TSyntax `tactic :=
     let synth : SourceInfo := SourceInfo.synthetic default default false
     TSyntax.mk (
       Syntax.node synth `Aesop.Frontend.Parser.aesopTactic
-        #[Syntax.atom synth "aesop", Syntax.node synth `null addClauses]
+        #[Syntax.atom synth "aesop", Syntax.node synth `null tacticClauses]
     )
 
   /--
     Tactic sequence: `intros; aesop`
     Only guaranteed to work for `aesop @ Lean v4.14.0`
   -/
-  def useAesop : TacticM Unit := do
-    let aesopStx := mkAesopStx #[]
+  def useAesop (subHeartbeats : Nat) : TacticM Unit := do
+    let configStx ← mkAesopConfigStx subHeartbeats
+    let aesopStx := mkAesopStx #[configStx]
     let stx ← `(tactic|intros; $aesopStx)
     evalTactic stx
 
@@ -46,14 +55,15 @@ section Tactics
     Tactic sequence: `intros; aesop (add unsafe premise₁) ⋯ (add unsafe premiseₙ)`
     Only guaranteed to work for `aesop @ Lean v4.14.0`
   -/
-  def useAesopWithPremises (ci : ConstantInfo) : TacticM Unit := do
+  def useAesopWithPremises (subHeartbeats : Nat) (ci : ConstantInfo) : TacticM Unit := do
     let .some proof := ci.value?
       | throwError "{decl_name%} :: ConstantInfo of {ci.name} has no value"
     let usedThmNames ← (← Expr.getUsedTheorems proof).filterM (fun name =>
       return !(← Name.onlyLogicInType name))
     let usedThmIdents := usedThmNames.map Lean.mkIdent
+    let configClause ← mkAesopConfigStx subHeartbeats
     let addClauses := usedThmIdents.map mkAddIdentStx
-    let aesopStx := mkAesopStx addClauses
+    let aesopStx := mkAesopStx (#[configClause] ++ addClauses)
     let stx ← `(tactic|intros; $aesopStx)
     evalTactic stx
   where
@@ -79,26 +89,26 @@ section Tactics
     | useSimp
     | useSimpAll
     | useSimpAllWithPremises
-    | useAesop
-    | useAesopWithPremises
+    | useAesop (subHeartbeats : Nat)
+    | useAesopWithPremises (subHeartbeats : Nat)
   deriving BEq, Hashable
 
   instance : ToString RegisteredTactic where
     toString : RegisteredTactic → String
-    | .useRfl                 => "useRfl"
-    | .useSimp                => "useSimp"
-    | .useSimpAll             => "useSimpAll"
-    | .useSimpAllWithPremises => "useSimpAllWithPremises"
-    | .useAesop               => "useAesop"
-    | .useAesopWithPremises   => "useAesopWithPremises"
+    | .useRfl                  => "useRfl"
+    | .useSimp                 => "useSimp"
+    | .useSimpAll              => "useSimpAll"
+    | .useSimpAllWithPremises  => "useSimpAllWithPremises"
+    | .useAesop sh             => s!"useAesop {sh}"
+    | .useAesopWithPremises sh => s!"useAesopWithPremises {sh}"
 
   def RegisteredTactic.toCiTactic : RegisteredTactic → ConstantInfo → TacticM Unit
-    | .useRfl                 => fun _ => EvalAuto.useRfl
-    | .useSimp                => fun _ => EvalAuto.useSimp
-    | .useSimpAll             => fun _ => EvalAuto.useSimpAll
-    | .useSimpAllWithPremises => EvalAuto.useSimpAllWithPremises
-    | .useAesop               => fun _ => EvalAuto.useAesop
-    | .useAesopWithPremises   => EvalAuto.useAesopWithPremises
+    | .useRfl                  => fun _ => EvalAuto.useRfl
+    | .useSimp                 => fun _ => EvalAuto.useSimp
+    | .useSimpAll              => fun _ => EvalAuto.useSimpAll
+    | .useSimpAllWithPremises  => EvalAuto.useSimpAllWithPremises
+    | .useAesop sh             => fun _ => EvalAuto.useAesop sh
+    | .useAesopWithPremises sh => EvalAuto.useAesopWithPremises sh
 
 end Tactics
 
