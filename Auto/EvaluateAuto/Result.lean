@@ -36,7 +36,16 @@ def Result.concise : Result → String
 | .nonterminate => "T"
 | .subGoals => "G"
 | .exception _ => "E"
-
+#check Exception
+def Result.ofConcise? : String → Option Result
+| "S" => .some .success
+| "N" => .some .nonProp
+| "F" => .some .typeCheckFail
+| "U" => .some .typeUnequal
+| "T" => .some .nonterminate
+| "G" => .some .subGoals
+| "E" => .some (.exception (.error Syntax.missing "Filled_in_by_Result.ofConcise?"))
+| _   => .none
 
 open Elab Tactic in
 /--

@@ -163,7 +163,7 @@ def runAutoOnConsts (config : EvalAutoConfig) (names : Array Name) : CoreM Unit 
     fhandle.putStrLn s!"Elapsed time: {(← IO.monoMsNow) - startTime} ms"
     fhandle.putStrLn s!"\nSummary:\n"
     for ((name, result), idx) in (names.zip results).zipWithIndex do
-      fhandle.putStrLn s!"{idx} {result.concise} {name}"
+      fhandle.putStrLn s!"{idx} {result.concise} {Name.uniqRepr name}"
 
 def runAutoOnNamesFile (cfg : EvalAutoConfig) (fname : String) : CoreM Unit := do
   let names ← NameArray.load fname
