@@ -86,6 +86,7 @@ def LexVal.ofString (s : String) (attr : String) : LexVal :=
   | "reserved"     => .reserved s
   | "forall"       => .reserved "forall"
   | "exists"       => .reserved "exists"
+  | "lambda"       => .reserved "lambda"
   | "let"          => .reserved "let"
   | "_"            => .underscore
   | _              => panic! s!"LexVal.ofString :: {repr attr} is not a valid attribute"
@@ -179,9 +180,9 @@ def lexTerm [Monad m] [Lean.MonadError m] (s : String) (p : String.Pos)
         match (SMT.lexiconADFA.getAttrs state).toList with
         | [attr] => pure attr
         | [attr1, attr2] =>
-          if attr1 == "forall" || attr1 == "exists" || attr1 == "let" || attr1 == "_" then pure attr1
-          else if attr2 == "forall" || attr2 == "exists" || attr2 == "let" || attr2 == "_" then pure attr2
-          else throwError "parseTerm :: Attribute conflict not caused by forall, exists, let, or _"
+          if attr1 == "forall" || attr1 == "exists" || attr1 == "lambda" || attr1 == "let" || attr1 == "_" then pure attr1
+          else if attr2 == "forall" || attr2 == "exists" || attr2 == "lambda" || attr2 == "let" || attr2 == "_" then pure attr2
+          else throwError "parseTerm :: Attribute conflict not caused by forall, exists, lambda, let, or _"
         | _ => throwError "parseTerm :: Invalid number of attributes"
 
       p := matched.stopPos
@@ -196,7 +197,7 @@ def lexTerm [Monad m] [Lean.MonadError m] (s : String) (p : String.Pos)
           -- Too many right parentheses
           return .malformed
         else
-          let final := pstk.back
+          let final := pstk.back!
           pstk := pstk.pop
           if pstk.size == 0 then
             return .complete (.app final) p
@@ -293,6 +294,7 @@ partial def getExplicitForallArgumentTypes (e : Expr) : List Expr :=
   | Expr.forallE _ _t b _ => getExplicitForallArgumentTypes b -- Skip over t because this binder is implicit
   | _ => []
 
+-- **TODO** Generalize this to make it possible to impose arbitrary constraints (which is helpful for hints like `(= _wfNat (lambda ((x Int)) (>= x 0)))`
 inductive ParseTermConstraint
   | mustBeProp
   | mustBeBool
@@ -300,7 +302,7 @@ inductive ParseTermConstraint
 
 open ParseTermConstraint
 
-/-- A helper function for `parseForall` and `parseExists`
+/-- A helper function for `parseForall`, `parseExists`, and `parseLambda`
 
     When parsing the arguments of SMT forall and exists expressions, the SMT type "Bool" can appear, which sometimes must be interpreted
     as `Prop` and sometimes must be interpreted as `Bool`. In `parseForall` and `parseExists`, if there are `x` "Bool" binders, then there
@@ -418,6 +420,38 @@ partial def parseExists (vs : List Term) (symbolMap : Std.HashMap String Expr) :
     catch _ =>
       continue
   throwError "parseExists :: Failed to parse exists expression with vs: {vs}"
+
+partial def parseLambdaBodyWithSortedVars (vs : List Term) (sortedVars : Array (String × Expr))
+  (symbolMap : Std.HashMap String Expr) (lambdaBody : Term) : MetaM Expr := do
+  withLocalDeclsD (sortedVars.map fun (n, ty) => (n.toName, fun _ => pure ty)) fun _ => do
+    let lctx ← getLCtx
+    let mut symbolMap := symbolMap
+    let mut sortedVarDecls := #[]
+    for sortedVar in sortedVars do
+      let some sortedVarDecl := lctx.findFromUserName? sortedVar.1.toName
+        | throwError "parseForall :: Unknown sorted var name {sortedVar.1} (parseForall input: {vs})"
+      symbolMap := symbolMap.insert sortedVar.1 (mkFVar sortedVarDecl.fvarId)
+      sortedVarDecls := sortedVarDecls.push sortedVarDecl
+    let body ← parseTerm lambdaBody symbolMap mustBeProp
+    Meta.mkLambdaFVars (sortedVarDecls.map (fun decl => mkFVar decl.fvarId)) body
+
+partial def parseLambda (vs : List Term) (symbolMap : Std.HashMap String Expr) : MetaM Expr := do
+  let [app sortedVars, existsBody] := vs
+    | throwError "parseLambda :: Unexpected input list {vs}"
+  let sortedVars ← sortedVars.mapM (fun sv => parseSortedVar sv symbolMap)
+  let sortedVarsWithIndices := sortedVars.mapFinIdx (fun idx val => (val, idx))
+  let mut curPropBoolChoice := some $ (sortedVarsWithIndices.filter (fun ((_, t), _) => t.isProp)).map (fun (_, idx) => (idx, false))
+  let mut possibleSortedVars := #[]
+  while curPropBoolChoice.isSome do
+    let (nextSortedVars, nextCurPropBoolChoice) := getNextSortedVars sortedVars curPropBoolChoice.get!
+    possibleSortedVars := possibleSortedVars.push nextSortedVars
+    curPropBoolChoice := nextCurPropBoolChoice
+  for sortedVars in possibleSortedVars do
+    try
+      return ← parseLambdaBodyWithSortedVars vs sortedVars symbolMap existsBody
+    catch _ =>
+      continue
+  throwError "parseLambda :: Failed to parse exists expression with vs: {vs}"
 
 /-- Given a varBinding of the form `(symbol value)` returns the string of the symbol, the type of the value, and the value itself -/
 partial def parseVarBinding (varBinding : Term) (symbolMap : Std.HashMap String Expr) : MetaM (String × Expr × Expr) := do
@@ -558,6 +592,7 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
     match vs.toList with
     | atom (reserved "forall") :: restVs => parseForall restVs symbolMap
     | atom (reserved "exists") :: restVs => parseExists restVs symbolMap
+    | atom (reserved "lambda") :: restVs => parseLambda restVs symbolMap
     | atom (reserved "let") :: restVs => parseLet restVs symbolMap parseTermConstraint
     | atom (symb "=>") :: restVs => parseImplication restVs symbolMap
     | app #[atom underscore, atom (symb "is"), ctor] :: [testerArg] =>

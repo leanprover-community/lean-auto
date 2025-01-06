@@ -81,6 +81,7 @@ def underscore : ERE := .ofStr "_"
 
 def SMTforall : ERE := .ofStr "forall"
 def SMTexists : ERE := .ofStr "exists"
+def SMTlambda : ERE := .ofStr "lambda" -- This is not part of SMT-lib 2.6 but can be output by cvc5's hints
 def SMTlet : ERE := .ofStr "let"
 
 /-- Special constants -/
@@ -137,6 +138,7 @@ def term : ERE := .plus #[
   specConst,
   .attr SMTforall "forall",
   .attr SMTexists "exists",
+  .attr SMTlambda "lambda",
   .attr SMTlet "let",
   .attr lparen "(",
   .attr rparen ")",

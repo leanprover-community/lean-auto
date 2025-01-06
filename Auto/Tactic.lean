@@ -439,7 +439,8 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
     | _ => throwError "runAuto :: Unexpected error")
   let sni : SMT.SMTNamingInfo :=
     {tyVal := (← LamReif.getTyVal), varVal := (← LamReif.getVarVal), lamEVarTy := (← LamReif.getLamEVarTy)}
-  let ((commands, validFacts, l2hMap, selInfos), state) ← (lamFOL2SMTWithExtraInfo sni lamVarTy lamEVarTy exportLamTerms exportInds).run
+  let ((commands, validFacts, l2hMap, wfPredicatesInvMap, selInfos), state) ←
+    (lamFOL2SMTWithExtraInfo sni lamVarTy lamEVarTy exportLamTerms exportInds).run
   for cmd in commands do
     trace[auto.smt.printCommands] "{cmd}"
   if (auto.smt.save.get (← getOptions)) then
@@ -475,7 +476,7 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
     let vderiv ← LamReif.collectDerivFor (.valid [] t)
     unsatCoreDerivLeafStrings := unsatCoreDerivLeafStrings ++ vderiv.collectLeafStrings
     trace[auto.smt.unsatCore.deriv] "|valid_fact_{id}| : {vderiv}"
-  -- **Build symbolPrecMap using l2hMap and selInfos**
+  -- **Build symbolPrecMap using l2hMap, wfPredicatesInvMap, and selInfos**
   let (preprocessFacts, theoryLemmas, instantiations, computationLemmas, polynomialLemmas, rewriteFacts) := solverHints
   let mut symbolMap : Std.HashMap String Expr := Std.HashMap.empty
   for (varName, varAtom) in l2hMap.toArray do
@@ -483,6 +484,10 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
       SMT.withExprValuation sni state.h2lMap (fun tyValMap varValMap etomValMap => do
         SMT.LamAtomic.toLeanExpr tyValMap varValMap etomValMap varAtom)
     symbolMap := symbolMap.insert varName varLeanExp
+  for (wfPredicateName, wfPredicateSort) in wfPredicatesInvMap.toArray do
+    let ty ← SMT.withExprValuation sni state.h2lMap (fun tyValMap _ _ => Lam2D.interpLamSortAsUnlifted tyValMap wfPredicateSort)
+    let tyPred := .lam .anonymous ty (mkConst ``True) .default -- Interpret `_wf_α` as `fun _ : α => True`
+    symbolMap := symbolMap.insert wfPredicateName tyPred
   /- `selectorArr` has entries containing:
      - The name of an SMT selector function
      - The constructor it is a selector for
