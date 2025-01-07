@@ -54,12 +54,13 @@ instance : Ord LamAtomic where
 
 /-- selectorInfo contains:
     - The name of the selector
+    - Whether the selector is a projection
     - The constructor that the selector is for
     - The index of the argument that it is selecting
     - The name of the SMT datatype that the selector is for
     - The output type of the selector (full type is an arrow type that takes in
       the datatype and returns the output type) -/
-abbrev SelectorInfo := String × LamAtomic × Nat × String × LamSort
+abbrev SelectorInfo := String × Bool × LamAtomic × Nat × String × LamSort
 
 def LamAtomic.toLeanExpr
   (tyValMap varValMap etomValMap : Std.HashMap Nat Expr)
@@ -190,24 +191,24 @@ mutual
       | _ => -- **TODO** This approach does not adequately address mutually inductive datatypes (assumes all ctors are of same datatype, and other issues)
         /- **TODO** Determine datatype name by calling `← h2Symb (.sort n) none` rather than using the first selInfo's datatype name
            (to ensure we get the correct specific datatype when considering mutually inductive datatypes) -/
-        let datatypeName := selInfos[0]!.2.2.2.1 -- Guaranteed to not panic because `selInfos.size > 0`
+        let datatypeName := selInfos[0]!.2.2.2.2.1 -- Guaranteed to not panic because `selInfos.size > 0`
         let some sWfConstraintName ← h2SymbWf s $ some ("wf" ++ datatypeName.capitalize)
           | throwError "{decl_name%} :: h2SymbWf returned none given {s} even though {s} has a nontrivial well-formed predicate"
         trace[auto.lamFOL2SMT] "defineWfConstraint :: {s} has datatype name {datatypeName}"
         let mut wfCstrTerms : Array STerm := #[]
         -- Gather a list of selector infos for each constructor
         let mut ctorInfos : Std.HashMap LamAtomic (List SelectorInfo) := Std.HashMap.empty
-        for (selName, ctor, argIdx, datatypeName, selOutputType) in selInfos do
+        for (selName, selIsProjection, ctor, argIdx, datatypeName, selOutputType) in selInfos do
           if ctorInfos.contains ctor then
-            ctorInfos := ctorInfos.modify ctor (fun acc => (selName, ctor, argIdx, datatypeName, selOutputType) :: acc)
+            ctorInfos := ctorInfos.modify ctor (fun acc => (selName, selIsProjection, ctor, argIdx, datatypeName, selOutputType) :: acc)
           else
-            ctorInfos := ctorInfos.insert ctor [(selName, ctor, argIdx, datatypeName, selOutputType)]
+            ctorInfos := ctorInfos.insert ctor [(selName, selIsProjection, ctor, argIdx, datatypeName, selOutputType)]
         -- Iterate through each constructor to build `wfCstrTerms`
         for (ctor, ctorSelInfos) in ctorInfos do
           let ctorName ← h2Symb ctor none -- `none` should never cause an error since `ctor` should have been given a symbol when the datatype was defined
           let ctorTester := .testerApp ctorName (.bvar 0) -- `.bvar 0` refers to the element of sort `s` being tested
           let mut wfSelectorTerms : Array STerm := #[]
-          for (selName, _, argIdx, datatypeName, selOutputType) in ctorSelInfos do
+          for (selName, selIsProjection, _, argIdx, datatypeName, selOutputType) in ctorSelInfos do
             trace[auto.lamFOL2SMT] "defineWfConstraint :: Examining selector {selName} for datatype {datatypeName} which has output type {selOutputType}"
             match ← getWfConstraint sni selOutputType none with
             | some selOutputTypeWfConstraint => wfSelectorTerms := wfSelectorTerms.push $ .qStrApp selOutputTypeWfConstraint #[.qStrApp selName #[.bvar 0]]
@@ -672,19 +673,19 @@ private def lamMutualIndInfo2STermWithInfos (sni : SMTNamingInfo) (mind : Mutual
       let lamSortArgTys := s.getArgTys -- `argTys` as `LamSort` rather than `SSort`
       let mut selDecls := #[]
       if projs.isSome then
-        if argTys.length != projInfos.size then
+        if argTys.length != projInfos.size || lamSortArgTys.length != projInfos.size then
           throwError "lamMutualIndInfo2STerm :: Unexpected error"
         selDecls := ((Array.mk argTys).zip projInfos).map (fun (argTy, _, name) => (name, argTy))
-        /- We don't update `selInfos` because `projs` exist for this inductive datatype. Since `projs` exists,
-           the selector function we want will already correspond to an existing projection function in Lean,
-           meaning we don't need to define a different selector function to have something to map the current
-           selDecls onto -/
+        let selDeclsInfos :=
+          ((Array.mk lamSortArgTys).zip projInfos).zipWithIndex.map
+            (fun ((lamSortArgTy, _, name), idx) => (name, true, tAtomic, idx, sname, lamSortArgTy))
+        selInfos := selInfos ++ selDeclsInfos
       else
         selDecls := (Array.mk argTys).zipWithIndex.map (fun (argTy, idx) =>
           (ctorname ++ s!"_sel{idx}", argTy))
         let selDeclsInfos :=
           (Array.mk lamSortArgTys).zipWithIndex.map
-            (fun (lamSortArgTy, idx) => (ctorname ++ s!"_sel{idx}", tAtomic, idx, sname, lamSortArgTy))
+            (fun (lamSortArgTy, idx) => (ctorname ++ s!"_sel{idx}", false, tAtomic, idx, sname, lamSortArgTy))
         selInfos := selInfos ++ selDeclsInfos
       cstrDecls := cstrDecls.push ⟨ctorname, selDecls⟩
     infos := infos.push (sname, 0, ⟨#[], cstrDecls⟩)

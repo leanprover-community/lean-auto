@@ -548,10 +548,12 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
   | atom (symb s) =>
     match symbolMap.get? s with
     | some v =>
+      let vType ← inferType v
       match parseTermConstraint with
-      | noConstraint => return v
+      | noConstraint =>
+        if vType == mkConst ``Nat then mkAppM ``Int.ofNat #[v]
+        else return v
       | mustBeProp =>
-        let vType ← inferType v
         if vType.isProp then
           return v
         else if vType == mkConst ``Bool then
@@ -559,7 +561,6 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
         else
           throwError "parseTerm :: {e} is parsed as {v} which is not a Prop"
       | mustBeBool =>
-        let vType ← inferType v
         if vType == mkConst ``Bool then
           return v
         else if vType.isProp then
@@ -569,10 +570,12 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
     | none =>
       match builtInSymbolMap.get? s with
       | some v =>
+        let vType ← inferType v
         match parseTermConstraint with
-        | noConstraint => return v
+        | noConstraint =>
+          if vType == mkConst ``Nat then mkAppM ``Int.ofNat #[v]
+          else return v
         | mustBeProp =>
-          let vType ← inferType v
           if vType.isProp then
             return v
           else if vType == mkConst ``Bool then
@@ -580,7 +583,6 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
           else
             throwError "parseTerm :: {e} is parsed as {v} which is not a Prop"
         | mustBeBool =>
-          let vType ← inferType v
           if vType == mkConst ``Bool then
             return v
           else if vType.isProp then
@@ -721,18 +723,42 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
         | some symbolExp =>
           let symbolExpType ← inferType symbolExp
           let expectedArgTypes := getExplicitForallArgumentTypes symbolExpType
-          let argConstraints := expectedArgTypes.map
-            (fun argType =>
-              if argType.isProp then mustBeProp
-              else if argType == mkConst ``Bool then mustBeBool
-              else noConstraint
+          let args ← (restVs.zip expectedArgTypes).mapM
+            (fun (t, expectedArgType) => do
+              if expectedArgType.isProp then
+                parseTerm t symbolMap mustBeProp
+              else if expectedArgType == mkConst ``Bool then
+                parseTerm t symbolMap mustBeBool
+              else if expectedArgType == mkConst ``Nat then
+                let arg ← parseTerm t symbolMap noConstraint
+                let argType ← inferType arg
+                if argType == mkConst ``Nat then
+                  pure arg
+                else if argType == mkConst ``Int then
+                  mkAppM ``Int.natAbs #[arg]
+                else
+                  throwError "parseTerm :: {e} includes term {t} which is parsed as {arg} which is not a Nat"
+              else if expectedArgType == mkConst ``Int then
+                let arg ← parseTerm t symbolMap noConstraint
+                let argType ← inferType arg
+                if argType == mkConst ``Int then
+                  pure arg
+                else if argType == mkConst ``Nat then
+                  mkAppM ``Int.ofNat #[arg]
+                else
+                  throwError "parseTerm :: {e} includes term {t} which is parsed as {arg} which is not an Int"
+              else
+                parseTerm t symbolMap noConstraint
             )
-          let args ← (restVs.zip argConstraints).mapM (fun (t, argConstraint) => parseTerm t symbolMap argConstraint)
+          let res ← mkAppM' symbolExp args.toArray
+          let resType ← inferType res
           match parseTermConstraint with
-          | noConstraint => mkAppM' symbolExp args.toArray
+          | noConstraint =>
+            if resType == mkConst ``Nat then
+              mkAppM ``Int.ofNat #[res]
+            else
+              return res
           | mustBeProp =>
-            let res ← mkAppM' symbolExp args.toArray
-            let resType ← inferType res
             if resType.isProp then
               return res
             else if resType == mkConst ``Bool then
@@ -740,8 +766,6 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
             else
               throwError "parseTerm :: {e} is parsed as {res} which is not a Prop"
           | mustBeBool =>
-            let res ← mkAppM' symbolExp args.toArray
-            let resType ← inferType res
             if resType == mkConst ``Bool then
               return res
             else if resType.isProp then

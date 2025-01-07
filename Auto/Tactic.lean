@@ -494,20 +494,21 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
      - The index of the argument it is a selector for
      - The mvar used to represent the selector function -/
   let mut selectorArr : Array (String × Expr × Nat × Expr) := #[]
-  for (selName, selCtor, argIdx, datatypeName, selOutputType) in selInfos do
-    let selCtor ←
-      SMT.withExprValuation sni state.h2lMap (fun tyValMap varValMap etomValMap => do
-        SMT.LamAtomic.toLeanExpr tyValMap varValMap etomValMap selCtor)
-    let selOutputType ←
-      SMT.withExprValuation sni state.h2lMap (fun tyValMap _ _ => Lam2D.interpLamSortAsUnlifted tyValMap selOutputType)
-    let selDatatype ←
-      match symbolMap.get? datatypeName with
-      | some selDatatype => pure selDatatype
-      | none => throwError "querySMTForHints :: Could not find the datatype {datatypeName} corresponding to selector {selName}"
-    let selType := Expr.forallE `x selDatatype selOutputType .default
-    let selMVar ← Meta.mkFreshExprMVar selType
-    selectorArr := selectorArr.push (selName, selCtor, argIdx, selMVar)
-    symbolMap := symbolMap.insert selName selMVar
+  for (selName, selIsProjection, selCtor, argIdx, datatypeName, selOutputType) in selInfos do
+    if !selIsProjection then -- Projections already have corresponding values in Lean and therefore don't need to be added to `selectorArr`
+      let selCtor ←
+        SMT.withExprValuation sni state.h2lMap (fun tyValMap varValMap etomValMap => do
+          SMT.LamAtomic.toLeanExpr tyValMap varValMap etomValMap selCtor)
+      let selOutputType ←
+        SMT.withExprValuation sni state.h2lMap (fun tyValMap _ _ => Lam2D.interpLamSortAsUnlifted tyValMap selOutputType)
+      let selDatatype ←
+        match symbolMap.get? datatypeName with
+        | some selDatatype => pure selDatatype
+        | none => throwError "querySMTForHints :: Could not find the datatype {datatypeName} corresponding to selector {selName}"
+      let selType := Expr.forallE `x selDatatype selOutputType .default
+      let selMVar ← Meta.mkFreshExprMVar selType
+      selectorArr := selectorArr.push (selName, selCtor, argIdx, selMVar)
+      symbolMap := symbolMap.insert selName selMVar
   let selectorMVars := selectorArr.map (fun (_, _, _, selMVar) => selMVar)
   -- Change the last argument of selectorArr from the mvar used to represent the selector function to its type
   selectorArr ← selectorArr.mapM
