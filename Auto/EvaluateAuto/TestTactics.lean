@@ -257,8 +257,9 @@ structure EvalTacticOnMathlibConfig where
   nthreads      : Nat
 
 /--
-  This should be run after `import Mathlib`, and should be run with a `cwd` where
-    `lake env` creates an environment in which `Mathlib` and `lean-auto` are available
+  This should be run after `import Mathlib` and `import Auto.EvaluateAuto.TestTactics`,
+  and should be run with a `cwd` where `lake env` creates an environment in which
+  `Mathlib` and `lean-auto` are available
 -/
 def evalTacticsAtMathlibHumanTheorems (config : EvalTacticOnMathlibConfig) : CoreM Unit := do
   let mms ← mathlibModules

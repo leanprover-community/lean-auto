@@ -202,6 +202,11 @@ def Array.groupBySize (xs : Array α) (size : Nat) : Option (Array (Array α)) :
     let ret := Array.mk <| (List.range n).map (fun i => Array.mk <| (xs.toList.drop (size * i)).take size)
     some ret
 
+/--
+  This should be run after `import Mathlib, import Auto.EvaluateAuto.TestTactics`,
+  and should be run with a `cwd` where `lake env` creates an environment in which
+  `Mathlib` and `lean-auto` are available
+-/
 def evalAutoAtMathlibHumanTheorems (config : EvalAutoOnMathlibConfig) : CoreM Unit := do
   if !(← System.FilePath.isDir config.resultFolder) then
     IO.FS.createDir config.resultFolder
@@ -214,7 +219,7 @@ def evalAutoAtMathlibHumanTheorems (config : EvalAutoOnMathlibConfig) : CoreM Un
     evaluateFilesHandle.putStrLn (toString idx)
     evaluateFilesHandle.flush
     let evalProc ← EvalProc.create "lake" #["env", "lean", "--stdin"]
-    let logPath := config.resultFolder ++ toString idx
+    let logPath := config.resultFolder ++ "/" ++ toString idx
     evalProc.stdin.putStr (evalFile batch logPath)
     let (_, evalProc) ← evalProc.takeStdin
     running := running.push (idx, evalProc)
@@ -248,7 +253,7 @@ where
         "import Auto.Tactic",
         "open Lean EvalAuto",
         "",
-        "def thms : Std.HashSet Name := Std.HashSet.ofList ["
+        "def thms : Array Name := #["
       ] ++ thmsStrs ++ [
         "]",
         "",
