@@ -43,7 +43,7 @@ namespace Solver.TPTP
 inductive ZEPortType where
   | fo
   | lams
-deriving BEq, Hashable, Inhabited
+deriving BEq, Hashable, Inhabited, Repr
 
 inductive SolverName where
   -- Disable TPTP prover
@@ -53,7 +53,7 @@ inductive SolverName where
   -- E prover, higher-order version
   | eproverHo
   | vampire
-deriving BEq, Hashable, Inhabited
+deriving BEq, Hashable, Inhabited, Repr
 
 instance : ToString SolverName where
   toString : SolverName → String

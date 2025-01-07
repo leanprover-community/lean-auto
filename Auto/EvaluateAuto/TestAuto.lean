@@ -1,4 +1,5 @@
 import Lean
+import Auto.EvaluateAuto.OS
 import Auto.EvaluateAuto.Result
 import Auto.EvaluateAuto.ConstAnalysis
 import Auto.EvaluateAuto.EnvAnalysis
@@ -18,6 +19,7 @@ inductive SolverConfig where
   | leanSmt
   | smt (solverName : Solver.SMT.SolverName)
   | tptp (solverName : Solver.TPTP.SolverName) (path : String)
+  deriving Repr
 
 instance : ToString SolverConfig where
   toString : SolverConfig → String
@@ -177,5 +179,89 @@ def runAutoOnConsts (config : EvalAutoConfig) (names : Array Name) : CoreM Unit 
 def runAutoOnNamesFile (cfg : EvalAutoConfig) (fname : String) : CoreM Unit := do
   let names ← NameArray.load fname
   runAutoOnConsts cfg names
+
+structure EvalAutoOnMathlibConfig where
+  /-- Timeout for Lean code (Lean-auto + native provers) -/
+  maxHeartbeats : Nat           := 65536
+  /-- Timeout for external provers, i.e. TPTP solvers and SMT solvers -/
+  timeout       : Nat           := 10
+  /-- Solver configuration -/
+  solverConfig  : SolverConfig
+  /-- Folder for saving the result of the evaluation -/
+  resultFolder  : String
+  /-- Number of threads to use -/
+  nthreads      : Nat
+  /-- Batch size -/
+  batchSize     : Nat
+
+def Array.groupBySize (xs : Array α) (size : Nat) : Option (Array (Array α)) :=
+  if size == 0 then
+    .none
+  else
+    let n := (xs.size + size - 1) / size
+    let ret := Array.mk <| (List.range n).map (fun i => Array.mk <| (xs.toList.drop (size * i)).take size)
+    some ret
+
+def evalAutoAtMathlibHumanTheorems (config : EvalAutoOnMathlibConfig) : CoreM Unit := do
+  if !(← System.FilePath.isDir config.resultFolder) then
+    IO.FS.createDir config.resultFolder
+  let evaluateFilesHandle ← IO.FS.Handle.mk (config.resultFolder ++ "/evaluateFiles.txt") .write
+  let all ← allHumanTheorems
+  let .some batches := Array.groupBySize all config.batchSize
+    | throwError "Batch size must be nonzero"
+  let mut running := #[]
+  for (batch, idx) in batches.zipWithIndex do
+    evaluateFilesHandle.putStrLn (toString idx)
+    evaluateFilesHandle.flush
+    let evalProc ← EvalProc.create "lake" #["env", "lean", "--stdin"]
+    let logPath := config.resultFolder ++ toString idx
+    evalProc.stdin.putStr (evalFile batch logPath)
+    let (_, evalProc) ← evalProc.takeStdin
+    running := running.push (idx, evalProc)
+    while running.size >= config.nthreads do
+      running ← tryWaitOn evaluateFilesHandle running
+  while running.size != 0 do
+    running ← tryWaitOn evaluateFilesHandle running
+where
+  tryWaitOn (evaluateFilesHandle : IO.FS.Handle) (running : Array (Nat × _)) : CoreM (Array (Nat × _)) := do
+    let mut running' := #[]
+    for (idx, proc) in running do
+      let retCode? ← proc.tryWait
+      match retCode? with
+      | .some retCode =>
+        evaluateFilesHandle.putStrLn s!"{idx} : {retCode}"
+        evaluateFilesHandle.flush
+      | .none => running' := running'.push (idx, proc)
+    return running'
+  evalFile
+    (thms : Array Name) (logPath : String) : String :=
+    let lb := "{"
+    let rb := "}"
+    let thmsStrs : List String :=
+      match thms.toList.getLast? with
+      | .some last =>
+        thms.toList.dropLast.map (fun n => s!"  {repr n},") ++ [s!"  {repr last}"]
+      | .none => []
+    let lines := [
+        s!"import Mathlib",
+        "import Auto.EvaluateAuto.TestAuto",
+        "import Auto.Tactic",
+        "open Lean EvalAuto",
+        "",
+        "def thms : Std.HashSet Name := Std.HashSet.ofList ["
+      ] ++ thmsStrs ++ [
+        "]",
+        "",
+        "def action : CoreM Unit := do",
+        "  let p ← initSrcSearchPath",
+        s!"  let _ ← runAutoOnConsts",
+        s!"    {lb} maxHeartbeats := {config.maxHeartbeats}, timeout := {config.timeout},",
+        s!"      solverConfig := {repr config.solverConfig},",
+        s!"      logFile := Option.some ({repr (logPath ++ ".log")}), resultFile := Option.some ({repr (logPath ++ ".result")}){rb}",
+        "    thms",
+        "",
+        "#eval action"
+      ]
+    String.intercalate "\n" lines
 
 end EvalAuto

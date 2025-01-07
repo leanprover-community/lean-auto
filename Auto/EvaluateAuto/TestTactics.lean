@@ -1,4 +1,5 @@
 import Lean
+import Auto.EvaluateAuto.OS
 import Auto.EvaluateAuto.Result
 import Auto.EvaluateAuto.ConstAnalysis
 import Auto.EvaluateAuto.EnvAnalysis
@@ -252,15 +253,8 @@ structure EvalTacticOnMathlibConfig where
     recorded here and avoided (throw error immediately) during evaluation.
   -/
   nonterminates : Array (RegisteredTactic × Name)
-  /--
-    Number of threads to use
-  -/
+  /-- Number of threads to use -/
   nthreads      : Nat
-
-abbrev EvalProc := IO.Process.Child ⟨.piped, .piped, .piped⟩
-
-def EvalProc.create (path : String) (args : Array String) : IO EvalProc :=
-  IO.Process.spawn {stdin := .piped, stdout := .piped, stderr := .piped, cmd := path, args := args}
 
 /--
   This should be run after `import Mathlib`, and should be run with a `cwd` where
@@ -290,7 +284,7 @@ def evalTacticsAtMathlibHumanTheorems (config : EvalTacticOnMathlibConfig) : Cor
     let evalProc ← EvalProc.create "lake" #["env", "lean", "--stdin"]
     let logPath := config.resultFolder ++ extraLogPath
     let validThms := (allTally.get? mm).getD #[]
-    evalProc.stdin.putStr (evalFile mm validThms logPath config.tactics)
+    evalProc.stdin.putStr (evalFile mm validThms logPath config)
     let (_, evalProc) ← evalProc.takeStdin
     running := running.push (mm, evalProc)
     while running.size >= config.nthreads do
@@ -310,7 +304,7 @@ where
     return running'
   evalFile
     (mm : Name) (validThms : Array Name)
-    (logPath : String) (tacs : Array RegisteredTactic) : String :=
+    (logPath : String) (config : EvalTacticOnMathlibConfig) : String :=
     let lb := "{"
     let rb := "}"
     let thmsStrs : List String :=
@@ -318,7 +312,7 @@ where
       | .some last =>
         validThms.toList.dropLast.map (fun n => s!"  {repr n},") ++ [s!"  {repr last}"]
       | .none => []
-    let tacsStr := String.intercalate ", " (tacs.map (fun tac => "." ++ toString tac)).toList
+    let tacsStr := String.intercalate ", " (config.tactics.map (fun tac => "." ++ toString tac)).toList
     let lines := [
         s!"import {mm}",
         "import Auto.EvaluateAuto.TestTactics",
@@ -332,7 +326,7 @@ where
         "def action : CoreM Unit := do",
         "  let p ← initSrcSearchPath",
         s!"  let _ ← evalAtModule ({repr mm}) p (fun ci => humanThms.contains ci.name)",
-        s!"    {lb} tactics := #[{tacsStr}],",
+        s!"    {lb} maxHeartbeats := {config.maxHeartbeats}, tactics := #[{tacsStr}],",
         s!"      logFile := {repr (logPath ++ ".log")}, resultFile := {repr (logPath ++ ".result")},",
         s!"      nonterminates := #[] {rb}",
         "",
