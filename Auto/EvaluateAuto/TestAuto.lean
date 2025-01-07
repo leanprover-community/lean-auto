@@ -10,7 +10,11 @@ open Lean Auto
 namespace EvalAuto
 
 inductive SolverConfig where
+  -- Use `duper` as the backend prover
   | native
+  -- Use `duper` as the backend prover, without any preprocessing
+  | rawNative
+  -- Use `lean-smt`, currently not supported
   | leanSmt
   | smt (solverName : Solver.SMT.SolverName)
   | tptp (solverName : Solver.TPTP.SolverName) (path : String)
@@ -18,6 +22,7 @@ inductive SolverConfig where
 instance : ToString SolverConfig where
   toString : SolverConfig → String
   | .native       => "native"
+  | .rawNative    => "rawNative"
   | .leanSmt      => "leanSmt"
   | .smt sn       => s!"smt {sn}"
   | .tptp sn path => s!"tptp {sn} {path}"
@@ -49,24 +54,25 @@ instance : ToString EvalAutoConfig where
     s!"solverConfig := {solverConfig}{logFileStr}{resultFileStr}}"
 
 /--
-  Run `Lean-auto` on `lem.type`, using premises collected from `lem.proof`
+  Run `prover` on `lem.type`, using premises collected from `lem.proof`
   Premises which only contain logic constants are filtered because they
     are assumed to be known by the prover
 -/
-private def runAutoOnAutoLemma (declName? : Option Name) (lem : Auto.Lemma) : CoreM Result := do
+private def runProverOnAutoLemma
+  (lem : Auto.Lemma) (prover : Array Lemma → Array Lemma → MetaM Expr) : CoreM Result := do
   if !(← Meta.MetaM.run' <| Meta.isProp lem.type) then
     return .nonProp
   -- **TODO: Aux theorem like those ending in `.proof_1`**
   let usedThmNames ← (← Expr.getUsedTheorems lem.proof).filterM (fun name =>
     return !(← Name.onlyLogicInType name))
   let usedThms ← usedThmNames.mapM (fun n => Lemma.ofConst n (.leaf "collected by hammertest"))
-  let autoProofFn : MetaM Expr := Meta.forallTelescope lem.type fun bs body => do
+  let proverFn : MetaM Expr := Meta.forallTelescope lem.type fun bs body => do
     let negGoal := Expr.app (.const ``Not []) body
     let negGoalImpFalse ← Meta.withLocalDeclD `negGoal negGoal fun negGoalFVar => do
       let inhLemmas ← Auto.Inhabitation.getInhFactsFromLCtx
       let lctxLemmas ← Auto.collectLctxLemmas true #[]
       let allLemmas ← (lctxLemmas ++ usedThms).mapM (Auto.unfoldConstAndPreprocessLemma #[])
-      let proofOfFalse ← Auto.runAuto declName? allLemmas inhLemmas
+      let proofOfFalse ← prover allLemmas inhLemmas
       Meta.mkLambdaFVars #[negGoalFVar] proofOfFalse
     let goal := mkApp2 (.const ``Classical.byContradiction []) body negGoalImpFalse
     Meta.mkLambdaFVars bs goal
@@ -74,31 +80,32 @@ private def runAutoOnAutoLemma (declName? : Option Name) (lem : Auto.Lemma) : Co
   let metaContext : Meta.Context := { config := Elab.Term.setElabConfig {} }
   let result : Expr ⊕ Exception ←
     Lean.Core.tryCatchRuntimeEx
-      (do let autoProof ← Meta.MetaM.run' autoProofFn (ctx := metaContext); return .inl autoProof)
+      (do let proof ← Meta.MetaM.run' proverFn (ctx := metaContext); return .inl proof)
       (fun e => return .inr e)
   match result with
-  | .inl autoProof =>
-    match Kernel.check (← getEnv) {} autoProof with
-    | Except.ok autoProofType =>
-      match Kernel.isDefEq (← getEnv) {} autoProofType lem.type with
+  | .inl proof =>
+    match Kernel.check (← getEnv) {} proof with
+    | Except.ok proofType =>
+      match Kernel.isDefEq (← getEnv) {} proofType lem.type with
       | Except.ok true => return .success
       | _ => return .typeUnequal
     | Except.error _ => return .typeCheckFail
   | .inr e => return .exception e
 
 /--
-  Run `Lean-auto` on the type of ``name``, using premises collected
+  Run `prover` on the type of ``name``, using premises collected
     from the proof of `name`
   Premises which only contain logic constants are filtered because they
     are assumed to be known by the prover
 -/
-def runAutoOnConst (name : Name) : CoreM Result := do
+def runProverOnConst
+  (name : Name) (prover : Array Lemma → Array Lemma → MetaM Expr) : CoreM Result := do
   let ci ← Name.getCi name decl_name%
   let .some v := ci.value?
     | throwError "{decl_name%} :: {name} has no value"
   let lemmaPre ← Auto.Lemma.ofConst name (.leaf "ofConst")
   let lemmaV := {lemmaPre with proof := v}
-  runAutoOnAutoLemma (.some name) lemmaV
+  runProverOnAutoLemma lemmaV prover
 
 def disableAllSolvers (o : Options) : Options :=
   let o := auto.native.set o false
@@ -124,15 +131,17 @@ def runAutoOnConsts (config : EvalAutoConfig) (names : Array Name) : CoreM Unit 
     let result : Result ← withCurrHeartbeats <|
       withReader (fun ctx => {ctx with maxHeartbeats := config.maxHeartbeats * 1000}) <|
         match config.solverConfig with
-        | .native    =>
+        | .native       =>
           withOptions (fun o =>
             let o := disableAllSolvers o
             let o := auto.native.set o true
             let o := auto.mono.mode.set o MonoMode.hol
-            o) <| runAutoOnConst name
-        | .leanSmt  =>
+            o) <| runProverOnConst name (Auto.runAuto (.some name))
+        | .rawNative    =>
+          runProverOnConst name Solver.Native.queryNative
+        | .leanSmt      =>
           throwError "Lean-SMT is currently not supported"
-        | .smt sn   =>
+        | .smt sn       =>
           withOptions (fun o =>
             let o := disableAllSolvers o
             let o := auto.smt.set o true
@@ -140,7 +149,7 @@ def runAutoOnConsts (config : EvalAutoConfig) (names : Array Name) : CoreM Unit 
             let o := auto.smt.timeout.set o config.timeout
             let o := auto.smt.trust.set o true
             let o := auto.mono.mode.set o MonoMode.fol
-            o) <| runAutoOnConst name
+            o) <| runProverOnConst name (Auto.runAuto (.some name))
         | .tptp sn path =>
           withOptions (fun o =>
             let o := disableAllSolvers o
@@ -154,7 +163,7 @@ def runAutoOnConsts (config : EvalAutoConfig) (names : Array Name) : CoreM Unit 
             | .zeport _       => auto.tptp.zeport.path.set o path
             | .eproverHo      => auto.tptp.eproverHo.path.set o path
             | .vampire        => auto.tptp.vampire.path.set o path) <|
-              runAutoOnConst name
+              runProverOnConst name (Auto.runAuto (.some name))
     trace[auto.eval.printResult] m!"{result}"
     results := results.push result
     if let .some fhandle := logFileHandle? then
