@@ -227,19 +227,6 @@ partial def lexAllTerms [Monad m] [Lean.MonadError m] (s : String) (p : String.P
   | .malformed .. => throwError "lexAllTerms: malformed input {s} (lexing from position {p})"
   | .incomplete .. => return acc
 
-/-
-private def testLexer (s : String) (p : String.Pos) (print := true) : MetaM Unit := do
-  match ← lexTerm s p {} with
-  | .complete e p => if print then IO.println e; IO.println (Substring.toString ⟨s, p, s.endPos⟩)
-  | .malformed .. => IO.println "malformed"
-  | .incomplete .. => IO.println "incomplete"
-
-#eval testLexer "(exists (x Int) (y Int) x0)" 0
-#eval testLexer "(forall (x Int) (y Int) (= (+ x y) (+ y x)))" 0
-#eval testLexer "(let ((_let_1 (+ x y))) (or (not (forall ((z Int)) (or (not (>= z 0)) (P z)))) (or (not (>= _let_1 0)) (P _let_1))))" 0
-#eval testLexer "(or (not (>= x 0)) (not (>= y 0)) (>= (+ x y) 0))" 0
--/
-
 inductive SymbolInput
 | UnaryBool -- Used for symbols that take in exactly one Bool argument
 | UnaryProp -- Used for symbols that input and output exactly one Prop argument
@@ -294,13 +281,17 @@ partial def getExplicitForallArgumentTypes (e : Expr) : List Expr :=
   | Expr.forallE _ _t b _ => getExplicitForallArgumentTypes b -- Skip over t because this binder is implicit
   | _ => []
 
--- **TODO** Generalize this to make it possible to impose arbitrary constraints (which is helpful for hints like `(= _wfNat (lambda ((x Int)) (>= x 0)))`
 inductive ParseTermConstraint
-  | mustBeProp
-  | mustBeBool
+  | expectedType : Expr → ParseTermConstraint
   | noConstraint
+  deriving Inhabited, Repr
 
 open ParseTermConstraint
+
+instance : ToMessageData ParseTermConstraint where
+  toMessageData := fun
+    | expectedType t => m!"expectedType {t}"
+    | noConstraint => m!"noConstraint"
 
 /-- A helper function for `parseForall`, `parseExists`, and `parseLambda`
 
@@ -339,9 +330,25 @@ def getNextSortedVars (originalSortedVars : Array (String × Expr)) (curPropBool
   else
     return (sortedVars, none)
 
+/-- Given an expression `e` and a ParseTermConstraint, returns an expression that is equivalent to `e` and conforms to the constraint.
+    If `parseTermConstraint` is `noConstraint`, then `correctType` will prefer interpreting the SMT "Int" sort as `Int` over `Nat`. -/
+def correctType (e : Expr) (parseTermConstraint : ParseTermConstraint) : MetaM Expr := do
+  let eType ← inferType e
+  match parseTermConstraint with
+  | noConstraint =>
+    if eType == mkConst ``Nat then mkAppM ``Int.ofNat #[e]
+    else return e
+  | expectedType t =>
+    if eType == t then return e
+    else if eType.isProp && t == mkConst ``Bool then whnf $ ← mkAppOptM ``decide #[some e, none]
+    else if eType == mkConst ``Bool && t.isProp then whnf $ ← mkAppM ``eq_true #[e]
+    else if eType == mkConst ``Nat && t == mkConst ``Int then return ← mkAppM ``Int.ofNat #[e]
+    else if eType == mkConst ``Int && t == mkConst ``Nat then return ← mkAppM ``Int.natAbs #[e]
+    else throwError "correctType :: {e} is parsed as {eType} which is not a {t}"
+
 mutual
 /-- Given a sorted var of the form `(symbol type)`, returns the string of the symbol and the type as an Expr -/
-partial def parseSortedVar (sortedVar : Term) (symbolMap : Std.HashMap String Expr) : MetaM (String × Expr) := do
+partial def parseSortedVar (sortedVar : Term) (symbolMap : Std.HashMap String Expr) (parseTermConstraint : ParseTermConstraint) : MetaM (String × Expr) := do
   match sortedVar with
   | app sortedVar =>
     match sortedVar with
@@ -349,7 +356,15 @@ partial def parseSortedVar (sortedVar : Term) (symbolMap : Std.HashMap String Ex
       let atom (symb varSymbol) := var
         | throwError "parseSortedVar :: Failed to parse {var} as the variable of a sortedVar"
       let varTypeExp ← parseTerm varType symbolMap noConstraint
-      return (varSymbol, varTypeExp)
+      match parseTermConstraint with
+      | noConstraint => return (varSymbol, varTypeExp)
+      | expectedType t =>
+        if varTypeExp == t then return (varSymbol, varTypeExp)
+        else if varTypeExp.isProp && t == mkConst ``Bool then return (varSymbol, t)
+        else if varTypeExp == mkConst ``Bool && t.isProp then return (varSymbol, t)
+        else if varTypeExp == mkConst ``Nat && t == mkConst ``Int then return (varSymbol, t)
+        else if varTypeExp == mkConst ``Int && t == mkConst ``Nat then return (varSymbol, t)
+        else throwError "parseSortedVar :: {sortedVar} is parsed as having type {varTypeExp} which is not the expected type {t}"
     | _ => throwError "parseSortedVar :: Failed to parse {sortedVar} as a sortedVar"
   | _ => throwError "parseSortedVar :: {sortedVar} is supposed to be a sortedVar, not an atom"
 
@@ -364,13 +379,13 @@ partial def parseForallBodyWithSortedVars (vs : List Term) (sortedVars : Array (
         | throwError "parseForall :: Unknown sorted var name {sortedVar.1} (parseForall input: {vs})"
       symbolMap := symbolMap.insert sortedVar.1 (mkFVar sortedVarDecl.fvarId)
       sortedVarDecls := sortedVarDecls.push sortedVarDecl
-    let body ← parseTerm forallBody symbolMap mustBeProp
+    let body ← parseTerm forallBody symbolMap (expectedType (.sort 0))
     Meta.mkForallFVars (sortedVarDecls.map (fun decl => mkFVar decl.fvarId)) body
 
 partial def parseForall (vs : List Term) (symbolMap : Std.HashMap String Expr) : MetaM Expr := do
   let [app sortedVars, forallBody] := vs
     | throwError "parseForall :: Unexpected input list {vs}"
-  let sortedVars ← sortedVars.mapM (fun sv => parseSortedVar sv symbolMap)
+  let sortedVars ← sortedVars.mapM (fun sv => parseSortedVar sv symbolMap noConstraint)
   let sortedVarsWithIndices := sortedVars.mapFinIdx (fun idx val => (val, idx))
   let mut curPropBoolChoice := some $ (sortedVarsWithIndices.filter (fun ((_, t), _) => t.isProp)).map (fun (_, idx) => (idx, false))
   let mut possibleSortedVars := #[]
@@ -396,7 +411,7 @@ partial def parseExistsBodyWithSortedVars (vs : List Term) (sortedVars : Array (
         | throwError "parseForall :: Unknown sorted var name {sortedVar.1} (parseForall input: {vs})"
       symbolMap := symbolMap.insert sortedVar.1 (mkFVar sortedVarDecl.fvarId)
       sortedVarDecls := sortedVarDecls.push sortedVarDecl
-    let lamBody ← parseTerm existsBody symbolMap mustBeProp
+    let lamBody ← parseTerm existsBody symbolMap (expectedType (.sort 0))
     let mut res := lamBody
     for decl in sortedVarDecls.reverse do
       res ← Meta.mkLambdaFVars #[(mkFVar decl.fvarId)] res
@@ -406,7 +421,7 @@ partial def parseExistsBodyWithSortedVars (vs : List Term) (sortedVars : Array (
 partial def parseExists (vs : List Term) (symbolMap : Std.HashMap String Expr) : MetaM Expr := do
   let [app sortedVars, existsBody] := vs
     | throwError "parseExists :: Unexpected input list {vs}"
-  let sortedVars ← sortedVars.mapM (fun sv => parseSortedVar sv symbolMap)
+  let sortedVars ← sortedVars.mapM (fun sv => parseSortedVar sv symbolMap noConstraint)
   let sortedVarsWithIndices := sortedVars.mapFinIdx (fun idx val => (val, idx))
   let mut curPropBoolChoice := some $ (sortedVarsWithIndices.filter (fun ((_, t), _) => t.isProp)).map (fun (_, idx) => (idx, false))
   let mut possibleSortedVars := #[]
@@ -421,8 +436,10 @@ partial def parseExists (vs : List Term) (symbolMap : Std.HashMap String Expr) :
       continue
   throwError "parseExists :: Failed to parse exists expression with vs: {vs}"
 
+/-- Note: The `parseTermConstraint` argument passed into `parseLambdaBodyWithSortedVars` corresponds to the expected type of the
+    entire lambda expression, not the expected type of the lambda's body. -/
 partial def parseLambdaBodyWithSortedVars (vs : List Term) (sortedVars : Array (String × Expr))
-  (symbolMap : Std.HashMap String Expr) (lambdaBody : Term) : MetaM Expr := do
+  (symbolMap : Std.HashMap String Expr) (lambdaBody : Term) (parseTermConstraint : ParseTermConstraint) : MetaM Expr := do
   withLocalDeclsD (sortedVars.map fun (n, ty) => (n.toName, fun _ => pure ty)) fun _ => do
     let lctx ← getLCtx
     let mut symbolMap := symbolMap
@@ -432,26 +449,41 @@ partial def parseLambdaBodyWithSortedVars (vs : List Term) (sortedVars : Array (
         | throwError "parseForall :: Unknown sorted var name {sortedVar.1} (parseForall input: {vs})"
       symbolMap := symbolMap.insert sortedVar.1 (mkFVar sortedVarDecl.fvarId)
       sortedVarDecls := sortedVarDecls.push sortedVarDecl
-    let body ← parseTerm lambdaBody symbolMap mustBeProp
-    Meta.mkLambdaFVars (sortedVarDecls.map (fun decl => mkFVar decl.fvarId)) body
+    match parseTermConstraint with
+    | noConstraint =>
+      let body ← parseTerm lambdaBody symbolMap noConstraint
+      Meta.mkLambdaFVars (sortedVarDecls.map (fun decl => mkFVar decl.fvarId)) body
+    | expectedType t =>
+      let tBody := t.getForallBody
+      if tBody.hasLooseBVars then throwError "parseLambdaBodyWithSortedVars :: {t} is a dependent type"
+      let body ← parseTerm lambdaBody symbolMap (expectedType tBody)
+      Meta.mkLambdaFVars (sortedVarDecls.map (fun decl => mkFVar decl.fvarId)) body
 
-partial def parseLambda (vs : List Term) (symbolMap : Std.HashMap String Expr) : MetaM Expr := do
-  let [app sortedVars, existsBody] := vs
+partial def parseLambda (vs : List Term) (symbolMap : Std.HashMap String Expr) (parseTermConstraint : ParseTermConstraint) : MetaM Expr := do
+  let [app sortedVars, lambdaBody] := vs
     | throwError "parseLambda :: Unexpected input list {vs}"
-  let sortedVars ← sortedVars.mapM (fun sv => parseSortedVar sv symbolMap)
-  let sortedVarsWithIndices := sortedVars.mapFinIdx (fun idx val => (val, idx))
-  let mut curPropBoolChoice := some $ (sortedVarsWithIndices.filter (fun ((_, t), _) => t.isProp)).map (fun (_, idx) => (idx, false))
-  let mut possibleSortedVars := #[]
-  while curPropBoolChoice.isSome do
-    let (nextSortedVars, nextCurPropBoolChoice) := getNextSortedVars sortedVars curPropBoolChoice.get!
-    possibleSortedVars := possibleSortedVars.push nextSortedVars
-    curPropBoolChoice := nextCurPropBoolChoice
-  for sortedVars in possibleSortedVars do
-    try
-      return ← parseLambdaBodyWithSortedVars vs sortedVars symbolMap existsBody
-    catch _ =>
-      continue
-  throwError "parseLambda :: Failed to parse exists expression with vs: {vs}"
+  match parseTermConstraint with
+  | noConstraint =>
+    let sortedVars ← sortedVars.mapM (fun sv => parseSortedVar sv symbolMap noConstraint)
+    let sortedVarsWithIndices := sortedVars.mapFinIdx (fun idx val => (val, idx))
+    let mut curPropBoolChoice := some $ (sortedVarsWithIndices.filter (fun ((_, t), _) => t.isProp)).map (fun (_, idx) => (idx, false))
+    let mut possibleSortedVars := #[]
+    while curPropBoolChoice.isSome do
+      let (nextSortedVars, nextCurPropBoolChoice) := getNextSortedVars sortedVars curPropBoolChoice.get!
+      possibleSortedVars := possibleSortedVars.push nextSortedVars
+      curPropBoolChoice := nextCurPropBoolChoice
+    for sortedVars in possibleSortedVars do
+      try
+        return ← parseLambdaBodyWithSortedVars vs sortedVars symbolMap lambdaBody noConstraint
+      catch _ =>
+        continue
+    throwError "parseLambda :: Failed to parse exists expression with vs: {vs}"
+  | expectedType t =>
+    let lambdaArgTypes := (getExplicitForallArgumentTypes t).toArray
+    if lambdaArgTypes.size != sortedVars.size then
+      throwError "parseLambda :: Expected {lambdaArgTypes.size} arguments, but got {sortedVars.size} in {vs}"
+    let sortedVars ← (sortedVars.zip lambdaArgTypes).mapM (fun (sv, t) => parseSortedVar sv symbolMap (expectedType t))
+    parseLambdaBodyWithSortedVars vs sortedVars symbolMap lambdaBody parseTermConstraint
 
 /-- Given a varBinding of the form `(symbol value)` returns the string of the symbol, the type of the value, and the value itself -/
 partial def parseVarBinding (varBinding : Term) (symbolMap : Std.HashMap String Expr) : MetaM (String × Expr × Expr) := do
@@ -512,7 +544,7 @@ partial def parseImplicationAux (args : List Term) (symbolMap : Std.HashMap Stri
   match args with
   | [] => return acc
   | arg :: restArgs =>
-    let arg ← parseTerm arg symbolMap mustBeProp
+    let arg ← parseTerm arg symbolMap (expectedType (.sort 0))
     let acc := .forallE `_ arg acc .default
     parseImplicationAux restArgs symbolMap acc
 
@@ -520,7 +552,7 @@ partial def parseImplicationAux (args : List Term) (symbolMap : Std.HashMap Stri
 partial def parseImplication (args : List Term) (symbolMap : Std.HashMap String Expr) : MetaM Expr := do
   match args.reverse with
   | lastArg :: (lastArg2 :: restArgs) =>
-    let lastArg ← parseTerm lastArg symbolMap mustBeProp
+    let lastArg ← parseTerm lastArg symbolMap (expectedType (.sort 0))
     parseImplicationAux (lastArg2 :: restArgs) symbolMap lastArg
   | _ => throwError "parseImplication :: Insufficient arguments given. args: {args}"
 
@@ -528,73 +560,21 @@ partial def parseImplication (args : List Term) (symbolMap : Std.HashMap String 
     Lean expressions they are meant to represent. `parseTermConstraint` is used to indicate whether the output expression must be a particular type. -/
 partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTermConstraint : ParseTermConstraint) : MetaM Expr := do
   match e with
-  | atom (num n) =>
-    match parseTermConstraint with
-    | noConstraint => mkAppM ``Int.ofNat #[Expr.lit (Literal.natVal n)]
-    | mustBeProp => throwError "parseTerm :: {e} can be parsed but not as a Prop"
-    | mustBeBool => throwError "parseTerm :: {e} can be parsed but not as a Bool"
-  | atom (rat n m) =>
-    match parseTermConstraint with
-    | noConstraint =>
-      let numerator ← mkAppM ``Int.ofNat #[Expr.lit (Literal.natVal n)]
-      mkAppM ``mkRat #[numerator, Expr.lit (Literal.natVal m)]
-    | mustBeProp => throwError "parseTerm :: {e} can be parsed but not as a Prop"
-    | mustBeBool => throwError "parseTerm :: {e} can be parsed but not as a Bool"
-  | atom (str s) =>
-    match parseTermConstraint with
-    | noConstraint => return Expr.lit (Literal.strVal s)
-    | mustBeProp => throwError "parseTerm :: {e} can be parsed but not as a Prop"
-    | mustBeBool => throwError "parseTerm :: {e} can be parsed but not as a Bool"
+  | atom (num n) => correctType (Expr.lit (Literal.natVal n)) parseTermConstraint
+  | atom (rat _ _) => throwError "parseTerm :: Rational/real numbers not supported yet"
+  | atom (str s) => correctType (Expr.lit (Literal.strVal s)) parseTermConstraint
   | atom (symb s) =>
     match symbolMap.get? s with
-    | some v =>
-      let vType ← inferType v
-      match parseTermConstraint with
-      | noConstraint =>
-        if vType == mkConst ``Nat then mkAppM ``Int.ofNat #[v]
-        else return v
-      | mustBeProp =>
-        if vType.isProp then
-          return v
-        else if vType == mkConst ``Bool then
-          mkAppM ``Eq #[v, mkConst ``true]
-        else
-          throwError "parseTerm :: {e} is parsed as {v} which is not a Prop"
-      | mustBeBool =>
-        if vType == mkConst ``Bool then
-          return v
-        else if vType.isProp then
-          whnf $ ← mkAppOptM ``decide #[some v, none]
-        else
-          throwError "parseTerm :: {e} is parsed as {v} which is not a Bool"
+    | some v => correctType v parseTermConstraint
     | none =>
       match builtInSymbolMap.get? s with
-      | some v =>
-        let vType ← inferType v
-        match parseTermConstraint with
-        | noConstraint =>
-          if vType == mkConst ``Nat then mkAppM ``Int.ofNat #[v]
-          else return v
-        | mustBeProp =>
-          if vType.isProp then
-            return v
-          else if vType == mkConst ``Bool then
-            mkAppM ``Eq #[vType, mkConst ``true]
-          else
-            throwError "parseTerm :: {e} is parsed as {v} which is not a Prop"
-        | mustBeBool =>
-          if vType == mkConst ``Bool then
-            return v
-          else if vType.isProp then
-            whnf $ ← mkAppOptM ``decide #[some v, none]
-          else
-            throwError "parseTerm :: {e} is parsed as {v} which is not a Bool"
+      | some v => correctType v parseTermConstraint
       | none => throwError "parseTerm :: Unknown symbol {s}"
   | app vs =>
     match vs.toList with
-    | atom (reserved "forall") :: restVs => parseForall restVs symbolMap
-    | atom (reserved "exists") :: restVs => parseExists restVs symbolMap
-    | atom (reserved "lambda") :: restVs => parseLambda restVs symbolMap
+    | atom (reserved "forall") :: restVs => correctType (← parseForall restVs symbolMap) parseTermConstraint
+    | atom (reserved "exists") :: restVs => correctType (← parseExists restVs symbolMap) parseTermConstraint
+    | atom (reserved "lambda") :: restVs => parseLambda restVs symbolMap parseTermConstraint
     | atom (reserved "let") :: restVs => parseLet restVs symbolMap parseTermConstraint
     | atom (symb "=>") :: restVs => parseImplication restVs symbolMap
     | app #[atom underscore, atom (symb "is"), ctor] :: [testerArg] =>
@@ -611,7 +591,7 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
         for ctorArg in ctorArgs do
           res ← mkLambdaFVars #[ctorArg] res
           res ← mkAppM ``Exists #[res]
-        return res
+        correctType res parseTermConstraint
     | atom (symb s) :: restVs =>
       match smtSymbolToLeanName s with
       | [(s1, UnaryProp), (s2, UnaryBool)] =>
@@ -624,38 +604,23 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
             if argType.isProp then mkAppM s1 #[arg]
             else if argType == mkConst ``Bool then mkAppM s2 #[arg]
             else throwError "parseTerm :: {arg} was not be interpreted as Prop or Bool in {e}"
-          | mustBeProp =>
-            let arg ← parseTerm arg symbolMap mustBeProp
-            mkAppM s1 #[arg]
-          | mustBeBool =>
-            let arg ← parseTerm arg symbolMap mustBeBool
-            mkAppM s2 #[arg]
+          | expectedType t =>
+            if t.isProp then
+              let arg ← parseTerm arg symbolMap (expectedType t)
+              mkAppM s1 #[arg]
+            else if t == mkConst ``Bool then
+              let arg ← parseTerm arg symbolMap (expectedType t)
+              mkAppM s2 #[arg]
+            else
+              throwError "parseTerm :: {e} is parsed as {arg} which is not a {t}"
         | _ => throwError "parseTerm :: Invalid unary symbol application {e}"
       | [(s, TwoExactNoConstraint)] =>
         match restVs with
         | [arg1, arg2] =>
           let arg1 ← parseTerm arg1 symbolMap noConstraint
           let arg2 ← parseTerm arg2 symbolMap noConstraint
-          match parseTermConstraint with
-          | noConstraint => mkAppM s #[arg1, arg2]
-          | mustBeProp =>
-            let res ← mkAppM s #[arg1, arg2]
-            let resType ← inferType res
-            if resType.isProp then
-              return res
-            else if resType == mkConst ``Bool then
-              mkAppM ``Eq #[res, mkConst ``true]
-            else
-              throwError "parseTerm :: {e} is parsed as {res} which is not a Prop"
-          | mustBeBool =>
-            let res ← mkAppM s #[arg1, arg2]
-            let resType ← inferType res
-            if resType == mkConst ``Bool then
-              return res
-            else if resType.isProp then
-              whnf $ ← mkAppOptM ``decide #[some res, none]
-            else
-              throwError "parseTerm :: {e} is parsed as {res} which is not a Bool"
+          let res ← mkAppM s #[arg1, arg2]
+          correctType res parseTermConstraint
         | _arg1 :: (_arg2 :: _restArgs) =>
           -- **TODO**: Interpret `(< a b c)` as `(and (< a b) (< b c))`
           throwError "parseTerm :: TwoExact symbol with more than two arguments not implemented yet (e: {e})"
@@ -663,115 +628,45 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
       | [(s, TwoExactEq)] =>
         match restVs with
         | [arg1, arg2] =>
-          let arg1 ← parseTerm arg1 symbolMap noConstraint
-          let arg1Type ← inferType arg1
-          let res ←
-            if arg1Type.isProp then
-              let arg2 ← parseTerm arg2 symbolMap mustBeProp -- arg2 needs to be a `Prop` to match arg1
-              mkAppM s #[arg1, arg2]
-            else if arg1Type == mkConst ``Bool then
-              let arg2 ← parseTerm arg2 symbolMap mustBeBool -- arg2 needs to be a `Bool` to match arg1
-              mkAppM s #[arg1, arg2]
-            else
-              let arg2 ← parseTerm arg2 symbolMap noConstraint
-              mkAppM s #[arg1, arg2]
-          match parseTermConstraint with
-          | noConstraint => return res
-          | mustBeProp => return res
-          | mustBeBool => whnf $ ← mkAppOptM ``decide #[some res, none]
+          let arg1' ← parseTerm arg1 symbolMap noConstraint
+          let arg1Type ← inferType arg1'
+          let arg2Opt ←
+            try pure $ some $ ← parseTerm arg2 symbolMap (expectedType arg1Type)
+            catch _ => pure none
+          match arg2Opt with
+          | some arg2 =>
+            correctType (← mkAppM s #[arg1', arg2]) parseTermConstraint
+          | none => -- If `arg2` can't be made to match `arg1`'s type, try to make `arg1` match `arg2`'s type
+            let arg2 ← parseTerm arg2 symbolMap noConstraint
+            let arg2Type ← inferType arg2
+            let arg1' ← parseTerm arg1 symbolMap (expectedType arg2Type)
+            correctType (← mkAppM s #[arg1', arg2]) parseTermConstraint
         | _arg1 :: (_arg2 :: _restArgs) =>
           -- **TODO**: Interpret `(= a b c)` as `(and (= a b) (= b c))`
           throwError "parseTerm :: TwoExact symbol with more than two arguments not implemented yet (e: {e})"
         | _ => throwError "parseTerm :: Invalid application {e}"
-      | [(s, LeftAssocNoConstraint)] =>
-        let res ← parseLeftAssocApp s restVs symbolMap noConstraint
-        match parseTermConstraint with
-        | noConstraint => return res
-        | mustBeProp =>
-          let resType ← inferType res
-          if resType.isProp then
-            return res
-          else if resType == mkConst ``Bool then
-            mkAppM ``Eq #[res, mkConst ``true]
-          else
-            throwError "parseTerm :: {e} is parsed as {res} which is not a Prop"
-        | mustBeBool =>
-          let resType ← inferType res
-          if resType == mkConst ``Bool then
-            return res
-          else if resType.isProp then
-            whnf $ ← mkAppOptM ``decide #[some res, none]
-          else
-            throwError "parseTerm :: {e} is parsed as {res} which is not a Bool"
+      | [(s, LeftAssocNoConstraint)] => parseLeftAssocApp s restVs symbolMap parseTermConstraint
       | [(s1, LeftAssocAllProp), (s2, LeftAssocAllBool)] =>
         match parseTermConstraint with
-        | noConstraint => parseLeftAssocApp s1 restVs symbolMap mustBeProp -- Favor `Prop` interpretation over `Bool interpretation
-        | mustBeProp => parseLeftAssocApp s1 restVs symbolMap mustBeProp
-        | mustBeBool => parseLeftAssocApp s2 restVs symbolMap mustBeBool
+        | noConstraint => parseLeftAssocApp s1 restVs symbolMap (expectedType (.sort 0)) -- Favor `Prop` interpretation over `Bool` interpretation
+        | expectedType t =>
+          if t.isProp then parseLeftAssocApp s1 restVs symbolMap (expectedType t)
+          else if t == mkConst ``Bool then parseLeftAssocApp s2 restVs symbolMap (expectedType t)
+          else throwError "parseTerm :: {e} has a head symbol {s} that does not permit it to have type {t}"
       | [(s, Minus)] =>
-        match parseTermConstraint with
-        | noConstraint =>
-          match restVs with -- Subtraction is left associative, but if it takes in just one argument, Minus is interpreted as negation
-          | [arg] =>
-            let arg ← parseTerm arg symbolMap noConstraint
-            mkAppM ``Neg.neg #[arg]
-          | _ => parseLeftAssocApp s restVs symbolMap noConstraint
-        | mustBeProp => throwError "parseTerm :: {e} has minus as a head symbol which cannot yield a result of type Prop"
-        | mustBeBool => throwError "parseTerm :: {e} has minus as a head symbol which cannot yield a result of type Bool"
+        match restVs with
+        | [arg] => -- Subtraction is left associative, but if it takes in just one argument, Minus is interpreted as negation
+          let arg ← parseTerm arg symbolMap parseTermConstraint
+          mkAppM ``Neg.neg #[arg]
+        | _ => parseLeftAssocApp s restVs symbolMap parseTermConstraint
       | [] =>
         match symbolMap.get? s with
         | some symbolExp =>
           let symbolExpType ← inferType symbolExp
           let expectedArgTypes := getExplicitForallArgumentTypes symbolExpType
-          let args ← (restVs.zip expectedArgTypes).mapM
-            (fun (t, expectedArgType) => do
-              if expectedArgType.isProp then
-                parseTerm t symbolMap mustBeProp
-              else if expectedArgType == mkConst ``Bool then
-                parseTerm t symbolMap mustBeBool
-              else if expectedArgType == mkConst ``Nat then
-                let arg ← parseTerm t symbolMap noConstraint
-                let argType ← inferType arg
-                if argType == mkConst ``Nat then
-                  pure arg
-                else if argType == mkConst ``Int then
-                  mkAppM ``Int.natAbs #[arg]
-                else
-                  throwError "parseTerm :: {e} includes term {t} which is parsed as {arg} which is not a Nat"
-              else if expectedArgType == mkConst ``Int then
-                let arg ← parseTerm t symbolMap noConstraint
-                let argType ← inferType arg
-                if argType == mkConst ``Int then
-                  pure arg
-                else if argType == mkConst ``Nat then
-                  mkAppM ``Int.ofNat #[arg]
-                else
-                  throwError "parseTerm :: {e} includes term {t} which is parsed as {arg} which is not an Int"
-              else
-                parseTerm t symbolMap noConstraint
-            )
+          let args ← (restVs.zip expectedArgTypes).mapM (fun (t, expectedArgType) => parseTerm t symbolMap (expectedType expectedArgType))
           let res ← mkAppM' symbolExp args.toArray
-          let resType ← inferType res
-          match parseTermConstraint with
-          | noConstraint =>
-            if resType == mkConst ``Nat then
-              mkAppM ``Int.ofNat #[res]
-            else
-              return res
-          | mustBeProp =>
-            if resType.isProp then
-              return res
-            else if resType == mkConst ``Bool then
-              mkAppM ``Eq #[res, mkConst ``true]
-            else
-              throwError "parseTerm :: {e} is parsed as {res} which is not a Prop"
-          | mustBeBool =>
-            if resType == mkConst ``Bool then
-              return res
-            else if resType.isProp then
-              whnf $ ← mkAppOptM ``decide #[some res, none]
-            else
-              throwError "parseTerm :: {e} is parsed as {res} which is not a Bool"
+          correctType res parseTermConstraint
         | none => throwError "parseTerm :: Unknown symbol {s} in term {e}"
       | _ => throwError "parseTerm :: Unexpected result of smtSymbolToLeanName {s}"
     | _ => throwError "parseTerm :: Invalid term application {e}"
@@ -796,41 +691,3 @@ def tryParseTermAndAbstractSelectors (e : Term) (symbolMap : Std.HashMap String 
   catch err =>
     trace[auto.smt.parseTermErrors] "Error parsing {e}. Error: {err.toMessageData}"
     return none
-
-/-
-private def testParseTerm (s : String) (p : String.Pos) : MetaM Expr := do
-  match ← lexTerm s p {} with
-  | .complete e p =>
-    IO.println s!"Lexed term: {e}"
-    IO.println s!"Rest of string: {(Substring.toString ⟨s, p, s.endPos⟩)}"
-    let constants :=
-      #[("P", (Expr.forallE `_ (mkConst ``Int) (.sort .zero) .default)),
-        ("x", (mkConst ``Int)), ("y", (mkConst ``Int))]
-    withLocalDeclsD (constants.map fun (n, ty) => (n, fun _ => pure ty)) fun _ => do
-      let some xDecl := (← getLCtx).findFromUserName? `x
-        | throwError "Unknown variable name x"
-      let some yDecl := (← getLCtx).findFromUserName? `y
-        | throwError "Unknown variable name y"
-      let some pDecl := (← getLCtx).findFromUserName? `P
-        | throwError "Unknown variable name P"
-      let symbolMap : HashMap String Expr := HashMap.empty
-      let symbolMap := symbolMap.insert "x" (mkFVar xDecl.fvarId)
-      let symbolMap := symbolMap.insert "y" (mkFVar yDecl.fvarId)
-      let symbolMap := symbolMap.insert "P" (mkFVar pDecl.fvarId)
-      let exp ← parseTerm e symbolMap
-      let expType ← inferType exp
-      IO.println s!"expType: {expType}"
-      IO.println "exp:"
-      return exp
-  | .malformed .. => throwError "malformed"
-  | .incomplete .. => throwError "incomplete"
-
-#eval testParseTerm "(or (not (>= x 0)) (not (>= y 0)) (>= (+ x y) 0))" 0
-#eval testParseTerm "(or (P (+ x y)) (not (>= (+ x y) 0)) (not (or (not (>= (+ x y) 0)) (P (+ x y)))))" 0
-#eval testParseTerm "(or (not (forall ((z Int)) (or (not (>= z 0)) (P z)))) (or (not (>= (+ x y) 0)) (P (+ x y))))" 0
-#eval testParseTerm "(let ((_let_1 (+ x y))) (or (not (forall ((z Int)) (or (not (>= z 0)) (P z)))) (or (not (>= _let_1 0)) (P _let_1))))" 0
-#eval testParseTerm "(or (not (exists ((z Int) (q Int)) (or (not (>= z 0)) (P z)))) (or (not (>= (+ x y) 0)) (P (+ x y))))" 0
-#eval testParseTerm "(=> (forall ((z Int)) (=> (>= z 0) (P z))) (forall ((z Int)) (or (not (>= z 0)) (P z))))" 0
-#eval testParseTerm "(forall ((B0 Bool) (B1 Bool)) (= (=> B0 B1) (or (not B0) B1)))" 0
-#eval testParseTerm "(- 3)" 0
--/
