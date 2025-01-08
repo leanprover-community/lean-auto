@@ -205,13 +205,13 @@ def Array.groupBySize (xs : Array α) (size : Nat) : Option (Array (Array α)) :
 /--
   This should be run after `import Mathlib, import Auto.EvaluateAuto.TestTactics`,
   and should be run with a `cwd` where `lake env` creates an environment in which
-  `Mathlib` and `lean-auto` are available
+  `Mathlib, lean-auto` and `duper` are available
 -/
 def evalAutoAtMathlibHumanTheorems (config : EvalAutoOnMathlibConfig) : CoreM Unit := do
   if !(← System.FilePath.isDir config.resultFolder) then
     IO.FS.createDir config.resultFolder
   let evaluateFilesHandle ← IO.FS.Handle.mk (config.resultFolder ++ "/evaluateFiles.txt") .write
-  let all ← allHumanTheorems
+  let all ← allHumanTheoremsFromPackage "Mathlib"
   let .some batches := Array.groupBySize all config.batchSize
     | throwError "Batch size must be nonzero"
   let mut running := #[]
@@ -251,7 +251,15 @@ where
         s!"import Mathlib",
         "import Auto.EvaluateAuto.TestAuto",
         "import Auto.Tactic",
-        "open Lean EvalAuto",
+        "import Duper.Tactic",
+        "open Lean Auto EvalAuto",
+        "",
+        "def Auto.duperRaw (lemmas : Array Lemma) (inhs : Array Lemma) : MetaM Expr := do",
+        "  let lemmas : Array (Expr × Expr × Array Name × Bool) ← lemmas.mapM",
+        "    (fun ⟨⟨proof, ty, _⟩, _⟩ => do return (ty, ← Meta.mkAppM ``eq_true #[proof], #[], true))",
+        "  Duper.runDuper lemmas.toList 0",
+        "",
+        "attribute [rebind Auto.Native.solverFunc] Auto.duperRaw",
         "",
         "def thms : Array Name := #["
       ] ++ thmsStrs ++ [
