@@ -301,6 +301,7 @@ instance : ToString SMTOption where
                 ( declare-sort 〈symbol〉 〈numeral〉 )
                 ( define-fun 〈function_def〉 )
                 ( define-fun-rec 〈function_def〉 )
+                ( define-funs-rec ( ⟨function_dec⟩ⁿ⁺¹ ) ( ⟨term⟩ⁿ⁺¹ ) )
                 ( define-sort 〈symbol〉 ( 〈symbol〉∗ ) 〈sort〉 )
                 ( declare-datatype 〈symbol〉 〈datatype_dec〉)
                 ...
@@ -327,6 +328,12 @@ inductive Command where
   | declSort   : (name : String) → (arity : Nat) → Command
   | defFun     : (isRec : Bool) → (name : String) → (args : Array (String × SSort)) →
                    (resTy : SSort) → (body : STerm) → Command
+  -- `defFuns` is used for the command `define-funs-rec`. Each element in the array it takes in contains:
+  -- `String` : Function name
+  -- `Array (String × SSort)` : Function args
+  -- `SSort` : Function return sort
+  -- `STerm` : Function body
+  | defFuns    : Array (String × Array (String × SSort) × SSort × STerm) → Command
   | defSort    : (name : String) → (args : Array String) → (body : SSort) → Command
   | declDtype  : (name : String) → DatatypeDecl → Command
   -- String × Nat : sort_dec
@@ -358,6 +365,15 @@ def Command.toString : Command → String
   let binders := "(" ++ String.intercalate " " (args.map (fun (name, sort) => s!"({SIdent.symb name} {sort})")).toList ++ ") "
   let trail := s!"{resTy} " ++ STerm.toString body (args.map (fun (name, _) => SIdent.symb name)) ++ ")"
   pre ++ binders ++ trail
+| .defFuns defs =>
+  let pre := "(define-funs-rec "
+  let declStringOfDef : String × Array (String × SSort) × SSort × STerm → String := fun (name, args, resSort, _) =>
+    let argBinders := "(" ++ String.intercalate " " (args.map (fun (name, sort) => s!"({SIdent.symb name} {sort})")).toList ++ ") "
+    s!"({SIdent.symb name} {argBinders} {resSort})"
+  let decls := "(" ++ String.intercalate " " (defs.map declStringOfDef).toList ++ ") "
+  let bodies := "(" ++ String.intercalate " " (defs.map (fun (_, args, _, body) => STerm.toString body (args.map (fun (name, _) => SIdent.symb name)))).toList ++ ")"
+  let trail := ")"
+  pre ++ decls ++ bodies ++ trail
 | .defSort name args body              =>
   let pre := s!"(define-sort {SIdent.symb name} ("
   let sargs := String.intercalate " " args.toList ++ ") "

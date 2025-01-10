@@ -494,7 +494,7 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
      - The index of the argument it is a selector for
      - The mvar used to represent the selector function -/
   let mut selectorArr : Array (String × Expr × Nat × Expr) := #[]
-  for (selName, selIsProjection, selCtor, argIdx, datatypeName, selOutputType) in selInfos do
+  for (selName, selIsProjection, selCtor, argIdx, datatypeName, _selInputType, selOutputType) in selInfos do
     if !selIsProjection then -- Projections already have corresponding values in Lean and therefore don't need to be added to `selectorArr`
       let selCtor ←
         SMT.withExprValuation sni state.h2lMap (fun tyValMap varValMap etomValMap => do

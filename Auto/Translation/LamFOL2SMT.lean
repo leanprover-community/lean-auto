@@ -57,10 +57,11 @@ instance : Ord LamAtomic where
     - Whether the selector is a projection
     - The constructor that the selector is for
     - The index of the argument that it is selecting
-    - The name of the SMT datatype that the selector is for
+    - The name of the SMT datatype that the selector is for (i.e. the name of the input type)
+    - The LamSort of the SMT datatype that the selector is for (i.e. the input type)
     - The output type of the selector (full type is an arrow type that takes in
-      the datatype and returns the output type) -/
-abbrev SelectorInfo := String × Bool × LamAtomic × Nat × String × LamSort
+      a datatype and returns the output type) -/
+abbrev SelectorInfo := String × Bool × LamAtomic × Nat × String × LamSort × LamSort
 
 def LamAtomic.toLeanExpr
   (tyValMap varValMap etomValMap : Std.HashMap Nat Expr)
@@ -168,16 +169,16 @@ private def lamSort2SSort (sni : SMTNamingInfo) : LamSort → TransM LamAtomic L
   return (smarg :: smargs, smres)
 | s => return ([], ← lamSort2SSortAux sni s)
 
-/- **TODO** Not sure if calling `getWfConstraint` with `none` by default will always work. Especially in cases where a mutually
-   inductive datatype refers to a datatype before it's well-formed constraint is defined. But I'll leave dealing with that
-   for when I'm actually trying to add support for mutually inductive datatypes. -/
 mutual
   /-- Assuming `s` either has the form `.atom n` or `.base b`, checks whether `s` has a well-formed constraint
       equivalent to `True`. If it does, then returns `none`. If it doesn't then `defineWfConstraint` creates
-      and defines a well-formed constraint corresponding to `s` and returns the String name of that constraint.
+      and defines the well-formed constraints corresponding to `s` and all of the types that are mutually inductive
+      with it and returns the String name of that `s`'s well-formed constraint.
 
       If `s` corresponds to a structure or inductive datatype that has been translated to an SMT datatype, then the
-      `selInfos?` field is populated and contains the selector information corresponding to `s`'s constructors.
+      `selInfos?` field is populated and contains the selector information corresponding to the constructors of all
+      datatypes that are mutually inductive with `s`.
+
       If `s` does not correspond to a structure or inductive datatype that has been translated to an SMT datatype, then
       the `selInfos?` field should be `none`. -/
   private partial def defineWfConstraint (sni : SMTNamingInfo) (s : LamSort) (selInfos? : Option (Array SelectorInfo))
@@ -185,56 +186,101 @@ mutual
     trace[auto.lamFOL2SMT] "Calling defineWfConstraint on {s}"
     match s, selInfos? with
     | .atom n, none => return none -- The well-formed predicate for every atom that doesn't correspond to a datatype is `True`
-    | .atom n, some selInfos =>
+    | .atom _, some selInfos =>
       match h : selInfos.size with
       | 0 => return none -- Datatypes with no selectors are guaranteed to be well-formed
-      | _ => -- **TODO** This approach does not adequately address mutually inductive datatypes (assumes all ctors are of same datatype, and other issues)
-        /- **TODO** Determine datatype name by calling `← h2Symb (.sort n) none` rather than using the first selInfo's datatype name
-           (to ensure we get the correct specific datatype when considering mutually inductive datatypes) -/
-        let datatypeName := selInfos[0]!.2.2.2.2.1 -- Guaranteed to not panic because `selInfos.size > 0`
-        let some sWfConstraintName ← h2SymbWf s $ some ("wf" ++ datatypeName.capitalize)
-          | throwError "{decl_name%} :: h2SymbWf returned none given {s} even though {s} has a nontrivial well-formed predicate"
-        trace[auto.lamFOL2SMT] "defineWfConstraint :: {s} has datatype name {datatypeName}"
-        let mut wfCstrTerms : Array STerm := #[]
-        -- Gather a list of selector infos for each constructor
-        let mut ctorInfos : Std.HashMap LamAtomic (List SelectorInfo) := Std.HashMap.empty
-        for (selName, selIsProjection, ctor, argIdx, datatypeName, selOutputType) in selInfos do
-          if ctorInfos.contains ctor then
-            ctorInfos := ctorInfos.modify ctor (fun acc => (selName, selIsProjection, ctor, argIdx, datatypeName, selOutputType) :: acc)
+      | _ =>
+        -- `wfDatatypeTerms` maps datatype names to their LamSorts and well-formed constraints (each has the form `(x is ctor) => all of ctor's selectors are well-formed`)
+        let mut wfDatatypeTerms : Std.HashMap String (LamSort × Array STerm) := Std.HashMap.empty
+        -- Gather a list of selector infos for each constructor (organized by datatype)
+        let mut ctorInfos : Std.HashMap String (Std.HashMap LamAtomic (List SelectorInfo)) := Std.HashMap.empty
+        for selInfo@(selName, selIsProjection, ctor, argIdx, selDatatypeName, selInputType, selOutputType) in selInfos do
+          if ctorInfos.contains selDatatypeName then
+            if ctorInfos[selDatatypeName]!.contains ctor then
+              ctorInfos := ctorInfos.modify selDatatypeName (fun map => map.modify ctor (fun acc => selInfo :: acc))
+            else
+              ctorInfos := ctorInfos.modify selDatatypeName (fun map => map.insert ctor [selInfo])
           else
-            ctorInfos := ctorInfos.insert ctor [(selName, selIsProjection, ctor, argIdx, datatypeName, selOutputType)]
-        -- Iterate through each constructor to build `wfCstrTerms`
-        for (ctor, ctorSelInfos) in ctorInfos do
-          let ctorName ← h2Symb ctor none -- `none` should never cause an error since `ctor` should have been given a symbol when the datatype was defined
-          let ctorTester := .testerApp ctorName (.bvar 0) -- `.bvar 0` refers to the element of sort `s` being tested
-          let mut wfSelectorTerms : Array STerm := #[]
-          for (selName, selIsProjection, _, argIdx, datatypeName, selOutputType) in ctorSelInfos do
-            trace[auto.lamFOL2SMT] "defineWfConstraint :: Examining selector {selName} for datatype {datatypeName} which has output type {selOutputType}"
-            match ← getWfConstraint sni selOutputType none with
-            | some selOutputTypeWfConstraint => wfSelectorTerms := wfSelectorTerms.push $ .qStrApp selOutputTypeWfConstraint #[.qStrApp selName #[.bvar 0]]
-            | none => -- **TODO** Modify to support mutually inductive types
-              if selOutputType == s then -- If selOutputType is the datatype we're looking at, then it is not necessarily equivalent to `True` and so we must add it
-                wfSelectorTerms := wfSelectorTerms.push $ .qStrApp sWfConstraintName #[.qStrApp selName #[.bvar 0]]
-              else continue -- Don't need to add to `wfSelectorTerms` because adding `∧ True` is redundant (**TODO** Modify to support mutually inductive types)
-          match h' : wfSelectorTerms.size with
-          | 0 => -- Don't need to add an implication to `wfCstrTerms` because `(_ is ctor) x => True` is equivalent to `True`
-            continue
-          | 1 =>
-            let allSelectorsWf := wfSelectorTerms[0]'(by rw [h']; exact Nat.zero_lt_one)
-            wfCstrTerms := wfCstrTerms.push $ .qStrApp "=>" #[ctorTester, allSelectorsWf]
-          | _ =>
-            let allSelectorsWf := .qStrApp "and" wfSelectorTerms
-            wfCstrTerms := wfCstrTerms.push $ .qStrApp "=>" #[ctorTester, allSelectorsWf]
-        if wfCstrTerms.size == 0 then
-          return none -- If `wfCstrTerms.size = 0`, then the well-formed constraint corresponding to `s` is equivalent to `True`
-        -- Create `wfCstrConjunction` from `wfCstrTerms`
-        let wfCstrConjunction :=
-          if h' : wfCstrTerms.size = 1 then wfCstrTerms[0]'(by rw [h']; exact Nat.zero_lt_one)
-          else .qStrApp "and" wfCstrTerms -- `wfCstrTerms.size ≥ 2`
-        -- Define the well-formed constraint for `s` in terms of `wfCstrConjunction`
-        let dname ← disposableName (← sni.suggestNameForSort s)
-        addCommand (.defFun true sWfConstraintName #[(dname, ← lamSort2SSortAux sni s)] (lamBaseSort2SSort .bool) wfCstrConjunction)
-        return some sWfConstraintName
+            ctorInfos := ctorInfos.insert selDatatypeName (Std.HashMap.empty.insert ctor [selInfo])
+        -- Iterate through each constructor to build `wfDatatypeTerms`
+        for (selDatatypeName, ctorMap) in ctorInfos do
+          for (ctor, ctorSelInfos) in ctorMap do
+            let ctorName ← h2Symb ctor none -- `none` should never cause an error since `ctor` should have been given a symbol when the datatype was defined
+            let ctorTester : STerm := .testerApp ctorName (.bvar 0) -- `.bvar 0` refers to the element of sort `s` being tested
+            let mut wfSelectorTerms : Array STerm := #[]
+            let mut ctorDatatypeOpt := none
+            for (selName, selIsProjection, _, argIdx, _, selInputType, selOutputType) in ctorSelInfos do
+              trace[auto.lamFOL2SMT] "defineWfConstraint :: Examining selector {selName} for datatype {selDatatypeName} which has output type {selOutputType}"
+              -- Update `ctorDatatype` (and sanity check to confirm that all selectors connected to ctor have the same datatype)
+              match ctorDatatypeOpt with
+              | none =>
+                ctorDatatypeOpt := some selInputType
+              | some ctorDatatype =>
+                if ctorDatatype != selInputType then
+                  throwError "{decl_name%} :: Constructor {ctor} has selectors for distinct datatypes {ctorDatatype} and {selInputType}"
+              -- Check whether `selOutputType` has a nontrivial well-formed constraint
+              match ← getWfConstraint sni selOutputType none with
+              | some selOutputTypeWfConstraint =>
+                wfSelectorTerms := wfSelectorTerms.push $ .qStrApp selOutputTypeWfConstraint #[.qStrApp selName #[.bvar 0]]
+              | none => -- `selOutputType` either has a well-formed constraint that is equivalent to `True` or has a constraint that is currently being defined
+                match selOutputType with
+                | .atom n =>
+                  let selOutputTypeName ← h2Symb (.sort n) none
+                  -- Check whether `selOutputType` is one of the datatypes whose well-formed constraint is currently being defined
+                  if ctorInfos.contains selOutputTypeName then
+                    let some selOutputTypeWfConstraint ← h2SymbWf selOutputType $ some ("wf" ++ selOutputTypeName.capitalize)
+                      | throwError "{decl_name%} :: h2SymbWf returned none given {s} even though {s} has a nontrivial well-formed predicate"
+                    wfSelectorTerms := wfSelectorTerms.push $ .qStrApp selOutputTypeWfConstraint #[.qStrApp selName #[.bvar 0]]
+                  else -- `selOutputType` does not correspond to one of the datatypes whose well-formed constraint is being defined, so we can ignore it
+                    continue
+                | _ => -- `selOutputType` does not correspond to one of the datatypes whose well-formed constraint is being defined, so we can ignore it
+                  continue
+            let some ctorDatatype := ctorDatatypeOpt
+              | throwError "{decl_name%} :: Constructor {ctor} has no selectors but was added to {selDatatypeName}'s ctorMap"
+            match h' : wfSelectorTerms.size with
+            | 0 =>
+              /- For now, we add to `wfDatatypeTerms` even though `(_ is ctor) x => True` is equivalent to `True` to ensure that `wfCstrConjunctions` (which
+                  is defined later) contains `selDatatypeName` and `selInputType`. I might refactor in the future to avoid unnecessary vacuous assertions. -/
+              if wfDatatypeTerms.contains selDatatypeName then continue -- Don't need to add anything because the only thing we would add is `True`
+              else wfDatatypeTerms := wfDatatypeTerms.insert selDatatypeName (ctorDatatype, #[.qStrApp "=>" #[ctorTester, .qStrApp "true" #[]]])
+            | 1 =>
+              let allSelectorsWf := wfSelectorTerms[0]'(by rw [h']; exact Nat.zero_lt_one)
+              if wfDatatypeTerms.contains selDatatypeName then
+                wfDatatypeTerms := wfDatatypeTerms.modify selDatatypeName (fun acc => (acc.1, acc.2.push $ .qStrApp "=>" #[ctorTester, allSelectorsWf]))
+              else
+                wfDatatypeTerms := wfDatatypeTerms.insert selDatatypeName (ctorDatatype, #[.qStrApp "=>" #[ctorTester, allSelectorsWf]])
+            | _ =>
+              let allSelectorsWf : STerm := .qStrApp "and" wfSelectorTerms
+              if wfDatatypeTerms.contains selDatatypeName then
+                wfDatatypeTerms := wfDatatypeTerms.modify selDatatypeName (fun acc => (acc.1, acc.2.push $ .qStrApp "=>" #[ctorTester, allSelectorsWf]))
+              else
+                wfDatatypeTerms := wfDatatypeTerms.insert selDatatypeName (ctorDatatype, #[.qStrApp "=>" #[ctorTester, allSelectorsWf]])
+        -- Create `wfCstrConjunctions` from `wfDatatypeTerms`
+        let mut wfCstrConjunctions : Array (LamSort × String × STerm) := #[] -- Datatype, datatype name, conjunction of its constructors' well-formed constraints
+        for (datatypeName, (datatype, wfTerms)) in wfDatatypeTerms do
+          let wfCstrConjunction :=
+            if wfTerms.size = 0 then .qStrApp "true" #[]
+            else if h' : wfTerms.size = 1 then wfTerms[0]'(by rw [h']; exact Nat.zero_lt_one)
+            else .qStrApp "and" wfTerms -- `wfTerms.size ≥ 2`
+          wfCstrConjunctions := wfCstrConjunctions.push (datatype, datatypeName, wfCstrConjunction)
+        /- Define the well-formed constraints for `s` in terms of `wfCstrConjunctions` (note we must do this even if they are equivalent to `True`)
+           because `h2SymbWf` may have been called on the datatypes that appear in `selInfos`. -/
+        let dnames ← wfCstrConjunctions.mapM (fun (datatype, _, _) => do disposableName (← sni.suggestNameForSort datatype))
+        let wfConstraintNames ← wfCstrConjunctions.mapM (fun (datatype, datatypeName, _) => h2SymbWf datatype $ some ("wf" ++ datatypeName.capitalize))
+        let wfConstraintNames ← wfConstraintNames.mapM
+          (fun wfConstraintNameOpt =>
+            match wfConstraintNameOpt with
+            | some wfConstraintName => pure wfConstraintName
+            | none => throwError "{decl_name%} :: h2SymbWf returned returned none for one of the datatypes in {selInfos}")
+        let mut funDefs : Array (String × Array (String × SSort) × SSort × STerm) := #[]
+        for (wfConstraintName, (datatype, datatypeName, wfCstrConjunction)) in wfConstraintNames.zip wfCstrConjunctions do
+          funDefs := funDefs.push (wfConstraintName, #[(dnames[0]!, ← lamSort2SSortAux sni datatype)], lamBaseSort2SSort .bool, wfCstrConjunction)
+        addCommand (.defFuns funDefs)
+        -- Look up the well-formed constraint name corresponding to `s`
+        for (wfConstraintName, (datatype, datatypeName, _)) in wfConstraintNames.zip wfCstrConjunctions do
+          if datatype == s then
+            return some wfConstraintName
+        throwError "{decl_name%} :: After defining the well-formed constraints for {selInfos}, failed to find the well-formed constraint name corresponding to {s}"
     | .base .nat, none =>
       let some name ← h2SymbWf s (some "wfNat")
         | throwError "{decl_name%} :: h2SymbWf returned none given {s} even though {s} has a nontrivial well-formed predicate"
@@ -280,21 +326,6 @@ mutual
         fnConstr := .forallE argName (← lamSort2SSortAux sni argTy) fnConstr
     addCommand (.assert fnConstr)
 end
-
-/-
-private def addNatConstraint? (sni : SMTNamingInfo) (name : String) (s : LamSort) : TransM LamAtomic LamSort Unit := do
-  let resTy := s.getResTy
-  if !(resTy == .base .nat) then
-    return
-  let args ← (Array.mk s.getArgTys).mapM (fun s => do return (s, ← IR.SMT.disposableName (← sni.suggestNameForSort s)))
-  let fnApp := STerm.qStrApp name (args.zipWithIndex.map (fun (_, n) => .bvar (args.size - 1 - n)))
-  let mut fnConstr := STerm.qStrApp ">=" #[fnApp, .sConst (.num 0)]
-  for (argTy, argName) in args.reverse do
-    if argTy == .base .nat then
-      fnConstr := .qStrApp "=>" #[.qStrApp ">=" #[.bvar 0, .sConst (.num 0)], fnConstr]
-    fnConstr := .forallE argName (← lamSort2SSortAux sni argTy) fnConstr
-  addCommand (.assert fnConstr)
--/
 
 private def int2STerm : Int → STerm
 | .ofNat n   => .sConst (.num n)
@@ -678,14 +709,14 @@ private def lamMutualIndInfo2STermWithInfos (sni : SMTNamingInfo) (mind : Mutual
         selDecls := ((Array.mk argTys).zip projInfos).map (fun (argTy, _, name) => (name, argTy))
         let selDeclsInfos :=
           ((Array.mk lamSortArgTys).zip projInfos).zipWithIndex.map
-            (fun ((lamSortArgTy, _, name), idx) => (name, true, tAtomic, idx, sname, lamSortArgTy))
+            (fun ((lamSortArgTy, _, name), idx) => (name, true, tAtomic, idx, sname, type, lamSortArgTy))
         selInfos := selInfos ++ selDeclsInfos
       else
         selDecls := (Array.mk argTys).zipWithIndex.map (fun (argTy, idx) =>
           (ctorname ++ s!"_sel{idx}", argTy))
         let selDeclsInfos :=
           (Array.mk lamSortArgTys).zipWithIndex.map
-            (fun (lamSortArgTy, idx) => (ctorname ++ s!"_sel{idx}", false, tAtomic, idx, sname, lamSortArgTy))
+            (fun (lamSortArgTy, idx) => (ctorname ++ s!"_sel{idx}", false, tAtomic, idx, sname, type, lamSortArgTy))
         selInfos := selInfos ++ selDeclsInfos
       cstrDecls := cstrDecls.push ⟨ctorname, selDecls⟩
     infos := infos.push (sname, 0, ⟨#[], cstrDecls⟩)
@@ -797,35 +828,17 @@ def lamFOL2SMTWithExtraInfo
     let _ ← compProjEqns.mapM addCommand
     trace[auto.lamFOL2SMT] "compCtorEqns: {compCtorEqns}"
     trace[auto.lamFOL2SMT] "compProjEqns: {compProjEqns}"
-
-    -- **NOTE** This is all very hacky, just trying to get enough working to view output of `defineWfConstraint`
-    let l2hMap ← getL2hMap
-    for ⟨type, _, _⟩ in mind do
-      let .atom sn := type
-        | throwError "lamFOL2SMTWithExtraInfo :: Unexpected error"
-      trace[auto.lamFOL2SMT] "About to call h2Symb on {LamAtomic.sort sn}"
-      let datatypeName ← h2Symb (.sort sn) .none
-      trace[auto.lamFOL2SMT] "Successfully called h2Symb on {LamAtomic.sort sn} (res: {datatypeName})"
-      match l2hMap.get? datatypeName with
-      | some (LamAtomic.sort sn) =>
-        let nameOpt ← defineWfConstraint sni (.atom sn) (some mindSelInfos)
-        trace[auto.lamFOL2SMT] "Successfully defined well-formed constraint for {datatypeName} (output : {nameOpt})"
-      | some _ => throwError "lamFOL2SMTWithExtraInfo :: Unexpected output from l2hMap.get? {datatypeName} (Output: {l2hMap.get? datatypeName})"
-      | none => throwError "lamFOL2SMTWithExtraInfo :: Unable to find datatype corresponding to {datatypeName}"
-
-    /- This is unsound
-    -- Add Nat constraints for each selector:
-    for (selName, _, _, selInputDatatypeName, selOutputSort) in mindSelInfos do
-      trace[auto.lamFOL2SMT] "Looking at {selName} (selOutputSort: {selOutputSort})"
-      if selOutputSort != .base .nat then continue
-      let datatypeNameSuggestion := (selInputDatatypeName.take 1).toLower -- Based loosely on `sni.suggestNameForSort`
-      let argName ← IR.SMT.disposableName datatypeNameSuggestion
-      let fnApp := STerm.qStrApp selName #[.bvar 0]
-      let datatypeSSort := .app (SIdent.symb selInputDatatypeName) #[]
-      let fnConstr := .forallE argName datatypeSSort $ STerm.qStrApp ">=" #[fnApp, .sConst (.num 0)]
-      -- **TODO** Add a well-formed constraint for `fnConstr`
-      addCommand (.assert fnConstr)
-    -/
+    -- Define the well-formed constraint for all of the mutually inductive types (note that calling `defineWfConstraint` on just one of them is enough)
+    let ⟨firstMindType, _, _⟩ :: _ := mind
+      | throwError "{decl_name%} :: Mutually inductive types {mind} does not have a first entry"
+    let .atom sn := firstMindType
+      | throwError "{decl_name%} :: Mutually inductive types {mind} contains a type {firstMindType} which is not an atom"
+    trace[auto.lamFOL2SMT] "About to call h2Symb on {LamAtomic.sort sn}"
+    let datatypeName ← h2Symb (.sort sn) .none
+    trace[auto.lamFOL2SMT] "Successfully called h2Symb on {LamAtomic.sort sn} (res: {datatypeName})"
+    let nameOpt ← defineWfConstraint sni (.atom sn) (some mindSelInfos)
+    trace[auto.lamFOL2SMT] "Successfully defined well-formed constraint for {datatypeName} (output : {nameOpt})"
+    -- Update `selInfos`
     selInfos := selInfos ++ mindSelInfos
   let mut validFacts := #[]
   for (t, idx) in facts.zipWithIndex do
