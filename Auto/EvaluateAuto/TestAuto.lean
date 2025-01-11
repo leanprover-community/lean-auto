@@ -265,6 +265,8 @@ where
       ] ++ thmsStrs ++ [
         "]",
         "",
+        "set_option auto.mono.ignoreNonQuasiHigherOrder true",
+        "",
         "def action : CoreM Unit := do",
         "  let p ← initSrcSearchPath",
         s!"  let _ ← runAutoOnConsts",
