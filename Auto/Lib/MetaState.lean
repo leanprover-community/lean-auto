@@ -76,7 +76,7 @@ private def runWithFVars (lctx : LocalContext) (fvarids : Array FVarId) (k : Met
       | .ldecl _ fvarId userName type value nonDep kind =>
         newlctx := newlctx.mkLetDecl fvarId userName type value nonDep kind
     | .none => throwError "{decl_name%} :: Unknown free variable {Expr.fvar fid}"
-  withReader (fun ctx => {ctx with lctx := newlctx}) k
+  Meta.withLCtx' newlctx k
 
 private def runWithIntroducedFVarsImp (m : MetaStateM (Array FVarId × α)) (k : α → MetaM β) : MetaM β := do
   let s ← get
@@ -116,19 +116,22 @@ def mkLocalDecl (fvarId : FVarId) (userName : Name) (type : Expr)
   (bi : BinderInfo := BinderInfo.default) (kind : LocalDeclKind := LocalDeclKind.default) : MetaStateM Unit := do
   let ctx ← getToContext
   let lctx := ctx.lctx
-  setToContext ({ctx with lctx := lctx.mkLocalDecl fvarId userName type bi kind})
+  let newCtx ← Meta.Context.modifyLCtx ctx (lctx.mkLocalDecl fvarId userName type bi kind)
+  setToContext newCtx
 
 def mkLetDecl (fvarId : FVarId) (userName : Name) (type value : Expr)
   (nonDep : Bool := false) (kind : LocalDeclKind := default) : MetaStateM Unit := do
   let ctx ← getToContext
   let lctx := ctx.lctx
-  setToContext ({ctx with lctx := lctx.mkLetDecl fvarId userName type value nonDep kind})
+  let newCtx ← Meta.Context.modifyLCtx ctx (lctx.mkLetDecl fvarId userName type value nonDep kind)
+  setToContext newCtx
 
 private def withNewLocalInstance (className : Name) (fvar : Expr) : MetaStateM Unit := do
   let localDecl ← runMetaM <| Meta.getFVarLocalDecl fvar
   if !localDecl.isImplementationDetail then
     let ctx ← getToContext
-    setToContext ({ ctx with localInstances := ctx.localInstances.push { className := className, fvar := fvar } })
+    let newCtx ← Meta.Context.modifyLocalInstances ctx (ctx.localInstances.push { className := className, fvar := fvar })
+    setToContext newCtx
 
 private def withNewFVar (fvar fvarType : Expr) : MetaStateM Unit := do
   if let some c ← runMetaM <| Meta.isClass? fvarType then
@@ -149,10 +152,12 @@ def withLetDecl (n : Name) (type : Expr) (val : Expr) (kind : LocalDeclKind) : M
   return fvarId
 
 def withTemporaryLCtx [MonadLiftT MetaStateM n] [Monad n] (lctx : LocalContext) (localInsts : LocalInstances) (k : n α) : n α := do
-  let initlctx ← getToContext
-  MetaState.setToContext {initlctx with lctx := lctx, localInstances := localInsts}
+  let initCtx ← getToContext
+  let newCtx ← (Meta.Context.modifyLCtx initCtx lctx : MetaStateM _)
+  let newCtx ← (Meta.Context.modifyLocalInstances newCtx localInsts : MetaStateM _)
+  MetaState.setToContext newCtx
   let ret ← k
-  MetaState.setToContext initlctx
+  MetaState.setToContext initCtx
   return ret
 
 end Auto.MetaState

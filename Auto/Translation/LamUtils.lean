@@ -524,7 +524,7 @@ namespace Lam2D
 
   section CheckDefEq
 
-    def checkLamBaseTermSimpNFMap : MetaM Unit :=
+    private def checkLamBaseTermSimpNFMap : MetaM Unit :=
       for (name, e) in lamBaseTermSimpNFList do
         if !(← Meta.isTypeCorrect e) then
           throwError "{e} is not type correct"

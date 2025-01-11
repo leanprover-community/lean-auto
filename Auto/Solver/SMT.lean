@@ -72,7 +72,7 @@ inductive SolverName where
   | z3
   | cvc4
   | cvc5
-deriving BEq, Hashable, Inhabited
+deriving BEq, Hashable, Inhabited, Repr
 
 instance : ToString SolverName where
   toString : SolverName → String

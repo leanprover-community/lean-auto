@@ -1,11 +1,30 @@
 import Lean
 import Auto.EvaluateAuto.EnvAnalysis
+import Auto.EvaluateAuto.ConstAnalysis
 import Auto.EvaluateAuto.Result
 open Lean
+
+register_option auto.evalAuto.ensureAesop : Bool := {
+  defValue := false
+  descr := "Enable/Disable enforcement of importing `aesop`"
+}
 
 namespace EvalAuto
 
 open Elab Frontend
+
+def processHeaderEnsuring (header : Syntax) (opts : Options) (messages : MessageLog)
+    (inputCtx : Parser.InputContext) (trustLevel : UInt32 := 0) (leakEnv := false) (ensuring : Array Import := #[])
+    : IO (Environment × MessageLog) := do
+  try
+    let env ← importModules (leakEnv := leakEnv) (headerToImports header ++ ensuring) opts trustLevel
+    pure (env, messages)
+  catch e =>
+    let env ← mkEmptyEnvironment
+    let spos := header.getPos?.getD 0
+    let pos  := inputCtx.fileMap.toPosition spos
+    pure (env, messages.add { fileName := inputCtx.fileName, data := toString e, pos := pos })
+
 def runWithEffectOfCommandsCore
   (cnt? : Option Nat)
   (action : Context → State → State → ConstantInfo → IO (Option α)) : FrontendM (Array α) := do
@@ -38,61 +57,16 @@ def runWithEffectOfCommandsCore
   the procedure is terminated.
 -/
 def runWithEffectOfCommands
-  (input : String) (fileName : String) (opts : Options := {}) (cnt? : Option Nat)
-  (action : Context → State → State → ConstantInfo → IO (Option α)) : IO (Array α) := do
+  (input : String) (fileName : String) (cnt? : Option Nat)
+  (action : Context → State → State → ConstantInfo → IO (Option α)) : CoreM (Array α) := do
   let inputCtx := Parser.mkInputContext input fileName
   let (header, parserState, messages) ← Parser.parseHeader inputCtx
-  let (env, messages) ← processHeader header opts messages inputCtx
-  let commandState := Command.mkState env messages opts
+  let mut ensuring := #[]
+  if auto.evalAuto.ensureAesop.get (← getOptions) then
+    ensuring := ensuring.push { module := `Aesop }
+  let (env, messages) ← processHeaderEnsuring header {} messages inputCtx (ensuring := ensuring)
+  let commandState := Command.mkState env messages {}
   (runWithEffectOfCommandsCore cnt? action { inputCtx }).run'
     { commandState := commandState, parserState := parserState, cmdPos := parserState.pos }
-
-open Elab Tactic in
-/--
-  Note: Use `initSrcSearchPath` to get SearchPath of Lean4's builtin source files
--/
-def runTacticAtConstantDeclaration
-  (name : Name) (searchPath : SearchPath)
-  (tactic : ConstantInfo → TacticM Unit) : CoreM Result := do
-  if ← isInitializerExecutionEnabled then
-    throwError "{decl_name%} :: Running this function with execution of `initialize` code enabled is unsafe"
-  let .some modName ← Lean.findModuleOf? name
-    | throwError "{decl_name%} :: Cannot find constant {name}"
-  let .some uri ← Server.documentUriFromModule searchPath modName
-    | throwError "{decl_name%} :: Cannot find module {modName}"
-  let .some path := System.Uri.fileUriToPath? uri
-    | throwError "{decl_name%} :: URI {uri} of {modName} is not a file"
-  let path := path.normalize
-  let inputHandle ← IO.FS.Handle.mk path .read
-  let input ← inputHandle.readToEnd
-  let results ← runWithEffectOfCommands input path.toString {} (.some 1) (fun ctx st₁ st₂ ci =>
-    let metaAction : MetaM (Option Result) := do
-      if ci.name != name then
-        return .none
-      let .mvar mid ← Meta.mkFreshExprMVar ci.type
-        | throwError "{decl_name%} :: Unexpected error"
-      let result : List MVarId ⊕ Exception ←
-        tryCatchRuntimeEx
-          (do let goals ← Term.TermElabM.run' (Tactic.run mid (tactic ci)) {}; return .inl goals)
-          (fun e => return .inr e)
-      match result with
-      | .inl goals =>
-        if goals.length >= 1 then
-          return .some .subGoals
-        let proof ← instantiateMVars (.mvar mid)
-        match Kernel.check (← getEnv) {} proof with
-        | Except.ok autoProofType =>
-          match Kernel.isDefEq (← getEnv) {} autoProofType ci.type with
-          | Except.ok true => return .some .success
-          | _ => return .some .typeUnequal
-        | Except.error _ => return .some .typeCheckFail
-      | .inr e => return .some (.exception e)
-    let coreAction : CoreM (Option Result) := metaAction.run'
-    let ioAction : IO (Option Result × _) := coreAction.toIO {fileName := path.toString, fileMap := FileMap.ofString input } { env := st₁.commandState.env }
-    do
-      return (← ioAction).fst)
-  let #[result] := results
-    | throwError "{decl_name%} :: Unexpected error"
-  return result
 
 end EvalAuto

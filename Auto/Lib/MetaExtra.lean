@@ -23,6 +23,8 @@ partial def Meta.normalizeNondependentForall (e : Expr) : MetaM Expr := do
   let e' ← whnfNondependentForall e
   match e' with
   | .forallE name ty body bi =>
+    if body.hasLooseBVar 0 then
+      return e
     let ty' ← normalizeNondependentForall ty
     let body' ← normalizeNondependentForall body
     return .forallE name ty' body' bi
@@ -141,5 +143,17 @@ def Meta.exToExcept (x : MetaM α) : MetaM (Except Exception α) :=
 
 def Meta.runtimeExToExcept (x : MetaM α) : MetaM (Except Exception α) :=
   tryCatchRuntimeEx (do let v ← x; return .ok v) (fun e => return .error e)
+
+/--
+  Workaround for modifying the `lctx` field of `Meta.Context`
+-/
+def Meta.Context.modifyLCtx (ctx : Context) (lctx : LocalContext) : CoreM Context :=
+  MetaM.run' (withLCtx' lctx read) ctx
+
+/--
+  Workaround for modifying the `localInstances` field of `Meta.Context`
+-/
+def Meta.Context.modifyLocalInstances (ctx : Context) (localInsts : LocalInstances) : CoreM Context :=
+  MetaM.run' (withLCtx ctx.lctx localInsts read) ctx
 
 end Auto
