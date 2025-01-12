@@ -129,6 +129,7 @@ def runAutoOnConsts (config : EvalAutoConfig) (names : Array Name) : CoreM Unit 
     if let .some fhandle := logFileHandle? then
       fhandle.putStrLn ""
       fhandle.putStrLn s!"Testing || {name} : {← (Lean.Meta.ppExpr ci.type).run'}"
+      fhandle.putStrLn s!"IO.monoMsNow : {← IO.monoMsNow}"
       fhandle.flush
     let result : Result ← withCurrHeartbeats <|
       withReader (fun ctx => {ctx with maxHeartbeats := config.maxHeartbeats * 1000}) <|

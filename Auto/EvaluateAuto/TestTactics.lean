@@ -225,6 +225,7 @@ where
       if let .some fhandle := logFileHandle? then
         fhandle.putStrLn ""
         fhandle.putStrLn s!"Testing tactic {idx} || {ci.name} : {← (Lean.Meta.ppExpr ci.type).run'}"
+        fhandle.putStrLn s!"IO.monoMsNow : {← IO.monoMsNow}"
         fhandle.flush
       let result ← (do
         if nonterms.contains (tactic, ci.name) then
