@@ -41,20 +41,29 @@ structure EvalAutoConfig where
   logFile       : Option String := .none
   /-- Optional file for saving the result of the evaluation -/
   resultFile    : Option String := .none
+  /--
+    On some problems, certain tactics may go into infinite loops not
+    guarded by `Core.checkMaxHeartbeats`. These instances should be
+    recorded here and avoided (throw error immediately) during evaluation.
+  -/
+  nonterminates : Array Name
 
 instance : ToString EvalAutoConfig where
   toString : EvalAutoConfig → String
-  | ⟨maxHeartbeats, timeout, solverConfig, logFile, resultFile⟩ =>
+  | ⟨maxHeartbeats, timeout, solverConfig, logFile, resultFile, nonterminates⟩ =>
     let logFileStr :=
       match logFile with
       | .some logFile => s!", logFile := {logFile}"
       | .none => ""
     let resultFileStr :=
       match resultFile with
-      | .some resultFile => s!", logFile := {resultFile}"
+      | .some resultFile => s!", resultFile := {resultFile}"
       | .none => ""
-    s!"\{maxHeartbeats := {maxHeartbeats}, timeout := {timeout}, " ++
-    s!"solverConfig := {solverConfig}{logFileStr}{resultFileStr}}"
+    let nontermStr := String.intercalate ",\n" (nonterminates.map (fun n => s!"    {repr n}")).toList
+    let nontermStr := if nonterminates.size != 0 then nontermStr ++ "\n" else nontermStr
+    s!"\{\n  maxHeartbeats := {maxHeartbeats}, timeout := {timeout}, " ++
+    s!"solverConfig := {solverConfig}{logFileStr}{resultFileStr}" ++
+    s!"\n  nonterminates := #[\n{nontermStr}  ]\n}"
 
 /--
   Run `prover` on `lem.type`, using premises collected from `lem.proof`
@@ -119,6 +128,7 @@ def disableAllSolvers (o : Options) : Options :=
 def runAutoOnConsts (config : EvalAutoConfig) (names : Array Name) : CoreM Unit := do
   let logFileHandle? : Option IO.FS.Handle ← config.logFile.mapM (fun fname => IO.FS.Handle.mk fname .write)
   let resultFileHandle? : Option IO.FS.Handle ← config.resultFile.mapM (fun fname => IO.FS.Handle.mk fname .write)
+  let nonterms := Std.HashSet.ofArray config.nonterminates
   trace[auto.eval.printConfig] m!"Config = {config}"
   if let .some fhandle := logFileHandle? then
     fhandle.putStrLn s!"Config = {config}"
@@ -135,40 +145,43 @@ def runAutoOnConsts (config : EvalAutoConfig) (names : Array Name) : CoreM Unit 
       fhandle.flush
     let result : Result ← withCurrHeartbeats <|
       withReader (fun ctx => {ctx with maxHeartbeats := config.maxHeartbeats * 1000}) <|
-        match config.solverConfig with
-        | .native       =>
-          withOptions (fun o =>
-            let o := disableAllSolvers o
-            let o := auto.native.set o true
-            let o := auto.mono.mode.set o MonoMode.hol
-            o) <| runProverOnConst name (Auto.runAuto (.some name))
-        | .rawNative    =>
-          runProverOnConst name Solver.Native.queryNative
-        | .leanSmt      =>
-          throwError "Lean-SMT is currently not supported"
-        | .smt sn       =>
-          withOptions (fun o =>
-            let o := disableAllSolvers o
-            let o := auto.smt.set o true
-            let o := auto.smt.solver.name.set o sn
-            let o := auto.smt.timeout.set o config.timeout
-            let o := auto.smt.trust.set o true
-            let o := auto.mono.mode.set o MonoMode.fol
-            o) <| runProverOnConst name (Auto.runAuto (.some name))
-        | .tptp sn path =>
-          withOptions (fun o =>
-            let o := disableAllSolvers o
-            let o := auto.tptp.set o true
-            let o := auto.tptp.solver.name.set o sn
-            let o := auto.tptp.timeout.set o config.timeout
-            let o := auto.tptp.trust.set o true
-            let o := auto.mono.mode.set o MonoMode.fol
-            match sn with
-            | .zipperposition => auto.tptp.zipperposition.path.set o path
-            | .zeport _       => auto.tptp.zeport.path.set o path
-            | .eproverHo      => auto.tptp.eproverHo.path.set o path
-            | .vampire        => auto.tptp.vampire.path.set o path) <|
-              runProverOnConst name (Auto.runAuto (.some name))
+        if nonterms.contains name then
+          return .nonterminate
+        else
+          match config.solverConfig with
+          | .native       =>
+            withOptions (fun o =>
+              let o := disableAllSolvers o
+              let o := auto.native.set o true
+              let o := auto.mono.mode.set o MonoMode.hol
+              o) <| runProverOnConst name (Auto.runAuto (.some name))
+          | .rawNative    =>
+            runProverOnConst name Solver.Native.queryNative
+          | .leanSmt      =>
+            throwError "Lean-SMT is currently not supported"
+          | .smt sn       =>
+            withOptions (fun o =>
+              let o := disableAllSolvers o
+              let o := auto.smt.set o true
+              let o := auto.smt.solver.name.set o sn
+              let o := auto.smt.timeout.set o config.timeout
+              let o := auto.smt.trust.set o true
+              let o := auto.mono.mode.set o MonoMode.fol
+              o) <| runProverOnConst name (Auto.runAuto (.some name))
+          | .tptp sn path =>
+            withOptions (fun o =>
+              let o := disableAllSolvers o
+              let o := auto.tptp.set o true
+              let o := auto.tptp.solver.name.set o sn
+              let o := auto.tptp.timeout.set o config.timeout
+              let o := auto.tptp.trust.set o true
+              let o := auto.mono.mode.set o MonoMode.fol
+              match sn with
+              | .zipperposition => auto.tptp.zipperposition.path.set o path
+              | .zeport _       => auto.tptp.zeport.path.set o path
+              | .eproverHo      => auto.tptp.eproverHo.path.set o path
+              | .vampire        => auto.tptp.vampire.path.set o path) <|
+                runProverOnConst name (Auto.runAuto (.some name))
     trace[auto.eval.printResult] m!"{result}"
     results := results.push result
     if let .some fhandle := logFileHandle? then
@@ -196,6 +209,7 @@ structure EvalAutoOnMathlibConfig where
   nthreads      : Nat
   /-- Batch size -/
   batchSize     : Nat
+  nonterminates : Array Name
 
 def Array.groupBySize (xs : Array α) (size : Nat) : Option (Array (Array α)) :=
   if size == 0 then
@@ -250,6 +264,12 @@ where
       | .some last =>
         thms.toList.dropLast.map (fun n => s!"  {repr n},") ++ [s!"  {repr last}"]
       | .none => []
+    let nonterms := config.nonterminates
+    let nontermsStrs : List String :=
+      match nonterms.toList.getLast? with
+      | .some last =>
+        nonterms.toList.dropLast.map (fun n => s!"  {repr n},") ++ [s!"  {repr last}"]
+      | .none => []
     let lines := [
         s!"import Mathlib",
         "import Auto.EvaluateAuto.TestAuto",
@@ -268,6 +288,10 @@ where
       ] ++ thmsStrs ++ [
         "]",
         "",
+        "def nonterms : Array Name := #["
+      ] ++ nontermsStrs ++ [
+        "]",
+        "",
         "set_option auto.mono.ignoreNonQuasiHigherOrder true",
         "",
         "def action : CoreM Unit := do",
@@ -275,7 +299,8 @@ where
         s!"  let _ ← runAutoOnConsts",
         s!"    {lb} maxHeartbeats := {config.maxHeartbeats}, timeout := {config.timeout},",
         s!"      solverConfig := {repr config.solverConfig},",
-        s!"      logFile := Option.some ({repr (logPath ++ ".log")}), resultFile := Option.some ({repr (logPath ++ ".result")}){rb}",
+        s!"      logFile := Option.some ({repr (logPath ++ ".log")}), resultFile := Option.some ({repr (logPath ++ ".result")}),\n" ++
+        s!"      nonterminates := nonterms {rb}",
         "    thms",
         "",
         "#eval action"

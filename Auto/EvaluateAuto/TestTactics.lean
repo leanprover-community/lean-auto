@@ -93,7 +93,7 @@ section Tactics
     | useSimpAllWithPremises
     | useAesop (subHeartbeats : Nat)
     | useAesopWithPremises (subHeartbeats : Nat)
-  deriving BEq, Hashable
+  deriving BEq, Hashable, Repr
 
   instance : ToString RegisteredTactic where
     toString : RegisteredTactic → String
@@ -316,6 +316,12 @@ where
       | .some last =>
         validThms.toList.dropLast.map (fun n => s!"  {repr n},") ++ [s!"  {repr last}"]
       | .none => []
+    let nonterms := config.nonterminates
+    let nontermsStrs : List String :=
+      match nonterms.toList.getLast? with
+      | .some last =>
+        nonterms.toList.dropLast.map (fun n => s!"  {repr n},") ++ [s!"  {repr last}"]
+      | .none => []
     let tacsStr := String.intercalate ", " (config.tactics.map (fun tac => "." ++ toString tac)).toList
     let lines := [
         s!"import {mm}",
@@ -327,12 +333,16 @@ where
       ] ++ thmsStrs ++ [
         "]",
         "",
+        "def nonterms : Array (RegisteredTactic × Name) := #["
+      ] ++ nontermsStrs ++ [
+        "]",
+        "",
         "def action : CoreM Unit := do",
         "  let p ← initSrcSearchPath",
         s!"  let _ ← evalAtModule ({repr mm}) p (fun ci => humanThms.contains ci.name)",
         s!"    {lb} maxHeartbeats := {config.maxHeartbeats}, tactics := #[{tacsStr}],",
         s!"      logFile := {repr (logPath ++ ".log")}, resultFile := {repr (logPath ++ ".result")},",
-        s!"      nonterminates := #[] {rb}",
+        s!"      nonterminates := nonterms {rb}",
         "",
         "set_option auto.evalAuto.ensureAesop true",
         "#eval action"
