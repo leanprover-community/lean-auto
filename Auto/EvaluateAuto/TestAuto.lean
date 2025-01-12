@@ -4,6 +4,7 @@ import Auto.EvaluateAuto.Result
 import Auto.EvaluateAuto.ConstAnalysis
 import Auto.EvaluateAuto.EnvAnalysis
 import Auto.EvaluateAuto.NameArr
+import Std
 import Auto.Tactic
 
 open Lean Auto
@@ -121,6 +122,7 @@ def runAutoOnConsts (config : EvalAutoConfig) (names : Array Name) : CoreM Unit 
   trace[auto.eval.printConfig] m!"Config = {config}"
   if let .some fhandle := logFileHandle? then
     fhandle.putStrLn s!"Config = {config}"
+    fhandle.putStrLn s!"Start time : {← Std.Time.Timestamp.now}"
   let startTime ← IO.monoMsNow
   let mut results := #[]
   for name in names do
@@ -129,7 +131,7 @@ def runAutoOnConsts (config : EvalAutoConfig) (names : Array Name) : CoreM Unit 
     if let .some fhandle := logFileHandle? then
       fhandle.putStrLn ""
       fhandle.putStrLn s!"Testing || {name} : {← (Lean.Meta.ppExpr ci.type).run'}"
-      fhandle.putStrLn s!"IO.monoMsNow : {← IO.monoMsNow}"
+      fhandle.putStrLn s!"Timestamp : {← Std.Time.Timestamp.now}"
       fhandle.flush
     let result : Result ← withCurrHeartbeats <|
       withReader (fun ctx => {ctx with maxHeartbeats := config.maxHeartbeats * 1000}) <|

@@ -5,6 +5,7 @@ import Auto.EvaluateAuto.ConstAnalysis
 import Auto.EvaluateAuto.EnvAnalysis
 import Auto.EvaluateAuto.NameArr
 import Auto.EvaluateAuto.CommandAnalysis
+import Std
 open Lean
 
 namespace EvalAuto
@@ -190,6 +191,7 @@ def evalAtModule
   trace[auto.eval.printConfig] m!"Config = {config}"
   if let .some fhandle := logFileHandle? then
     fhandle.putStrLn s!"Config = {config}"
+    fhandle.putStrLn s!"Start time : {← Std.Time.Timestamp.now}"
   let .some uri ← Server.documentUriFromModule searchPath modName
     | throwError "{decl_name%} :: Cannot find module {modName}"
   let .some path := System.Uri.fileUriToPath? uri
@@ -225,7 +227,7 @@ where
       if let .some fhandle := logFileHandle? then
         fhandle.putStrLn ""
         fhandle.putStrLn s!"Testing tactic {idx} || {ci.name} : {← (Lean.Meta.ppExpr ci.type).run'}"
-        fhandle.putStrLn s!"IO.monoMsNow : {← IO.monoMsNow}"
+        fhandle.putStrLn s!"Timestamp : {← Std.Time.Timestamp.now}"
         fhandle.flush
       let result ← (do
         if nonterms.contains (tactic, ci.name) then
