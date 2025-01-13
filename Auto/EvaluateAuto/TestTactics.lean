@@ -183,7 +183,7 @@ instance : ToString EvalTacticConfig where
   Effectively `runTacticsAtConstantDeclaration` at each constant in `modName` which satisfies `filter`\
   Note: Use `initSrcSearchPath` to get SearchPath of source files
 -/
-def evalAtModule
+def evalTacticsAtModule
   (modName : Name) (searchPath : SearchPath) (filter : ConstantInfo → Bool)
   (config : EvalTacticConfig) : CoreM Unit:= do
   let logFileHandle? : Option IO.FS.Handle ← config.logFile.mapM (fun fname => IO.FS.Handle.mk fname .write)
@@ -339,7 +339,7 @@ where
         "",
         "def action : CoreM Unit := do",
         "  let p ← initSrcSearchPath",
-        s!"  let _ ← evalAtModule ({repr mm}) p (fun ci => humanThms.contains ci.name)",
+        s!"  let _ ← evalTacticsAtModule ({repr mm}) p (fun ci => humanThms.contains ci.name)",
         s!"    {lb} maxHeartbeats := {config.maxHeartbeats}, tactics := #[{tacsStr}],",
         s!"      logFile := {repr (logPath ++ ".log")}, resultFile := {repr (logPath ++ ".result")},",
         s!"      nonterminates := nonterms {rb}",
