@@ -1104,7 +1104,12 @@ where
     let liTypeRep? ← FVarRep.replacePolyWithFVar li.type
     match liTypeRep? with
     | .inl liTypeRep => return .some ⟨li.proof, liTypeRep, li.deriv⟩
-    | .inr m => if (← getIgnoreNonQuasiHigherOrder) then return .none else throwError m)
+    | .inr m =>
+      if (← getIgnoreNonQuasiHigherOrder) then
+        trace[auto.mono] "Don't know how to deal with fact {li.type}, ignoring it"
+        return .none
+      else
+        throwError m)
   fvarRepMInductAction (ivals : Array (Array SimpleIndVal)) : FVarRep.FVarRepM (Array (Array SimpleIndVal)) :=
     ivals.mapM (fun svals => svals.mapM (fun ⟨name, type, ctors, projs⟩ => do
       let (type, _) ← FVarRep.processType type
