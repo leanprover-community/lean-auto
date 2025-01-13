@@ -223,6 +223,13 @@ def Array.groupBySize (xs : Array α) (size : Nat) : Option (Array (Array α)) :
   This should be run after `import Mathlib, import Auto.EvaluateAuto.TestTactics`,
   and should be run with a `cwd` where `lake env` creates an environment in which
   `Mathlib, lean-auto` and `duper` are available
+
+  The evaluation splits all theorems in Mathlib into batches of size `config.batchSize`,
+  and uses `config.nthreads` parallel threads to run lean-auto on these theorems.
+  For each thread, three files are created:
+  · `path.log`: Detailed log
+  · `path.result`: Concise result of evaluation
+  · `path.names`: Names of all the theorems in this batch
 -/
 def evalAutoAtMathlibHumanTheorems (config : EvalAutoOnMathlibConfig) : CoreM Unit := do
   if !(← System.FilePath.isDir config.resultFolder) then
@@ -230,13 +237,14 @@ def evalAutoAtMathlibHumanTheorems (config : EvalAutoOnMathlibConfig) : CoreM Un
   let evaluateFilesHandle ← IO.FS.Handle.mk (config.resultFolder ++ "/evaluateFiles.txt") .write
   let all ← allHumanTheoremsFromPackage "Mathlib"
   let .some batches := Array.groupBySize all config.batchSize
-    | throwError "Batch size must be nonzero"
+    | throwError "{decl_name%} :: Batch size must be nonzero"
   let mut running := #[]
   for (batch, idx) in batches.zipWithIndex do
     evaluateFilesHandle.putStrLn (toString idx)
     evaluateFilesHandle.flush
     let evalProc ← EvalProc.create "lake" #["env", "lean", "--stdin"]
     let logPath := config.resultFolder ++ "/" ++ toString idx
+    NameArray.save batch (logPath ++ ".names")
     evalProc.stdin.putStr (evalFile batch logPath)
     let (_, evalProc) ← evalProc.takeStdin
     running := running.push (idx, evalProc)
