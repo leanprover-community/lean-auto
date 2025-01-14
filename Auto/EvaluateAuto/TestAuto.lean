@@ -334,19 +334,19 @@ def readAutoEvalResult (config : EvalAutoOnMathlibConfig) :
       if lines[2]? != .some "Summary:" || lines[3]? != .some "" then
         throwError "{decl_name%} :: Format of result file changed, please change analysis code. Result file : {file}"
       let lines := (lines.drop 4).filter (fun s => s != "")
-      let lineAnalysis ← (Array.mk lines).mapM analyzeLine
+      let lineAnalysis ← (Array.mk lines).mapM (analyzeLine file.toString)
       ret := ret.append lineAnalysis
   return ret
 where
-  analyzeLine (line : String) : CoreM (Name × Result × Nat) := do
+  analyzeLine (fileName line : String) : CoreM (Name × Result × Nat) := do
     let line := (line.dropWhile (fun c => c != ' ')).drop 1
     let s := line.takeWhile (fun c => c != ' ')
     let .some res := Result.ofConcise? s
-      | throwError s!"{decl_name%} :: {s} is not a concise representation of a `Result`"
+      | throwError s!"{decl_name%} :: In file {fileName}, {s} is not a concise representation of a `Result`"
     let line := (line.dropWhile (fun c => c != ' ')).drop 1
     let s := line.takeWhile (fun c => c != ' ')
     let .some t := String.toNat? s
-      | throwError s!"{decl_name%} :: {s} is not a string representation of a Nat"
+      | throwError s!"{decl_name%} :: In file {fileName}, {s} is not a string representation of a Nat"
     let line := (line.dropWhile (fun c => c != ' ')).drop 1
     let name := Name.parseUniqRepr line
     return (name, res, t)

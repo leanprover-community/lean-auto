@@ -380,10 +380,10 @@ def callNative_checker
 open LamReif Embedding.Lam in
 /--
   Similar in functionality compared to `callNative_checker`, but
-    all `valid` entries are supposed to be reified facts (so there should
-    be no `etom`s). We invoke the prover to get the same `proof` as
-    `callNativeChecker`, but we return a proof of `⊥` by applying `proof`
-    to un-reified facts.
+  all `valid` entries are supposed to be reified facts (so there should
+  be no `etom`s). We invoke the prover to get the same `proof` as
+  `callNativeChecker`, but we return a proof of `⊥` by applying `proof`
+  to un-reified facts.
 
   Note that `MetaState.withTemporaryLCtx` is used to isolate the prover from the
   current local context. This is necessary because `lean-auto` assumes that the prover
@@ -436,6 +436,18 @@ def queryNative
   let checker ← LamReif.buildCheckerExprFor contra
   Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
 
+def rewriteIteCondDecide (lemmas : Array Lemma) : MetaM (Array Lemma) := do
+  -- Simplify `ite`
+  let ite_simp_lem ← Lemma.ofConst ``Auto.Bool.ite_simp (.leaf "hw Auto.Bool.ite_simp")
+  let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem ite_simp_lem)
+  -- Simplify `cond`
+  let cond_simp_lem ← Lemma.ofConst ``Auto.Bool.cond_simp (.leaf "hw Auto.Bool.cond_simp")
+  let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem cond_simp_lem)
+  -- Simplify `decide`
+  let decide_simp_lem ← Lemma.ofConst ``Auto.Bool.decide_simp (.leaf "hw Auto.Bool.decide_simp")
+  let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem decide_simp_lem)
+  return lemmas
+
 /--
   Run `auto`'s monomorphization and preprocessing, then send the problem to different solvers
 -/
@@ -443,54 +455,48 @@ def runAuto
   (declName? : Option Name) (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr :=
   Meta.withDefault do
     traceLemmas `auto.runAuto.printLemmas s!"All lemmas received by {decl_name%}:" lemmas
-    -- Simplify `ite`
-    let ite_simp_lem ← Lemma.ofConst ``Auto.Bool.ite_simp (.leaf "hw Auto.Bool.ite_simp")
-    let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem ite_simp_lem)
-    -- Simplify `cond`
-    let cond_simp_lem ← Lemma.ofConst ``Auto.Bool.cond_simp (.leaf "hw Auto.Bool.cond_simp")
-    let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem cond_simp_lem)
-    -- Simplify `decide`
-    let decide_simp_lem ← Lemma.ofConst ``Auto.Bool.decide_simp (.leaf "hw Auto.Bool.decide_simp")
-    let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem decide_simp_lem)
-    let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) (minds : Array (Array SimpleIndVal)) : LamReif.ReifM Expr := (do
-      let exportFacts ← LamReif.reifFacts uvalids
-      let mut exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
-      let _ ← LamReif.reifInhabitations uinhs
-      let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
-        (fun (s, _) => Embedding.Lam.REntry.nonempty s)
-      let exportInds ← LamReif.reifMutInds minds
-      LamReif.printValuation
-      -- **Preprocessing in Verified Checker**
-      let (exportFacts', exportInds) ← LamReif.preprocess exportFacts exportInds
-      exportFacts := exportFacts'
-      -- **TPTP invocation and Premise Selection**
-      if auto.tptp.get (← getOptions) then
-        let (proof, unsatCore) ← queryTPTP exportFacts
-        if let .some proof := proof then
-          return proof
-        let premiseSel? := auto.tptp.premiseSelection.get (← getOptions)
-        if premiseSel? then
-          if let .some unsatCore := unsatCore then
-            exportFacts := unsatCore
-      -- **SMT**
-      if auto.smt.get (← getOptions) then
-        let (proof, _) ← querySMT exportFacts exportInds
-        if let .some proof := proof then
-          return proof
-      -- **Native Prover**
-      exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)
-      if auto.native.get (← getOptions) then
-        if let .some proof ← queryNative declName? exportFacts exportInhs then
-          return proof
-      throwError "Auto failed to find proof"
-      )
+    let lemmas ← rewriteIteCondDecide lemmas
     let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
       let s ← get
       let u ← computeMaxLevel s.facts
-      (afterReify s.facts s.inhTys s.inds).run' {u := u})
+      (reifMAction s.facts s.inhTys s.inds).run' {u := u})
     trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
     trace[auto.tactic.printProof] "{proof}"
     return proof
+where
+  reifMAction
+    (uvalids : Array UMonoFact) (uinhs : Array UMonoFact)
+    (minds : Array (Array SimpleIndVal)) : LamReif.ReifM Expr := do
+    let exportFacts ← LamReif.reifFacts uvalids
+    let mut exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
+    let _ ← LamReif.reifInhabitations uinhs
+    let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
+      (fun (s, _) => Embedding.Lam.REntry.nonempty s)
+    let exportInds ← LamReif.reifMutInds minds
+    LamReif.printValuation
+    -- **Preprocessing in Verified Checker**
+    let (exportFacts', exportInds) ← LamReif.preprocess exportFacts exportInds
+    exportFacts := exportFacts'
+    -- **TPTP invocation and Premise Selection**
+    if auto.tptp.get (← getOptions) then
+      let (proof, unsatCore) ← queryTPTP exportFacts
+      if let .some proof := proof then
+        return proof
+      let premiseSel? := auto.tptp.premiseSelection.get (← getOptions)
+      if premiseSel? then
+        if let .some unsatCore := unsatCore then
+          exportFacts := unsatCore
+    -- **SMT**
+    if auto.smt.get (← getOptions) then
+      let (proof, _) ← querySMT exportFacts exportInds
+      if let .some proof := proof then
+        return proof
+    -- **Native Prover**
+    exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)
+    if auto.native.get (← getOptions) then
+      if let .some proof ← queryNative declName? exportFacts exportInhs then
+        return proof
+    throwError "Auto failed to find proof"
 
 @[tactic auto]
 def evalAuto : Tactic

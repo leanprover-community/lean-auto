@@ -371,11 +371,11 @@ def readTacticEvalResult (config : EvalTacticOnMathlibConfig) :
       if lines[2]? != .some "Summary:" || lines[3]? != .some "" then
         throwError "{decl_name%} :: Format of result file changed, please change analysis code. Result file : {path}"
       let lines := (lines.drop 4).filter (fun s => s != "")
-      let lineAnalysis ← (Array.mk lines).mapM analyzeLine
+      let lineAnalysis ← (Array.mk lines).mapM (analyzeLine path.toString)
       ret := ret.push (modName, lineAnalysis)
   return ret
 where
-  analyzeLine (line : String) : CoreM (Name × Array (Result × Nat)) := do
+  analyzeLine (fileName line : String) : CoreM (Name × Array (Result × Nat)) := do
     let line := (line.dropWhile (fun c => c != ' ')).drop 3
     let tr := (line.takeWhile (fun c => c != ']')).splitOn ", "
     let tr : Array (Result × Nat) ← (Array.mk tr).mapM (fun s => do
@@ -385,8 +385,8 @@ where
       | .some r =>
         match String.toNat? st with
         | .some t => return (r, t)
-        | .none => throwError s!"{decl_name%} :: {st} is not a string representation of a Nat"
-      | .none => throwError s!"{decl_name%} :: {sr} is not a concise representation of a `Result`")
+        | .none => throwError s!"{decl_name%} :: In file {fileName}, {st} is not a string representation of a Nat"
+      | .none => throwError s!"{decl_name%} :: In file {fileName}, {sr} is not a concise representation of a `Result`")
     let line := (line.dropWhile (fun c => c != ']')).drop 2
     let name := Name.parseUniqRepr line
     return (name, tr)
