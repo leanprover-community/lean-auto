@@ -291,6 +291,7 @@ def evalTacticsAtMathlibHumanTheorems (config : EvalTacticOnMathlibConfig) : Cor
     let evalProc ← EvalProc.create "lake" #["env", "lean", "--stdin"]
     let logPath := config.resultFolder ++ extraLogPath
     let validThms := (allTally.get? mm).getD #[]
+    NameArray.save validThms (logPath ++ ".name")
     evalProc.stdin.putStr (evalFile mm validThms logPath config)
     let (_, evalProc) ← evalProc.takeStdin
     running := running.push (mm, evalProc)
