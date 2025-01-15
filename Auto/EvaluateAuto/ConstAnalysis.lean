@@ -44,6 +44,17 @@ def Name.isTheorem (name : Name) : CoreM Bool := do
   return true
 
 /--
+  A variant of `Name.isTheorem` which returns `false` when
+  `name` is not in the environment
+-/
+def Name.isTheorem' (name : Name) : CoreM Bool := do
+  let .some ci := (← getEnv).find? name
+    | return false
+  let .thmInfo _ := ci
+    | return false
+  return true
+
+/--
   A constant is a human theorem iff it is a theorem and has a
   declaration range. Roughly speaking, a constant have a declaration
   range iff it is defined (presumably by a human) in a `.lean` file
@@ -73,6 +84,9 @@ def allHumanTheoremsFromPackage (pkgPrefix : String) : CoreM (Array Name) := do
 /-- Return the theorems that occurs in an expression -/
 def Expr.getUsedTheorems (e : Expr) : CoreM (Array Name) :=
   e.getUsedConstants.filterM Name.isTheorem
+
+def Expr.getUsedTheorems' (e : Expr) : CoreM (Array Name) :=
+  e.getUsedConstants.filterM Name.isTheorem'
 
 /-- Return the theorems that are used in the declaration body of a constant -/
 def Name.getUsedTheorems (name : Name) : CoreM (Array Name) := do
