@@ -14,6 +14,25 @@ open Elab Tactic
 
 section Tactics
 
+  /--
+    Solves the goal using `sorry` if `ci` does not contain unknown constants,
+    and throws and error if `ci` contains unknown constants
+
+    When we evaluate tactics on a theorem `T`, we replay the file that defines `T`
+    and calls the tactic on the environment `env` just before the declaration of `T`.
+    Since there are commands that define multiple constants simultaneously, it is
+    possible that the proof or type of `T` contains constants not present in `env`.
+    We run `testUnknownConstant` to detect such situations.
+  -/
+  def testUnknownConstant (ci : ConstantInfo) : TacticM Unit := do
+    let .some proof := ci.value?
+      | throwError "{decl_name%} :: ConstantInfo of {ci.name} has no value"
+    let usedConsts := Expr.getUsedConstants proof ++ Expr.getUsedConstants ci.type
+    for name in usedConsts do
+      if ((← getEnv).find? name).isNone then
+        throwError "{decl_name%} :: Proof of {ci.name} contains unknown constant {name}"
+    evalTactic (← `(tactic| sorry))
+
   def useRfl : TacticM Unit := do evalTactic (← `(tactic| intros; rfl))
 
   def useSimp : TacticM Unit := do evalTactic (← `(tactic| intros; simp))
@@ -87,6 +106,7 @@ section Tactics
         ]
 
   inductive RegisteredTactic where
+    | testUnknownConstant
     | useRfl
     | useSimp
     | useSimpAll
@@ -97,6 +117,7 @@ section Tactics
 
   instance : ToString RegisteredTactic where
     toString : RegisteredTactic → String
+    | .testUnknownConstant     => "testUnknownConstant"
     | .useRfl                  => "useRfl"
     | .useSimp                 => "useSimp"
     | .useSimpAll              => "useSimpAll"
@@ -105,6 +126,7 @@ section Tactics
     | .useAesopWithPremises sh => s!"useAesopWithPremises {sh}"
 
   def RegisteredTactic.toCiTactic : RegisteredTactic → ConstantInfo → TacticM Unit
+    | .testUnknownConstant     => EvalAuto.testUnknownConstant
     | .useRfl                  => fun _ => EvalAuto.useRfl
     | .useSimp                 => fun _ => EvalAuto.useSimp
     | .useSimpAll              => fun _ => EvalAuto.useSimpAll
