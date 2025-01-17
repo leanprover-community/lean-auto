@@ -342,16 +342,26 @@ def evalAutoAtTheoremsAsync
       logFile := .some (logPath ++ ".log"), resultFile := .some (logPath ++ ".result"),
       nonterminates := config.nonterminates
     }
-    let evalProc ← EvalProc.create "bash" #[]
-    if let .some mlimit := config.memoryLimitKb then
-      evalProc.stdin.putStrLn s!"ulimit -v {mlimit}"
     let ef := evalFile batch evalAutoConfig
-    if let .some tlimit := config.timeLimitS then
-      evalProc.stdin.putStrLn ("echo " ++ bashRepr ef ++ s!" | timeout {tlimit} lake env lean --stdin")
+    if let .some mlimit := config.memoryLimitKb then
+      let evalProc ← EvalProc.create "bash" #[]
+      evalProc.stdin.putStrLn s!"ulimit -v {mlimit}"
+      let tlimitStr := match config.timeLimitS with | .some tlimit => s!"timeout {tlimit} " | .none => ""
+      evalProc.stdin.putStrLn ("echo " ++ bashRepr ef ++ s!" | {tlimitStr}lake env lean --stdin")
+      let (_, evalProc) ← evalProc.takeStdin
+      running := running.push (idx, evalProc)
     else
-      evalProc.stdin.putStrLn ("echo " ++ bashRepr ef ++ s!" | lake env lean --stdin")
-    let (_, evalProc) ← evalProc.takeStdin
-    running := running.push (idx, evalProc)
+      -- Do not use `bash` because it might spin-wait
+      if let .some tlimit := config.timeLimitS then
+        let evalProc ← EvalProc.create "timeout" #[s!"{tlimit}", "lake", "env", "lean", "--stdin"]
+        evalProc.stdin.putStrLn ef
+        let (_, evalProc) ← evalProc.takeStdin
+        running := running.push (idx, evalProc)
+      else
+        let evalProc ← EvalProc.create "lake" #["env", "lean", "--stdin"]
+        evalProc.stdin.putStrLn ef
+        let (_, evalProc) ← evalProc.takeStdin
+        running := running.push (idx, evalProc)
     while running.size >= config.nprocs do
       running ← tryWaitOn evaluateFilesHandle running
   while running.size != 0 do
