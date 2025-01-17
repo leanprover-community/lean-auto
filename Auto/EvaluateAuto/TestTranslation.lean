@@ -111,7 +111,7 @@ def evalReduceSize
   (memoryLimitKb : Nat) (timeLimitS : Nat) : CoreM Unit := do
   if !(← System.FilePath.isDir resultFolder) then
     IO.FS.createDir resultFolder
-  NameArray.save names (resultFolder ++ "names.txt")
+  NameArray.save names (resultFolder ++ "/names.txt")
   let evaluateNamesHandle ← IO.FS.Handle.mk (resultFolder ++ "/evaluateNames.txt") .write
   let mut running := #[]
   for (name, idx) in names.zipWithIndex do
