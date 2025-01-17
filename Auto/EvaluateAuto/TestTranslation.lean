@@ -1,6 +1,11 @@
 import Auto.Tactic
+import Auto.EvaluateAuto.OS
 import Auto.EvaluateAuto.ConstAnalysis
-open Lean Auto EvalAuto
+import Auto.EvaluateAuto.NameArr
+
+open Lean Auto
+
+namespace EvalAuto
 
 /--
   Compute the size of the problem associated with `lem`\
@@ -72,3 +77,62 @@ def monomorphizedProblemSizeOfConst (name : Name) : CoreM (Option Nat) := do
   match ← monomorphizedProblemOfConst name with
   | .some ls => return .some <| (ls.map Embedding.Lam.LamTerm.size).foldl Nat.add 0
   | .none => return .none
+
+/--
+  Run `Meta.reduceAll` on the type of `name` and the type of all
+  theorems used in the proof of `name. Return the sum of sizes of the
+  reduced theorem
+-/
+def testReduce (name : Name) : MetaM Nat := do
+  let usedThms ← Name.getUsedTheorems name
+  let allNames := usedThms ++ #[name]
+  let allExprs ← allNames.mapM (fun name => do
+    let .some ci := (← getEnv).find? name
+      | throwError "{decl_name%} :: Cannot find {name}"
+    return ci.type)
+  let red (e : Expr) : MetaM TransformStep := do
+    let e ← Meta.whnf e
+    return .continue e
+  let exprs ← allExprs.mapM (fun e => Meta.transform e (pre := red) (usedLetOnly := false))
+  return Array.foldl Nat.add 0 (exprs.map Expr.sizeWithoutSharing)
+
+def testReduceDWriteResult (path : String) (name : Name) : MetaM Unit := do
+  let size ← Meta.withDefault <| testReduce name
+  let handle ← IO.FS.Handle.mk path .write
+  handle.putStrLn s!"{size} {Name.uniqRepr name}"
+
+/--
+  Run `testReduceDWriteResult` on each name in `names`. A new Lean 4 process
+  is created for each `name` (this is because we want to pose time and memory
+  limit on each of them)
+-/
+def evalReduceSize
+  (names : Array Name) (resultFolder : String) (nprocs : Nat)
+  (memoryLimitKb : Nat) (timeLimitS : Nat) : CoreM Unit := do
+  if !(← System.FilePath.isDir resultFolder) then
+    IO.FS.createDir resultFolder
+  NameArray.save names (resultFolder ++ "names.txt")
+  let evaluateNamesHandle ← IO.FS.Handle.mk (resultFolder ++ "/evaluateNames.txt") .write
+  let mut running := #[]
+  for (name, idx) in names.zipWithIndex do
+    let evalProc ← runFunctionOnConstsUsingNewLeanProcess
+      #[name] ``testReduceDWriteResult
+      #[s!"\"{resultFolder}/{idx}.result\""] memoryLimitKb timeLimitS
+    running := running.push (idx, evalProc)
+    while running.size >= nprocs do
+      running ← tryWaitOn evaluateNamesHandle running
+  while running.size != 0 do
+    running ← tryWaitOn evaluateNamesHandle running
+where
+  tryWaitOn (evaluateNamesHandle : IO.FS.Handle) (running : Array (Nat × EvalTakenProc)) : CoreM (Array (Nat × _)) := do
+    let mut running' := #[]
+    for (idx, proc) in running do
+      let retCode? ← proc.tryWait
+      match retCode? with
+      | .some retCode =>
+        evaluateNamesHandle.putStrLn s!"{idx} : {retCode}"
+        evaluateNamesHandle.flush
+      | .none => running' := running'.push (idx, proc)
+    return running'
+
+end EvalAuto

@@ -204,6 +204,9 @@ instance : ToString EvalTacticConfig where
 /--
   Effectively `runTacticsAtConstantDeclaration` at each constant in `modName` which satisfies `filter`\
   Note: Use `initSrcSearchPath` to get SearchPath of source files
+
+  For the `i`-th theorem `name` in `names`, its entry in the result file has the following form:
+  `<i> #[<result> <time> <heartbeats>, ⋯, <result> <time> <heartbeats>] <name>`
 -/
 def evalTacticsAtModule
   (modName : Name) (searchPath : SearchPath) (filter : ConstantInfo → Bool)
@@ -235,17 +238,17 @@ def evalTacticsAtModule
     fhandle.putStrLn s!"Total elapsed time : {(← IO.monoMsNow) - startTime} ms"
     fhandle.putStrLn s!"\nSummary:\n"
     for ((name, result), idx) in results.zipWithIndex do
-      let resultStrs := result.map (fun (r, t) => Result.concise r ++ " " ++ toString t)
+      let resultStrs := result.map (fun (r, time, hb) => s!"{r.concise} {time} {hb}")
       fhandle.putStrLn s!"{idx} {resultStrs} {Name.uniqRepr name}"
 where
   evalAction
     (context : Core.Context) (state : Core.State) (ci : ConstantInfo)
     (logFileHandle? : Option IO.FS.Handle) (config : EvalTacticConfig)
-    (nonterms : Std.HashSet (RegisteredTactic × Name)) : IO (Array (Result × Nat)) := do
+    (nonterms : Std.HashSet (RegisteredTactic × Name)) : IO (Array (Result × Nat × Nat)) := do
   config.tactics.zipWithIndex.mapM (fun (tactic, idx) => do
     let metaAction : MetaM Result :=
       Term.TermElabM.run' <| Result.ofTacticOnExpr ci.type (tactic.toCiTactic ci)
-    let coreAction : CoreM (Result × Nat) := (do
+    let coreAction : CoreM (Result × Nat × Nat) := (do
       trace[auto.eval.printProblem] m!"Testing tactic {idx} || {ci.name} : {ci.type}"
       if let .some fhandle := logFileHandle? then
         fhandle.putStrLn ""
@@ -253,6 +256,7 @@ where
         fhandle.putStrLn s!"Testing tactic {idx} || {ci.name} : {← (Lean.Meta.ppExpr ci.type).run'}"
         fhandle.flush
       let problemStartTime ← IO.monoMsNow
+      let problemStartHb ← IO.getNumHeartbeats
       let result ← (do
         if nonterms.contains (tactic, ci.name) then
           return Result.nonterminate
@@ -261,14 +265,15 @@ where
             withReader (fun ctx => { ctx with maxHeartbeats := config.maxHeartbeats * 1000 }) <|
               Meta.MetaM.run' metaAction)
       let problemTime := (← IO.monoMsNow) - problemStartTime
-      trace[auto.eval.printResult] m!"{result}\nElapsed time : {problemTime}ms"
+      let problemHb := (← IO.getNumHeartbeats) - problemStartHb
+      trace[auto.eval.printResult] m!"{result}\nElapsed time : {problemTime} ms, {problemHb} hb"
       if let .some fhandle := logFileHandle? then
-        fhandle.putStrLn (toString (← MessageData.format m!"{result}\nElapsed time : {problemTime}ms"))
-      return (result, problemTime))
+        fhandle.putStrLn (toString (← MessageData.format m!"{result}\nElapsed time : {problemTime} ms, {problemHb} hb"))
+      return (result, problemTime, problemHb))
     let (result, _) ← coreAction.toIO context state
     return result)
 
-def readEvalTacticsAtModuleResult (resultFile : String) : CoreM (Array (Name × Array (Result × Nat))) := do
+def readEvalTacticsAtModuleResult (resultFile : String) : CoreM (Array (Name × Array (Result × Nat × Nat))) := do
   let content ← IO.FS.readFile resultFile
   let lines := content.splitOn "\n"
   if lines[2]? != .some "Summary:" || lines[3]? != .some "" then
@@ -276,18 +281,15 @@ def readEvalTacticsAtModuleResult (resultFile : String) : CoreM (Array (Name × 
   let lines := (lines.drop 4).filter (fun s => s != "")
   (Array.mk lines).mapM (analyzeLine resultFile)
 where
-  analyzeLine (fileName line : String) : CoreM (Name × Array (Result × Nat)) := do
+  analyzeLine (fileName line : String) : CoreM (Name × Array (Result × Nat × Nat)) := do
     let line := (line.dropWhile (fun c => c != ' ')).drop 3
     let tr := (line.takeWhile (fun c => c != ']')).splitOn ", "
-    let tr : Array (Result × Nat) ← (Array.mk tr).mapM (fun s => do
-      let sr := s.take 1
-      let st := s.drop 2
-      match Result.ofConcise? sr with
-      | .some r =>
-        match String.toNat? st with
-        | .some t => return (r, t)
-        | .none => throwError s!"{decl_name%} :: In file {fileName}, {st} is not a string representation of a Nat"
-      | .none => throwError s!"{decl_name%} :: In file {fileName}, {sr} is not a concise representation of a `Result`")
+    let tr : Array (Result × Nat × Nat) ← (Array.mk tr).mapM (fun s => do
+      let [sr, st, sh] := s.splitOn " "
+        | throwError "s!{decl_name%} :: In file {fileName}, {s} is not of the form `<result> <time> <heartbeats>`"
+      match Result.ofConcise? sr, String.toNat? st, String.toNat? sh with
+      | .some r, .some t, .some h => return (r, t, h)
+      | _, _, _ => throwError s!"{decl_name%} :: In file {fileName}, {s} is not of the form `<result> <time> <heartbeats>`")
     let line := (line.dropWhile (fun c => c != ']')).drop 2
     let name := Name.parseUniqRepr line
     return (name, tr)
@@ -306,7 +308,7 @@ structure EvalTacticOnMathlibConfig where
   -/
   nonterminates : Array (RegisteredTactic × Name)
   /-- Number of threads to use -/
-  nthreads      : Nat
+  nprocs        : Nat
 
 /--
   This should be run after `import Mathlib` and `import Auto.EvaluateAuto.TestTactics`,
@@ -341,12 +343,12 @@ def evalTacticsAtMathlibHumanTheorems (config : EvalTacticOnMathlibConfig) : Cor
     evalProc.stdin.putStr (evalFile mm validThms logPath config)
     let (_, evalProc) ← evalProc.takeStdin
     running := running.push (mm, evalProc)
-    while running.size >= config.nthreads do
+    while running.size >= config.nprocs do
       running ← tryWaitOn evaluateFilesHandle running
   while running.size != 0 do
     running ← tryWaitOn evaluateFilesHandle running
 where
-  tryWaitOn (evaluateFilesHandle : IO.FS.Handle) (running : Array (Name × _)) : CoreM (Array (Name × _)) := do
+  tryWaitOn (evaluateFilesHandle : IO.FS.Handle) (running : Array (Name × EvalTakenProc)) : CoreM (Array (Name × _)) := do
     let mut running' := #[]
     for (mm, proc) in running do
       let retCode? ← proc.tryWait
@@ -373,18 +375,18 @@ where
         nonterms.toList.dropLast.map (fun n => s!"  {repr n},") ++ [s!"  {repr last}"]
       | .none => []
     let tacsStr := String.intercalate ", " (config.tactics.map (fun tac => "." ++ toString tac)).toList
-    let lines := [
+    let lines := #[
         s!"import {mm}",
         "import Auto.EvaluateAuto.TestTactics",
         "import Aesop",
         "open Lean EvalAuto",
         "",
         "def humanThms : Std.HashSet Name := Std.HashSet.ofList ["
-      ] ++ thmsStrs ++ [
+      ] ++ thmsStrs ++ #[
         "]",
         "",
         "def nonterms : Array (RegisteredTactic × Name) := #["
-      ] ++ nontermsStrs ++ [
+      ] ++ nontermsStrs ++ #[
         "]",
         "",
         "def action : CoreM Unit := do",
@@ -397,13 +399,13 @@ where
         "set_option auto.evalAuto.ensureAesop true",
         "#eval action"
       ]
-    String.intercalate "\n" lines
+    String.intercalate "\n" lines.toList
 
 /--
   Read results generated by `evalTacticsAtMathlibHumanTheorems`
 -/
 def readETMHTResult (config : EvalTacticOnMathlibConfig) :
-  CoreM (Array (Name × Array (Name × Array (Result × Nat)))) := do
+  CoreM (Array (Name × Array (Name × Array (Result × Nat × Nat)))) := do
   let resultFolder := config.resultFolder
   if !(← System.FilePath.isDir resultFolder) then
     throwError "{decl_name%} :: {config.resultFolder} is not a directory"
