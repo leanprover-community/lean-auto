@@ -247,9 +247,9 @@ structure EvalAutoOnMathlibConfig where
   nprocs        : Nat
   /-- Batch size -/
   batchSize     : Nat
-  /-- Memory limit, in kb -/
+  /-- Memory limit for each evaluation process, in kb -/
   memoryLimitKb : Option Nat    := .none
-  /-- Time limit, in seconds -/
+  /-- Total time limit for each evaluation process, in seconds -/
   timeLimitS    : Option Nat    := .none
   nonterminates : Array Name
 
