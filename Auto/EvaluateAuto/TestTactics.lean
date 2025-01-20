@@ -5,6 +5,8 @@ import Auto.EvaluateAuto.ConstAnalysis
 import Auto.EvaluateAuto.EnvAnalysis
 import Auto.EvaluateAuto.NameArr
 import Auto.EvaluateAuto.CommandAnalysis
+import Auto.Tactic
+import Auto.EvaluateAuto.AutoConfig
 import Std
 open Lean
 
@@ -85,7 +87,7 @@ section Tactics
     let configClause ← mkAesopConfigStx subHeartbeats
     let addClauses := usedThmIdents.map mkAddIdentStx
     let aesopStx := mkAesopStx (#[configClause] ++ addClauses)
-    let stx ← `(tactic|intros; $aesopStx)
+    let stx ← `(tactic| intros; $aesopStx)
     evalTactic stx
   where
     synth : SourceInfo := SourceInfo.synthetic default default false
@@ -105,6 +107,20 @@ section Tactics
             Syntax.atom synth ")"
         ]
 
+  def useAuto
+    (config : SolverConfig)
+    (timeout : Nat) -- Timeout for external provers
+    (ci : ConstantInfo) : TacticM Unit := do
+    let .some proof := ci.value?
+      | throwError "{decl_name%} :: ConstantInfo of {ci.name} has no value"
+    let usedThmNames ← (← Expr.getUsedTheorems' proof).filterM (fun name =>
+      return !(← Name.onlyLogicInType name))
+    let usedThmTerms : Array Term := usedThmNames.map (fun name => ⟨mkIdent name⟩)
+    let usedThmHints : Array (TSyntax `Auto.hintelem) ← usedThmTerms.mapM (fun t =>
+      `(Auto.hintelem| t))
+    let stx ← `(tactic| auto [$[$usedThmHints],*])
+    withAutoSolverConfigOptions config timeout <| evalTactic stx
+
   inductive RegisteredTactic where
     | testUnknownConstant
     | useRfl
@@ -113,6 +129,7 @@ section Tactics
     | useSimpAllWithPremises
     | useAesop (subHeartbeats : Nat)
     | useAesopWithPremises (subHeartbeats : Nat)
+    | useAuto (config : SolverConfig) (timeout : Nat)
   deriving BEq, Hashable, Repr
 
   instance : ToString RegisteredTactic where
@@ -124,6 +141,7 @@ section Tactics
     | .useSimpAllWithPremises  => "useSimpAllWithPremises"
     | .useAesop sh             => s!"useAesop {sh}"
     | .useAesopWithPremises sh => s!"useAesopWithPremises {sh}"
+    | .useAuto config timeout  => s!"useAuto {config} {timeout}"
 
   def RegisteredTactic.toCiTactic : RegisteredTactic → ConstantInfo → TacticM Unit
     | .testUnknownConstant     => EvalAuto.testUnknownConstant
@@ -133,6 +151,7 @@ section Tactics
     | .useSimpAllWithPremises  => EvalAuto.useSimpAllWithPremises
     | .useAesop sh             => fun _ => EvalAuto.useAesop sh
     | .useAesopWithPremises sh => EvalAuto.useAesopWithPremises sh
+    | .useAuto config timeout  => EvalAuto.useAuto config timeout
 
 end Tactics
 

@@ -5,30 +5,12 @@ import Auto.EvaluateAuto.Result
 import Auto.EvaluateAuto.ConstAnalysis
 import Auto.EvaluateAuto.EnvAnalysis
 import Auto.EvaluateAuto.NameArr
+import Auto.EvaluateAuto.AutoConfig
 import Auto.Tactic
 
 open Lean Auto
 
 namespace EvalAuto
-
-inductive SolverConfig where
-  -- Use `duper` as the backend prover
-  | native
-  -- Use `duper` as the backend prover, without any preprocessing
-  | rawNative
-  -- Use `lean-smt`, currently not supported
-  | leanSmt
-  | smt (solverName : Solver.SMT.SolverName)
-  | tptp (solverName : Solver.TPTP.SolverName) (path : String)
-  deriving Repr
-
-instance : ToString SolverConfig where
-  toString : SolverConfig → String
-  | .native       => "native"
-  | .rawNative    => "rawNative"
-  | .leanSmt      => "leanSmt"
-  | .smt sn       => s!"smt {sn}"
-  | .tptp sn path => s!"tptp {sn} {path}"
 
 structure EvalAutoConfig where
   /-- Timeout for Lean code (Lean-auto + native provers) -/
@@ -119,12 +101,6 @@ def runProverOnConst
   let lemmaV := {lemmaPre with proof := v}
   runProverOnAutoLemma lemmaV prover
 
-def disableAllSolvers (o : Options) : Options :=
-  let o := auto.native.set o false
-  let o := auto.smt.set o false
-  let o := auto.tptp.set o false
-  o
-
 /--
   Run `lean-auto` on all the constants listed in `names`
 
@@ -151,45 +127,18 @@ def runAutoOnConsts (config : EvalAutoConfig) (names : Array Name) : CoreM Unit 
       fhandle.flush
     let problemStartTime ← IO.monoMsNow
     let problemStartHb ← IO.getNumHeartbeats
-    let result : Result ← withCurrHeartbeats <|
-      withReader (fun ctx => {ctx with maxHeartbeats := config.maxHeartbeats * 1000}) <|
-        if nonterms.contains name then
-          return .nonterminate
-        else
-          match config.solverConfig with
-          | .native       =>
-            withOptions (fun o =>
-              let o := disableAllSolvers o
-              let o := auto.native.set o true
-              let o := auto.mono.mode.set o MonoMode.hol
-              o) <| runProverOnConst name (Auto.runAuto (.some name))
-          | .rawNative    =>
-            runProverOnConst name Solver.Native.queryNative
-          | .leanSmt      =>
-            throwError "Lean-SMT is currently not supported"
-          | .smt sn       =>
-            withOptions (fun o =>
-              let o := disableAllSolvers o
-              let o := auto.smt.set o true
-              let o := auto.smt.solver.name.set o sn
-              let o := auto.smt.timeout.set o config.timeout
-              let o := auto.smt.trust.set o true
-              let o := auto.mono.mode.set o MonoMode.fol
-              o) <| runProverOnConst name (Auto.runAuto (.some name))
-          | .tptp sn path =>
-            withOptions (fun o =>
-              let o := disableAllSolvers o
-              let o := auto.tptp.set o true
-              let o := auto.tptp.solver.name.set o sn
-              let o := auto.tptp.timeout.set o config.timeout
-              let o := auto.tptp.trust.set o true
-              let o := auto.mono.mode.set o MonoMode.fol
-              match sn with
-              | .zipperposition => auto.tptp.zipperposition.path.set o path
-              | .zeport _       => auto.tptp.zeport.path.set o path
-              | .eproverHo      => auto.tptp.eproverHo.path.set o path
-              | .vampire        => auto.tptp.vampire.path.set o path) <|
-                runProverOnConst name (Auto.runAuto (.some name))
+    let result : Result ← (do
+      if nonterms.contains name then
+        return .nonterminate
+      else
+        withCurrHeartbeats <|
+          withTheReader Core.Context (fun ctx => {ctx with maxHeartbeats := config.maxHeartbeats * 1000}) <|
+            withAutoSolverConfigOptions config.solverConfig config.timeout (
+              match config.solverConfig with
+              | .rawNative => runProverOnConst name Solver.Native.queryNative
+              | .leanSmt   => throwError "Lean-SMT is currently not supported"
+              | _          => runProverOnConst name (Auto.runAuto (.some name))
+        ))
     let problemTime := (← IO.monoMsNow) - problemStartTime
     let problemHb := (← IO.getNumHeartbeats) - problemStartHb
     trace[auto.eval.printResult] m!"{result}\nElapsed time: {problemTime} ms, {problemHb} hb"
