@@ -108,6 +108,7 @@ section Tactics
         ]
 
   def useAuto
+    (ignoreNonQuasiHigherOrder : Bool)
     (config : SolverConfig)
     (timeout : Nat) -- Timeout for external provers
     (ci : ConstantInfo) : TacticM Unit := do
@@ -119,7 +120,8 @@ section Tactics
     let usedThmHints : Array (TSyntax `Auto.hintelem) ← usedThmTerms.mapM (fun t =>
       `(Auto.hintelem| $t:term))
     let stx ← `(tactic| auto [$[$usedThmHints],*])
-    withAutoSolverConfigOptions config timeout <| evalTactic stx
+    withOptions (fun o => auto.mono.ignoreNonQuasiHigherOrder.set o ignoreNonQuasiHigherOrder) <|
+      withAutoSolverConfigOptions config timeout <| evalTactic stx
 
   inductive RegisteredTactic where
     | testUnknownConstant
@@ -129,7 +131,7 @@ section Tactics
     | useSimpAllWithPremises
     | useAesop (subHeartbeats : Nat)
     | useAesopWithPremises (subHeartbeats : Nat)
-    | useAuto (config : SolverConfig) (timeout : Nat)
+    | useAuto (ignoreNonQuasiHigherOrder : Bool) (config : SolverConfig) (timeout : Nat)
   deriving BEq, Hashable, Repr
 
   instance : ToString RegisteredTactic where
@@ -141,7 +143,7 @@ section Tactics
     | .useSimpAllWithPremises  => "useSimpAllWithPremises"
     | .useAesop sh             => s!"useAesop {sh}"
     | .useAesopWithPremises sh => s!"useAesopWithPremises {sh}"
-    | .useAuto config timeout  => s!"useAuto {config} {timeout}"
+    | .useAuto ig config timeout => s!"useAuto {ig} {config} {timeout}"
 
   def RegisteredTactic.toCiTactic : RegisteredTactic → ConstantInfo → TacticM Unit
     | .testUnknownConstant     => EvalAuto.testUnknownConstant
@@ -151,7 +153,7 @@ section Tactics
     | .useSimpAllWithPremises  => EvalAuto.useSimpAllWithPremises
     | .useAesop sh             => fun _ => EvalAuto.useAesop sh
     | .useAesopWithPremises sh => EvalAuto.useAesopWithPremises sh
-    | .useAuto config timeout  => EvalAuto.useAuto config timeout
+    | .useAuto ig config timeout => EvalAuto.useAuto ig config timeout
 
 end Tactics
 
