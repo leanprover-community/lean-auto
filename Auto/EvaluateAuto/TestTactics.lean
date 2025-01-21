@@ -393,7 +393,7 @@ where
       | .some last =>
         nonterms.toList.dropLast.map (fun n => s!"  {repr n},") ++ [s!"  {repr last}"]
       | .none => []
-    let tacsStr := String.intercalate ", " (config.tactics.map (fun tac => "." ++ toString tac)).toList
+    let tacsStr := String.intercalate ", " (config.tactics.map (fun tac => s!"({repr tac})")).toList
     -- Passing options
     let allImportedModules := Std.HashSet.ofArray (← getEnv).allImportedModuleNames
     let ensureAesop := auto.testTactics.ensureAesop.get (← getOptions)
@@ -405,7 +405,7 @@ where
     let rnm : Name := (rnm.splitOn ".").foldl (fun cur field => Name.str cur field) .anonymous
     if ensureAuto && !allImportedModules.contains rnm then
       throwError "{decl_name%} :: Cannot find rebindNativeModuleName module `{toString rnm}`"
-    let ensureAutoImports := if ensureAuto then #["import Duper", s!"import {rnm}"] else #[]
+    let ensureAutoImports := if ensureAuto then #["import Duper.Tactic", s!"import {rnm}"] else #[]
     let lines := #[
         s!"import {mm}",
         "import Auto.EvaluateAuto.TestTactics"
@@ -432,7 +432,7 @@ where
         -- Passing option `auto.testTactics.ensureAuto`
         s!"set_option auto.testTactics.ensureAuto {ensureAuto}",
         -- Passing option `auto.testTactics.rebindNativeModuleName`
-        s!"set_option auto.testTactics.rebindNativeModuleName {rnm}",
+        s!"set_option auto.testTactics.rebindNativeModuleName \"{rnm}\"",
         "",
         "#eval action"
       ]
