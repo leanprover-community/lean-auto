@@ -4,9 +4,20 @@ import Auto.EvaluateAuto.ConstAnalysis
 import Auto.EvaluateAuto.Result
 open Lean
 
-register_option auto.evalAuto.ensureAesop : Bool := {
+register_option auto.testTactics.ensureAesop : Bool := {
   defValue := false
   descr := "Enable/Disable enforcement of importing `aesop`"
+}
+
+register_option auto.testTactics.ensureAuto : Bool := {
+  defValue := false
+  descr := "Enable/Disable enforcement of importing `Auto.Tactic`"
+}
+
+register_option auto.testTactics.rebindNativeModuleName : String := {
+  defValue := ""
+  descr := "Name of the module which defines the native solver function `f` " ++
+  "and configures `attribute [rebind Auto.Native.solverFunc] f`"
 }
 
 namespace EvalAuto
@@ -62,8 +73,23 @@ def runWithEffectOfCommands
   let inputCtx := Parser.mkInputContext input fileName
   let (header, parserState, messages) ← Parser.parseHeader inputCtx
   let mut ensuring := #[]
-  if auto.evalAuto.ensureAesop.get (← getOptions) then
+  let allImportedModules := Std.HashSet.ofArray (← getEnv).allImportedModuleNames
+  if auto.testTactics.ensureAesop.get (← getOptions) then
+    if !allImportedModules.contains `Aesop then
+      throwError "{decl_name%} :: Cannot find module `Aesop`"
     ensuring := ensuring.push { module := `Aesop }
+  if auto.testTactics.ensureAuto.get (← getOptions) then
+    if !allImportedModules.contains `Auto.Tactic then
+      throwError "{decl_name%} :: Cannot find module `Auto.Tactic`"
+    ensuring := ensuring.push { module := `Auto.Tactic }
+    if !allImportedModules.contains `Duper.Tactic then
+      throwError "{decl_name%} :: Cannot find module `Duper.Tactic`"
+    ensuring := ensuring.push { module := `Duper.Tactic }
+    let rnm := auto.testTactics.rebindNativeModuleName.get (← getOptions)
+    let rnm : Name := (rnm.splitOn ".").foldl (fun cur field => Name.str cur field) .anonymous
+    if !allImportedModules.contains rnm then
+      throwError "{decl_name%} :: Cannot find rebindNativeModuleName module `{toString rnm}`"
+    ensuring := ensuring.push { module := rnm }
   let (env, messages) ← processHeaderEnsuring header {} messages inputCtx (ensuring := ensuring)
   let commandState := Command.mkState env messages {}
   (runWithEffectOfCommandsCore cnt? action { inputCtx }).run'
