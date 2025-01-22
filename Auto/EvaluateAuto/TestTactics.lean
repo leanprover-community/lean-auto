@@ -46,7 +46,8 @@ section Tactics
       | throwError "{decl_name%} :: ConstantInfo of {ci.name} has no value"
     let usedThmNames ← (← Expr.getUsedTheorems' proof).filterM (fun name =>
       return !(← Name.onlyLogicInType name))
-    let usedThmTerms : Array Term := usedThmNames.map (fun name => ⟨mkIdent name⟩)
+    let usedThmExprs ← liftM <| usedThmNames.mapM Meta.mkConstWithFreshMVarLevels
+    let usedThmTerms ← liftM <| usedThmExprs.mapM Term.exprToSyntax
     evalTactic (← `(tactic| intros; simp_all [$[$usedThmTerms:term],*]))
 
   private def mkAesopConfigStx (subHeartbeats : Nat) : CoreM Syntax := do
@@ -81,17 +82,18 @@ section Tactics
   def useAesopWithPremises (subHeartbeats : Nat) (ci : ConstantInfo) : TacticM Unit := do
     let .some proof := ci.value?
       | throwError "{decl_name%} :: ConstantInfo of {ci.name} has no value"
+    let configClause ← mkAesopConfigStx subHeartbeats
     let usedThmNames ← (← Expr.getUsedTheorems' proof).filterM (fun name =>
       return !(← Name.onlyLogicInType name))
-    let usedThmIdents := usedThmNames.map Lean.mkIdent
-    let configClause ← mkAesopConfigStx subHeartbeats
-    let addClauses := usedThmIdents.map mkAddIdentStx
+    let usedThmExprs ← liftM <| usedThmNames.mapM Meta.mkConstWithFreshMVarLevels
+    let usedThmTerms ← liftM <| usedThmExprs.mapM Term.exprToSyntax
+    let addClauses := usedThmTerms.map mkAddIdentStx
     let aesopStx := mkAesopStx (#[configClause] ++ addClauses)
     let stx ← `(tactic| intros; $aesopStx)
     evalTactic stx
   where
     synth : SourceInfo := SourceInfo.synthetic default default false
-    mkAddIdentStx (ident : Ident) : Syntax :=
+    mkAddIdentStx (term : Term) : Syntax :=
       Syntax.node synth `Aesop.Frontend.Parser.«tactic_clause(Add_)»
         #[Syntax.atom synth "(", Syntax.atom synth "add",
           Syntax.node synth `null
@@ -101,7 +103,13 @@ section Tactics
                   #[Syntax.atom synth "unsafe"]
                 ],
                 Syntax.node synth `Aesop.Frontend.Parser.rule_expr_
-                  #[Lean.Syntax.node synth `Aesop.Frontend.Parser.featIdent #[ident]]
+                  #[Lean.Syntax.node synth `Aesop.Frontend.Parser.«feature(_)»
+                    #[
+                      Lean.Syntax.atom synth "(",
+                      term,
+                      Lean.Syntax.atom synth ")"
+                    ]
+                  ]
               ]
             ],
             Syntax.atom synth ")"
@@ -116,7 +124,8 @@ section Tactics
       | throwError "{decl_name%} :: ConstantInfo of {ci.name} has no value"
     let usedThmNames ← (← Expr.getUsedTheorems' proof).filterM (fun name =>
       return !(← Name.onlyLogicInType name))
-    let usedThmTerms : Array Term := usedThmNames.map (fun name => ⟨mkIdent name⟩)
+    let usedThmExprs ← liftM <| usedThmNames.mapM Meta.mkConstWithFreshMVarLevels
+    let usedThmTerms ← liftM <| usedThmExprs.mapM Term.exprToSyntax
     let usedThmHints : Array (TSyntax `Auto.hintelem) ← usedThmTerms.mapM (fun t =>
       `(Auto.hintelem| $t:term))
     let stx ← `(tactic| auto [$[$usedThmHints],*])
