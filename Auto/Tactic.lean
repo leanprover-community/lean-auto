@@ -750,52 +750,47 @@ def evalAuto : Tactic
 def runAutoGetHints (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM solverHints :=
   Meta.withDefault do
     traceLemmas `auto.runAuto.printLemmas s!"All lemmas received by {decl_name%}:" lemmas
-    -- Simplify `ite`
-    let ite_simp_lem ← Lemma.ofConst ``Auto.Bool.ite_simp (.leaf "hw Auto.Bool.ite_simp")
-    let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem ite_simp_lem)
-    -- Simplify `cond`
-    let cond_simp_lem ← Lemma.ofConst ``Auto.Bool.cond_simp (.leaf "hw Auto.Bool.cond_simp")
-    let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem cond_simp_lem)
-    -- Simplify `decide`
-    let decide_simp_lem ← Lemma.ofConst ``Auto.Bool.decide_simp (.leaf "hw Auto.Bool.decide_simp")
-    let lemmas ← lemmas.mapM (fun lem => Lemma.rewriteUPolyRigid lem decide_simp_lem)
-    let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) (minds : Array (Array SimpleIndVal)) : LamReif.ReifM solverHints := (do
-      let exportFacts ← LamReif.reifFacts uvalids
-      let mut exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
-      let _ ← LamReif.reifInhabitations uinhs
-      let exportInds ← LamReif.reifMutInds minds
-      LamReif.printValuation
-      -- **Preprocessing in Verified Checker**
-      let (exportFacts', exportInds) ← LamReif.preprocess exportFacts exportInds
-      exportFacts := exportFacts'
-      -- **TPTP**
-      if auto.tptp.get (← getOptions) then
-        if auto.tptp.premiseSelection.get (← getOptions) then
-          let (_, some unsatCore) ← queryTPTP exportFacts
-            | throwError "runAutoGetHints :: External TPTP solver unable to solve the goal"
-          let mut unsatCoreDerivLeafStrings := #[]
-          for fact in unsatCore do
-            let factDTR ← LamReif.collectDerivFor fact
-            unsatCoreDerivLeafStrings := unsatCoreDerivLeafStrings ++ factDTR.collectLeafStrings
-            trace[auto.tptp.unsatCore.deriv] "{fact} DTR: {factDTR}"
-          -- When the external prover uses the TPTP format, only information about the unsat core can be collected
-          return (unsatCoreDerivLeafStrings, #[], [], [], [], [], [], [])
-        else
-          throwError "runAutoGetHints :: No hints to return if auto.tptp is enabled but auto.tptp.premiseSelection is disabled"
-      -- **SMT**
-      else if auto.smt.get (← getOptions) then
-        if let .some solverHints ← querySMTForHints exportFacts exportInds then
-          return solverHints
-        else
-          throwError "runAutoGetHints :: SMT solver was unable to find a proof"
-      else
-        throwError "runAutoGetHints :: Either auto.smt or auto.tptp must be enabled"
-      )
+    let lemmas ← rewriteIteCondDecide lemmas
     let (solverHints, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM solverHints) do
       let s ← get
       let u ← computeMaxLevel s.facts
-      (afterReify s.facts s.inhTys s.inds).run' {u := u})
+      (reifMAction s.facts s.inhTys s.inds).run' {u := u})
     return solverHints
+where
+  reifMAction
+    (uvalids : Array UMonoFact) (uinhs : Array UMonoFact)
+    (minds : Array (Array SimpleIndVal)) : LamReif.ReifM solverHints := do
+    let exportFacts ← LamReif.reifFacts uvalids
+    let mut exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
+    let _ ← LamReif.reifInhabitations uinhs
+    let exportInds ← LamReif.reifMutInds minds
+    LamReif.printValuation
+    -- **Preprocessing in Verified Checker**
+    let (exportFacts', exportInds) ← LamReif.preprocess exportFacts exportInds
+    exportFacts := exportFacts'
+    -- **TPTP invocation and Premise Selection**
+    if auto.tptp.get (← getOptions) then
+      if auto.tptp.premiseSelection.get (← getOptions) then
+        let (_, some unsatCore) ← queryTPTP exportFacts
+          | throwError "runAutoGetHints :: External TPTP solver unable to solve the goal"
+        let mut unsatCoreDerivLeafStrings := #[]
+        for fact in unsatCore do
+          let factDTR ← LamReif.collectDerivFor fact
+          unsatCoreDerivLeafStrings := unsatCoreDerivLeafStrings ++ factDTR.collectLeafStrings
+          trace[auto.tptp.unsatCore.deriv] "{fact} DTR: {factDTR}"
+        -- When the external prover uses the TPTP format, only information about the unsat core can be collected
+        return (unsatCoreDerivLeafStrings, #[], [], [], [], [], [], [])
+      else
+        throwError "runAutoGetHints :: No hints to return if auto.tptp is enabled but auto.tptp.premiseSelection is disabled"
+    -- **SMT**
+    else if auto.smt.get (← getOptions) then
+      if let .some solverHints ← querySMTForHints exportFacts exportInds then
+        return solverHints
+      else
+        throwError "runAutoGetHints :: SMT solver was unable to find a proof"
+    -- **Native Prover**
+    else
+      throwError "runAutoGetHints :: Either auto.smt or auto.tptp must be enabled"
 
 syntax (name := autoGetHints) "autoGetHints" autoinstr hints (uord)* : tactic
 
