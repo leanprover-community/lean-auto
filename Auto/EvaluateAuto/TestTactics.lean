@@ -101,10 +101,29 @@ section Tactics
                   #[Syntax.atom synth "unsafe"]
                 ],
                 Syntax.node synth `Aesop.Frontend.Parser.rule_expr_
-                  #[Lean.Syntax.node synth `Aesop.Frontend.Parser.featIdent #[ident]]
+                  #[Syntax.node synth `Aesop.Frontend.Parser.featIdent #[ident]]
               ]
             ],
             Syntax.atom synth ")"
+        ]
+
+  def useDuper (ci : ConstantInfo) : TacticM Unit := do
+    let .some proof := ci.value?
+      | throwError "{decl_name%} :: ConstantInfo of {ci.name} has no value"
+    let usedThmNames ← (← Expr.getUsedTheorems' proof).filterM (fun name =>
+      return !(← Name.onlyLogicInType name))
+    let usedThmIdents : Array Ident := usedThmNames.map (fun name => ⟨mkIdent name⟩)
+    let stx := mkDuperStx usedThmIdents
+    evalTactic stx
+  where
+    mkDuperStx (idents : Array Ident) : Syntax :=
+      let synth : SourceInfo := SourceInfo.synthetic default default false
+      let idArr : Array Syntax := ((idents.map (fun id => #[Syntax.atom synth ",", id])).flatMap id)[1:]
+      Syntax.node synth `Duper.duper
+        #[Syntax.atom synth "duper",
+          Syntax.node synth `null
+            #[Syntax.atom synth "[", Syntax.node synth `null idArr, Syntax.atom synth "]"],
+          Syntax.node synth `null #[]
         ]
 
   def useAuto
@@ -131,6 +150,7 @@ section Tactics
     | useSimpAllWithPremises
     | useAesop (subHeartbeats : Nat)
     | useAesopWithPremises (subHeartbeats : Nat)
+    | useDuper
     | useAuto (ignoreNonQuasiHigherOrder : Bool) (config : SolverConfig) (timeout : Nat)
   deriving BEq, Hashable, Repr
 
@@ -143,6 +163,7 @@ section Tactics
     | .useSimpAllWithPremises  => "useSimpAllWithPremises"
     | .useAesop sh             => s!"useAesop {sh}"
     | .useAesopWithPremises sh => s!"useAesopWithPremises {sh}"
+    | .useDuper                => s!"useDuper"
     | .useAuto ig config timeout => s!"useAuto {ig} {config} {timeout}"
 
   def RegisteredTactic.toCiTactic : RegisteredTactic → ConstantInfo → TacticM Unit
@@ -153,6 +174,7 @@ section Tactics
     | .useSimpAllWithPremises  => EvalAuto.useSimpAllWithPremises
     | .useAesop sh             => fun _ => EvalAuto.useAesop sh
     | .useAesopWithPremises sh => EvalAuto.useAesopWithPremises sh
+    | .useDuper                => EvalAuto.useDuper
     | .useAuto ig config timeout => EvalAuto.useAuto ig config timeout
 
 end Tactics
