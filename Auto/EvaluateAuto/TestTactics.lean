@@ -5,6 +5,9 @@ import Auto.EvaluateAuto.ConstAnalysis
 import Auto.EvaluateAuto.EnvAnalysis
 import Auto.EvaluateAuto.NameArr
 import Auto.EvaluateAuto.CommandAnalysis
+import Auto.Tactic
+import Auto.EvaluateAuto.AutoConfig
+import Std
 open Lean
 
 namespace EvalAuto
@@ -12,6 +15,25 @@ namespace EvalAuto
 open Elab Tactic
 
 section Tactics
+
+  /--
+    Solves the goal using `sorry` if `ci` does not contain unknown constants,
+    and throws and error if `ci` contains unknown constants
+
+    When we evaluate tactics on a theorem `T`, we replay the file that defines `T`
+    and calls the tactic on the environment `env` just before the declaration of `T`.
+    Since there are commands that define multiple constants simultaneously, it is
+    possible that the proof or type of `T` contains constants not present in `env`.
+    We run `testUnknownConstant` to detect such situations.
+  -/
+  def testUnknownConstant (ci : ConstantInfo) : TacticM Unit := do
+    let .some proof := ci.value?
+      | throwError "{decl_name%} :: ConstantInfo of {ci.name} has no value"
+    let usedConsts := Expr.getUsedConstants proof ++ Expr.getUsedConstants ci.type
+    for name in usedConsts do
+      if ((← getEnv).find? name).isNone then
+        throwError "{decl_name%} :: Proof of {ci.name} contains unknown constant {name}"
+    evalTactic (← `(tactic| sorry))
 
   def useRfl : TacticM Unit := do evalTactic (← `(tactic| intros; rfl))
 
@@ -59,13 +81,13 @@ section Tactics
   def useAesopWithPremises (subHeartbeats : Nat) (ci : ConstantInfo) : TacticM Unit := do
     let .some proof := ci.value?
       | throwError "{decl_name%} :: ConstantInfo of {ci.name} has no value"
+    let configClause ← mkAesopConfigStx subHeartbeats
     let usedThmNames ← (← Expr.getUsedTheorems proof).filterM (fun name =>
       return !(← Name.onlyLogicInType name))
     let usedThmIdents := usedThmNames.map Lean.mkIdent
-    let configClause ← mkAesopConfigStx subHeartbeats
     let addClauses := usedThmIdents.map mkAddIdentStx
     let aesopStx := mkAesopStx (#[configClause] ++ addClauses)
-    let stx ← `(tactic|intros; $aesopStx)
+    let stx ← `(tactic| intros; $aesopStx)
     evalTactic stx
   where
     synth : SourceInfo := SourceInfo.synthetic default default false
@@ -79,37 +101,81 @@ section Tactics
                   #[Syntax.atom synth "unsafe"]
                 ],
                 Syntax.node synth `Aesop.Frontend.Parser.rule_expr_
-                  #[Lean.Syntax.node synth `Aesop.Frontend.Parser.featIdent #[ident]]
+                  #[Syntax.node synth `Aesop.Frontend.Parser.featIdent #[ident]]
               ]
             ],
             Syntax.atom synth ")"
         ]
 
+  def useDuper (ci : ConstantInfo) : TacticM Unit := do
+    let .some proof := ci.value?
+      | throwError "{decl_name%} :: ConstantInfo of {ci.name} has no value"
+    let usedThmNames ← (← Expr.getUsedTheorems proof).filterM (fun name =>
+      return !(← Name.onlyLogicInType name))
+    let usedThmIdents : Array Ident := usedThmNames.map (fun name => ⟨mkIdent name⟩)
+    let stx := mkDuperStx usedThmIdents
+    evalTactic stx
+  where
+    mkDuperStx (idents : Array Ident) : Syntax :=
+      let synth : SourceInfo := SourceInfo.synthetic default default false
+      let idArr : Array Syntax := ((idents.map (fun id => #[Syntax.atom synth ",", id])).flatMap id)[1:]
+      Syntax.node synth `Duper.duper
+        #[Syntax.atom synth "duper",
+          Syntax.node synth `null
+            #[Syntax.atom synth "[", Syntax.node synth `null idArr, Syntax.atom synth "]"],
+          Syntax.node synth `null #[]
+        ]
+
+  def useAuto
+    (ignoreNonQuasiHigherOrder : Bool)
+    (config : SolverConfig)
+    (timeout : Nat) -- Timeout for external provers
+    (ci : ConstantInfo) : TacticM Unit := do
+    let .some proof := ci.value?
+      | throwError "{decl_name%} :: ConstantInfo of {ci.name} has no value"
+    let usedThmNames ← (← Expr.getUsedTheorems proof).filterM (fun name =>
+      return !(← Name.onlyLogicInType name))
+    let usedThmTerms : Array Term := usedThmNames.map (fun name => ⟨mkIdent name⟩)
+    let usedThmHints : Array (TSyntax `Auto.hintelem) ← usedThmTerms.mapM (fun t =>
+      `(Auto.hintelem| $t:term))
+    let stx ← `(tactic| auto [$[$usedThmHints],*])
+    withOptions (fun o => auto.mono.ignoreNonQuasiHigherOrder.set o ignoreNonQuasiHigherOrder) <|
+      withAutoSolverConfigOptions config timeout <| evalTactic stx
+
   inductive RegisteredTactic where
+    | testUnknownConstant
     | useRfl
     | useSimp
     | useSimpAll
     | useSimpAllWithPremises
     | useAesop (subHeartbeats : Nat)
     | useAesopWithPremises (subHeartbeats : Nat)
-  deriving BEq, Hashable
+    | useDuper
+    | useAuto (ignoreNonQuasiHigherOrder : Bool) (config : SolverConfig) (timeout : Nat)
+  deriving BEq, Hashable, Repr
 
   instance : ToString RegisteredTactic where
     toString : RegisteredTactic → String
+    | .testUnknownConstant     => "testUnknownConstant"
     | .useRfl                  => "useRfl"
     | .useSimp                 => "useSimp"
     | .useSimpAll              => "useSimpAll"
     | .useSimpAllWithPremises  => "useSimpAllWithPremises"
     | .useAesop sh             => s!"useAesop {sh}"
     | .useAesopWithPremises sh => s!"useAesopWithPremises {sh}"
+    | .useDuper                => s!"useDuper"
+    | .useAuto ig config timeout => s!"useAuto {ig} {config} {timeout}"
 
   def RegisteredTactic.toCiTactic : RegisteredTactic → ConstantInfo → TacticM Unit
+    | .testUnknownConstant     => EvalAuto.testUnknownConstant
     | .useRfl                  => fun _ => EvalAuto.useRfl
     | .useSimp                 => fun _ => EvalAuto.useSimp
     | .useSimpAll              => fun _ => EvalAuto.useSimpAll
     | .useSimpAllWithPremises  => EvalAuto.useSimpAllWithPremises
     | .useAesop sh             => fun _ => EvalAuto.useAesop sh
     | .useAesopWithPremises sh => EvalAuto.useAesopWithPremises sh
+    | .useDuper                => EvalAuto.useDuper
+    | .useAuto ig config timeout => EvalAuto.useAuto ig config timeout
 
 end Tactics
 
@@ -181,8 +247,11 @@ instance : ToString EvalTacticConfig where
 /--
   Effectively `runTacticsAtConstantDeclaration` at each constant in `modName` which satisfies `filter`\
   Note: Use `initSrcSearchPath` to get SearchPath of source files
+
+  For the `i`-th theorem `name` in `names`, its entry in the result file has the following form:
+  `<i> #[<result> <time> <heartbeats>, ⋯, <result> <time> <heartbeats>] <name>`
 -/
-def evalAtModule
+def evalTacticsAtModule
   (modName : Name) (searchPath : SearchPath) (filter : ConstantInfo → Bool)
   (config : EvalTacticConfig) : CoreM Unit:= do
   let logFileHandle? : Option IO.FS.Handle ← config.logFile.mapM (fun fname => IO.FS.Handle.mk fname .write)
@@ -190,6 +259,7 @@ def evalAtModule
   trace[auto.eval.printConfig] m!"Config = {config}"
   if let .some fhandle := logFileHandle? then
     fhandle.putStrLn s!"Config = {config}"
+    fhandle.putStrLn s!"Start time : {← Std.Time.Timestamp.now}"
   let .some uri ← Server.documentUriFromModule searchPath modName
     | throwError "{decl_name%} :: Cannot find module {modName}"
   let .some path := System.Uri.fileUriToPath? uri
@@ -208,24 +278,28 @@ def evalAtModule
     else
       return .none)
   if let .some fhandle := resultFileHandle? then
-    fhandle.putStrLn s!"Elapsed time : {(← IO.monoMsNow) - startTime} ms"
+    fhandle.putStrLn s!"Total elapsed time : {(← IO.monoMsNow) - startTime} ms"
     fhandle.putStrLn s!"\nSummary:\n"
     for ((name, result), idx) in results.zipWithIndex do
-      fhandle.putStrLn s!"{idx} {result.map Result.concise} {Name.uniqRepr name}"
+      let resultStrs := result.map (fun (r, time, hb) => s!"{r.concise} {time} {hb}")
+      fhandle.putStrLn s!"{idx} {resultStrs} {Name.uniqRepr name}"
 where
   evalAction
     (context : Core.Context) (state : Core.State) (ci : ConstantInfo)
     (logFileHandle? : Option IO.FS.Handle) (config : EvalTacticConfig)
-    (nonterms : Std.HashSet (RegisteredTactic × Name)) : IO (Array Result) := do
+    (nonterms : Std.HashSet (RegisteredTactic × Name)) : IO (Array (Result × Nat × Nat)) := do
   config.tactics.zipWithIndex.mapM (fun (tactic, idx) => do
     let metaAction : MetaM Result :=
       Term.TermElabM.run' <| Result.ofTacticOnExpr ci.type (tactic.toCiTactic ci)
-    let coreAction : CoreM Result := (do
+    let coreAction : CoreM (Result × Nat × Nat) := (do
       trace[auto.eval.printProblem] m!"Testing tactic {idx} || {ci.name} : {ci.type}"
       if let .some fhandle := logFileHandle? then
         fhandle.putStrLn ""
+        fhandle.putStrLn s!"Timestamp : {← Std.Time.Timestamp.now}"
         fhandle.putStrLn s!"Testing tactic {idx} || {ci.name} : {← (Lean.Meta.ppExpr ci.type).run'}"
         fhandle.flush
+      let problemStartTime ← IO.monoMsNow
+      let problemStartHb ← IO.getNumHeartbeats
       let result ← (do
         if nonterms.contains (tactic, ci.name) then
           return Result.nonterminate
@@ -233,12 +307,35 @@ where
           withCurrHeartbeats <|
             withReader (fun ctx => { ctx with maxHeartbeats := config.maxHeartbeats * 1000 }) <|
               Meta.MetaM.run' metaAction)
-      trace[auto.eval.printResult] m!"{result}"
+      let problemTime := (← IO.monoMsNow) - problemStartTime
+      let problemHb := (← IO.getNumHeartbeats) - problemStartHb
+      trace[auto.eval.printResult] m!"{result}\nElapsed time : {problemTime} ms, {problemHb} hb"
       if let .some fhandle := logFileHandle? then
-        fhandle.putStrLn (toString (← MessageData.format m!"{result}"))
-      return result)
+        fhandle.putStrLn (toString (← MessageData.format m!"{result}\nElapsed time : {problemTime} ms, {problemHb} hb"))
+      return (result, problemTime, problemHb))
     let (result, _) ← coreAction.toIO context state
     return result)
+
+def readEvalTacticsAtModuleResult (resultFile : String) : CoreM (Array (Name × Array (Result × Nat × Nat))) := do
+  let content ← IO.FS.readFile resultFile
+  let lines := content.splitOn "\n"
+  if lines[2]? != .some "Summary:" || lines[3]? != .some "" then
+    throwError "{decl_name%} :: Format of result file changed, please change analysis code. Result file : {resultFile}"
+  let lines := (lines.drop 4).filter (fun s => s != "")
+  (Array.mk lines).mapM (analyzeLine resultFile)
+where
+  analyzeLine (fileName line : String) : CoreM (Name × Array (Result × Nat × Nat)) := do
+    let line := (line.dropWhile (fun c => c != ' ')).drop 3
+    let tr := (line.takeWhile (fun c => c != ']')).splitOn ", "
+    let tr : Array (Result × Nat × Nat) ← (Array.mk tr).mapM (fun s => do
+      let [sr, st, sh] := s.splitOn " "
+        | throwError "s!{decl_name%} :: In file {fileName}, {s} is not of the form `<result> <time> <heartbeats>`"
+      match Result.ofConcise? sr, String.toNat? st, String.toNat? sh with
+      | .some r, .some t, .some h => return (r, t, h)
+      | _, _, _ => throwError s!"{decl_name%} :: In file {fileName}, {s} is not of the form `<result> <time> <heartbeats>`")
+    let line := (line.dropWhile (fun c => c != ']')).drop 2
+    let name := Name.parseUniqRepr line
+    return (name, tr)
 
 structure EvalTacticOnMathlibConfig where
   /-- Timeout for each tactic -/
@@ -254,7 +351,7 @@ structure EvalTacticOnMathlibConfig where
   -/
   nonterminates : Array (RegisteredTactic × Name)
   /-- Number of threads to use -/
-  nthreads      : Nat
+  nprocs        : Nat
 
 /--
   This should be run after `import Mathlib` and `import Auto.EvaluateAuto.TestTactics`,
@@ -285,15 +382,16 @@ def evalTacticsAtMathlibHumanTheorems (config : EvalTacticOnMathlibConfig) : Cor
     let evalProc ← EvalProc.create "lake" #["env", "lean", "--stdin"]
     let logPath := config.resultFolder ++ extraLogPath
     let validThms := (allTally.get? mm).getD #[]
-    evalProc.stdin.putStr (evalFile mm validThms logPath config)
+    NameArray.save validThms (logPath ++ ".name")
+    evalProc.stdin.putStr (← evalFile mm validThms logPath config)
     let (_, evalProc) ← evalProc.takeStdin
     running := running.push (mm, evalProc)
-    while running.size >= config.nthreads do
+    while running.size >= config.nprocs do
       running ← tryWaitOn evaluateFilesHandle running
   while running.size != 0 do
     running ← tryWaitOn evaluateFilesHandle running
 where
-  tryWaitOn (evaluateFilesHandle : IO.FS.Handle) (running : Array (Name × _)) : CoreM (Array (Name × _)) := do
+  tryWaitOn (evaluateFilesHandle : IO.FS.Handle) (running : Array (Name × EvalTakenProc)) : CoreM (Array (Name × _)) := do
     let mut running' := #[]
     for (mm, proc) in running do
       let retCode? ← proc.tryWait
@@ -305,7 +403,7 @@ where
     return running'
   evalFile
     (mm : Name) (validThms : Array Name)
-    (logPath : String) (config : EvalTacticOnMathlibConfig) : String :=
+    (logPath : String) (config : EvalTacticOnMathlibConfig) : CoreM String := do
     let lb := "{"
     let rb := "}"
     let thmsStrs : List String :=
@@ -313,34 +411,62 @@ where
       | .some last =>
         validThms.toList.dropLast.map (fun n => s!"  {repr n},") ++ [s!"  {repr last}"]
       | .none => []
-    let tacsStr := String.intercalate ", " (config.tactics.map (fun tac => "." ++ toString tac)).toList
-    let lines := [
+    let nonterms := config.nonterminates
+    let nontermsStrs : List String :=
+      match nonterms.toList.getLast? with
+      | .some last =>
+        nonterms.toList.dropLast.map (fun n => s!"  {repr n},") ++ [s!"  {repr last}"]
+      | .none => []
+    let tacsStr := String.intercalate ", " (config.tactics.map (fun tac => s!"({repr tac})")).toList
+    -- Passing options
+    let allImportedModules := Std.HashSet.ofArray (← getEnv).allImportedModuleNames
+    let ensureAesop := auto.testTactics.ensureAesop.get (← getOptions)
+    if ensureAesop && !allImportedModules.contains `Aesop then
+      throwError "{decl_name%} :: Cannot find module `Aesop`"
+    let ensureAesopImports := if ensureAesop then #["import Aesop"] else #[]
+    let ensureAuto := auto.testTactics.ensureAuto.get (← getOptions)
+    let rnm := auto.testTactics.rebindNativeModuleName.get (← getOptions)
+    let rnm : Name := (rnm.splitOn ".").foldl (fun cur field => Name.str cur field) .anonymous
+    if ensureAuto && !allImportedModules.contains rnm then
+      throwError "{decl_name%} :: Cannot find rebindNativeModuleName module `{toString rnm}`"
+    let ensureAutoImports := if ensureAuto then #["import Duper.Tactic", s!"import {rnm}"] else #[]
+    let lines := #[
         s!"import {mm}",
-        "import Auto.EvaluateAuto.TestTactics",
-        "import Aesop",
+        "import Auto.EvaluateAuto.TestTactics"
+      ] ++ ensureAesopImports ++ ensureAutoImports ++ #[
         "open Lean EvalAuto",
         "",
         "def humanThms : Std.HashSet Name := Std.HashSet.ofList ["
-      ] ++ thmsStrs ++ [
+      ] ++ thmsStrs ++ #[
+        "]",
+        "",
+        "def nonterms : Array (RegisteredTactic × Name) := #["
+      ] ++ nontermsStrs ++ #[
         "]",
         "",
         "def action : CoreM Unit := do",
         "  let p ← initSrcSearchPath",
-        s!"  let _ ← evalAtModule ({repr mm}) p (fun ci => humanThms.contains ci.name)",
+        s!"  let _ ← evalTacticsAtModule ({repr mm}) p (fun ci => humanThms.contains ci.name)",
         s!"    {lb} maxHeartbeats := {config.maxHeartbeats}, tactics := #[{tacsStr}],",
         s!"      logFile := {repr (logPath ++ ".log")}, resultFile := {repr (logPath ++ ".result")},",
-        s!"      nonterminates := #[] {rb}",
+        s!"      nonterminates := nonterms {rb}",
         "",
-        "set_option auto.evalAuto.ensureAesop true",
+        -- Passing option `auto.testTactics.ensureAesop`
+        s!"set_option auto.testTactics.ensureAesop {ensureAesop}",
+        -- Passing option `auto.testTactics.ensureAuto`
+        s!"set_option auto.testTactics.ensureAuto {ensureAuto}",
+        -- Passing option `auto.testTactics.rebindNativeModuleName`
+        s!"set_option auto.testTactics.rebindNativeModuleName \"{rnm}\"",
+        "",
         "#eval action"
       ]
-    String.intercalate "\n" lines
+    return String.intercalate "\n" lines.toList
 
 /--
   Read results generated by `evalTacticsAtMathlibHumanTheorems`
 -/
-def readTacticEvalResult (config : EvalTacticOnMathlibConfig) :
-  CoreM (Array (Name × Array (Name × Array Result))) := do
+def readETMHTResult (config : EvalTacticOnMathlibConfig) :
+  CoreM (Array (Name × Array (Name × Array (Result × Nat × Nat)))) := do
   let resultFolder := config.resultFolder
   if !(← System.FilePath.isDir resultFolder) then
     throwError "{decl_name%} :: {config.resultFolder} is not a directory"
@@ -348,24 +474,50 @@ def readTacticEvalResult (config : EvalTacticOnMathlibConfig) :
   let mut ret := #[]
   for path in allPaths do
     if !(← System.FilePath.isDir path) && path.toString.takeRight 7 == ".result" then
+      let content ← readEvalTacticsAtModuleResult path.toString
       let suffix := (path.toString.drop (resultFolder.length + 1)).dropRight 7
       let modName := (suffix.splitOn "/").foldl (fun a b => Name.str a b) .anonymous
-      let content ← IO.FS.readFile path
-      let lines := content.splitOn "\n"
-      if lines[2]? != .some "Summary:" || lines[3]? != .some "" then
-        throwError "{decl_name%} :: Format of result file changed, please change analysis code. Result file : {path}"
-      let lines := (lines.drop 4).filter (fun s => s != "")
-      let lineAnalysis ← (Array.mk lines).mapM analyzeLine
-      ret := ret.push (modName, lineAnalysis)
+      ret := ret.push (modName, content)
   return ret
-where
-  analyzeLine (line : String) : CoreM (Name × Array Result) := do
-    let line := (line.dropWhile (fun c => c != ' ')).drop 3
-    let tr := (line.takeWhile (fun c => c != ']')).splitOn ", "
-    let tr : Array Result ← (Array.mk tr).mapM (fun s => do
-      match Result.ofConcise? s with
-      | .some r => return r
-      | .none => throwError s!"{decl_name%} :: {s} is not a concise representation of a `Result`")
-    let line := (line.dropWhile (fun c => c != ']')).drop 2
-    let name := Name.parseUniqRepr line
-    return (name, tr)
+
+/--
+  Read results generated by `evalTacticsAtMathlibHumanTheorems` and
+    store them in a single file `gatheredResult` in `config.resultFolder`
+-/
+def gatherETMHTResult (config : EvalTacticOnMathlibConfig) : CoreM Unit := do
+  let resultFolder := config.resultFolder
+  let saveFile ← IO.FS.Handle.mk (resultFolder ++ "/gatheredResult") .write
+  if !(← System.FilePath.isDir resultFolder) then
+    throwError "{decl_name%} :: {config.resultFolder} is not a directory"
+  let readResult ← readETMHTResult config
+  let readResult := (readResult.map Prod.snd).flatMap id
+  saveFile.putStrLn "Total elapsed time: Not applicable. This is a gathered result of evalTacticsAtMathlibHumanTheorems"
+  saveFile.putStrLn ""
+  saveFile.putStrLn "Summary:"
+  saveFile.putStrLn ""
+  for ((name, result), idx) in readResult.zipWithIndex do
+    let resultStrs := result.map (fun (r, time, hb) => s!"{r.concise} {time} {hb}")
+    saveFile.putStrLn s!"{idx} {resultStrs} {Name.uniqRepr name}"
+
+/--
+  Read `evaluateFiles.txt` generated by `evalTacticsAtMathlibHumanTheorems`
+-/
+def readETMHTEvaluateFiles (config : EvalTacticOnMathlibConfig) : CoreM (Array Name × Array (Name × Nat)) := do
+  let resultFolder := config.resultFolder
+  let content ← IO.FS.readFile (resultFolder ++ "/evaluateFiles.txt")
+  let lines := (content.splitOn "\n").filter (fun line => line != "")
+  let mut retStart := #[]
+  let mut retEnd := #[]
+  let str2Name (s : String) := (s.splitOn ".").foldl (fun cur field => Name.str cur field) Name.anonymous
+  for line in lines do
+    if line.contains ':' then
+      let [name, retCode] := line.splitOn ":"
+        | throwError "{decl_name%} :: Unexpected line format, line content : `{line}`"
+      let name := name.dropRight 1
+      let retCode := retCode.drop 1
+      let some retCode := retCode.toNat?
+        | throwError "{decl_name%} :: Unexpected line format, line content : `{line}`"
+      retEnd := retEnd.push (str2Name name, retCode)
+    else
+      retStart := retStart.push (str2Name line)
+  return (retStart, retEnd)

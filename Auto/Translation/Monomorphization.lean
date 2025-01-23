@@ -620,12 +620,15 @@ def termLikeDefEqDefEqs (lemmas : Array Lemma) : MetaM (Array Lemma) := do
         if let .ok (.some (proof, eq, params)) ← computation then
           let eq := Expr.eraseMData (← Core.betaReduce eq)
           let eq ← Meta.transform eq (pre := fun e => do return .continue (← unfoldProj e))
-          let_expr Eq _ lhs rhs := eq | continue
-          if lhs == rhs then
+          if ← isTrivialEq eq then
             continue
           trace[auto.mono.termLikeDefEq] "{eq}"
           ret := ret.push ⟨⟨proof, eq, .leaf "termLikeDefEq"⟩, params⟩
   return ret
+where
+  isTrivialEq (e : Expr) : MetaM Bool := Meta.forallTelescope e fun _ b => do
+    let_expr Eq _ lhs rhs := b | return false
+    return lhs == rhs
 
 def initializeMonoM (lemmas : Array Lemma) : MonoM Unit := do
   let lemmas := lemmas ++ (← termLikeDefEqDefEqs lemmas)
@@ -1104,7 +1107,12 @@ where
     let liTypeRep? ← FVarRep.replacePolyWithFVar li.type
     match liTypeRep? with
     | .inl liTypeRep => return .some ⟨li.proof, liTypeRep, li.deriv⟩
-    | .inr m => if (← getIgnoreNonQuasiHigherOrder) then return .none else throwError m)
+    | .inr m =>
+      if (← getIgnoreNonQuasiHigherOrder) then
+        trace[auto.mono] "Don't know how to deal with fact {li.type}, ignoring it"
+        return .none
+      else
+        throwError m)
   fvarRepMInductAction (ivals : Array (Array SimpleIndVal)) : FVarRep.FVarRepM (Array (Array SimpleIndVal)) :=
     ivals.mapM (fun svals => svals.mapM (fun ⟨name, type, ctors, projs⟩ => do
       let (type, _) ← FVarRep.processType type
