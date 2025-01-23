@@ -44,7 +44,7 @@ section Tactics
   def useSimpAllWithPremises (ci : ConstantInfo) : TacticM Unit := do
     let .some proof := ci.value?
       | throwError "{decl_name%} :: ConstantInfo of {ci.name} has no value"
-    let usedThmNames ← (← Expr.getUsedTheorems' proof).filterM (fun name =>
+    let usedThmNames ← (← Expr.getUsedTheorems proof).filterM (fun name =>
       return !(← Name.onlyLogicInType name))
     let usedThmTerms : Array Term := usedThmNames.map (fun name => ⟨mkIdent name⟩)
     evalTactic (← `(tactic| intros; simp_all [$[$usedThmTerms:term],*]))
@@ -82,7 +82,7 @@ section Tactics
     let .some proof := ci.value?
       | throwError "{decl_name%} :: ConstantInfo of {ci.name} has no value"
     let configClause ← mkAesopConfigStx subHeartbeats
-    let usedThmNames ← (← Expr.getUsedTheorems' proof).filterM (fun name =>
+    let usedThmNames ← (← Expr.getUsedTheorems proof).filterM (fun name =>
       return !(← Name.onlyLogicInType name))
     let usedThmIdents := usedThmNames.map Lean.mkIdent
     let addClauses := usedThmIdents.map mkAddIdentStx
@@ -110,7 +110,7 @@ section Tactics
   def useDuper (ci : ConstantInfo) : TacticM Unit := do
     let .some proof := ci.value?
       | throwError "{decl_name%} :: ConstantInfo of {ci.name} has no value"
-    let usedThmNames ← (← Expr.getUsedTheorems' proof).filterM (fun name =>
+    let usedThmNames ← (← Expr.getUsedTheorems proof).filterM (fun name =>
       return !(← Name.onlyLogicInType name))
     let usedThmIdents : Array Ident := usedThmNames.map (fun name => ⟨mkIdent name⟩)
     let stx := mkDuperStx usedThmIdents
@@ -133,7 +133,7 @@ section Tactics
     (ci : ConstantInfo) : TacticM Unit := do
     let .some proof := ci.value?
       | throwError "{decl_name%} :: ConstantInfo of {ci.name} has no value"
-    let usedThmNames ← (← Expr.getUsedTheorems' proof).filterM (fun name =>
+    let usedThmNames ← (← Expr.getUsedTheorems proof).filterM (fun name =>
       return !(← Name.onlyLogicInType name))
     let usedThmTerms : Array Term := usedThmNames.map (fun name => ⟨mkIdent name⟩)
     let usedThmHints : Array (TSyntax `Auto.hintelem) ← usedThmTerms.mapM (fun t =>
