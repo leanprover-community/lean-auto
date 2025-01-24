@@ -291,10 +291,10 @@ def evalAutoAtTheoremsAsync
       logFile := .some (logPath ++ ".log"), resultFile := .some (logPath ++ ".result"),
       nonterminates := config.nonterminates
     }
+    let ef := evalFile batch evalAutoConfig
     let evalProc ← EvalProc.create "bash" #[]
     if let .some mlimit := config.memoryLimitKb then
       evalProc.stdin.putStrLn s!"ulimit -v {mlimit}"
-    let ef := evalFile batch evalAutoConfig
     if let .some tlimit := config.timeLimitS then
       evalProc.stdin.putStrLn ("echo " ++ bashRepr ef ++ s!" | timeout {tlimit} lake env lean --stdin")
     else
