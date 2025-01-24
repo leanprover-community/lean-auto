@@ -126,16 +126,17 @@ section Tactics
           Syntax.node synth `null
             #[Syntax.atom synth "{",
               Syntax.node synth `null
-                #[Syntax.node synth `Duper.«configOptionPreprocessing:=_»
-                  #[Syntax.atom synth "preprocessing",
-                    Syntax.atom synth ":=",
-                    Syntax.node synth
-                      `Duper.preprocessing_optionNo_preprocessing
-                      #[Syntax.atom synth "no_preprocessing"]
-                  ]
-                ],
-              Syntax.atom synth "}"
-            ]
+                #[Syntax.node synth `Duper.«configOptionPortfolioInstance:=_»
+                    #[Syntax.atom synth "portfolioInstance",
+                      Syntax.atom synth ":=",
+                      Syntax.node synth `num #[Syntax.atom synth "0"]],
+                  Syntax.atom synth ",",
+                  Syntax.node synth `Duper.«configOptionPreprocessing:=_»
+                    #[Syntax.atom synth "preprocessing",
+                      Syntax.atom synth ":=",
+                      Syntax.node synth `Duper.preprocessing_optionNo_preprocessing
+                        #[Lean.Syntax.atom synth "no_preprocessing"]]],
+              Lean.Syntax.atom synth "}"]
         ]
 
   def useAuto
