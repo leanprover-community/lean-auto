@@ -123,7 +123,19 @@ section Tactics
         #[Syntax.atom synth "duper",
           Syntax.node synth `null
             #[Syntax.atom synth "[", Syntax.node synth `null idArr, Syntax.atom synth "]"],
-          Syntax.node synth `null #[]
+          Syntax.node synth `null
+            #[Syntax.atom synth "{",
+              Syntax.node synth `null
+                #[Syntax.node synth `Duper.«configOptionPreprocessing:=_»
+                  #[Syntax.atom synth "preprocessing",
+                    Syntax.atom synth ":=",
+                    Syntax.node synth
+                      `Duper.preprocessing_optionNo_preprocessing
+                      #[Syntax.atom synth "no_preprocessing"]
+                  ]
+                ],
+              Syntax.atom synth "}"
+            ]
         ]
 
   def useAuto
