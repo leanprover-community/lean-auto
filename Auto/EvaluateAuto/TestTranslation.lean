@@ -78,6 +78,41 @@ def monomorphizedProblemSizeOfConst (name : Name) : CoreM (Option Nat) := do
   | .some ls => return .some <| (ls.map Embedding.Lam.LamTerm.size).foldl Nat.add 0
   | .none => return .none
 
+def evalMonoSize
+  (names : Array Name) (resultFile : String)
+  (maxHeartbeats : Nat) : CoreM Unit := do
+  let resultHandle ← IO.FS.Handle.mk resultFile .write
+  for (name, idx) in names.zipWithIndex do
+    let rawSize ← rawProblemSizeOfConst name
+    let monoSize? ← withCurrHeartbeats <|
+      withTheReader Core.Context (fun ctx => {ctx with maxHeartbeats := maxHeartbeats * 1000}) <|
+        monomorphizedProblemSizeOfConst name
+    let line := s!"{idx} {rawSize}"
+    let line := match monoSize? with | .some monoSize => line ++ s!" {monoSize}" | .none => line ++ " N"
+    let line := line ++ " " ++ Name.uniqRepr name
+    resultHandle.putStrLn line
+    resultHandle.flush
+
+def readEvalMonoSizeResult (resultFile : String) : CoreM (Array (Name × Nat × Option Nat)) := do
+  let content ← IO.FS.readFile resultFile
+  let lines := (content.splitOn "\n").filter (fun line => line != "")
+  (Array.mk lines).mapM analyzeLine
+where analyzeLine (line : String) : CoreM (Name × Nat × Option Nat) := do
+  let line := (line.dropWhile (fun c => c != ' ')).drop 1
+  let rawSizeStr := line.takeWhile (fun c => c != ' ')
+  let line := (line.dropWhile (fun c => c != ' ')).drop 1
+  let .some rawSize := rawSizeStr.toNat?
+    | throwError "{decl_name%} :: {rawSizeStr} is not a string representation of a Nat"
+  let monoSizeStr := line.takeWhile (fun c => c != ' ')
+  let line := (line.dropWhile (fun c => c != ' ')).drop 1
+  let mut monoSize? : Option Nat := .none
+  if monoSizeStr != "N" then
+    let .some monoSize := monoSizeStr.toNat?
+      | throwError "{decl_name%} :: {monoSizeStr} is not a string representation of a Nat"
+    monoSize? := .some monoSize
+  let name := Name.parseUniqRepr line
+  return (name, rawSize, monoSize?)
+
 /--
   Run `Meta.reduceAll` on the type of `name` and the type of all
   theorems used in the proof of `name. Return the sum of sizes of the
