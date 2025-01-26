@@ -62,7 +62,7 @@ def withAutoSolverConfigOptions
       let o := auto.tptp.solver.name.set o sn
       let o := auto.tptp.timeout.set o timeout
       let o := auto.tptp.trust.set o true
-      let o := auto.mono.mode.set o MonoMode.fol
+      let o := auto.mono.mode.set o MonoMode.hol
       match sn with
       | .zipperposition => auto.tptp.zipperposition.path.set o path
       | .zeport _       => auto.tptp.zeport.path.set o path
