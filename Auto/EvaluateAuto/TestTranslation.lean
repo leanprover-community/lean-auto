@@ -78,6 +78,41 @@ def monomorphizedProblemSizeOfConst (name : Name) : CoreM (Option Nat) := do
   | .some ls => return .some <| (ls.map Embedding.Lam.LamTerm.size).foldl Nat.add 0
   | .none => return .none
 
+def evalMonoSize
+  (names : Array Name) (resultFile : String)
+  (maxHeartbeats : Nat) : CoreM Unit := do
+  let resultHandle ← IO.FS.Handle.mk resultFile .write
+  for (name, idx) in names.zipWithIndex do
+    let rawSize ← rawProblemSizeOfConst name
+    let monoSize? ← withCurrHeartbeats <|
+      withTheReader Core.Context (fun ctx => {ctx with maxHeartbeats := maxHeartbeats * 1000}) <|
+        monomorphizedProblemSizeOfConst name
+    let line := s!"{idx} {rawSize}"
+    let line := match monoSize? with | .some monoSize => line ++ s!" {monoSize}" | .none => line ++ " N"
+    let line := line ++ " " ++ Name.uniqRepr name
+    resultHandle.putStrLn line
+    resultHandle.flush
+
+def readEvalMonoSizeResult (resultFile : String) : CoreM (Array (Name × Nat × Option Nat)) := do
+  let content ← IO.FS.readFile resultFile
+  let lines := (content.splitOn "\n").filter (fun line => line != "")
+  (Array.mk lines).mapM analyzeLine
+where analyzeLine (line : String) : CoreM (Name × Nat × Option Nat) := do
+  let line := (line.dropWhile (fun c => c != ' ')).drop 1
+  let rawSizeStr := line.takeWhile (fun c => c != ' ')
+  let line := (line.dropWhile (fun c => c != ' ')).drop 1
+  let .some rawSize := rawSizeStr.toNat?
+    | throwError "{decl_name%} :: {rawSizeStr} is not a string representation of a Nat"
+  let monoSizeStr := line.takeWhile (fun c => c != ' ')
+  let line := (line.dropWhile (fun c => c != ' ')).drop 1
+  let mut monoSize? : Option Nat := .none
+  if monoSizeStr != "N" then
+    let .some monoSize := monoSizeStr.toNat?
+      | throwError "{decl_name%} :: {monoSizeStr} is not a string representation of a Nat"
+    monoSize? := .some monoSize
+  let name := Name.parseUniqRepr line
+  return (name, rawSize, monoSize?)
+
 /--
   Run `Meta.reduceAll` on the type of `name` and the type of all
   theorems used in the proof of `name. Return the sum of sizes of the
@@ -96,18 +131,19 @@ def testReduce (name : Name) : MetaM Nat := do
   let exprs ← allExprs.mapM (fun e => Meta.transform e (pre := red) (usedLetOnly := false))
   return Array.foldl Nat.add 0 (exprs.map Expr.sizeWithoutSharing)
 
-def testReduceDWriteResult (path : String) (name : Name) : MetaM Unit := do
-  let size ← Meta.withDefault <| testReduce name
+def testReduceWriteResult (mode : Meta.TransparencyMode) (path : String) (name : Name) : MetaM Unit := do
+  let size ← Meta.withTransparency mode <| testReduce name
   let handle ← IO.FS.Handle.mk path .write
   handle.putStrLn s!"{size} {Name.uniqRepr name}"
 
 /--
-  Run `testReduceDWriteResult` on each name in `names`. A new Lean 4 process
+  Run `testReduceWriteResult` on each name in `names`. A new Lean 4 process
   is created for each `name` (this is because we want to pose time and memory
   limit on each of them)
 -/
 def evalReduceSize
-  (names : Array Name) (resultFolder : String) (nprocs : Nat)
+  (names : Array Name) (mode : Meta.TransparencyMode)
+  (resultFolder : String) (nprocs : Nat)
   (memoryLimitKb : Nat) (timeLimitS : Nat) : CoreM Unit := do
   if !(← System.FilePath.isDir resultFolder) then
     IO.FS.createDir resultFolder
@@ -116,8 +152,8 @@ def evalReduceSize
   let mut running := #[]
   for (name, idx) in names.zipWithIndex do
     let evalProc ← runFunctionOnConstsUsingNewLeanProcess
-      #[name] ``testReduceDWriteResult
-      #[s!"\"{resultFolder}/{idx}.result\""] memoryLimitKb timeLimitS
+      #[name] ``testReduceWriteResult
+      #[toString (repr mode), s!"\"{resultFolder}/{idx}.result\""] memoryLimitKb timeLimitS
     running := running.push (idx, evalProc)
     while running.size >= nprocs do
       running ← tryWaitOn evaluateNamesHandle running
@@ -134,5 +170,41 @@ where
         evaluateNamesHandle.flush
       | .none => running' := running'.push (idx, proc)
     return running'
+
+/--
+  Return:
+    Except.ok <size_of_reduced_expr>
+    Except.error <ret_code>
+-/
+def readEvalReduceSizeResult (resultFolder : String) : CoreM (Array (Name × Except Nat Nat)) := do
+  let names ← NameArray.load (resultFolder ++ "/names.txt")
+  let mut ref : Std.HashMap Name (Except Nat Nat) := Std.HashMap.empty
+  let evaluateNames ← IO.FS.readFile (resultFolder ++ "/evaluateNames.txt")
+  let evalLines := (evaluateNames.splitOn "\n").filter (fun s => s != "")
+  for line in evalLines do
+    let [idxStr, retCodeStr] := line.splitOn " : "
+      | throwError "{decl_name%} :: Unexpected line format. Line content : {line}"
+    let (.some idx, .some retCode) := (idxStr.toNat?, retCodeStr.toNat?)
+      | throwError "{decl_name%} :: Unexpected line format. Line content : {line}"
+    let .some name := names[idx]?
+      | throwError "{decl_name%} :: Unexpected error"
+    if retCode != 0 then
+      ref := ref.insert name (.error retCode)
+  for (name, idx) in names.zipWithIndex do
+    let path : System.FilePath := resultFolder ++ s!"/{idx}.result"
+    let .ok mdata ← path.metadata.toBaseIO
+      | continue
+    if mdata.type != .file then
+      continue
+    let content ← IO.FS.readFile path
+    let sizeStr := content.takeWhile (fun c => c != ' ')
+    let .some size := sizeStr.toNat?
+      | throwError "{decl_name%} :: {sizeStr} is not a string representation of a Nat"
+    ref := ref.insert name (Except.ok size)
+  let ret ← names.mapM (fun name => do
+    let .some val := ref[name]?
+      | throwError "{decl_name%} :: Cannot find {name} in result"
+    return (name, val))
+  return ret
 
 end EvalAuto

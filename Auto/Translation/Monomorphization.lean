@@ -198,7 +198,7 @@ private def ConstInst.toMessageDataAux (ci : ConstInst) : MessageData :=
   | .succ _ =>
     let narg := ci.argsIdx[nArgsIdx - 1]?.getD 0 + 1
     let arr : Array (Option Expr) := Array.mk ((List.range narg).map (fun _ => .none))
-    let arr := (ci.argsInst.zip ci.argsIdx).foldl (fun acc (arg, idx) => acc.setD idx (.some arg)) arr
+    let arr := (ci.argsInst.zip ci.argsIdx).foldl (fun acc (arg, idx) => acc.setIfInBounds idx (.some arg)) arr
     let arr := arr.map (fun e? => match e? with | .some e => m!" ({e})" | .none => m!" _")
     MessageData.intercalate "" arr.toList
 
@@ -337,7 +337,7 @@ def ConstInst.toExpr (ci : ConstInst) : MetaM Expr := do
   let nargs := (Nat.succ <$> ci.argsIdx[ci.argsIdx.size - 1]?).getD 0
   let mut args : Array (Option Expr) := (Array.mk (List.range nargs)).map (fun n => .none)
   for (arg, idx) in ci.argsInst.zip ci.argsIdx do
-    args := args.setD idx (.some arg)
+    args := args.setIfInBounds idx (.some arg)
   let .some ret := ConstInst.toExprAux args.toList [] ci.head.toExpr type
     | throwError "{decl_name%} :: Unexpected error"
   return ret
@@ -349,7 +349,7 @@ def ConstInst.toExpr (ci : ConstInst) : MetaM Expr := do
 def ConstInst.getOtherArgs (ci : ConstInst) (e : Expr) : CoreM (Array Expr) := do
   let mut args := e.getAppArgs.map Option.some
   for idx in ci.argsIdx do
-    args := args.setD idx .none
+    args := args.setIfInBounds idx .none
   let mut ret := #[]
   for arg? in args do
     if let .some arg := arg? then

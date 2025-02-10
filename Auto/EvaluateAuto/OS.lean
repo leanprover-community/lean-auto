@@ -4,12 +4,12 @@ open Lean
 
 namespace EvalAuto
 
-abbrev EvalProc := IO.Process.Child ⟨.piped, .piped, .piped⟩
+abbrev EvalProc := IO.Process.Child ⟨.piped, .null, .null⟩
 
-abbrev EvalTakenProc := IO.Process.Child ⟨.null, .piped, .piped⟩
+abbrev EvalTakenProc := IO.Process.Child ⟨.null, .null, .null⟩
 
 def EvalProc.create (path : String) (args : Array String) : IO EvalProc :=
-  IO.Process.spawn {stdin := .piped, stdout := .piped, stderr := .piped, cmd := path, args := args}
+  IO.Process.spawn {stdin := .piped, stdout := .null, stderr := .null, cmd := path, args := args}
 
 def bashRepr (s : String) :=
   "\"" ++ String.join (s.data.map go) ++ "\""
