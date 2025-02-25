@@ -497,6 +497,7 @@ theorem LamWF.interp_eqForallEH
     GLift.down (LamWF.interp lval (pushLCtx argTy lctx) (pushLCtxDep x lctxTerm) (.ofApp _ wf.bvarLift .pushLCtx_ofBVar))) := by
   dsimp [interp, LamBaseTerm.LamWF.interp, forallLiftFn]
   conv => enter [2, x, 1]; rw [← interp_bvarLift]
+  rfl
 
 theorem LamValid.revert1H (H : LamValid lval (pushLCtx s lctx) (.app s t.bvarLift (.bvar 0))) :
   LamValid lval lctx (.mkForallE s t) :=
@@ -504,7 +505,9 @@ theorem LamValid.revert1H (H : LamValid lval (pushLCtx s lctx) (.app s t.bvarLif
   have .ofApp _ (.ofBase (.ofForallE _)) (.ofLam _ (.ofApp _ wft (.ofBVar _))) := wfAp
   ⟨LamWF.mkForallE (.fromBVarLift _ wft), fun lctxTerm => by
     dsimp [LamWF.mkForallE, LamWF.interp, LamBaseTerm.LamWF.interp]; intro x
-    dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, forallLiftFn] at ht
+    replace ht :
+      ∀ (lctxTerm : (n : Nat) → LamSort.interp lval.tyVal (lctx n)) (x : LamSort.interp lval.tyVal s),
+      (LamWF.interp lval (pushLCtx s lctx) (pushLCtxDep x lctxTerm) wft x).down := ht
     apply Eq.mp _ (ht lctxTerm x); apply congrArg; apply congrFun
     apply Eq.trans (b := LamWF.interp lval (pushLCtx s lctx) (pushLCtxDep x lctxTerm)
       (.bvarLift _ (.fromBVarLift _ wft)))
@@ -521,8 +524,10 @@ theorem LamValid.intro1H (H : LamValid lval lctx (.mkForallE s t)) :
     have ⟨wfF, hF⟩ := H
     have .ofApp _ (.ofBase (.ofForallE _)) wft := wfF
     ⟨.mkForallEF (.ofApp _ (.bvarLift _ wft) .pushLCtx_ofBVar), fun lctxTerm => by
-      dsimp [LamWF.mkForallEF, LamWF.interp, LamBaseTerm.LamWF.interp]; intro x; dsimp
-      dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, forallLiftFn] at hF
+      dsimp [LamWF.mkForallEF, LamWF.interp, LamBaseTerm.LamWF.interp]; intro x;
+      show (LamWF.interp lval (pushLCtx s lctx) (pushLCtxDep x lctxTerm) (LamWF.bvarLift t wft) x).down
+      replace hF : ∀ (lctxTerm : (n : Nat) → LamSort.interp lval.tyVal (lctx n)) (x : LamSort.interp lval.tyVal s),
+        (LamWF.interp lval lctx lctxTerm wft x).down := hF
       apply Eq.mp _ (hF lctxTerm x); apply congrArg; rw [← LamWF.interp_bvarLift]⟩
   )
 
@@ -865,7 +870,12 @@ theorem LamEquiv.forall_congr
   LamEquiv lval lctx (.base .prop) (.mkForallEF argTy fn₁) (.mkForallEF argTy fn₂) := by
   have ⟨wfFn₁, wfFn₂, eqFn⟩ := eFn
   exists LamWF.mkForallEF wfFn₁, LamWF.mkForallEF wfFn₂; intro lctxTerm
-  dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, forallLiftFn]
+  show
+    Eq.{u_1 + 1} (α := LamSort.interp lval.tyVal (LamSort.base LamBaseSort.prop))
+    { down := ∀ (x : LamSort.interp lval.tyVal argTy),
+        (LamWF.interp lval (pushLCtx argTy lctx) (pushLCtxDep x lctxTerm) wfFn₁).down }
+    { down := ∀ (x : LamSort.interp lval.tyVal argTy),
+        (LamWF.interp lval (pushLCtx argTy lctx) (pushLCtxDep x lctxTerm) wfFn₂).down }
   apply _root_.congrArg; apply _root_.forall_congr; intro x
   apply _root_.congrArg; apply eqFn
 
@@ -889,7 +899,6 @@ theorem LamEquiv.not_imp_not
   (wf₂ : LamWF lval.toLamTyVal ⟨lctx, t₂, .base .prop⟩) :
   LamEquiv lval lctx (.base .prop) (.mkImp (.mkNot t₁) (.mkNot t₂)) (.mkImp t₂ t₁) := by
   exists (LamWF.mkImp (.mkNot wf₁) (.mkNot wf₂)); exists (LamWF.mkImp wf₂ wf₁); intro lctxTerm
-  dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, impLift, notLift]
   apply GLift.down.inj; dsimp; apply propext (Iff.intro ?mp ?mpr)
   case mp =>
     intro nin h; apply Classical.byContradiction; intro nh'; apply nin nh' h
@@ -968,7 +977,10 @@ theorem LamWF.interp_funext
   | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) HLhs) HRhs =>
     match wf₂ with
     | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) (.ofApp _ HLhs' (.ofBVar _))) (.ofApp _ HRhs' (.ofBVar _)) => by
-      dsimp [interp, LamBaseTerm.LamWF.interp, eqLiftFn]
+      show (interp lval lctx lctxTerm HLhs = interp lval lctx lctxTerm HRhs) =
+        ∀ (x : LamSort.interp lval.tyVal argTy),
+          interp lval (pushLCtx argTy lctx) (pushLCtxDep x lctxTerm) HLhs' x =
+            interp lval (pushLCtx argTy lctx) (pushLCtxDep x lctxTerm) HRhs' x
       rcases LamWF.unique HLhs' HLhs.bvarLift with ⟨⟨⟩, ⟨⟩⟩
       rcases LamWF.unique HRhs' HRhs.bvarLift with ⟨⟨⟩, ⟨⟩⟩
       apply propext (Iff.intro ?mp ?mpr)
@@ -990,7 +1002,13 @@ theorem LamEquiv.eqFunextF
     let wfAp₂ := LamWF.ofApp _
       (LamWF.bvarLift (s:=argTy) _ wfFn₂) LamWF.pushLCtx_ofBVar
     exists LamWF.mkEq wfFn₁ wfFn₂, LamWF.mkForallEF (LamWF.mkEq wfAp₁ wfAp₂); intro lctxTerm
-    dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, eqLiftFn, forallLiftFn]
+    show
+      { down := LamWF.interp lval lctx lctxTerm wfFn₁ = LamWF.interp lval lctx lctxTerm wfFn₂ : GLift Prop } =
+      { down := ∀ (x : LamSort.interp lval.tyVal argTy),
+          LamWF.interp lval (pushLCtx argTy lctx) (pushLCtxDep (lctxty := LamSort.interp lval.tyVal) x lctxTerm)
+            (LamWF.bvarLift fn₁ wfFn₁) x =
+          LamWF.interp lval (pushLCtx argTy lctx) (pushLCtxDep (lctxty := LamSort.interp lval.tyVal) x lctxTerm)
+            (LamWF.bvarLift fn₂ wfFn₂) x }
     apply _root_.congrArg; apply propext (Iff.intro ?mp ?mpr)
     case mp =>
       intro hinterp h; rw [← LamWF.interp_bvarLift, ← LamWF.interp_bvarLift, hinterp]
@@ -1009,7 +1027,6 @@ theorem LamEquiv.eqFunextH
   | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) wfFn₁) wfFn₂ =>
     exists LamWF.mkForallEF (.ofApp _ (.ofApp _ (.ofBase (.ofEq _)) wfFn₁) wfFn₂)
     exists LamWF.mkEq (.ofLam _ wfFn₁) (.ofLam _ wfFn₂); intro lctxTerm
-    dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, eqLiftFn, forallLiftFn]
     apply GLift.down.inj; dsimp; apply propext (Iff.intro ?mp ?mpr)
     case mp => apply funext
     case mpr => intro h x; apply _root_.congrFun h

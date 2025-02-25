@@ -336,10 +336,10 @@ def getNextSortedVars (originalSortedVars : Array (String × Expr)) (curPropBool
   -- Calculate `nextPropBoolChoice`
   let mut nextPropBoolChoice := curPropBoolChoice
   for h : i in [:curPropBoolChoice.size] do
-    if (curPropBoolChoice[i]'h.2).2 then
-      nextPropBoolChoice := curPropBoolChoice.set! i ((curPropBoolChoice[i]'h.2).1, false)
+    if (curPropBoolChoice[i]'h.2.1).2 then
+      nextPropBoolChoice := curPropBoolChoice.set! i ((curPropBoolChoice[i]'h.2.1).1, false)
     else
-      nextPropBoolChoice := curPropBoolChoice.set! i ((curPropBoolChoice[i]'h.2).1, true)
+      nextPropBoolChoice := curPropBoolChoice.set! i ((curPropBoolChoice[i]'h.2.1).1, true)
       break
   -- Check whether we should return `some nextPropBoolChoice` or `none`
   if nextPropBoolChoice.any (fun (_, b) => b) then

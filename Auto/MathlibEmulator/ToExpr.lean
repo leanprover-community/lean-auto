@@ -20,22 +20,14 @@ set_option autoImplicit true
 section override
 namespace Auto
 
-attribute [-instance] Lean.instToExprOption
-
 deriving instance Lean.ToExpr for Option
 
-attribute [-instance] Lean.instToExprList
-
 deriving instance Lean.ToExpr for List
-
-attribute [-instance] Lean.instToExprArray
 
 instance {α : Type u} [Lean.ToExpr α] [ToLevel.{u}] : Lean.ToExpr (Array α) :=
   let type := Lean.toTypeExpr α
   { toExpr     := fun as => Lean.mkApp2 (Lean.mkConst ``List.toArray [toLevel.{u}]) type (Lean.toExpr as.toList)
     toTypeExpr := Lean.mkApp (Lean.mkConst ``Array [toLevel.{u}]) type }
-
-attribute [-instance] Lean.instToExprProd
 
 deriving instance Lean.ToExpr for Prod
 

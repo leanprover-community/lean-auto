@@ -91,7 +91,7 @@ theorem LamWF.mapBVarAt.correct (lval : LamValuation.{u}) {restoreDep : _}
   dsimp [LamWF.interp]
   let IHFn := LamWF.mapBVarAt.correct lval covPD idx lctxTerm fn wfFn
   let IHArg := LamWF.mapBVarAt.correct lval covPD idx lctxTerm arg wfArg
-  rw [IHFn]; rw [IHArg]
+  rw [IHFn]; rw [IHArg]; rfl
 
 /-- Changing all `.bvar ?n` in `t` (where `?n >= idx`) to `.bvar (?n + lvl)` -/
 def LamTerm.bvarLiftsIdx (idx lvl : Nat) := LamTerm.mapBVarAt idx (fun x => Nat.add x lvl)
