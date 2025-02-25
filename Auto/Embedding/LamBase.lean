@@ -9,6 +9,8 @@ import Auto.Lib.ListExtra
 -- import Mathlib.Data.Real.Basic
 import Auto.MathlibEmulator
 
+set_option linter.unusedVariables false
+
 -- Embedding Simply Typed Lambda Calculus into Dependent Type Theory
 -- Simply Typed Lambda Calculus = HOL (without polymorphism)
 namespace Auto.Embedding.Lam

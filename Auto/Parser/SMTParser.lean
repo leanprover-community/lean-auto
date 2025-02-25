@@ -521,7 +521,7 @@ partial def parseLet (vs : List Term) (symbolMap : Std.HashMap String Expr) (par
   let [app varBindings, letBody] := vs
     | throwError "parsseLet :: Unexpected input list {vs}"
   let varBindings ← varBindings.mapM (fun vb => parseVarBinding vb symbolMap)
-  withLocalDeclsD (varBindings.map fun (n, ty, val) => (n.toName, fun _ => pure ty)) fun _ => do
+  withLocalDeclsD (varBindings.map fun (n, ty, _) => (n.toName, fun _ => pure ty)) fun _ => do
     let lctx ← getLCtx
     let mut symbolMap := symbolMap
     let mut varBindingDecls := #[]

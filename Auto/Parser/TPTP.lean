@@ -2,6 +2,8 @@ import Lean
 import Auto.Embedding.LamBVarOp
 open Lean
 
+set_option linter.unusedVariables false
+
 namespace Auto.Parser.TPTP
 
 namespace Tokenizer

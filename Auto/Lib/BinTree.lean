@@ -8,6 +8,8 @@ import Auto.Lib.Pos
 -- Make sure that `Lean.toExpr Nat` is overriden
 import Auto.Lib.ToExprExtra
 
+set_option linter.unusedVariables false
+
 /-
   Polymorphic binary tree
   For definitions with `'`, the tree behaves as `{n : Nat // n ≠ 0} → α`

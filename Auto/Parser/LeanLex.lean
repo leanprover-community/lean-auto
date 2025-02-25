@@ -2,6 +2,8 @@ import Lean
 import Auto.Parser.NDFA
 open Lean
 
+set_option linter.unusedVariables false
+
 namespace Auto
 
 -- POSIX ERE internal representation
