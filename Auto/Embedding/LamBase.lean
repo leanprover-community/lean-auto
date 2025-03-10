@@ -2673,101 +2673,101 @@ def LamTerm.mkNot (t : LamTerm) : LamTerm :=
 
 theorem LamTerm.maxEVarSucc_mkNot :
   (mkNot t).maxEVarSucc = t.maxEVarSucc := by
-  dsimp [maxEVarSucc]; rw [Nat.max, Nat.max_zero_left]
+  dsimp [mkNot, maxEVarSucc]; rw [Nat.max, Nat.max_zero_left]
 
 def LamTerm.mkAnd (t₁ t₂ : LamTerm) : LamTerm :=
   .app (.base .prop) (.app (.base .prop) (.base .and) t₁) t₂
 
 theorem LamTerm.maxEVarSucc_mkAnd :
   (mkAnd t₁ t₂).maxEVarSucc = max t₁.maxEVarSucc t₂.maxEVarSucc := by
-  dsimp [maxEVarSucc]; rw [Nat.max, Nat.max, Nat.max_zero_left]
+  dsimp [mkAnd, maxEVarSucc]; rw [Nat.max, Nat.max, Nat.max_zero_left]
 
 def LamTerm.mkOr (t₁ t₂ : LamTerm) : LamTerm :=
   .app (.base .prop) (.app (.base .prop) (.base .or) t₁) t₂
 
 theorem LamTerm.maxEVarSucc_mkOr :
   (mkOr t₁ t₂).maxEVarSucc = max t₁.maxEVarSucc t₂.maxEVarSucc := by
-  dsimp [maxEVarSucc]; rw [Nat.max, Nat.max, Nat.max_zero_left]
+  dsimp [mkOr, maxEVarSucc]; rw [Nat.max, Nat.max, Nat.max_zero_left]
 
 def LamTerm.mkImp (t₁ t₂ : LamTerm) : LamTerm :=
   .app (.base .prop) (.app (.base .prop) (.base .imp) t₁) t₂
 
 theorem LamTerm.maxEVarSucc_mkImp :
   (mkImp t₁ t₂).maxEVarSucc = max t₁.maxEVarSucc t₂.maxEVarSucc := by
-  dsimp [maxEVarSucc]; rw [Nat.max, Nat.max, Nat.max_zero_left]
+  dsimp [mkImp, maxEVarSucc]; rw [Nat.max, Nat.max, Nat.max_zero_left]
 
 def LamTerm.mkIff (t₁ t₂ : LamTerm) : LamTerm :=
   .app (.base .prop) (.app (.base .prop) (.base .iff) t₁) t₂
 
 theorem LamTerm.maxEVarSucc_mkIff :
   (mkIff t₁ t₂).maxEVarSucc = max t₁.maxEVarSucc t₂.maxEVarSucc := by
-  dsimp [maxEVarSucc]; rw [Nat.max, Nat.max, Nat.max_zero_left]
+  dsimp [mkIff, maxEVarSucc]; rw [Nat.max, Nat.max, Nat.max_zero_left]
 
 def LamTerm.mkEq (s : LamSort) (t₁ t₂ : LamTerm) : LamTerm :=
   .app s (.app s (.base (.eq s)) t₁) t₂
 
 theorem LamTerm.maxLooseBVarSucc_mkEq :
   (mkEq s t₁ t₂).maxLooseBVarSucc = max t₁.maxLooseBVarSucc t₂.maxLooseBVarSucc := by
-  dsimp [maxLooseBVarSucc, Nat.max]; rw [Nat.max_zero_left]
+  dsimp [mkEq, maxLooseBVarSucc, Nat.max]; rw [Nat.max_zero_left]
 
 theorem LamTerm.maxEVarSucc_mkEq :
   (mkEq s t₁ t₂).maxEVarSucc = max t₁.maxEVarSucc t₂.maxEVarSucc := by
-  dsimp [maxEVarSucc, Nat.max]; rw[Nat.max_zero_left]
+  dsimp [mkEq, maxEVarSucc, Nat.max]; rw [Nat.max_zero_left]
 
 def LamTerm.mkForallE (s : LamSort) (p : LamTerm) : LamTerm :=
   .app (.func s (.base .prop)) (.base (.forallE s)) p
 
 theorem LamTerm.maxLooseBVarSucc_mkForallE :
   (mkForallE s p).maxLooseBVarSucc = p.maxLooseBVarSucc := by
-  dsimp [maxLooseBVarSucc, Nat.max]; rw [Nat.max_zero_left]
+  dsimp [mkForallE, maxLooseBVarSucc, Nat.max]; rw [Nat.max_zero_left]
 
 theorem LamTerm.maxEVarSucc_mkForallE :
   (mkForallE s p).maxEVarSucc = p.maxEVarSucc := by
-  dsimp [maxEVarSucc]; apply Nat.max_zero_left
+  dsimp [mkForallE, maxEVarSucc]; apply Nat.max_zero_left
 
 def LamTerm.mkForallEF (s : LamSort) (p : LamTerm) : LamTerm :=
   .app (.func s (.base .prop)) (.base (.forallE s)) (.lam s p)
 
 theorem LamTerm.maxLooseBVarSucc_mkForallEF :
   (mkForallEF s p).maxLooseBVarSucc = p.maxLooseBVarSucc.pred := by
-  dsimp [maxLooseBVarSucc, Nat.max]; rw [Nat.max_zero_left]
+  dsimp [mkForallEF, maxLooseBVarSucc, Nat.max]; rw [Nat.max_zero_left]
 
 theorem LamTerm.maxEVarSucc_mkForallEF :
   (mkForallEF s p).maxEVarSucc = p.maxEVarSucc := by
-  dsimp [maxEVarSucc]; apply Nat.max_zero_left
+  dsimp [mkForallEF, maxEVarSucc]; apply Nat.max_zero_left
 
 def LamTerm.mkExistE (s : LamSort) (p : LamTerm) : LamTerm :=
   .app (.func s (.base .prop)) (.base (.existE s)) p
 
 theorem LamTerm.maxLooseBVarSucc_mkExistE :
   (mkExistE s p).maxLooseBVarSucc = p.maxLooseBVarSucc := by
-  dsimp [maxLooseBVarSucc, Nat.max]; rw [Nat.max_zero_left]
+  dsimp [mkExistE, maxLooseBVarSucc, Nat.max]; rw [Nat.max_zero_left]
 
 theorem LamTerm.maxEVarSucc_mkExistE :
   (mkExistE s p).maxEVarSucc = p.maxEVarSucc := by
-  dsimp [maxEVarSucc]; apply Nat.max_zero_left
+  dsimp [mkExistE, maxEVarSucc]; apply Nat.max_zero_left
 
 def LamTerm.mkExistEF (s : LamSort) (p : LamTerm) : LamTerm :=
   .app (.func s (.base .prop)) (.base (.existE s)) (.lam s p)
 
 theorem LamTerm.maxLooseBVarSucc_mkExistEF :
   (mkExistEF s p).maxLooseBVarSucc = p.maxLooseBVarSucc.pred := by
-  dsimp [maxLooseBVarSucc, Nat.max]; rw [Nat.max_zero_left]
+  dsimp [mkExistEF, maxLooseBVarSucc, Nat.max]; rw [Nat.max_zero_left]
 
 theorem LamTerm.maxEVarSucc_mkExistEF :
   (mkExistEF s p).maxEVarSucc = p.maxEVarSucc := by
-  dsimp [maxEVarSucc]; apply Nat.max_zero_left
+  dsimp [mkExistEF, maxEVarSucc]; apply Nat.max_zero_left
 
 def LamTerm.mkIte (s : LamSort) (b x y : LamTerm) : LamTerm :=
   .app s (.app s (.app (.base .prop) (.base (.ite s)) b) x) y
 
 theorem LamTerm.maxLooseBVarSucc_mkIte :
   (mkIte s b x y).maxLooseBVarSucc = max (max b.maxLooseBVarSucc x.maxLooseBVarSucc) y.maxLooseBVarSucc := by
-  dsimp [maxLooseBVarSucc, Nat.max]; rw [Nat.max_zero_left]
+  dsimp [mkIte, maxLooseBVarSucc, Nat.max]; rw [Nat.max_zero_left]
 
 theorem LamTerm.maxEVarSucc_mkIte :
   (mkIte s b x y).maxEVarSucc = max (max b.maxEVarSucc x.maxEVarSucc) y.maxEVarSucc := by
-  dsimp [maxEVarSucc, Nat.max]; rw [Nat.max_zero_left]
+  dsimp [mkIte, maxEVarSucc, Nat.max]; rw [Nat.max_zero_left]
 
 def LamTerm.mkNatVal (n : Nat) : LamTerm := .base (.natVal n)
 
@@ -2778,35 +2778,35 @@ def LamTerm.mkNatBinOp (binOp : NatConst) (a b : LamTerm) : LamTerm :=
 
 theorem LamTerm.maxEVarSucc_mkNatBinOp :
   (mkNatBinOp op a b).maxEVarSucc = max a.maxEVarSucc b.maxEVarSucc := by
-  dsimp [maxEVarSucc]; simp [Nat.max, Nat.max_zero_left]
+  dsimp [mkNatBinOp, maxEVarSucc]; simp [Nat.max, Nat.max_zero_left]
 
 def LamTerm.mkIOfNat (n : LamTerm) : LamTerm :=
   .app (.base .nat) (.base .iofNat) n
 
 theorem LamTerm.maxEVarSucc_mkIOfNat :
   (mkIOfNat n).maxEVarSucc = n.maxEVarSucc := by
-  dsimp [maxEVarSucc]; apply Nat.max_zero_left
+  dsimp [mkIOfNat, maxEVarSucc]; apply Nat.max_zero_left
 
 def LamTerm.mkINegSucc (n : LamTerm) : LamTerm :=
   .app (.base .nat) (.base .inegSucc) n
 
 theorem LamTerm.maxEVarSucc_mkINegSucc :
   (mkINegSucc n).maxEVarSucc = n.maxEVarSucc := by
-  dsimp [maxEVarSucc]; apply Nat.max_zero_left
+  dsimp [mkINegSucc, maxEVarSucc]; apply Nat.max_zero_left
 
 def LamTerm.mkIntUOp (uop : IntConst) (a : LamTerm) : LamTerm :=
   .app (.base .int) (.base (.icst uop)) a
 
 theorem LamTerm.maxEVarSucc_mkIntUOp :
   (mkIntUOp uop n).maxEVarSucc = n.maxEVarSucc := by
-  dsimp [maxEVarSucc]; apply Nat.max_zero_left
+  dsimp [mkIntUOp, maxEVarSucc]; apply Nat.max_zero_left
 
 def LamTerm.mkIntBinOp (binOp : IntConst) (a b : LamTerm) : LamTerm :=
   .app (.base .int) (.app (.base .int) (.base (.icst binOp)) a) b
 
 theorem LamTerm.maxEVarSucc_mkIntBinOp :
   (mkIntBinOp op a b).maxEVarSucc = max a.maxEVarSucc b.maxEVarSucc := by
-  dsimp [maxEVarSucc]; simp [Nat.max, Nat.max_zero_left]
+  dsimp [mkIntBinOp, maxEVarSucc]; simp [Nat.max, Nat.max_zero_left]
 
 /-- Make `BitVec.ofNat n i` -/
 def LamTerm.mkBvofNat (n : Nat) (i : LamTerm) : LamTerm :=
@@ -2814,7 +2814,7 @@ def LamTerm.mkBvofNat (n : Nat) (i : LamTerm) : LamTerm :=
 
 theorem LamTerm.maxEVarSucc_mkBvofNat :
   (mkBvofNat n i).maxEVarSucc = i.maxEVarSucc := by
-  dsimp [maxEVarSucc]; apply Nat.max_zero_left
+  dsimp [mkBvofNat, maxEVarSucc]; apply Nat.max_zero_left
 
 /-- Make `BitVec.ofInt n i` -/
 def LamTerm.mkBvofInt (n : Nat) (i : LamTerm) : LamTerm :=
@@ -2822,28 +2822,28 @@ def LamTerm.mkBvofInt (n : Nat) (i : LamTerm) : LamTerm :=
 
 theorem LamTerm.maxEVarSucc_mkBvofInt :
   (mkBvofInt n i).maxEVarSucc = i.maxEVarSucc := by
-  dsimp [maxEVarSucc]; apply Nat.max_zero_left
+  dsimp [mkBvofInt, maxEVarSucc]; apply Nat.max_zero_left
 
 def LamTerm.mkBvUOp (n : Nat) (uop : BitVecConst) (a : LamTerm) : LamTerm :=
   .app (.base (.bv n)) (.base (.bvcst uop)) a
 
 theorem LamTerm.maxEVarSucc_mkBvUOp :
   (mkBvUOp n uop a).maxEVarSucc = a.maxEVarSucc := by
-  dsimp [maxEVarSucc]; apply Nat.max_zero_left
+  dsimp [mkBvUOp, maxEVarSucc]; apply Nat.max_zero_left
 
 def LamTerm.mkBvBinOp (n : Nat) (binOp : BitVecConst) (a b : LamTerm) : LamTerm :=
   .app (.base (.bv n)) (.app (.base (.bv n)) (.base (.bvcst binOp)) a) b
 
 theorem LamTerm.maxEVarSucc_mkBvBinOp :
   (mkBvBinOp n binOp a b).maxEVarSucc = max a.maxEVarSucc b.maxEVarSucc := by
-  dsimp [maxEVarSucc]; simp [Nat.max, Nat.max_zero_left]
+  dsimp [mkBvBinOp, maxEVarSucc]; simp [Nat.max, Nat.max_zero_left]
 
 def LamTerm.mkBvNatBinOp (n : Nat) (binOp : BitVecConst) (a b : LamTerm) : LamTerm :=
   .app (.base .nat) (.app (.base (.bv n)) (.base (.bvcst binOp)) a) b
 
 theorem LamTerm.maxEVarSucc_mkBvNatBinOp :
   (mkBvNatBinOp n binOp a b).maxEVarSucc = max a.maxEVarSucc b.maxEVarSucc := by
-  dsimp [maxEVarSucc]; simp [Nat.max, Nat.max_zero_left]
+  dsimp [mkBvNatBinOp, maxEVarSucc]; simp [Nat.max, Nat.max_zero_left]
 
 def LamTerm.mkAppN (t : LamTerm) : List (LamSort × LamTerm) → LamTerm
 | .nil => t
@@ -2891,7 +2891,7 @@ theorem LamTerm.maxEVarSucc_mkForallEFN {t : LamTerm} :
   induction lctx generalizing t
   case nil => rfl
   case cons s lctx IH =>
-    dsimp [mkForallEFN, maxEVarSucc]; rw [IH]
+    dsimp [mkForallEF, mkForallEFN, maxEVarSucc]; rw [IH]
     rw [Nat.max, Nat.max_zero_left]
 
 theorem LamTerm.mkForallEFN_append :
@@ -4167,7 +4167,7 @@ theorem LamWF.interp_bvarApps
   case cons lty lctx lx lctxTerm IH =>
     dsimp [LamSort.mkFuncsRev] at wft
     dsimp [LamTerm.bvarApps] at wfAp; cases wfAp; case ofApp HArg HFn =>
-      dsimp [interp]; apply congr_hd_heq (f₂:=fun lx =>valPre (HList.cons lx lctxTerm)) (x₂:=lx) <;> try rfl
+      apply congr_hd_heq (f₂:=fun lx =>valPre (HList.cons lx lctxTerm)) (x₂:=lx) <;> try rfl
       case h₁ =>
         apply @IH (lty::tyex) (.func lty s) wft _ (fun lctxTerm lx => valPre (.cons lx lctxTerm)) (.cons lx termex) ht
       case h₂ =>

@@ -161,7 +161,7 @@ theorem LamThmValid.define {lval : LamValuation.{u}}
     rw [Nat.max_zero_left]; have ⟨_, hlb⟩ := LamThmWFD.ofLamThmWF wft; apply hlb
   case right =>
     exists LamWF.mkEq LamWF.insertEVarAt_eIdx wft'
-    intro lctxTerm; dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, eqLiftFn]
+    intro lctxTerm; dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, LamTerm.mkEq, eqLiftFn]
     apply eq_of_heq; apply HEq.trans (LamWF.interp_insertEVarAt_eIdx _)
     apply LamWF.interp_eVarIrrelevance <;> try rfl
     intro n hn; apply LamValuation.insertEVarAt_eVarIrrelevance
@@ -189,7 +189,7 @@ section Skolemization
     ∃ val, LamThmValid (lval.insertEVarAt (s.mkFuncsRev lctx) val eidx) lctx (.app s p (LamTerm.bvarApps (.etom eidx) lctx 0)) := by
     have ⟨hSucc, ⟨wft, ht⟩⟩ := LamThmValidD.ofLamThmValid vt
     cases wft; case ofApp HArg HFn => cases HFn; case ofBase Hb => cases Hb; case ofExistE =>
-      dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, existLiftFn] at ht;
+      dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, LamTerm.mkExistE, existLiftFn] at ht;
       have ⟨valPre, hvalPre⟩ := choose_spec' ht
       exists LamSort.curryRev valPre; apply LamThmValid.ofLamThmValidD; apply And.intro;
       case left =>
