@@ -281,7 +281,7 @@ theorem pred_succ_eq (p : Pos) : pred (.succ p) = p := by
 theorem succ_pred_xO (p : Pos) : succ (pred (xO p)) = xO p := by
   induction p <;> try rfl
   case xO p' IH =>
-    dsimp [succ, pred]; dsimp [succ, pred] at IH; rw [IH]
+    dsimp [succ, pred, predXO]; dsimp [succ, pred] at IH; rw [IH]
 
 theorem succ_pred_xI (p : Pos) : succ (pred (xI p)) = xI p := by
   cases p <;> rfl

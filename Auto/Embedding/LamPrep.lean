@@ -81,14 +81,14 @@ theorem LamEquiv.prop_ne_equiv_eq_not
   (wfr : LamWF lval.toLamTyVal ⟨lctx, rhs, .base .prop⟩) :
   LamEquiv lval lctx (.base .prop) (.mkNot (.mkEq (.base .prop) lhs rhs)) (.mkEq (.base .prop) lhs (.mkNot rhs)) := by
   exists LamWF.mkNot (LamWF.mkEq wfl wfr); exists LamWF.mkEq wfl (.mkNot wfr); intro lctxTerm
-  dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, notLift, eqLiftFn]
+  dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, LamWF.mkEq, notLift, eqLiftFn]
   apply GLift.down.inj; apply propext (Iff.intro ?mp ?mpr)
   case mp =>
     intro h; apply GLift.down.inj; apply eq_not_of_ne
     intro h'; apply h; apply GLift.down.inj _ _ h'
   case mpr =>
     intro h h'; have h' := _root_.congrArg GLift.down h'; revert h'
-    apply ne_of_eq_not; dsimp at h; rw [h]; rfl
+    apply ne_of_eq_not; dsimp [LamTerm.mkEq] at h; rw [h]; rfl
 
 /-- (a ≠ b) ↔ (a = (¬ b)) -/
 def LamTerm.prop_ne_equiv_eq_not? (t : LamTerm) : Option LamTerm :=
@@ -101,7 +101,7 @@ theorem LamTerm.maxEVarSucc_prop_ne_equiv_eq_not?
   (heq : prop_ne_equiv_eq_not? t = .some t') : t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
   | .app _ (.base .not) (.app _ (.app _ (.base (.eq (.base .prop))) lhs) rhs), Eq.refl _ => by
-    dsimp [maxEVarSucc]; simp [Nat.max, Nat.max_zero_left, Nat.max_zero_right]
+    dsimp [mkEq, mkNot, maxEVarSucc]; simp [Nat.max, Nat.max_zero_left, Nat.max_zero_right]
 
 theorem LamEquiv.prop_ne_equiv_eq_not?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
@@ -122,7 +122,7 @@ theorem LamGenConv.prop_ne_equiv_eq_not? : LamGenConv lval LamTerm.prop_ne_equiv
 def LamTerm.equalize (t : LamTerm) : LamTerm := .mkEq (.base .prop) t (.base .trueE)
 
 theorem LamTerm.maxEVarSucc_equalize : (LamTerm.equalize t).maxEVarSucc = t.maxEVarSucc := by
-  simp [maxEVarSucc, Nat.max, Nat.max_zero_left, Nat.max_zero_right]
+  simp [equalize, mkEq, maxEVarSucc, Nat.max, Nat.max_zero_left, Nat.max_zero_right]
 
 theorem LamEquiv.equalize (wft : LamWF lval.toLamTyVal ⟨lctx, t, .base .prop⟩) :
   LamEquiv lval lctx (.base .prop) t t.equalize := by
@@ -141,7 +141,7 @@ theorem LamTerm.maxEVarSucc_equalize? (heq : equalize? s t = .some t') :
   t'.maxEVarSucc = t.maxEVarSucc := by
   match s, heq with
   | .base .prop, Eq.refl _ =>
-    simp [maxEVarSucc, Nat.max, Nat.max_zero_left, Nat.max_zero_right]
+    simp [mkEq, maxEVarSucc, Nat.max, Nat.max_zero_left, Nat.max_zero_right]
 
 theorem LamEquiv.equalize?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, .base .prop⟩)
@@ -296,7 +296,7 @@ theorem LamTerm.maxEVarSucc_eq_false_equiv?
   t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
   | .app _ (.app _ (.base (.eq _)) lhs) (.base .falseE), Eq.refl _ => by
-    simp [maxEVarSucc, Nat.max, Nat.max_zero_left, Nat.max_zero_right]
+    simp [mkNot, maxEVarSucc, Nat.max, Nat.max_zero_left, Nat.max_zero_right]
 
 theorem LamEquiv.eq_false_equiv?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
@@ -396,7 +396,7 @@ def LamTerm.maxEVarSucc_not_eq_true_equiv_eq_false?
   t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
   | .app _ (.app _ (.base (.eq _)) (.app _ (.base .not) lhs)) (.base .trueE), Eq.refl _ => by
-    simp [maxEVarSucc, Nat.max, Nat.max_zero_left]
+    simp [mkEq, maxEVarSucc, Nat.max, Nat.max_zero_left]
 
 theorem LamEquiv.not_eq_true_equiv_eq_false?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
@@ -430,7 +430,7 @@ def LamTerm.maxEVarSucc_not_eq_false_equiv_eq_true?
   t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
   | .app _ (.app _ (.base (.eq _)) (.app _ (.base .not) lhs)) (.base .falseE), Eq.refl _ => by
-    simp [maxEVarSucc, Nat.max, Nat.max_zero_left]
+    simp [mkEq, maxEVarSucc, Nat.max, Nat.max_zero_left]
 
 theorem LamEquiv.not_eq_false_equiv_eq_true?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
@@ -457,7 +457,7 @@ theorem LamEquiv.not_not_equiv
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, .base .prop⟩) :
   LamEquiv lval lctx (.base .prop) (.mkNot (.mkNot t)) t := by
   exists (.mkNot (.mkNot wft)); exists wft; intro lctxTerm
-  dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, notLift]
+  dsimp [LamTerm.mkNot, LamWF.interp, LamBaseTerm.LamWF.interp, notLift]
   apply GLift.down.inj; dsimp
   apply propext (Iff.intro Classical.byContradiction (fun a b => b a))
 
@@ -498,7 +498,7 @@ theorem LamTerm.maxEVarSucc_not_eq_equiv_eq_not?
   t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
   | .app _ (.app _ (.base (.eq _)) (.app _ (.base .not) lhs)) rhs, Eq.refl _ => by
-    simp [maxEVarSucc, Nat.max, Nat.max_zero_left]
+    simp [mkEq, mkNot, maxEVarSucc, Nat.max, Nat.max_zero_left]
 
 theorem LamEquiv.not_eq_equiv_eq_not?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
@@ -530,7 +530,7 @@ theorem LamTerm.maxEVarSucc_not_eq_not_equiv_eq?
   t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
   | .app _ (.app _ (.base (.eq _)) (.app _ (.base .not) lhs)) (.app _ (.base .not) rhs), Eq.refl _ => by
-    simp [maxEVarSucc, Nat.max, Nat.max_zero_left]
+    simp [mkEq, maxEVarSucc, Nat.max, Nat.max_zero_left]
 
 theorem LamEquiv.not_eq_not_equiv_eq?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
@@ -561,7 +561,7 @@ theorem LamTerm.maxEVarSucc_propext?
   t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
   | .app _ (.app _ (.base .iff) lhs) rhs, Eq.refl _ => by
-    simp [maxEVarSucc, Nat.max, Nat.max_zero_left]
+    simp [mkEq, maxEVarSucc, Nat.max, Nat.max_zero_left]
 
 theorem LamEquiv.propext?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
@@ -572,7 +572,7 @@ theorem LamEquiv.propext?
     match wft with
     | .ofApp _ (.ofApp _ (.ofBase .ofIff) Hlhs) Hrhs =>
       exists (.mkIff Hlhs Hrhs); exists (.mkEq Hlhs Hrhs); intro lctxTerm
-      dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, iffLift, eqLiftFn]
+      dsimp [LamWF.mkEq, LamWF.interp, LamBaseTerm.LamWF.interp, iffLift, eqLiftFn]
       apply GLift.down.inj; apply propext (Iff.intro ?mp ?mpr)
       case mp =>
         intro h; apply GLift.down.inj; apply propext h
@@ -596,7 +596,7 @@ theorem LamTerm.maxEVarSucc_not_and_equiv_not_or_not?
   t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
   | .app _ (.base .not) (.app _ (.app _ (.base .and) lhs) rhs), Eq.refl _ => by
-    simp [maxEVarSucc, Nat.max, Nat.max_zero_left, Nat.max_zero_right]
+    simp [mkNot, mkOr, maxEVarSucc, Nat.max, Nat.max_zero_left, Nat.max_zero_right]
 
 theorem LamEquiv.not_and_equiv_not_or_not?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
@@ -628,7 +628,7 @@ theorem LamTerm.maxEVarSucc_not_or_equiv_not_and_not?
   t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
   | .app _ (.base .not) (.app _ (.app _ (.base .or) lhs) rhs), Eq.refl _ => by
-    simp [maxEVarSucc, Nat.max, Nat.max_zero_left, Nat.max_zero_right]
+    simp [mkNot, mkAnd, maxEVarSucc, Nat.max, Nat.max_zero_left, Nat.max_zero_right]
 
 theorem LamEquiv.not_or_equiv_not_and_not?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
@@ -659,7 +659,7 @@ theorem LamTerm.maxEVarSucc_propeq?
   t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
   | .app (.base .prop) (.app _ (.base (.eq _)) lhs) rhs, Eq.refl _ => by
-    simp [maxEVarSucc, Nat.max, Nat.max_zero_left, Nat.max_zero_right, Nat.max_eq_left]
+    simp [mkOr, mkNot, mkAnd, maxEVarSucc, Nat.max, Nat.max_zero_left, Nat.max_zero_right, Nat.max_eq_left]
 
 theorem propeq_equiv_eq' {a b : GLift Prop} : (a = b) ↔
   (a.down ∨ ¬ b.down) ∧ (¬ a.down ∨ b.down) := by
@@ -694,7 +694,7 @@ theorem LamTerm.maxEVarSucc_imp_equiv_not_or?
   t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
   | .app _ (.app _ (.base .imp) lhs) rhs, Eq.refl _ => by
-    simp [maxEVarSucc, Nat.max, Nat.max_zero_left]
+    simp [mkNot, mkOr, maxEVarSucc, Nat.max, Nat.max_zero_left]
 
 theorem LamEquiv.imp_equiv_not_or?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
@@ -726,7 +726,7 @@ theorem LamTerm.maxEVarSucc_not_imp_equiv_and_not?
   t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
   | .app _ (.base .not) (.app _ (.app _ (.base .imp) lhs) rhs), Eq.refl _ => by
-    simp [maxEVarSucc, Nat.max, Nat.max_zero_left]
+    simp [mkNot, mkAnd, maxEVarSucc, Nat.max, Nat.max_zero_left]
 
 theorem LamEquiv.not_imp_equiv_and_not?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
@@ -758,7 +758,7 @@ theorem LamTerm.maxEVarSucc_propne?
   t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
   | .app _ (.base .not) (.app (.base .prop) (.app _ (.base (.eq _)) lhs) rhs), Eq.refl _ => by
-    simp [maxEVarSucc, Nat.max, Nat.max_zero_left, Nat.max_zero_right, Nat.max_eq_left]
+    simp [mkNot, mkAnd, mkOr, maxEVarSucc, Nat.max, Nat.max_zero_left, Nat.max_zero_right, Nat.max_eq_left]
 
 theorem propne_equiv_eq' {a b : GLift Prop} : (a ≠ b) ↔
   (a.down ∨ b.down) ∧ (¬ a.down ∨ ¬ b.down) := by

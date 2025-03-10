@@ -49,7 +49,7 @@ theorem LamValid.intro1H? (H : LamValid lval lctx t)
       let Hp' := LamWF.bvarLiftIdx (s:=s) 0 _ Hp
       let HApp := LamWF.ofApp s Hp' (.ofBVar 0)
       rw [← pushLCtxAt_zero]; exists HApp; intro lctxTerm
-      dsimp [LamWF.interp]
+      dsimp [LamWF.interp, LamTerm.bvarLift]
       have vl' := vl (fun n => lctxTerm (.succ n)) (lctxTerm 0)
       apply Eq.mp _ vl'; apply congrArg; apply congrFun;
       apply Eq.trans (LamWF.interp_bvarLiftIdx lval (idx:=0) lctx
@@ -83,7 +83,7 @@ theorem LamTerm.maxEVarSucc_intro1? (heq : LamTerm.intro1? t = .some (s, t')) :
         dsimp [maxEVarSucc]; rw [Nat.max, Nat.max_def]; simp [Nat.zero_le]
         cases p <;> cases heq <;> try rfl
         case app.refl =>
-          dsimp [maxEVarSucc]; rw [LamTerm.maxEVarSucc_mapBVarAt]; rw [LamTerm.maxEVarSucc_mapBVarAt]
+          dsimp [maxEVarSucc, bvarLift, bvarLiftIdx, bvarLiftsIdx]; rw [LamTerm.maxEVarSucc_mapBVarAt]; dsimp [maxEVarSucc]
           rw [Nat.max, Nat.max_comm, Nat.max_def]; simp [Nat.zero_le]
 
 theorem LamValid.intro1? (H : LamValid lval lctx t)
