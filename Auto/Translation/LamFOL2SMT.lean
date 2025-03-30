@@ -315,7 +315,7 @@ mutual
     let some resWfConstraint ← getWfConstraint sni s.getResTy none
       | pure () -- If `getWfConstraint` returns `none`, then `s`'s well-formed constraint is equivalent to `True`
     let args ← (Array.mk s.getArgTys).mapM (fun s => do return (s, ← IR.SMT.disposableName (← sni.suggestNameForSort s)))
-    let fnApp := .qStrApp name (args.zipWithIndex.map (fun (_, n) => .bvar (args.size - 1 - n)))
+    let fnApp := .qStrApp name (args.zipIdx.map (fun (_, n) => .bvar (args.size - 1 - n)))
     let mut fnConstr := .qStrApp resWfConstraint #[fnApp]
     for (argTy, argName) in args.reverse do
       match ← getWfConstraint sni argTy none with -- **TODO** Is it always correct to use `none` here?
@@ -639,7 +639,7 @@ private def lamMutualIndInfo2STerm (sni : SMTNamingInfo) (mind : MutualIndInfo) 
           throwError "{decl_name%} :: Unexpected error"
         selDecls := ((Array.mk argTys).zip projInfos).map (fun (argTy, _, name) => (name, argTy))
       else
-        selDecls := (Array.mk argTys).zipWithIndex.map (fun (argTy, idx) =>
+        selDecls := (Array.mk argTys).zipIdx.map (fun (argTy, idx) =>
           (ctorname ++ s!"_sel{idx}", argTy))
       cstrDecls := cstrDecls.push ⟨ctorname, selDecls⟩
     infos := infos.push (sname, 0, ⟨#[], cstrDecls⟩)
@@ -708,14 +708,14 @@ private def lamMutualIndInfo2STermWithInfos (sni : SMTNamingInfo) (mind : Mutual
           throwError "lamMutualIndInfo2STerm :: Unexpected error"
         selDecls := ((Array.mk argTys).zip projInfos).map (fun (argTy, _, name) => (name, argTy))
         let selDeclsInfos :=
-          ((Array.mk lamSortArgTys).zip projInfos).zipWithIndex.map
+          ((Array.mk lamSortArgTys).zip projInfos).zipIdx.map
             (fun ((lamSortArgTy, _, name), idx) => (name, true, tAtomic, idx, sname, type, lamSortArgTy))
         selInfos := selInfos ++ selDeclsInfos
       else
-        selDecls := (Array.mk argTys).zipWithIndex.map (fun (argTy, idx) =>
+        selDecls := (Array.mk argTys).zipIdx.map (fun (argTy, idx) =>
           (ctorname ++ s!"_sel{idx}", argTy))
         let selDeclsInfos :=
-          (Array.mk lamSortArgTys).zipWithIndex.map
+          (Array.mk lamSortArgTys).zipIdx.map
             (fun (lamSortArgTy, idx) => (ctorname ++ s!"_sel{idx}", false, tAtomic, idx, sname, type, lamSortArgTy))
         selInfos := selInfos ++ selDeclsInfos
       cstrDecls := cstrDecls.push ⟨ctorname, selDecls⟩
@@ -764,8 +764,8 @@ def withExprValuation
   {α : Type} [Inhabited α] (sni : SMTNamingInfo) (h2lMap : Std.HashMap LamAtomic String)
   (printFn : Std.HashMap Nat Expr → Std.HashMap Nat Expr → Std.HashMap Nat Expr → MetaM α) :
   MetaM α := do
-  let tyValMap := Std.HashMap.ofList (sni.tyVal.zipWithIndex.map (fun ((e, _), n) => (n, e))).toList
-  let varValMap := Std.HashMap.ofList (sni.varVal.zipWithIndex.map (fun ((e, _), n) => (n, e))).toList
+  let tyValMap := Std.HashMap.ofList (sni.tyVal.zipIdx.map (fun ((e, _), n) => (n, e))).toList
+  let varValMap := Std.HashMap.ofList (sni.varVal.zipIdx.map (fun ((e, _), n) => (n, e))).toList
   let etomsWithName := h2lMap.toArray.filterMap (fun (atomic, name) =>
     match atomic with | .etom n => .some (n, name) | _ => .none)
   let declInfos ← etomsWithName.mapM (fun (n, name) => do
@@ -799,7 +799,7 @@ def lamFOL2SMT
     let compProjEqns ← compProjs.mapM (compEqn sni lamVarTy lamEVarTy)
     let _ ← compProjEqns.mapM addCommand
   let mut validFacts := #[]
-  for (t, idx) in facts.zipWithIndex do
+  for (t, idx) in facts.zipIdx do
     let sterm ← lamTerm2STerm sni lamVarTy lamEVarTy t
     validFacts := validFacts.push sterm
     trace[auto.lamFOL2SMT] "λ term {repr t} translated to SMT term {sterm}"
@@ -841,7 +841,7 @@ def lamFOL2SMTWithExtraInfo
     -- Update `selInfos`
     selInfos := selInfos ++ mindSelInfos
   let mut validFacts := #[]
-  for (t, idx) in facts.zipWithIndex do
+  for (t, idx) in facts.zipIdx do
     let sterm ← lamTerm2STerm sni lamVarTy lamEVarTy t
     validFacts := validFacts.push sterm
     trace[auto.lamFOL2SMT] "λ term {repr t} translated to SMT term {sterm}"

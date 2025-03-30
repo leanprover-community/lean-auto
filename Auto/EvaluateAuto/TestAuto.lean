@@ -148,7 +148,7 @@ def runAutoOnConsts (config : EvalAutoConfig) (names : Array Name) : CoreM Unit 
   if let .some fhandle := resultFileHandle? then
     fhandle.putStrLn s!"Total elapsed time: {(← IO.monoMsNow) - globalStartTime} ms"
     fhandle.putStrLn s!"\nSummary:\n"
-    for ((name, result, time, hb), idx) in (names.zip results).zipWithIndex do
+    for ((name, result, time, hb), idx) in (names.zip results).zipIdx do
       fhandle.putStrLn s!"{idx} {result.concise} {time} {hb} {Name.uniqRepr name}"
 
 /--
@@ -280,7 +280,7 @@ def evalAutoAtTheoremsAsync
   let .some batches := Array.groupBySize names config.batchSize
     | throwError "{decl_name%} :: Batch size must be nonzero"
   let mut running := #[]
-  for (batch, idx) in batches.zipWithIndex do
+  for (batch, idx) in batches.zipIdx do
     evaluateFilesHandle.putStrLn (toString idx)
     evaluateFilesHandle.flush
     let logPath := config.resultFolder ++ "/" ++ toString idx
