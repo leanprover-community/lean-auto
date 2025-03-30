@@ -282,7 +282,7 @@ def ConstInst.ofExpr? (params : Array Name) (bvars : Array Expr) (e : Expr) : Me
   let mut argsIdx := #[]
   let mut argsInst := #[]
   -- Check that all dependent and instance arguments are instantiated
-  for (arg, idx) in args.zipWithIndex do
+  for (arg, idx) in args.zipIdx do
     headType ← Core.betaReduce headType
     let .forallE _ ty body bi := headType
       | throwError "{decl_name%} :: {headType} is not a `∀`"
@@ -613,9 +613,9 @@ def termLikeDefEqDefEqs (lemmas : Array Lemma) : MetaM (Array Lemma) := do
   let mut ret := #[]
   let mode := auto.mono.termLikeDefEq.mode.get (← getOptions)
   let heartbeats := auto.mono.termLikeDefEq.maxHeartbeats.get (← getOptions)
-  for ((n₁, params₁), idx₁) in nses.zipWithIndex do
+  for ((n₁, params₁), idx₁) in nses.zipIdx do
     if n₁.isLambda || params₁.size != 0 then continue
-    for ((n₂, params₂), idx₂) in nses.zipWithIndex do
+    for ((n₂, params₂), idx₂) in nses.zipIdx do
       if idx₁ >= idx₂ then continue
         let computation := Meta.withNewMCtxDepth <| Meta.withTransparency mode <| Expr.instanceOf? n₂ params₂ n₁
         let computation := Meta.runtimeExToExcept <| Meta.withMaxHeartbeats heartbeats <| computation
@@ -638,7 +638,7 @@ def initializeMonoM (lemmas : Array Lemma) : MonoM Unit := do
     let li ← LemmaInst.ofLemmaHOL lem
     trace[auto.mono.printLemmaInst] "New {li}"
     return li)
-  for (li, idx) in lemmaInsts.zipWithIndex do
+  for (li, idx) in lemmaInsts.zipIdx do
     setActive ((← getActive).enqueue (.inr (li, idx)))
   let lemmaInsts := lemmaInsts.map (fun x => #[x])
   setLisArr lemmaInsts
@@ -681,7 +681,7 @@ def saturate : MonoM Unit := do
       generateCiInstDefEq ci
       let lisArr ← getLisArr
       trace[auto.mono.match] "Matching against {ci}"
-      for (lis, idx) in lisArr.zipWithIndex do
+      for (lis, idx) in lisArr.zipIdx do
         cnt := cnt + 1
         for li in lis do
           let newLis_cnt ← matchCiAndLi ci li idx cnt
@@ -749,7 +749,7 @@ where
     if isTrigger ci.head then
       return
     let cis := ((← getCiMap).toArray.map Prod.snd).flatMap id
-    for (ci', _) in cis.zipWithIndex do
+    for (ci', _) in cis.zipIdx do
       if (← ci.toExpr) != (← ci'.toExpr) && !(isTrigger ci'.head) then
         if let .some (proof, eq, _) ← bidirectionalOfInstanceEq ci ci' then
           let eq := Expr.eraseMData (← Core.betaReduce eq)

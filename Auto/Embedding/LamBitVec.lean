@@ -147,7 +147,7 @@ namespace BVLems
     rw [ushiftRight_def]; rcases a with ⟨⟨a, isLt⟩⟩;
     unfold ushiftRight; rw [eq_iff_val_eq]
     dsimp [BitVec.toNat, BitVec.ofNat]
-    rw [Nat.zero_mod, Nat.shiftRight_eq_div_pow]
+    rw [Nat.shiftRight_eq_div_pow]
     apply Iff.intro <;> intro h
     case mp =>
       rw [← Nat.le_iff_div_eq_zero (Nat.two_pow_pos _)]

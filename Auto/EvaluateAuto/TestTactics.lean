@@ -211,7 +211,7 @@ def runTacticsAtConstantDeclaration
   let path := path.normalize
   let inputHandle ← IO.FS.Handle.mk path .read
   let input ← inputHandle.readToEnd
-  let results : Array (Array Result) ← runWithEffectOfCommands input path.toString (.some 1) (fun ctx st₁ st₂ ci => do
+  let results : Array (Array Result) ← runWithEffectOfCommands input path.toString (.some 1) (fun _ st₁ _ ci => do
     if name != ci.name then
       return .none
     let metaAction (tactic : ConstantInfo → TacticM Unit) : MetaM Result :=
@@ -282,7 +282,7 @@ def evalTacticsAtModule
   let input ← inputHandle.readToEnd
   let startTime ← IO.monoMsNow
   let nonterms := Std.HashSet.ofArray config.nonterminates
-  let results ← runWithEffectOfCommands input path.toString .none (fun ctx st₁ st₂ ci => do
+  let results ← runWithEffectOfCommands input path.toString .none (fun _ st₁ _ ci => do
     if filter ci then
       let result ← evalAction
         {fileName := path.toString, fileMap := FileMap.ofString input } { env := st₁.commandState.env }
@@ -293,7 +293,7 @@ def evalTacticsAtModule
   if let .some fhandle := resultFileHandle? then
     fhandle.putStrLn s!"Total elapsed time : {(← IO.monoMsNow) - startTime} ms"
     fhandle.putStrLn s!"\nSummary:\n"
-    for ((name, result), idx) in results.zipWithIndex do
+    for ((name, result), idx) in results.zipIdx do
       let resultStrs := result.map (fun (r, time, hb) => s!"{r.concise} {time} {hb}")
       fhandle.putStrLn s!"{idx} {resultStrs} {Name.uniqRepr name}"
 where
@@ -301,7 +301,7 @@ where
     (context : Core.Context) (state : Core.State) (ci : ConstantInfo)
     (logFileHandle? : Option IO.FS.Handle) (config : EvalTacticConfig)
     (nonterms : Std.HashSet (RegisteredTactic × Name)) : IO (Array (Result × Nat × Nat)) := do
-  config.tactics.zipWithIndex.mapM (fun (tactic, idx) => do
+  config.tactics.zipIdx.mapM (fun (tactic, idx) => do
     let metaAction : MetaM Result :=
       Term.TermElabM.run' <| Result.ofTacticOnExpr ci.type (tactic.toCiTactic ci)
     let coreAction : CoreM (Result × Nat × Nat) := (do
@@ -542,7 +542,7 @@ def gatherETMHTResult (config : EvalTacticOnMathlibConfig) : CoreM Unit := do
   saveFile.putStrLn ""
   saveFile.putStrLn "Summary:"
   saveFile.putStrLn ""
-  for ((name, result), idx) in readResult.zipWithIndex do
+  for ((name, result), idx) in readResult.zipIdx do
     let resultStrs := result.map (fun (r, time, hb) => s!"{r.concise} {time} {hb}")
     saveFile.putStrLn s!"{idx} {resultStrs} {Name.uniqRepr name}"
 
@@ -562,7 +562,7 @@ def gatherETMHTResultAllowNonRet (config : EvalTacticOnMathlibConfig) : CoreM Un
   saveFile.putStrLn ""
   saveFile.putStrLn "Summary:"
   saveFile.putStrLn ""
-  for ((name, result), idx) in readResult.zipWithIndex do
+  for ((name, result), idx) in readResult.zipIdx do
     let resultStrs := result.map (fun (r, time, hb) => s!"{r.concise} {time} {hb}")
     saveFile.putStrLn s!"{idx} {resultStrs} {Name.uniqRepr name}"
   for path in nonRet do

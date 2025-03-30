@@ -2034,7 +2034,7 @@ section UnsafeOps
       return .none
     if !appFn.isAtom && !appFn.isEtom then
       return .none
-    for ((_, arg), idx) in appargsRev.zipWithIndex do
+    for ((_, arg), idx) in appargsRev.zipIdx do
       let .bvar i := arg
         | return .none
       -- Index within range, `ret[i]` is not assigned before

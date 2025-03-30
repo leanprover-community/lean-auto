@@ -404,7 +404,7 @@ partial def parseForall (vs : List Term) (symbolMap : Std.HashMap String Expr) :
   let [app sortedVars, forallBody] := vs
     | throwError "parseForall :: Unexpected input list {vs}"
   let sortedVars ← sortedVars.mapM (fun sv => parseSortedVar sv symbolMap noConstraint)
-  let sortedVarsWithIndices := sortedVars.mapFinIdx (fun idx val => (val, idx))
+  let sortedVarsWithIndices := sortedVars.mapFinIdx (fun idx val pf => (val, Fin.mk idx pf))
   let mut curPropBoolChoice := some $ (sortedVarsWithIndices.filter (fun ((_, t), _) => t.isProp)).map (fun (_, idx) => (idx, false))
   let mut possibleSortedVars := #[]
   while curPropBoolChoice.isSome do
@@ -440,7 +440,7 @@ partial def parseExists (vs : List Term) (symbolMap : Std.HashMap String Expr) :
   let [app sortedVars, existsBody] := vs
     | throwError "parseExists :: Unexpected input list {vs}"
   let sortedVars ← sortedVars.mapM (fun sv => parseSortedVar sv symbolMap noConstraint)
-  let sortedVarsWithIndices := sortedVars.mapFinIdx (fun idx val => (val, idx))
+  let sortedVarsWithIndices := sortedVars.mapFinIdx (fun idx val pf => (val, Fin.mk idx pf))
   let mut curPropBoolChoice := some $ (sortedVarsWithIndices.filter (fun ((_, t), _) => t.isProp)).map (fun (_, idx) => (idx, false))
   let mut possibleSortedVars := #[]
   while curPropBoolChoice.isSome do
@@ -483,7 +483,7 @@ partial def parseLambda (vs : List Term) (symbolMap : Std.HashMap String Expr) (
   match parseTermConstraint with
   | noConstraint =>
     let sortedVars ← sortedVars.mapM (fun sv => parseSortedVar sv symbolMap noConstraint)
-    let sortedVarsWithIndices := sortedVars.mapFinIdx (fun idx val => (val, idx))
+    let sortedVarsWithIndices := sortedVars.mapFinIdx (fun idx val pf => (val, Fin.mk idx pf))
     let mut curPropBoolChoice := some $ (sortedVarsWithIndices.filter (fun ((_, t), _) => t.isProp)).map (fun (_, idx) => (idx, false))
     let mut possibleSortedVars := #[]
     while curPropBoolChoice.isSome do
@@ -604,7 +604,7 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
         throwError "parseTerm :: Tester applied not {testerArg} of type {idtType} which is not an inductive datatype"
       let ctorType ← inferType parsedCtor
       let ctorArgTypes := (getForallArgumentTypes ctorType).toArray
-      withLocalDeclsD (ctorArgTypes.mapFinIdx fun idx ty => ((.str .anonymous ("arg" ++ idx.1.repr)), fun _ => pure ty)) fun ctorArgs => do
+      withLocalDeclsD (ctorArgTypes.mapFinIdx fun idx ty _ => ((.str .anonymous ("arg" ++ idx.repr)), fun _ => pure ty)) fun ctorArgs => do
         let mut res ← mkAppM ``Eq #[parsedTesterArg, ← mkAppM' parsedCtor ctorArgs]
         for ctorArg in ctorArgs do
           res ← mkLambdaFVars #[ctorArg] res
