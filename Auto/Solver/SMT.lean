@@ -177,6 +177,7 @@ def querySolver (query : Array IR.SMT.Command) : MetaM (Option (Sexp × String))
     return .some (unsatCore, stdout)
   | _ =>
     trace[auto.smt.result] "{name} produces unexpected check-sat response\n {checkSatResponse}"
+    solver.kill
     return .none
 
 def saveQuery (query : Array IR.SMT.Command) : MetaM Unit := do
