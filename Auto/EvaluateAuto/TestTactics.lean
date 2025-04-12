@@ -363,6 +363,8 @@ structure EvalTacticOnMathlibConfig where
   memoryLimitKb : Option Nat    := .none
   /-- Total time limit for each evaluation process, in seconds -/
   timeLimitS    : Option Nat    := .none
+  /-- Specify modules to run tactics on -/
+  moduleFilter  : Name → Bool   := fun _ => true
   /--
     On some problems, certain tactics may go into infinite loops not
     guarded by `Core.checkMaxHeartbeats`. These instances should be
@@ -376,9 +378,9 @@ structure EvalTacticOnMathlibConfig where
   `Mathlib` and `lean-auto` are available
 -/
 def evalTacticsAtMathlibHumanTheorems (config : EvalTacticOnMathlibConfig) : CoreM Unit := do
-  let mms ← mathlibModules
-  if !(← allMathlibModuleNamesCanBeFilename) then
-    throwError "{decl_name%} :: Some Mathlib modules have extra-ordinary names. Evaluation code needs to be changed!"
+  let mms := (← mathlibModules).filter config.moduleFilter
+  if !(mms.all Name.canBeFilename) then
+    throwError "{decl_name%} :: Some modules have extra-ordinary names. Evaluation code needs to be changed!"
   if !(← System.FilePath.isDir config.resultFolder) then
     IO.FS.createDir config.resultFolder
   let evaluateFilesHandle ← IO.FS.Handle.mk (config.resultFolder ++ "/evaluateFiles.txt") .write

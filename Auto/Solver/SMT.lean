@@ -200,6 +200,7 @@ def querySolver (query : Array IR.SMT.Command) : MetaM (Option (Parser.SMTTerm.T
     return .some (unsatCore, stdout)
   | _ =>
     trace[auto.smt.result] "{name} produces unexpected check-sat response\n {checkSatResponse}"
+    solver.kill
     return .none
 
 /-- solverHints includes:

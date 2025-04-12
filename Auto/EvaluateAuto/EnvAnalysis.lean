@@ -32,4 +32,28 @@ def Array.randPick {α} (xs : Array α) (n : Nat) : IO (Array α) := do
       ret := ret.push (xs[rd]'h)
   return ret
 
+def Array.randPickNodup {α} (xs : Array α) (n : Nat) : IO (Array α) := do
+  let mut ret := #[]
+  let mut xs := xs
+  let n := Nat.min n xs.size
+  for i in [0:n] do
+    let rd ← IO.rand 0 (xs.size - 1 - i)
+    if h : rd < xs.size then
+      ret := ret.push (xs[rd]'h)
+      xs := xs.set rd (xs[xs.size - 1 - i]) h
+  return ret
+
+def Array.pseudoRandPickNodup {α} (xs : Array α) (n : Nat) (gen : StdGen) : Array α × StdGen := Id.run <| do
+  let mut ret := #[]
+  let mut xs := xs
+  let mut gen := gen
+  let n := Nat.min n xs.size
+  for i in [0:n] do
+    let (rd, gen') := randNat gen 0 (xs.size - 1 - i)
+    gen := gen'
+    if h : rd < xs.size then
+      ret := ret.push (xs[rd]'h)
+      xs := xs.set rd (xs[xs.size - 1 - i]) h
+  return (ret, gen)
+
 end EvalAuto
