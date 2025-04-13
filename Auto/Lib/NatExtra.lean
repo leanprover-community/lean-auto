@@ -239,8 +239,8 @@ theorem Nat.le_pow (h : b ≥ 2) : a < b ^ a := by
   theorem Nat.ones_testBit_false_of_ge (n i : Nat) (h : i ≥ n) : (2 ^ n - 1).testBit i = false := by
     have hl : 2 ^ n - 1 < 2 ^ i := by
       rw [Nat.lt_eq_succ_le, Nat.succ_eq_add_one, Nat.sub_add_cancel (Nat.two_pow_pos _)]
-      apply Nat.pow_le_pow_of_le_right (Nat.le_step .refl) h
-    have hls : 2 ^ i ≤ 2 ^ (i + 1) := Nat.pow_le_pow_of_le_right (Nat.le_step .refl) (Nat.le_add_right _ _)
+      apply Nat.pow_le_pow_right (Nat.le_step .refl) h
+    have hls : 2 ^ i ≤ 2 ^ (i + 1) := Nat.pow_le_pow_right (Nat.le_step .refl) (Nat.le_add_right _ _)
     rw [Nat.testBit_false_iff]; rw [Nat.mod_eq_of_lt (Nat.le_trans hl hls)]; apply hl
 
   theorem Nat.xor_def (a b : Nat) : a ^^^ b = a.xor b := rfl
@@ -253,7 +253,7 @@ theorem Nat.le_pow (h : b ≥ 2) : a < b ^ a := by
     case inl hl =>
       rw [Nat.ones_testBit_false_of_ge _ _ hl]
       rw [show (∀ b, (false != b) = b) by (intro b; simp)]
-      have ple : 2 ^ n ≤ 2 ^ i := Nat.pow_le_pow_of_le_right (Nat.le_step .refl) hl
+      have ple : 2 ^ n ≤ 2 ^ i := Nat.pow_le_pow_right (Nat.le_step .refl) hl
       have lf : Nat.testBit a i = false := by
         rw [Nat.testBit_false_iff]
         apply Nat.le_trans _ (Nat.le_trans h ple); apply Nat.succ_le_succ

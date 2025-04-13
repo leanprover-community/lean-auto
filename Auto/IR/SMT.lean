@@ -147,7 +147,7 @@ def STerm.attrApp (name : String) (attrTerm : STerm) (term : STerm) : STerm :=
 private partial def STerm.toStringAux : STerm → List SIdent → String
   | .sConst c, _         => SpecConst.toString c
   | .bvar i, binders   =>
-    if let some si := binders.get? i then
+    if let some si := binders[i]? then
       ToString.toString si
     else
       panic!"STerm.toString :: Loose bound variable"

@@ -160,11 +160,11 @@ theorem LamTerm.lamCheck?Eq'_etom :
 theorem LamTerm.lamCheck?Eq'_base :
   LamTerm.lamCheck?Eq' lval lctx (.base b) (LamBaseTerm.lamCheck lval.toLamTyVal b) := rfl
 
-theorem LamTerm.lamCheck?Eq'_bvar
-  (h : lctx.get? n = .some ⟨s, val⟩) :
+theorem LamTerm.lamCheck?Eq'_bvar {lctx : List ((s : LamSort) × LamSort.interp lval.tyVal s)}
+  (h : lctx[n]? = .some ⟨s, val⟩) :
   LamTerm.lamCheck?Eq' lval lctx (.bvar n) s := by
-  dsimp [lamCheck?Eq', lamCheck?]; have ⟨hlt, _⟩ := List.get?_eq_some_iff.mp h
-  rw [pushLCtxs_lt hlt, List.getD_eq_getElem?_getD, ← List.get?_eq_getElem?, h]; rfl
+  dsimp [lamCheck?Eq', lamCheck?]; have ⟨hlt, _⟩ := List.getElem?_eq_some_iff.mp h
+  rw [pushLCtxs_lt hlt, List.getD_eq_getElem?_getD, h]; rfl
 
 theorem LamTerm.lamCheck?Eq'_lam
   (h : LamTerm.lamCheck?Eq' lval (⟨argTy, val⟩ :: lctx) body s) :
@@ -198,10 +198,10 @@ theorem LamTerm.interpEq_base
 
 theorem LamTerm.interpEq_bvar
   (lval : LamValuation) (lctx : List ((s : LamSort) × s.interp lval.tyVal))
-  (s : LamSort) (val : s.interp lval.tyVal) (h : lctx.get? n = .some ⟨s, val⟩) :
+  (s : LamSort) (val : s.interp lval.tyVal) (h : lctx[n]? = .some ⟨s, val⟩) :
   LamTerm.interpEq lval lctx (.bvar n) val := by
-  dsimp [interpEq, interp]; have ⟨hlt, _⟩ := List.get?_eq_some_iff.mp h
-  rw [pushLCtxs_lt hlt, List.getD_eq_getElem?_getD, ← List.get?_eq_getElem?, h]; rfl
+  dsimp [interpEq, interp]; have ⟨hlt, _⟩ := List.getElem?_eq_some_iff.mp h
+  rw [pushLCtxs_lt hlt, List.getD_eq_getElem?_getD, h]; rfl
 
 theorem LamTerm.interpEq_lam
   (lval : LamValuation) (lctx : List ((s : LamSort) × s.interp lval.tyVal))

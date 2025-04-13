@@ -18,7 +18,7 @@ theorem List.ofFun_length (f : Nat → α) (n : Nat) :
   case succ n IH => dsimp [ofFun]; rw [IH]
 
 theorem List.ofFun_get?_eq_some (f : Nat → α) (n m : Nat) (h : n > m) :
-  (List.ofFun f n).get? m = .some (f m) := by
+  (List.ofFun f n)[m]? = .some (f m) := by
   induction m generalizing f n
   case zero =>
     cases n
@@ -29,7 +29,7 @@ theorem List.ofFun_get?_eq_some (f : Nat → α) (n m : Nat) (h : n > m) :
     case zero => cases h
     case succ n =>
       let h' := Nat.le_of_succ_le_succ h
-      dsimp [ofFun, List.get?]; rw [IH (fun n => f (.succ n)) _ h']
+      dsimp [ofFun]; rw [IH (fun n => f (.succ n)) _ h']
 
 theorem List.beq_def [BEq α] {x y : List α} : (x == y) = x.beq y := rfl
 
