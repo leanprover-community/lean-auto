@@ -1635,7 +1635,7 @@ theorem LamGenModify.rwGenAtIfSign {modify} (H : LamGenModify lval modify weaken
   clear hl'
   induction l generalizing occ weaken? weaken?'
   case zero =>
-    cases List.length_eq_zero.mp (Nat.le_zero.mp hl)
+    cases List.length_eq_zero_iff.mp (Nat.le_zero.mp hl)
     match h : weaken? == weaken?' with
     | true => cases (Bool.beq_to_eq _ _).mp h; exact H
     | false => dsimp [LamGenModify]; intro t₁ t₂ h; cases h

@@ -2,11 +2,13 @@ import Auto.Lib.ExprExtra
 import Auto.Lib.BinTree
 
 set_option lazyReduce.printTime true
-set_option maxRecDepth 50000 in
+set_option maxRecDepth 5000 in
 #lazyReduce List.map (fun n => (List.range (1000 + n)).length) (List.range 10)
 
-set_option maxRecDepth 50000 in
-#lazyReduce (List.range 10000).length
+/-
+set_option maxRecDepth 20000 in
+#lazyReduce (List.range 5000).length
+-/
 
 #check 2
 
@@ -48,11 +50,11 @@ def foldl' (f : α → β → α) (init : α) : BinTree β → α
 def foldAgain (bt : BinTree Nat) := foldl' (fun bt entry => bt.insert entry entry) BinTree.leaf bt
 
 /-
-def sdk : (foldAgain (simplebt 1 12)).get? 100 = Option.some 100 := Eq.refl (Option.some 100)
+def sdk : (foldAgain (simplebt 1 12))[100]? = Option.some 100 := Eq.refl (Option.some 100)
 
 #check (simplebt 2 10)
 
-#eval (foldAgain (simplebt 1 12)).get? 100
+#eval (foldAgain (simplebt 1 12))[100]?
 -/
 
 #check 2

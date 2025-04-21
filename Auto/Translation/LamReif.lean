@@ -197,7 +197,7 @@ def lookupAssertion! (t : LamTerm) : ReifM (Expr × DTr × LamTerm × Nat) := do
     throwError "{decl_name%} :: Unknown assertion {t}"
 
 def lookupRTable! (pos : Nat) : ReifM REntry := do
-  if let .some r := (← getRTable).get? pos then
+  if let .some r := (← getRTable)[pos]? then
     return r
   else
     throwError "{decl_name%} :: Unknown REntry {pos}"
@@ -277,7 +277,7 @@ def getLamTyValAtMeta : ReifM LamTyVal := do
   let lamEVarTy ← getLamEVarTy
   return ⟨fun n => varTy[n]?.getD (.base .prop),
           fun n => lamILTy[n]?.getD (.base .prop),
-          fun n => (lamEVarTy.get? n).getD (.base .prop)⟩
+          fun n => lamEVarTy[n]?.getD (.base .prop)⟩
 
 def resolveLamBaseTermImport : LamBaseTerm → ReifM LamBaseTerm
 | .eqI n      => do return .eq (← lookupLamILTy! n)
@@ -502,7 +502,7 @@ end ILLifting
 section Checker
 
   def nonemptyOfAtom (n : Nat) : ReifM (Option REntry) := do
-    let .some (_, s) := (← getVarVal).get? n
+    let .some (_, s) := (← getVarVal)[n]?
       | throwError "{decl_name%} :: Index {n} out of bound"
     if !(← inhSubsumptionCheck s) then
       return .none
@@ -511,7 +511,7 @@ section Checker
     return .some re
 
   def nonemptyOfEtom (n : Nat) : ReifM (Option REntry) := do
-    let .some s := (← getLamEVarTy).get? n
+    let .some s := (← getLamEVarTy)[n]?
       | throwError "{decl_name%} :: Index {n} out of bound"
     if !(← inhSubsumptionCheck s) then
       return .none

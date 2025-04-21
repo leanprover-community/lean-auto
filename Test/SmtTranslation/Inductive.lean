@@ -102,8 +102,13 @@ end Recursive
 
 section Mixed
 
-  example (x y : α) : List.get? [x, y] 1 = .some y := by
-    auto d[List.get?]
+  def List.myGet? : (as : List α) → (i : Nat) → Option α
+    | a::_,  0   => some a
+    | _::as, n+1 => myGet? as n
+    | _,     _   => none
+
+  example (x y : α) : List.myGet? [x, y] 1 = .some y := by
+    auto d[List.myGet?]
 
   example (x : α) : List.head? [x] = .some x := by
     have h₁ : List.head? (α := α) [] = .none := rfl

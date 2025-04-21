@@ -598,7 +598,7 @@ partial def ofListFoldl (xs : List α) : BinTree α :=
     let nElem := Nat.div xs.length 2
     let l := xs.take nElem
     let r := xs.drop (.succ nElem)
-    let mid := xs.get? nElem
+    let mid := xs[nElem]?
     .node (ofListFoldl l) mid (ofListFoldl r)
 
 open Lean in

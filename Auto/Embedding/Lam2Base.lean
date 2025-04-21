@@ -96,7 +96,7 @@ def Lam₂Type.check (tcVal : Nat → Lam₂Sort) (ltyLCtx : Nat) : Lam₂Type �
   Lam₂Type → Option ((n : Lam₂Sort) × Lam₂Sort.interp n)
 | .atom n => .some (val n)
 | .bvar n =>
-  match lctx.get? n with
+  match lctx[n]? with
   | .some s => .some ⟨0, s⟩
   | .none   => .none
 | .func dom cod =>
