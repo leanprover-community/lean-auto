@@ -82,7 +82,7 @@ def evalMonoSize
   (names : Array Name) (resultFile : String)
   (maxHeartbeats : Nat) : CoreM Unit := do
   let resultHandle ← IO.FS.Handle.mk resultFile .write
-  for (name, idx) in names.zipWithIndex do
+  for (name, idx) in names.zipIdx do
     let rawSize ← rawProblemSizeOfConst name
     let monoSize? ← withCurrHeartbeats <|
       withTheReader Core.Context (fun ctx => {ctx with maxHeartbeats := maxHeartbeats * 1000}) <|
@@ -150,7 +150,7 @@ def evalReduceSize
   NameArray.save names (resultFolder ++ "/names.txt")
   let evaluateNamesHandle ← IO.FS.Handle.mk (resultFolder ++ "/evaluateNames.txt") .write
   let mut running := #[]
-  for (name, idx) in names.zipWithIndex do
+  for (name, idx) in names.zipIdx do
     let evalProc ← runFunctionOnConstsUsingNewLeanProcess
       #[name] ``testReduceWriteResult
       #[toString (repr mode), s!"\"{resultFolder}/{idx}.result\""] memoryLimitKb timeLimitS
@@ -190,7 +190,7 @@ def readEvalReduceSizeResult (resultFolder : String) : CoreM (Array (Name × Exc
       | throwError "{decl_name%} :: Unexpected error"
     if retCode != 0 then
       ref := ref.insert name (.error retCode)
-  for (name, idx) in names.zipWithIndex do
+  for (name, idx) in names.zipIdx do
     let path : System.FilePath := resultFolder ++ s!"/{idx}.result"
     let .ok mdata ← path.metadata.toBaseIO
       | continue

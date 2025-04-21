@@ -35,7 +35,7 @@ def lam2TH0 (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort) (facts : Arra
   -- Empty type is not inhabited
   if (lamVarTy ++ lamEVarTy).any (fun s => s == .base .empty) then
     return "thf(empty_inhabited, axiom, $false)."
-  let facts ← facts.zipWithIndex.mapM (fun (t, i) =>
+  let facts ← facts.zipIdx.mapM (fun (t, i) =>
     match transLamTerm t with
     | .ok ts => return s!"thf(fact{i}, axiom, {ts})."
     | .error e => throwError e)

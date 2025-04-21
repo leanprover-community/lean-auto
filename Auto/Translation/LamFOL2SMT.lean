@@ -160,7 +160,7 @@ private def addNatConstraint? (sni : SMTNamingInfo) (name : String) (s : LamSort
   if !(resTy == .base .nat) then
     return
   let args ← (Array.mk s.getArgTys).mapM (fun s => do return (s, ← IR.SMT.disposableName (← sni.suggestNameForSort s)))
-  let fnApp := STerm.qStrApp name (args.zipWithIndex.map (fun (_, n) => .bvar (args.size - 1 - n)))
+  let fnApp := STerm.qStrApp name (args.zipIdx.map (fun (_, n) => .bvar (args.size - 1 - n)))
   let mut fnConstr := STerm.qStrApp ">=" #[fnApp, .sConst (.num 0)]
   for (argTy, argName) in args.reverse do
     if argTy == .base .nat then
@@ -480,7 +480,7 @@ private def lamMutualIndInfo2STerm (sni : SMTNamingInfo) (mind : MutualIndInfo) 
           throwError "{decl_name%} :: Unexpected error"
         selDecls := ((Array.mk argTys).zip projInfos).map (fun (argTy, _, name) => (name, argTy))
       else
-        selDecls := (Array.mk argTys).zipWithIndex.map (fun (argTy, idx) =>
+        selDecls := (Array.mk argTys).zipIdx.map (fun (argTy, idx) =>
           (ctorname ++ s!"_sel{idx}", argTy))
       cstrDecls := cstrDecls.push ⟨ctorname, selDecls⟩
     infos := infos.push (sname, 0, ⟨#[], cstrDecls⟩)
@@ -528,8 +528,8 @@ def withExprValuation
   {α : Type} [Inhabited α] (sni : SMTNamingInfo) (h2lMap : Std.HashMap LamAtomic String)
   (printFn : Std.HashMap Nat Expr → Std.HashMap Nat Expr → Std.HashMap Nat Expr → MetaM α) :
   MetaM α := do
-  let tyValMap := Std.HashMap.ofList (sni.tyVal.zipWithIndex.map (fun ((e, _), n) => (n, e))).toList
-  let varValMap := Std.HashMap.ofList (sni.varVal.zipWithIndex.map (fun ((e, _), n) => (n, e))).toList
+  let tyValMap := Std.HashMap.ofList (sni.tyVal.zipIdx.map (fun ((e, _), n) => (n, e))).toList
+  let varValMap := Std.HashMap.ofList (sni.varVal.zipIdx.map (fun ((e, _), n) => (n, e))).toList
   let etomsWithName := h2lMap.toArray.filterMap (fun (atomic, name) =>
     match atomic with | .etom n => .some (n, name) | _ => .none)
   let declInfos ← etomsWithName.mapM (fun (n, name) => do
@@ -563,7 +563,7 @@ def lamFOL2SMT
     let compProjEqns ← compProjs.mapM (compEqn sni lamVarTy lamEVarTy)
     let _ ← compProjEqns.mapM addCommand
   let mut validFacts := #[]
-  for (t, idx) in facts.zipWithIndex do
+  for (t, idx) in facts.zipIdx do
     let sterm ← lamTerm2STerm sni lamVarTy lamEVarTy t
     validFacts := validFacts.push sterm
     trace[auto.lamFOL2SMT] "λ term {repr t} translated to SMT term {sterm}"

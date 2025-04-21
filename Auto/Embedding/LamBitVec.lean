@@ -146,7 +146,7 @@ namespace BVLems
   theorem shiftRight_eq_zero_iff (a : BitVec n) (b : Nat) : a >>> b = 0#n ↔ a.toNat < 2 ^ b := by
     rw [ushiftRight_def]; rcases a with ⟨⟨a, isLt⟩⟩;
     unfold ushiftRight; rw [eq_iff_val_eq]
-    dsimp [BitVec.toNat, BitVec.ofNat]
+    dsimp only [BitVec.toNat, BitVec.ofNat, Fin.val_ofNat', BitVec.ofNatLt]
     rw [Nat.zero_mod, Nat.shiftRight_eq_div_pow]
     apply Iff.intro <;> intro h
     case mp =>
