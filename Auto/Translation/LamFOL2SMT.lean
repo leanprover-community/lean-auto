@@ -554,14 +554,14 @@ def lamFOL2SMT
   TransM LamAtomic (Array IR.SMT.Command × Array STerm) := do
   let _ ← sortAuxDecls.mapM addCommand
   let _ ← termAuxDecls.mapM addCommand
+  let mut compCtorProjs := #[]
   for mind in minds do
     let (dsdecl, compCtors, compProjs) ← lamMutualIndInfo2STerm sni mind
     trace[auto.lamFOL2SMT] "MutualIndInfo translated to command {dsdecl}"
     addCommand dsdecl
-    let compCtorEqns ← compCtors.mapM (compEqn sni lamVarTy lamEVarTy)
-    let _ ← compCtorEqns.mapM addCommand
-    let compProjEqns ← compProjs.mapM (compEqn sni lamVarTy lamEVarTy)
-    let _ ← compProjEqns.mapM addCommand
+    compCtorProjs := compCtorProjs.append (compCtors ++ compProjs)
+  let compEqns ← compCtorProjs.mapM (compEqn sni lamVarTy lamEVarTy)
+  let _ ← compEqns.mapM addCommand
   let mut validFacts := #[]
   for (t, idx) in facts.zipIdx do
     let sterm ← lamTerm2STerm sni lamVarTy lamEVarTy t
