@@ -337,9 +337,9 @@ def getNextSortedVars (originalSortedVars : Array (String × Expr)) (curPropBool
   let mut nextPropBoolChoice := curPropBoolChoice
   for h : i in [:curPropBoolChoice.size] do
     if (curPropBoolChoice[i]'h.2.1).2 then
-      nextPropBoolChoice := curPropBoolChoice.set! i ((curPropBoolChoice[i]'h.2.1).1, false)
+      nextPropBoolChoice := nextPropBoolChoice.set! i ((curPropBoolChoice[i]'h.2.1).1, false)
     else
-      nextPropBoolChoice := curPropBoolChoice.set! i ((curPropBoolChoice[i]'h.2.1).1, true)
+      nextPropBoolChoice := nextPropBoolChoice.set! i ((curPropBoolChoice[i]'h.2.1).1, true)
       break
   -- Check whether we should return `some nextPropBoolChoice` or `none`
   if nextPropBoolChoice.any (fun (_, b) => b) then
@@ -577,6 +577,7 @@ partial def parseImplication (args : List Term) (symbolMap : Std.HashMap String 
 /-- The entry function for the variety of mutually recursive functions used to parse SMT terms. `symbolMap` is used to map smt constants to the original
     Lean expressions they are meant to represent. `parseTermConstraint` is used to indicate whether the output expression must be a particular type. -/
 partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTermConstraint : ParseTermConstraint) : MetaM Expr := do
+  Core.checkSystem "{decl_name%}"
   match e with
   | atom (num n) => correctType (Expr.lit (Literal.natVal n)) parseTermConstraint
   | atom (rat _ _) => throwError "parseTerm :: Rational/real numbers not supported yet"
