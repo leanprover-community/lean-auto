@@ -750,7 +750,7 @@ where
       return
     let cis := ((← getCiMap).toArray.map Prod.snd).flatMap id
     for (ci', _) in cis.zipIdx do
-      if (← ci.toExpr) != (← ci'.toExpr) && !(isTrigger ci'.head) then
+      if (← ci.toExpr) != (← ci'.toExpr) && !(isTrigger ci.head) && !(isTrigger ci'.head) then
         if let .some (proof, eq, _) ← bidirectionalOfInstanceEq ci ci' then
           let eq := Expr.eraseMData (← Core.betaReduce eq)
           let eq ← Meta.transform eq (pre := fun e => do return .continue (← unfoldProj e))

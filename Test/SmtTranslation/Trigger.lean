@@ -20,5 +20,5 @@ theorem fPlusOneGreater : forall x, (f x) + 1 > x := by auto [fGreater] u[]
 
 axiom fTrueGreater : true → ∀ x, trigger (f x) (f x > x)
 
-set_option trace.auto.printLemmas true
+set_option auto.mono.termLikeDefEq.mode "reducible"
 theorem fTrueGreaterTr : true → forall x, f x > x := by auto [fTrueGreater] u[]

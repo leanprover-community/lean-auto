@@ -279,7 +279,7 @@ def getLamTyValAtMeta : ReifM LamTyVal := do
   let lamEVarTy ← getLamEVarTy
   return ⟨fun n => varTy[n]?.getD (.base .prop),
           fun n => lamILTy[n]?.getD (.base .prop),
-          fun n => (lamEVarTy[n]?).getD (.base .prop)⟩
+          fun n => lamEVarTy[n]?.getD (.base .prop)⟩
 
 def resolveLamBaseTermImport : LamBaseTerm → ReifM LamBaseTerm
 | .eqI n      => do return .eq (← lookupLamILTy! n)

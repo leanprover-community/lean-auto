@@ -859,7 +859,7 @@ section pushs_pops
     rw [List.ofFun_length]
     match h : Nat.blt n lvl with
     | true =>
-      rw [List.ofFun_get?_eq_some]; rfl
+      rw [ List.ofFun_getElem?_eq_some]; rfl
       dsimp [Nat.blt] at h;
       exact Nat.le_of_ble_eq_true h
     | false =>

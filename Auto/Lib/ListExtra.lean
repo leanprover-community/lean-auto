@@ -17,7 +17,7 @@ theorem List.ofFun_length (f : Nat → α) (n : Nat) :
   case zero => rfl
   case succ n IH => dsimp [ofFun]; rw [IH]
 
-theorem List.ofFun_get?_eq_some (f : Nat → α) (n m : Nat) (h : n > m) :
+theorem List.ofFun_getElem?_eq_some (f : Nat → α) (n m : Nat) (h : n > m) :
   (List.ofFun f n)[m]? = .some (f m) := by
   induction m generalizing f n
   case zero =>

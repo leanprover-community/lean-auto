@@ -109,7 +109,7 @@ def Lemma.reorderForallInstDep (lem : Lemma) : MetaM Lemma := do
   Meta.forallTelescope lem.type fun xs body => do
     let mut prec := #[]
     let mut trail := #[]
-    for (fvar, i) in xs.zipWithIndex do
+    for (fvar, i) in xs.zipIdx do
       if depargs.contains i || !(← Meta.isProp (← Meta.inferType fvar)) then
         prec := prec.push fvar
       else

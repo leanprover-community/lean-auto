@@ -2714,7 +2714,7 @@ theorem LamTerm.maxLooseBVarSucc_mkEq :
 
 theorem LamTerm.maxEVarSucc_mkEq :
   (mkEq s t₁ t₂).maxEVarSucc = max t₁.maxEVarSucc t₂.maxEVarSucc := by
-  dsimp [mkEq, maxEVarSucc, Nat.max]; rw[Nat.max_zero_left]
+  dsimp [mkEq, maxEVarSucc, Nat.max]; rw [Nat.max_zero_left]
 
 def LamTerm.mkForallE (s : LamSort) (p : LamTerm) : LamTerm :=
   .app (.func s (.base .prop)) (.base (.forallE s)) p
