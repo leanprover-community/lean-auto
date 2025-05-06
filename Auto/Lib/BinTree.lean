@@ -27,20 +27,20 @@ private theorem wfAux (n n' : Nat) : n = n' + 2 → n / 2 < n := by
   case hLtK => apply Nat.le_refl
 
 @[irreducible] def inductionOn.{u}
-  {motive : Nat → Sort u} (x : Nat)
+  {motive : Nat → Sort u}
   (ind : ∀ x, motive ((x + 2) / 2) → motive (x + 2))
-  (base₀ : motive 0) (base₁ : motive 1) : motive x :=
+  (base₀ : motive 0) (base₁ : motive 1)  (x : Nat) : motive x :=
   match h : x with
   | 0 => base₀
   | 1 => base₁
-  | x' + 2 => ind x' (inductionOn ((x' + 2) / 2) ind base₀ base₁)
+  | x' + 2 => ind x' (inductionOn ind base₀ base₁ ((x' + 2) / 2) )
 decreasing_by apply wfAux; rfl
 
 @[irreducible] def induction.{u}
   {motive : Nat → Sort u}
   (ind : ∀ x, motive ((x + 2) / 2) → motive (x + 2))
   (base₀ : motive 0) (base₁ : motive 1) : ∀ x, motive x :=
-  fun x => inductionOn x ind base₀ base₁
+  fun x => inductionOn ind base₀ base₁ x
 
 end Bin
 
@@ -96,7 +96,7 @@ theorem eq_of_beq_eq_true [BEq α] (α_eq_of_beq_eq_true : ∀ (x y : α), (x ==
 
 instance [BEq α] [LawfulBEq α] : LawfulBEq (BinTree α) where
   eq_of_beq := eq_of_beq_eq_true (@LawfulBEq.eq_of_beq _ _ _)
-  rfl := beq_refl (@LawfulBEq.rfl _ _ _)
+  rfl := beq_refl (@BEq.rfl _ _ _)
 
 def val? (bt : BinTree α) : Option α :=
   match bt with

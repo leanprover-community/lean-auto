@@ -5,7 +5,7 @@ open Lean
 
 namespace Auto.Inhabitation
 
-private def logicalConsts : Std.HashSet Name := Std.HashSet.empty.insertMany
+private def logicalConsts : Std.HashSet Name := Std.HashSet.emptyWithCapacity.insertMany
   #[``Eq, ``Exists, ``And, ``Or, ``Iff, ``Not]
 
 /--

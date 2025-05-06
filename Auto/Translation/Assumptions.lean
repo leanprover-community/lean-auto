@@ -101,7 +101,7 @@ def Lemma.equivQuick (lem₁ lem₂ : Lemma) : MetaM Bool := do
 /- Reorder top-level `∀` so that (non-prop / dependent) ones precede other ones -/
 /-
 def Lemma.reorderForallInstDep (lem : Lemma) : MetaM Lemma := do
-  let depargs := Std.HashSet.empty.insertMany (Expr.depArgs lem.type)
+  let depargs := Std.HashSet.emptyWithCapacity.insertMany (Expr.depArgs lem.type)
   Meta.forallTelescope lem.type fun xs body => do
     let mut prec := #[]
     let mut trail := #[]
@@ -313,12 +313,12 @@ def LemmaInst.ofMLemmaInst (mi : MLemmaInst) : MetaM LemmaInst := do
   return ⟨lem, nbinders, nargs⟩
 
 partial def collectUniverseLevels : Expr → MetaM (Std.HashSet Level)
-| .bvar _ => return Std.HashSet.empty
+| .bvar _ => return Std.HashSet.emptyWithCapacity
 | e@(.fvar _) => do collectUniverseLevels (← instantiateMVars (← Meta.inferType e))
 | e@(.mvar _) => do collectUniverseLevels (← instantiateMVars (← Meta.inferType e))
-| .sort u => return Std.HashSet.empty.insert u
+| .sort u => return Std.HashSet.emptyWithCapacity.insert u
 | e@(.const _ us) => do
-  let hus := Std.HashSet.empty.insertMany us
+  let hus := Std.HashSet.emptyWithCapacity.insertMany us
   let tys ← collectUniverseLevels (← instantiateMVars (← Meta.inferType e))
   return mergeHashSet hus tys
 | .app fn arg => do
@@ -338,14 +338,14 @@ partial def collectUniverseLevels : Expr → MetaM (Std.HashSet Level)
   let vs ← collectUniverseLevels v
   let bodys ← collectUniverseLevels body
   return mergeHashSet (mergeHashSet tys vs) bodys
-| .lit _ => return Std.HashSet.empty.insert (.succ .zero)
+| .lit _ => return Std.HashSet.emptyWithCapacity.insert (.succ .zero)
 | .mdata _ e' => collectUniverseLevels e'
 | .proj .. => throwError "{decl_name%} :: Please unfold projections before collecting universe levels"
 
 def computeMaxLevel (facts : Array UMonoFact) : MetaM Level := do
   let levels ← facts.foldlM (fun hs ⟨_, ty, _⟩ => do
     let tyUs ← collectUniverseLevels ty
-    return mergeHashSet tyUs hs) Std.HashSet.empty
+    return mergeHashSet tyUs hs) Std.HashSet.emptyWithCapacity
   -- Compute the universe level that we need to lift to
   -- Use `.succ` two times to reveal bugs
   let level := Level.succ (.succ (levels.fold (fun l l' => Level.max l l') Level.zero))

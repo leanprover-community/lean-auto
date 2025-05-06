@@ -23,7 +23,7 @@ where
   | .max l₁ l₂ => mergeHashSet (go l₁) (go l₂)
   | .imax l₁ l₂ => mergeHashSet (go l₁) (go l₂)
   | .param _ => {}
-  | .mvar id => Std.HashSet.empty.insert id
+  | .mvar id => Std.HashSet.emptyWithCapacity.insert id
 
 def Level.findParam? (p : Name → Bool) : Level → Option Name
 | .zero => .none

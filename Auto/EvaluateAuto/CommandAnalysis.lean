@@ -24,7 +24,7 @@ namespace EvalAuto
 
 open Elab Frontend
 
-def processHeaderEnsuring (header : Syntax) (opts : Options) (messages : MessageLog)
+def processHeaderEnsuring (header : TSyntax ``Parser.Module.header) (opts : Options) (messages : MessageLog)
     (inputCtx : Parser.InputContext) (trustLevel : UInt32 := 0) (leakEnv := false) (ensuring : Array Import := #[])
     : IO (Environment × MessageLog) := do
   try
@@ -32,7 +32,7 @@ def processHeaderEnsuring (header : Syntax) (opts : Options) (messages : Message
     pure (env, messages)
   catch e =>
     let env ← mkEmptyEnvironment
-    let spos := header.getPos?.getD 0
+    let spos := header.raw.getPos?.getD 0
     let pos  := inputCtx.fileMap.toPosition spos
     pure (env, messages.add { fileName := inputCtx.fileName, data := toString e, pos := pos })
 

@@ -16,7 +16,7 @@ def mergeArray (a1 a2 : Array α) :=
     a1 ++ a2
 
 def tallyArrayHashable [Hashable α] [BEq α] (xs : Array α) : Array (α × Nat) := Id.run <| do
-  let mut ret : Std.HashMap α Nat := Std.HashMap.empty
+  let mut ret : Std.HashMap α Nat := Std.HashMap.emptyWithCapacity
   for x in xs do
     match ret.get? x with
     | .some cnt => ret := ret.insert x (cnt + 1)

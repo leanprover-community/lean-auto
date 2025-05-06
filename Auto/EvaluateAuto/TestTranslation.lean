@@ -178,7 +178,7 @@ where
 -/
 def readEvalReduceSizeResult (resultFolder : String) : CoreM (Array (Name × Except Nat Nat)) := do
   let names ← NameArray.load (resultFolder ++ "/names.txt")
-  let mut ref : Std.HashMap Name (Except Nat Nat) := Std.HashMap.empty
+  let mut ref : Std.HashMap Name (Except Nat Nat) := Std.HashMap.emptyWithCapacity
   let evaluateNames ← IO.FS.readFile (resultFolder ++ "/evaluateNames.txt")
   let evalLines := (evaluateNames.splitOn "\n").filter (fun s => s != "")
   for line in evalLines do
