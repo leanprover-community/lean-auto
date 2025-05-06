@@ -173,7 +173,7 @@ def collectUserLemmas (terms : Array Term) : TacticM (Array Lemma) :=
     return lemmas
 
 def collectHintDBLemmas (names : Array Name) : TacticM (Array Lemma) := do
-  let mut hs : Std.HashSet Name := Std.HashSet.empty
+  let mut hs : Std.HashSet Name := Std.HashSet.emptyWithCapacity
   let mut ret : Array Lemma := #[]
   for name in names do
     let .some db ← findLemDB name

@@ -198,7 +198,7 @@ theorem Nat.le_pow (h : b ≥ 2) : a < b ^ a := by
     rw [Nat.le_sub_iff_add_le lla]; apply h
 
   theorem Nat.testBit_true_iff (a i : Nat) : a.testBit i ↔ 2 ^ i ≤ a % 2 ^ (i + 1) := by
-    rw [Nat.testBit_to_div_mod, decide_eq_true_iff]; apply Iff.intro <;> intro h
+    rw [Nat.testBit_eq_decide_div_mod_eq, decide_eq_true_iff]; apply Iff.intro <;> intro h
     case mp =>
       have ⟨k, hk⟩ := Nat.mod_par h; clear h
       have ⟨r, ⟨er, lr⟩⟩ := Nat.div_par hk (Nat.two_pow_pos _); clear hk; cases er

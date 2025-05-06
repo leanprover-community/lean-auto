@@ -52,20 +52,20 @@ def ofNat'WF (n : Nat) :=
 decreasing_by rw [← h]; apply ofNat'WFAux; assumption
 
 @[irreducible] def ofNat'WF.inductionOn.{u}
-  {motive : Nat → Sort u} (x : Nat)
+  {motive : Nat → Sort u}
   (ind : ∀ x, motive ((x + 2) / 2) → motive (x + 2))
-  (base₀ : motive 0) (base₁ : motive 1) : motive x :=
+  (base₀ : motive 0) (base₁ : motive 1) (x : Nat) : motive x :=
   match h : x with
   | 0 => base₀
   | 1 => base₁
-  | x' + 2 => ind x' (inductionOn ((x' + 2) / 2) ind base₀ base₁)
+  | x' + 2 => ind x' (inductionOn ind base₀ base₁ ((x' + 2) / 2))
 decreasing_by apply ofNat'WFAux; rfl
 
 @[irreducible] def ofNat'WF.induction
   {motive : Nat → Sort u}
   (ind : ∀ x, motive ((x + 2) / 2) → motive (x + 2))
   (base₀ : motive 0) (base₁ : motive 1) : ∀ x, motive x :=
-  fun x => ofNat'WF.inductionOn x ind base₀ base₁
+  fun x => ofNat'WF.inductionOn ind base₀ base₁ x
 
 theorem ofNat'WF.succSucc (n : Nat) :
   ofNat'WF (n + 2) =

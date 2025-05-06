@@ -198,13 +198,13 @@ end Tactics
   Note: Use `initSrcSearchPath` to get SearchPath of source files
 -/
 def runTacticsAtConstantDeclaration
-  (name : Name) (searchPath : SearchPath)
+  (name : Name) (_searchPath : SearchPath)
   (tactics : Array (ConstantInfo → TacticM Unit)) : CoreM (Array Result) := do
   if ← isInitializerExecutionEnabled then
     throwError "{decl_name%} :: Running this function with execution of `initialize` code enabled is unsafe"
   let .some modName ← Lean.findModuleOf? name
     | throwError "{decl_name%} :: Cannot find constant {name}"
-  let .some uri ← Server.documentUriFromModule searchPath modName
+  let .some uri ← Server.documentUriFromModule? modName
     | throwError "{decl_name%} :: Cannot find module {modName}"
   let .some path := System.Uri.fileUriToPath? uri
     | throwError "{decl_name%} :: URI {uri} of {modName} is not a file"
@@ -265,7 +265,7 @@ instance : ToString EvalTacticConfig where
   `<i> #[<result> <time> <heartbeats>, ⋯, <result> <time> <heartbeats>] <name>`
 -/
 def evalTacticsAtModule
-  (modName : Name) (searchPath : SearchPath) (filter : ConstantInfo → Bool)
+  (modName : Name) (_searchPath : SearchPath) (filter : ConstantInfo → Bool)
   (config : EvalTacticConfig) : CoreM Unit:= do
   let logFileHandle? : Option IO.FS.Handle ← config.logFile.mapM (fun fname => IO.FS.Handle.mk fname .write)
   let resultFileHandle? : Option IO.FS.Handle ← config.resultFile.mapM (fun fname => IO.FS.Handle.mk fname .write)
@@ -273,7 +273,7 @@ def evalTacticsAtModule
   if let .some fhandle := logFileHandle? then
     fhandle.putStrLn s!"Config = {config}"
     fhandle.putStrLn s!"Start time : {← Std.Time.Timestamp.now}"
-  let .some uri ← Server.documentUriFromModule searchPath modName
+  let .some uri ← Server.documentUriFromModule? modName
     | throwError "{decl_name%} :: Cannot find module {modName}"
   let .some path := System.Uri.fileUriToPath? uri
     | throwError "{decl_name%} :: URI {uri} of {modName} is not a file"
