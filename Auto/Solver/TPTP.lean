@@ -146,7 +146,7 @@ def queryZipperpositionExe (query : String) : MetaM (Bool × String) := do
     if filesInBuildDir.any (fun f => f.fileName == zipperpositionExeName) then
       buildDir / zipperpositionExeName
     else
-      currentDir / pkgDir / ".lake/build" / zipperpositionExeName
+      currentDir / pkgDir / "auto/.lake/build" / zipperpositionExeName
   let solver ← createAux path.toString #["-i=tptp", "-o=tptp", "--mode=ho-competitive", s!"-t={tlim}"]
   solver.stdin.putStr s!"{query}\n"
   let (_, solver) ← solver.takeStdin
