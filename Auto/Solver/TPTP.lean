@@ -131,16 +131,22 @@ def queryZipperposition (query : String) : MetaM (Bool × String) := do
   return (proven, stdout)
 
 def queryZipperpositionExe (query : String) : MetaM (Bool × String) := do
+  let tlim := auto.tptp.timeout.get (← getOptions)
   let zipperpositionExeName :=
     if System.Platform.isWindows then "zipperposition.exe"
     else if System.Platform.isOSX then "zipperposition-bin-macos-big-sur.exe"
     else "zipperposition.exe"
   let currentDir ← IO.currentDir
   let buildDir := currentDir / ".lake/build"
-  -- **TODO** Temporarily just searching build, in reality I need to search pkgs too
-  -- **TODO** Handle both the case where it's in .lake/build and the case where it's in .lake/pkg/auto/.lake/build
-  let tlim := auto.tptp.timeout.get (← getOptions)
-  let path := buildDir / zipperpositionExeName
+  let pkgDir := currentDir / ".lake/pkg"
+  let filesInBuildDir ← System.FilePath.readDir buildDir
+  let path :=
+    -- First case is for running `auto` when lean-auto is the primary package, second case is
+    -- for running `auto` when lean-auto is a dependency of another package
+    if filesInBuildDir.any (fun f => f.fileName == zipperpositionExeName) then
+      buildDir / zipperpositionExeName
+    else
+      currentDir / pkgDir / ".lake/build" / zipperpositionExeName
   let solver ← createAux path.toString #["-i=tptp", "-o=tptp", "--mode=ho-competitive", s!"-t={tlim}"]
   solver.stdin.putStr s!"{query}\n"
   let (_, solver) ← solver.takeStdin
