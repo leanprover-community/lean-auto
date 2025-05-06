@@ -138,7 +138,7 @@ def queryZipperpositionExe (query : String) : MetaM (Bool × String) := do
     else "zipperposition.exe"
   let currentDir ← IO.currentDir
   let buildDir := currentDir / ".lake/build"
-  let pkgDir := currentDir / ".lake/pkg"
+  let pkgDir := currentDir / ".lake/packages"
   let filesInBuildDir ← System.FilePath.readDir buildDir
   let path :=
     -- First case is for running `auto` when lean-auto is the primary package, second case is
