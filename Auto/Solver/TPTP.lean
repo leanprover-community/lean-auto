@@ -2,6 +2,7 @@ import Lean
 import Auto.IR.TPTP_TH0
 import Auto.Parser.TPTP
 import Auto.Embedding.LamBase
+import Lake
 open Lean
 
 initialize
@@ -49,6 +50,8 @@ deriving BEq, Hashable, Inhabited, Repr
 inductive SolverName where
   -- Disable TPTP prover
   | zipperposition
+  -- `zipperposition_exe` corresponds to the executable downloaded by the lakefile's `post_update` script
+  | zipperposition_exe
   -- zipperposition + E theorem prover, portfolio
   | zeport (zept : ZEPortType)
   -- E prover, higher-order version
@@ -59,6 +62,7 @@ deriving BEq, Hashable, Inhabited, Repr
 instance : ToString SolverName where
   toString : SolverName → String
   | .zipperposition => "zipperposition"
+  | .zipperposition_exe => "zipperposition_exe"
   | .zeport zept =>
     match zept with
     | .fo => "zeport-fo"
@@ -70,6 +74,7 @@ instance : Lean.KVMap.Value SolverName where
   toDataValue n := toString n
   ofDataValue?
   | "zipperposition" => some .zipperposition
+  | "zipperposition_exe" => some .zipperposition_exe
   | "zeport-fo" => some (.zeport .fo)
   | "zeport-lams" => some (.zeport .lams)
   | "eprover-ho" => some .eproverHo
@@ -80,7 +85,7 @@ end Auto.Solver.TPTP
 
 open Auto.Solver.TPTP in
 register_option auto.tptp.solver.name : SolverName := {
-  defValue := SolverName.zipperposition
+  defValue := SolverName.zipperposition_exe
   descr := "Name of the designated TPTP solver"
 }
 
@@ -116,6 +121,27 @@ def queryZipperposition (query : String) : MetaM (Bool × String) := do
   let path := auto.tptp.zipperposition.path.get (← getOptions)
   let tlim := auto.tptp.timeout.get (← getOptions)
   let solver ← createAux path #["-i=tptp", "-o=tptp", "--mode=ho-competitive", s!"-t={tlim}"]
+  solver.stdin.putStr s!"{query}\n"
+  let (_, solver) ← solver.takeStdin
+  let stdout ← solver.stdout.readToEnd
+  let stderr ← solver.stderr.readToEnd
+  trace[auto.tptp.result] "Result: \nstderr:\n{stderr}\nstdout:\n{stdout}"
+  solver.kill
+  let proven := (stdout.splitOn "SZS status Unsatisfiable").length >= 2
+  return (proven, stdout)
+
+def queryZipperpositionExe (query : String) : MetaM (Bool × String) := do
+  let zipperpositionExeName :=
+    if System.Platform.isWindows then "zipperposition.exe"
+    else if System.Platform.isOSX then "zipperposition-bin-macos-big-sur.exe"
+    else "zipperposition.exe"
+  let currentDir ← IO.currentDir
+  let buildDir := currentDir / ".lake/build"
+  -- **TODO** Temporarily just searching build, in reality I need to search pkgs too
+  -- **TODO** Handle both the case where it's in .lake/build and the case where it's in .lake/pkg/auto/.lake/build
+  let tlim := auto.tptp.timeout.get (← getOptions)
+  let path := buildDir / zipperpositionExeName
+  let solver ← createAux path.toString #["-i=tptp", "-o=tptp", "--mode=ho-competitive", s!"-t={tlim}"]
   solver.stdin.putStr s!"{query}\n"
   let (_, solver) ← solver.takeStdin
   let stdout ← solver.stdout.readToEnd
@@ -192,6 +218,7 @@ def querySolver (query : String) : MetaM (Bool × Array Parser.TPTP.Command) := 
   let (proven, stdout) ← (do
     match auto.tptp.solver.name.get (← getOptions) with
     | .zipperposition => queryZipperposition query
+    | .zipperposition_exe => queryZipperpositionExe query
     | .zeport zept    => queryZEPort zept query
     | .eproverHo      => queryE query
     | .vampire        => queryVampire query)
