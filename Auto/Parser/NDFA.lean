@@ -101,7 +101,7 @@ section NFA
 
     def NFA.move (r : NFA σ) (ss : Std.HashSet Nat) (c : σ) :=
       let sss := ss.toArray.map (fun s => NFA.nextStatesOfState r s (.inr c))
-      sss.foldl (fun hs s => hs.insertMany s) Std.HashSet.empty
+      sss.foldl (fun hs s => hs.insertMany s) Std.HashSet.emptyWithCapacity
 
     -- Valid moves from a set of states `ss`, ignoring `ε` transitions
     -- Returns a hashmap from symbol to HashSet of states
@@ -124,7 +124,7 @@ section NFA
                 if let some d := ret.get? c then
                   ret := ret.insert c (d.insertMany dests)
                 else
-                  ret := ret.insert c (Std.HashSet.empty.insertMany dests)
+                  ret := ret.insert c (Std.HashSet.emptyWithCapacity.insertMany dests)
         return ret
 
     -- Move, then compute ε-closure
@@ -135,7 +135,7 @@ section NFA
       cs.foldl (fun ss' c => r.moveε ss' c) ss
 
     def NFA.run (r : NFA σ) (cs : Array σ) :=
-      r.moveεMany (r.εClosureOfStates (Std.HashSet.empty.insert 0)) cs
+      r.moveεMany (r.εClosureOfStates (Std.HashSet.emptyWithCapacity.insert 0)) cs
 
   end Run
 
@@ -149,10 +149,10 @@ section NFA
   def NFA.normalize (n : NFA σ) : NFA σ :=
     let size := n.tr.size
     let normEntry (x : _ × Array Nat) :=
-      (x.fst, (Std.HashSet.empty.insertMany (x.snd.filter (· <= size))).toArray)
+      (x.fst, (Std.HashSet.emptyWithCapacity.insertMany (x.snd.filter (· <= size))).toArray)
     let tr' := n.tr.map (fun hs => Std.HashMap.ofList (hs.toList.map normEntry))
     let attrs' := n.attrs[0:size+1].toArray
-    let attrs' := attrs'.append ⟨(List.range (size + 1 - attrs'.size)).map (fun _ => Std.HashSet.empty)⟩
+    let attrs' := attrs'.append ⟨(List.range (size + 1 - attrs'.size)).map (fun _ => Std.HashSet.emptyWithCapacity)⟩
     NFA.mk tr' attrs'
 
   /-- Whether the NFA's initial state has incoming edges -/
@@ -185,15 +185,15 @@ section NFA
       NFA.mk n.tr new_attrs
 
   /-- Does not accept any string -/
-  def NFA.zero : NFA σ := NFA.mk #[Std.HashMap.empty] #[.empty, .empty]
+  def NFA.zero : NFA σ := NFA.mk #[Std.HashMap.emptyWithCapacity] #[.emptyWithCapacity, .emptyWithCapacity]
 
   /-- Only accepts empty string -/
   def NFA.epsilon : NFA σ :=
-    NFA.mk #[Std.HashMap.empty.insert (.inl .unit) #[1]] #[.empty, .empty]
+    NFA.mk #[Std.HashMap.emptyWithCapacity.insert (.inl .unit) #[1]] #[.emptyWithCapacity, .emptyWithCapacity]
 
   /-- Accepts a character -/
   def NFA.ofSymb (c : σ) : NFA σ :=
-    NFA.mk #[Std.HashMap.empty.insert (.inr c) #[1]] #[.empty, .empty]
+    NFA.mk #[Std.HashMap.emptyWithCapacity.insert (.inr c) #[1]] #[.emptyWithCapacity, .emptyWithCapacity]
 
   /-- Produce an NFA whose language is the union of `m`'s and `n`'s -/
   def NFA.plus (m n : NFA σ) : NFA σ :=
@@ -203,15 +203,15 @@ section NFA
     -- `acc'` is the new accept state
     let acc' := m.tr.size + n.tr.size + 3
     let initTrans : Std.HashMap (Unit ⊕ σ) (Array Nat) :=
-      Std.HashMap.empty.insert (Sum.inl .unit) #[off_m, off_n]
+      Std.HashMap.emptyWithCapacity.insert (Sum.inl .unit) #[off_m, off_n]
     -- Move the states of `m` by `off_m`
     let new_mtr := m.tr.map (relocateHMap · off_m)
-    let new_mtr := new_mtr.push (Std.HashMap.empty.insert (.inl .unit) #[acc'])
+    let new_mtr := new_mtr.push (Std.HashMap.emptyWithCapacity.insert (.inl .unit) #[acc'])
     -- Move the states of `n` by `off_n`
     let new_ntr := n.tr.map (relocateHMap · off_n)
-    let new_ntr := new_ntr.push (Std.HashMap.empty.insert (.inl .unit) #[acc'])
+    let new_ntr := new_ntr.push (Std.HashMap.emptyWithCapacity.insert (.inl .unit) #[acc'])
     let new_tr := #[initTrans] ++ new_mtr ++ new_ntr
-    let new_attrs := #[Std.HashSet.empty] ++ m.attrs ++ n.attrs ++ #[Std.HashSet.empty]
+    let new_attrs := #[Std.HashSet.emptyWithCapacity] ++ m.attrs ++ n.attrs ++ #[Std.HashSet.emptyWithCapacity]
     NFA.mk new_tr new_attrs
 
   def NFA.multiPlus (as : Array (NFA σ)) :=
@@ -222,15 +222,15 @@ section NFA
       let (acc', offs) : Nat × Array Nat :=
         as.foldl (fun (cur, acc) (arr : NFA σ) => (cur + arr.tr.size + 1, acc.push cur)) (1, #[])
       let initTrans : Std.HashMap (Unit ⊕ σ) (Array Nat) :=
-        Std.HashMap.empty.insert (Sum.inl .unit) offs
+        Std.HashMap.emptyWithCapacity.insert (Sum.inl .unit) offs
       let trs := (as.zip offs).map (fun ((a, off) : NFA σ × Nat) =>
           let new_a := a.tr.map (relocateHMap · off)
-          new_a.push (Std.HashMap.empty.insert (.inl .unit) #[acc'])
+          new_a.push (Std.HashMap.emptyWithCapacity.insert (.inl .unit) #[acc'])
         )
       let new_tr := (#[#[initTrans]] ++ trs).flatMap id
-      let new_attrs := #[Std.HashSet.empty] ++
+      let new_attrs := #[Std.HashSet.emptyWithCapacity] ++
                        (as.map (fun (⟨_, attrs⟩ : NFA σ) => attrs)).flatMap id ++
-                       #[Std.HashSet.empty]
+                       #[Std.HashSet.emptyWithCapacity]
       NFA.mk new_tr new_attrs
 
   def NFA.comp (m n : NFA σ) : NFA σ :=
@@ -268,12 +268,12 @@ section NFA
     -- The new location of the original accept state of `m`
     -- let macc' := m.size + 1
     let initTrans : Std.HashMap (Unit ⊕ σ) (Array Nat) :=
-      Std.HashMap.empty.insert (Sum.inl .unit) #[1, acc']
+      Std.HashMap.emptyWithCapacity.insert (Sum.inl .unit) #[1, acc']
     -- Move the states of `m` by `1`
     let new_mtr := m.tr.map (relocateHMap · 1)
-    let new_mtr := new_mtr.push (Std.HashMap.empty.insert (.inl .unit) #[1, acc'])
+    let new_mtr := new_mtr.push (Std.HashMap.emptyWithCapacity.insert (.inl .unit) #[1, acc'])
     let new_tr := #[initTrans] ++ new_mtr
-    let new_attrs := #[.empty] ++ m.attrs ++ #[.empty]
+    let new_attrs := #[.emptyWithCapacity] ++ m.attrs ++ #[.emptyWithCapacity]
     NFA.mk new_tr new_attrs
 
   /-- Extra functionality -/
@@ -296,8 +296,8 @@ section NFA
         if r.hasEdgeToInit then
           -- Add a new state as the initial state so that the
           --   new initial state has no incoming edges
-          let new_tr := #[Std.HashMap.empty.insert (.inl .unit) #[1]] ++ r.tr.map (relocateHMap · 1)
-          let new_attrs := #[.empty] ++ r.attrs
+          let new_tr := #[Std.HashMap.emptyWithCapacity.insert (.inl .unit) #[1]] ++ r.tr.map (relocateHMap · 1)
+          let new_attrs := #[.emptyWithCapacity] ++ r.attrs
           NFA.mk new_tr new_attrs
         else
           r
@@ -322,12 +322,12 @@ section NFA
 
   /-- Accepts all characters in an array of characters -/
   def NFA.ofSymbPlus (cs : Array σ) : NFA σ :=
-    NFA.mk #[Std.HashMap.ofList (cs.map (fun c => (.inr c,#[1]))).toList] #[.empty, .empty]
+    NFA.mk #[Std.HashMap.ofList (cs.map (fun c => (.inr c,#[1]))).toList] #[.emptyWithCapacity, .emptyWithCapacity]
 
   /-- An `NFA UInt32` that accepts exactly a string -/
   def NFA.ofSymbComp (s : Array σ) : NFA σ :=
-    let tr := (Array.mk s.toList).mapIdx (fun idx c => Std.HashMap.empty.insert (.inr c) #[idx + 1])
-    let attrs := Array.mk ((List.range (s.size + 1)).map (fun _ => .empty))
+    let tr := (Array.mk s.toList).mapIdx (fun idx c => Std.HashMap.emptyWithCapacity.insert (.inr c) #[idx + 1])
+    let attrs := Array.mk ((List.range (s.size + 1)).map (fun _ => .emptyWithCapacity))
     NFA.mk tr attrs
 
   /-
@@ -361,9 +361,9 @@ section NFA
 
   #eval IO.println test₃
   #eval test₃.wf
-  #eval (test₃.move (HashSet.empty.insert 0) 'a').toList
-  #eval (test₃.εClosureOfStates (HashSet.empty.insert 0)).toList
-  #eval (test₃.move (HashSet.empty.insertMany [7,3,1,0]) 'a').toList
+  #eval (test₃.move (HashSet.emptyWithCapacity.insert 0) 'a').toList
+  #eval (test₃.εClosureOfStates (HashSet.emptyWithCapacity.insert 0)).toList
+  #eval (test₃.move (HashSet.emptyWithCapacity.insertMany [7,3,1,0]) 'a').toList
 
   -/
 
@@ -431,17 +431,17 @@ section DFA
     if !n.wf then
       panic! s!"DFA.ofNFA :: {n} is not well-formed"
     -- Array of states
-    let mut dstates : Array (List Nat) := #[sort (n.εClosureOfStates (Std.HashSet.empty.insert 0)).toList]
+    let mut dstates : Array (List Nat) := #[sort (n.εClosureOfStates (Std.HashSet.emptyWithCapacity.insert 0)).toList]
     -- Map from state to idx of state
     let mut idxmap : Std.HashMap (List Nat) Nat :=
-      Std.HashMap.empty.insert dstates[0]! 0
+      Std.HashMap.emptyWithCapacity.insert dstates[0]! 0
     -- `Unit` represents the `malformed input` state
     let mut tr : Array (Std.HashMap σ (Nat ⊕ Unit)) := #[{}]
     -- Next state to process
     let mut cur := 0
     while h : cur < dstates.size do
       let st := dstates[cur]
-      let moves := n.moves (Std.HashSet.empty.insertMany st)
+      let moves := n.moves (Std.HashSet.emptyWithCapacity.insertMany st)
       for (c, st) in moves.toList do
         -- If `st` is empty, then the move ends in `malformed input` state
         if st.size == 0 then
@@ -466,16 +466,16 @@ section DFA
       ))
     )
     let accepts := dstates.mapIdx (fun idx l => if l.contains n.tr.size then some idx else none)
-    let accepts := accepts.foldl (fun hs o => if let some x := o then hs.insert x else hs) Std.HashSet.empty
+    let accepts := accepts.foldl (fun hs o => if let some x := o then hs.insert x else hs) Std.HashSet.emptyWithCapacity
     let attrs := dstates.map (fun l =>
-      (Array.mk l).foldl (fun acc s => if let some x := n.attrs[s]? then acc.insertMany x else acc) Std.HashSet.empty)
+      (Array.mk l).foldl (fun acc s => if let some x := n.attrs[s]? then acc.insertMany x else acc) Std.HashSet.emptyWithCapacity)
     return DFA.mk accepts rettr attrs
 
   /-
 
-  def test₄ : DFA String := ⟨HashSet.empty.insert 3, #[
+  def test₄ : DFA String := ⟨HashSet.emptyWithCapacity.insert 3, #[
     Std.HashMap.ofList [("a", 5), ("b", 0)],
-    Std.HashMap.ofList [("q", 1), ("c", 4), ("a", 2)]], #[.empty, .empty]⟩
+    Std.HashMap.ofList [("q", 1), ("c", 4), ("a", 2)]], #[.emptyWithCapacity, .emptyWithCapacity]⟩
 
   local instance : Hashable Char where
     hash c := hash c.val

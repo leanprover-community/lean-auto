@@ -71,7 +71,7 @@ def Expr.collectRawM [Monad m] (p : Expr → m Bool) : Expr → m (Std.HashSet E
 | e@(.proj _ _ b) => do
   let hb ← collectRawM p b
   addp? p e hb
-| e => addp? p e Std.HashSet.empty
+| e => addp? p e Std.HashSet.emptyWithCapacity
 where addp? p e hs := do
   if ← p e then
     return hs.insert e

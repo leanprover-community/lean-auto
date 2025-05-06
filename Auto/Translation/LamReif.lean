@@ -1478,7 +1478,7 @@ partial def reifTerm (lctx : Std.HashMap FVarId Nat) : Expr → ReifM LamTerm
 | e => processTermExpr lctx e
 
 def reifTermCheckType (e : Expr) : ReifM (LamSort × LamTerm) := do
-  let t ← reifTerm .empty e
+  let t ← reifTerm .emptyWithCapacity e
   let ltv ← getLamTyValAtMeta
   let .some s := t.lamCheck? ltv Embedding.Lam.dfLCtxTy
     | throwError "{decl_name%} :: LamTerm {t} is not type correct"
