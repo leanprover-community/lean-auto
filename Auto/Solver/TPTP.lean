@@ -2,7 +2,6 @@ import Lean
 import Auto.IR.TPTP_TH0
 import Auto.Parser.TPTP
 import Auto.Embedding.LamBase
-import Lake
 open Lean
 
 initialize
