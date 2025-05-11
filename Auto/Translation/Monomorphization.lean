@@ -262,8 +262,8 @@ def ConstInst.matchExpr (e : Expr) (ci : ConstInst) : MetaM Bool := do
   · The expression does not contain level parameters in `params`
 -/
 def ConstInst.ofExpr? (params : Array Name) (bvars : Array Expr) (e : Expr) : MetaM (Option ConstInst) := do
-  let paramSet := Std.HashSet.empty.insertMany params
-  let bvarSet := Std.HashSet.empty.insertMany bvars
+  let paramSet := Std.HashSet.emptyWithCapacity.insertMany params
+  let bvarSet := Std.HashSet.emptyWithCapacity.insertMany bvars
   let fn := e.getAppFn
   -- If the head contains bound variable, then this is not
   --   a valid instance
@@ -416,7 +416,7 @@ private partial def MLemmaInst.matchConstInst (ci : ConstInst) (mi : MLemmaInst)
 | .bvar _ => throwError "{decl_name%} :: Loose bound variable"
 | e@(.app ..) => do
   let args := e.getAppArgs
-  let mut ret := Std.HashSet.empty
+  let mut ret := Std.HashSet.emptyWithCapacity
   for arg in args do
     ret := mergeHashSet ret (← MLemmaInst.matchConstInst ci mi arg)
   let s ← saveState
@@ -439,14 +439,14 @@ private partial def MLemmaInst.matchConstInst (ci : ConstInst) (mi : MLemmaInst)
 | .letE .. => throwError "{decl_name%} :: Let-expressions should have been reduced"
 | .mdata .. => throwError "{decl_name%} :: mdata should have been consumed"
 | .proj .. => throwError "{decl_name%} :: Projections should have been turned into ordinary expressions"
-| _ => return Std.HashSet.empty
+| _ => return Std.HashSet.emptyWithCapacity
 
 /-- Given a LemmaInst `li` and a ConstInst `ci`, try to match all subexpressions of `li` against `ci` -/
 def LemmaInst.matchConstInst (ci : ConstInst) (li : LemmaInst) : MetaM (Std.HashSet LemmaInst) :=
   Meta.withNewMCtxDepth do
     let (lmvars, mvars, mi) ← MLemmaInst.ofLemmaInst li
     if lmvars.size == 0 && mvars.size == 0 then
-      return Std.HashSet.empty
+      return Std.HashSet.emptyWithCapacity
     -- Match with `b` in `∀ (x₁ : α₁) ⋯ (xₙ : αₙ). b := li.type`
     let mut ret ← MLemmaInst.matchConstInst ci mi mi.type
     -- Match with `α₁ ⋯ αₙ` in `∀ (x₁ : α₁) ⋯ (xₙ : αₙ). b := li.type`
@@ -484,7 +484,7 @@ where
         | _ => false
       if hol && (← getMode) == .fol then
         return false
-      let fvarSet := Std.HashSet.empty.insertMany fvars
+      let fvarSet := Std.HashSet.emptyWithCapacity.insertMany fvars
       if ty.hasAnyFVar fvarSet.contains then
         return false
       leadingForallQuasiMonomorphicAux (fvars.push xid)  bodyi
@@ -823,11 +823,11 @@ namespace FVarRep
 
   def getBfvarSet : FVarRepM (Std.HashSet FVarId) := do
     let bfvars ← getBfvars
-    return Std.HashSet.empty.insertMany bfvars
+    return Std.HashSet.emptyWithCapacity.insertMany bfvars
 
   def getFfvarSet : FVarRepM (Std.HashSet FVarId) := do
     let ffvars ← getFfvars
-    return Std.HashSet.empty.insertMany ffvars
+    return Std.HashSet.emptyWithCapacity.insertMany ffvars
 
   /-- Similar to `Monomorphization.processConstInst` -/
   def processConstInst (ci : ConstInst) : FVarRepM Unit := do

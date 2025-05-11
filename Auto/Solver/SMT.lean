@@ -58,6 +58,11 @@ register_option auto.smt.dumpHints : Bool := {
   descr := "Enable/Disable dumping cvc5 hints (experimental)"
 }
 
+register_option auto.smt.sygus_inst : Bool := {
+  defValue := false
+  descr := "Enable/Diable the --sygus-inst flag when calling cvc5"
+}
+
 register_option auto.smt.dumpHints.limitedRws : Bool := {
   defValue := true
   descr := "Only dump rewrites from quantifier instantiations as hints (experimental)"
@@ -119,17 +124,17 @@ def createSolver (name : SolverName) : MetaM SolverProc := do
   | .z3   => createAux "z3" #["-in", "-smt2", s!"-T:{tlim}"]
   | .cvc4 => throwError "cvc4 is not supported"
   | .cvc5 =>
-    if auto.smt.dumpHints.get (← getOptions) then
-      if auto.smt.dumpHints.limitedRws.get (← getOptions) then
-        createAux "cvc5"
-          #[s!"--tlimit={tlim * 1000}", "--produce-models", "--enum-inst",
-            "--dump-hints", "--proof-granularity=dsl-rewrite", "--hints-only-rw-insts"]
-      else
-        createAux "cvc5"
-          #[s!"--tlimit={tlim * 1000}", "--produce-models", "--enum-inst",
-            "--dump-hints", "--proof-granularity=dsl-rewrite"]
-    else
-      createAux "cvc5" #[s!"--tlimit={tlim * 1000}", "--produce-models", "--enum-inst"]
+    let dumpHints := auto.smt.dumpHints.get (← getOptions)
+    let limitedRws := auto.smt.dumpHints.limitedRws.get (← getOptions)
+    let sygusInst := auto.smt.sygus_inst.get (← getOptions)
+    let mut flags := #[s!"--tlimit={tlim * 1000}", "--produce-models", "--enum-inst"]
+    if dumpHints then
+      flags := flags ++ #["--dump-hints", "--proof-granularity=dsl-rewrite"]
+    if limitedRws then
+      flags := flags.push "--hints-only-rw-insts"
+    if sygusInst then
+      flags := flags.push "--sygus-inst"
+    createAux "cvc5" flags
 where
   createAux (path : String) (args : Array String) : MetaM SolverProc :=
     IO.Process.spawn {stdin := .piped, stdout := .piped, stderr := .piped,

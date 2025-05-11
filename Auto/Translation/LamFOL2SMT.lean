@@ -191,9 +191,9 @@ mutual
       | 0 => return none -- Datatypes with no selectors are guaranteed to be well-formed
       | _ =>
         -- `wfDatatypeTerms` maps datatype names to their LamSorts and well-formed constraints (each has the form `(x is ctor) => all of ctor's selectors are well-formed`)
-        let mut wfDatatypeTerms : Std.HashMap String (LamSort × Array STerm) := Std.HashMap.empty
+        let mut wfDatatypeTerms : Std.HashMap String (LamSort × Array STerm) := Std.HashMap.emptyWithCapacity
         -- Gather a list of selector infos for each constructor (organized by datatype)
-        let mut ctorInfos : Std.HashMap String (Std.HashMap LamAtomic (List SelectorInfo)) := Std.HashMap.empty
+        let mut ctorInfos : Std.HashMap String (Std.HashMap LamAtomic (List SelectorInfo)) := Std.HashMap.emptyWithCapacity
         for selInfo@(selName, selIsProjection, ctor, argIdx, selDatatypeName, selInputType, selOutputType) in selInfos do
           if ctorInfos.contains selDatatypeName then
             if ctorInfos[selDatatypeName]!.contains ctor then
@@ -201,7 +201,7 @@ mutual
             else
               ctorInfos := ctorInfos.modify selDatatypeName (fun map => map.insert ctor [selInfo])
           else
-            ctorInfos := ctorInfos.insert selDatatypeName (Std.HashMap.empty.insert ctor [selInfo])
+            ctorInfos := ctorInfos.insert selDatatypeName (Std.HashMap.emptyWithCapacity.insert ctor [selInfo])
         -- Iterate through each constructor to build `wfDatatypeTerms`
         for (selDatatypeName, ctorMap) in ctorInfos do
           for (ctor, ctorSelInfos) in ctorMap do

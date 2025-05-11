@@ -609,7 +609,7 @@ theorem LamEquiv.not_and_equiv_not_or_not?
     | .ofApp _ _ (.ofApp _ (.ofApp _ _ Hlhs) Hrhs) =>
       exists (.mkNot (.mkAnd Hlhs Hrhs)), (.mkOr (.mkNot Hlhs) (.mkNot Hrhs)); intro lctxTerm
       apply GLift.down.inj; apply propext
-      apply Classical.not_and_iff_or_not_not
+      apply Classical.not_and_iff_not_or_not
 
 theorem LamGenConv.not_and_equiv_not_or_not? : LamGenConv lval LamTerm.not_and_equiv_not_or_not? := by
   intro t₁ t₂ heq lctx rty wf
