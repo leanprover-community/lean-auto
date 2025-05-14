@@ -15,7 +15,7 @@ def Lake.unzip (zipFile exeFile : FilePath) (dir : FilePath) : LogIO PUnit := do
   IO.FS.createDirAll dir
   if System.Platform.isWindows then
     proc (quiet := true) {
-      cmd := "expand-archive"
+      cmd := "Expand-Archive"
       args := #["-LiteralPath", "\'" ++ zipFile.toString ++ "\'", "-DestinationPath", "\'" ++ dir.toString ++ "\'"]
     }
   else
