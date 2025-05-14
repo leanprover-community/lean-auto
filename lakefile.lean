@@ -16,7 +16,7 @@ def Lake.unzip (zipFile exeFile : FilePath) (dir : FilePath) : LogIO PUnit := do
   if System.Platform.isWindows then
     proc (quiet := true) {
       cmd := "expand-archive"
-      args := #["-LiteralPath", zipFile.toString, "-DestinationPath", dir.toString]
+      args := #["-LiteralPath", "\'" ++ zipFile.toString ++ "\'", "-DestinationPath", "\'" ++ dir.toString ++ "\'"]
     }
   else
     proc (quiet := true) {
@@ -60,4 +60,4 @@ post_update pkg do
       logError "package not found"
       return 1
   let exitCode := exitCode?.getD 1
-  if exitCode = 0 then return () else error s!"{pkg.name}: failed to download/setup `lean-zipperposition`"
+  if exitCode = 0 then return () else error s!"{pkg.name}: failed to download/setup `zipperposition`"
