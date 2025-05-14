@@ -810,20 +810,10 @@ theorem LamTerm.maxEVarSucc_instantiateAt :
     dsimp [maxEVarSucc]; apply IH
   case app s fn arg' IHFn IHArg' =>
     dsimp [maxEVarSucc]; rw [IHFn, IHArg']
-    match hasLooseBVarEq idx fn, hasLooseBVarEq idx arg' with
-    | true, true =>
-      simp [Nat.max]
-      conv => enter [1, 1]; rw [Nat.max_comm]
-      conv => enter [1]; rw [Nat.max_assoc]
-      conv => enter [1, 1]; rw [← Nat.max_assoc]; enter [2]; rw [Nat.max_eq_left .refl]
-      conv => enter [1, 1]; rw [Nat.max_comm]
-      apply Eq.symm; apply Nat.max_assoc
-    | true, false =>
-      simp [Nat.max]; apply Eq.symm; apply Nat.max_assoc
-    | false, true =>
-      simp [Nat.max]; rw [Nat.max_assoc, Nat.max_assoc]
-      conv => enter [1, 1]; rw [Nat.max_comm]
-    | false, false => rfl
+    cases hasLooseBVarEq idx fn
+    <;> cases hasLooseBVarEq idx arg'
+    <;> simp only [Nat.max_comm arg.maxEVarSucc, _root_.Nat.max_assoc, Nat.max_self, Bool.or_true, Bool.or_false,
+  Bool.or_self]
 
 theorem LamTerm.maxEVarSucc_instantiateAt_le :
   (LamTerm.instantiateAt idx arg body).maxEVarSucc ≤ Nat.max arg.maxEVarSucc body.maxEVarSucc := by

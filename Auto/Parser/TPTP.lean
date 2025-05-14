@@ -36,10 +36,10 @@ def tokens := [
 ]
 
 def tokenHashMap : Std.HashSet String :=
-  Std.HashSet.empty.insertMany tokens
+  Std.HashSet.emptyWithCapacity.insertMany tokens
 
 def tokenPrefixes : Std.HashSet String :=
-  Std.HashSet.empty.insertMany $ tokens.flatMap (fun t => Id.run do
+  Std.HashSet.emptyWithCapacity.insertMany $ tokens.flatMap (fun t => Id.run do
     let mut res := []
     let mut pref := ""
     for c in t.data do

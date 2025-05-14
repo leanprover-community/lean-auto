@@ -262,7 +262,7 @@ def smtSymbolToLeanName (s : String) : List (Name × SymbolInput) :=
   | _ => []
 
 def builtInSymbolMap : Std.HashMap String Expr :=
-  let map := Std.HashMap.empty
+  let map := Std.HashMap.emptyWithCapacity
   let map := map.insert "Nat" (mkConst ``Nat)
   let map := map.insert "Int" (mkConst ``Int)
   let map := map.insert "Bool" (.sort .zero)

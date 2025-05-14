@@ -850,7 +850,7 @@ theorem LamTerm.maxEVarSucc_pushBVCast : maxEVarSucc (pushBVCast ct t) = maxEVar
                       (argeq₁ .none) (argeq .none) (argeq (.ofNat n)))
                       (by
                         dsimp [ashr_equiv, mkIte, mkEq, mkNatBinOp, mkBvUOp, mkBvBinOp, mkBvNatBinOp, maxEVarSucc, pushBVCast]
-                        simp [Nat.max, Nat.max_zero_left, Nat.max_zero_right]
+                        simp only [Nat.max, Nat.zero_max, Nat.max_zero, Nat.max_self]
                         apply maxlem₂)
                   cases arg
                   case app s''' fn' arg₂ =>

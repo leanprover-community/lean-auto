@@ -173,7 +173,7 @@ def collectUserLemmas (terms : Array Term) : TacticM (Array Lemma) :=
     return lemmas
 
 def collectHintDBLemmas (names : Array Name) : TacticM (Array Lemma) := do
-  let mut hs : Std.HashSet Name := Std.HashSet.empty
+  let mut hs : Std.HashSet Name := Std.HashSet.emptyWithCapacity
   let mut ret : Array Lemma := #[]
   for name in names do
     let .some db ← findLemDB name
@@ -478,7 +478,7 @@ def querySMTForHints (exportFacts : Array REntry) (exportInds : Array MutualIndI
     trace[auto.smt.unsatCore.deriv] "|valid_fact_{id}| : {vderiv}"
   -- **Build symbolPrecMap using l2hMap, wfPredicatesInvMap, and selInfos**
   let (preprocessFacts, theoryLemmas, instantiations, computationLemmas, polynomialLemmas, rewriteFacts) := solverHints
-  let mut symbolMap : Std.HashMap String Expr := Std.HashMap.empty
+  let mut symbolMap : Std.HashMap String Expr := Std.HashMap.emptyWithCapacity
   for (varName, varAtom) in l2hMap.toArray do
     let varLeanExp ←
       SMT.withExprValuation sni state.h2lMap (fun tyValMap varValMap etomValMap => do

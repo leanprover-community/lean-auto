@@ -33,13 +33,13 @@ initialize lemDBExt : LemDBExtension ← registerPersistentEnvExtension {
 }
 
 partial def LemDB.toHashSet : LemDB → AttrM (Std.HashSet Name)
-| .empty => pure Std.HashSet.empty
+| .empty => pure Std.HashSet.emptyWithCapacity
 | .addLemma lem hdb => do
     let hset ← hdb.toHashSet
     return hset.insert lem
 | .compose hdbs => do
     let state := lemDBExt.getState (← getEnv)
-    let mut ret := Std.HashSet.empty
+    let mut ret := Std.HashSet.emptyWithCapacity
     for hdb in hdbs do
       let some hdb := state.get? hdb
         | throwError "{decl_name%} :: Unknown lemma database {hdb}"

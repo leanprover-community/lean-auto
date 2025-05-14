@@ -85,16 +85,16 @@ def EREBracket.neg (b : EREBracket) : EREBracket := .minus b (.cc .all)
 
 -- **TODO**: Why does this need `partial`?
 partial def EREBracket.toHashSet : EREBracket → Std.HashSet Char
-  | .cc cty       => Std.HashSet.empty.insertMany (toString cty).toList
-  | .inStr s      => Std.HashSet.empty.insertMany s.toList
+  | .cc cty       => Std.HashSet.emptyWithCapacity.insertMany (toString cty).toList
+  | .inStr s      => Std.HashSet.emptyWithCapacity.insertMany s.toList
   | .plus ⟨bl⟩     => go bl
   | .minus b1 b2  =>
     let hb := b2.toHashSet
     let b1s := b1.toHashSet.toList
-    Std.HashSet.empty.insertMany (b1s.filter (fun x => !hb.contains x))
+    Std.HashSet.emptyWithCapacity.insertMany (b1s.filter (fun x => !hb.contains x))
 where
   go : List EREBracket → Std.HashSet Char
-    | [] => Std.HashSet.empty
+    | [] => Std.HashSet.emptyWithCapacity
     | b :: bl => (go bl).insertMany (toHashSet b)
 
 def EREBracket.toString (e : EREBracket) := String.mk e.toHashSet.toList
@@ -220,7 +220,7 @@ section
 
   def CharGrouping.wf : CharGrouping σ → Bool :=
     fun ⟨ngroup, all, charMap⟩ =>
-      let img := charMap.fold (fun hs _ n => hs.insert n) Std.HashSet.empty
+      let img := charMap.fold (fun hs _ n => hs.insert n) Std.HashSet.emptyWithCapacity
       let surj := (sort img.toList) == List.range ngroup
       let allInCharMap := all.toList.all (fun c => charMap.contains c)
       let sizeEq := all.size == charMap.size
@@ -229,7 +229,7 @@ section
   def CharGrouping.groups : CharGrouping σ → Array (Std.HashSet σ) :=
     fun ⟨ngroup, _, charMap⟩ => Id.run <| do
       let mut arr : Array (Std.HashSet σ) :=
-        Array.mk ((List.range ngroup).map (fun _ => Std.HashSet.empty))
+        Array.mk ((List.range ngroup).map (fun _ => Std.HashSet.emptyWithCapacity))
       for (c, idx) in charMap.toList do
         arr := arr.modify idx (fun hs => hs.insert c)
       return arr
@@ -318,8 +318,8 @@ instance : ToString (ADFA Char) where
 
 def ERE.charGrouping (e : ERE) : CharGrouping Char := Id.run <| do
   let hsets := e.brackets.map EREBracket.toHashSet
-  let mut all := hsets.foldl (fun hs nhs => hs.insertMany nhs) Std.HashSet.empty
-  let mut charMap := all.fold (fun hs c => hs.insert c 0) Std.HashMap.empty
+  let mut all := hsets.foldl (fun hs nhs => hs.insertMany nhs) Std.HashSet.emptyWithCapacity
+  let mut charMap := all.fold (fun hs c => hs.insert c 0) Std.HashMap.emptyWithCapacity
   -- Current number of groups
   let mut curidx := 1
   for hset in hsets do
@@ -343,12 +343,12 @@ def ERE.charGrouping (e : ERE) : CharGrouping Char := Id.run <| do
 private partial def ERE.toNFAAux (cg : CharGrouping Char) : ERE → (NFA Nat)
 | .bracket b     =>
   let bs := toString b
-  let states := bs.foldl (fun hs c => hs.insert (cg.charMap.get! c)) Std.HashSet.empty
+  let states := bs.foldl (fun hs c => hs.insert (cg.charMap.get! c)) Std.HashSet.emptyWithCapacity
   NFA.ofSymbPlus states.toArray
 | .bracketN b    =>
   let bs := toString b
   -- All `utf-8` characters
-  let initHs := Std.HashSet.empty.insertMany ((cg.ngroup + 2) :: List.range cg.ngroup)
+  let initHs := Std.HashSet.emptyWithCapacity.insertMany ((cg.ngroup + 2) :: List.range cg.ngroup)
   let states := bs.foldl (fun hs c => hs.erase (cg.charMap.get! c)) initHs
   NFA.ofSymbPlus states.toArray
 | .startp        => NFA.ofSymb (cg.ngroup)
