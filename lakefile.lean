@@ -11,12 +11,17 @@ lean_lib «Auto» {
   -- add any library configuration options here
 }
 
-def Lake.unzip (file : FilePath) (dir : FilePath) : LogIO PUnit := do
+def Lake.unzip (zipFile exeFile : FilePath) (dir : FilePath) : LogIO PUnit := do
   IO.FS.createDirAll dir
   proc (quiet := true) {
     cmd := "unzip"
-    args := #["-d", dir.toString, file.toString]
+    args := #["-d", dir.toString, zipFile.toString]
   }
+  if !System.Platform.isWindows then
+    proc (quiet := true) {
+      cmd := "chmod"
+      args := #["+x", exeFile.toString]
+    }
 
 def zipperposition.url := "https://github.com/sneeuwballen/zipperposition/releases/download/2.1"
 
@@ -43,7 +48,7 @@ post_update pkg do
       let zipperpositionExeFile := pkg.buildDir / zipperposition.exe_name
       if !(← zipperpositionExeFile.pathExists) then
         download s!"{zipperposition.url}/{zipperposition.zip_name}" zipperpositionZipFile
-        unzip zipperpositionZipFile pkg.buildDir
+        unzip zipperpositionZipFile zipperpositionExeFile pkg.buildDir
         IO.FS.removeFile zipperpositionZipFile
       return 0
     else
