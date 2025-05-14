@@ -13,11 +13,16 @@ lean_lib «Auto» {
 
 def Lake.unzip (zipFile exeFile : FilePath) (dir : FilePath) : LogIO PUnit := do
   IO.FS.createDirAll dir
-  proc (quiet := true) {
-    cmd := "unzip"
-    args := #["-d", dir.toString, zipFile.toString]
-  }
-  if !System.Platform.isWindows then
+  if System.Platform.isWindows then
+    proc (quiet := true) {
+      cmd := "expand-archive"
+      args := #["-LiteralPath", zipFile.toString, "-DestinationPath", dir.toString]
+    }
+  else
+    proc (quiet := true) {
+      cmd := "unzip"
+      args := #["-d", dir.toString, zipFile.toString]
+    }
     proc (quiet := true) {
       cmd := "chmod"
       args := #["+x", exeFile.toString]
