@@ -146,13 +146,23 @@ def queryZipperpositionExe (query : String) : MetaM (Bool × String) := do
       buildDir / zipperpositionExeName
     else
       currentDir / pkgDir / "auto/.lake/build" / zipperpositionExeName
-  let solver ← createAux path.toString #["-i=tptp", "-o=tptp", "--mode=ho-competitive", s!"-t={tlim}"]
+  let solver ←
+    -- On Windows, Zipperposition's timeout flag does not seem to work
+    if System.Platform.isWindows then
+      createAux path.toString #["-i=tptp", "-o=tptp", "--mode=ho-competitive"]
+    else
+      createAux path.toString #["-i=tptp", "-o=tptp", "--mode=ho-competitive", s!"-t={tlim}"]
   solver.stdin.putStr s!"{query}\n"
   let (_, solver) ← solver.takeStdin
-  let stdout ← solver.stdout.readToEnd
+  let stdout ← IO.waitAny
+    [← IO.asTask solver.stdout.readToEnd Task.Priority.dedicated,
+    ← IO.asTask (do IO.sleep (tlim * 1000); pure "Timeout reached") Task.Priority.dedicated]
+  let stdout ← IO.ofExcept stdout
+  if stdout == "Timeout reached" then
+    solver.kill
+    throwError "Zipperposition_exe timeout reached; process manually killed"
   let stderr ← solver.stderr.readToEnd
   trace[auto.tptp.result] "Result: \nstderr:\n{stderr}\nstdout:\n{stdout}"
-  solver.kill
   let proven := (stdout.splitOn "SZS status Unsatisfiable").length >= 2
   return (proven, stdout)
 
