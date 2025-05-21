@@ -135,17 +135,14 @@ def getZipperpositionExePath : MetaM System.FilePath := do
     else if System.Platform.isOSX then "zipperposition-bin-macos-big-sur.exe"
     else "zipperposition.exe"
   let currentDir ← IO.currentDir
-  let buildDir := currentDir / ".lake/build"
-  let pkgDir := currentDir / ".lake/packages"
-  let filesInBuildDir ← System.FilePath.readDir buildDir
-  let path :=
-    -- First case is for running `auto` when lean-auto is the primary package, second case is
-    -- for running `auto` when lean-auto is a dependency of another package
-    if filesInBuildDir.any (fun f => f.fileName == zipperpositionExeName) then
-      buildDir / zipperpositionExeName
-    else
-      currentDir / pkgDir / "auto/.lake/build" / zipperpositionExeName
-  return path
+  let path1 := currentDir / ".lake/build" / zipperpositionExeName
+  let path2 := currentDir / ".lake/packages/auto/.lake/build" / zipperpositionExeName
+  if ← path1.pathExists then -- For running `auto` when lean-auto is the primary package
+    return path1
+  else if ← path2.pathExists then -- For running `auto` when lean-auto is a dependency of another package
+    return path2
+  else
+    throwError "Zipperposition executable {zipperpositionExeName} not found at {path1} or {path2}"
 
 def queryZipperpositionExe (query : String) : MetaM (Bool × String) := do
   let tlim := auto.tptp.timeout.get (← getOptions)
