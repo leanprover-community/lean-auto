@@ -129,8 +129,7 @@ def queryZipperposition (query : String) : MetaM (Bool × String) := do
   let proven := (stdout.splitOn "SZS status Unsatisfiable").length >= 2
   return (proven, stdout)
 
-def queryZipperpositionExe (query : String) : MetaM (Bool × String) := do
-  let tlim := auto.tptp.timeout.get (← getOptions)
+def getZipperpositionExePath : MetaM System.FilePath := do
   let zipperpositionExeName :=
     if System.Platform.isWindows then "zipperposition.exe"
     else if System.Platform.isOSX then "zipperposition-bin-macos-big-sur.exe"
@@ -146,6 +145,11 @@ def queryZipperpositionExe (query : String) : MetaM (Bool × String) := do
       buildDir / zipperpositionExeName
     else
       currentDir / pkgDir / "auto/.lake/build" / zipperpositionExeName
+  return path
+
+def queryZipperpositionExe (query : String) : MetaM (Bool × String) := do
+  let tlim := auto.tptp.timeout.get (← getOptions)
+  let path ← getZipperpositionExePath
   let solver ←
     -- On Windows, Zipperposition's timeout flag does not seem to work
     if System.Platform.isWindows then
