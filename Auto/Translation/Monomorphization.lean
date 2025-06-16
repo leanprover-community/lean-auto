@@ -1103,7 +1103,7 @@ where
     let exlis := s.exprMap.toList.map (fun (e, id) => (id, e))
     let cilis ← s.ciIdMap.toList.mapM (fun (ci, id) => do return (id, ← MetaState.runMetaM ci.toExpr))
     let polyVal := Std.HashMap.ofList (exlis ++ cilis)
-    return (s.ffvars, Reif.State.mk uvalids polyVal s.tyCanMap inhs monoIndVals none)
+    return (s.ffvars, Reif.State.mk uvalids polyVal s.tyCanMap inhs monoIndVals)
   fvarRepMFactAction (lis : Array LemmaInst) : FVarRep.FVarRepM (Array UMonoFact) := lis.filterMapM (fun li => do
     trace[auto.mono.fvarRepFact] "{li.type}"
     let liTypeRep? ← FVarRep.replacePolyWithFVar li.type
