@@ -908,7 +908,7 @@ instance : BEq StringConst where
 
 def StringConst.beq_refl {s : StringConst} : (s.beq s) = true := by
   cases s <;> try rfl
-  case strVal s => apply LawfulBEq.rfl (α := String)
+  case strVal s => apply BEq.rfl (α := String)
 
 def StringConst.eq_of_beq_eq_true {s₁ s₂ : StringConst} (H : s₁.beq s₂) : s₁ = s₂ := by
   cases s₁ <;> cases s₂ <;> try (first | contradiction | rfl)
@@ -1258,8 +1258,8 @@ def BitVecConst.beq_refl {b : BitVecConst} : (b.beq b) = true := by
   cases b <;> dsimp [beq] <;> rw [Nat.beq_refl] <;> (try rw [Nat.beq_refl]) <;> (try rfl) <;>
     (try rw [Nat.beq_refl]) <;> (try rfl)
   case bvaOp => rw [BVAOp.beq_refl]; rfl
-  case bvcmp => rw [LawfulBEq.rfl (α := Bool)]; rw [BVCmp.beq_refl]; rfl
-  case bvshOp => rw [LawfulBEq.rfl (α := Bool)]; rw [BVShOp.beq_refl]; rfl
+  case bvcmp => rw [BEq.rfl (α := Bool)]; rw [BVCmp.beq_refl]; rfl
+  case bvshOp => rw [BEq.rfl (α := Bool)]; rw [BVShOp.beq_refl]; rfl
 
 def BitVecConst.eq_of_beq_eq_true {b₁ b₂ : BitVecConst} (H : b₁.beq b₂) : b₁ = b₂ := by
   cases b₁ <;> cases b₂ <;> (try contradiction) <;> (try rw [Nat.eq_of_beq_eq_true H]) <;>
@@ -1757,13 +1757,13 @@ instance : BEq LamBaseTerm where
 
 def LamBaseTerm.beq_refl {b : LamBaseTerm} : (b.beq b) = true := by
   cases b <;> first | rfl | apply LamSort.beq_refl | apply Nat.beq_refl | skip
-  case pcst pc => apply LawfulBEq.rfl (α := PropConst)
-  case bcst bc => apply LawfulBEq.rfl (α := BoolConst)
-  case ncst n => apply LawfulBEq.rfl (α := NatConst)
-  case icst i => apply LawfulBEq.rfl (α := IntConst)
-  case scst s => apply LawfulBEq.rfl (α := StringConst)
-  case bvcst s => apply LawfulBEq.rfl (α := BitVecConst)
-  case ocst o => apply LawfulBEq.rfl (α := OtherConst)
+  case pcst pc => apply BEq.rfl (α := PropConst)
+  case bcst bc => apply BEq.rfl (α := BoolConst)
+  case ncst n => apply BEq.rfl (α := NatConst)
+  case icst i => apply BEq.rfl (α := IntConst)
+  case scst s => apply BEq.rfl (α := StringConst)
+  case bvcst s => apply BEq.rfl (α := BitVecConst)
+  case ocst o => apply BEq.rfl (α := OtherConst)
 
 def LamBaseTerm.eq_of_beq_eq_true {b₁ b₂ : LamBaseTerm} (H : b₁.beq b₂) : b₁ = b₂ := by
   cases b₁ <;> cases b₂ <;> (first | contradiction | rfl | apply congrArg) <;>

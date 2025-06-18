@@ -26,7 +26,7 @@ private theorem wfAux (n n' : Nat) : n = n' + 2 → n / 2 < n := by
     apply Nat.succ_le_succ; apply Nat.zero_le
   case hLtK => apply Nat.le_refl
 
-@[irreducible] def inductionOn.{u}
+def inductionOn.{u}
   {motive : Nat → Sort u} (x : Nat)
   (ind : ∀ x, motive ((x + 2) / 2) → motive (x + 2))
   (base₀ : motive 0) (base₁ : motive 1) : motive x :=
@@ -96,7 +96,7 @@ theorem eq_of_beq_eq_true [BEq α] (α_eq_of_beq_eq_true : ∀ (x y : α), (x ==
 
 instance [BEq α] [LawfulBEq α] : LawfulBEq (BinTree α) where
   eq_of_beq := eq_of_beq_eq_true (@LawfulBEq.eq_of_beq _ _ _)
-  rfl := beq_refl (@LawfulBEq.rfl _ _ _)
+  rfl := beq_refl (@BEq.rfl _ _ _)
 
 def val? (bt : BinTree α) : Option α :=
   match bt with

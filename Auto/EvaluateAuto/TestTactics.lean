@@ -197,6 +197,7 @@ end Tactics
   the command that created the constant `name`\
   Note: Use `initSrcSearchPath` to get SearchPath of source files
 -/
+/- **TODO: Fix Evaluation Issue** -/
 def runTacticsAtConstantDeclaration
   (name : Name) (searchPath : SearchPath)
   (tactics : Array (ConstantInfo → TacticM Unit)) : CoreM (Array Result) := do
@@ -204,7 +205,7 @@ def runTacticsAtConstantDeclaration
     throwError "{decl_name%} :: Running this function with execution of `initialize` code enabled is unsafe"
   let .some modName ← Lean.findModuleOf? name
     | throwError "{decl_name%} :: Cannot find constant {name}"
-  let .some uri ← Server.documentUriFromModule searchPath modName
+  let .some uri ← Server.documentUriFromModule? modName
     | throwError "{decl_name%} :: Cannot find module {modName}"
   let .some path := System.Uri.fileUriToPath? uri
     | throwError "{decl_name%} :: URI {uri} of {modName} is not a file"
@@ -257,6 +258,7 @@ instance : ToString EvalTacticConfig where
     s!"\{\n  maxHeartbeats := {maxHeartbeats}, tactics := {tactics}{logFileStr}{resultFileStr}" ++
     s!"\n  nonterminates := #[\n{nontermStr}  ]\n}"
 
+/- **TODO: Fix Evaluation Issue** -/
 /--
   Effectively `runTacticsAtConstantDeclaration` at each constant in `modName` which satisfies `filter`\
   Note: Use `initSrcSearchPath` to get SearchPath of source files
@@ -273,7 +275,7 @@ def evalTacticsAtModule
   if let .some fhandle := logFileHandle? then
     fhandle.putStrLn s!"Config = {config}"
     fhandle.putStrLn s!"Start time : {← Std.Time.Timestamp.now}"
-  let .some uri ← Server.documentUriFromModule searchPath modName
+  let .some uri ← Server.documentUriFromModule? modName
     | throwError "{decl_name%} :: Cannot find module {modName}"
   let .some path := System.Uri.fileUriToPath? uri
     | throwError "{decl_name%} :: URI {uri} of {modName} is not a file"

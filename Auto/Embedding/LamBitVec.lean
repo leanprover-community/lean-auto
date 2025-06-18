@@ -120,23 +120,23 @@ namespace BVLems
 
   theorem sshiftRight_ge_length_eq_msb (a : BitVec n) (i : Nat) : i ≥ n → a.sshiftRight i =
     if a.msb then (1#n).neg else 0#n := by
-    intro h; simp [sshiftRight, BitVec.toInt, ← msb_equiv_lt']
-    cases hmsb : a.msb <;> simp [hmsb, Int.shiftRight_def]
+    intro h; simp only [sshiftRight, BitVec.toInt, ← msb_equiv_lt']
+    cases hmsb : a.msb <;> simp only [hmsb, Int.shiftRight_def] <;> dsimp
     case false =>
       rw [BitVec.ofNat]
       apply ushiftRight_ge_length_eq_zero'; exact h
     case true =>
       rw [← Int.subNatNat_eq_coe, Int.subNatNat_of_lt (toNat_le _)]
-      simp [BitVec.toInt, BitVec.ofInt]
+      simp only [BitVec.toInt, BitVec.ofInt]; dsimp
       have hzero : (2 ^ n - BitVec.toNat a - 1) >>> i = 0 := by
         rw [Nat.shiftRight_eq_div_pow]; apply (Nat.le_iff_div_eq_zero (Nat.two_pow_pos _)).mpr
         rw [Nat.sub_one, Nat.pred_lt_iff_le (Nat.two_pow_pos _)]
         apply Nat.le_trans (Nat.sub_le _ _) (Nat.pow_le_pow_right (.step .refl) h)
       apply eq_of_val_eq; rw [toNat_ofNatLt, hzero]
       rw [toNat_neg, Int.mod_def', Int.emod]
-      rw [Nat.zero_mod, Int.natAbs_ofNat, Nat.succ_eq_add_one, Nat.zero_add]
+      rw [Nat.zero_mod, Int.natAbs_natCast, Nat.succ_eq_add_one, Nat.zero_add]
       rw [Int.subNatNat_of_sub_eq_zero ((Nat.sub_eq_zero_iff_le).mpr (Nat.two_pow_pos _))]
-      rw [Int.toNat_ofNat, BitVec.toNat_ofNat]
+      rw [Int.toNat_natCast, BitVec.toNat_ofNat]
       cases n <;> try rfl
       case succ n =>
         have hlt : 2 ≤ 2 ^ Nat.succ n := @Nat.pow_le_pow_right 2 (.step .refl) 1 (.succ n) (Nat.succ_le_succ (Nat.zero_le _))

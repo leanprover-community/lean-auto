@@ -49,7 +49,7 @@ def ofNat'WF (n : Nat) :=
     | _ => .xI (ofNat'WF (n / 2))
 decreasing_by rw [← h]; apply ofNat'WFAux; assumption
 
-@[irreducible] def ofNat'WF.inductionOn.{u}
+def ofNat'WF.inductionOn.{u}
   {motive : Nat → Sort u} (x : Nat)
   (ind : ∀ x, motive ((x + 2) / 2) → motive (x + 2))
   (base₀ : motive 0) (base₁ : motive 1) : motive x :=
