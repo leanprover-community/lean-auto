@@ -126,7 +126,7 @@ end AbstractMVars
   with new fresh metavariables.
 
   Application: we use this method to cache the results of type class resolution. -/
-def abstractMVars (e : Expr) : MetaM AbstractMVarsResult := do
+def abstractMVars (e : Expr) : MetaM AbstractMVars.AbstractMVarsResult := do
   let e ← instantiateMVars e
   let (e, s) := AbstractMVars.abstractExprMVars e { mctx := (← getMCtx), lctx := (← getLCtx), ngen := (← getNGen) }
   setNGen s.ngen
@@ -134,12 +134,12 @@ def abstractMVars (e : Expr) : MetaM AbstractMVarsResult := do
   let e := s.lctx.mkLambda s.fvars e
   pure { paramNames := s.paramNames, numMVars := s.fvars.size, expr := e }
 
-def openAbstractMVarsResult (a : AbstractMVarsResult) : MetaM (Array Expr × Array BinderInfo × Expr) := do
+def openAbstractMVarsResult (a : AbstractMVars.AbstractMVarsResult) : MetaM (Array Expr × Array BinderInfo × Expr) := do
   let us ← a.paramNames.mapM fun _ => mkFreshLevelMVar
   let e := a.expr.instantiateLevelParamsArray a.paramNames us
   lambdaMetaTelescope e (some a.numMVars)
 
-def abstractMVarsForall (e : Expr) : MetaM AbstractMVarsResult := do
+def abstractMVarsForall (e : Expr) : MetaM AbstractMVars.AbstractMVarsResult := do
   let e ← instantiateMVars e
   let (e, s) := AbstractMVars.abstractExprMVars e { mctx := (← getMCtx), lctx := (← getLCtx), ngen := (← getNGen) }
   setNGen s.ngen
@@ -174,7 +174,7 @@ where getParamLevelName! : Level → Name
 | .param name => name
 | e           => panic! s!"Lean.getLevelParamName! :: Level {e} is not a parameter level."
 
-def abstractMVarsLambda (e : Expr) : MetaM AbstractMVarsResult := do
+def abstractMVarsLambda (e : Expr) : MetaM AbstractMVars.AbstractMVarsResult := do
   let e ← instantiateMVars e
   let (e, s) := AbstractMVars.abstractExprMVars e { mctx := (← getMCtx), lctx := (← getLCtx), ngen := (← getNGen) }
   setNGen s.ngen

@@ -24,7 +24,6 @@ structure State where
   --   where `ty₁, ty₂, ⋯, tyₙ` are canonicalized types within `tyCanMap`
   inhTys          : Array UMonoFact     := {}
   inds            : Array (Array SimpleIndVal) := {}
-  declName?       : Option Name
 
 abbrev ReifM := StateT State MetaM
 
@@ -45,8 +44,6 @@ abbrev ReifM := StateT State MetaM
   | .none => throwError "{decl_name%} :: Unable to resolve {e}"
 
 def mkAuxName (suffix : Name) : ReifM Name := do
-  match (← getDeclName?) with
-  | none          => throwError "{decl_name%} :: auxiliary declaration cannot be created when declaration name is not available"
-  | some declName => Lean.mkAuxName (declName ++ suffix) 1
+  Lean.mkAuxDeclName (kind := suffix)
 
 end Auto.Reif

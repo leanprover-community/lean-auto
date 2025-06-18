@@ -647,7 +647,7 @@ open Embedding.Lam in
   Otherwise use the one determined by `Solver.Native.queryNative`
 -/
 def queryNative
-  (declName? : Option Name) (exportFacts exportInhs : Array REntry)
+  (exportFacts exportInhs : Array REntry)
   (prover? : Option (Array Lemma → Array Lemma → MetaM Expr) := .none) : LamReif.ReifM (Option Expr) := do
   let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ←
     callNative_checker exportInhs exportFacts (prover?.getD Solver.Native.queryNative)
@@ -656,7 +656,6 @@ def queryNative
   let forallElimed ← LamReif.validOfElimForalls etomInstantiated usedInhs
   let contra ← LamReif.validOfImps forallElimed unsatCore
   LamReif.printProofs
-  Reif.setDeclName? declName?
   let checker ← LamReif.buildCheckerExprFor contra
   Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
 
@@ -676,7 +675,7 @@ def rewriteIteCondDecide (lemmas : Array Lemma) : MetaM (Array Lemma) := do
   Run `auto`'s monomorphization and preprocessing, then send the problem to different solvers
 -/
 def runAuto
-  (declName? : Option Name) (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr :=
+  (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr :=
   Meta.withDefault do
     traceLemmas `auto.runAuto.printLemmas s!"All lemmas received by {decl_name%}:" lemmas
     let lemmas ← rewriteIteCondDecide lemmas
@@ -718,7 +717,7 @@ where
     -- **Native Prover**
     exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)
     if auto.native.get (← getOptions) then
-      if let .some proof ← queryNative declName? exportFacts exportInhs then
+      if let .some proof ← queryNative exportFacts exportInhs then
         return proof
     throwError "Auto failed to find proof"
 
@@ -738,8 +737,7 @@ def evalAuto : Tactic
     match instr with
     | .none =>
       let (lemmas, inhFacts) ← collectAllLemmas hints uords (goalBinders.push ngoal)
-      let declName? ← Elab.Term.getDeclName?
-      let proof ← runAuto declName? lemmas inhFacts
+      let proof ← runAuto lemmas inhFacts
       absurd.assign proof
     | .useSorry =>
       let proof ← Meta.mkAppM ``sorryAx #[Expr.const ``False [], Expr.const ``false []]
@@ -1092,7 +1090,7 @@ def monoInterface
   Run native `prover` with monomorphization and preprocessing of `auto`
 -/
 def runNativeProverWithAuto
-  (declName? : Option Name) (prover : Array Lemma → Array Lemma → MetaM Expr)
+  (prover : Array Lemma → Array Lemma → MetaM Expr)
   (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr := do
   let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) : LamReif.ReifM Expr := (do
     let exportFacts ← LamReif.reifFacts uvalids
@@ -1102,7 +1100,7 @@ def runNativeProverWithAuto
       (fun (s, _) => Embedding.Lam.REntry.nonempty s)
     LamReif.printValuation
     let (exportFacts, _) ← LamReif.preprocess exportFacts #[]
-    if let .some expr ← queryNative declName? exportFacts exportInhs prover then
+    if let .some expr ← queryNative exportFacts exportInhs prover then
       return expr
     else
       throwError "{decl_name%} :: Failed to find proof")
