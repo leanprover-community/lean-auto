@@ -455,7 +455,7 @@ section
         "~!@$%^&*_-+=<>.?/" ++
         "ΑαΒβΓγΔδΕεΖζΗηΘθΙιΚκΛλΜμΝνΞξΟοΠπΡρΣσςΤτΥυΦφΧχΨψΩω" ++
         "₀₁₂₃₄₅₆₇₈₉"
-      let allowedSet : Std.HashSet UInt32 := Std.HashSet.insertMany Std.HashSet.empty (List.map Char.val allowedStr.toList)
+      let allowedSet : Std.HashSet UInt32 := Std.HashSet.insertMany Std.HashSet.emptyWithCapacity (List.map Char.val allowedStr.toList)
       c.isAlphanum || allowedSet.contains c.val
 
 

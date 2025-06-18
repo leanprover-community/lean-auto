@@ -4087,7 +4087,7 @@ theorem LamWF.interp_bvarAppsRev
     dsimp [LamTerm.bvarAppsRev] at wfAp
     rw [List.reverse_cons, pushLCtxs_append_singleton] at wfAp
     rw [interp_substLCtxTerm_rec (by rw [List.reverse_cons])
-      (pushLCtxsDep_substxs _ _ _ (List.reverse_cons _ _) HList.reverse_cons)]
+      (pushLCtxsDep_substxs _ _ _ List.reverse_cons HList.reverse_cons)]
     rw [interp_substLCtxTerm_rec
       (pushLCtxs_append_singleton _ _ _) (pushLCtxsDep_append_singleton _ _ _)]
     rw [LamWF.interp_substWF (wf':=wfAp)]
@@ -4102,7 +4102,7 @@ theorem LamWF.interp_bvarAppsRev
         apply pushLCtxsDep_substxs; rw [List.reverse_cons]; apply HList.reverse_cons
       case h₂ =>
         apply eq_of_heq; apply HEq.trans (LamWF.interp_bvar _)
-        apply HEq.trans (pushLCtxsDep_ge _ (Nat.le_of_eq (List.length_reverse _)))
+        apply HEq.trans (pushLCtxsDep_ge _ (Nat.le_of_eq List.length_reverse))
         rw [List.length_reverse, Nat.sub_self]; rfl
 
 theorem LamWF.interp_eqForallEF

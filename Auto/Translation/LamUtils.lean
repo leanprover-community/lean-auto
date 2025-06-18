@@ -49,20 +49,20 @@ namespace LamExportUtils
     "constants should have been eliminated"
 
   def collectLamSortAtoms : LamSort → Std.HashSet Nat
-  | .atom n => Std.HashSet.empty.insert n
-  | .base _ => Std.HashSet.empty
+  | .atom n => Std.HashSet.emptyWithCapacity.insert n
+  | .base _ => Std.HashSet.emptyWithCapacity
   | .func a b => (collectLamSortAtoms a).insertMany (collectLamSortAtoms b)
 
   def collectLamSortsAtoms (ss : Array LamSort) : Std.HashSet Nat :=
-    ss.foldl (fun hs s => hs.insertMany (collectLamSortAtoms s)) Std.HashSet.empty
+    ss.foldl (fun hs s => hs.insertMany (collectLamSortAtoms s)) Std.HashSet.emptyWithCapacity
 
   def collectLamSortBitVecLengths : LamSort → Std.HashSet Nat
-  | .base (.bv n) => Std.HashSet.empty.insert n
+  | .base (.bv n) => Std.HashSet.emptyWithCapacity.insert n
   | .func a b => (collectLamSortBitVecLengths a).insertMany (collectLamSortBitVecLengths b)
-  | _ => Std.HashSet.empty
+  | _ => Std.HashSet.emptyWithCapacity
 
   def collectLamSortsBitVecLengths (ss : Array LamSort) : Std.HashSet Nat :=
-    ss.foldl (fun hs s => hs.insertMany (collectLamSortBitVecLengths s)) Std.HashSet.empty
+    ss.foldl (fun hs s => hs.insertMany (collectLamSortBitVecLengths s)) Std.HashSet.emptyWithCapacity
 
   /-- Collect type atoms in a LamBaseTerm -/
   def collectLamBaseTermAtoms (b : LamBaseTerm) : CoreM (Std.HashSet Nat) := do
@@ -80,7 +80,7 @@ namespace LamExportUtils
     if let .some s := s? then
       return collectLamSortAtoms s
     else
-      return Std.HashSet.empty
+      return Std.HashSet.emptyWithCapacity
 
   /--
     The first hashset is the type atoms
@@ -96,14 +96,14 @@ namespace LamExportUtils
   | .atom n => do
     let .some s := lamVarTy[n]?
       | throwError "{decl_name%} :: Unknown term atom {n}"
-    return (collectLamSortAtoms s, Std.HashSet.empty.insert n, Std.HashSet.empty)
+    return (collectLamSortAtoms s, Std.HashSet.emptyWithCapacity.insert n, Std.HashSet.emptyWithCapacity)
   | .etom n => do
     let .some s := lamEVarTy[n]?
       | throwError "{decl_name%} :: Unknown etom {n}"
-    return (collectLamSortAtoms s, Std.HashSet.empty, Std.HashSet.empty.insert n)
+    return (collectLamSortAtoms s, Std.HashSet.emptyWithCapacity, Std.HashSet.emptyWithCapacity.insert n)
   | .base b => do
-    return (← collectLamBaseTermAtoms b, Std.HashSet.empty, Std.HashSet.empty)
-  | .bvar _ => pure (Std.HashSet.empty, Std.HashSet.empty, Std.HashSet.empty)
+    return (← collectLamBaseTermAtoms b, Std.HashSet.emptyWithCapacity, Std.HashSet.emptyWithCapacity)
+  | .bvar _ => pure (Std.HashSet.emptyWithCapacity, Std.HashSet.emptyWithCapacity, Std.HashSet.emptyWithCapacity)
   | .lam s t => do
     let (typeHs, termHs, etomHs) ← collectLamTermAtoms lamVarTy lamEVarTy t
     let sHs := collectLamSortAtoms s
@@ -120,52 +120,52 @@ namespace LamExportUtils
     ts.foldlM (fun (tyHs, aHs, eHs) t => do
       let (tyHs', aHs', eHs') ← collectLamTermAtoms lamVarTy lamEVarTy t
       return (mergeHashSet tyHs tyHs', mergeHashSet aHs aHs', mergeHashSet eHs eHs'))
-      (Std.HashSet.empty, Std.HashSet.empty, Std.HashSet.empty)
+      (Std.HashSet.emptyWithCapacity, Std.HashSet.emptyWithCapacity, Std.HashSet.emptyWithCapacity)
 
   def collectLamTermNatConsts : LamTerm → Std.HashSet NatConst
-  | .base (.ncst nc) => Std.HashSet.empty.insert nc
+  | .base (.ncst nc) => Std.HashSet.emptyWithCapacity.insert nc
   | .lam _ body => collectLamTermNatConsts body
   | .app _ fn arg => mergeHashSet (collectLamTermNatConsts fn) (collectLamTermNatConsts arg)
-  | _ => Std.HashSet.empty
+  | _ => Std.HashSet.emptyWithCapacity
 
   def collectLamTermsNatConsts (ts : Array LamTerm) : Std.HashSet NatConst :=
-    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermNatConsts t)) Std.HashSet.empty
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermNatConsts t)) Std.HashSet.emptyWithCapacity
 
   def collectLamTermIntConsts : LamTerm → Std.HashSet IntConst
-  | .base (.icst ic) => Std.HashSet.empty.insert ic
+  | .base (.icst ic) => Std.HashSet.emptyWithCapacity.insert ic
   | .lam _ body => collectLamTermIntConsts body
   | .app _ fn arg => mergeHashSet (collectLamTermIntConsts fn) (collectLamTermIntConsts arg)
-  | _ => Std.HashSet.empty
+  | _ => Std.HashSet.emptyWithCapacity
 
   def collectLamTermsIntConsts (ts : Array LamTerm) : Std.HashSet IntConst :=
-    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermIntConsts t)) Std.HashSet.empty
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermIntConsts t)) Std.HashSet.emptyWithCapacity
 
   def collectLamTermStringConsts : LamTerm → Std.HashSet StringConst
-  | .base (.scst sc) => Std.HashSet.empty.insert sc
+  | .base (.scst sc) => Std.HashSet.emptyWithCapacity.insert sc
   | .lam _ body => collectLamTermStringConsts body
   | .app _ fn arg => mergeHashSet (collectLamTermStringConsts fn) (collectLamTermStringConsts arg)
-  | _ => Std.HashSet.empty
+  | _ => Std.HashSet.emptyWithCapacity
 
   def collectLamTermsStringConsts (ts : Array LamTerm) : Std.HashSet StringConst :=
-    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermStringConsts t)) Std.HashSet.empty
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermStringConsts t)) Std.HashSet.emptyWithCapacity
 
   def collectLamTermBitvecs : LamTerm → Std.HashSet BitVecConst
-  | .base (.bvcst bvc) => Std.HashSet.empty.insert bvc
+  | .base (.bvcst bvc) => Std.HashSet.emptyWithCapacity.insert bvc
   | .lam _ body => collectLamTermBitvecs body
   | .app _ fn arg => mergeHashSet (collectLamTermBitvecs fn) (collectLamTermBitvecs arg)
-  | _ => Std.HashSet.empty
+  | _ => Std.HashSet.emptyWithCapacity
 
   def collectLamTermsBitvecs (ts : Array LamTerm) : Std.HashSet BitVecConst :=
-    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermBitvecs t)) Std.HashSet.empty
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermBitvecs t)) Std.HashSet.emptyWithCapacity
 
   def collectLamTermIteSorts : LamTerm → Std.HashSet LamSort
-  | .base (.ite s) => Std.HashSet.empty.insert s
+  | .base (.ite s) => Std.HashSet.emptyWithCapacity.insert s
   | .lam _ body => collectLamTermIteSorts body
   | .app _ fn arg => mergeHashSet (collectLamTermIteSorts fn) (collectLamTermIteSorts arg)
-  | _ => Std.HashSet.empty
+  | _ => Std.HashSet.emptyWithCapacity
 
   def collectLamTermsIteSorts (ts : Array LamTerm) : Std.HashSet LamSort :=
-    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermIteSorts t)) Std.HashSet.empty
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermIteSorts t)) Std.HashSet.emptyWithCapacity
 
 end LamExportUtils
 
