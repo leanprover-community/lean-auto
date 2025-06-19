@@ -287,7 +287,7 @@ def evalTacticsAtModule
   let results ← runWithEffectOfCommands input path.toString .none (fun ctx st₁ st₂ ci => do
     if filter ci then
       let result ← evalAction
-        {fileName := path.toString, fileMap := FileMap.ofString input } { env := st₁.commandState.env }
+        { fileName := path.toString, fileMap := FileMap.ofString input } { env := st₁.commandState.env }
         ci logFileHandle? config nonterms
       return .some (ci.name, result)
     else
