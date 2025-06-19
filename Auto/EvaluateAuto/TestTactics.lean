@@ -194,13 +194,10 @@ end Tactics
 
 /--
   Use `runWithEffectOfCommands` to run tactics at the place just before
-  the command that created the constant `name`\
-  Note: Use `initSrcSearchPath` to get SearchPath of source files
+  the command that created the constant `name`
 -/
-/- **TODO: Fix Evaluation Issue** -/
 def runTacticsAtConstantDeclaration
-  (name : Name) (searchPath : SearchPath)
-  (tactics : Array (ConstantInfo → TacticM Unit)) : CoreM (Array Result) := do
+  (name : Name) (tactics : Array (ConstantInfo → TacticM Unit)) : CoreM (Array Result) := do
   if ← isInitializerExecutionEnabled then
     throwError "{decl_name%} :: Running this function with execution of `initialize` code enabled is unsafe"
   let .some modName ← Lean.findModuleOf? name
@@ -258,17 +255,14 @@ instance : ToString EvalTacticConfig where
     s!"\{\n  maxHeartbeats := {maxHeartbeats}, tactics := {tactics}{logFileStr}{resultFileStr}" ++
     s!"\n  nonterminates := #[\n{nontermStr}  ]\n}"
 
-/- **TODO: Fix Evaluation Issue** -/
 /--
   Effectively `runTacticsAtConstantDeclaration` at each constant in `modName` which satisfies `filter`\
-  Note: Use `initSrcSearchPath` to get SearchPath of source files
 
   For the `i`-th theorem `name` in `names`, its entry in the result file has the following form:
   `<i> #[<result> <time> <heartbeats>, ⋯, <result> <time> <heartbeats>] <name>`
 -/
 def evalTacticsAtModule
-  (modName : Name) (searchPath : SearchPath) (filter : ConstantInfo → Bool)
-  (config : EvalTacticConfig) : CoreM Unit:= do
+  (modName : Name) (filter : ConstantInfo → Bool) (config : EvalTacticConfig) : CoreM Unit:= do
   let logFileHandle? : Option IO.FS.Handle ← config.logFile.mapM (fun fname => IO.FS.Handle.mk fname .write)
   let resultFileHandle? : Option IO.FS.Handle ← config.resultFile.mapM (fun fname => IO.FS.Handle.mk fname .write)
   trace[auto.eval.printConfig] m!"Config = {config}"
@@ -472,8 +466,7 @@ where
         "]",
         "",
         "def action : CoreM Unit := do",
-        "  let p ← initSrcSearchPath",
-        s!"  let _ ← evalTacticsAtModule ({repr mm}) p (fun ci => humanThms.contains ci.name)",
+        s!"  let _ ← evalTacticsAtModule ({repr mm}) (fun ci => humanThms.contains ci.name)",
         s!"    {lb} maxHeartbeats := {config.maxHeartbeats}, tactics := #[{tacsStr}],",
         s!"      logFile := {repr (logPath ++ ".log")}, resultFile := {repr (logPath ++ ".result")},",
         s!"      nonterminates := nonterms {rb}",
