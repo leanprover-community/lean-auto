@@ -137,7 +137,7 @@ def runAutoOnConsts (config : EvalAutoConfig) (names : Array Name) : CoreM Unit 
               match config.solverConfig with
               | .rawNative => runProverOnConst name Solver.Native.queryNative
               | .leanSmt   => throwError "Lean-SMT is currently not supported"
-              | _          => runProverOnConst name (Auto.runAuto (.some name))
+              | _          => runProverOnConst name Auto.runAuto
         ))
     let problemTime := (← IO.monoMsNow) - problemStartTime
     let problemHb := (← IO.getNumHeartbeats) - problemStartHb
