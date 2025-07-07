@@ -47,7 +47,7 @@ namespace BVLems
 
   theorem toNat_shiftLeft {a : BitVec n} (i : Nat) : (a <<< i).toNat = (a.toNat * (2 ^ i)) % (2 ^ n) := by
     rw [shiftLeft_def]; rcases a with ⟨⟨a, isLt⟩⟩
-    unfold BitVec.shiftLeft BitVec.toNat BitVec.ofNat Fin.ofNat'
+    unfold BitVec.shiftLeft BitVec.toNat BitVec.ofNat Fin.ofNat
     dsimp; rw [Nat.shiftLeft_eq]
 
   theorem toNat_ushiftRight {a : BitVec n} (i : Nat) : (a >>> i).toNat = (a.toNat) / (2 ^ i) := by
@@ -146,7 +146,7 @@ namespace BVLems
   theorem shiftRight_eq_zero_iff (a : BitVec n) (b : Nat) : a >>> b = 0#n ↔ a.toNat < 2 ^ b := by
     rw [ushiftRight_def]; rcases a with ⟨⟨a, isLt⟩⟩;
     unfold ushiftRight; rw [eq_iff_val_eq]
-    dsimp only [BitVec.toNat, BitVec.ofNat, Fin.val_ofNat', BitVec.ofNatLT]
+    dsimp only [BitVec.toNat, BitVec.ofNat, Fin.val_ofNat, BitVec.ofNatLT]
     rw [Nat.zero_mod, Nat.shiftRight_eq_div_pow]
     apply Iff.intro <;> intro h
     case mp =>
@@ -159,11 +159,11 @@ namespace BVLems
 
   theorem ofNat_add (n a b : Nat) : BitVec.ofNat n (a + b) = BitVec.ofNat n a + BitVec.ofNat n b := by
     apply congrArg (f:=BitVec.ofFin); apply Fin.eq_of_val_eq
-    dsimp [Fin.ofNat']; rw [Nat.add_mod]; rfl
+    dsimp [Fin.ofNat]; rw [Nat.add_mod]; rfl
 
   theorem ofNat_mod_pow2 (n a : Nat) : BitVec.ofNat n (a % (2 ^ n)) = BitVec.ofNat n a := by
     apply congrArg (f:=BitVec.ofFin); apply Fin.eq_of_val_eq
-    dsimp [Fin.ofNat']; apply Nat.mod_mod
+    dsimp [Fin.ofNat]; apply Nat.mod_mod
 
   theorem ofNat_sub (n a b : Nat) : BitVec.ofNat n (a - b) =
     if (a < b) then 0#n else (BitVec.ofNat n a - BitVec.ofNat n b) := by
@@ -189,7 +189,7 @@ namespace BVLems
 
   theorem ofNat_mul (n a b : Nat) : BitVec.ofNat n (a * b) = BitVec.ofNat n a * BitVec.ofNat n b := by
     apply congrArg (f:=BitVec.ofFin); apply Fin.eq_of_val_eq
-    dsimp [Fin.ofNat']; rw [Nat.mul_mod]; rfl
+    dsimp [Fin.ofNat]; rw [Nat.mul_mod]; rfl
 
   theorem shl_equiv (a : BitVec n) (b : Nat) : a <<< b = if (b < n) then (a <<< BitVec.ofNat n b) else 0 := by
     cases hdec : decide (b < n)

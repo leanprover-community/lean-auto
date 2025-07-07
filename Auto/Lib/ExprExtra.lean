@@ -6,6 +6,16 @@ open Lean Elab Command
 
 namespace Auto
 
+private partial def mkAuxNameAux (env : Environment) (base : Name) (i : Nat) : Name :=
+  let candidate := base.appendIndexAfter i
+  if env.contains candidate then
+    mkAuxNameAux env base (i+1)
+  else
+    candidate
+
+def mkAuxName [Monad m] [MonadEnv m] (baseName : Name) (idx : Nat) : m Name := do
+  return mkAuxNameAux (← getEnv) baseName idx
+
 def Expr.eraseMData : Expr → Expr
 | .app fn arg => .app (eraseMData fn) (eraseMData arg)
 | .lam name ty body bi => .lam name (eraseMData ty) (eraseMData body) bi
