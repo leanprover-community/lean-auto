@@ -1029,34 +1029,6 @@ namespace FVarRep
 
 end FVarRep
 
-/--
-  Given `mvarId : ty`, create a fresh mvar `m` of type
-    `monofact₁ → monofact₂ → ⋯ → monofactₙ → ty`
-  and return `(m proof₁ proof₂ ⋯ proofₙ, m)`
--/
-def intromono (lemmas : Array Lemma) (mvarId : MVarId) : MetaM MVarId := do
-  let startTime ← IO.monoMsNow
-  let monoMAction : MonoM LemmaInsts := (do
-    initializeMonoM lemmas
-    saturate
-    let monoLemmas ← getAllMonoLemmaInsts
-    trace[auto.mono] "Monomorphization took {(← IO.monoMsNow) - startTime}ms"
-    return monoLemmas)
-  let (monoLemmas, _) ← monoMAction.run {}
-  MetaState.runAtMetaM' (do
-    let mut fids := #[]
-    for ml in monoLemmas do
-      let userName := (`monoLem).appendIndexAfter fids.size
-      let fid ← MetaState.withLocalDecl userName .default ml.type .default
-      fids := fids.push fid
-    let type ← MetaState.runMetaM <| mvarId.getType
-    let tag ← MetaState.runMetaM <| mvarId.getTag
-    let mvar ← MetaState.runMetaM <| Meta.mkFreshExprSyntheticOpaqueMVar type.headBeta tag
-    let newVal ← MetaState.runMetaM <| Meta.mkLambdaFVars (fids.map Expr.fvar) mvar
-    let newVal := Lean.mkAppN newVal (monoLemmas.map (·.proof))
-    mvarId.assign newVal
-    return mvar.mvarId!)
-
 def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State → MetaM α) : MetaM α := do
   for h in lemmas do
     trace[auto.mono.printInputLemmas] "Monomorphization got input lemma :: {h.type}"

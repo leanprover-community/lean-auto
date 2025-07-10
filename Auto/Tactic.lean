@@ -25,7 +25,7 @@ syntax uord := atomic(unfolds) <|> defeqs
 syntax autoinstr := ("👍" <|> "👎")?
 syntax (name := auto) "auto" autoinstr hints (uord)* : tactic
 syntax (name := mononative) "mononative" hints (uord)* : tactic
-syntax (name := intromono) "intromono" hints (uord)* : tactic
+syntax (name := mono) "mono" hints (uord)* : tactic
 
 inductive Instruction where
   | none
@@ -378,6 +378,20 @@ def callNative_checker
     { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
 
 open LamReif Embedding.Lam in
+def callMkMVar_checker
+  (nonempties : Array REntry) (valids : Array REntry) :
+  ReifM (MVarId × Expr × LamTerm × Array Nat) := do
+  let tyVal ← LamReif.getTyVal
+  let varVal ← LamReif.getVarVal
+  let lamEVarTy ← LamReif.getLamEVarTy
+  let nonemptiesWithDTr ← nonempties.mapM (fun re =>
+    do return (re, ← collectDerivFor re))
+  let validsWithDTr ← valids.mapM (fun re =>
+    do return (re, ← collectDerivFor re))
+  MetaState.runAtMetaM' <| (Lam2DAAF.callMkMVarWithAtomAsFVar nonemptiesWithDTr validsWithDTr).run'
+    { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
+
+open LamReif Embedding.Lam in
 /--
   Similar in functionality compared to `callNative_checker`, but
   all `valid` entries are supposed to be reified facts (so there should
@@ -424,7 +438,7 @@ open Embedding.Lam in
 -/
 def queryNative
   (declName? : Option Name) (exportFacts exportInhs : Array REntry)
-  (prover? : Option (Array Lemma → Array Lemma → MetaM Expr) := .none) : LamReif.ReifM (Option Expr) := do
+  (prover? : Option (Array Lemma → Array Lemma → MetaM Expr) := .none) : LamReif.ReifM Expr := do
   let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ←
     callNative_checker exportInhs exportFacts (prover?.getD Solver.Native.queryNative)
   LamReif.newAssertion proof (.leaf "by_native::queryNative") proofLamTerm
@@ -449,7 +463,8 @@ def rewriteIteCondDecide (lemmas : Array Lemma) : MetaM (Array Lemma) := do
   return lemmas
 
 /--
-  Run `auto`'s monomorphization and preprocessing, then send the problem to different solvers
+  Run `auto`'s preprocessing and monomorphization, then send the
+  problem to different solvers
 -/
 def runAuto
   (declName? : Option Name) (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr :=
@@ -494,8 +509,7 @@ where
     -- **Native Prover**
     exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)
     if auto.native.get (← getOptions) then
-      if let .some proof ← queryNative declName? exportFacts exportInhs then
-        return proof
+      return ← queryNative declName? exportFacts exportInhs
     throwError "Auto failed to find proof"
 
 @[tactic auto]
@@ -522,18 +536,63 @@ def evalAuto : Tactic
       absurd.assign proof
 | _ => throwUnsupportedSyntax
 
-@[tactic intromono]
-def evalIntromono : Tactic
-| `(intromono | intromono $hints $[$uords]*) => withMainContext do
+/--
+  Run `auto`'s preprocessing and monomorphization to abstract the
+  problem into an essentially higher-order problem
+-/
+def runMono
+  (declName? : Option Name) (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM (Expr × MVarId) :=
+  Meta.withDefault do
+    traceLemmas `auto.runAuto.printLemmas s!"All lemmas received by {decl_name%}:" lemmas
+    let lemmas ← rewriteIteCondDecide lemmas
+    let ((proof, mvarId), _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM (Expr × MVarId)) do
+      let s ← get
+      let u ← computeMaxLevel s.facts
+      (reifMAction s.facts s.inhTys s.inds).run' {u := u})
+    trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
+    trace[auto.tactic.printProof] "{proof}"
+    return (proof, mvarId)
+where
+  reifMAction
+    (uvalids : Array UMonoFact) (uinhs : Array UMonoFact)
+    (minds : Array (Array SimpleIndVal)) : LamReif.ReifM (Expr × MVarId) := do
+    let exportFacts ← LamReif.reifFacts uvalids
+    let mut exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
+    let _ ← LamReif.reifInhabitations uinhs
+    let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
+      (fun (s, _) => Embedding.Lam.REntry.nonempty s)
+    let exportInds ← LamReif.reifMutInds minds
+    LamReif.printValuation
+    -- **Preprocessing in Verified Checker**
+    let (exportFacts', _) ← LamReif.preprocess exportFacts exportInds
+    exportFacts := exportFacts'.append (← LamReif.auxLemmas exportFacts)
+    -- **Query the dummy prover which creates a metavariable**
+    let (goalId, proof, proofLamTerm, etoms) ← callMkMVar_checker exportInhs exportFacts
+    LamReif.newAssertion proof (.leaf "by_native::queryNative") proofLamTerm
+    let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (etoms.map .etom)
+    let forallElimed ← LamReif.validOfElimForalls etomInstantiated exportInhs
+    let contra ← LamReif.validOfImps forallElimed exportFacts
+    LamReif.printProofs
+    Reif.setDeclName? declName?
+    let checker ← LamReif.buildCheckerExprFor contra
+    let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
+    return (contra, goalId)
+
+@[tactic mono]
+def evalMono : Tactic
+| `(mono | mono $hints $[$uords]*) => withMainContext do
   let (goalBinders, newGoal) ← (← getMainGoal).intros
   let [nngoal] ← newGoal.apply (.const ``Classical.byContradiction [])
     | throwError "{decl_name%} :: Unexpected result after applying Classical.byContradiction"
   let (ngoal, absurd) ← MVarId.intro1 nngoal
   replaceMainGoal [absurd]
-  withMainContext do
-    let (lemmas, _) ← collectAllLemmas hints uords (goalBinders.push ngoal)
-    let newMid ← Monomorphization.intromono lemmas absurd
-    replaceMainGoal [newMid]
+  let mvarId ← withMainContext do
+    let (lemmas, inhFacts) ← collectAllLemmas hints uords (goalBinders.push ngoal)
+    let declName? ← Elab.Term.getDeclName?
+    let (proof, mvarId) ← runMono declName? lemmas inhFacts
+    absurd.assign proof
+    return mvarId
+  replaceMainGoal [mvarId]
 | _ => throwUnsupportedSyntax
 
 /--
@@ -571,10 +630,7 @@ def runNativeProverWithAuto
       (fun (s, _) => Embedding.Lam.REntry.nonempty s)
     LamReif.printValuation
     let (exportFacts, _) ← LamReif.preprocess exportFacts #[]
-    if let .some expr ← queryNative declName? exportFacts exportInhs prover then
-      return expr
-    else
-      throwError "{decl_name%} :: Failed to find proof")
+    return ← queryNative declName? exportFacts exportInhs prover)
   let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
     let s ← get
     let u ← computeMaxLevel s.facts

@@ -271,22 +271,6 @@ def Expr.instanceOf? (e₁ : Expr) (params : Array Name) (e₂ : Expr) : MetaM (
     else
       return .none
 
-def Expr.formatWithUsername (e : Expr) : MetaM Format := do
-  let fvarIds := (collectFVars {} e).fvarIds
-  let names ← fvarIds.mapM (fun fid => do
-    match ← fid.findDecl? with
-    | .some decl => return decl.userName
-    | .none => throwError "{decl_name%}e :: Unknown free variable {(Expr.fvar fid).dbgToString}")
-  let e := e.replaceFVars (fvarIds.map Expr.fvar) (names.map (Expr.const · []))
-  let e ← instantiateMVars e
-  let mvarIds := (Expr.collectMVars {} e).result
-  let names ← mvarIds.mapM (fun mid => do
-    match ← mid.findDecl? with
-    | .some decl => return decl.userName
-    | .none => throwError "{decl_name%} :: Unknown metavariable {(Expr.mvar mid).dbgToString}")
-  let e := (e.abstract (mvarIds.map Expr.mvar)).instantiateRev (names.map (Expr.const · []))
-  return f!"{e}"
-
 /--
   `ident` must be of type `Expr → TermElabM Unit`
   Compiles `term` into `Expr`, then applies `ident` to it

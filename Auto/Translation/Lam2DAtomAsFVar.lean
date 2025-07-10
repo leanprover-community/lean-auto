@@ -133,17 +133,10 @@ def withHyps (hyps : Array Expr) : ExternM (Array FVarId) := do
     ret := ret.push newFVarId
   return ret
 
-/--
-  Calling external provere with type atoms, atoms, etoms, inhabitation facts
-  and lemmas as free variables
-
-  Note that `MetaState.withTemporaryLCtx` is used to isolate the prover from the
-  current local context. This is necessary because `lean-auto` assumes that the prover
-  does not use free variables introduced during monomorphization
--/
-def callNativeWithAtomAsFVar
-  (nonemptiesWithDTr : Array (REntry × DTr)) (validsWithDTr : Array (REntry × DTr)) (prover : Array Lemma → Array Lemma → MetaM Expr) :
-  ExternM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := MetaState.withTemporaryLCtx {} {} <| do
+def withAll
+  (nonemptiesWithDTr : Array (REntry × DTr))
+  (validsWithDTr : Array (REntry × DTr)) :
+  ExternM (Array LamSort × Array LamTerm × Array Lemma × Array Lemma) := do
   let ss ← nonemptiesWithDTr.mapM (fun (re, _) => do
     match re with
     | .nonempty s => return s
@@ -170,8 +163,28 @@ def callNativeWithAtomAsFVar
   let hypFvars ← withHyps hyps
   let lemmas : Array Lemma := ((hyps.zip hypFvars).zip hypDTrs).map
     (fun ((ty, proof), dtr) => ⟨⟨.fvar proof, ty, dtr⟩, #[]⟩)
-  let hypLemmas : Array Lemma := ((inhs.zip inhFVars).zip inhDTrs).map
+  let inhLemmas : Array Lemma := ((inhs.zip inhFVars).zip inhDTrs).map
     (fun ((ty, proof), dtr) => ⟨⟨.fvar proof, ty, dtr⟩, #[]⟩)
+  return (ss, ts, lemmas, inhLemmas)
+
+/--
+  Calling external prover with type atoms, atoms, etoms, inhabitation facts
+  and lemmas as free variables
+
+  Note that `MetaState.withTemporaryLCtx` is used to isolate the prover from the
+  current local context. This is necessary because `lean-auto` assumes that the prover
+  does not use free variables introduced during monomorphization
+-/
+def callNativeWithAtomAsFVar
+  (nonemptiesWithDTr : Array (REntry × DTr)) (validsWithDTr : Array (REntry × DTr)) (prover : Array Lemma → Array Lemma → MetaM Expr) :
+  ExternM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := MetaState.withTemporaryLCtx {} {} <| do
+  let (ss, ts, lemmas, inhLemmas) ← withAll nonemptiesWithDTr validsWithDTr
+  let getFid (lem : Lemma) : ExternM FVarId := do
+    match lem.proof with
+    | .fvar id => return id
+    | _ => throwError "{decl_name%} :: Unexpected error"
+  let hypFVars ← lemmas.mapM getFid
+  let inhFVars ← inhLemmas.mapM getFid
   -- Note that we're not introducing bound variables into local context
   --   in the above action, so it's reasonable to use `runMetaM`
   let atomsToAbstract ← getAtomsToAbstract
@@ -181,9 +194,9 @@ def callNativeWithAtomAsFVar
     -- It is important to add `Meta.withNewMCtxDepth`, otherwise exprmvars
     --   or levelmvars of the current level will be assigned, and we'll
     --   get weird proof reconstruction error
-    let mut expr ← Meta.withNewMCtxDepth <| prover lemmas hypLemmas
+    let mut expr ← Meta.withNewMCtxDepth <| prover lemmas inhLemmas
     let mut usedHyps := []
-    for (fvar, re_t) in (hypFvars.zip (valids.zip ts)).reverse do
+    for (fvar, re_t) in (hypFVars.zip ((validsWithDTr.map Prod.fst).zip ts)).reverse do
       if expr.hasAnyFVar (· == fvar) then
         expr ← Meta.mkLambdaFVars #[.fvar fvar] expr
         usedHyps := re_t :: usedHyps
@@ -193,7 +206,7 @@ def callNativeWithAtomAsFVar
         expr ← Meta.mkLambdaFVars #[.fvar fvar] expr
         usedInhs := re_s :: usedInhs
     let mut usedEtoms := []
-    for (fvar, eidx) in etomsToAbstract do
+    for (fvar, eidx) in etomsToAbstract.reverse do
       if expr.hasAnyFVar (· == fvar) then
         expr ← Meta.mkLambdaFVars #[.fvar fvar] expr
         usedEtoms := eidx :: usedEtoms
@@ -209,9 +222,42 @@ def callNativeWithAtomAsFVar
       let .some ty := lamEVarTy[etom]?
         | throwError "{decl_name%} :: Unexpected error"
       return ty)
-    let proof := mkAppN expr ⟨usedVals⟩
     let proofLamTerm := usedEtomTys.foldr (fun s cur => LamTerm.mkForallEF s cur) proofLamTermPre
+    let proof := mkAppN expr ⟨usedVals⟩
     trace[auto.lam2D.printProof] "Found proof of {proofLamTerm}\n\n{proof}"
     return (proof, proofLamTerm, ⟨usedEtoms⟩, ⟨usedInhs.map Prod.fst⟩, ⟨usedHyps.map Prod.fst⟩))
+
+def callMkMVarWithAtomAsFVar
+  (nonemptiesWithDTr : Array (REntry × DTr)) (validsWithDTr : Array (REntry × DTr)) :
+  ExternM (MVarId × Expr × LamTerm × Array Nat) := MetaState.withTemporaryLCtx {} {} <| do
+  let (ss, ts, lemmas, inhLemmas) ← withAll nonemptiesWithDTr validsWithDTr
+  let getFid (lem : Lemma) : ExternM FVarId := do
+    match lem.proof with
+    | .fvar id => return id
+    | _ => throwError "{decl_name%} :: Unexpected error"
+  let hypFVars ← lemmas.mapM getFid
+  let inhFVars ← inhLemmas.mapM getFid
+  -- Note that we're not introducing bound variables into local context
+  --   in the above action, so it's reasonable to use `runMetaM`
+  let atomsToAbstract ← getAtomsToAbstract
+  let etomsToAbstract ← getEtomsToAbstract
+  let lamEVarTy ← getLamEVarTy
+  let allFVars :=
+    atomsToAbstract.map Prod.fst ++ etomsToAbstract.map Prod.fst ++
+    inhFVars ++ hypFVars
+  let proofLamTermPre := ts.foldr (fun t' t => t'.mkImp t) (.base .falseE)
+  let proofLamTermPre := ss.foldr (fun s t => t.mkForallEF s) proofLamTermPre
+  let proofLamTermPre := proofLamTermPre.abstractsRevImp (etomsToAbstract.map (fun (_, id) => .etom id))
+  let usedEtomTys ← etomsToAbstract.mapM (fun (_, etom) => do
+    let .some ty := lamEVarTy[etom]?
+      | throwError "{decl_name%} :: Unexpected error"
+    return ty)
+  let proofLamTerm := usedEtomTys.foldr (fun s cur => LamTerm.mkForallEF s cur) proofLamTermPre
+  let (proof, goalId) ← runMetaM (do
+    let .mvar mProofId ← Meta.mkFreshExprMVar (mkConst ``False)
+      | throwError "{decl_name%} :: Unexpected error"
+    let (_, goalId) ← mProofId.revert allFVars (preserveOrder:=true)
+    return (← instantiateMVars (.mvar mProofId), goalId))
+  return (goalId, proof, proofLamTerm, etomsToAbstract.map Prod.snd)
 
 end Auto.Lam2DAAF
