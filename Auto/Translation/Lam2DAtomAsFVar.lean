@@ -256,8 +256,10 @@ def callMkMVarWithAtomAsFVar
   let (proof, goalId) ← runMetaM (do
     let .mvar mProofId ← Meta.mkFreshExprMVar (mkConst ``False)
       | throwError "{decl_name%} :: Unexpected error"
-    let (_, goalId) ← mProofId.revert allFVars (preserveOrder:=true)
-    return (← instantiateMVars (.mvar mProofId), goalId))
+    let (fvars, goalId) ← mProofId.revert allFVars (preserveOrder:=true)
+    let proof ← Meta.mkLambdaFVars (fvars.map Expr.fvar) (← instantiateMVars (.mvar mProofId))
+    let proof ← Meta.instantiateLambda proof (atomsToAbstract.map Prod.snd)
+    return (proof, goalId))
   return (goalId, proof, proofLamTerm, etomsToAbstract.map Prod.snd)
 
 end Auto.Lam2DAAF

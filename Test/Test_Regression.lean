@@ -99,9 +99,8 @@ end Inhabitation
 set_option auto.redMode "instances" in
 example (as bs cs : List α) (f : α → β) :
   ((as ++ bs) ++ cs).map f = as.map f ++ (bs.map f ++ cs.map f) := by
-  intromono [List.append_assoc, List.map_append];
-  apply monoLem_0
-  rw [monoLem_1]; rw [monoLem_3]; rw [monoLem_3]
+  mono [List.append_assoc, List.map_append];
+  intros; sorry
 
 example
   (h : ∀ (α : Type u) (as bs cs : List α), (as ++ bs) ++ cs ≠ as ++ (bs ++ cs) → False)
@@ -126,7 +125,8 @@ section MonomorphizationWierdExample
     (hab : as.length = bs.length) (hbc : bs.length = cs.length) (hcd : cs.length = ds.length)
     (h : ∀ (δ : Type u) (f₁ f₂ f₃ f₄ : δ → α) (xs : List δ),
       xs.map f₁ = as ∧ xs.map f₂ = bs ∧ xs.map f₃ = cs ∧ xs.map f₄ = ds → False) : False := by
-    intromono [h, hab, prod_eq₁', prod_eq₂'] d[List.length, List.directZip, List.map]; sorry
+    mono [h, hab, prod_eq₁', prod_eq₂'] d[List.length, List.directZip, List.map]
+    intros; sorry
 
 end MonomorphizationWierdExample
 
