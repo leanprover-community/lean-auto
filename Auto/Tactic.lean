@@ -592,6 +592,7 @@ def evalMono : Tactic
     let (proof, mvarId) ← runMono declName? lemmas inhFacts
     absurd.assign proof
     return mvarId
+  let (_, mvarId) ← mvarId.intros
   replaceMainGoal [mvarId]
 | _ => throwUnsupportedSyntax
 

@@ -1,5 +1,4 @@
 import Auto.Tactic
-import Auto.EvaluateAuto.TestCode
 
 -- Standard Preprocessing Configs
 set_option auto.redMode "reducible"
@@ -19,6 +18,17 @@ attribute [rebind Auto.Native.solverFunc] Auto.Solver.Native.emulateNative
 set_option auto.native true
 set_option trace.auto.lamReif.printResult true
 set_option trace.auto.lamReif.printValuation true
+
+  set_option trace.auto.printLemmas true
+  set_option auto.redMode "instances"
+  example : (∀ (xs ys zs : List α), xs ++ ys ++ zs = xs ++ (ys ++ zs)) := by
+    intro xs; induction xs <;> (mono [*] d[List.append]; sorry)
+
+  example (x : α) : List.head? [x] = .some x := by
+    have list_head_unfold : @List.head? α = (fun x =>
+      @List.casesOn α (fun x => (fun x => Option α) x) x ((fun _ => @none α) Unit.unit) fun head tail =>
+        (fun a tail => @some α a) head tail) := by sorry
+    mono [list_head_unfold] d[List.rec]; sorry
 
 -- set_option auto.tptp true
 -- set_option trace.auto.tptp.premiseSelection true
