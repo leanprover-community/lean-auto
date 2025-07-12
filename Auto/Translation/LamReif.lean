@@ -1478,7 +1478,7 @@ partial def reifTerm (lctx : Std.HashMap FVarId Nat) : Expr → ReifM LamTerm
 | e => processTermExpr lctx e
 
 def reifTermCheckType (e : Expr) : ReifM (LamSort × LamTerm) := do
-  let t ← reifTerm .empty e
+  let t ← reifTerm .emptyWithCapacity e
   let ltv ← getLamTyValAtMeta
   let .some s := t.lamCheck? ltv Embedding.Lam.dfLCtxTy
     | throwError "{decl_name%} :: LamTerm {t} is not type correct"
@@ -2009,7 +2009,8 @@ open Embedding.Lam LamReif
     -- Collect essential chksteps and assertions from the high-level `lam`
     --   into the low-level `lam` such that the low-level `lam` proves `re`
     partial def collectProofFor (ref : State) (hre : REntry) : TransM Unit := do
-      if let .some _ := (← getChkMap).get? hre then
+      let translatedHre ← transREntry ref hre
+      if let .some _ := (← getChkMap).get? translatedHre then
         return
       let (highLvlProof, _) ← (lookupREntryProof! hre).run ref
       match highLvlProof with
@@ -2019,11 +2020,9 @@ open Embedding.Lam LamReif
         match er with
         | .fail => throwError "{decl_name%} :: Unexpected evaluation result"
         | .addEntry reNew => do
-          let expectedEntry ← transREntry ref hre
-          if expectedEntry != reNew then throwError "{decl_name%} :: Entry mismatch"
+          if translatedHre != reNew then throwError "{decl_name%} :: Entry mismatch"
         | .newEtomWithValid _ lctx t => do
-          let expectedEntry ← transREntry ref hre
-          if expectedEntry != .valid lctx t then throwError "{decl_name%} :: Entry mismatch"
+          if translatedHre != .valid lctx t then throwError "{decl_name%} :: Entry mismatch"
       | .inhabitation e deriv _ =>
         let .nonempty hs := hre
           | throwError "{decl_name%} :: Unexpected error"
