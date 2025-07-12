@@ -43,7 +43,7 @@ def monomorphizedProblemOfAutoLemma (lem : Auto.Lemma) : CoreM (Option (Array Em
   let usedThmNames ← (← Expr.getUsedTheorems lem.proof).filterM (fun name =>
     return !(← Name.onlyLogicInType name))
   let usedThms ← usedThmNames.mapM (fun n => Lemma.ofConst n (.leaf "collected by hammertest"))
-  let monoFn : MetaM (Array Embedding.Lam.LamTerm) := Meta.forallTelescope lem.type fun bs body => do
+  let monoFn : MetaM (Array Embedding.Lam.LamTerm) := Meta.forallTelescope lem.type fun _ body => do
     let negGoal := Expr.app (.const ``Not []) body
     Meta.withLocalDeclD `negGoal negGoal fun _ => do
       let inhLemmas ← Inhabitation.getInhFactsFromLCtx

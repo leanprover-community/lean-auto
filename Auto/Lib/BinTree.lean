@@ -30,7 +30,7 @@ def inductionOn.{u}
   {motive : Nat → Sort u} (x : Nat)
   (ind : ∀ x, motive ((x + 2) / 2) → motive (x + 2))
   (base₀ : motive 0) (base₁ : motive 1) : motive x :=
-  match h : x with
+  match x with
   | 0 => base₀
   | 1 => base₁
   | x' + 2 => ind x' (inductionOn ((x' + 2) / 2) ind base₀ base₁)

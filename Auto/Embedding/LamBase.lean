@@ -3429,8 +3429,8 @@ def LamWF.eVarIrrelevance
 | .ofBVar _ => .ofBVar _
 | .ofLam bodyTy H => .ofLam bodyTy (eVarIrrelevance hLamVarTy hLamILTy hirr H)
 | .ofApp argTy HFn HArg => .ofApp argTy
-  (eVarIrrelevance hLamVarTy hLamILTy (fun n H => hirr _ (Nat.le_trans H (Nat.le_max_left _ _))) HFn)
-  (eVarIrrelevance hLamVarTy hLamILTy (fun n H => hirr _ (Nat.le_trans H (Nat.le_max_right _ _))) HArg)
+  (eVarIrrelevance hLamVarTy hLamILTy (fun _ H => hirr _ (Nat.le_trans H (Nat.le_max_left _ _))) HFn)
+  (eVarIrrelevance hLamVarTy hLamILTy (fun _ H => hirr _ (Nat.le_trans H (Nat.le_max_right _ _))) HArg)
 
 def LamWF.getAtom {ltv : LamTyVal}
   (wft : LamWF ltv ⟨lctx, .atom n, s⟩) : ltv.lamVarTy n = s :=
@@ -3655,7 +3655,7 @@ def LamWF.fnWFOfMkAppN
   LamWF ltv ⟨lctx, f, s.mkFuncs (args.map Prod.fst)⟩ :=
   match args with
   | .nil => wfApp
-  | .cons (argTy, arg) args =>
+  | .cons _ args =>
     (LamWF.fnWFOfMkAppN (args:=args) wfApp).getFn
 
 def LamWF.argsWFOfMkAppN {f : LamTerm}

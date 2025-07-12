@@ -40,24 +40,24 @@ private theorem ofNat'WFAux (n n' : Nat) : n = n' + 2 → n / 2 < n := by
   case hLtK => apply Nat.le_refl
 
 def ofNat'WF (n : Nat) :=
-  match h : n with
+  match _ : n with
   | 0 => xH
   | 1 => xH
   | _ + 2 =>
     match n % 2 with
     | 0 => .xO (ofNat'WF (n / 2))
     | _ => .xI (ofNat'WF (n / 2))
-decreasing_by rw [← h]; apply ofNat'WFAux; assumption
+decreasing_by simp only [*]; apply ofNat'WFAux _ _ rfl
 
 def ofNat'WF.inductionOn.{u}
   {motive : Nat → Sort u} (x : Nat)
   (ind : ∀ x, motive ((x + 2) / 2) → motive (x + 2))
   (base₀ : motive 0) (base₁ : motive 1) : motive x :=
-  match h : x with
+  match x with
   | 0 => base₀
   | 1 => base₁
   | x' + 2 => ind x' (inductionOn ((x' + 2) / 2) ind base₀ base₁)
-decreasing_by apply ofNat'WFAux; rfl
+decreasing_by apply ofNat'WFAux _ _ rfl
 
 @[irreducible] def ofNat'WF.induction
   {motive : Nat → Sort u}

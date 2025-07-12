@@ -849,7 +849,7 @@ def getProof (lamVarTy lamEVarTy : Array LamSort) (cmds : Array Command) : MetaM
     match cmd with
     | "thf" | "tff" | "cnf" | "fof" =>
       match args with
-      | [⟨.ident name, []⟩, ⟨.ident kind, _⟩, val] =>
+      | [⟨.ident _, []⟩, ⟨.ident kind, _⟩, val] =>
         if kind != "type" then
           match term2LamTerm pi val with
           | .term (.base .prop) t =>

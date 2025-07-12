@@ -209,7 +209,7 @@ def runTacticsAtConstantDeclaration
   let path := path.normalize
   let inputHandle ← IO.FS.Handle.mk path .read
   let input ← inputHandle.readToEnd
-  let results : Array (Array Result) ← runWithEffectOfCommands input path.toString (.some 1) (fun ctx st₁ st₂ ci => do
+  let results : Array (Array Result) ← runWithEffectOfCommands input path.toString (.some 1) (fun _ctx st₁ _st₂ ci => do
     if name != ci.name then
       return .none
     let metaAction (tactic : ConstantInfo → TacticM Unit) : MetaM Result :=
@@ -278,7 +278,7 @@ def evalTacticsAtModule
   let input ← inputHandle.readToEnd
   let startTime ← IO.monoMsNow
   let nonterms := Std.HashSet.ofArray config.nonterminates
-  let results ← runWithEffectOfCommands input path.toString .none (fun ctx st₁ st₂ ci => do
+  let results ← runWithEffectOfCommands input path.toString .none (fun _ctx st₁ _st₂ ci => do
     if filter ci then
       let result ← evalAction
         { fileName := path.toString, fileMap := FileMap.ofString input } { env := st₁.commandState.env }
