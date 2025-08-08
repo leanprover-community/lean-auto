@@ -156,4 +156,72 @@ def Meta.Context.modifyLCtx (ctx : Context) (lctx : LocalContext) : CoreM Contex
 def Meta.Context.modifyLocalInstances (ctx : Context) (localInsts : LocalInstances) : CoreM Context :=
   MetaM.run' (withLCtx ctx.lctx localInsts read) ctx
 
+/--
+Replace occurrences of `p` in non-dependent positions in `e` with `q`. The type
+of the resulting expression should be identical to the type of `e`
+· Both `e` and `q` are not supposed to contain loose bvars
+· We detect subterms equivalent to `p` using key-matching.
+  That is, only perform `isDefEq` tests when the head symbol of substerm is equivalent to head symbol of `p`.
+· We only abstract non-dependent positions
+  That is, if there is a function application `f a` and the argument of
+  `f` is dependent, then occurrences of `p` in `a` will not be abstracted
+
+By default, all occurrences are abstracted,
+but this behavior can be controlled using the `occs` parameter.
+
+All matches of `p` in `e` are considered for occurrences,
+but for each match that is included by the `occs` parameter,
+metavariables appearing in `p` (or `e`) may become instantiated,
+affecting the possibility of subsequent matches.
+For matches that are not included in the `occs` parameter, the metavariable context is rolled back
+to prevent blocking subsequent matches which require different instantiations.
+-/
+partial def Meta.replaceNonDep (e : Expr) (p : Expr) (q : Expr) (occs : Occurrences := .all) : MetaM Expr := do
+  let e ← instantiateMVars e
+  let pHeadIdx := p.toHeadIndex
+  let pNumArgs := p.headNumArgs
+  let rec visit (e : Expr) : StateRefT Nat MetaM Expr := do
+    let visitChildren : Unit → StateRefT Nat MetaM Expr := fun _ => do
+      match e with
+      | .app f a         => do
+        let type ← Meta.whnf (← Meta.inferType f)
+        let .forallE _ _ b _ := type
+          | throwError "{decl_name%} :: {type} is not a `∀`"
+        if b.hasLooseBVar 0 then
+          return e.updateApp! (← visit f) a
+        else
+          return e.updateApp! (← visit f) (← visit a)
+      | .mdata _ b       => return e.updateMData! (← visit b)
+      | .proj _ _ b      => return e.updateProj! (← visit b)
+      | .letE n t v b _ =>
+        Meta.withLetDecl n t (← visit v) fun x =>
+          return ← mkLetFVars #[x] (← visit (b.instantiate1 x))
+      | .lam ..     =>
+        Meta.lambdaTelescope e fun xs b => do
+          return ← mkLambdaFVars xs (← visit b)
+      | .forallE n d b bi => do
+        let d' ← (if b.hasLooseBVar 0 then return d else visit d)
+        Meta.withLocalDecl n bi d' fun x => do
+          return ← mkForallFVars #[x] (← visit (b.instantiate1 x))
+      | e                => return e
+    if e.toHeadIndex != pHeadIdx || e.headNumArgs != pNumArgs then
+      visitChildren ()
+    else
+      -- We save the metavariable context here,
+      -- so that it can be rolled back unless `occs.contains i`.
+      let mctx ← getMCtx
+      if (← isDefEq e p) then
+        let i ← get
+        set (i+1)
+        if occs.contains i then
+          return q
+        else
+          -- Revert the metavariable context,
+          -- so that other matches are still possible.
+          setMCtx mctx
+          visitChildren ()
+      else
+        visitChildren ()
+  visit e |>.run' 1
+
 end Auto

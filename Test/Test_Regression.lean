@@ -599,6 +599,29 @@ section Adhoc
     (if True then x else y) = x ∧ (if False then z else t) = t := by
     auto
 
+  -- Nested `ite`
+
+  set_option auto.smt true in
+  set_option auto.tptp false in
+  example
+    (h : if (if 2 = 3 then 1 else 2) = (if 3 = 2 then 0 else 1) then True else False)
+    : False := by
+    auto
+
+  set_option trace.auto.mono.printInputLemmas true
+  open Classical
+  example
+    (node : Type) [node_dec : DecidableEq node] (ring_bottom : node)
+    (st0_x st0_up st1_x st1_up : node → Prop) (s x x_1 : node)
+    (bad_motive :
+      ¬if s = ring_bottom then True
+        else if st0_x s = st0_x x then True
+        else if ((¬st0_x s) = if x_1 = s then ¬st0_x s else st0_x x_1) ∧ ¬x_1 = s ∧ ¬st0_up x_1 then
+          (∀ (a_1 : node), (if a_1 = s then ¬st0_x s else st0_x a_1) = st1_x a_1) → ∃ x, ¬(¬x = s ∧ (¬x = s → st0_up x)) = st1_up x
+        else True) :
+    True := by
+    auto
+
   -- Boolean
   example : true ≠ false := by
     auto
