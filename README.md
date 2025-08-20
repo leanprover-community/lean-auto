@@ -2,7 +2,7 @@
   <img src="Doc/pics/Logo.bmp" width="600" />
 </p>
   
-Lean-auto is an interface between Lean and automated theorem provers. Up to now, lean-auto is maintained and developed primarily by Yicheng Qian (GitHub: PratherConid). It is currently in active development, and pull requests/issues are welcome. For more information, feel free to reach out to Yicheng Qian on [Lean Zulip](https://leanprover.zulipchat.com).  
+[Lean-auto](https://arxiv.org/abs/2505.14929) is an interface between Lean and automated theorem provers. Up to now, lean-auto is maintained and developed primarily by Yicheng Qian (GitHub: PratherConid). It is currently in active development, and pull requests/issues are welcome. For more information, feel free to reach out to Yicheng Qian on [Lean Zulip](https://leanprover.zulipchat.com).  
   
 Lean-auto is based on a monomorphization procedure from dependent type theory to higher-order logic and a deep embedding of higher-order logic into dependent type theory. It is capable of handling dependently-typed and/or universe-polymorphic input terms. Currently, proof reconstruction can be handled by [Duper](https://github.com/leanprover-community/duper), a higher-order superposition prover written in Lean. To enable Duper, please import the duper repo in your project, and set the following options:
 ```lean

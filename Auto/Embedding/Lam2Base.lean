@@ -119,27 +119,15 @@ def Lam₂Type.check_iff_interp
     simp [check, interp, Option.map]
   case bvar n =>
     simp [check, interp]
-    cases Nat.decLt n (List.length lctx)
-    case isTrue h =>
-      simp [h]
-    case isFalse h =>
-      simp [h, List.getElem?_eq]
+    cases Nat.decLt n (List.length lctx) <;> simp [*]
   case func fn arg IHfn IHarg =>
     revert IHfn IHarg
     simp [check, interp]
     match
       cfn : check (fun n => (val n).fst) (List.length lctx) fn,
       carg : check (fun n => (val n).fst) (List.length lctx) arg with
-    | .some 0, .some 0 =>
-      simp;
-      match cifn : interp val lctx fn, ciarg : interp val lctx arg with
-      | .some ⟨0, _⟩, .some ⟨0, _⟩ => simp
-      | .some ⟨0, _⟩, .some ⟨n + 1, _⟩ => simp
-      | .some ⟨0, _⟩, .none => simp
-      | .some ⟨n + 1, _⟩, _ => simp
-      | .none , _ => simp
-    | .some 0, .some (n + 1) =>
-      simp;
+    | .some 0, .some 0 | .some 0, .some (n + 1) | .some (n + 1), _ =>
+      simp only;
       match cifn : interp val lctx fn, ciarg : interp val lctx arg with
       | .some ⟨0, _⟩, .some ⟨0, _⟩ => simp
       | .some ⟨0, _⟩, .some ⟨n + 1, _⟩ => simp
@@ -147,33 +135,17 @@ def Lam₂Type.check_iff_interp
       | .some ⟨n + 1, _⟩, _ => simp
       | .none , _ => simp
     | .some 0, .none =>
-      simp; cases interp val lctx arg <;> simp
-    | .some (n + 1), _ =>
-      simp;
-      match cifn : interp val lctx fn, ciarg : interp val lctx arg with
-      | .some ⟨0, _⟩, .some ⟨0, _⟩ => simp
-      | .some ⟨0, _⟩, .some ⟨n + 1, _⟩ => simp
-      | .some ⟨0, _⟩, .none => simp
-      | .some ⟨n + 1, _⟩, _ => simp
-      | .none , _ => simp
+      simp only; cases interp val lctx arg <;> simp
     | .none, _ =>
-      simp; cases interp val lctx fn <;> simp
+      simp only; cases interp val lctx fn <;> simp
   case app fn arg IHfn IHarg =>
     revert IHfn IHarg
-    simp [check, interp]
+    simp only [check, interp]
     match
       cfn : check (fun n => (val n).fst) (List.length lctx) fn,
       carg : check (fun n => (val n).fst) (List.length lctx) arg with
-    | .some (n + 1), .some 0 =>
-      simp;
-      match cifn : interp val lctx fn, ciarg : interp val lctx arg with
-      | .some ⟨n + 1, _⟩, .some ⟨0, _⟩ => simp
-      | .some ⟨n + 1, _⟩, .some ⟨m + 1, _⟩ => simp
-      | .some ⟨n + 1, _⟩, .none => simp
-      | .some ⟨0, _⟩, _ => simp
-      | .none , _ => simp
-    | .some (n + 1), .some (m + 1) =>
-      simp;
+    | .some (n + 1), .some 0 | .some (n + 1), .some (m + 1) =>
+      simp only
       match cifn : interp val lctx fn, ciarg : interp val lctx arg with
       | .some ⟨n + 1, _⟩, .some ⟨0, _⟩ => simp
       | .some ⟨n + 1, _⟩, .some ⟨m + 1, _⟩ => simp
@@ -181,14 +153,14 @@ def Lam₂Type.check_iff_interp
       | .some ⟨0, _⟩, _ => simp
       | .none , _ => simp
     | .some (n + 1), none =>
-      simp; cases interp val lctx arg <;> simp
+      simp only; cases interp val lctx arg <;> simp
     | .some 0, _ =>
-      simp;
+      simp only;
       match cifn : interp val lctx fn with
       | .some ⟨n + 1, _⟩ => simp
       | .some ⟨0, _⟩ => simp
       | .none => simp
     | .none, _ =>
-      simp; cases interp val lctx fn <;> simp
+      simp only; cases interp val lctx fn <;> simp
 
 end Auto.Embedding.Lam₂

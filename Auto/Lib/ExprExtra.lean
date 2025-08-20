@@ -6,6 +6,16 @@ open Lean Elab Command
 
 namespace Auto
 
+private partial def mkAuxNameAux (env : Environment) (base : Name) (i : Nat) : Name :=
+  let candidate := base.appendIndexAfter i
+  if env.contains candidate then
+    mkAuxNameAux env base (i+1)
+  else
+    candidate
+
+def mkAuxName [Monad m] [MonadEnv m] (baseName : Name) (idx : Nat) : m Name := do
+  return mkAuxNameAux (← getEnv) baseName idx
+
 def Expr.eraseMData : Expr → Expr
 | .app fn arg => .app (eraseMData fn) (eraseMData arg)
 | .lam name ty body bi => .lam name (eraseMData ty) (eraseMData body) bi
@@ -260,22 +270,6 @@ def Expr.instanceOf? (e₁ : Expr) (params : Array Name) (e₂ : Expr) : MetaM (
         return (proof, eq, s.paramNames)
     else
       return .none
-
-def Expr.formatWithUsername (e : Expr) : MetaM Format := do
-  let fvarIds := (collectFVars {} e).fvarIds
-  let names ← fvarIds.mapM (fun fid => do
-    match ← fid.findDecl? with
-    | .some decl => return decl.userName
-    | .none => throwError "{decl_name%}e :: Unknown free variable {(Expr.fvar fid).dbgToString}")
-  let e := e.replaceFVars (fvarIds.map Expr.fvar) (names.map (Expr.const · []))
-  let e ← instantiateMVars e
-  let mvarIds := (Expr.collectMVars {} e).result
-  let names ← mvarIds.mapM (fun mid => do
-    match ← mid.findDecl? with
-    | .some decl => return decl.userName
-    | .none => throwError "{decl_name%} :: Unknown metavariable {(Expr.mvar mid).dbgToString}")
-  let e := (e.abstract (mvarIds.map Expr.mvar)).instantiateRev (names.map (Expr.const · []))
-  return f!"{e}"
 
 /--
   `ident` must be of type `Expr → TermElabM Unit`

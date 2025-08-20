@@ -164,6 +164,7 @@ def collectExprsSimpleInduct (es : Array Expr) : MetaM (Array (Array SimpleIndVa
 
 end Auto
 
+/-
 section Test
 /-
   private def skd (e : Expr) : Elab.Term.TermElabM Unit := do
@@ -204,3 +205,4 @@ section Test
   #getExprAndApply[Tree Int|skd]
 -/
 end Test
+-/

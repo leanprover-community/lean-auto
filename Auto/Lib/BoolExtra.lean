@@ -89,7 +89,7 @@ theorem Bool.ite'_eq_false (p : Prop) (a b : α) : ¬ p → ite' p a b = b := by
 /--
   Invoke `rw` at the beginning of `auto`
 -/
-theorem Bool.cond_simp.{u} : @cond = fun (α : Type u) b => @ite' α (b = true) := by
+theorem Bool.cond_simp.{u} : @cond = fun (α : Sort u) b => @ite' α (b = true) := by
   funext α b x y; cases b
   case false => rw [cond_false, Bool.ite'_eq_false]; exact Bool.false_ne_true
   case true => rw [cond_true, Bool.ite'_eq_true]; rfl

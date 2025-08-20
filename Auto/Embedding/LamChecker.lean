@@ -1380,32 +1380,8 @@ theorem InferenceStep.evalValidOfInstantiate_correct
 theorem ConvStep.eval_correct
   (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
   (cs : ConvStep) → EvalResult.correct r cv (cs.eval r)
-| .validOfHeadBeta pos => by
-  dsimp [eval]
-  cases h : r.getValid pos <;> try exact True.intro
-  case some lctxt =>
-    match lctxt with
-    | (lctx, t) =>
-      have h' := RTable.getValid_correct inv h
-      apply ChkStep.eval_correct_validAux h'
-      case vimp =>
-        intro hv; apply LamThmValid.mpLamThmEquiv _ hv
-        apply LamThmEquiv.ofHeadBeta (LamThmWF.ofLamThmValid hv)
-      case condimp =>
-        intro hcond; apply Nat.le_trans LamTerm.maxEVarSucc_headBeta hcond
-| .validOfBetaBounded pos bound => by
-  dsimp [eval]
-  cases h : r.getValid pos <;> try exact True.intro
-  case some lctxt =>
-    match lctxt with
-    | (lctx, t) =>
-      have h' := RTable.getValid_correct inv h
-      apply ChkStep.eval_correct_validAux h'
-      case vimp =>
-        intro hv; apply LamThmValid.mpLamThmEquiv _ hv
-        apply LamThmEquiv.ofBetaBounded (LamThmWF.ofLamThmValid hv)
-      case condimp =>
-        intro hcond; apply Nat.le_trans LamTerm.maxEVarSucc_betaBounded hcond
+| .validOfHeadBeta pos
+| .validOfBetaBounded pos bound
 | .validOfExtensionalize pos => by
   dsimp [eval]
   cases h : r.getValid pos <;> try exact True.intro
@@ -1416,9 +1392,14 @@ theorem ConvStep.eval_correct
       apply ChkStep.eval_correct_validAux h'
       case vimp =>
         intro hv; apply LamThmValid.mpLamThmEquiv _ hv
-        apply LamThmEquiv.ofExtensionalize (LamThmWF.ofLamThmValid hv)
+        have hvalid := LamThmWF.ofLamThmValid hv
+        simp [LamThmEquiv.ofHeadBeta hvalid, LamThmEquiv.ofBetaBounded hvalid,
+              LamThmEquiv.ofExtensionalize hvalid]
       case condimp =>
-        intro hcond; rw [LamTerm.maxEVarSucc_extensionalizeAux]; exact hcond
+        intro hcond
+        simp [Nat.le_trans LamTerm.maxEVarSucc_headBeta hcond,
+              Nat.le_trans LamTerm.maxEVarSucc_betaBounded hcond,
+              LamTerm.maxEVarSucc_extensionalizeAux, hcond]
 | .validOfEqSymm pos => by
   dsimp [eval]
   cases h₁ : r.getValid pos <;> try exact True.intro

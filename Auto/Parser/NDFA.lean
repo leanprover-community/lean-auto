@@ -361,9 +361,9 @@ section NFA
 
   #eval IO.println test₃
   #eval test₃.wf
-  #eval (test₃.move (HashSet.emptyWithCapacity.insert 0) 'a').toList
-  #eval (test₃.εClosureOfStates (HashSet.emptyWithCapacity.insert 0)).toList
-  #eval (test₃.move (HashSet.emptyWithCapacity.insertMany [7,3,1,0]) 'a').toList
+  #eval (test₃.move (Std.HashSet.emptyWithCapacity.insert 0) 'a').toList
+  #eval (test₃.εClosureOfStates (Std.HashSet.emptyWithCapacity.insert 0)).toList
+  #eval (test₃.move (Std.HashSet.emptyWithCapacity.insertMany [7,3,1,0]) 'a').toList
 
   -/
 
@@ -473,9 +473,9 @@ section DFA
 
   /-
 
-  def test₄ : DFA String := ⟨HashSet.emptyWithCapacity.insert 3, #[
+  def test₄ : DFA String := ⟨Std.HashSet.emptyWithCapacity.insert 3, #[
     Std.HashMap.ofList [("a", 5), ("b", 0)],
-    Std.HashMap.ofList [("q", 1), ("c", 4), ("a", 2)]], #[.emptyWithCapacity, .emptyWithCapacity]⟩
+    Std.HashMap.ofList [("q", 1), ("c", 4), ("a", 2)]], #[.empty, .empty]⟩
 
   local instance : Hashable Char where
     hash c := hash c.val

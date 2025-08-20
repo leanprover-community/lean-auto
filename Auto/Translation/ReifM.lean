@@ -47,6 +47,6 @@ abbrev ReifM := StateT State MetaM
 def mkAuxName (suffix : Name) : ReifM Name := do
   match (← getDeclName?) with
   | none          => throwError "{decl_name%} :: auxiliary declaration cannot be created when declaration name is not available"
-  | some declName => Lean.mkAuxName (declName ++ suffix) 1
+  | some declName => Auto.mkAuxName (declName ++ suffix) 1
 
 end Auto.Reif

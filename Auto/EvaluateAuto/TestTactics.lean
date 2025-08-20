@@ -194,12 +194,10 @@ end Tactics
 
 /--
   Use `runWithEffectOfCommands` to run tactics at the place just before
-  the command that created the constant `name`\
-  Note: Use `initSrcSearchPath` to get SearchPath of source files
+  the command that created the constant `name`
 -/
 def runTacticsAtConstantDeclaration
-  (name : Name) (_searchPath : SearchPath)
-  (tactics : Array (ConstantInfo → TacticM Unit)) : CoreM (Array Result) := do
+  (name : Name) (tactics : Array (ConstantInfo → TacticM Unit)) : CoreM (Array Result) := do
   if ← isInitializerExecutionEnabled then
     throwError "{decl_name%} :: Running this function with execution of `initialize` code enabled is unsafe"
   let .some modName ← Lean.findModuleOf? name
@@ -211,7 +209,7 @@ def runTacticsAtConstantDeclaration
   let path := path.normalize
   let inputHandle ← IO.FS.Handle.mk path .read
   let input ← inputHandle.readToEnd
-  let results : Array (Array Result) ← runWithEffectOfCommands input path.toString (.some 1) (fun _ st₁ _ ci => do
+  let results : Array (Array Result) ← runWithEffectOfCommands input path.toString (.some 1) (fun _ctx st₁ _st₂ ci => do
     if name != ci.name then
       return .none
     let metaAction (tactic : ConstantInfo → TacticM Unit) : MetaM Result :=
@@ -259,14 +257,12 @@ instance : ToString EvalTacticConfig where
 
 /--
   Effectively `runTacticsAtConstantDeclaration` at each constant in `modName` which satisfies `filter`\
-  Note: Use `initSrcSearchPath` to get SearchPath of source files
 
   For the `i`-th theorem `name` in `names`, its entry in the result file has the following form:
   `<i> #[<result> <time> <heartbeats>, ⋯, <result> <time> <heartbeats>] <name>`
 -/
 def evalTacticsAtModule
-  (modName : Name) (_searchPath : SearchPath) (filter : ConstantInfo → Bool)
-  (config : EvalTacticConfig) : CoreM Unit:= do
+  (modName : Name) (filter : ConstantInfo → Bool) (config : EvalTacticConfig) : CoreM Unit:= do
   let logFileHandle? : Option IO.FS.Handle ← config.logFile.mapM (fun fname => IO.FS.Handle.mk fname .write)
   let resultFileHandle? : Option IO.FS.Handle ← config.resultFile.mapM (fun fname => IO.FS.Handle.mk fname .write)
   trace[auto.eval.printConfig] m!"Config = {config}"
@@ -282,10 +278,10 @@ def evalTacticsAtModule
   let input ← inputHandle.readToEnd
   let startTime ← IO.monoMsNow
   let nonterms := Std.HashSet.ofArray config.nonterminates
-  let results ← runWithEffectOfCommands input path.toString .none (fun _ st₁ _ ci => do
+  let results ← runWithEffectOfCommands input path.toString .none (fun _ctx st₁ _st₂ ci => do
     if filter ci then
       let result ← evalAction
-        {fileName := path.toString, fileMap := FileMap.ofString input } { env := st₁.commandState.env }
+        { fileName := path.toString, fileMap := FileMap.ofString input } { env := st₁.commandState.env }
         ci logFileHandle? config nonterms
       return .some (ci.name, result)
     else
@@ -470,8 +466,7 @@ where
         "]",
         "",
         "def action : CoreM Unit := do",
-        "  let p ← initSrcSearchPath",
-        s!"  let _ ← evalTacticsAtModule ({repr mm}) p (fun ci => humanThms.contains ci.name)",
+        s!"  let _ ← evalTacticsAtModule ({repr mm}) (fun ci => humanThms.contains ci.name)",
         s!"    {lb} maxHeartbeats := {config.maxHeartbeats}, tactics := #[{tacsStr}],",
         s!"      logFile := {repr (logPath ++ ".log")}, resultFile := {repr (logPath ++ ".result")},",
         s!"      nonterminates := nonterms {rb}",

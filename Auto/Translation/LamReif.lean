@@ -1162,7 +1162,7 @@ def processSimpleApp (fn arg : Expr) : ReifM (Option LamTerm) := do
       return .some (.base (.ocst (.smtAttr1T attrName (← reifType arg) (.base .prop))))
     if let .some tcon := reifMapIL.get? name then
       if name == ``Embedding.forallF then
-        let [lvl₁, lvl₂] := lvls
+        let [_lvl₁, lvl₂] := lvls
           | throwError "{decl_name%} :: Auto.Embedding.forallF should have two levels"
         if !(← Meta.isLevelDefEq lvl₂ .zero) then
           return .none
@@ -1319,7 +1319,7 @@ def reifMapLam0Arg4NatLit : Std.HashMap (Name × Name) (Array ((Nat → Expr) ×
         (fun n => .app (.const ``BitVec.sshiftRight []) (.lit (.natVal n)), fun n => .base (.bvashr n))])
   ]
 
-def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
+def processLam0Arg2 (e fn arg₁ _arg₂ : Expr) : MetaM (Option LamTerm) := do
   let .const fnName _ := fn
     | return .none
   if arg₁.isConst then
@@ -1339,7 +1339,7 @@ def processLam0Arg2 (e fn arg₁ arg₂ : Expr) : MetaM (Option LamTerm) := do
               return .some (tcon n)
   return .none
 
-def processLam0Arg3 (e fn arg₁ arg₂ arg₃ : Expr) : MetaM (Option LamTerm) := do
+def processLam0Arg3 (e fn arg₁ arg₂ _arg₃ : Expr) : MetaM (Option LamTerm) := do
   match fn with
   | .const ``OfNat.ofNat _ =>
     match arg₁ with
@@ -1365,7 +1365,7 @@ def processLam0Arg3 (e fn arg₁ arg₂ arg₃ : Expr) : MetaM (Option LamTerm) 
     | _ => return .none
   | _ => return .none
 
-def processLam0Arg4 (e fn arg₁ arg₂ arg₃ arg₄ : Expr) : MetaM (Option LamTerm) := do
+def processLam0Arg4 (e fn arg₁ arg₂ _arg₃ _arg₄ : Expr) : MetaM (Option LamTerm) := do
   let .const fnName _ := fn
     | return .none
   if arg₁.isConst && arg₂.isConst then
@@ -2011,7 +2011,8 @@ open Embedding.Lam LamReif
     -- Collect essential chksteps and assertions from the high-level `lam`
     --   into the low-level `lam` such that the low-level `lam` proves `re`
     partial def collectProofFor (ref : State) (hre : REntry) : TransM Unit := do
-      if let .some _ := (← getChkMap).get? hre then
+      let translatedHre ← transREntry ref hre
+      if let .some _ := (← getChkMap).get? translatedHre then
         return
       let (highLvlProof, _) ← (lookupREntryProof! hre).run ref
       match highLvlProof with
@@ -2021,11 +2022,9 @@ open Embedding.Lam LamReif
         match er with
         | .fail => throwError "{decl_name%} :: Unexpected evaluation result"
         | .addEntry reNew => do
-          let expectedEntry ← transREntry ref hre
-          if expectedEntry != reNew then throwError "{decl_name%} :: Entry mismatch"
+          if translatedHre != reNew then throwError "{decl_name%} :: Entry mismatch"
         | .newEtomWithValid _ lctx t => do
-          let expectedEntry ← transREntry ref hre
-          if expectedEntry != .valid lctx t then throwError "{decl_name%} :: Entry mismatch"
+          if translatedHre != .valid lctx t then throwError "{decl_name%} :: Entry mismatch"
       | .inhabitation e deriv _ =>
         let .nonempty hs := hre
           | throwError "{decl_name%} :: Unexpected error"
