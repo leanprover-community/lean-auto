@@ -75,7 +75,7 @@ section NFA
         #[]
       else
         let hmap := r.tr[s]'(
-          by simp [Nat.not_gt_eq] at h₁;
+          by simp at h₁;
              have h₃ : _ := Nat.eq_or_lt_of_le h₁
              have h₄ : (s = Array.size r.tr) = False := eq_false h₂
              simp [h₄] at h₃; simp [h₃]
@@ -417,7 +417,7 @@ section DFA
       d.tr.size
     else
       let hmap := d.tr[s]'(
-        by simp [Nat.not_gt_eq] at h₁;
+        by simp at h₁;
            have h₃ : _ := Nat.eq_or_lt_of_le h₁
            have h₄ : (s = Array.size _) = False := eq_false h₂
            simp [h₄] at h₃; simp [h₃]

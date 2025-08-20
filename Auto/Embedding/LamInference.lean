@@ -179,7 +179,7 @@ section Skolemization
     match t, heq with
     | .app _ (.base (.existE s)) p, Eq.refl _ => by
       dsimp [maxEVarSucc]; rw [LamTerm.maxEVarSucc_bvarApps];
-      simp [Nat.max, Nat.max_zero_left]; apply Nat.le_refl
+      simp [Nat.max]; apply Nat.le_refl
 
   theorem choose_spec' {p : α → β → Prop} (h : ∀ q, ∃ x, p x q) : ∃ (y : _ → _), ∀ q, p (y q) q :=
     ⟨fun q => Classical.choose (h q), fun q => Classical.choose_spec (h q)⟩

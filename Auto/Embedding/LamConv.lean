@@ -795,7 +795,7 @@ theorem LamTerm.maxEVarSucc_instantiateAt :
         rw [Nat.eq_of_le_of_lt_succ (Nat.sub_eq_zero_iff_le.mp h₂) (
           Nat.succ_le_succ (Nat.le_of_ble_eq_true h₁)
         )]; rw [Nat.beq_refl]
-        simp [maxEVarSucc, Nat.max_zero_right]
+        simp [maxEVarSucc]
       | _ + 1 =>
         dsimp
         match h₃ : idx.beq n with
@@ -1466,7 +1466,7 @@ theorem LamTerm.maxEVarSucc_eqSymm?
   (heq : LamTerm.eqSymm? t = .some t') : t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
   | .app s (.app _ (.base (.eq _)) lhs) _, Eq.refl _ => by
-    simp [mkEq, maxEVarSucc, Nat.max, Nat.max_zero_left]
+    simp [mkEq, maxEVarSucc, Nat.max]
     apply Nat.max_comm
 
 def LamWF.eqSymm?
@@ -1507,7 +1507,7 @@ theorem LamTerm.maxEVarSucc_neSymm?
   (heq : LamTerm.neSymm? t = .some t') : t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
   | .app _ (.base .not) (.app s (.app _ (.base (.eq _)) lhs) _), Eq.refl _ => by
-    simp [mkEq, mkNot, maxEVarSucc, Nat.max, Nat.max_zero_left]
+    simp [mkEq, mkNot, maxEVarSucc, Nat.max]
     apply Nat.max_comm
 
 def LamWF.neSymm?

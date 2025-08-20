@@ -157,7 +157,7 @@ def queryZipperpositionExe (query : String) : MetaM (Bool × String) := do
   let (_, solver) ← solver.takeStdin
   let stdout ← IO.waitAny
     [← IO.asTask solver.stdout.readToEnd Task.Priority.dedicated,
-    ← IO.asTask (do IO.sleep (tlim * 1000); pure "Timeout reached") Task.Priority.dedicated]
+    ← IO.asTask (do IO.sleep (UInt32.ofBitVec (tlim * 1000#32)); pure "Timeout reached") Task.Priority.dedicated]
   let stdout ← IO.ofExcept stdout
   if stdout == "Timeout reached" then
     solver.kill
