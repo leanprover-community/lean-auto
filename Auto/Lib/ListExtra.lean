@@ -112,7 +112,7 @@ def List.mergeSort (r : α → α → Prop) [DecidableRel r]  : List α → List
   | [] => []
   | [a] => [a]
   | a :: b :: l => by
-    let ls := split (a :: b :: l)
+    letI ls := split (a :: b :: l)
     have e : split (a :: b :: l) = ⟨ls.1, ls.2⟩ := rfl
     have h := length_split_lt e
     have : (split l).fst.length < l.length + 1 := Nat.lt_of_succ_lt_succ h.1

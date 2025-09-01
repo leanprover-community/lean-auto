@@ -11,7 +11,7 @@ theorem LamTerm.maxEVarSucc_intro1F?
   (heq : LamTerm.intro1F? t = .some (s, t')) : t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
   | .app _ (.base (.forallE _)) (.lam _ _), Eq.refl _ => by
-    simp [maxEVarSucc, Nat.max, Nat.max_zero_left]
+    simp [maxEVarSucc, Nat.max]
 
 theorem LamValid.intro1F? (H : LamValid lval lctx t)
   (heq : LamTerm.intro1F? t = .some (s, p)) : LamValid lval (pushLCtx s lctx) p :=
