@@ -337,7 +337,7 @@ private def ConstInst.toExprAux (args : List (Option Expr))
 def ConstInst.toExpr (ci : ConstInst) : MetaM Expr := do
   let type ← instantiateMVars (← ci.head.inferType)
   let nargs := (Nat.succ <$> ci.argsIdx[ci.argsIdx.size - 1]?).getD 0
-  let mut args : Array (Option Expr) := (Array.mk (List.range nargs)).map (fun n => .none)
+  let mut args : Array (Option Expr) := (Array.mk (List.range nargs)).map (fun _ => .none)
   for (arg, idx) in ci.argsInst.zip ci.argsIdx do
     args := args.setIfInBounds idx (.some arg)
   let .some ret := ConstInst.toExprAux args.toList [] ci.head.toExpr type
@@ -1033,34 +1033,6 @@ namespace FVarRep
     | .none => trace[auto.mono] "Warning, {e} is not a valid instance of `forallF` or `ImpF`"
 
 end FVarRep
-
-/--
-  Given `mvarId : ty`, create a fresh mvar `m` of type
-    `monofact₁ → monofact₂ → ⋯ → monofactₙ → ty`
-  and return `(m proof₁ proof₂ ⋯ proofₙ, m)`
--/
-def intromono (lemmas : Array Lemma) (mvarId : MVarId) : MetaM MVarId := do
-  let startTime ← IO.monoMsNow
-  let monoMAction : MonoM LemmaInsts := (do
-    initializeMonoM lemmas
-    saturate
-    let monoLemmas ← getAllMonoLemmaInsts
-    trace[auto.mono] "Monomorphization took {(← IO.monoMsNow) - startTime}ms"
-    return monoLemmas)
-  let (monoLemmas, _) ← monoMAction.run {}
-  MetaState.runAtMetaM' (do
-    let mut fids := #[]
-    for ml in monoLemmas do
-      let userName := (`monoLem).appendIndexAfter fids.size
-      let fid ← MetaState.withLocalDecl userName .default ml.type .default
-      fids := fids.push fid
-    let type ← MetaState.runMetaM <| mvarId.getType
-    let tag ← MetaState.runMetaM <| mvarId.getTag
-    let mvar ← MetaState.runMetaM <| Meta.mkFreshExprSyntheticOpaqueMVar type.headBeta tag
-    let newVal ← MetaState.runMetaM <| Meta.mkLambdaFVars (fids.map Expr.fvar) mvar
-    let newVal := Lean.mkAppN newVal (monoLemmas.map (·.proof))
-    mvarId.assign newVal
-    return mvar.mvarId!)
 
 def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State → MetaM α) : MetaM α := do
   for h in lemmas do

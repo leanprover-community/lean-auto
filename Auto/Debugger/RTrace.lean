@@ -12,7 +12,7 @@ initialize
     messages that we see (e.g. we want to see the 200th-300th trace
     messages and the 500th-550th trace messages). We might also want
     to see trace messages that contain specific substrings.
-  
+
   `Range` represents an array of left-closed, right-open non-empty
     intervals on natural numbers, such that they're disjoint and are
     ordered with respect to the ordering of natural numbers.
@@ -21,7 +21,7 @@ abbrev Range := Array (Nat × Nat)
 
 def Range.wf (r : Range) : Bool :=
   r.size == 0 || (r.all (fun (a, b) => a < b) &&
-    (r.pop.zip (r.eraseIdx 0)).all (fun ((_, a), (b, _)) => a ≤ b))
+    (r.pop.zip (r.eraseIdxIfInBounds 0)).all (fun ((_, a), (b, _)) => a ≤ b))
 
 def Range.contains (r : Range) (n : Nat) : Bool := r.any (fun (l, r) => l ≤ n ∧ n < r)
 
@@ -49,11 +49,11 @@ def Range.add (r : Range) (interval : Nat × Nat) : Range := Id.run <| do
 def Range.adds (r : Range) (intervals : Range) : Range :=
   intervals.foldl (fun cur i => cur.add i) r
 
-initialize RTrace.rtraceState : IO.Ref (HashMap String (Range × Nat)) ← IO.mkRef {}
+initialize RTrace.rtraceState : IO.Ref (Std.HashMap String (Range × Nat)) ← IO.mkRef {}
 
 def RTrace.printRTraceClass (clsName : String) : IO Unit := do
-  if let .some range := (← rtraceState.get).find? clsName then
-    IO.println s!"Class range: {range.fst.data}, Current index: {range.snd}"
+  if let .some range := (← rtraceState.get).get? clsName then
+    IO.println s!"Class range: {range.fst.toList}, Current index: {range.snd}"
   else
     throw (IO.userError s!"Unknown RTrace Class {clsName}")
 
@@ -62,7 +62,7 @@ def RTrace.setRTraceClass (clsName : String) (intervals : Range) : IO Unit := do
   rtraceState.set ((← rtraceState.get).insert clsName (range, 0))
 
 def RTrace.addToRTraceClass (clsName : String) (intervals : Range) : IO Unit := do
-  let range := ((← rtraceState.get).find? clsName).getD (#[], 0)
+  let range := ((← rtraceState.get).get? clsName).getD (#[], 0)
   rtraceState.set ((← rtraceState.get).insert clsName (range.fst.adds intervals, 0))
 
 def RTrace.clearRTraceClass (clsName : String) : IO Unit := do
@@ -70,7 +70,7 @@ def RTrace.clearRTraceClass (clsName : String) : IO Unit := do
 
 def RTrace.resetRTrace : IO Unit := do
   let state := ← rtraceState.get
-  rtraceState.set (HashMap.ofList (state.toList.map (fun (name, (r, _)) => (name, (r, 0)))))
+  rtraceState.set (Std.HashMap.ofList (state.toList.map (fun (name, (r, _)) => (name, (r, 0)))))
 
 syntax (name := printRTraceClass) "#printRTraceClass" str : command
 syntax (name := setRTraceClass) "#setRTraceClass" str "[" ( "(" num "," num ")" ) ,* "]" : command
@@ -125,7 +125,7 @@ def elabResetRTrace : CommandElab := fun stx => do
 
 def rguard [Monad m] [MonadLiftT IO m] (clsName : String) (action : m Unit) : m Unit := do
   let state ← @id (IO _) <| RTrace.rtraceState.get
-  match state.find? clsName with
+  match state.get? clsName with
   | .some (range, idx) =>
     if range.contains idx then action
     @id (IO _ ) <| RTrace.rtraceState.set (state.insert clsName (range, idx + 1))
@@ -134,7 +134,7 @@ def rguard [Monad m] [MonadLiftT IO m] (clsName : String) (action : m Unit) : m 
 def rtrace [Monad m] [MonadLiftT IO m] [MonadTrace m] [MonadRef m] [AddMessageContext m]
   (clsName : String) (msg : MessageData) : m Unit := do
   let state ← @id (IO _) <| RTrace.rtraceState.get
-  match state.find? clsName with
+  match state.get? clsName with
   | .some (range, idx) =>
     if range.contains idx then (addTrace `auto.debugger.rtrace (m!"{clsName} {idx} : " ++ msg))
     @id (IO _ ) <| RTrace.rtraceState.set (state.insert clsName (range, idx + 1))

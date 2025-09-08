@@ -49,23 +49,23 @@ def ofNat'WF (n : Nat) :=
     match n % 2 with
     | 0 => .xO (ofNat'WF (n / 2))
     | _ => .xI (ofNat'WF (n / 2))
-decreasing_by rw [← h]; apply ofNat'WFAux; assumption
+decreasing_by rw [h]; apply ofNat'WFAux _ _ rfl
 
-@[irreducible] def ofNat'WF.inductionOn.{u}
-  {motive : Nat → Sort u}
+def ofNat'WF.inductionOn.{u}
+  {motive : Nat → Sort u} (x : Nat)
   (ind : ∀ x, motive ((x + 2) / 2) → motive (x + 2))
-  (base₀ : motive 0) (base₁ : motive 1) (x : Nat) : motive x :=
-  match h : x with
+  (base₀ : motive 0) (base₁ : motive 1) : motive x :=
+  match x with
   | 0 => base₀
   | 1 => base₁
-  | x' + 2 => ind x' (inductionOn ind base₀ base₁ ((x' + 2) / 2))
-decreasing_by apply ofNat'WFAux; rfl
+  | x' + 2 => ind x' (inductionOn ((x' + 2) / 2) ind base₀ base₁)
+decreasing_by apply ofNat'WFAux _ _ rfl
 
 @[irreducible] def ofNat'WF.induction
   {motive : Nat → Sort u}
   (ind : ∀ x, motive ((x + 2) / 2) → motive (x + 2))
   (base₀ : motive 0) (base₁ : motive 1) : ∀ x, motive x :=
-  fun x => ofNat'WF.inductionOn ind base₀ base₁ x
+  fun x => ofNat'WF.inductionOn x ind base₀ base₁
 
 theorem ofNat'WF.succSucc (n : Nat) :
   ofNat'WF (n + 2) =

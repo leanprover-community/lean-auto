@@ -108,17 +108,20 @@ def List.merge (r : α → α → Prop) [DecidableRel r] : List α → List α �
   | a :: l, b :: l' => if r a b then a :: merge r l (b :: l') else b :: merge r (a :: l) l'
   termination_by l₁ l₂ => List.length l₁ + List.length l₂
 
-def List.mergeSort (r : α → α → Prop) [DecidableRel r]  : List α → List α
+def List.mergeSort (r : α → α → Prop) [DecidableRel r] : List α → List α
   | [] => []
   | [a] => [a]
-  | a :: b :: l => by
+  | a :: b :: l =>
     let ls := split (a :: b :: l)
+    merge r (mergeSort r ls.1) (mergeSort r ls.2)
+termination_by l => List.length l
+decreasing_by
+  all_goals
     have e : split (a :: b :: l) = ⟨ls.1, ls.2⟩ := rfl
     have h := length_split_lt e
     have : (split l).fst.length < l.length + 1 := Nat.lt_of_succ_lt_succ h.1
     have : (split l).snd.length < l.length + 1 := Nat.lt_of_succ_lt_succ h.2
-    exact merge r (mergeSort r ls.1) (mergeSort r ls.2)
-  termination_by l => List.length l
+    simp [*]
 
 theorem List.map_equiv (f₁ f₂ : α → β) (hequiv : ∀ x, f₁ x = f₂ x) : List.map f₁ xs = List.map f₂ xs := by
   induction xs

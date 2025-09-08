@@ -5,6 +5,8 @@ open Lean Meta
 namespace Auto
 namespace AbstractMVars
 
+/- **TODO:** Update according to the `AbstractMVars` implementation of Lean -/
+
 structure AbstractMVarsResult where
   paramNames : Array Name
   numMVars   : Nat
@@ -81,7 +83,7 @@ partial def abstractExprMVars (e : Expr) : M Expr := do
     | e@(Expr.mdata _ b)       => return e.updateMData! (← abstractExprMVars b)
     | e@(Expr.lam _ d b _)     => return e.updateLambdaE! (← abstractExprMVars d) (← abstractExprMVars b)
     | e@(Expr.forallE _ d b _) => return e.updateForallE! (← abstractExprMVars d) (← abstractExprMVars b)
-    | e@(Expr.letE _ t v b _)  => return e.updateLet! (← abstractExprMVars t) (← abstractExprMVars v) (← abstractExprMVars b)
+    | e@(Expr.letE _ t v b nondep)  => return e.updateLet! (← abstractExprMVars t) (← abstractExprMVars v) (← abstractExprMVars b) nondep
     | e@(Expr.mvar mvarId)     =>
       let decl := (← getMCtx).getDecl mvarId
       if decl.depth != (← getMCtx).depth then
@@ -126,7 +128,7 @@ end AbstractMVars
   with new fresh metavariables.
 
   Application: we use this method to cache the results of type class resolution. -/
-def abstractMVars (e : Expr) : MetaM AbstractMVarsResult := do
+def abstractMVars (e : Expr) : MetaM Auto.AbstractMVars.AbstractMVarsResult := do
   let e ← instantiateMVars e
   let (e, s) := AbstractMVars.abstractExprMVars e { mctx := (← getMCtx), lctx := (← getLCtx), ngen := (← getNGen) }
   setNGen s.ngen
@@ -134,12 +136,12 @@ def abstractMVars (e : Expr) : MetaM AbstractMVarsResult := do
   let e := s.lctx.mkLambda s.fvars e
   pure { paramNames := s.paramNames, numMVars := s.fvars.size, expr := e }
 
-def openAbstractMVarsResult (a : AbstractMVarsResult) : MetaM (Array Expr × Array BinderInfo × Expr) := do
+def openAbstractMVarsResult (a : Auto.AbstractMVars.AbstractMVarsResult) : MetaM (Array Expr × Array BinderInfo × Expr) := do
   let us ← a.paramNames.mapM fun _ => mkFreshLevelMVar
   let e := a.expr.instantiateLevelParamsArray a.paramNames us
   lambdaMetaTelescope e (some a.numMVars)
 
-def abstractMVarsForall (e : Expr) : MetaM AbstractMVarsResult := do
+def abstractMVarsForall (e : Expr) : MetaM Auto.AbstractMVars.AbstractMVarsResult := do
   let e ← instantiateMVars e
   let (e, s) := AbstractMVars.abstractExprMVars e { mctx := (← getMCtx), lctx := (← getLCtx), ngen := (← getNGen) }
   setNGen s.ngen
@@ -174,7 +176,7 @@ where getParamLevelName! : Level → Name
 | .param name => name
 | e           => panic! s!"Lean.getLevelParamName! :: Level {e} is not a parameter level."
 
-def abstractMVarsLambda (e : Expr) : MetaM AbstractMVarsResult := do
+def abstractMVarsLambda (e : Expr) : MetaM Auto.AbstractMVars.AbstractMVarsResult := do
   let e ← instantiateMVars e
   let (e, s) := AbstractMVars.abstractExprMVars e { mctx := (← getMCtx), lctx := (← getLCtx), ngen := (← getNGen) }
   setNGen s.ngen

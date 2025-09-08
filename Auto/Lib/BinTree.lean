@@ -28,21 +28,21 @@ private theorem wfAux (n n' : Nat) : n = n' + 2 → n / 2 < n := by
     apply Nat.succ_le_succ; apply Nat.zero_le
   case hLtK => apply Nat.le_refl
 
-@[irreducible] def inductionOn.{u}
-  {motive : Nat → Sort u}
+def inductionOn.{u}
+  {motive : Nat → Sort u} (x : Nat)
   (ind : ∀ x, motive ((x + 2) / 2) → motive (x + 2))
-  (base₀ : motive 0) (base₁ : motive 1)  (x : Nat) : motive x :=
-  match h : x with
+  (base₀ : motive 0) (base₁ : motive 1) : motive x :=
+  match x with
   | 0 => base₀
   | 1 => base₁
-  | x' + 2 => ind x' (inductionOn ind base₀ base₁ ((x' + 2) / 2) )
+  | x' + 2 => ind x' (inductionOn ((x' + 2) / 2) ind base₀ base₁)
 decreasing_by apply wfAux; rfl
 
 @[irreducible] def induction.{u}
   {motive : Nat → Sort u}
   (ind : ∀ x, motive ((x + 2) / 2) → motive (x + 2))
   (base₀ : motive 0) (base₁ : motive 1) : ∀ x, motive x :=
-  fun x => inductionOn ind base₀ base₁ x
+  fun x => inductionOn x ind base₀ base₁
 
 end Bin
 

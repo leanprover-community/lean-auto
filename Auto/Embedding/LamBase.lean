@@ -2780,7 +2780,7 @@ def LamTerm.mkNatBinOp (binOp : NatConst) (a b : LamTerm) : LamTerm :=
 
 theorem LamTerm.maxEVarSucc_mkNatBinOp :
   (mkNatBinOp op a b).maxEVarSucc = max a.maxEVarSucc b.maxEVarSucc := by
-  dsimp [mkNatBinOp, maxEVarSucc]; simp [Nat.max, Nat.max_zero_left]
+  dsimp [mkNatBinOp, maxEVarSucc]; simp [Nat.max]
 
 def LamTerm.mkIOfNat (n : LamTerm) : LamTerm :=
   .app (.base .nat) (.base .iofNat) n
@@ -2808,7 +2808,7 @@ def LamTerm.mkIntBinOp (binOp : IntConst) (a b : LamTerm) : LamTerm :=
 
 theorem LamTerm.maxEVarSucc_mkIntBinOp :
   (mkIntBinOp op a b).maxEVarSucc = max a.maxEVarSucc b.maxEVarSucc := by
-  dsimp [mkIntBinOp, maxEVarSucc]; simp [Nat.max, Nat.max_zero_left]
+  dsimp [mkIntBinOp, maxEVarSucc]; simp [Nat.max]
 
 /-- Make `BitVec.ofNat n i` -/
 def LamTerm.mkBvofNat (n : Nat) (i : LamTerm) : LamTerm :=
@@ -2838,14 +2838,14 @@ def LamTerm.mkBvBinOp (n : Nat) (binOp : BitVecConst) (a b : LamTerm) : LamTerm 
 
 theorem LamTerm.maxEVarSucc_mkBvBinOp :
   (mkBvBinOp n binOp a b).maxEVarSucc = max a.maxEVarSucc b.maxEVarSucc := by
-  dsimp [mkBvBinOp, maxEVarSucc]; simp [Nat.max, Nat.max_zero_left]
+  dsimp [mkBvBinOp, maxEVarSucc]; simp [Nat.max]
 
 def LamTerm.mkBvNatBinOp (n : Nat) (binOp : BitVecConst) (a b : LamTerm) : LamTerm :=
   .app (.base .nat) (.app (.base (.bv n)) (.base (.bvcst binOp)) a) b
 
 theorem LamTerm.maxEVarSucc_mkBvNatBinOp :
   (mkBvNatBinOp n binOp a b).maxEVarSucc = max a.maxEVarSucc b.maxEVarSucc := by
-  dsimp [mkBvNatBinOp, maxEVarSucc]; simp [Nat.max, Nat.max_zero_left]
+  dsimp [mkBvNatBinOp, maxEVarSucc]; simp [Nat.max]
 
 def LamTerm.mkAppN (t : LamTerm) : List (LamSort × LamTerm) → LamTerm
 | .nil => t
@@ -3431,8 +3431,8 @@ def LamWF.eVarIrrelevance
 | .ofBVar _ => .ofBVar _
 | .ofLam bodyTy H => .ofLam bodyTy (eVarIrrelevance hLamVarTy hLamILTy hirr H)
 | .ofApp argTy HFn HArg => .ofApp argTy
-  (eVarIrrelevance hLamVarTy hLamILTy (fun n H => hirr _ (Nat.le_trans H (Nat.le_max_left _ _))) HFn)
-  (eVarIrrelevance hLamVarTy hLamILTy (fun n H => hirr _ (Nat.le_trans H (Nat.le_max_right _ _))) HArg)
+  (eVarIrrelevance hLamVarTy hLamILTy (fun _ H => hirr _ (Nat.le_trans H (Nat.le_max_left _ _))) HFn)
+  (eVarIrrelevance hLamVarTy hLamILTy (fun _ H => hirr _ (Nat.le_trans H (Nat.le_max_right _ _))) HArg)
 
 def LamWF.getAtom {ltv : LamTyVal}
   (wft : LamWF ltv ⟨lctx, .atom n, s⟩) : ltv.lamVarTy n = s :=
@@ -3657,7 +3657,7 @@ def LamWF.fnWFOfMkAppN
   LamWF ltv ⟨lctx, f, s.mkFuncs (args.map Prod.fst)⟩ :=
   match args with
   | .nil => wfApp
-  | .cons (argTy, arg) args =>
+  | .cons _ args =>
     (LamWF.fnWFOfMkAppN (args:=args) wfApp).getFn
 
 def LamWF.argsWFOfMkAppN {f : LamTerm}
@@ -3776,7 +3776,6 @@ def LamWF.bvarApps
   | .nil => wft
   | .cons ty lctx =>
     let lctxr := pushLCtxs (List.reverseAux ex (ty::lctx)) lctx'
-    have lctxr_def : lctxr = pushLCtxs (List.reverseAux ex (ty::lctx)) lctx' := by rfl
     .ofApp _ (LamWF.bvarApps (ex:=ty::ex) wft) (by
       have tyeq : ty = lctxr ex.length := by
         have exlt : List.length ex < List.length (List.reverse (ty :: ex)) := by
@@ -4089,8 +4088,8 @@ theorem LamWF.interp_bvarAppsRev
     rw [List.reverse_cons, pushLCtxs_append_singleton] at wft
     dsimp [LamTerm.bvarAppsRev] at wfAp
     rw [List.reverse_cons, pushLCtxs_append_singleton] at wfAp
-    rw [interp_substLCtxTerm_rec (by simp only [List.reverse_cons])
-      (pushLCtxsDep_substxs _ _ _ (@List.reverse_cons _ _ _) HList.reverse_cons)]
+    rw [interp_substLCtxTerm_rec (by rw [List.reverse_cons])
+      (pushLCtxsDep_substxs _ _ _ List.reverse_cons HList.reverse_cons)]
     rw [interp_substLCtxTerm_rec
       (pushLCtxs_append_singleton _ _ _) (pushLCtxsDep_append_singleton _ _ _)]
     rw [LamWF.interp_substWF (wf':=wfAp)]
@@ -4105,7 +4104,7 @@ theorem LamWF.interp_bvarAppsRev
         apply pushLCtxsDep_substxs; rw [List.reverse_cons]; apply HList.reverse_cons
       case h₂ =>
         apply eq_of_heq; apply HEq.trans (LamWF.interp_bvar _)
-        apply HEq.trans (pushLCtxsDep_ge _ (Nat.le_of_eq (@List.length_reverse _ _)))
+        apply HEq.trans (pushLCtxsDep_ge _ (Nat.le_of_eq List.length_reverse))
         rw [List.length_reverse, Nat.sub_self]; rfl
 
 theorem LamWF.interp_eqForallEF

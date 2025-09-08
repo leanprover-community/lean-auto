@@ -3,6 +3,7 @@ import Auto.Lib.BoolExtra
 import Auto.Lib.MessageData
 import Auto.Lib.ExprExtra
 import Auto.Lib.ListExtra
+import Auto.Lib.MetaExtra
 import Auto.Lib.Containers
 import Auto.Lib.AbstractMVars
 open Lean
@@ -126,12 +127,15 @@ def Lemma.reorderForallInstDep (lem : Lemma) : MetaM Lemma := do
   · If `lhs` occurs in `lem.type`, perform rewrite and return result
   · If `lhs` does not occur in `lem.type`, return `.none`
 -/
-def Lemma.rewriteUMonoRigid? (lem : Lemma) (rw : UMonoFact) : MetaM (Option Lemma) := do
+def Lemma.rewriteUMonoRigid? (lem : Lemma) (rw : UMonoFact) (nonDep : Bool) : MetaM (Option Lemma) := do
   let ⟨rwproof, rwtype, rwDeriv⟩ := rw
   let .some (α, lhs, rhs) ← Meta.matchEq? rwtype
     | throwError "{decl_name%} :: {rwtype} is not an equality"
   let ⟨⟨proof, e, lemDeriv⟩, params⟩ := lem
-  let eAbst ← Meta.kabstract e lhs
+  let eAbst ← (do
+    if nonDep then
+      Meta.withLocalDeclD `_a α fun x => do return (← Meta.replaceNonDep e lhs x).abstract #[x]
+    else Meta.kabstract e lhs)
   unless eAbst.hasLooseBVars do
     return .none
   let eNew := eAbst.instantiate1 rhs
@@ -139,7 +143,13 @@ def Lemma.rewriteUMonoRigid? (lem : Lemma) (rw : UMonoFact) : MetaM (Option Lemm
   unless (← Meta.isTypeCorrect motive) do
     throwError "{decl_name%} :: Motive {motive} is not type correct"
   let eqPrf ← Meta.mkEqNDRec motive proof rwproof
-  return .some ⟨⟨eqPrf, eNew, .node "rw" #[lemDeriv, rwDeriv]⟩, params⟩
+  return .some ⟨⟨eqPrf, ← Core.betaReduce eNew, .node "rw" #[lemDeriv, rwDeriv]⟩, params⟩
+
+def checkNonRecEquality (e : Expr) : MetaM Unit := do
+  let .some (_, lhs, rhs) ← Meta.matchEq? e
+    | throwError "{decl_name%} :: {e} is not an equality"
+  if (← Meta.kabstract rhs lhs).hasLooseBVars then
+    throwError "{decl_name%} :: Right-hand side {rhs} of equality contains left-hand side {lhs}"
 
 /--
   Exhaustively rewrite using a universe-polymorphic rigid equality
@@ -151,19 +161,16 @@ def Lemma.rewriteUMonoRigid? (lem : Lemma) (rw : UMonoFact) : MetaM (Option Lemm
 def Lemma.rewriteUPolyRigid (lem : Lemma) (rw : Lemma) : MetaM Lemma := do
   let mut lem := lem
   let s ← saveState
-  -- Test whether `rhs` contains `lhs
-  let .some (_, lhs, rhs) ← Meta.matchEq? rw.type
-    | throwError "{decl_name%} :: {rw.type} is not an equality"
-  let lhs' := lhs.instantiateLevelParamsArray rw.params (← rw.params.mapM (fun _ => Meta.mkFreshLevelMVar))
-  let rhs' := rhs.instantiateLevelParamsArray rw.params (← rw.params.mapM (fun _ => Meta.mkFreshLevelMVar))
-  if (← Meta.kabstract rhs' lhs').hasLooseBVars then
-    throwError "{decl_name%} :: Right-hand side {rhs} of equality contains left-hand side {lhs}"
+  -- Test whether `rhs` contains `lhs`
+  let rwty' := rw.type.instantiateLevelParamsArray
+    rw.params (← rw.params.mapM (fun _ => Meta.mkFreshLevelMVar))
+  checkNonRecEquality rwty'
   restoreState s
   while true do
     let umvars ← rw.params.mapM (fun _ => Meta.mkFreshLevelMVar)
     let .some urw := (rw.instantiateLevelParamsArray umvars).toUMonoFact?
       | throwError "{decl_name%} :: Unexpected error"
-    let .some lem' ← Lemma.rewriteUMonoRigid? lem urw
+    let .some lem' ← Lemma.rewriteUMonoRigid? lem urw false
       | break
     let restmvars := (← umvars.mapM Level.collectLevelMVars).flatMap id
     for lmvar in restmvars do
@@ -172,6 +179,41 @@ def Lemma.rewriteUPolyRigid (lem : Lemma) (rw : Lemma) : MetaM Lemma := do
     lem ← lem'.instantiateMVars
   restoreState s
   return ← lem.betaReduceType
+
+/--
+  Exhaustively rewrite using an array of universe-polymorphic rigid equalities
+  · Only `lhs`s occurring in non-dependent positions will be replaced by `rhs`
+  · If there are multiple instances of `lhs` with different universe
+    level instantiations, all of these instances will be replaced with `rhs`
+  · `rw.snd` should have the form `lhs = rhs`, where both sides are rigid
+    and `rhs` should not contain `lhs`
+-/
+def Lemma.rewriteUPolyRigidNonDep (lem : Lemma) (rws : Array Lemma) : MetaM Lemma := do
+  let mut lem := lem
+  let s ← saveState
+  -- Test whether `rhs` contains `lhs`
+  for rw in rws do
+    let rwty' := rw.type.instantiateLevelParamsArray
+      rw.params (← rw.params.mapM (fun _ => Meta.mkFreshLevelMVar))
+    checkNonRecEquality rwty'
+  restoreState s
+  while true do
+    let lemRef := lem
+    for rw in rws do
+      let umvars ← rw.params.mapM (fun _ => Meta.mkFreshLevelMVar)
+      let .some urw := (rw.instantiateLevelParamsArray umvars).toUMonoFact?
+        | throwError "{decl_name%} :: Unexpected error"
+      let .some lem' ← Lemma.rewriteUMonoRigid? lem urw true
+        | continue
+      let restmvars := (← umvars.mapM Level.collectLevelMVars).flatMap id
+      for lmvar in restmvars do
+        if !(← Meta.isLevelDefEq (.mvar lmvar) .zero) then
+          break
+      lem ← lem'.instantiateMVars
+    if lem == lemRef then
+      break
+  restoreState s
+  return lem
 
 /-
   An instance of a `Lemma`. If a lemma has proof `H`,

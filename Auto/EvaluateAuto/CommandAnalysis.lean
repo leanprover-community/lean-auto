@@ -25,10 +25,10 @@ namespace EvalAuto
 open Elab Frontend
 
 def processHeaderEnsuring (header : TSyntax ``Parser.Module.header) (opts : Options) (messages : MessageLog)
-    (inputCtx : Parser.InputContext) (trustLevel : UInt32 := 0) (leakEnv := false) (ensuring : Array Import := #[])
+    (inputCtx : Parser.InputContext) (trustLevel : UInt32 := 0) (leakEnv loadExts := false) (ensuring : Array Import := #[])
     : IO (Environment × MessageLog) := do
   try
-    let env ← importModules (leakEnv := leakEnv) (headerToImports header ++ ensuring) opts trustLevel
+    let env ← importModules (leakEnv := leakEnv) (loadExts := loadExts) (headerToImports header ++ ensuring) opts trustLevel
     pure (env, messages)
   catch e =>
     let env ← mkEmptyEnvironment
@@ -90,7 +90,7 @@ def runWithEffectOfCommands
     if !allImportedModules.contains rnm then
       throwError "{decl_name%} :: Cannot find rebindNativeModuleName module `{toString rnm}`"
     ensuring := ensuring.push { module := rnm }
-  let (env, messages) ← processHeaderEnsuring header {} messages inputCtx (ensuring := ensuring)
+  let (env, messages) ← processHeaderEnsuring header {} messages inputCtx (ensuring := ensuring) (loadExts := true)
   let commandState := Command.mkState env messages {}
   (runWithEffectOfCommandsCore cnt? action { inputCtx }).run'
     { commandState := commandState, parserState := parserState, cmdPos := parserState.pos }

@@ -455,6 +455,7 @@ namespace Lam2D
         (mkApp2 (.const ``instHAppendOfAppend [.zero]) stringc (mkConst ``String.instAppend))),
       (``String.lt, mkApp2 (.const ``LT.lt [.zero]) stringc (mkConst ``String.instLT)),
     ]
+
   open LamCstrD in
   def bitVecConstSimpNFList : List (Name × Expr) :=
     let natc := mkConst ``Nat

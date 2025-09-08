@@ -9,7 +9,7 @@ structure State extends Meta.State, Meta.Context
 
 structure SavedState where
   core       : Core.State
-  meta       : State
+  metaState  : State
 
 abbrev MetaStateM := StateRefT State CoreM
 
@@ -31,12 +31,12 @@ instance : AddMessageContext MetaStateM where
   addMessageContext := addMessageContextFull
 
 protected def saveState : MetaStateM SavedState :=
-  return { core := (← getThe Core.State), meta := (← get) }
+  return { core := (← getThe Core.State), metaState := (← get) }
 
 def SavedState.restore (b : SavedState) : MetaStateM Unit := do
   -- **TODO: Is this safe?**
   liftM (m := CoreM) <| modify fun s => { s with env := b.core.env, messages := b.core.messages, infoState := b.core.infoState }
-  modify fun s => { s with mctx := b.meta.mctx, zetaDeltaFVarIds := b.meta.zetaDeltaFVarIds, postponed := b.meta.postponed }
+  modify fun s => { s with mctx := b.metaState.mctx, zetaDeltaFVarIds := b.metaState.zetaDeltaFVarIds, postponed := b.metaState.postponed }
 
 instance : MonadBacktrack SavedState MetaStateM where
   saveState      := MetaState.saveState

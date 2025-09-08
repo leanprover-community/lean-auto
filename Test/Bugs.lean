@@ -1,5 +1,4 @@
 import Auto.Tactic
-import Auto.EvaluateAuto.TestCode
 
 -- Standard Preprocessing Configs
 set_option auto.redMode "reducible"
@@ -15,10 +14,6 @@ set_option auto.smt.solver.name "z3"
 -- Emulate native solver
 set_option trace.auto.native.printFormulas true
 attribute [rebind Auto.Native.solverFunc] Auto.Solver.Native.emulateNative
-
-set_option auto.native true
-set_option trace.auto.lamReif.printResult true
-set_option trace.auto.lamReif.printValuation true
 
 -- set_option auto.tptp true
 -- set_option trace.auto.tptp.premiseSelection true
@@ -80,3 +75,18 @@ end Set
 example (x : Nat) (primeset : Nat → Prop) (dvd : Nat → Nat → Prop) :
   ((∃ (i : _) (i_1 : primeset i), dvd i x) ↔ (∃ p, primeset p ∧ dvd p x)) := by
   auto
+
+section
+
+  variable (world : Type)
+
+  @[reducible] def F: Type := Nat → world
+
+  @[reducible] def G : Type := F world → (Nat → Prop)
+
+  set_option trace.auto.lamReif.printValuation true
+  set_option auto.mono.mode "fol"
+  example (f : Nat → world) (p : G world) : p f 0 ∨ ¬p f 0 := by
+    auto
+
+end

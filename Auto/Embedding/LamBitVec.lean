@@ -47,7 +47,7 @@ namespace BVLems
 
   theorem toNat_shiftLeft {a : BitVec n} (i : Nat) : (a <<< i).toNat = (a.toNat * (2 ^ i)) % (2 ^ n) := by
     rw [shiftLeft_def]; rcases a with ⟨⟨a, isLt⟩⟩
-    unfold BitVec.shiftLeft BitVec.toNat BitVec.ofNat Fin.ofNat'
+    unfold BitVec.shiftLeft BitVec.toNat BitVec.ofNat Fin.ofNat
     dsimp; rw [Nat.shiftLeft_eq]
 
   theorem toNat_ushiftRight {a : BitVec n} (i : Nat) : (a >>> i).toNat = (a.toNat) / (2 ^ i) := by
@@ -64,7 +64,7 @@ namespace BVLems
       rw [Bool.dite_eq_false (proof:=hnle)]; rfl
     case true =>
       have hle := of_decide_eq_true hdec
-      rw [Bool.dite_eq_true (proof:=hle), toNat_setWidth']
+      rw [Bool.dite_eq_true (proof:=hle), toNat_zeroExtend']
       rw [Nat.mod_eq_of_lt]; rcases a with ⟨⟨a, isLt⟩⟩;
       apply Nat.le_trans isLt; apply Nat.pow_le_pow_right (Nat.le_step .refl) hle
 
@@ -120,22 +120,21 @@ namespace BVLems
 
   theorem sshiftRight_ge_length_eq_msb (a : BitVec n) (i : Nat) : i ≥ n → a.sshiftRight i =
     if a.msb then (1#n).neg else 0#n := by
-    intro h; simp [sshiftRight, BitVec.toInt, ← msb_equiv_lt']
-    cases hmsb : a.msb <;> simp [hmsb, Int.shiftRight_def]
+    intro h; simp only [sshiftRight, BitVec.toInt, ← msb_equiv_lt']
+    cases hmsb : a.msb <;> simp only [Int.shiftRight_def] <;> dsimp
     case false =>
       rw [BitVec.ofNat]
       apply ushiftRight_ge_length_eq_zero'; exact h
     case true =>
-      have heq : (@HPow.hPow Int Nat Int instHPow 2 n) = ↑(@HPow.hPow Nat Nat Nat instHPow 2 n) := by simp only [Int.natCast_pow, Int.cast_ofNat_Int]
-      rw [heq, ← Int.subNatNat_eq_coe, Int.subNatNat_of_lt (toNat_le _)]
-      simp [BitVec.toInt, BitVec.ofInt]
+      rw [← Int.subNatNat_eq_coe, Int.subNatNat_of_lt (toNat_le _)]
+      simp only [BitVec.ofInt]; dsimp
       have hzero : (2 ^ n - BitVec.toNat a - 1) >>> i = 0 := by
         rw [Nat.shiftRight_eq_div_pow]; apply (Nat.le_iff_div_eq_zero (Nat.two_pow_pos _)).mpr
         rw [Nat.sub_one, Nat.pred_lt_iff_le (Nat.two_pow_pos _)]
         apply Nat.le_trans (Nat.sub_le _ _) (Nat.pow_le_pow_right (.step .refl) h)
       apply eq_of_val_eq; rw [toNat_ofNatLt, hzero]
       rw [toNat_neg, Int.mod_def', Int.emod]
-      rw [heq, Nat.zero_mod, Int.natAbs_natCast, Nat.succ_eq_add_one, Nat.zero_add]
+      rw [Nat.zero_mod, Int.natAbs_natCast, Nat.succ_eq_add_one, Nat.zero_add]
       rw [Int.subNatNat_of_sub_eq_zero ((Nat.sub_eq_zero_iff_le).mpr (Nat.two_pow_pos _))]
       rw [Int.toNat_natCast, BitVec.toNat_ofNat]
       cases n <;> try rfl
@@ -147,7 +146,7 @@ namespace BVLems
   theorem shiftRight_eq_zero_iff (a : BitVec n) (b : Nat) : a >>> b = 0#n ↔ a.toNat < 2 ^ b := by
     rw [ushiftRight_def]; rcases a with ⟨⟨a, isLt⟩⟩;
     unfold ushiftRight; rw [eq_iff_val_eq]
-    dsimp only [BitVec.toNat, BitVec.ofNat, Fin.val_ofNat', BitVec.ofNatLT]
+    dsimp only [BitVec.toNat, BitVec.ofNat, Fin.val_ofNat, BitVec.ofNatLT]
     rw [Nat.zero_mod, Nat.shiftRight_eq_div_pow]
     apply Iff.intro <;> intro h
     case mp =>
@@ -160,11 +159,11 @@ namespace BVLems
 
   theorem ofNat_add (n a b : Nat) : BitVec.ofNat n (a + b) = BitVec.ofNat n a + BitVec.ofNat n b := by
     apply congrArg (f:=BitVec.ofFin); apply Fin.eq_of_val_eq
-    dsimp [Fin.ofNat']; rw [Nat.add_mod]; rfl
+    dsimp [Fin.ofNat]; rw [Nat.add_mod]; rfl
 
   theorem ofNat_mod_pow2 (n a : Nat) : BitVec.ofNat n (a % (2 ^ n)) = BitVec.ofNat n a := by
     apply congrArg (f:=BitVec.ofFin); apply Fin.eq_of_val_eq
-    dsimp [Fin.ofNat']; apply Nat.mod_mod
+    dsimp [Fin.ofNat]; apply Nat.mod_mod
 
   theorem ofNat_sub (n a b : Nat) : BitVec.ofNat n (a - b) =
     if (a < b) then 0#n else (BitVec.ofNat n a - BitVec.ofNat n b) := by
@@ -190,7 +189,7 @@ namespace BVLems
 
   theorem ofNat_mul (n a b : Nat) : BitVec.ofNat n (a * b) = BitVec.ofNat n a * BitVec.ofNat n b := by
     apply congrArg (f:=BitVec.ofFin); apply Fin.eq_of_val_eq
-    dsimp [Fin.ofNat']; rw [Nat.mul_mod]; rfl
+    dsimp [Fin.ofNat]; rw [Nat.mul_mod]; rfl
 
   theorem shl_equiv (a : BitVec n) (b : Nat) : a <<< b = if (b < n) then (a <<< BitVec.ofNat n b) else 0 := by
     cases hdec : decide (b < n)
@@ -758,7 +757,7 @@ theorem LamTerm.maxEVarSucc_pushBVCast : maxEVarSucc (pushBVCast ct t) = maxEVar
                 dsimp [pushBVCast, maxEVarSucc, mkBvBinOp]
                 simp [IH (Nat.le_trans LamTerm.size_app_ge_size_arg leFn), IH leArg])
               case nsub =>
-                dsimp [pushBVCast, maxEVarSucc, bvofNat_nsub, mkIte, mkBvBinOp, mkNatBinOp, Nat.max]
+                dsimp only [pushBVCast, maxEVarSucc, bvofNat_nsub, mkIte, mkBvBinOp, mkNatBinOp, Nat.max]
                 simp [IH (Nat.le_trans LamTerm.size_app_ge_size_arg leFn), IH leArg]
       case ofInt m => apply Nat.max_zero_left
       case none =>
@@ -797,7 +796,7 @@ theorem LamTerm.maxEVarSucc_pushBVCast : maxEVarSucc (pushBVCast ct t) = maxEVar
                       (argeq₁ .none) (argeq .none) (argeq (.ofNat n)))
                       (by
                         dsimp [shl_equiv, mkIte, mkNatBinOp, mkBvBinOp, mkBvNatBinOp, maxEVarSucc, pushBVCast]
-                        simp only [Nat.max, Nat.max_zero_left, Nat.max_zero_right, maxlem₁])
+                        simp [Nat.max, maxlem₁])
                   cases arg
                   case app s''' fn' arg₂ =>
                     have leArg₂ := Nat.le_trans LamTerm.size_app_ge_size_arg leArg
@@ -810,7 +809,7 @@ theorem LamTerm.maxEVarSucc_pushBVCast : maxEVarSucc (pushBVCast ct t) = maxEVar
                         case bvtoNat m =>
                           dsimp [maxEVarSucc, pushBVCast]
                           cases m.ble n <;> dsimp [shl_toNat_equiv_short, shl_toNat_equiv_long, mkIte, mkEq, mkBvUOp, mkBvBinOp, maxEVarSucc] <;> rw [argeq₁, argeq₂]
-                          simp [Nat.max, Nat.max_zero_left, Nat.max_zero_right, maxlem₁]
+                          simp [Nat.max, maxlem₁]
                         all_goals apply h_none_shl
                       all_goals apply h_none_shl
                     all_goals apply h_none_shl
@@ -823,7 +822,7 @@ theorem LamTerm.maxEVarSucc_pushBVCast : maxEVarSucc (pushBVCast ct t) = maxEVar
                       (argeq₁ .none) (argeq .none) (argeq (.ofNat n)))
                       (by
                         dsimp [lshr_equiv, mkIte, mkNatBinOp, mkBvBinOp, mkBvNatBinOp, maxEVarSucc, pushBVCast]
-                        simp only [Nat.max, Nat.max_zero_left, Nat.max_zero_right, maxlem₁])
+                        simp [Nat.max, maxlem₁])
                   cases arg
                   case app s''' fn' arg₂ =>
                     have leArg₂ := Nat.le_trans LamTerm.size_app_ge_size_arg leArg
@@ -836,7 +835,7 @@ theorem LamTerm.maxEVarSucc_pushBVCast : maxEVarSucc (pushBVCast ct t) = maxEVar
                         case bvtoNat m =>
                           dsimp [maxEVarSucc, pushBVCast]
                           cases m.ble n <;> dsimp [lshr_toNat_equiv_short , lshr_toNat_equiv_long, mkIte, mkEq, mkBvUOp, mkBvBinOp, maxEVarSucc] <;> rw [argeq₁, argeq₂]
-                          simp [Nat.max, Nat.max_zero_left, Nat.max_zero_right, maxlem₁]
+                          simp [Nat.max, maxlem₁]
                         all_goals apply h_none_lshr
                       all_goals apply h_none_lshr
                     all_goals apply h_none_lshr
@@ -848,8 +847,8 @@ theorem LamTerm.maxEVarSucc_pushBVCast : maxEVarSucc (pushBVCast ct t) = maxEVar
                     Eq.trans (LamTerm.congr_maxEVarSucc_ashr_equiv (n₁:=n) (n₂:=n)
                       (argeq₁ .none) (argeq .none) (argeq (.ofNat n)))
                       (by
-                        dsimp [ashr_equiv, mkIte, mkEq, mkNatBinOp, mkBvUOp, mkBvBinOp, mkBvNatBinOp, maxEVarSucc, pushBVCast]
-                        simp only [Nat.max, Nat.max_zero_left, Nat.max_zero_right, maxlem₂])
+                        dsimp only [ashr_equiv, mkIte, mkEq, mkNatBinOp, mkBvUOp, mkBvBinOp, mkBvNatBinOp, maxEVarSucc, pushBVCast]
+                        simp [Nat.max, maxlem₂])
                   cases arg
                   case app s''' fn' arg₂ =>
                     have leArg₂ := Nat.le_trans LamTerm.size_app_ge_size_arg leArg
@@ -862,7 +861,7 @@ theorem LamTerm.maxEVarSucc_pushBVCast : maxEVarSucc (pushBVCast ct t) = maxEVar
                         case bvtoNat m =>
                           dsimp [maxEVarSucc, pushBVCast]
                           cases m.ble n <;> dsimp [ashr_toNat_equiv_short, ashr_toNat_equiv_long, mkIte, mkEq, mkBvUOp, mkBvBinOp, maxEVarSucc] <;> rw [argeq₁, argeq₂]
-                          simp [Nat.max, Nat.max_zero_left, Nat.max_zero_right, maxlem₂]
+                          simp [Nat.max, maxlem₂]
                         all_goals apply h_none_ashr
                       all_goals apply h_none_ashr
                     all_goals apply h_none_ashr

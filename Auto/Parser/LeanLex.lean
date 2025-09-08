@@ -158,7 +158,7 @@ partial def ERE.brackets : ERE → Array EREBracket
 | .repGeLe e _ _ => e.brackets
 | .comp es       => (es.map ERE.brackets).flatMap id
 | .plus es       => (es.map ERE.brackets).flatMap id
-| .attr e s      => e.brackets
+| .attr e _      => e.brackets
 
 partial def ERE.normalizeBrackets : ERE → ERE
 | .bracket b     => .bracket (.inStr (toString b))
