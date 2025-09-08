@@ -10,6 +10,8 @@ open Lean
 
 namespace Auto.Embedding.Lam
 
+open ToExprExtra
+
 /-- An entry of RTable -/
 inductive REntry where
   -- Well-formed formulas, with types

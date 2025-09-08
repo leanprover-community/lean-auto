@@ -230,7 +230,7 @@ def callNativeWithAtomAsFVar
 @[inherit_doc callNativeWithAtomAsFVar]
 def callMkMVarWithAtomAsFVar
   (nonemptiesWithDTr : Array (REntry × DTr)) (validsWithDTr : Array (REntry × DTr)) :
-  ExternM (MVarId × Expr × LamTerm × Nat × Array Nat) := MetaState.withTemporaryLCtx {} {} <| do
+  ExternM (MVarId × Expr × LamTerm × Array (FVarId × Expr) × Array Nat) := MetaState.withTemporaryLCtx {} {} <| do
   let (ss, ts, lemmas, inhLemmas) ← withAll nonemptiesWithDTr validsWithDTr
   let getFid (lem : Lemma) : ExternM FVarId := do
     match lem.proof with
@@ -261,6 +261,6 @@ def callMkMVarWithAtomAsFVar
     let proof ← Meta.mkLambdaFVars (fvars.map Expr.fvar) (← instantiateMVars (.mvar mProofId))
     let proof ← Meta.instantiateLambda proof (atomsToAbstract.map Prod.snd)
     return (proof, goalId))
-  return (goalId, proof, proofLamTerm, atomsToAbstract.size, etomsToAbstract.map Prod.snd)
+  return (goalId, proof, proofLamTerm, atomsToAbstract, etomsToAbstract.map Prod.snd)
 
 end Auto.Lam2DAAF

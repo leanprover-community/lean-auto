@@ -13,6 +13,8 @@ import Auto.MathlibEmulator
 -- Simply Typed Lambda Calculus = HOL (without polymorphism)
 namespace Auto.Embedding.Lam
 
+open ToExprExtra
+
 /-- Interpreted sorts -/
 inductive LamBaseSort
   | prop   : LamBaseSort            -- GLift `Prop`

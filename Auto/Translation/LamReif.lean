@@ -20,7 +20,10 @@ initialize
   registerTraceClass `auto.lamReif.prep.printResult
 
 namespace Auto.LamReif
+
 open Embedding.Lam
+
+open ToExprExtra
 
 /--
   We require that all instances of polymorphic constants,
