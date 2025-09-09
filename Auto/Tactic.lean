@@ -381,7 +381,7 @@ open LamReif Embedding.Lam in
 def callMkMVar_checker
   (nonempties : Array REntry) (valids : Array REntry) :
   ReifM (Array (REntry × DTr) × Array (REntry × DTr) × MVarId ×
-         Expr × LamTerm × Nat × Array Nat) := do
+         Expr × LamTerm × Array Expr × Array Nat) := do
   let tyVal ← LamReif.getTyVal
   let varVal ← LamReif.getVarVal
   let lamEVarTy ← LamReif.getLamEVarTy
@@ -551,6 +551,8 @@ def evalAuto : Tactic
   Return Value
   · `e : Expr`    : An term of type `False`, which contains one metavariable yet to be assigned
   · `id : MVarId` : The ID of the metavariable in `e` yet to be assigned
+  · `atomVals : Array (FVarId × Expr)`
+                    The values of the type lam-atoms and term lam-atoms
   · `derivs : Array (FVarId × DTr)`
                     The `DTr`s associated with (monomorphized) lemmas and inhabitation lemmas
                     in the context of `id`. Using this information you can obtain the
@@ -558,21 +560,21 @@ def evalAuto : Tactic
 -/
 def runMono
   (declName? : Option Name) (lemmas : Array Lemma) (inhFacts : Array Lemma) :
-  MetaM (Expr × MVarId × Array (FVarId × DTr)) :=
+  MetaM (Expr × MVarId × Array (FVarId × Expr) × Array (FVarId × DTr)) :=
   Meta.withDefault do
     traceLemmas `auto.runAuto.printLemmas s!"All lemmas received by {decl_name%}:" lemmas
     let lemmas ← rewriteIteCondDecide lemmas
-    let ((proof, goalId, derivs), _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM _) do
+    let ((proof, goalId, atomVals, derivs), _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM _) do
       let s ← get
       let u ← computeMaxLevel s.facts
       (reifMAction s.facts s.inhTys s.inds).run' {u := u})
     trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
     trace[auto.tactic.printProof] "{proof}"
-    return (proof, goalId, derivs)
+    return (proof, goalId, atomVals, derivs)
 where
   reifMAction
     (uvalids : Array UMonoFact) (uinhs : Array UMonoFact)
-    (minds : Array (Array SimpleIndVal)) : LamReif.ReifM (Expr × MVarId × Array (FVarId × DTr)) := do
+    (minds : Array (Array SimpleIndVal)) : LamReif.ReifM (Expr × MVarId × Array (FVarId × Expr) × Array (FVarId × DTr)) := do
     let exportFacts ← LamReif.reifFacts uvalids
     let mut exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
     let _ ← LamReif.reifInhabitations uinhs
@@ -584,7 +586,7 @@ where
     let (exportFacts', _) ← LamReif.preprocess exportFacts exportInds
     exportFacts := exportFacts'.append (← LamReif.auxLemmas exportFacts)
     -- **Query the dummy prover which creates a metavariable**
-    let (nonemptyWithDTrs, validWithDTrs, goalId, proof, proofLamTerm, natoms, etoms) ←
+    let (nonemptyWithDTrs, validWithDTrs, goalId, proof, proofLamTerm, atomVals, etoms) ←
       callMkMVar_checker exportInhs exportFacts
     LamReif.newAssertion proof (.leaf "by_native::queryNative") proofLamTerm
     let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (etoms.map .etom)
@@ -594,10 +596,10 @@ where
     Reif.setDeclName? declName?
     let checker ← LamReif.buildCheckerExprFor contra
     let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
-    let (_, goalId) ← goalId.introN (natoms + etoms.size)
+    let (goalFVars, goalId) ← goalId.introN (atomVals.size + etoms.size)
     let (goalCtx, goalId) ← goalId.introN (exportInhs.size + exportFacts.size)
     let goalCtxWithDeriv := goalCtx.zip ((nonemptyWithDTrs ++ validWithDTrs).map Prod.snd)
-    return (contra, goalId, goalCtxWithDeriv)
+    return (contra, goalId, goalFVars.zip atomVals, goalCtxWithDeriv)
 
 @[tactic mono]
 def evalMono : Tactic
