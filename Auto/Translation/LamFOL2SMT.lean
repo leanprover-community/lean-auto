@@ -9,6 +9,18 @@ initialize
   registerTraceClass `auto.lamFOL2SMT
   registerTraceClass `auto.lamFOL2SMT.nameSuggestion
 
+register_option auto.smt.ignoreUnusableFacts : Bool := {
+  defValue := false
+  descr := "If true, silently ignores facts that cannot be translated to STerms"
+}
+
+def getIgnoreUnusableFacts (opts : Options) : Bool :=
+  auto.smt.ignoreUnusableFacts.get opts
+
+def getIgnoreUnusableFactsM : CoreM Bool := do
+  let opts ← getOptions
+  return getIgnoreUnusableFacts opts
+
 -- LamFOL2SMT : First-order fragment of simply-typed lambda calculus to SMT IR
 
 namespace Auto
@@ -590,6 +602,14 @@ where
     (ts.push arg, t)
   | t => (#[], t)
 
+private def tryLamTerm2Sterm (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Array LamSort) (t : LamTerm) :
+  TransM LamAtomic LamSort (Option STerm) := do
+  try
+    return some (← lamTerm2STerm sni lamVarTy lamEVarTy t)
+  catch e =>
+    trace[auto.lamFOL2SMT] "{decl_name%} :: Failed to translate {t} to STerm. Error: {e.toMessageData}"
+    return none
+
 private def lamMutualIndInfo2STerm (sni : SMTNamingInfo) (mind : MutualIndInfo) :
   TransM LamAtomic LamSort (IR.SMT.Command ×
     Array (String × LamSort × LamTerm) ×
@@ -800,7 +820,13 @@ def lamFOL2SMT
   let _ ← compEqns.mapM addCommand
   let mut validFacts := #[]
   for (t, idx) in facts.zipIdx do
-    let sterm ← lamTerm2STerm sni lamVarTy lamEVarTy t
+    let stermOpt ←
+      if (← getIgnoreUnusableFactsM) then
+        tryLamTerm2Sterm sni lamVarTy lamEVarTy t
+      else
+        lamTerm2STerm sni lamVarTy lamEVarTy t
+    let some sterm := stermOpt
+      | continue -- If `getIgnoreUnusableFactsM` is true, then silently ignore facts that cannot be translated to STerms and move on to the next fact
     validFacts := validFacts.push sterm
     trace[auto.lamFOL2SMT] "λ term {repr t} translated to SMT term {sterm}"
     addCommand (.assert (.attr sterm #[.symb "named" s!"valid_fact_{idx}"]))
@@ -842,7 +868,13 @@ def lamFOL2SMTWithExtraInfo
     selInfos := selInfos ++ mindSelInfos
   let mut validFacts := #[]
   for (t, idx) in facts.zipIdx do
-    let sterm ← lamTerm2STerm sni lamVarTy lamEVarTy t
+    let stermOpt ←
+      if (← getIgnoreUnusableFactsM) then
+        tryLamTerm2Sterm sni lamVarTy lamEVarTy t
+      else
+        lamTerm2STerm sni lamVarTy lamEVarTy t
+    let some sterm := stermOpt
+      | continue -- If `getIgnoreUnusableFactsM` is true, then silently ignore facts that cannot be translated to STerms and move on to the next fact
     validFacts := validFacts.push sterm
     trace[auto.lamFOL2SMT] "λ term {repr t} translated to SMT term {sterm}"
     addCommand (.assert (.attr sterm #[.symb "named" s!"valid_fact_{idx}"]))
