@@ -55,7 +55,7 @@ def monomorphizedProblemOfAutoLemma (lem : Auto.Lemma) : CoreM (Option (Array Em
         let u ← computeMaxLevel s.facts
         (LamReif.reifFacts s.facts).run' {u := u})
       return monomorphized
-  let metaContext : Meta.Context := { config := Elab.Term.setElabConfig {} }
+  let metaContext : Meta.Context := { keyedConfig := (Elab.Term.setElabConfig {}).toConfigWithKey }
   Lean.Core.tryCatchRuntimeEx
     (do let monomorphized ← Meta.MetaM.run' monoFn (ctx := metaContext); return .some monomorphized)
     (fun _ => return .none)

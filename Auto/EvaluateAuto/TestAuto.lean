@@ -71,7 +71,7 @@ private def runProverOnAutoLemma
     let goal := mkApp2 (.const ``Classical.byContradiction []) body negGoalImpFalse
     Meta.mkLambdaFVars bs goal
   -- Align with tactic elaboration (see `Lean.Elab.Term.TermElabM.run`)
-  let metaContext : Meta.Context := { config := Elab.Term.setElabConfig {} }
+  let metaContext : Meta.Context := { keyedConfig := (Elab.Term.setElabConfig {}).toConfigWithKey }
   let result : Expr ⊕ Exception ←
     Lean.Core.tryCatchRuntimeEx
       (do let proof ← Meta.MetaM.run' proverFn (ctx := metaContext); return .inl proof)
