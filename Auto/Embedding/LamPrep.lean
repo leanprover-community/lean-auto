@@ -11,7 +11,7 @@ theorem LamTerm.evarBounded_andLeft? : evarBounded andLeft? 0 := by
   intro t t' heq
   match t, heq with
   | .app _ (.app _ (.base .and) _) _, Eq.refl _ =>
-    dsimp [maxEVarSucc]; simp [Nat.max]
+    dsimp [maxEVarSucc]; simp only [Nat.max, Nat.max_zero_left]
     apply Nat.le_max_left
 
 theorem LamGenModify.andLeft? : LamGenModify lval LamTerm.andLeft? true := by
@@ -30,7 +30,7 @@ theorem LamTerm.evarBounded_andRight? : evarBounded andRight? 0 := by
   intro t t' heq
   match t, heq with
   | .app _ (.app _ (.base .and) _) _, Eq.refl _ =>
-    dsimp [maxEVarSucc]; simp [Nat.max]
+    dsimp [maxEVarSucc]; simp only [Nat.max, Nat.max_zero_left]
     apply Nat.le_max_right
 
 theorem LamGenModify.andRight? : LamGenModify lval LamTerm.andRight? true := by
@@ -663,7 +663,7 @@ theorem LamTerm.maxEVarSucc_propeq?
 
 theorem propeq_equiv_eq' {a b : GLift Prop} : (a = b) ↔
   (a.down ∨ ¬ b.down) ∧ (¬ a.down ∨ b.down) := by
-  cases a; case up a => cases b; simp; rw [equiv_eq (a:=a)]; apply propeq_equiv
+  cases a; case up a => cases b; simp only [GLift.up.injEq, eq_iff_iff]; rw [equiv_eq (a:=a)]; apply propeq_equiv
 
 theorem LamEquiv.propeq?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)
@@ -762,7 +762,7 @@ theorem LamTerm.maxEVarSucc_propne?
 
 theorem propne_equiv_eq' {a b : GLift Prop} : (a ≠ b) ↔
   (a.down ∨ b.down) ∧ (¬ a.down ∨ ¬ b.down) := by
-  cases a; case up a => cases b; simp; rw [equiv_eq (a:=a)]; apply propne_equiv
+  cases a; case up a => cases b; simp only [ne_eq, GLift.up.injEq, eq_iff_iff]; rw [equiv_eq (a:=a)]; apply propne_equiv
 
 theorem LamEquiv.propne?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, s⟩)

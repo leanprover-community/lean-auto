@@ -22,7 +22,10 @@ initialize
   registerTraceClass `auto.lamReif.prep.printResult
 
 namespace Auto.LamReif
+
 open Embedding.Lam
+
+open ToExprExtra
 
 /--
   We require that all instances of polymorphic constants,
@@ -1735,7 +1738,7 @@ section BuildChecker
     let startTime₁ ← IO.monoMsNow
     addDecl decl
     let startTime₂ ← IO.monoMsNow
-    withOptions (fun opts => opts.set ``compiler.enableNew false) <| compileDecl decl
+    compileDecl decl
     trace[auto.buildChecker] m!"For {auxName}, type checking took {startTime₂ - startTime₁}" ++
       m!"compilation took {(← IO.monoMsNow) - startTime₁}ms"
     return auxName

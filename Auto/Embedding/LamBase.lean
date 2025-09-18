@@ -15,6 +15,8 @@ set_option linter.unusedVariables false
 -- Simply Typed Lambda Calculus = HOL (without polymorphism)
 namespace Auto.Embedding.Lam
 
+open ToExprExtra
+
 /-- Interpreted sorts -/
 inductive LamBaseSort
   | prop   : LamBaseSort            -- GLift `Prop`

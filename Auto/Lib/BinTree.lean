@@ -18,6 +18,8 @@ set_option linter.unusedVariables false
 
 namespace Auto
 
+open ToExprExtra
+
 namespace Bin
 
 private theorem wfAux (n n' : Nat) : n = n' + 2 → n / 2 < n := by

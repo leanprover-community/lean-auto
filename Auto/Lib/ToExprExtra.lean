@@ -2,15 +2,13 @@ import Lean
 import Auto.MathlibEmulator
 open Lean
 
-namespace Auto
+namespace Auto.ToExprExtra
 
-attribute [-instance] Lean.instToExprNat
-instance : ToExpr Nat where
+scoped instance : ToExpr Nat where
   toExpr := fun n => .lit (.natVal n)
   toTypeExpr := .const ``Nat []
 
-attribute [-instance] instToExprInt
-instance : ToExpr Int where
+scoped instance : ToExpr Int where
   toExpr := fun n =>
     match n with
     | .ofNat n => .app (.const ``Int.ofNat []) (.lit (.natVal n))
@@ -28,4 +26,4 @@ instance : ToExpr Int where
 def instExprToExprId (ty : Expr) : ToExpr Expr :=
   { toExpr := id, toTypeExpr := ty}
 
-end Auto
+end Auto.ToExprExtra
