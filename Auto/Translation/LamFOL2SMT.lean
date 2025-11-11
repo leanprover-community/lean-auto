@@ -62,7 +62,7 @@ instance : ToString LamAtomic where
   toString := LamAtomic.toString
 
 instance : Ord LamAtomic where
-  compare := fun x y => instOrdString.compare s!"{x}" s!"{y}"
+  compare := fun x y => compareOfLessAndEq s!"{x}" s!"{y}"
 
 /-- selectorInfo contains:
     - The name of the selector

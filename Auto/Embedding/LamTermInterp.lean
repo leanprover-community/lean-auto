@@ -70,7 +70,7 @@ theorem LamTerm.interp_equiv
     let .ofLam bodyTy H := lwf; apply eq_sigma_of_heq
     case h₁ => rw [← IH _ H]
     case h₂ =>
-      dsimp [LamWF.interp, interp];
+      simp [LamWF.interp];
       apply HEq.funext; intros lctxTerm
       apply HEq.funext; intros x
       rw [← IH _ H]
@@ -88,7 +88,7 @@ theorem LamTerm.interp_equiv
         let ⟨fnTyEq, fnInterpEq⟩ := IHFn'
         let ⟨argTyEq, argInterpEq⟩ := IHArg'
         cases fnTyEq; cases argTyEq; cases fnInterpEq; cases argInterpEq
-        dsimp; rw [LamSort.beq_refl]
+        dsimp; rw [LamSort.beq_refl]; rfl
 
 theorem LamThmValid.getDefault (H : LamThmValid lval [] t) :
   GLift.down (LamTerm.interpAsProp lval dfLCtxTy (dfLCtxTerm lval.tyVal) t) := by

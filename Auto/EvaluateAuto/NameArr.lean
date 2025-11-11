@@ -10,7 +10,7 @@ def Name.canBeFilename (n : Name) : Bool :=
   n.components.all (fun n =>
     match n with
     | .str _ s =>
-      match s.get? 0 with
+      match String.Pos.Raw.get? s 0 with
       | .some _ => s.all (fun c => c.isAlphanum || c == '_' || c == '\'')
       | .none => false
     | _ => false)

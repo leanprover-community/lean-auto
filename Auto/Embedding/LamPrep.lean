@@ -67,13 +67,13 @@ theorem propne_equiv {a b : Prop} : (a ≠ b) ↔ (a ∨ b) ∧ (¬ a ∨ ¬ b) 
 theorem LamEquiv.not_true_equiv_false :
   LamEquiv lval lctx (.base .prop) (.mkNot (.base .trueE)) (.base .falseE) := by
   exists LamWF.mkNot (.ofBase .ofTrueE); exists LamWF.ofBase .ofFalseE; intro lctxTerm
-  dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, notLift]
+  simp [LamWF.interp, LamBaseTerm.LamWF.interp]
   apply GLift.down.inj; dsimp; apply eq_false; exact fun h => h .intro
 
 theorem LamEquiv.not_false_equiv_true :
   LamEquiv lval lctx (.base .prop) (.mkNot (.base .falseE)) (.base .trueE) := by
   exists LamWF.mkNot (.ofBase .ofFalseE); exists LamWF.ofBase .ofTrueE; intro lctxTerm
-  dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, notLift]
+  simp [LamWF.interp, LamBaseTerm.LamWF.interp]
   apply GLift.down.inj; dsimp; apply eq_true; exact id
 
 theorem LamEquiv.prop_ne_equiv_eq_not
@@ -267,7 +267,7 @@ theorem LamEquiv.eq_true_equiv?
     match wft with
     | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) Hlhs) (.ofBase .ofTrueE) =>
       exists Hlhs; intro lctxTerm
-      dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, eqLiftFn]
+      simp [LamWF.interp, LamBaseTerm.LamWF.interp, eqLiftFn]
       apply GLift.down.inj; dsimp; apply propext (Iff.intro ?mp ?mpr)
       case mp =>
         intro h; apply of_eq_true (_root_.congrArg _ h)
@@ -308,7 +308,7 @@ theorem LamEquiv.eq_false_equiv?
     match wft with
     | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) Hlhs) (.ofBase .ofFalseE) =>
       exists LamWF.mkNot Hlhs; intro lctxTerm
-      dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, eqLiftFn]
+      simp [LamWF.interp, LamBaseTerm.LamWF.interp, eqLiftFn]
       apply GLift.down.inj; dsimp; apply propext (Iff.intro ?mp ?mpr)
       case mp =>
         intro h h'; rw [h] at h'; exact h'

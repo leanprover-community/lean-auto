@@ -56,8 +56,8 @@ post_update pkg do
   let v := Verbosity.normal
   let v := if args.contains "-q" || args.contains "--quiet" then Verbosity.quiet else v
   let v := if args.contains "-v" || args.contains "--verbose" then Verbosity.verbose else v
-  let exitCode? ← LoggerIO.toBaseIO (minLv := v.minLogLv) <| ws.runLakeT do
-    if let some pkg ← findPackage? _package.name then
+  let exitCode? ← LoggerIO.toBaseIO (cfg := {outLv := v.minLogLv}) <| ws.runLakeT do
+    if let some pkg ← findPackage? __name__ then
       let zipperpositionZipFile := pkg.buildDir / zipperposition.zip_name
       let zipperpositionExeFile := pkg.buildDir / zipperposition.exe_name
       if !(← zipperpositionExeFile.pathExists) then

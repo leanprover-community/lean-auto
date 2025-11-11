@@ -4096,9 +4096,9 @@ theorem LamWF.interp_bvarAppsRev
       (pushLCtxs_append_singleton _ _ _) (pushLCtxsDep_append_singleton _ _ _)]
     rw [LamWF.interp_substWF (wf':=wfAp)]
     apply IH (LamWF.ofApp _ wft LamWF.bvarAppsRev_Aux)
-    dsimp [interp]; apply HEq.trans (b:=LamSort.curry valPre lterm) <;> try rfl
+    dsimp only; apply HEq.trans (b:=LamSort.curry valPre lterm) <;> try rfl
     case h₁ =>
-      apply heq_of_eq; apply congr
+      apply heq_of_eq; rw [interp]; apply congr
       case h₁ =>
         apply eq_of_heq; apply HEq.trans _ ht; apply heq_of_eq; apply interp_substLCtxTerm
         rw [List.reverse_cons, pushLCtxs_append_singleton]
@@ -4202,7 +4202,7 @@ theorem LamWF.interp_insertEVarAt_eIdx
   let lval' := {lval with lamEVarTy := replaceAt ty pos lamEVarTy',
                           eVarVal := replaceAtDep val pos eVarVal'}
   HEq (lwf.interp lval' lctxTy lctxTerm) val := by
-  cases lwf; dsimp [interp, replaceAt, replaceAtDep]; rw [Nat.beq_refl]
+  cases lwf; dsimp only [Lean.Elab.WF.paramLet, replaceAt]; simp only [interp, replaceAtDep, id_eq]; rw [Nat.beq_refl]
 
 theorem LamWF.interp_eVarIrrelevance
   (lval₁ : LamValuation.{u}) (lval₂ : LamValuation.{u})
@@ -4240,17 +4240,17 @@ theorem LamWF.interp_eVarIrrelevance
       apply HEq.trans _ (LamWF.interp_heq (lval:=lval₂) (lwf₁ := lwf₂') rfl HEq.rfl _ rfl)
       cases lwf₂'; dsimp [interp]; apply (hirr _ _).right; exact .refl
     case base b =>
-      cases lwf₁; cases lwf₂; dsimp [interp]
+      cases lwf₁; cases lwf₂; rw [interp]
       apply LamBaseTerm.LamWF.interp_lvalIrrelevance <;> rfl
     case lam s t IH =>
       cases lwf₁; case ofLam bodyTy₁ H₁ =>
         cases lwf₂; case ofLam H₂ =>
-          dsimp [interp]; apply HEq.funext; intro x; apply IH
+          rw [interp]; apply HEq.funext; intro x; apply IH
           exact hirr
     case app s fn arg IHFn IHArg =>
       cases lwf₁; case ofApp HArg₁ HFn₁ =>
         cases lwf₂; case ofApp HArg₂ HFn₂ =>
-          dsimp [interp]; apply congr_h_heq <;> try rfl
+          rw [interp]; apply congr_h_heq <;> try rfl
           case h₁ =>
             apply IHFn; intros n hlt;
             apply (hirr n (Nat.le_trans hlt (Nat.le_max_left _ _)))
@@ -4270,20 +4270,20 @@ theorem LamWF.interp_lctxIrrelevance
   HEq (LamWF.interp lval lctxTy₁ lctxTerm₁ lwf₁) (LamWF.interp lval lctxTy₂ lctxTerm₂ lwf₂) := by
   induction t generalizing lctxTy₁ lctxTy₂ rty <;> try (cases lwf₁; cases lwf₂; rfl)
   case base b =>
-    cases lwf₁; cases lwf₂; dsimp [interp]; apply LamBaseTerm.LamWF.interp_heq <;> rfl
+    cases lwf₁; cases lwf₂; rw [interp]; apply LamBaseTerm.LamWF.interp_heq <;> rfl
   case bvar n =>
-    cases lwf₁; dsimp [interp]
+    cases lwf₁; rw [interp]
     have htyeq : lctxTy₁ n = lctxTy₂ n := by
       apply (hirr _ _).left; exact .refl
     rw [htyeq] at lwf₂; apply HEq.trans (b:=interp _ _ lctxTerm₂ lwf₂)
     case h₁ =>
-      cases lwf₂; dsimp [interp]; apply (hirr _ _).right; exact .refl
+      cases lwf₂; rw [interp]; apply (hirr _ _).right; exact .refl
     case h₂ =>
       apply interp_heq <;> rfl
   case lam s t IH =>
     cases lwf₁; case ofLam bodyTy₁ H₁ =>
       cases lwf₂; case ofLam H₂ =>
-        dsimp [interp]; apply HEq.funext; intros x; apply IH
+        rw [interp]; apply HEq.funext; intros x; apply IH
         intros n hlt; dsimp [pushLCtx, pushLCtxDep]
         cases n
         case zero => exact And.intro rfl HEq.rfl
@@ -4294,7 +4294,7 @@ theorem LamWF.interp_lctxIrrelevance
   case app s fn arg IHFn IHArg =>
     cases lwf₁; case ofApp HArg₁ HFn₁ =>
       cases lwf₂; case ofApp HArg₂ HFn₂ =>
-        dsimp [interp]; apply congr_h_heq <;> try rfl
+        rw [interp]; apply congr_h_heq <;> try rfl
         case h₁ =>
           apply IHFn; intros n hlt;
           apply (hirr n (Nat.le_trans hlt (Nat.le_max_left _ _)))

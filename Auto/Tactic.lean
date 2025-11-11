@@ -306,9 +306,9 @@ where
   /-- Returns the ending position of the common prefix, working up from `spos, tpos`. -/
   loop spos tpos :=
     if h : spos < s.stopPos ∧ tpos < t.stopPos then
-      if s.str.get spos == t.str.get tpos then
-        have := Nat.sub_lt_sub_left h.1 (s.str.lt_next spos)
-        loop (s.str.next spos) (t.str.next tpos)
+      if String.Pos.Raw.get s.str spos == String.Pos.Raw.get t.str tpos then
+        have := Nat.sub_lt_sub_left h.1 (String.Pos.Raw.byteIdx_lt_byteIdx_next s.str spos)
+        loop (String.Pos.Raw.next s.str spos) (String.Pos.Raw.next t.str tpos)
       else
         spos
     else

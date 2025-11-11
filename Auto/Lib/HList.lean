@@ -88,7 +88,7 @@ theorem HList.getD_append_left (xs : HList β as) (ys : HList β bs) (h : i < as
     dsimp [append]; cases i
     case zero => apply HEq.rfl
     case succ i =>
-      dsimp [getD]; apply IH; apply Nat.le_of_succ_le_succ h
+      apply IH; apply Nat.le_of_succ_le_succ h
 
 theorem HList.getD_append_right (xs : HList β as) (ys : HList β bs) (h : i ≥ as.length) :
   HEq ((append xs ys).getD df i) (ys.getD df (i - as.length)) := by
@@ -98,7 +98,7 @@ theorem HList.getD_append_right (xs : HList β as) (ys : HList β bs) (h : i ≥
     dsimp [append]; cases i
     case zero => contradiction
     case succ i =>
-      dsimp [getD]; rw [Nat.succ_sub_succ];
+      rw [Nat.succ_sub_succ];
       apply IH; apply Nat.le_of_succ_le_succ h
 
 def HList.append_get_left (xs : HList β (as ++ bs)) : HList β as :=
@@ -116,14 +116,14 @@ theorem HList.append_get_left_eq (xs : HList β as) (ys : HList β bs) :
   induction xs
   case nil => rfl
   case cons x xs IH =>
-    dsimp [append, append_get_left]; rw [IH]
+    dsimp only [append, List.append_eq]; rw [append_get_left, IH]
 
 theorem HList.append_get_right_eq (xs : HList β as) (ys : HList β bs) :
   HList.append_get_right (xs.append ys) = ys := by
   induction xs
   case nil => rfl
   case cons x xs IH =>
-    dsimp [append, append_get_right]; rw [IH]
+    dsimp only [append, List.append_eq]; rw [append_get_right, IH]
 
 theorem HList.append_get_append_eq (xs : HList β (as ++ bs)) :
   HList.append xs.append_get_left xs.append_get_right = xs := by
@@ -131,7 +131,7 @@ theorem HList.append_get_append_eq (xs : HList β (as ++ bs)) :
   case nil => rfl
   case cons a as IH =>
     cases xs; case cons x xs =>
-      dsimp [append_get_left, append_get_right, append]; rw [IH]
+      rw [append_get_left, append_get_right, append, IH]
 
 @[irreducible] def HList.append_IsomType {α : Type u} {β : α → Sort v} {xs ys : List α} :
   IsomType (HList β (xs ++ ys)) (PProd (HList β xs) (HList β ys)) :=
@@ -149,7 +149,7 @@ theorem HList.append_get_append_eq (xs : HList β (as ++ bs)) :
       apply congrArg; generalize append_get_right l = l'
       match l' with
       | .cons e .nil => rfl,
-   fun ⟨l, e⟩ => by dsimp; rw [append_get_left_eq, append_get_right_eq]⟩
+   fun ⟨l, e⟩ => by dsimp; rw [append_get_left_eq, append_get_right_eq]; simp⟩
 
 def HList.reverseAux : {as : _} → (xs : HList β as) → (ys : HList β bs) → HList β (List.reverseAux as bs)
   | .nil,       .nil,       r => r

@@ -495,7 +495,7 @@ theorem LamWF.interp_eqForallEH
   {wf : LamWF lval.toLamTyVal ⟨lctx, t, .func argTy (.base .prop)⟩} :
   GLift.down (LamWF.interp lval lctx lctxTerm (.mkForallE wf)) = (∀ x,
     GLift.down (LamWF.interp lval (pushLCtx argTy lctx) (pushLCtxDep x lctxTerm) (.ofApp _ wf.bvarLift .pushLCtx_ofBVar))) := by
-  dsimp [interp, LamBaseTerm.LamWF.interp, LamTerm.mkForallE, mkForallE, forallLiftFn, pushLCtx_ofBVar]
+  simp [interp, LamBaseTerm.LamWF.interp, LamTerm.mkForallE, mkForallE, forallLiftFn, pushLCtx_ofBVar]
   conv => enter [2, x, 1]; rw [← interp_bvarLift]
 
 theorem LamValid.revert1H (H : LamValid lval (pushLCtx s lctx) (.app s t.bvarLift (.bvar 0))) :
@@ -503,8 +503,8 @@ theorem LamValid.revert1H (H : LamValid lval (pushLCtx s lctx) (.app s t.bvarLif
   have ⟨wfAp, ht⟩ := LamValid.revert1F H
   have .ofApp _ (.ofBase (.ofForallE _)) (.ofLam _ (.ofApp _ wft (.ofBVar _))) := wfAp
   ⟨LamWF.mkForallE (.fromBVarLift _ wft), fun lctxTerm => by
-    dsimp [LamWF.mkForallE, LamTerm.mkForallE, LamWF.interp, LamBaseTerm.LamWF.interp]; intro x
-    dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, LamTerm.mkForallEF, forallLiftFn] at ht
+    simp [LamWF.mkForallE, LamTerm.mkForallE, LamWF.interp, LamBaseTerm.LamWF.interp]; intro x
+    simp [LamWF.interp, LamBaseTerm.LamWF.interp, LamTerm.mkForallEF, forallLiftFn] at ht
     apply Eq.mp _ (ht lctxTerm x); apply congrArg; apply congrFun
     apply Eq.trans (b := LamWF.interp lval (pushLCtx s lctx) (pushLCtxDep x lctxTerm)
       (.bvarLift _ (.fromBVarLift _ wft)))
@@ -521,9 +521,9 @@ theorem LamValid.intro1H (H : LamValid lval lctx (.mkForallE s t)) :
     have ⟨wfF, hF⟩ := H
     have .ofApp _ (.ofBase (.ofForallE _)) wft := wfF
     ⟨.mkForallEF (.ofApp _ (.bvarLift _ wft) .pushLCtx_ofBVar), fun lctxTerm => by
-      dsimp [LamWF.mkForallEF, LamWF.interp, LamBaseTerm.LamWF.interp]
+      simp [LamWF.mkForallEF, LamWF.interp, LamBaseTerm.LamWF.interp]
       intro x; dsimp [LamWF.pushLCtx_ofBVar, LamWF.interp]
-      apply Eq.mp _ (hF lctxTerm x); apply congrArg; rw [← LamWF.interp_bvarLift]⟩
+      apply Eq.mp _ (hF lctxTerm x); apply congrArg; rw [← LamWF.interp_bvarLift]; rfl⟩
   )
 
 theorem LamThmValid.intro1H (H : LamThmValid lval lctx (.mkForallE s t)) :
@@ -865,7 +865,9 @@ theorem LamEquiv.forall_congr
   LamEquiv lval lctx (.base .prop) (.mkForallEF argTy fn₁) (.mkForallEF argTy fn₂) := by
   have ⟨wfFn₁, wfFn₂, eqFn⟩ := eFn
   exists LamWF.mkForallEF wfFn₁, LamWF.mkForallEF wfFn₂; intro lctxTerm
-  dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, LamTerm.mkForallEF, LamWF.mkForallEF, forallLiftFn]
+  dsimp only [LamTerm.mkForallEF, LamWF.mkForallEF]
+  simp only [LamWF.interp, LamBaseTerm.LamWF.interp]
+  rw [forallLiftFn]
   apply _root_.congrArg; apply _root_.forall_congr; intro x
   apply _root_.congrArg; apply eqFn
 
@@ -969,11 +971,12 @@ theorem LamWF.interp_funext
     match wf₂ with
     | .ofApp _ (.ofApp _ (.ofBase (.ofEq _)) (.ofApp _ HLhs' (.ofBVar _))) (.ofApp _ HRhs' (.ofBVar _)) => by
       dsimp [interp, LamBaseTerm.LamWF.interp, LamTerm.mkEq, eqLiftFn]
+      simp only [interp, id_eq]
       rcases LamWF.unique HLhs' HLhs.bvarLift with ⟨⟨⟩, ⟨⟩⟩
       rcases LamWF.unique HRhs' HRhs.bvarLift with ⟨⟨⟩, ⟨⟩⟩
       apply propext (Iff.intro ?mp ?mpr)
       case mp =>
-        intro h x; rw [← LamWF.interp_bvarLift, ← LamWF.interp_bvarLift, h]
+        intro h x; rw [← LamWF.interp_bvarLift, ← LamWF.interp_bvarLift, h]; rfl
       case mpr =>
         intro h; apply funext; intro x; have h' := h x
         rw [← LamWF.interp_bvarLift, ← LamWF.interp_bvarLift] at h'; exact h'
@@ -991,9 +994,10 @@ theorem LamEquiv.eqFunextF
       (LamWF.bvarLift (s:=argTy) _ wfFn₂) LamWF.pushLCtx_ofBVar
     exists LamWF.mkEq wfFn₁ wfFn₂, LamWF.mkForallEF (LamWF.mkEq wfAp₁ wfAp₂); intro lctxTerm
     dsimp +zetaDelta [LamWF.interp, LamBaseTerm.LamWF.interp, LamTerm.mkEq, LamWF.mkEq, LamWF.mkForallEF, LamTerm.mkForallEF, eqLiftFn, forallLiftFn, LamWF.pushLCtx_ofBVar]
+    simp only [LamWF.interp, LamBaseTerm.LamWF.interp, eqLiftFn, id_eq]
     apply _root_.congrArg; apply propext (Iff.intro ?mp ?mpr)
     case mp =>
-      intro hinterp h; rw [← LamWF.interp_bvarLift, ← LamWF.interp_bvarLift, hinterp]
+      intro hinterp h; simp only; rw [← LamWF.interp_bvarLift, ← LamWF.interp_bvarLift, hinterp]
     case mpr =>
       intro hinterp; apply funext; intro x; apply Eq.trans ?left (Eq.trans (hinterp x) ?right)
       case left => rw [← LamWF.interp_bvarLift]

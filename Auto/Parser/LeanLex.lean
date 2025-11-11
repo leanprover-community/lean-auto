@@ -456,16 +456,16 @@ instance : ToString LexResult where
 -/
 def ERE.ADFALexEagerL (a : ADFA Char) (s : Substring) (cfg : LexConfig) : LexResult := Id.run <| do
   -- Current position in `s`
-  let mut p : String.Pos := s.startPos
+  let mut p : String.Pos.Raw := s.startPos
   -- The value of `b` will represent where the match begins
-  let mut b : String.Pos := s.startPos
+  let mut b : String.Pos.Raw := s.startPos
   -- `es` records the last successful match. The first
   --   `String.Pos` is where the lexicon ends, and the
   --   `Nat` is the state of the `DFA` when the lexicon
   --   ends. We record this state because we need to
   --   extract its attributes if this turns out to be
   --   the longest match.
-  let mut es : Option (String.Pos × Nat) := none
+  let mut es : Option (String.Pos.Raw × Nat) := none
   let beginString : Nat := a.cg.ngroup
   let endString : Nat := a.cg.ngroup + 1
   let mut endReached : Bool := false
@@ -476,19 +476,19 @@ def ERE.ADFALexEagerL (a : ADFA Char) (s : Substring) (cfg : LexConfig) : LexRes
       a.dfa.move cfg.initS beginString
     else
       cfg.initS
-  let sGetGroupFromPos (p : String.Pos) : Id Nat := (do
+  let sGetGroupFromPos (p : String.Pos.Raw) : Id Nat := (do
     if p == s.stopPos then
       -- Implicitly append `s` with "end of string"
       return endString
     else
-      let .some c := s.str.get? p
+      let .some c := String.Pos.Raw.get? s.str p
         | panic! s!"ERE.ADFALex :: Invalid position {p} for string {s.str}"
       return a.cg.getGroup c)
   -- Matched at least one character
   let mut matchStarted : Bool := false
   if cfg.strict then
     -- First character must be a valid match
-    let c := s.str.get! p
+    let c := String.Pos.Raw.get! s.str p
     let cgp := a.cg.getGroup c
     let state' := a.dfa.move state cgp
     if state' == a.dfa.tr.size then
@@ -523,7 +523,7 @@ def ERE.ADFALexEagerL (a : ADFA Char) (s : Substring) (cfg : LexConfig) : LexRes
     -- If the symbol is valid as the first symbol, start matching
     | false, false => b := p; state := state'; matchStarted := true
     if !endReached then
-      let c := s.str.get! p
+      let c := String.Pos.Raw.get! s.str p
       p := p + c
   match es with
   | .some (e, finalstate) =>
