@@ -43,6 +43,8 @@ theorem Bool.ofProp_spec' (c : Prop) : Bool.ofProp c = false ↔ ¬ c := by
   conv => enter [2, 1]; rw [← Bool.ofProp_spec c]
   simp
 
+attribute [irreducible] Bool.ofProp
+
 theorem Bool.ite_eq_true (p : Prop) [inst : Decidable p] (a b : α) : p → ite p a b = a := by
   intro hp; dsimp [ite]; cases inst
   case isFalse hnp => apply False.elim (hnp hp)
@@ -79,6 +81,8 @@ theorem Bool.ite_simp.{u} : @ite = fun (α : Sort u) p _ => @ite' α p := by
   dsimp [ite']; cases h : Bool.ofProp p
   case false => rw [Bool.ite_eq_false]; apply (Bool.ofProp_spec' _).mp h
   case true  => rw [Bool.ite_eq_true]; apply (Bool.ofProp_spec _).mp h
+
+attribute [irreducible] Bool.ite'
 
 theorem Bool.ite'_eq_true (p : Prop) (a b : α) : p → ite' p a b = a := by
   intro hp; apply Bool.ite_simp ▸ @Bool.ite_eq_true _ p (Classical.propDecidable _) a b hp
