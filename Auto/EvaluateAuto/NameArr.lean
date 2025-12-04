@@ -36,11 +36,11 @@ def Name.uniqRepr (n : Name) : String :=
 -/
 def Name.parseUniqRepr (n : String) : Name :=
   let compParse (s : String) : String ⊕ Nat := Id.run <| do
-    let s := s.data
+    let s := s.toList
     if s[0]? == '\\' then
       if let .some c := s[1]? then
         if c.isDigit then
-          return .inr ((String.toNat? (String.mk (s.drop 1))).getD 0)
+          return .inr ((String.toNat? (String.ofList (s.drop 1))).getD 0)
     let mut ret := ""
     let mut escape := false
     for c in s do

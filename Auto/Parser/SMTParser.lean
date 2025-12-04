@@ -36,7 +36,7 @@ def LexVal.toString : LexVal → String
     let nfrac := n % m
     let nfracs := s!"{nfrac}"
     let nfracs :=
-      String.mk ((List.range (pow - nfracs.length)).map (fun _ => '0')) ++
+      String.ofList ((List.range (pow - nfracs.length)).map (fun _ => '0')) ++
       nfracs
     s!"{nint}." ++ nfracs
 | .str s   => "\"" ++ String.intercalate "\"\"" (s.splitOn "\"") ++ "\""
@@ -81,7 +81,7 @@ def LexVal.ofString (s : String) (attr : String) : LexVal :=
   | "quotedsymbol" => .symb ((s.drop 1).take (s.length - 2))
   | "keyword"      => .kw (s.drop 1)
   | "comment"      =>
-    let rn : Nat := if String.Pos.Raw.get s (String.Pos.Raw.prev s (String.Pos.Raw.prev s s.endPos)) == '\r' then 1 else 0
+    let rn : Nat := if String.Pos.Raw.get s (String.Pos.Raw.prev s (String.Pos.Raw.prev s s.rawEndPos)) == '\r' then 1 else 0
     .comment ((s.drop 1).take (s.length - 2 - rn))
   | "reserved"     => .reserved s
   | "forall"       => .reserved "forall"
@@ -148,16 +148,16 @@ local instance : Hashable Char := ⟨fun c => hash c.val⟩
 -/
 def lexTerm [Monad m] [Lean.MonadError m] (s : String) (p : String.Pos.Raw)
   (partialResult : PartialResult) : m LexResult := do
-  if p == s.endPos then
+  if p == s.rawEndPos then
     return .incomplete partialResult p
   let nextLexicon (p : String.Pos.Raw) (lst : Nat) :=
-    Regex.ERE.ADFALexEagerL SMT.lexiconADFA ⟨s, p, s.endPos⟩
+    Regex.ERE.ADFALexEagerL SMT.lexiconADFA ⟨s, p, s.rawEndPos⟩
       {strict := true, initS := lst, prependBeginS := false, appendEndS := false}
   let mut lst := partialResult.lst
   let mut lexpart := partialResult.lexpart
   let mut pstk := partialResult.pstk
   let mut p := p
-  let endPos := s.endPos
+  let endPos := s.rawEndPos
   while true do
     -- If we're not resuming from an incomplete
     --   match of lexicon, skip white space

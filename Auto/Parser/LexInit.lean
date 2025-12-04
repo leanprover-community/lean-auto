@@ -26,10 +26,10 @@ namespace SMT
 
 open Regex
 
-def whitespace : String := (String.mk
+def whitespace : String := (String.ofList
   ([9, 10, 13, 32].map Char.ofNat))
 
-def unprintable : String := String.mk
+def unprintable : String := String.ofList
   ((127 :: List.range 32).map Char.ofNat)
 
 def comment : ERE :=

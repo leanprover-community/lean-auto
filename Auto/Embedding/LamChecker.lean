@@ -1664,7 +1664,7 @@ theorem EtomStep.eval_correct
           rw [Nat.beq_eq_false_of_ne (Nat.ne_of_lt hlt)]
         case right =>
           rw [LamTerm.maxEVarSucc_mkEq]; dsimp [LamTerm.maxEVarSucc]
-          rw [Nat.max_le]; apply And.intro (Nat.le_refl _) (Nat.le_step h₂')
+          rw [Nat.max_le]; apply And.intro (Nat.le_refl _) (Nat.le_succ_of_le h₂')
     | false => exact True.intro
   | .none => exact True.intro
 

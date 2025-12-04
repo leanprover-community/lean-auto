@@ -144,7 +144,7 @@ axiom autoSMTSorry.{u} (α : Sort u) : α
 
 def getTerm (s : String) : MetaM (Parser.SMTTerm.Term × String) := do
   match ← lexTerm s ⟨0⟩ {} with
-  | .complete se p => return (se, Substring.toString ⟨s, p, s.endPos⟩)
+  | .complete se p => return (se, Substring.Raw.toString ⟨s, p, s.rawEndPos⟩)
   | .incomplete _ _ => throwError s!"getTerm {decl_name%} :: Incomplete input {s}"
   | .malformed => throwError s!"getTerm {decl_name%} :: Malformed (prefix of) input {s}"
 

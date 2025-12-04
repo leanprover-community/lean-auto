@@ -12,14 +12,14 @@ def EvalProc.create (path : String) (args : Array String) : IO EvalProc :=
   IO.Process.spawn {stdin := .piped, stdout := .null, stderr := .null, cmd := path, args := args}
 
 def bashRepr (s : String) :=
-  "\"" ++ String.join (s.data.map go) ++ "\""
+  "\"" ++ String.join (s.toList.map go) ++ "\""
 where
   go : Char → String
   | '$' => "\\$"
   | '`' => "\\`"
   | '\"' => "\\\""
   | '\\' => "\\\\"
-  | c => String.mk [c]
+  | c => String.ofList [c]
 
 def runLeanFileUsingNewLeanProcess
   (leanFile : String) (memoryLimitKb : Nat) (timeLimitS : Nat) :

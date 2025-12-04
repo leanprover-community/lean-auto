@@ -2569,7 +2569,7 @@ theorem LamTerm.maxLooseBVarSucc.spec (m : Nat) :
     let IH' := Nat.pred_le_pred (IH.mp h)
     rw [Nat.pred_succ] at IH'; exact IH'
   case mpr =>
-    apply IH.mpr; apply Nat.lt_pred_iff_succ_lt.mp; exact h
+    apply IH.mpr; apply Nat.lt_pred_iff.mp; exact h
 | .app _ t₁ t₂ => by
   dsimp [hasLooseBVarGe, maxLooseBVarSucc];
   rw [Bool.or_eq_true]; rw [spec m t₁]; rw [spec m t₂];

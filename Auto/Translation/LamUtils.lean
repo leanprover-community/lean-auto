@@ -452,7 +452,7 @@ namespace Lam2D
     [
       (``String.append, mkApp4
         (.const ``HAppend.hAppend [.zero, .zero, .zero]) stringc stringc stringc
-        (mkApp2 (.const ``instHAppendOfAppend [.zero]) stringc (mkConst ``String.instAppend))),
+        (mkApp2 (.const ``instHAppendOfAppend [.zero]) stringc (mkConst ``instAppendString))),
       (``String.lt, mkApp2 (.const ``LT.lt [.zero]) stringc (mkConst ``String.instLT)),
     ]
 

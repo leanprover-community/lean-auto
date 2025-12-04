@@ -60,7 +60,7 @@ def transNatConst (nc : NatConst) : String := "t_" ++ nc.reprAux.replace " " "_"
 def transIntConst (ic : IntConst) : String := "t_" ++ ic.reprAux
 
 def transString (s : String) : String :=
-  String.join (s.data.map (fun c => s!"d{c.toNat}"))
+  String.join (s.toList.map (fun c => s!"d{c.toNat}"))
 
 def transStringConst : StringConst → String
 | .strVal s  => "t_strVal_" ++ transString s

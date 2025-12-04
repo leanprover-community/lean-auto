@@ -300,7 +300,7 @@ def queryTPTP (exportFacts : Array REntry) : LamReif.ReifM (Option Expr × Optio
     The returned substring will use the same underlying string as `s`.
 
     Note: Code taken from Std -/
-def commonPrefix (s t : Substring) : Substring :=
+def commonPrefix (s t : Substring.Raw) : Substring.Raw :=
   { s with stopPos := loop s.startPos t.startPos }
 where
   /-- Returns the ending position of the common prefix, working up from `spos, tpos`. -/
@@ -316,9 +316,9 @@ where
   termination_by s.stopPos.byteIdx - spos.byteIdx
 
 /-- If `pre` is a prefix of `s`, i.e. `s = pre ++ t`, returns the remainder `t`. -/
-def dropPrefix? (s : Substring) (pre : Substring) : Option Substring :=
+def dropPrefix? (s : Substring.Raw) (pre : Substring.Raw) : Option Substring.Raw :=
   let t := commonPrefix s pre
-  if t.bsize = pre.bsize then
+  if Substring.Raw.bsize t = Substring.Raw.bsize pre then
     some { s with startPos := t.stopPos }
   else
     none

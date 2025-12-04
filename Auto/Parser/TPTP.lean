@@ -42,7 +42,7 @@ def tokenPrefixes : Std.HashSet String :=
   Std.HashSet.emptyWithCapacity.insertMany $ tokens.flatMap (fun t => Id.run do
     let mut res := []
     let mut pref := ""
-    for c in t.data do
+    for c in t.toList do
       pref := pref.push c
       res := pref :: res
     return res
@@ -87,7 +87,7 @@ def finalizeToken : TokenizerM Unit := do
     setStatus .default
 
 def tokenizeAux (str : String) : TokenizerM Unit := do
-  for char in str.data do
+  for char in str.toList do
     match ← getStatus with
     | .default =>
       if char.isWhitespace then
@@ -104,7 +104,7 @@ def tokenizeAux (str : String) : TokenizerM Unit := do
         setStatus .comment
       else if tokenPrefixes.contains ((← getCurrToken).push char) then
         addToCurrToken char
-      else if tokenPrefixes.contains ([char].asString) then
+      else if tokenPrefixes.contains (String.ofList [char]) then
         finalizeToken
         addToCurrToken char
       else throw $ IO.userError s!"TPTP.parse :: Invalid token: {char}"
