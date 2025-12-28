@@ -116,7 +116,7 @@ where
 
 def getSexp (s : String) : MetaM (Sexp × String) :=
   match parseSexp s ⟨0⟩ {} with
-  | .complete se p => return (se, Substring.toString ⟨s, p, s.endPos⟩)
+  | .complete se p => return (se, Substring.Raw.toString ⟨s, p, s.rawEndPos⟩)
   | .incomplete _ _ => throwError s!"{decl_name%} :: Incomplete input {s}"
   | .malformed => throwError s!"{decl_name%} :: Malformed (prefix of) input {s}"
 

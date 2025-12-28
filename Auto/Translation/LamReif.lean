@@ -1507,7 +1507,7 @@ def reifInhabitations (inhs : Array UMonoFact) : ReifM (Array LamSort) :=
 def reifInd (ind : SimpleIndVal) : ReifM (Option IndInfo) := do
   let ⟨name, type, ctors, projs⟩ := ind
   if name == ``Nat || name == ``Int || name == ``Bool ||
-     name == ``String || name == ``String.Pos || name == ``Empty ||
+     name == ``String || name == ``String.Pos.Raw || name == ``Empty ||
      name == ``BitVec then
     return .none
   -- For now, do not reify inductively defined proposition

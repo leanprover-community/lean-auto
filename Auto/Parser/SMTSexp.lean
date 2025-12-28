@@ -35,7 +35,7 @@ def LexVal.toString : LexVal → String
     let nfrac := n % m
     let nfracs := s!"{nfrac}"
     let nfracs :=
-      String.mk ((List.range (pow - nfracs.length)).map (fun _ => '0')) ++
+      String.ofList ((List.range (pow - nfracs.length)).map (fun _ => '0')) ++
       nfracs
     s!"{nint}." ++ nfracs
 | .str s   => "\"" ++ String.intercalate "\"\"" (s.splitOn "\"") ++ "\""
@@ -78,7 +78,7 @@ def LexVal.ofString (s : String) (attr : String) : LexVal :=
   | "quotedsymbol" => .symb ((s.drop 1).take (s.length - 2))
   | "keyword"      => .kw (s.drop 1)
   | "comment"      =>
-    let rn : Nat := if s.get (s.prev (s.prev s.endPos)) == '\r' then 1 else 0
+    let rn : Nat := if String.Pos.Raw.get s (String.Pos.Raw.prev s (String.Pos.Raw.prev s s.rawEndPos)) == '\r' then 1 else 0
     .comment ((s.drop 1).take (s.length - 2 - rn))
   | _              => panic! s!"LexVal.ofString :: {repr attr} is not a valid attribute"
 
@@ -114,12 +114,12 @@ instance : ToString PartialResult where
 
 inductive ParseResult where
   -- Sexp: Result
-  -- String.pos: The position of the next character
-  | complete   : Sexp → String.Pos → ParseResult
+  -- String.Pos.Raw: The position of the next character
+  | complete   : Sexp → String.Pos.Raw → ParseResult
   -- Array (Array Sexp): Parser stack
   -- Nat: State of lexer
-  -- String.pos: The position of the next character
-  | incomplete : PartialResult → String.Pos → ParseResult
+  -- String.Pos.Raw: The position of the next character
+  | incomplete : PartialResult → String.Pos.Raw → ParseResult
   -- Malformed input
   | malformed  : ParseResult
 deriving Inhabited, BEq, Hashable
@@ -138,24 +138,24 @@ local instance : Hashable Char := ⟨fun c => hash c.val⟩
      part of `l` before `p` will always be identified as `incomplete`
      by `ERE.ADFALexEagerL SMTSexp.lexiconADFA`, and never as `done`.
 -/
-def parseSexp (s : String) (p : String.Pos) (partialResult : PartialResult) : ParseResult := Id.run <| do
-  if p == s.endPos then
+def parseSexp (s : String) (p : String.Pos.Raw) (partialResult : PartialResult) : ParseResult := Id.run <| do
+  if p == s.rawEndPos then
     return .incomplete partialResult p
-  let nextLexicon (p : String.Pos) (lst : Nat) :=
-    Regex.ERE.ADFALexEagerL SMTSexp.lexiconADFA ⟨s, p, s.endPos⟩
+  let nextLexicon (p : String.Pos.Raw) (lst : Nat) :=
+    Regex.ERE.ADFALexEagerL SMTSexp.lexiconADFA ⟨s, p, s.rawEndPos⟩
       {strict := true, initS := lst, prependBeginS := false, appendEndS := false}
   let mut lst := partialResult.lst
   let mut lexpart := partialResult.lexpart
   let mut pstk := partialResult.pstk
   let mut p := p
-  let endPos := s.endPos
+  let endPos := s.rawEndPos
   while true do
     -- If we're not resuming from an incomplete
     --   match of lexicon, skip white space
     if lexpart == "" then
       -- Skip whitespace characters
       while p != endPos do
-        let c := s.get! p
+        let c := String.Pos.Raw.get! s p
         if SMTSexp.whitespace.contains c then
           p := p + c
         else
@@ -189,7 +189,7 @@ def parseSexp (s : String) (p : String.Pos) (partialResult : PartialResult) : Pa
       | .comment s => pstk := pstk.modify (pstk.size - 1) (fun arr => arr.push (.atom (.comment s)))
       | l       =>
         -- Ordinary lexicons must be separated by whitespace or parentheses
-        match s.get? p with
+        match String.Pos.Raw.get? s p with
         | some c =>
           if !SMTSexp.whitespace.contains c ∧ c != ')' ∧ c != '(' then
             return .malformed

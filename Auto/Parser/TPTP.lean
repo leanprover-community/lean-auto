@@ -40,7 +40,7 @@ def tokenPrefixes : Std.HashSet String :=
   Std.HashSet.emptyWithCapacity.insertMany $ tokens.flatMap (fun t => Id.run do
     let mut res := []
     let mut pref := ""
-    for c in t.data do
+    for c in t.toList do
       pref := pref.push c
       res := pref :: res
     return res
@@ -85,7 +85,7 @@ def finalizeToken : TokenizerM Unit := do
     setStatus .default
 
 def tokenizeAux (str : String) : TokenizerM Unit := do
-  for char in str.data do
+  for char in str.toList do
     match ← getStatus with
     | .default =>
       if char.isWhitespace then
@@ -102,7 +102,7 @@ def tokenizeAux (str : String) : TokenizerM Unit := do
         setStatus .comment
       else if tokenPrefixes.contains ((← getCurrToken).push char) then
         addToCurrToken char
-      else if tokenPrefixes.contains (⟨[char]⟩) then
+      else if tokenPrefixes.contains (String.ofList [char]) then
         finalizeToken
         addToCurrToken char
       else throw $ IO.userError s!"TPTP.parse :: Invalid token: {char}"
@@ -449,27 +449,27 @@ def ident2BitVecConst (s : String) : Option BitVecConst :=
     | true, .some n => .some (.bvtoInt n)
     | _,    _       => .none
   | "t_bvmsb" =>
-    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    match String.Pos.Raw.get s ⟨7⟩, (s.drop 8).toNat? with
     | '_', .some n => .some (.bvmsb n)
     | _,   _       => .none
   | "t_bvadd" =>
-    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    match String.Pos.Raw.get s ⟨7⟩, (s.drop 8).toNat? with
     | '_', .some n => .some (.bvadd n)
     | _,   _       => .none
   | "t_bvsub" =>
-    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    match String.Pos.Raw.get s ⟨7⟩, (s.drop 8).toNat? with
     | '_', .some n => .some (.bvsub n)
     | _,   _       => .none
   | "t_bvneg" =>
-    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    match String.Pos.Raw.get s ⟨7⟩, (s.drop 8).toNat? with
     | '_', .some n => .some (.bvneg n)
     | _,   _       => .none
   | "t_bvabs" =>
-    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    match String.Pos.Raw.get s ⟨7⟩, (s.drop 8).toNat? with
     | '_', .some n => .some (.bvabs n)
     | _,   _       => .none
   | "t_bvmul" =>
-    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    match String.Pos.Raw.get s ⟨7⟩, (s.drop 8).toNat? with
     | '_', .some n => .some (.bvmul n)
     | _,   _       => .none
   | "t_bvudi" =>
@@ -493,23 +493,23 @@ def ident2BitVecConst (s : String) : Option BitVecConst :=
     | "t_bvsmod_", .some n => .some (.bvsmod n)
     | _,           _       => .none
   | "t_bvult" =>
-    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    match String.Pos.Raw.get s ⟨7⟩, (s.drop 8).toNat? with
     | '_', .some n => .some (.bvult n)
     | _,   _       => .none
   | "t_bvule" =>
-    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    match String.Pos.Raw.get s ⟨7⟩, (s.drop 8).toNat? with
     | '_', .some n => .some (.bvule n)
     | _,   _       => .none
   | "t_bvslt" =>
-    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    match String.Pos.Raw.get s ⟨7⟩, (s.drop 8).toNat? with
     | '_', .some n => .some (.bvslt n)
     | _,   _       => .none
   | "t_bvsle" =>
-    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    match String.Pos.Raw.get s ⟨7⟩, (s.drop 8).toNat? with
     | '_', .some n => .some (.bvsle n)
     | _,   _       => .none
   | "t_bvand" =>
-    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    match String.Pos.Raw.get s ⟨7⟩, (s.drop 8).toNat? with
     | '_', .some n => .some (.bvand n)
     | _,   _       => .none
   | "t_bvor_" =>
@@ -517,15 +517,15 @@ def ident2BitVecConst (s : String) : Option BitVecConst :=
     | .some n => .some (.bvor n)
     | _       => .none
   | "t_bvxor" =>
-    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    match String.Pos.Raw.get s ⟨7⟩, (s.drop 8).toNat? with
     | '_', .some n => .some (.bvxor n)
     | _,   _       => .none
   | "t_bvnot" =>
-    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    match String.Pos.Raw.get s ⟨7⟩, (s.drop 8).toNat? with
     | '_', .some n => .some (.bvnot n)
     | _,   _       => .none
   | "t_bvshl" =>
-    match s.get ⟨7⟩, (s.drop 8).toNat? with
+    match String.Pos.Raw.get s ⟨7⟩, (s.drop 8).toNat? with
     | '_', .some n => .some (.bvshl n)
     | _,   _       => .none
   | "t_bvlsh" =>
@@ -626,7 +626,7 @@ def ident2LamConstr (pi : ParsingInfo) (s : String) : LamConstr :=
   match pi.proverSkolem.get? s with
   | .some (s, n) => .term s (.etom (n + pi.lamEVarTy.size))
   | .none =>
-    match s.get ⟨0⟩ with
+    match String.Pos.Raw.get s ⟨0⟩ with
     | 's' =>
       match ident2LamSort s with
       | .some b => .sort b

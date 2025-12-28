@@ -15,7 +15,7 @@ private def sort : List Nat → List Nat :=
 -- Character class
 namespace CC
 
-private def alls    := String.mk ((List.range 128).map Char.ofNat)
+private def alls    := String.ofList ((List.range 128).map Char.ofNat)
 private def uppers  := "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 private def lowers  := "abcdefghijklmnopqrstuvwxyz"
 private def alphas  := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -25,9 +25,9 @@ private def xdigits := "0123456789ABCDEFabcdef"
 private def puncts  := ".,!?:…"
 private def blanks  := " \t"
 private def spaces  := " \t\n\r\x0c\x0b"
-private def cntrls  := String.mk ((List.range 32).map Char.ofNat)
-private def graphs  := String.mk (alls.toList.filter (fun x => !" \t\n\r\x0c\x0b".toList.contains x))
-private def prints  := String.mk (alls.toList.filter (fun x => !"\t\n\r\x0c\x0b".toList.contains x))
+private def cntrls  := String.ofList ((List.range 32).map Char.ofNat)
+private def graphs  := String.ofList (alls.toList.filter (fun x => !" \t\n\r\x0c\x0b".toList.contains x))
+private def prints  := String.ofList (alls.toList.filter (fun x => !"\t\n\r\x0c\x0b".toList.contains x))
 
 inductive Ty where
   | all
@@ -95,7 +95,7 @@ where
     | [] => Std.HashSet.emptyWithCapacity
     | b :: bl => (go bl).insertMany (toHashSet b)
 
-def EREBracket.toString (e : EREBracket) := String.mk e.toHashSet.toList
+def EREBracket.toString (e : EREBracket) := String.ofList e.toHashSet.toList
 
 instance : ToString EREBracket where
   toString := EREBracket.toString
@@ -133,7 +133,7 @@ deriving BEq, Hashable, Inhabited
 def ERE.inStr (s : String) := ERE.bracket (.inStr s)
 
 /-- Match the given string -/
-def ERE.ofStr (s : String) := ERE.comp ⟨s.toList.map (fun c => .inStr (String.mk [c]))⟩
+def ERE.ofStr (s : String) := ERE.comp ⟨s.toList.map (fun c => .inStr (String.ofList [c]))⟩
 
 def ERE.ofCC (c : CC.Ty) := ERE.bracket (.cc c)
 
@@ -299,7 +299,7 @@ end
 def CharGrouping.toStringForChar (cg : CharGrouping Char) : String :=
   CharGrouping.toStringAux cg (fun l =>
     let sorted := sort (l.toList.map Char.toNat)
-    let str := String.mk (sorted.map Char.ofNat)
+    let str := String.ofList (sorted.map Char.ofNat)
     ToString.toString (repr str))
 
 instance : ToString (CharGrouping Char) where
@@ -308,7 +308,7 @@ instance : ToString (CharGrouping Char) where
 def ADFA.toStringForChar (a : ADFA Char) : String :=
   ADFA.toStringAux a (fun l =>
     let sorted := sort (l.toList.map Char.toNat)
-    let str := String.mk (sorted.map Char.ofNat)
+    let str := String.ofList (sorted.map Char.ofNat)
     ToString.toString (repr str))
 
 instance : ToString (ADFA Char) where
@@ -418,7 +418,7 @@ instance : ToString LexResultTy where
 structure LexResult where
   type       : LexResultTy
   -- Matched part
-  matched    : Substring
+  matched    : Substring.Raw
   -- Whether the appended `end of string` group is matched
   endSMatched : Bool
   state      : Nat
@@ -452,18 +452,18 @@ instance : ToString LexResult where
   We prepend `s` with the "beginning of string" group
     and append to `s` the "end of string" group
 -/
-def ERE.ADFALexEagerL (a : ADFA Char) (s : Substring) (cfg : LexConfig) : LexResult := Id.run <| do
+def ERE.ADFALexEagerL (a : ADFA Char) (s : Substring.Raw) (cfg : LexConfig) : LexResult := Id.run <| do
   -- Current position in `s`
-  let mut p : String.Pos := s.startPos
+  let mut p : String.Pos.Raw := s.startPos
   -- The value of `b` will represent where the match begins
-  let mut b : String.Pos := s.startPos
+  let mut b : String.Pos.Raw := s.startPos
   -- `es` records the last successful match. The first
   --   `String.Pos` is where the lexicon ends, and the
   --   `Nat` is the state of the `DFA` when the lexicon
   --   ends. We record this state because we need to
   --   extract its attributes if this turns out to be
   --   the longest match.
-  let mut es : Option (String.Pos × Nat) := none
+  let mut es : Option (String.Pos.Raw × Nat) := none
   let beginString : Nat := a.cg.ngroup
   let endString : Nat := a.cg.ngroup + 1
   let mut endReached : Bool := false
@@ -474,19 +474,19 @@ def ERE.ADFALexEagerL (a : ADFA Char) (s : Substring) (cfg : LexConfig) : LexRes
       a.dfa.move cfg.initS beginString
     else
       cfg.initS
-  let sGetGroupFromPos (p : String.Pos) : Id Nat := (do
+  let sGetGroupFromPos (p : String.Pos.Raw) : Id Nat := (do
     if p == s.stopPos then
       -- Implicitly append `s` with "end of string"
       return endString
     else
-      let .some c := s.str.get? p
+      let .some c := String.Pos.Raw.get? s.str p
         | panic! s!"ERE.ADFALex :: Invalid position {p} for string {s.str}"
       return a.cg.getGroup c)
   -- Matched at least one character
   let mut matchStarted : Bool := false
   if cfg.strict then
     -- First character must be a valid match
-    let c := s.str.get! p
+    let c := String.Pos.Raw.get! s.str p
     let cgp := a.cg.getGroup c
     let state' := a.dfa.move state cgp
     if state' == a.dfa.tr.size then
@@ -521,7 +521,7 @@ def ERE.ADFALexEagerL (a : ADFA Char) (s : Substring) (cfg : LexConfig) : LexRes
     -- If the symbol is valid as the first symbol, start matching
     | false, false => b := p; state := state'; matchStarted := true
     if !endReached then
-      let c := s.str.get! p
+      let c := String.Pos.Raw.get! s.str p
       p := p + c
   match es with
   | .some (e, finalstate) =>

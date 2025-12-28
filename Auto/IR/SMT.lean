@@ -99,7 +99,7 @@ def SpecConst.toString : SpecConst → String
 | .binary bs => bs.foldl (fun acc b => acc.push (if b then '1' else '0')) "#b"
 | .num n     => ToString.toString (repr n)
 where specCharRepr (c : Char) : String :=
-  "\\u{" ++ String.mk (Nat.toDigits 16 c.toNat) ++ "}"
+  "\\u{" ++ String.ofList (Nat.toDigits 16 c.toNat) ++ "}"
 
 mutual
 

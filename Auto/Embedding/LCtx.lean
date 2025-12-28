@@ -493,11 +493,8 @@ section push
 
   theorem pushLCtxs_cons (xs : List α) (lctx : Nat → α) :
     pushLCtxs (x :: xs) lctx = pushLCtx x (pushLCtxs xs lctx) := by
-    apply funext; intros n; cases n
-    case h.zero =>
-      dsimp [pushLCtxs, pushLCtx, Nat.blt, Nat.ble]; rw [Nat.zero_ble]
-    case h.succ n =>
-      dsimp [pushLCtxs, pushLCtx, Nat.blt, Nat.ble]; rw [Nat.succ_sub_succ]
+    apply funext; intros n; cases n <;>
+      simp [pushLCtxs, pushLCtx, Nat.blt, Nat.ble]
 
   theorem pushLCtxs_append (xs ys : List α) (lctx : Nat → α) :
     pushLCtxs (xs ++ ys) lctx = pushLCtxs xs (pushLCtxs ys lctx) := by
@@ -515,7 +512,7 @@ section push
 
   theorem pushLCtxs_cons_zero (xs : List α) (lctx : Nat → α) :
     pushLCtxs (x :: xs) lctx 0 = x := by
-    dsimp [pushLCtxs, Nat.blt, Nat.ble]; rw [Nat.zero_ble]
+    dsimp [pushLCtxs, Nat.blt, Nat.ble, Nat.zero_ble]
 
   theorem pushLCtxs_cons_succ (xs : List α) (lctx : Nat → α) (n : Nat) :
     pushLCtxs (x :: xs) lctx (.succ n) = pushLCtxs xs lctx n := by
@@ -611,9 +608,7 @@ section push
     HEq (pushLCtxsDep (.cons x xs) lctx) (pushLCtxDep x (pushLCtxsDep xs lctx)) := by
     apply HEq.funext; intros n; cases n
     case zero =>
-      dsimp [pushLCtxs, pushLCtx, Nat.blt, Nat.ble]
-      rw [Nat.ble_eq_true_of_le]; rfl
-      apply Nat.zero_le
+      simp [pushLCtxs, pushLCtx, Nat.blt, Nat.ble, HList.getD]
     case succ n =>
       dsimp [pushLCtxs, pushLCtx, Nat.blt, Nat.ble]
       rw [Nat.succ_sub_succ]; rfl
@@ -622,9 +617,7 @@ section push
     {lctxty : α → Sort u} {ty : α} (x : lctxty ty) {tys : List α}
     (xs : HList lctxty tys) {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :
     HEq (pushLCtxsDep (.cons x xs) lctx 0) x := by
-    dsimp [pushLCtxs, Nat.blt, Nat.ble];
-    rw [Nat.ble_eq_true_of_le]; rfl
-    apply Nat.zero_le
+    simp [pushLCtxs, Nat.blt, Nat.ble, HList.getD]
 
   theorem pushLCtxsDep_cons_succ
     {lctxty : α → Sort u} {ty : α} (x : lctxty ty) {tys : List α}
@@ -771,9 +764,9 @@ section push
       dsimp at heq; rw [← heq]
       rw [HList.ofFun_succ];
       congr
-      case e_3.h => dsimp; rw [pushLCtxs_cons_zero]
-      case e_4.h => dsimp; rw [pushLCtxs_cons_succ_Fn]; apply List.ofFun_ofPushLCtx; rfl
-      case e_5 => apply pushLCtxsDep_cons_zero
+      case e_4.h =>
+        dsimp; rw [pushLCtxs_cons_succ_Fn]
+        apply List.ofFun_ofPushLCtx; rfl
       case e_6 =>
         apply HEq.trans _ (ofFun_ofPushLCtxDep rfl xs lctx)
         congr
