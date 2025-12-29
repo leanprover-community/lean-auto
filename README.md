@@ -25,16 +25,17 @@ Although Lean-auto is still under development, it's already able to solve nontri
   <img src="Doc/pics/shortfive.png" alt="drawing" width="500"/>
 </p>
 
-Type **"auto 👍"** to see whether auto is set up.  
+Type **"auto 👍"** to test whether auto is set up.  
 
 ## Usage
 * ``auto [<term>,*] u[<ident>,*] d[<ident>,*]``
   * ``u[<ident>,*]``: Unfold identifiers
   * ``d[<ident>,*]``: Add definitional equality related to identifiers
+* The file ``Test/Test_Regression.lean`` in this repo contains working examples of usages of ``lean-auto``. Note that the ``native`` mode in ``Test/Test_Regression`` uses a dummy native solver, but this is only for testing. In real use cases, you should replace the dummy solver with a native theorem prover such as ``duper``. See below for detailed instructions.
 * Currently, auto supports
-  * SMT solver invocation: ``set_option auto.smt true``, but without proof reconstruction. Make sure that SMT solvers are installed, and that ``auto.smt.solver.name`` is correctly set.
-  * TPTP Solver invocation: ``set_option auto.tptp true``, but without proof reconstruction. Make sure that TPTP solvers (currently only supports zipperposition) are installed, and that ``auto.tptp.solver.name`` and ``auto.tptp.zeport.path`` are correctly set.
-  * Proof search by native prover. To enable proof search by native prover, use ``set_option auto.native true``, and use ``attribute [rebind Auto.Native.solverFunc] <solve_interface>`` to bind `lean-auto` to the interface of the solver, which should be a Lean constant of type ``Array Lemma → MetaM Expr``.
+  * SMT solver invocation: ``set_option auto.smt true``, but without proof reconstruction. Make sure that SMT solvers are installed, and that ``auto.smt.solver.name`` is correctly set. If you want to try 
+  * TPTP solver invocation: ``set_option auto.tptp true``, but without proof reconstruction. Currently, we only support zipperposition. Make sure that ``auto.tptp.solver.name`` and ``auto.tptp.zeport.path`` are correctly set.
+  * Proof search by native prover. To enable proof search by native prover, use ``set_option auto.native true``, and use ``attribute [rebind Auto.Native.solverFunc] <solve_interface>`` to bind `lean-auto` to the interface of the solver, which should be a Lean constant of type ``Array Lemma → Array Lemma → MetaM Expr``.
 
 ## Installing Lean-auto
 * ``z3`` version >= 4.12.2. Lower versions may not be able to deal with smt-lib 2.6 string escape sequence.
@@ -46,12 +47,6 @@ Type **"auto 👍"** to see whether auto is set up.
 * Command ```#genMonadState <term>, #genMonadContext <term>```: Defined in ```MonadUtils.lean```. Refer to the comment at the beginning of ```MonadUtils.lean```.
 * Command ```#fromMetaTactic [<ident>]```: Calls ```Tactic.liftMetaTactic``` on ```<ident>```. The constant ```<ident>``` must be already declared and be of type ```MVarId → MetaM (List MVarId)```
 * Lexical Analyzer Generator: ```Parser/LeanLex.lean```. The frontend is not yet implemented. The backend can be found in ```NDFA.lean```.
-
-## Monomorphization Strategy
-* Let $H : \alpha$ be an assumption. We require that
-  * $(1)$ If the type $\beta$ of any subterm $t$ of $\alpha$ depends on a bound variable $x$ inside $\alpha$, and $\beta$ is not of type $Prop$, then $x$ must be instantiated. Examples: [Monomorphization](./Doc/Monomorphization.lean), section `InstExamples`
-  * $(2)$ If any binder $x$ of $\alpha$ has binderinfo `instImplicit`, then the binder $x$ must be instantiated via typeclass inference.
-* **TODO**
 
 ## Translation Workflow (Tentative)
 * Collecting assumptions from local context and user-provided facts
