@@ -88,7 +88,7 @@ theorem HList.getD_append_left (xs : HList β as) (ys : HList β bs) (h : i < as
     dsimp [append]; cases i
     case zero => apply HEq.rfl
     case succ i =>
-      dsimp [getD]; apply IH; apply Nat.le_of_succ_le_succ h
+      simp only [getD]; apply IH; apply Nat.le_of_succ_le_succ h
 
 theorem HList.getD_append_right (xs : HList β as) (ys : HList β bs) (h : i ≥ as.length) :
   HEq ((append xs ys).getD df i) (ys.getD df (i - as.length)) := by
@@ -98,7 +98,7 @@ theorem HList.getD_append_right (xs : HList β as) (ys : HList β bs) (h : i ≥
     dsimp [append]; cases i
     case zero => contradiction
     case succ i =>
-      dsimp [getD]; rw [Nat.succ_sub_succ];
+      simp only [getD]; rw [Nat.succ_sub_succ];
       apply IH; apply Nat.le_of_succ_le_succ h
 
 def HList.append_get_left (xs : HList β (as ++ bs)) : HList β as :=

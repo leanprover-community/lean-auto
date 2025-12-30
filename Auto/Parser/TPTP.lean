@@ -102,7 +102,7 @@ def tokenizeAux (str : String) : TokenizerM Unit := do
         setStatus .comment
       else if tokenPrefixes.contains ((← getCurrToken).push char) then
         addToCurrToken char
-      else if tokenPrefixes.contains (String.ofList [char]) then
+      else if tokenPrefixes.contains (String.mk [char]) then
         finalizeToken
         addToCurrToken char
       else throw $ IO.userError s!"TPTP.parse :: Invalid token: {char}"

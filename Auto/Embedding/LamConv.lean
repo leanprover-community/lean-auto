@@ -964,6 +964,8 @@ theorem LamWF.interp_instantiate1.{u}
   case eqBody => rw [pushLCtxAt_zero]
   case eqLarge =>
     apply eq_of_heq; apply LamWF.interp_heq <;> try rfl
+    case h.HLCtxTyEq =>
+      rw [pushLCtxAt_zero]
     case h.HLCtxTermEq =>
       apply HEq.trans (HEq.symm (pushLCtxAtDep_zero _ _)) _
       apply pushLCtxAtDep_heq <;> try rfl

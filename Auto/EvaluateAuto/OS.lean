@@ -19,7 +19,7 @@ where
   | '`' => "\\`"
   | '\"' => "\\\""
   | '\\' => "\\\\"
-  | c => String.ofList [c]
+  | c => String.mk [c]
 
 def runLeanFileUsingNewLeanProcess
   (leanFile : String) (memoryLimitKb : Nat) (timeLimitS : Nat) :

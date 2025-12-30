@@ -35,7 +35,7 @@ def LexVal.toString : LexVal → String
     let nfrac := n % m
     let nfracs := s!"{nfrac}"
     let nfracs :=
-      String.ofList ((List.range (pow - nfracs.length)).map (fun _ => '0')) ++
+      String.mk ((List.range (pow - nfracs.length)).map (fun _ => '0')) ++
       nfracs
     s!"{nint}." ++ nfracs
 | .str s   => "\"" ++ String.intercalate "\"\"" (s.splitOn "\"") ++ "\""
@@ -78,7 +78,7 @@ def LexVal.ofString (s : String) (attr : String) : LexVal :=
   | "quotedsymbol" => .symb ((s.drop 1).take (s.length - 2))
   | "keyword"      => .kw (s.drop 1)
   | "comment"      =>
-    let rn : Nat := if String.Pos.Raw.get s (String.Pos.Raw.prev s (String.Pos.Raw.prev s s.rawEndPos)) == '\r' then 1 else 0
+    let rn : Nat := if String.Pos.Raw.get s (String.Pos.Raw.prev s (String.Pos.Raw.prev s s.endPos)) == '\r' then 1 else 0
     .comment ((s.drop 1).take (s.length - 2 - rn))
   | _              => panic! s!"LexVal.ofString :: {repr attr} is not a valid attribute"
 
@@ -139,16 +139,16 @@ local instance : Hashable Char := ⟨fun c => hash c.val⟩
      by `ERE.ADFALexEagerL SMTSexp.lexiconADFA`, and never as `done`.
 -/
 def parseSexp (s : String) (p : String.Pos.Raw) (partialResult : PartialResult) : ParseResult := Id.run <| do
-  if p == s.rawEndPos then
+  if p == s.endPos then
     return .incomplete partialResult p
   let nextLexicon (p : String.Pos.Raw) (lst : Nat) :=
-    Regex.ERE.ADFALexEagerL SMTSexp.lexiconADFA ⟨s, p, s.rawEndPos⟩
+    Regex.ERE.ADFALexEagerL SMTSexp.lexiconADFA ⟨s, p, s.endPos⟩
       {strict := true, initS := lst, prependBeginS := false, appendEndS := false}
   let mut lst := partialResult.lst
   let mut lexpart := partialResult.lexpart
   let mut pstk := partialResult.pstk
   let mut p := p
-  let endPos := s.rawEndPos
+  let endPos := s.endPos
   while true do
     -- If we're not resuming from an incomplete
     --   match of lexicon, skip white space
