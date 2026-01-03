@@ -42,6 +42,18 @@ Type **"auto 👍"** to test whether auto is set up.
 * ``cvc5``
 * ``zipperposition`` portfolio mode
 
+## Troubleshooting
+* ``Monomorphization failed because ...``:  
+  Try adding `set_option auto.mono.ignoreNonQuasiHigherOrder true` before you invoke `auto`
+* ``Duper Saturated`` when using `lean-auto + duper`:  
+  This can happen if
+  * $(1)$ The list of hints you provided to `auto` is insufficient
+  * $(2)$ `duper` is unable to prove the translated problem, although the translated problem is provable
+  * $(3)$ `auto` is unable to handle certain Lean features in the problem
+  ---
+  To find out if the issue is caused by $(1)$, try proving the goal manually using only the basic tactics (e.g. `rw`, `apply`, `simp only`, and `dsimp only`) and the hints you provided to `lean-auto`. Try not to use `simp`, `simp_all` and `grind` because they might automatically use theorems that are not within the hint list provided to them. If you're able to prove the goal manually, it means the list of hints you provided is sufficient.  
+  To find out if the issue is caused by $(2)$, try using `lean-auto + SMT solver` and `lean-auto + TPTP solver` and see if it's able to solve the goal. Note that even if the goal is still not solved, it does not necessarily mean that the translated problem is unprovable.
+
 ## Utilities
 * Command ```#getExprAndApply [ <term> | <ident> ]```: Defined in ```ExprExtra.lean```. This command first elaborates the ```<term>``` into a lean ```Expr```, then applies function ```<ident>``` to ```Expr```. The constant ```ident``` must be already declared and be of type ```Expr → TermElabM Unit```
 * Command ```#genMonadState <term>, #genMonadContext <term>```: Defined in ```MonadUtils.lean```. Refer to the comment at the beginning of ```MonadUtils.lean```.
