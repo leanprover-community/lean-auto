@@ -13,7 +13,8 @@ theorem LamWF.interp_app_bvarLift_bvar0
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, .func argTy resTy⟩) :
   LamWF.interp lval (pushLCtx argTy lctx) (pushLCtxDep x lctxTerm) wft.app_bvarLift_bvar0 =
     LamWF.interp (rty:=.func _ _) lval lctx lctxTerm wft x := by
-  simp [LamWF.interp, LamTerm.app_bvarLift_bvar0, app_bvarLift_bvar0, pushLCtx_ofBVar]; rw [← LamWF.interp_bvarLift]
+  simp only [LamWF.interp, LamTerm.app_bvarLift_bvar0, app_bvarLift_bvar0, pushLCtx_ofBVar]
+  rw [← LamWF.interp_bvarLift]; rfl
 
 def LamTerm.etaExpand1 (s : LamSort) (t : LamTerm) : LamTerm :=
   .lam s (.app s t.bvarLift (.bvar 0))
@@ -881,8 +882,8 @@ theorem LamWF.interp_instantiateAt.{u}
 | lctxTy, lctxTerm, wfArg, .ofEtom n => rfl
 | lctxTy, lctxTerm, wfArg, .ofBase b => rfl
 | lctxTy, lctxTerm, wfArg, .ofBVar n => by
-  simp [LamWF.interp, LamWF.instantiateAt, LamTerm.instantiateAt]
-  dsimp [pushLCtxAt, pushLCtxAtDep, restoreAt, restoreAtDep, pushLCtx]
+  simp only [LamWF.interp, LamWF.instantiateAt, LamTerm.instantiateAt]
+  simp only [pushLCtxAt, pushLCtxAtDep, restoreAt, restoreAtDep, pushLCtx]
   match Nat.ble idx n with
   | true =>
     dsimp;
@@ -912,7 +913,8 @@ theorem LamWF.interp_instantiateAt.{u}
 | lctxTy, lctxTerm, wfArg, .ofApp argTy' HFn HArg =>
   let IHFn := LamWF.interp_instantiateAt lval idx lctxTy lctxTerm wfArg HFn
   let IHArg := LamWF.interp_instantiateAt lval idx lctxTy lctxTerm wfArg HArg
-  by simp [LamWF.interp, LamTerm.instantiateAt, instantiateAt]; dsimp at IHFn; dsimp at IHArg; simp [IHFn, IHArg]
+  by simp only [LamWF.interp, LamTerm.instantiateAt, instantiateAt]
+     dsimp at IHFn; dsimp at IHArg; simp [IHFn, IHArg]
 
 def LamTerm.instantiate1 := LamTerm.instantiateAt 0
 
@@ -1071,10 +1073,10 @@ theorem LamWF.interp_resolveImport
   | .ofBase b => LamBaseTerm.LamWF.interp_resolveImport lval b
   | .ofBVar n => rfl
   | .ofLam s hwf => by
-    apply funext; intros x; simp [interp, LamTerm.resolveImport, resolveImport]
+    apply funext; intros x; simp only [interp, LamTerm.resolveImport, resolveImport]
     rw [LamWF.interp_resolveImport _ _ hwf]
   | .ofApp s wfFn wfArg => by
-    simp [interp, LamTerm.resolveImport, resolveImport];
+    simp only [interp, LamTerm.resolveImport, resolveImport];
     rw [LamWF.interp_resolveImport _ _ wfFn]
     rw [LamWF.interp_resolveImport _ _ wfArg]
 

@@ -140,8 +140,6 @@ where
     IO.Process.spawn {stdin := .piped, stdout := .piped, stderr := .piped,
                       cmd := path, args := args}
 
-axiom autoSMTSorry.{u} (α : Sort u) : α
-
 def getTerm (s : String) : MetaM (Parser.SMTTerm.Term × String) := do
   match ← lexTerm s ⟨0⟩ {} with
   | .complete se p => return (se, Substring.Raw.toString ⟨s, p, s.rawEndPos⟩)

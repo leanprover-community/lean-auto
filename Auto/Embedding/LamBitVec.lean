@@ -46,27 +46,13 @@ namespace BVLems
   theorem sub_def (a b : BitVec n) : a - b = a.sub b := rfl
 
   theorem toNat_shiftLeft {a : BitVec n} (i : Nat) : (a <<< i).toNat = (a.toNat * (2 ^ i)) % (2 ^ n) := by
-    rw [shiftLeft_def]; rcases a with ⟨⟨a, isLt⟩⟩
-    unfold BitVec.shiftLeft BitVec.toNat BitVec.ofNat
-    dsimp; rw [Nat.shiftLeft_eq]
+    rw [BitVec.toNat_shiftLeft, Nat.shiftLeft_eq]
 
   theorem toNat_ushiftRight {a : BitVec n} (i : Nat) : (a >>> i).toNat = (a.toNat) / (2 ^ i) := by
-    rw [ushiftRight_def]; rcases a with ⟨⟨a, isLt⟩⟩
-    unfold BitVec.ushiftRight BitVec.toNat
-    dsimp; rw [Nat.shiftRight_eq_div_pow]
+    rw [BitVec.toNat_ushiftRight, Nat.shiftRight_eq_div_pow]
 
-  theorem toNat_zeroExtend' {a : BitVec n} (le : n ≤ m) : (a.setWidth' le).toNat = a.toNat := rfl
-
-  theorem toNat_zeroExtend {a : BitVec n} (i : Nat) : (a.zeroExtend i).toNat = a.toNat % (2 ^ i) := by
-    unfold BitVec.zeroExtend BitVec.setWidth; cases hdec : decide (n ≤ i)
-    case false =>
-      have hnle := of_decide_eq_false hdec
-      rw [Bool.dite_eq_false (proof:=hnle)]; rfl
-    case true =>
-      have hle := of_decide_eq_true hdec
-      rw [Bool.dite_eq_true (proof:=hle), toNat_zeroExtend']
-      rw [Nat.mod_eq_of_lt]; rcases a with ⟨⟨a, isLt⟩⟩;
-      apply Nat.le_trans isLt; apply Nat.pow_le_pow_right (Nat.le_succ_of_le .refl) hle
+  theorem toNat_zeroExtend {n} {a : BitVec n} (i : Nat) : (a.zeroExtend i).toNat = a.toNat % (2 ^ i) :=
+    BitVec.toNat_setWidth i a
 
   theorem toNat_sub (a b : BitVec n) : (a - b).toNat = (2 ^ n - b.toNat + a.toNat) % (2 ^ n) := rfl
 
@@ -95,58 +81,30 @@ namespace BVLems
     apply (Nat.le_iff_div_eq_zero (Nat.two_pow_pos _)).mpr
     apply Nat.le_trans (toNat_le _) (Nat.pow_le_pow_right (Nat.lt_succ_of_lt .refl) h)
 
-  theorem ushiftRight_ge_length_eq_zero' (a : BitVec n) (i : Nat) : i ≥ n → BitVec.ofNat n (a.toNat >>> i) = 0#n := by
-    intro h; apply congrArg (@BitVec.ofNat n)
-    rw [Nat.shiftRight_eq_div_pow, Nat.le_iff_div_eq_zero (Nat.two_pow_pos _)]
-    apply Nat.le_trans (toNat_le _) (Nat.pow_le_pow_right (Nat.lt_succ_of_lt .refl) h)
-
-  theorem msb_equiv_lt (a : BitVec n) : !a.msb ↔ a.toNat < 2 ^ (n - 1) := by
-    dsimp [BitVec.msb, BitVec.getMsbD, BitVec.getLsbD]
-    cases n
-    case zero => cases a <;> simp
-    case succ n =>
-      have dtrue : decide (0 < n + 1) = true := by simp
-      rw [dtrue, Bool.not_eq_true', Bool.true_and, Nat.succ_sub_one, Nat.testBit_false_iff]
-      rw [Nat.mod_eq_of_lt (toNat_le _)]
-
-  theorem msb_equiv_lt' (a : BitVec n) : !a.msb ↔ 2 * a.toNat < 2 ^ n := by
-    rw [msb_equiv_lt]
-    cases n
-    case zero => cases a <;> simp
-    case succ n =>
-      rw [Nat.succ_sub_one, Nat.pow_succ, Nat.mul_comm (m:=2)]
-      apply Iff.symm; apply Nat.mul_lt_mul_left
-      exact Nat.lt_succ_of_lt .refl
-
   theorem sshiftRight_ge_length_eq_msb (a : BitVec n) (i : Nat) : i ≥ n → a.sshiftRight i =
     if a.msb then (1#n).neg else 0#n := by
-    intro h; simp only [sshiftRight, BitVec.toInt, ← msb_equiv_lt']
-    cases hmsb : a.msb <;> simp only [Int.shiftRight_def]
+    intro h
+    cases hmsb : a.msb <;> dsimp <;> rw [eq_iff_val_eq]
     case false =>
-      dsimp only [Bool.not_false, ↓dreduceIte, Int.ofNat_eq_natCast, Int.natCast_shiftRight, Bool.false_eq_true]
-      rw [BitVec.ofNat]
-      apply ushiftRight_ge_length_eq_zero'; exact h
+      rw [BitVec.sshiftRight_eq_of_msb_false hmsb]
+      have ha : a.toNat < 2 ^ i := Nat.le_trans (toNat_le _) (
+        Nat.pow_le_pow_right Nat.zero_lt_two h)
+      simp [Nat.shiftRight_eq_div_pow, ha]
     case true =>
-      rw [← Int.subNatNat_eq_coe, Int.subNatNat_of_lt (toNat_le _)]
-      simp only [BitVec.ofInt]
-      dsimp only [Bool.not_true, Bool.false_eq_true, ↓dreduceIte,
-        Nat.pred_eq_sub_one, Int.ofNat_eq_natCast, Int.natCast_shiftRight, Int.natCast_pow,
-        Int.cast_ofNat_Int, neg_eq]
-      have hzero : (2 ^ n - BitVec.toNat a - 1) >>> i = 0 := by
-        rw [Nat.shiftRight_eq_div_pow]; apply (Nat.le_iff_div_eq_zero (Nat.two_pow_pos _)).mpr
-        rw [Nat.sub_one, Nat.pred_lt_iff_le (Nat.two_pow_pos _)]
-        apply Nat.le_trans (Nat.sub_le _ _) (Nat.pow_le_pow_right (Nat.lt_succ_of_lt .refl) h)
-      apply eq_of_val_eq; rw [toNat_ofNatLt, hzero]
-      rw [toNat_neg, Int.mod_def', Int.emod]
-      rw [Nat.zero_mod, Nat.succ_eq_add_one, Nat.zero_add]
-      rw [Int.subNatNat_of_sub_eq_zero (by grind)]
-      rw [Int.toNat_natCast, BitVec.toNat_ofNat]
-      cases n <;> try rfl
-      case succ n =>
-        have hlt : 2 ≤ 2 ^ Nat.succ n := @Nat.pow_le_pow_right 2 (Nat.lt_succ_of_lt .refl) 1 (.succ n) (Nat.succ_le_succ (Nat.zero_le _))
-        rw [Nat.mod_eq_of_lt (a:=1) hlt]
-        rw [Nat.mod_eq_of_lt (by grind)]
-        grind
+      have hn : n > 0 := by
+        apply Nat.ne_zero_iff_zero_lt.mp; intro hn; cases hn
+        rw [BitVec.msb_eq_toNat] at hmsb
+        have := toNat_le a; simp_all
+      have hpn : 2 ^ n > 1 := Nat.pow_le_pow_right Nat.zero_lt_two hn
+      have hin : 2 ^ n ≤ 2 ^ i := Nat.pow_le_pow_right Nat.zero_lt_two h
+      rw [BitVec.sshiftRight_eq_of_msb_true hmsb]
+      rw [BitVec.toNat_not, BitVec.toNat_neg, BitVec.toNat_ofNat]
+      rw [Nat.one_mod_eq_one.mpr (Nat.ne_of_gt hpn)]
+      have hsa : 2 ^ n - 1 - a.toNat < 2 ^ i := by
+        apply Nat.sub_lt_of_lt; apply Nat.lt_iff_add_one_le.mpr
+        rw [Nat.sub_add_cancel (Nat.le_of_lt hpn)]; exact hin
+      have han : (~~~a >>> i).toNat = 0 := by simp [Nat.shiftRight_eq_div_pow, hsa]
+      simp [han]
 
   theorem shiftRight_eq_zero_iff (a : BitVec n) (b : Nat) : a >>> b = 0#n ↔ a.toNat < 2 ^ b := by
     rw [ushiftRight_def]; rcases a with ⟨⟨a, isLt⟩⟩;
@@ -200,7 +158,7 @@ namespace BVLems
       rw [Bool.ite_eq_true _ _ _ hle, smtshiftLeft_def, toNat_ofNat, Nat.mod_eq_of_lt]
       apply Nat.le_trans hle (Nat.le_of_lt (Nat.le_pow .refl))
 
-  theorem shl_equiv'.{u} (a : BitVec n) (b : Nat) : a <<< b =
+  theorem shl_equiv_GLift.{u} (a : BitVec n) (b : Nat) : a <<< b =
     (Bool.ite' (b < n) (GLift.up.{1, u} (a <<< BitVec.ofNat n b)) (GLift.up.{1, u} 0)).down := by
     have h := shl_equiv a b; rw [Bool.ite_simp] at h; rw [Bool.ite'_comm (f := GLift.down)]; exact h
 
@@ -243,7 +201,7 @@ namespace BVLems
       rw [Bool.ite_eq_true _ _ _ hle, smtushiftRight_def, toNat_ofNat, Nat.mod_eq_of_lt]
       apply Nat.le_trans hle (Nat.le_of_lt (Nat.le_pow .refl))
 
-  theorem lshr_equiv'.{u} (a : BitVec n) (b : Nat) : a >>> b =
+  theorem lshr_equiv_GLift.{u} (a : BitVec n) (b : Nat) : a >>> b =
     (Bool.ite' (b < n) (GLift.up.{1, u} (a >>> BitVec.ofNat n b)) (GLift.up.{1, u} 0)).down := by
     have h := lshr_equiv a b; rw [Bool.ite_simp] at h; rw [Bool.ite'_comm (f := GLift.down)]; exact h
 
@@ -270,7 +228,7 @@ namespace BVLems
       rw [smtushiftRight_def, eqof, shiftRight_eq_zero_iff] at heq
       rw [toNat_zeroExtend, Nat.mod_eq_of_lt heq]
 
-  theorem lshr_toNat_equiv_long'.{u} (a : BitVec n) (b : BitVec m) (h : m > n) : a >>> b.toNat =
+  theorem lshr_toNat_equiv_long_GLift.{u} (a : BitVec n) (b : BitVec m) (h : m > n) : a >>> b.toNat =
     (Bool.ite' (GLift.up.{1, u} (b >>> (BitVec.ofNat m n)) = GLift.up.{1, u} 0#m)
       (GLift.up.{1, u} (a >>> (zeroExtend n b))) (GLift.up.{1, u} 0)).down := by
     have h := lshr_toNat_equiv_long a b h; rw [Bool.ite_simp] at h
@@ -286,7 +244,7 @@ namespace BVLems
       rw [Bool.ite_eq_true _ _ _ hle, toNat_ofNat, Nat.mod_eq_of_lt]
       apply Nat.le_trans hle (Nat.le_of_lt (Nat.le_pow .refl))
 
-  theorem ashr_equiv'.{u} (a : BitVec n) (b : Nat) : a.sshiftRight b =
+  theorem ashr_equiv_GLift.{u} (a : BitVec n) (b : Nat) : a.sshiftRight b =
     (Bool.ite' (b < n) (GLift.up.{1, u} (a.sshiftRight (BitVec.ofNat n b).toNat))
       (Bool.ite' (GLift.up.{1, u} a.msb = GLift.up.{1, u} true) (GLift.up.{1, u} (1#n).neg) (GLift.up.{1, u} 0#n))).down := by
     have h := ashr_equiv a b; rw [Bool.ite_simp] at h; rw [eqGLift_equiv]
@@ -315,7 +273,7 @@ namespace BVLems
       rw [smtushiftRight_def, eqof, shiftRight_eq_zero_iff] at heq
       rw [toNat_zeroExtend, Nat.mod_eq_of_lt heq]
 
-  theorem ashr_toNat_equiv_long'.{u} (a : BitVec n) (b : BitVec m) (h : m > n) : a.sshiftRight b.toNat =
+  theorem ashr_toNat_equiv_long_GLift.{u} (a : BitVec n) (b : BitVec m) (h : m > n) : a.sshiftRight b.toNat =
     (Bool.ite' (GLift.up.{1, u} (b >>> (BitVec.ofNat m n)) = GLift.up.{1, u} 0#m)
       (GLift.up.{1, u} (a.sshiftRight (zeroExtend n b).toNat))
       (Bool.ite'
@@ -405,7 +363,7 @@ theorem LamEquiv.shl_equiv
   ⟨.mkBvNatBinOp (.ofBvshl _) wfa wfb,
    .mkIte (.mkNatBinOp (.ofNlt) wfb (.ofBase (.ofNatVal n)))
     (.mkBvBinOp (.ofBvsmtshl _) wfa (.mkBvofNat wfb)) (.ofBase (.ofBvVal _ _)), fun lctxTerm => by
-    apply GLift.down.inj; apply BVLems.shl_equiv'⟩
+    apply GLift.down.inj; apply BVLems.shl_equiv_GLift⟩
 
 abbrev LamTerm.shl_toNat_equiv_short (n : Nat) (a : LamTerm) (m : Nat) (b : LamTerm) :=
   LamTerm.mkBvBinOp n (.bvsmtshl n) a (.mkBvUOp m (.bvzeroExtend m n) b)
@@ -497,7 +455,7 @@ theorem LamEquiv.lshr_equiv
   ⟨.mkBvNatBinOp (.ofBvlshr _) wfa wfb,
    .mkIte (.mkNatBinOp (.ofNlt) wfb (.ofBase (.ofNatVal n)))
     (.mkBvBinOp (.ofBvsmtlshr _) wfa (.mkBvofNat wfb)) (.ofBase (.ofBvVal _ _)), fun lctxTerm => by
-    apply GLift.down.inj; apply BVLems.lshr_equiv'⟩
+    apply GLift.down.inj; apply BVLems.lshr_equiv_GLift⟩
 
 abbrev LamTerm.lshr_toNat_equiv_short (n : Nat) (a : LamTerm) (m : Nat) (b : LamTerm) :=
   LamTerm.mkBvBinOp n (.bvsmtlshr n) a (.mkBvUOp m (.bvzeroExtend m n) b)
@@ -558,7 +516,7 @@ theorem LamEquiv.lshr_toNat_equiv_long
     .mkIte
       (.mkEq (.mkBvBinOp (.ofBvsmtlshr _) wfb (.ofBase (.ofBvVal _ _))) (.ofBase (.ofBvVal _ _)))
       (.mkBvBinOp (.ofBvsmtlshr _) wfa (.mkBvUOp (.ofBvzeroExtend _ _) wfb)) (.ofBase (.ofBvVal _ _)), fun lctxTerm => by
-    apply GLift.down.inj; apply BVLems.lshr_toNat_equiv_long' _ _ h⟩
+    apply GLift.down.inj; apply BVLems.lshr_toNat_equiv_long_GLift _ _ h⟩
 
 def LamTerm.ashr_equiv (n : Nat) (a b bbv : LamTerm) :=
   LamTerm.mkIte (.base (.bv n)) (.mkNatBinOp .nlt b (.base (.natVal n)))
@@ -597,7 +555,7 @@ theorem LamEquiv.ashr_equiv
     (.mkIte (.mkEq (.mkBvUOp (.ofBvmsb _) wfa) (.ofBase .ofTrueB))
       (.mkBvUOp (.ofBvneg _) ((.ofBase (.ofBvVal _ _))))
       (.ofBase (.ofBvVal _ _))), fun lctxTerm => by
-    apply GLift.down.inj; apply BVLems.ashr_equiv'⟩
+    apply GLift.down.inj; apply BVLems.ashr_equiv_GLift⟩
 
 abbrev LamTerm.ashr_toNat_equiv_short (n : Nat) (a : LamTerm) (m : Nat) (b : LamTerm) :=
   LamTerm.mkBvBinOp n (.bvsmtashr n) a (.mkBvUOp m (.bvzeroExtend m n) b)
@@ -664,7 +622,7 @@ theorem LamEquiv.ashr_toNat_equiv_long
         (.mkIte (.mkEq (.mkBvUOp (.ofBvmsb _) wfa) (.ofBase .ofTrueB))
           (.mkBvUOp (.ofBvneg _) (.ofBase (.ofBvVal _ _)))
           (.ofBase (.ofBvVal _ _))), fun lctxTerm => by
-    apply GLift.down.inj; apply BVLems.ashr_toNat_equiv_long' _ _ h⟩
+    apply GLift.down.inj; apply BVLems.ashr_toNat_equiv_long_GLift _ _ h⟩
 
 inductive BVCastType where
   | ofNat : Nat → BVCastType
