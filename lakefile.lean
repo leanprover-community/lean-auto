@@ -57,7 +57,7 @@ post_update pkg do
   let v := if args.contains "-q" || args.contains "--quiet" then Verbosity.quiet else v
   let v := if args.contains "-v" || args.contains "--verbose" then Verbosity.verbose else v
   let exitCode? ← LoggerIO.toBaseIO (cfg := {outLv := v.minLogLv}) <| ws.runLakeT do
-    if let some pkg ← findPackage? __name__ then
+    if let some pkg ← findPackageByKey? __name__ then
       let zipperpositionZipFile := pkg.buildDir / zipperposition.zip_name
       let zipperpositionExeFile := pkg.buildDir / zipperposition.exe_name
       if !(← zipperpositionExeFile.pathExists) then
@@ -69,4 +69,4 @@ post_update pkg do
       logError "package not found"
       return 1
   let exitCode := exitCode?.getD 1
-  if exitCode = 0 then return () else error s!"{pkg.name}: failed to download/setup `zipperposition`"
+  if exitCode = 0 then return () else error s!"{pkg.baseName}: failed to download/setup `zipperposition`"

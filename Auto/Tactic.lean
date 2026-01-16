@@ -347,7 +347,7 @@ def addTryThisTacticSeqSuggestion (ref : Syntax) (suggestion : TSyntax ``Lean.Pa
 where
   dedent (s : String) : String :=
     s.splitOn "\n"
-    |>.map (λ line => dropPrefix? line.toSubstring "  ".toSubstring |>.map (·.toString) |>.getD line)
+    |>.map (λ line => dropPrefix? line.toRawSubstring "  ".toRawSubstring |>.map (·.toString) |>.getD line)
     |> String.intercalate "\n"
 
 open Embedding.Lam in

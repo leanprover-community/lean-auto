@@ -75,14 +75,14 @@ def LexVal.ofString (s : String) (attr : String) : LexVal :=
     let bdigs := s.drop 2
     .num (bdigs.foldl (fun x c => x * 2 + c.toNat - '0'.toNat) 0)
   | "string" =>
-    let subs := ((s.drop 1).take (s.length - 2)).splitOn "\"\""
+    let subs := ((s.drop 1).take (s.length - 2)).toString.splitOn "\"\""
     .str (String.intercalate "\"" subs)
   | "simplesymbol" => .symb s
-  | "quotedsymbol" => .symb ((s.drop 1).take (s.length - 2))
-  | "keyword"      => .kw (s.drop 1)
+  | "quotedsymbol" => .symb ((s.drop 1).take (s.length - 2)).toString
+  | "keyword"      => .kw (s.drop 1).toString
   | "comment"      =>
     let rn : Nat := if String.Pos.Raw.get s (String.Pos.Raw.prev s (String.Pos.Raw.prev s s.rawEndPos)) == '\r' then 1 else 0
-    .comment ((s.drop 1).take (s.length - 2 - rn))
+    .comment ((s.drop 1).take (s.length - 2 - rn)).toString
   | "reserved"     => .reserved s
   | "forall"       => .reserved "forall"
   | "exists"       => .reserved "exists"

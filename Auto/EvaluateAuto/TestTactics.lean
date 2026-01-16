@@ -335,15 +335,15 @@ def readEvalTacticsAtModuleResult (resultFile : String) : CoreM (Array (Name × 
 where
   analyzeLine (fileName line : String) : CoreM (Name × Array (Result × Nat × Nat)) := do
     let line := (line.dropWhile (fun c => c != ' ')).drop 3
-    let tr := (line.takeWhile (fun c => c != ']')).splitOn ", "
+    let tr := ((line.takeWhile (fun c => c != ']')).toString.splitOn ", ")
     let tr : Array (Result × Nat × Nat) ← (Array.mk tr).mapM (fun s => do
       let [sr, st, sh] := s.splitOn " "
-        | throwError "s!{decl_name%} :: In file {fileName}, {s} is not of the form `<result> <time> <heartbeats>`"
+        | throwError s!"{decl_name%} :: In file {fileName}, {s} is not of the form `<result> <time> <heartbeats>`"
       match Result.ofConcise? sr, String.toNat? st, String.toNat? sh with
       | .some r, .some t, .some h => return (r, t, h)
       | _, _, _ => throwError s!"{decl_name%} :: In file {fileName}, {s} is not of the form `<result> <time> <heartbeats>`")
     let line := (line.dropWhile (fun c => c != ']')).drop 2
-    let name := Name.parseUniqRepr line
+    let name := Name.parseUniqRepr line.toString
     return (name, tr)
 
 structure EvalTacticOnMathlibConfig where
@@ -493,9 +493,9 @@ def readETMHTResult (config : EvalTacticOnMathlibConfig) :
   let allPaths ← System.FilePath.walkDir resultFolder
   let mut ret := #[]
   for path in allPaths do
-    if !(← System.FilePath.isDir path) && path.toString.takeRight 7 == ".result" then
+    if !(← System.FilePath.isDir path) && path.toString.takeEnd 7 == ".result" then
       let content ← readEvalTacticsAtModuleResult path.toString
-      let suffix := (path.toString.drop (resultFolder.length + 1)).dropRight 7
+      let suffix := ((path.toString.drop (resultFolder.length + 1)).dropEnd 7).toString
       let modName := (suffix.splitOn "/").foldl (fun a b => Name.str a b) .anonymous
       ret := ret.push (modName, content)
   return ret
@@ -513,13 +513,13 @@ def readETMHTResultAllowNonRet (config : EvalTacticOnMathlibConfig) :
   let mut ret := #[]
   let mut nonRet := #[]
   for path in allPaths do
-    if !(← System.FilePath.isDir path) && path.toString.takeRight 7 == ".result" then
+    if !(← System.FilePath.isDir path) && path.toString.takeEnd 7 == ".result" then
       let raw ← IO.FS.readFile path
       if raw.length == 0 then
-        nonRet := nonRet.push (path.toString.dropRight 7)
+        nonRet := nonRet.push ((path.toString.dropEnd 7).toString)
         continue
       let content ← readEvalTacticsAtModuleResult path.toString
-      let suffix := (path.toString.drop (resultFolder.length + 1)).dropRight 7
+      let suffix := ((path.toString.drop (resultFolder.length + 1)).dropEnd 7).toString
       let modName := (suffix.splitOn "/").foldl (fun a b => Name.str a b) .anonymous
       ret := ret.push (modName, content)
   return (nonRet, ret)
@@ -579,8 +579,8 @@ def readETMHTEvaluateFiles (config : EvalTacticOnMathlibConfig) : CoreM (Array N
     if line.contains ':' then
       let [name, retCode] := line.splitOn ":"
         | throwError "{decl_name%} :: Unexpected line format, line content : `{line}`"
-      let name := name.dropRight 1
-      let retCode := retCode.drop 1
+      let name := (name.dropEnd 1).toString
+      let retCode := (retCode.drop 1).toString
       let some retCode := retCode.toNat?
         | throwError "{decl_name%} :: Unexpected line format, line content : `{line}`"
       retEnd := retEnd.push (str2Name name, retCode)

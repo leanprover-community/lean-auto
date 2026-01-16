@@ -400,7 +400,7 @@ def ident2StringConst (s : String) : Option StringConst :=
       match x, y.toNat? with
       | .some l, .some y' => .some (l.push (Char.ofNat y'))
       | _,       _        => .none
-    match s.take 9, (((s.drop 9).splitOn "d").drop 1).foldl foldFn (.some "") with
+    match s.take 9, (((s.drop 9).toString.splitOn "d").drop 1).foldl foldFn (.some "") with
     | "t_strVal_", .some s => .some (.strVal s)
     | _,         _       => .none
 
@@ -428,7 +428,7 @@ open Embedding.Lam in
 def ident2BitVecConst (s : String) : Option BitVecConst :=
   match s.take 7 with
   | "t_bvVal" =>
-    match (s.drop 7).splitOn "_" with
+    match (s.drop 7).toString.splitOn "_" with
     | ["", ns, is] =>
       match ns.toNat?, is.toNat? with
       | .some n, .some i => .some (.bvVal n i)
@@ -550,35 +550,35 @@ def ident2BitVecConst (s : String) : Option BitVecConst :=
       | "ashr", .some n => .some (.bvsmtashr n)
       | _,      _       => .none
   | "t_bvapp" =>
-    match s.take 11, (s.drop 11).splitOn "_" with
+    match s.take 11, (s.drop 11).toString.splitOn "_" with
     | "t_bvappend_", [ns, ms] =>
       match ns.toNat?, ms.toNat? with
       | .some n, .some m => .some (.bvappend n m)
       | _,       _       => .none
     | _,             _        => .none
   | "t_bvext" =>
-    match s.take 12, (s.drop 12).splitOn "_" with
+    match s.take 12, (s.drop 12).toString.splitOn "_" with
     | "t_bvextract_", [ns, hs, ls] =>
       match ns.toNat?, hs.toNat?, ls.toNat? with
       | .some n, .some h, .some l => .some (.bvextract n h l)
       | _,       _,       _       => .none
     | _,              _            => .none
   | "t_bvrep" =>
-    match s.take 11, (s.drop 11).splitOn "_" with
+    match s.take 11, (s.drop 11).toString.splitOn "_" with
     | "t_bvrepeat_", [ws, is] =>
       match ws.toNat?, is.toNat? with
       | .some w, .some i => .some (.bvrepeat w i)
       | _,       _       => .none
     | _,             _        => .none
   | "t_bvzer" =>
-    match s.take 15, (s.drop 15).splitOn "_" with
+    match s.take 15, (s.drop 15).toString.splitOn "_" with
     | "t_bvzeroExtend_", [ws, vs] =>
       match ws.toNat?, vs.toNat? with
       | .some w, .some v => .some (.bvzeroExtend w v)
       | _,       _       => .none
     | _,             _        => .none
   | "t_bvsig" =>
-    match s.take 15, (s.drop 15).splitOn "_" with
+    match s.take 15, (s.drop 15).toString.splitOn "_" with
     | "t_bvsignExtend_", [ws, vs] =>
       match ws.toNat?, vs.toNat? with
       | .some w, .some v => .some (.bvsignExtend w v)
