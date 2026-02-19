@@ -14,7 +14,7 @@ namespace IR.SMT
 def isSimpleSymbol (s : String) : Bool :=
   let symbSpecials := "~!@$%^&*_-+=<>.?/"
   let front := s.front.isAlpha || (symbSpecials.contains s.front)
-  let body := s.all (fun c => Char.isAlphanum c || symbSpecials.contains c)
+  let body := s.all (fun (c : Char) => c.isAlphanum || symbSpecials.contains c)
   s.length != 0 && front && body
 
 -- <index>      ::= <numeral> | <symbol>

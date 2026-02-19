@@ -167,16 +167,16 @@ where
     let s := (line.takeWhile (fun c => c != ' ')).toString
     let .some res := Result.ofConcise? s
       | throwError s!"{decl_name%} :: In file {fileName}, {s} is not a concise representation of a `Result`"
-    let line := (line.dropWhile (fun c => c != ' ')).drop 1
+    let line := ((line.dropWhile (fun c => c != ' ')).drop 1).toString
     let s := (line.takeWhile (fun c => c != ' ')).toString
     let .some time := String.toNat? s
       | throwError s!"{decl_name%} :: In file {fileName}, {s} is not a string representation of a Nat"
-    let line := (line.dropWhile (fun c => c != ' ')).drop 1
+    let line := ((line.dropWhile (fun c => c != ' ')).drop 1).toString
     let s := (line.takeWhile (fun c => c != ' ')).toString
     let .some hb := String.toNat? s
       | throwError s!"{decl_name%} :: In file {fileName}, {s} is not a string representation of a Nat"
-    let line := (line.dropWhile (fun c => c != ' ')).drop 1
-    let name := Name.parseUniqRepr line.toString
+    let line := ((line.dropWhile (fun c => c != ' ')).drop 1).toString
+    let name := Name.parseUniqRepr line
     return (name, res, time, hb)
 
 def runAutoOnNamesFile (cfg : EvalAutoConfig) (fname : String) : CoreM Unit := do
@@ -332,7 +332,7 @@ def readEATAResult (config : EvalAutoAsyncConfig) :
   let allFiles := (← System.FilePath.readDir resultFolder).map IO.FS.DirEntry.path
   let mut ret := #[]
   for file in allFiles do
-    if !(← System.FilePath.isDir file) && (file.toString.takeEnd 7).toString == ".result" then
+    if !(← System.FilePath.isDir file) && file.toString.takeEnd 7 == ".result" then
       ret := ret.append (← readRunAutoOnConstsResult file.toString)
   return ret
 
