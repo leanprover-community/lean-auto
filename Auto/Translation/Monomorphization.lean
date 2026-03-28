@@ -544,7 +544,29 @@ structure State where
 
 abbrev MonoM := StateRefT State MetaM
 
-#genMonadState MonoM
+def getCiMap : MonoM (Std.HashMap Expr ConstInsts) := do
+  return (← get).ciMap
+
+def setCiMap (ciMap : Std.HashMap Expr ConstInsts) : MonoM Unit := do
+  modify fun s => { s with ciMap := ciMap }
+
+def getLisArr : MonoM (Array LemmaInsts) := do
+  return (← get).lisArr
+
+def setLisArr (lisArr : Array LemmaInsts) : MonoM Unit := do
+  modify fun s => { s with lisArr := lisArr }
+
+def getCiInstDefEqs : MonoM (Array LemmaInst) := do
+  return (← get).ciInstDefEqs
+
+def setCiInstDefEqs (ciInstDefEqs : Array LemmaInst) : MonoM Unit := do
+  modify fun s => { s with ciInstDefEqs := ciInstDefEqs }
+
+def getActive : MonoM (Std.Queue (ConstInst ⊕ (LemmaInst × Nat))) := do
+  return (← get).active
+
+def setActive (active : Std.Queue (ConstInst ⊕ (LemmaInst × Nat))) : MonoM Unit := do
+  modify fun s => { s with active := active }
 
 /-
   Returns:
@@ -819,7 +841,47 @@ namespace FVarRep
 
   abbrev FVarRepM := StateRefT State MetaState.MetaStateM
 
-  #genMonadState FVarRepM
+  def getBfvars : FVarRepM (Array FVarId) := do
+    return (← get).bfvars
+
+  def setBfvars (bfvars : Array FVarId) : FVarRepM Unit := do
+    modify fun s => { s with bfvars := bfvars }
+
+  def getFfvars : FVarRepM (Array FVarId) := do
+    return (← get).ffvars
+
+  def setFfvars (ffvars : Array FVarId) : FVarRepM Unit := do
+    modify fun s => { s with ffvars := ffvars }
+
+  def getExprMap : FVarRepM (Std.HashMap Expr FVarId) := do
+    return (← get).exprMap
+
+  def setExprMap (exprMap : Std.HashMap Expr FVarId) : FVarRepM Unit := do
+    modify fun s => { s with exprMap := exprMap }
+
+  def getCiMap : FVarRepM (Std.HashMap Expr ConstInsts) := do
+    return (← get).ciMap
+
+  def setCiMap (ciMap : Std.HashMap Expr ConstInsts) : FVarRepM Unit := do
+    modify fun s => { s with ciMap := ciMap }
+
+  def getCiIdMap : FVarRepM (Std.HashMap ConstInst FVarId) := do
+    return (← get).ciIdMap
+
+  def setCiIdMap (ciIdMap : Std.HashMap ConstInst FVarId) : FVarRepM Unit := do
+    modify fun s => { s with ciIdMap := ciIdMap }
+
+  def getIdCiMap : FVarRepM (Std.HashMap FVarId ConstInst) := do
+    return (← get).idCiMap
+
+  def setIdCiMap (idCiMap : Std.HashMap FVarId ConstInst) : FVarRepM Unit := do
+    modify fun s => { s with idCiMap := idCiMap }
+
+  def getTyCanMap : FVarRepM (Std.HashMap Expr Expr) := do
+    return (← get).tyCanMap
+
+  def setTyCanMap (tyCanMap : Std.HashMap Expr Expr) : FVarRepM Unit := do
+    modify fun s => { s with tyCanMap := tyCanMap }
 
   def getBfvarSet : FVarRepM (Std.HashSet FVarId) := do
     let bfvars ← getBfvars

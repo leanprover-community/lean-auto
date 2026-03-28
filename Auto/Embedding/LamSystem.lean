@@ -522,7 +522,7 @@ theorem LamValid.intro1H (H : LamValid lval lctx (.mkForallE s t)) :
     have ⟨wfF, hF⟩ := H
     have .ofApp _ (.ofBase (.ofForallE _)) wft := wfF
     ⟨.mkForallEF (.ofApp _ (.bvarLift _ wft) .pushLCtx_ofBVar), fun lctxTerm => by
-      simp only [LamWF.mkForallEF, LamWF.interp, LamBaseTerm.LamWF.interp]
+      simp only [LamWF.mkForallEF]
       intro x; simp only [LamWF.pushLCtx_ofBVar, LamWF.interp, eq_mp_eq_cast, cast_eq, id_eq]
       apply Eq.mp _ (hF lctxTerm x); apply congrArg; rw [← LamWF.interp_bvarLift]⟩
   )

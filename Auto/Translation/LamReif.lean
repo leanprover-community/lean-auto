@@ -103,7 +103,77 @@ abbrev ReifM := StateRefT State Reif.ReifM
 
 @[inline] def ReifM.run' (x : ReifM α) (s : State) := Prod.fst <$> x.run s
 
-#genMonadState ReifM
+def getTyVarMap : ReifM (Std.HashMap Expr Nat) := do
+  return (← get).tyVarMap
+
+def setTyVarMap (tyVarMap : Std.HashMap Expr Nat) : ReifM Unit := do
+  modify fun s => { s with tyVarMap := tyVarMap }
+
+def getVarMap : ReifM (Std.HashMap Expr Nat) := do
+  return (← get).varMap
+
+def setVarMap (varMap : Std.HashMap Expr Nat) : ReifM Unit := do
+  modify fun s => { s with varMap := varMap }
+
+def getTyVal : ReifM (Array (Expr × Level)) := do
+  return (← get).tyVal
+
+def setTyVal (tyVal : Array (Expr × Level)) : ReifM Unit := do
+  modify fun s => { s with tyVal := tyVal }
+
+def getVarVal : ReifM (Array (Expr × LamSort)) := do
+  return (← get).varVal
+
+def setVarVal (varVal : Array (Expr × LamSort)) : ReifM Unit := do
+  modify fun s => { s with varVal := varVal }
+
+def getLamILTy : ReifM (Array LamSort) := do
+  return (← get).lamILTy
+
+def setLamILTy (lamILTy : Array LamSort) : ReifM Unit := do
+  modify fun s => { s with lamILTy := lamILTy }
+
+def getIsomTyMap : ReifM (Std.HashMap LamSort Nat) := do
+  return (← get).isomTyMap
+
+def setIsomTyMap (isomTyMap : Std.HashMap LamSort Nat) : ReifM Unit := do
+  modify fun s => { s with isomTyMap := isomTyMap }
+
+def getAssertions : ReifM (Std.HashMap LamTerm (Expr × DTr × LamTerm × Nat)) := do
+  return (← get).assertions
+
+def setAssertions (assertions : Std.HashMap LamTerm (Expr × DTr × LamTerm × Nat)) : ReifM Unit := do
+  modify fun s => { s with assertions := assertions }
+
+def getInhabitations : ReifM (Std.HashMap LamSort (Expr × DTr × Nat)) := do
+  return (← get).inhabitations
+
+def setInhabitations (inhabitations : Std.HashMap LamSort (Expr × DTr × Nat)) : ReifM Unit := do
+  modify fun s => { s with inhabitations := inhabitations }
+
+def getChkStepCache : ReifM (Std.HashMap ChkStep (EvalResult × Array Nat)) := do
+  return (← get).chkStepCache
+
+def setChkStepCache (chkStepCache : Std.HashMap ChkStep (EvalResult × Array Nat)) : ReifM Unit := do
+  modify fun s => { s with chkStepCache := chkStepCache }
+
+def getEtomChkStep : ReifM (Std.HashMap Nat ChkStep) := do
+  return (← get).etomChkStep
+
+def setEtomChkStep (etomChkStep : Std.HashMap Nat ChkStep) : ReifM Unit := do
+  modify fun s => { s with etomChkStep := etomChkStep }
+
+def getRst : ReifM RTableStatus := do
+  return (← get).rst
+
+def setRst (rst : RTableStatus) : ReifM Unit := do
+  modify fun s => { s with rst := rst }
+
+def getU : ReifM Level := do
+  return (← get).u
+
+def setU (u : Level) : ReifM Unit := do
+  modify fun s => { s with u := u }
 
 def getRTable : ReifM (Array REntry) := do return (← getRst).rTable
 
@@ -1825,13 +1895,52 @@ open Embedding.Lam LamReif
 
   @[always_inline]
   instance : Monad TransM :=
-    let i := inferInstanceAs (Monad TransM);
-    { pure := i.pure, bind := i.bind }
+    inferInstance
 
   instance : Inhabited (TransM α) where
     default := fun _ => throw default
 
-  #genMonadState TransM
+  def getTypeH2lMap : TransM (Std.HashMap Nat Nat) := do
+    return (← get).typeH2lMap
+
+  def setTypeH2lMap (typeH2lMap : Std.HashMap Nat Nat) : TransM Unit := do
+    modify fun s => { s with typeH2lMap := typeH2lMap }
+
+  def getTypeL2hMap : TransM (Array Nat) := do
+    return (← get).typeL2hMap
+
+  def setTypeL2hMap (typeL2hMap : Array Nat) : TransM Unit := do
+    modify fun s => { s with typeL2hMap := typeL2hMap }
+
+  def getTermH2lMap : TransM (Std.HashMap Nat Nat) := do
+    return (← get).termH2lMap
+
+  def setTermH2lMap (termH2lMap : Std.HashMap Nat Nat) : TransM Unit := do
+    modify fun s => { s with termH2lMap := termH2lMap }
+
+  def getTermL2hMap : TransM (Array Nat) := do
+    return (← get).termL2hMap
+
+  def setTermL2hMap (termL2hMap : Array Nat) : TransM Unit := do
+    modify fun s => { s with termL2hMap := termL2hMap }
+
+  def getEtomH2lMap : TransM (Std.HashMap Nat Nat) := do
+    return (← get).etomH2lMap
+
+  def setEtomH2lMap (etomH2lMap : Std.HashMap Nat Nat) : TransM Unit := do
+    modify fun s => { s with etomH2lMap := etomH2lMap }
+
+  def getEtomL2hMap : TransM (Std.HashMap Nat Nat) := do
+    return (← get).etomL2hMap
+
+  def setEtomL2hMap (etomL2hMap : Std.HashMap Nat Nat) : TransM Unit := do
+    modify fun s => { s with etomL2hMap := etomL2hMap }
+
+  def getCsH2lMap : TransM (Std.HashMap ChkStep ChkStep) := do
+    return (← get).csH2lMap
+
+  def setCsH2lMap (csH2lMap : Std.HashMap ChkStep ChkStep) : TransM Unit := do
+    modify fun s => { s with csH2lMap := csH2lMap }
 
   def transTypeAtom (a : Nat) (val : Expr × Level) : TransM Nat := do
     let typeH2lMap ← getTypeH2lMap

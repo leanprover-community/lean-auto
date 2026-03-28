@@ -14,7 +14,7 @@ structure SavedState where
 abbrev MetaStateM := StateRefT State CoreM
 
 @[always_inline]
-instance : Monad MetaStateM := let i := inferInstanceAs (Monad MetaStateM); { pure := i.pure, bind := i.bind }
+instance : Monad MetaStateM := inferInstance
 
 instance : MonadLCtx MetaStateM where
   getLCtx := return (← get).toContext.lctx
@@ -42,7 +42,17 @@ instance : MonadBacktrack SavedState MetaStateM where
   saveState      := MetaState.saveState
   restoreState s := s.restore
 
-#genMonadState MetaStateM
+def getToState : MetaStateM Meta.State := do
+  return (← get).toState
+
+def setToState (st : Meta.State) : MetaStateM Unit := do
+  modify fun s => { s with toState := st }
+
+def getToContext : MetaStateM Meta.Context := do
+  return (← get).toContext
+
+def setToContext (ctx : Meta.Context) : MetaStateM Unit := do
+  modify fun s => { s with toContext := ctx }
 
 def runMetaM (n : MetaM α) : MetaStateM α := do
   let s ← get
