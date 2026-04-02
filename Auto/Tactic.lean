@@ -331,7 +331,6 @@ def addTryThisTacticSeqSuggestion (ref : Syntax) (suggestion : TSyntax ``Lean.Pa
   if let some range := (origSpan?.getD ref).getRange? then
     let map ← getFileMap
     let (indent, column) := Lean.Meta.Tactic.TryThis.getIndentAndColumn map range
-    dbg_trace s!"indent: {indent}, column: {column}"
     let text := fmt.pretty (width := Std.Format.defWidth) indent column
     let suggestion := {
       -- HACK: The `tacticSeq` syntax category is pretty-printed with each line
