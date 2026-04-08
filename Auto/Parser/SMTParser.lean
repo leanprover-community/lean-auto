@@ -253,7 +253,7 @@ def smtSymbolToLeanName (s : String) : List (Name × SymbolInput) :=
   | "-" => [(``HSub.hSub, Minus)] -- Minus is left-associative when given ≥ 2 arguments but is also used for unary negation
   | "nsub" => [(``Nat.sub, Minus)]
   | "*" => [(``HMul.hMul, LeftAssocNoConstraint)]
-  | "/" => [(``HDiv.hDiv, LeftAssocNoConstraint)]
+  | "div" => [(``Int.ediv, LeftAssocNoConstraint)]
   | "or" => [(``Or, LeftAssocAllProp), (``or, LeftAssocAllBool)]
   | "and" => [(``And, LeftAssocAllProp), (``and, LeftAssocAllBool)]
   | "not" => [(``Not, UnaryProp), (``not, UnaryBool)]
@@ -276,7 +276,7 @@ def builtInSymbolMap : Std.HashMap String Expr :=
   let map := map.insert "-" (mkConst ``HSub.hSub)
   let map := map.insert "nsub" (mkConst ``Nat.sub)
   let map := map.insert "*" (mkConst ``HMul.hMul)
-  let map := map.insert "/" (mkConst ``HDiv.hDiv)
+  let map := map.insert "div" (mkConst ``Int.ediv)
   let map := map.insert "or" (mkConst ``Or)
   let map := map.insert "and" (mkConst ``And)
   let map := map.insert "not" (mkConst ``Not)
@@ -357,7 +357,7 @@ def correctType (e : Expr) (parseTermConstraint : ParseTermConstraint) : MetaM E
     else return e
   | expectedType t => do
     if ← isDefEq eType t then return e
-    else if eType.isProp && (← isDefEq t (mkConst ``Bool)) then whnf $ ← mkAppOptM ``decide #[some e, none]
+    else if eType.isProp && (← isDefEq t (mkConst ``Bool)) then whnf $ ← mkAppOptM ``decide #[some e, ← mkAppM ``Classical.propDecidable #[e]]
     else if (← isDefEq eType (mkConst ``Bool)) && t.isProp then whnf $ ← mkAppM ``Eq #[e, mkConst ``true]
     else if (← isDefEq eType (mkConst ``Nat)) && (← isDefEq t (mkConst ``Int)) then return ← mkAppM ``Int.ofNat #[e]
     else if (← isDefEq eType (mkConst ``Int)) && (← isDefEq t (mkConst ``Nat)) then return ← mkAppM ``Int.natAbs #[e]

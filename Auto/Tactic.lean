@@ -995,6 +995,7 @@ def ppOptionsSetting (o : Options) : Options :=
   let o := o.set `pp.analyze true
   let o := o.set `pp.proofs true
   let o := o.set `pp.funBinderTypes true
+  let o := o.set `pp.analyze.trustOfNat false
   o.set `pp.piBinderTypes true
 
 @[tactic autoGetHints]
