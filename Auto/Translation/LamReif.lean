@@ -1823,7 +1823,7 @@ open Embedding.Lam LamReif
 
   @[always_inline]
   instance : Monad TransM :=
-    let i := inferInstanceAs (Monad TransM);
+    let i : Monad TransM := inferInstance;
     { pure := i.pure, bind := i.bind }
 
   instance : Inhabited (TransM α) where

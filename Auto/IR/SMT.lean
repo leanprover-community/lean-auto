@@ -410,7 +410,7 @@ section
 
   @[always_inline]
   instance : Monad (TransM ω) :=
-    let i := inferInstanceAs (Monad (TransM ω));
+    let i : Monad (TransM ω) := inferInstance;
     { pure := i.pure, bind := i.bind }
 
   instance : Inhabited (TransM ω α) where

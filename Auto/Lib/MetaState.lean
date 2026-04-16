@@ -14,7 +14,7 @@ structure SavedState where
 abbrev MetaStateM := StateRefT State CoreM
 
 @[always_inline]
-instance : Monad MetaStateM := let i := inferInstanceAs (Monad MetaStateM); { pure := i.pure, bind := i.bind }
+instance : Monad MetaStateM := let i : Monad MetaStateM := inferInstance; { pure := i.pure, bind := i.bind }
 
 instance : MonadLCtx MetaStateM where
   getLCtx := return (← get).toContext.lctx

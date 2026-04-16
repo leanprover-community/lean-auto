@@ -23,6 +23,7 @@ scoped instance : ToExpr Int where
   We require that `toExpr (self:=instExprToExprId (.const ``Nat [])) l₂ ≝ l₁`
   It is obvious that this shouldn't be marked as an `instance`
 -/
+@[implicit_reducible]
 def instExprToExprId (ty : Expr) : ToExpr Expr :=
   { toExpr := id, toTypeExpr := ty}
 
