@@ -125,8 +125,8 @@ private def elabGenMonadStateAux (m : Term) (stx : Syntax) : CommandElabM Unit :
     | throwError "{decl_name%} :: Unknown monad"
   let .str pre _ := mname
     | throwError "{decl_name%} :: {mname} is not a valid constant name"
-  let pureInst ← elabStx (← `(inferInstanceAs (Pure $m)))
-  let mstateInst ← elabStx (← `(inferInstanceAs (MonadState _ $m)))
+  let pureInst ← elabStx (← `((inferInstance : Pure $m)))
+  let mstateInst ← elabStx (← `((inferInstance : MonadState _ $m)))
   let mstateInstTy ← Meta.inferType mstateInst
   -- The type of the state of the Monad (with parameters applied)
   let stateTy := mstateInstTy.getArg! 0

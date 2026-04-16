@@ -263,23 +263,7 @@ structure State where
 
 abbrev InterpM := StateRefT State MetaState.MetaStateM
 
-def getSortFVars : InterpM (Array FVarId) := do
-  return (← get).sortFVars
-
-def setSortFVars (sortFVars : Array FVarId) : InterpM Unit := do
-  modify fun s => { s with sortFVars := sortFVars }
-
-def getSortMap : InterpM (Std.HashMap LamSort FVarId) := do
-  return (← get).sortMap
-
-def setSortMap (sortMap : Std.HashMap LamSort FVarId) : InterpM Unit := do
-  modify fun s => { s with sortMap := sortMap }
-
-def getLctxTyRev : InterpM (Array LamSort) := do
-  return (← get).lctxTyRev
-
-def setLctxTyRev (lctxTyRev : Array LamSort) : InterpM Unit := do
-  modify fun s => { s with lctxTyRev := lctxTyRev }
+#genMonadState InterpM
 
 def getLCtxTy! (idx : Nat) : InterpM LamSort := do
   let lctxTyRev ← getLctxTyRev

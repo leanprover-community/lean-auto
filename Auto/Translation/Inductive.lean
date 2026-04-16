@@ -85,17 +85,7 @@ structure CollectInduct.State where
 
 abbrev IndCollectM := StateRefT CollectInduct.State MetaM
 
-def getRecorded : IndCollectM (Std.HashMap Name (Array Expr)) := do
-  return (← get).recorded
-
-def setRecorded (recorded : Std.HashMap Name (Array Expr)) : IndCollectM Unit := do
-  modify fun s => { s with recorded := recorded }
-
-def getSis : IndCollectM (Array (Array SimpleIndVal)) := do
-  return (← get).sis
-
-def setSis (sis : Array (Array SimpleIndVal)) : IndCollectM Unit := do
-  modify fun s => { s with sis := sis }
+#genMonadState IndCollectM
 
 private def collectSimpleInduct
   (tyctor : Name) (lvls : List Level) (args : Array Expr) : MetaM SimpleIndVal := do
@@ -176,7 +166,7 @@ end Auto
 
 /-
 section Test
-/-
+
   private def skd (e : Expr) : Elab.Term.TermElabM Unit := do
     let (_, st) ← (Auto.collectExprSimpleInduct (Auto.Expr.eraseMData e)).run {}
     for siw in st.sis do
@@ -213,6 +203,6 @@ section Test
   end
 
   #getExprAndApply[Tree Int|skd]
--/
+
 end Test
 -/

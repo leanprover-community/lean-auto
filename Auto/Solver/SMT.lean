@@ -234,7 +234,7 @@ def querySolverWithHints (query : Array IR.SMT.Command)
   emitCommand solver .checkSat
   let stdout ← solver.stdout.getLine
   trace[auto.smt.result] "checkSatResponse: {stdout}"
-  -- **TODO** When checkSatResponse is sat, the below getTerm call can throw an error
+  -- **NOTE** When checkSatResponse is sat, the below getTerm call can throw an error
   let (checkSatResponse, _) ← getTerm stdout
   match checkSatResponse with
   | .atom (.symb "sat") =>

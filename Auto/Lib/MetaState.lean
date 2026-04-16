@@ -42,17 +42,7 @@ instance : MonadBacktrack SavedState MetaStateM where
   saveState      := MetaState.saveState
   restoreState s := s.restore
 
-def getToState : MetaStateM Meta.State := do
-  return (← get).toState
-
-def setToState (st : Meta.State) : MetaStateM Unit := do
-  modify fun s => { s with toState := st }
-
-def getToContext : MetaStateM Meta.Context := do
-  return (← get).toContext
-
-def setToContext (ctx : Meta.Context) : MetaStateM Unit := do
-  modify fun s => { s with toContext := ctx }
+#genMonadState MetaStateM
 
 def runMetaM (n : MetaM α) : MetaStateM α := do
   let s ← get

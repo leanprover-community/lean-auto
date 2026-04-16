@@ -28,29 +28,7 @@ structure State where
 
 abbrev ReifM := StateT State MetaM
 
-def getExprFVarVal : ReifM (Std.HashMap FVarId Expr) := do
-  return (← get).exprFVarVal
-
-def getFacts : ReifM (Array UMonoFact) := do
-  return (← get).facts
-
-def setFacts (facts : Array UMonoFact) : ReifM Unit := do
-  modify fun s => { s with facts := facts }
-
-def getTyCanMap : ReifM (Std.HashMap Expr Expr) := do
-  return (← get).tyCanMap
-
-def getInhTys : ReifM (Array UMonoFact) := do
-  return (← get).inhTys
-
-def setInhTys (inhTys : Array UMonoFact) : ReifM Unit := do
-  modify fun s => { s with inhTys := inhTys }
-
-def setDeclName? (declName? : Option Name) : ReifM Unit := do
-  modify fun s => { s with declName? := declName? }
-
-def getDeclName? : ReifM (Option Name) := do
-  return (← get).declName?
+#genMonadState ReifM
 
 /--
   Given an expression `e`, if it's a `fvar` and is in `polyVal`,

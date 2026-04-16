@@ -452,41 +452,7 @@ section
   @[inline] def TransM.run' (x : TransM ω φ α) (s : State ω φ := {}) : MetaM α :=
     Prod.fst <$> StateRefT'.run x s
 
-  def getH2lMap : TransM ω φ (Std.HashMap ω String) := do
-    return (← get).h2lMap
-
-  def setH2lMap (h2lMap : Std.HashMap ω String) : TransM ω φ Unit := do
-    modify fun s => { s with h2lMap := h2lMap }
-
-  def getL2hMap : TransM ω φ (Std.HashMap String ω) := do
-    return (← get).l2hMap
-
-  def setL2hMap (l2hMap : Std.HashMap String ω) : TransM ω φ Unit := do
-    modify fun s => { s with l2hMap := l2hMap }
-
-  def getUsedNames : TransM ω φ (Std.HashMap String Nat) := do
-    return (← get).usedNames
-
-  def setUsedNames (usedNames : Std.HashMap String Nat) : TransM ω φ Unit := do
-    modify fun s => { s with usedNames := usedNames }
-
-  def getWfPredicatesMap : TransM ω φ (Std.HashMap φ (Option String)) := do
-    return (← get).wfPredicatesMap
-
-  def setWfPredicatesMap (wfPredicatesMap : Std.HashMap φ (Option String)) : TransM ω φ Unit := do
-    modify fun s => { s with wfPredicatesMap := wfPredicatesMap }
-
-  def getWfPredicatesInvMap : TransM ω φ (Std.HashMap String φ) := do
-    return (← get).wfPredicatesInvMap
-
-  def setWfPredicatesInvMap (wfPredicatesInvMap : Std.HashMap String φ) : TransM ω φ Unit := do
-    modify fun s => { s with wfPredicatesInvMap := wfPredicatesInvMap }
-
-  def getCommands : TransM ω φ (Array Command) := do
-    return (← get).commands
-
-  def setCommands (commands : Array Command) : TransM ω φ Unit := do
-    modify fun s => { s with commands := commands }
+  #genMonadState (TransM ω φ)
 
   def getMapSize : TransM ω φ Nat := do
     let size := (← getH2lMap).size
