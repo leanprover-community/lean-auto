@@ -9,6 +9,7 @@ private instance : ToString TransparencyMode where
   | .default   => "default"
   | .reducible => "reducible"
   | .instances => "instances"
+  | .none      => "none"
 
 private instance : Lean.KVMap.Value TransparencyMode where
   toDataValue t := toString t
@@ -17,6 +18,7 @@ private instance : Lean.KVMap.Value TransparencyMode where
   | "default"   => some .default
   | "reducible" => some .reducible
   | "instances" => some .instances
+  | "none"      => some .none
   | _           => none
 
 register_option auto.redMode : TransparencyMode := {

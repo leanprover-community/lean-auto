@@ -20,12 +20,9 @@ open ToExprExtra
 
 namespace Bin
 
-private theorem wfAux (n n' : Nat) : n = n' + 2 → n / 2 < n := by
-  intro H; apply Nat.div_lt_self
-  case hLtN =>
-    cases n;
-    contradiction;
-    apply Nat.succ_le_succ; apply Nat.zero_le
+private theorem wfAux (n : Nat) : (n + 2).div 2 < n + 2 := by
+  apply Nat.div_lt_self
+  case hLtN => apply Nat.succ_le_succ; apply Nat.zero_le
   case hLtK => apply Nat.le_refl
 
 def inductionOn.{u}
@@ -36,7 +33,6 @@ def inductionOn.{u}
   | 0 => base₀
   | 1 => base₁
   | x' + 2 => ind x' (inductionOn ((x' + 2) / 2) ind base₀ base₁)
-decreasing_by apply wfAux; rfl
 
 @[irreducible] def induction.{u}
   {motive : Nat → Sort u}
@@ -118,16 +114,16 @@ def right! (bt : BinTree α) :=
   | .leaf => leaf
   | .node _ _ r => r
 
+attribute [local simp] Bin.wfAux
+
 def get?'WF (bt : BinTree α) (n : Nat) : Option α :=
-  match h : n with
+  match _ : n with
   | 0 => .none
   | 1 => bt.val?
   | _ + 2 =>
     match Nat.mod n 2 with
     | 0 => get?'WF bt.left! (Nat.div n 2)
     | _ + 1 => get?'WF bt.right! (Nat.div n 2)
-termination_by n
-decreasing_by all_goals { rw [← h]; apply Bin.wfAux; assumption }
 
 theorem get?'WF.succSucc (bt : BinTree α) (n : Nat) :
   get?'WF bt (n + 2) =
@@ -200,7 +196,7 @@ theorem get?'_leaf (n : Nat) : @get?' α .leaf n = .none := by
     cases (n + 2) % 2 <;> exact IH
 
 def insert'WF (bt : BinTree α) (n : Nat) (x : α) : BinTree α :=
-  match h : n with
+  match _ : n with
   | 0 => bt
   | 1 =>
     match bt with
@@ -216,8 +212,6 @@ def insert'WF (bt : BinTree α) (n : Nat) (x : α) : BinTree α :=
       match bt with
       | .leaf => .node .leaf .none (insert'WF .leaf (Nat.div n 2) x)
       | .node l v r => .node l v (insert'WF r (Nat.div n 2) x)
-termination_by n
-decreasing_by all_goals { rw [← h]; apply Bin.wfAux; assumption }
 
 theorem insert'WF.succSucc (bt : BinTree α) (n : Nat) (x : α) :
   insert'WF bt (n + 2) x =

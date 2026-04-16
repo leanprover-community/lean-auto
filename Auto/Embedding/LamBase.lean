@@ -3935,17 +3935,17 @@ def LamWF.ofLamCheck? {ltv : LamTyVal} :
       rw [LamSort.eq_of_beq_eq_true h₂] at h₁
       apply LamWF.ofLamCheck? h₁
 
-noncomputable def LamWF.interp.{u} (lval : LamValuation.{u}) :
-  (lctxTy : Nat → LamSort) → (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal) →
+noncomputable def LamWF.interp.{u} (lval : LamValuation.{u})
+  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal) :
   (lwf : LamWF lval.toLamTyVal ⟨lctxTy, t, rty⟩) → rty.interp lval.tyVal
-| _,      _       , .ofAtom n => lval.varVal n
-| _,      _       , .ofEtom n => lval.eVarVal n
-| _,      _       , .ofBase H => LamBaseTerm.LamWF.interp lval H
-| lctxTy, lctxTerm, .ofBVar n => lctxTerm n
-| lctxTy, lctxTerm, @LamWF.ofLam _ _ argTy _ body H =>
+| .ofAtom n => lval.varVal n
+| .ofEtom n => lval.eVarVal n
+| .ofBase H => LamBaseTerm.LamWF.interp lval H
+| .ofBVar n => lctxTerm n
+| @ofLam _ _ argTy _ body H =>
   fun (x : argTy.interp lval.tyVal) =>
     LamWF.interp lval (pushLCtx argTy lctxTy) (pushLCtxDep (rty:=lctxTy) x lctxTerm) H
-| lctxTy, lctxTerm, .ofApp _ HFn HArg =>
+| .ofApp _ HFn HArg =>
   let mfn := LamWF.interp lval lctxTy lctxTerm HFn
   let marg := LamWF.interp lval lctxTy lctxTerm HArg
   mfn marg
