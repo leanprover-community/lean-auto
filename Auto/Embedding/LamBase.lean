@@ -3937,17 +3937,17 @@ def LamWF.ofLamCheck? {ltv : LamTyVal} :
       rw [LamSort.eq_of_beq_eq_true h₂] at h₁
       apply LamWF.ofLamCheck? h₁
 
-noncomputable def LamWF.interp.{u} (lval : LamValuation.{u}) :
-  (lctxTy : Nat → LamSort) → (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal) →
+noncomputable def LamWF.interp.{u} (lval : LamValuation.{u})
+  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal) :
   (lwf : LamWF lval.toLamTyVal ⟨lctxTy, t, rty⟩) → rty.interp lval.tyVal
-| _,      _       , .ofAtom n => lval.varVal n
-| _,      _       , .ofEtom n => lval.eVarVal n
-| _,      _       , .ofBase H => LamBaseTerm.LamWF.interp lval H
-| lctxTy, lctxTerm, .ofBVar n => lctxTerm n
-| lctxTy, lctxTerm, @LamWF.ofLam _ _ argTy _ body H =>
+| .ofAtom n => lval.varVal n
+| .ofEtom n => lval.eVarVal n
+| .ofBase H => LamBaseTerm.LamWF.interp lval H
+| .ofBVar n => lctxTerm n
+| @ofLam _ _ argTy _ body H =>
   fun (x : argTy.interp lval.tyVal) =>
     LamWF.interp lval (pushLCtx argTy lctxTy) (pushLCtxDep (rty:=lctxTy) x lctxTerm) H
-| lctxTy, lctxTerm, .ofApp _ HFn HArg =>
+| .ofApp _ HFn HArg =>
   let mfn := LamWF.interp lval lctxTy lctxTerm HFn
   let marg := LamWF.interp lval lctxTy lctxTerm HArg
   mfn marg
@@ -4094,6 +4094,7 @@ theorem LamWF.interp_bvarAppsRev
       (pushLCtxsDep_substxs _ _ _ List.reverse_cons HList.reverse_cons)]
     rw [interp_substLCtxTerm_rec
       (pushLCtxs_append_singleton _ _ _) (pushLCtxsDep_append_singleton _ _ _)]
+    rw [LamWF.interp_substWF (t:=t.bvarAppsRev (lty :: lctxTy)) (wf':=wfAp)]
     apply IH (LamWF.ofApp _ wft LamWF.bvarAppsRev_Aux)
     simp only[interp]; apply HEq.trans (b:=LamSort.curry valPre lterm) <;> try rfl
     case h₁ =>
@@ -4134,16 +4135,9 @@ theorem LamWF.interp_eqForallEFN'
       enter [2]; rw [IsomType.eqForall HList.cons_IsomType]; rw [Prod.eqForall']
       unfold HList.cons_IsomType; dsimp; enter [xs, x]
     apply forall_congr; intro xs
-    let wf' : LamWF lval.toLamTyVal
-      ⟨pushLCtx s (pushLCtxs ls lctx), t, LamSort.base LamBaseSort.prop⟩ := by
-      simpa [pushLCtxs_cons] using wf
-    have lhsRw :
-      (interp lval (pushLCtxs ls lctx) (pushLCtxsDep xs lctxTerm) wfMkF.fromMkForallEFN').down =
-      (interp lval (pushLCtxs ls lctx) (pushLCtxsDep xs lctxTerm) (LamWF.mkForallEF wf')).down := by
-      apply congrArg GLift.down
-      simpa using LamWF.interp_substWF
-    rw [lhsRw]
-    apply Eq.trans LamWF.interp_eqForallEF
+    conv => lhs; rw [interp_substWF
+      (wf':=LamWF.mkForallEF (LamWF.fromMkForallEF (LamWF.fromMkForallEFN' wfMkF)))]
+    rw [interp_eqForallEF]
     apply forall_congr; intro x
     apply congrArg; apply eq_of_heq; apply interp_heq <;> try rfl
     case HLCtxTyEq => rw [pushLCtxs_cons]
@@ -4210,9 +4204,8 @@ theorem LamWF.interp_insertEVarAt_eIdx
   let lval' := {lval with lamEVarTy := replaceAt ty pos lamEVarTy',
                           eVarVal := replaceAtDep val pos eVarVal'}
   HEq (lwf.interp lval' lctxTy lctxTerm) val := by
-  cases lwf; unfold interp replaceAt replaceAtDep
-  simp only [replaceAt, id_eq, Lean.Elab.WF.paramLet, interp]
-  rw [Nat.beq_refl]
+  cases lwf; simp only [interp, replaceAtDep]; simp only [replaceAt]
+  rw [Nat.beq_refl]; rfl
 
 theorem LamWF.interp_eVarIrrelevance
   (lval₁ : LamValuation.{u}) (lval₂ : LamValuation.{u})
