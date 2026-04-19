@@ -100,11 +100,11 @@ open Parser.SMTTerm
 
 abbrev SolverProc := IO.Process.Child ⟨.piped, .piped, .piped⟩
 
-private def emitCommand (p : SolverProc) (c : IR.SMT.Command) : IO Unit := do
+def emitCommand (p : SolverProc) (c : IR.SMT.Command) : IO Unit := do
   p.stdin.putStr s!"{c}\n"
   p.stdin.flush
 
-private def emitCommands (p : SolverProc) (c : Array IR.SMT.Command) : IO Unit := do
+def emitCommands (p : SolverProc) (c : Array IR.SMT.Command) : IO Unit := do
   let _ ← c.mapM (emitCommand p)
 
 def createSolver (name : SolverName) : MetaM SolverProc := do
