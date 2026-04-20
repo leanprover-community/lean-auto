@@ -10,8 +10,6 @@ import Auto.Embedding.LamChecker
 import Auto.Embedding.LamInhReasoning
 open Lean
 
-set_option linter.unusedVariables false
-
 initialize
   registerTraceClass `auto.buildChecker
   registerTraceClass `auto.lamReif.newChkStep

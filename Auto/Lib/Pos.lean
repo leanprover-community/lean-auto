@@ -1,7 +1,5 @@
 import Auto.MathlibEmulator
 
-set_option linter.unusedVariables false
-
 namespace Auto
 
 inductive Pos where

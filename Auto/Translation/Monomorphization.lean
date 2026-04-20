@@ -12,8 +12,6 @@ import Auto.Lib.MetaExtra
 import Auto.Translation.SMTAttributes
 open Lean
 
-set_option linter.unusedVariables false
-
 initialize
   registerTraceClass `auto.mono
   registerTraceClass `auto.mono.match
