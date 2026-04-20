@@ -231,7 +231,7 @@ structure ConstrDecl where
   name     : String
   selDecls : Array (String × SSort)
 
-def ConstrDecl.toString : ConstrDecl → Array SIdent → String
+protected def ConstrDecl.toString : ConstrDecl → Array SIdent → String
 | ⟨name, selDecls⟩, binders =>
   let pre := s!"({SIdent.symb name}"
   let selDecls := selDecls.map (fun (name, sort) => s!"({SIdent.symb name} " ++ SSort.toString sort binders ++ ")")
@@ -244,7 +244,7 @@ structure DatatypeDecl where
   params : Array String
   cstrDecls : Array ConstrDecl
 
-def DatatypeDecl.toString : DatatypeDecl → String := fun ⟨params, cstrDecls⟩ =>
+protected def DatatypeDecl.toString : DatatypeDecl → String := fun ⟨params, cstrDecls⟩ =>
   let scstrDecls := cstrDecls.map (fun d => ConstrDecl.toString d (params.map SIdent.symb))
   let scstrDecls := "(" ++ String.intercalate " " scstrDecls.toList ++ ")"
   if params.size == 0 then
