@@ -1770,13 +1770,13 @@ def LamBaseTerm.beq_refl {b : LamBaseTerm} : (b.beq b) = true := by
 def LamBaseTerm.eq_of_beq_eq_true {b₁ b₂ : LamBaseTerm} (H : b₁.beq b₂) : b₁ = b₂ := by
   cases b₁ <;> cases b₂ <;> (first | contradiction | rfl | apply congrArg) <;>
     (try apply LamSort.eq_of_beq_eq_true H) <;> (try apply Nat.eq_of_beq_eq_true H)
-  case pcst.pcst.h pc₁ pc₂ => apply LawfulBEq.eq_of_beq (α := PropConst) H
-  case bcst.bcst.h bc₁ bc₂ => apply LawfulBEq.eq_of_beq (α := BoolConst) H
-  case ncst.ncst.h nc₁ nc₂ => apply LawfulBEq.eq_of_beq (α := NatConst) H
-  case icst.icst.h n₁ n₂ => apply LawfulBEq.eq_of_beq (α := IntConst) H
-  case scst.scst.h s₁ s₂ => apply LawfulBEq.eq_of_beq (α := StringConst) H
-  case bvcst.bvcst.h v₁ v₂ => apply LawfulBEq.eq_of_beq (α := BitVecConst) H
-  case ocst.ocst.h o₁ o₂ => apply LawfulBEq.eq_of_beq (α := OtherConst) H
+  case pcst.pcst pc₁ pc₂ => apply LawfulBEq.eq_of_beq (α := PropConst) H
+  case bcst.bcst bc₁ bc₂ => apply LawfulBEq.eq_of_beq (α := BoolConst) H
+  case ncst.ncst nc₁ nc₂ => apply LawfulBEq.eq_of_beq (α := NatConst) H
+  case icst.icst n₁ n₂ => apply LawfulBEq.eq_of_beq (α := IntConst) H
+  case scst.scst s₁ s₂ => apply LawfulBEq.eq_of_beq (α := StringConst) H
+  case bvcst.bvcst v₁ v₂ => apply LawfulBEq.eq_of_beq (α := BitVecConst) H
+  case ocst.ocst o₁ o₂ => apply LawfulBEq.eq_of_beq (α := OtherConst) H
 
 instance : LawfulBEq LamBaseTerm where
   eq_of_beq := LamBaseTerm.eq_of_beq_eq_true
@@ -2013,13 +2013,13 @@ def LamBaseTerm.lamCheck_of_LamWF (H : LamWF ltv b s) : b.lamCheck ltv = s := by
 
 def LamBaseTerm.LamWF.ofCheck (H : b.lamCheck ltv = s) : LamWF ltv b s := by
   cases H; cases b <;> constructor
-  case refl.pcst.pcwf => apply PropConst.LamWF.ofCheck; rfl
-  case refl.bcst.bcwf => apply BoolConst.LamWF.ofCheck; rfl
-  case refl.ncst.ncwf => apply NatConst.LamWF.ofCheck; rfl
-  case refl.icst.icwf => apply IntConst.LamWF.ofCheck; rfl
-  case refl.scst.scwf => apply StringConst.LamWF.ofCheck; rfl
-  case refl.bvcst.bvcwf => apply BitVecConst.LamWF.ofCheck; rfl
-  case refl.ocst.ocwf => apply OtherConst.LamWF.ofCheck; rfl
+  case refl.pcst => apply PropConst.LamWF.ofCheck; rfl
+  case refl.bcst => apply BoolConst.LamWF.ofCheck; rfl
+  case refl.ncst => apply NatConst.LamWF.ofCheck; rfl
+  case refl.icst => apply IntConst.LamWF.ofCheck; rfl
+  case refl.scst => apply StringConst.LamWF.ofCheck; rfl
+  case refl.bvcst => apply BitVecConst.LamWF.ofCheck; rfl
+  case refl.ocst => apply OtherConst.LamWF.ofCheck; rfl
 
 structure ILLift (β : Type u) where
   eqL     : EqLift.{u + 1, u} β
