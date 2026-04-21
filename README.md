@@ -42,6 +42,31 @@ Type **"auto 👍"** to test whether auto is set up.
 * ``cvc5``
 * ``zipperposition`` portfolio mode
 
+## Hacking
+
+### Building native `.so` plugins (`:dynlib`)
+
+Lean-auto builds a number of native dynamic libraries (`:dynlib` targets).  
+During `lake build` you may see errors like:
+
+```
+collect2: fatal error: cannot find ‘ld’
+compilation terminated.
+error: external command 'gcc' exited with code 1
+```
+
+This means that the system linker (`ld`) is missing from your environment.
+
+#### Fix on Nix/NixOS
+
+On nixos `nix profile add nixpkgs#gcc nixpkgs#binutils` doesnt work. Use instead
+
+```bash
+nix profile add nixpkgs#llvmPackages.bintools
+```
+
+After that, `lake build` should succeed.
+
 ## Troubleshooting
 * ``Monomorphization failed because ...``:  
   Try adding `set_option auto.mono.ignoreNonQuasiHigherOrder true` before you invoke `auto`
