@@ -1,0 +1,8 @@
+name = "auto"
+version = "0.1.0"
+defaultTargets = ["Auto"]
+precompileModules = true
+preferReleaseBuild = true
+
+[[lean_lib]]
+name = "Auto"
