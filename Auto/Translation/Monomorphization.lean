@@ -810,8 +810,6 @@ namespace FVarRep
     exprMap  : Std.HashMap Expr FVarId      := {}
     ciMap    : Std.HashMap Expr ConstInsts
     ciIdMap  : Std.HashMap ConstInst FVarId := {}
-    -- Inverse of `ciIdMap`
-    idCiMap  : Std.HashMap FVarId ConstInst := {}
     -- Canonicalization map for types
     tyCanMap : Std.HashMap Expr Expr        := {}
 
@@ -883,7 +881,6 @@ namespace FVarRep
       let (city, _) ← processType city
       let fvarId ← MetaState.withLetDecl userName city cie .default
       setCiIdMap ((← getCiIdMap).insert ci fvarId)
-      setIdCiMap ((← getIdCiMap).insert fvarId ci)
       setFfvars ((← getFfvars).push fvarId)
       return fvarId
 
