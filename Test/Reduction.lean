@@ -2,8 +2,8 @@ import Auto.Lib.ExprExtra
 import Auto.Lib.BinTree
 
 set_option lazyReduce.printTime true
-set_option maxRecDepth 5000 in
-#lazyReduce List.map (fun n => (List.range (1000 + n)).length) (List.range 10)
+set_option maxRecDepth 10000 in
+#lazyReduce List.map (fun n => (List.range (3000 + n)).length) (List.range 10)
 
 /-
 set_option maxRecDepth 20000 in
@@ -25,7 +25,7 @@ def casting (f g : Nat → Type) (x : ∀ n, f n) (H : ∀ n, f n = g n) : (∀ 
   (fun n => by cases n <;> rfl) 21
 
 def tst1₁ (x : α) : True :=
-  let a := inferInstanceAs (Inhabited Nat);
+  let a : Inhabited Nat := inferInstance;
   let b := a.default
   True.intro
 

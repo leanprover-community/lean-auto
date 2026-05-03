@@ -443,16 +443,16 @@ inductive NatConst
 deriving Inhabited, Hashable, Lean.ToExpr
 
 mkConstFamily NatConst with
-  | natVal (n : Nat) | ofNatVal | (.base .nat)                                              | s!"{n} : Nat" | GLift.up n
-  | nadd  | ofNadd | (.func (.base .nat) (.func (.base .nat) (.base .nat)))                 | "+"     | naddLift
-  | nsub  | ofNsub | (.func (.base .nat) (.func (.base .nat) (.base .nat)))                 | "-"     | nsubLift
-  | nmul  | ofNmul | (.func (.base .nat) (.func (.base .nat) (.base .nat)))                 | "*"     | nmulLift
-  | ndiv  | ofNdiv | (.func (.base .nat) (.func (.base .nat) (.base .nat)))                 | "/"     | ndivLift
-  | nmod  | ofNmod | (.func (.base .nat) (.func (.base .nat) (.base .nat)))                 | "%"     | nmodLift
-  | nle   | ofNle  | (.func (.base .nat) (.func (.base .nat) (.base .prop)))                | "≤"     | nleLift
-  | nlt   | ofNlt  | (.func (.base .nat) (.func (.base .nat) (.base .prop)))                | "<"     | nltLift
-  | nmax  | ofNmax | (.func (.base .nat) (.func (.base .nat) (.base .nat)))                 | "nmax"  | nmaxLift
-  | nmin  | ofNmin | (.func (.base .nat) (.func (.base .nat) (.base .nat)))                 | "nmin"  | nminLift
+  | natVal (n : Nat) | ofNatVal | (.base .nat)                               | s!"{n} : Nat" | GLift.up n
+  | nadd  | ofNadd | (.func (.base .nat) (.func (.base .nat) (.base .nat)))  | "+"     | naddLift
+  | nsub  | ofNsub | (.func (.base .nat) (.func (.base .nat) (.base .nat)))  | "-"     | nsubLift
+  | nmul  | ofNmul | (.func (.base .nat) (.func (.base .nat) (.base .nat)))  | "*"     | nmulLift
+  | ndiv  | ofNdiv | (.func (.base .nat) (.func (.base .nat) (.base .nat)))  | "/"     | ndivLift
+  | nmod  | ofNmod | (.func (.base .nat) (.func (.base .nat) (.base .nat)))  | "%"     | nmodLift
+  | nle   | ofNle  | (.func (.base .nat) (.func (.base .nat) (.base .prop))) | "≤"     | nleLift
+  | nlt   | ofNlt  | (.func (.base .nat) (.func (.base .nat) (.base .prop))) | "<"     | nltLift
+  | nmax  | ofNmax | (.func (.base .nat) (.func (.base .nat) (.base .nat)))  | "nmax"  | nmaxLift
+  | nmin  | ofNmin | (.func (.base .nat) (.func (.base .nat) (.base .nat)))  | "nmin"  | nminLift
 
 inductive IntConst
   | iofNat | inegSucc | ineg | iabs
@@ -488,13 +488,13 @@ inductive StringConst
 deriving Inhabited, Hashable, Lean.ToExpr
 
 mkConstFamily StringConst with
-  | strVal (s : String) | ofStrVal | (.base .string)                                                                          | s!"({s} : String)" | GLift.up s
-  | slength   | ofSlength   | (.func (.base .string) (.base .nat))                                                            | "length"            | slengthLift
-  | sapp      | ofSapp      | (.func (.base .string) (.func (.base .string) (.base .string)))                                 | "++"                | sappLift
-  | sle       | ofSle       | (.func (.base .string) (.func (.base .string) (.base .prop)))                                   | "≤"                 | sleLift
-  | slt       | ofSlt       | (.func (.base .string) (.func (.base .string) (.base .prop)))                                   | "<"                 | sltLift
-  | sprefixof | ofSprefixof | (.func (.base .string) (.func (.base .string) (.base .bool)))                                   | "is_prefix_of"      | sprefixofLift
-  | srepall   | ofSrepall   | (.func (.base .string) (.func (.base .string) (.func (.base .string) (.base .string))))         | "replace_all"       | srepallLift
+  | strVal (s : String) | ofStrVal | (.base .string)                                                                  | s!"({s} : String)" | GLift.up s
+  | slength   | ofSlength   | (.func (.base .string) (.base .nat))                                                    | "length"            | slengthLift
+  | sapp      | ofSapp      | (.func (.base .string) (.func (.base .string) (.base .string)))                         | "++"                | sappLift
+  | sle       | ofSle       | (.func (.base .string) (.func (.base .string) (.base .prop)))                           | "≤"                 | sleLift
+  | slt       | ofSlt       | (.func (.base .string) (.func (.base .string) (.base .prop)))                           | "<"                 | sltLift
+  | sprefixof | ofSprefixof | (.func (.base .string) (.func (.base .string) (.base .bool)))                           | "is_prefix_of"      | sprefixofLift
+  | srepall   | ofSrepall   | (.func (.base .string) (.func (.base .string) (.func (.base .string) (.base .string)))) | "replace_all"       | srepallLift
 
 inductive BVAOp where
   | add
@@ -1275,11 +1275,11 @@ instance : ToString LamBaseTerm where
 def LamBaseTerm.beq : LamBaseTerm → LamBaseTerm → Bool
 | .pcst pc₁,    .pcst pc₂    => pc₁.beq pc₂
 | .bcst bc₁,    .bcst bc₂    => bc₁.beq bc₂
-| .ncst nc₁,    .ncst nc₂    => NatConst.beq nc₁ nc₂
-| .icst ic₁,    .icst ic₂    => IntConst.beq ic₁ ic₂
-| .scst sc₁,    .scst sc₂    => StringConst.beq sc₁ sc₂
-| .bvcst l₁,    .bvcst l₂    => BitVecConst.beq l₁ l₂
-| .ocst o₁,     .ocst o₂     => OtherConst.beq o₁ o₂
+| .ncst nc₁,    .ncst nc₂    => nc₁.beq nc₂
+| .icst ic₁,    .icst ic₂    => ic₁.beq ic₂
+| .scst sc₁,    .scst sc₂    => sc₁.beq sc₂
+| .bvcst l₁,    .bvcst l₂    => l₁.beq l₂
+| .ocst o₁,     .ocst o₂     => o₁.beq o₂
 | .eqI n₁,      .eqI n₂      => n₁.beq n₂
 | .forallEI n₁, .forallEI n₂ => n₁.beq n₂
 | .existEI n₁,  .existEI n₂  => n₁.beq n₂
