@@ -1,6 +1,7 @@
 import Lean
 import Auto.Embedding.Lift
 import Auto.Embedding.LCtx
+import Auto.Embedding.LamConstMacro
 import Auto.Lib.ExprExtra
 import Auto.Lib.NatExtra
 import Auto.Lib.IntExtra
@@ -409,94 +410,14 @@ inductive PropConst
   | iff      : PropConst -- Propositional `iff`
 deriving Inhabited, Hashable, Lean.ToExpr
 
-def PropConst.reprAux : PropConst → String
-| trueE  => "trueE"
-| falseE => "falseE"
-| not    => "not"
-| and    => "and"
-| or     => "or"
-| imp    => "imp"
-| iff    => "iff"
-
-def PropConst.reprPrec (p : PropConst) (n : Nat) :=
-  match n with
-  | 0 => f!"Auto.Embedding.Lam.PropConst.{p.reprAux}"
-  | _ + 1 => f!"({p.reprAux})"
-
-instance : Repr PropConst where
-  reprPrec := PropConst.reprPrec
-
-def PropConst.toString : PropConst → String
-| trueE  => "True"
-| falseE => "False"
-| not    => "¬"
-| and    => "∧"
-| or     => "∨"
-| imp    => "→"
-| iff    => "↔"
-
-instance : ToString PropConst where
-  toString := PropConst.toString
-
-def PropConst.beq : PropConst → PropConst → Bool
-| trueE,  trueE  => true
-| falseE, falseE => true
-| not,    not    => true
-| and,    and    => true
-| or,     or     => true
-| imp,    imp    => true
-| iff,    iff    => true
-| _,       _     => false
-
-instance : BEq PropConst where
-  beq := PropConst.beq
-
-def PropConst.beq_refl {p : PropConst} : (p.beq p) = true := by
-  cases p <;> rfl
-
-def PropConst.eq_of_beq_eq_true {p₁ p₂ : PropConst} (H : p₁.beq p₂) : p₁ = p₂ := by
-  cases p₁ <;> cases p₂ <;> first | contradiction | rfl
-
-instance : LawfulBEq PropConst where
-  eq_of_beq := PropConst.eq_of_beq_eq_true
-  rfl := PropConst.beq_refl
-
-def PropConst.lamCheck : PropConst → LamSort
-| .trueE  => .base .prop
-| .falseE => .base .prop
-| .not    => .func (.base .prop) (.base .prop)
-| .and | .or | .imp | .iff => .func (.base .prop) (.func (.base .prop) (.base .prop))
-
-inductive PropConst.LamWF : PropConst → LamSort → Type
-  | ofTrueE      : LamWF .trueE (.base .prop)
-  | ofFalseE     : LamWF .falseE (.base .prop)
-  | ofNot        : LamWF .not (.func (.base .prop) (.base .prop))
-  | ofAnd        : LamWF .and (.func (.base .prop) (.func (.base .prop) (.base .prop)))
-  | ofOr         : LamWF .or (.func (.base .prop) (.func (.base .prop) (.base .prop)))
-  | ofImp        : LamWF .imp (.func (.base .prop) (.func (.base .prop) (.base .prop)))
-  | ofIff        : LamWF .iff (.func (.base .prop) (.func (.base .prop) (.base .prop)))
-
-def PropConst.LamWF.unique {p : PropConst} {s₁ s₂ : LamSort}
-  (pcwf₁ : LamWF p s₁) (pcwf₂ : LamWF p s₂) : s₁ = s₂ ∧ HEq pcwf₁ pcwf₂ := by
-  cases pcwf₁ <;> cases pcwf₂ <;> trivial
-
-def PropConst.LamWF.ofPropConst : (p : PropConst) → (s : LamSort) × PropConst.LamWF p s
-| .trueE      => ⟨.base .prop, .ofTrueE⟩
-| .falseE     => ⟨.base .prop, .ofFalseE⟩
-| .not        => ⟨.func (.base .prop) (.base .prop), .ofNot⟩
-| .and        => ⟨.func (.base .prop) (.func (.base .prop) (.base .prop)), .ofAnd⟩
-| .or         => ⟨.func (.base .prop) (.func (.base .prop) (.base .prop)), .ofOr⟩
-| .imp        => ⟨.func (.base .prop) (.func (.base .prop) (.base .prop)), .ofImp⟩
-| .iff        => ⟨.func (.base .prop) (.func (.base .prop) (.base .prop)), .ofIff⟩
-
-def PropConst.lamWF_complete (wf : LamWF p s) : LamWF.ofPropConst p = ⟨s, wf⟩ := by
-  cases wf <;> rfl
-
-def PropConst.lamCheck_of_LamWF (H : LamWF p s) : p.lamCheck = s := by
-  cases H <;> rfl
-
-def PropConst.LamWF.ofCheck (H : p.lamCheck = s) : LamWF p s := by
-  cases H; cases p <;> constructor
+mkConstFamily PropConst with
+  | trueE  | ofTrueE  | (.base .prop)                                                       | "True"  | GLift.up True
+  | falseE | ofFalseE | (.base .prop)                                                       | "False" | GLift.up False
+  | not    | ofNot    | (.func (.base .prop) (.base .prop))                                 | "¬"     | notLift
+  | and    | ofAnd    | (.func (.base .prop) (.func (.base .prop) (.base .prop)))           | "∧"     | andLift
+  | or     | ofOr     | (.func (.base .prop) (.func (.base .prop) (.base .prop)))           | "∨"     | orLift
+  | imp    | ofImp    | (.func (.base .prop) (.func (.base .prop) (.base .prop)))           | "→"     | impLift
+  | iff    | ofIff    | (.func (.base .prop) (.func (.base .prop) (.base .prop)))           | "↔"     | iffLift
 
 inductive BoolConst
   | ofProp
@@ -2038,34 +1959,6 @@ structure LamValuation extends LamTyVal where
   varVal   : ∀ (n : Nat), (lamVarTy n).interp tyVal
   ilVal    : ∀ (n : Nat), ILLift.{u} ((lamILTy n).interp tyVal)
   eVarVal  : ∀ (n : Nat), (lamEVarTy n).interp tyVal
-
-def PropConst.interp (tyVal : Nat → Type u) : (p : PropConst) → p.lamCheck.interp tyVal
-| .trueE      => GLift.up True
-| .falseE     => GLift.up False
-| .not        => notLift
-| .and        => andLift
-| .or         => orLift
-| .imp        => impLift
-| .iff        => iffLift
-
-def PropConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF p s) → s.interp tyVal
-| .ofTrueE      => GLift.up True
-| .ofFalseE     => GLift.up False
-| .ofNot        => notLift
-| .ofAnd        => andLift
-| .ofOr         => orLift
-| .ofImp        => impLift
-| .ofIff        => iffLift
-
-theorem PropConst.LamWF.interp_lvalIrrelevance
-  (tyVal₁ tyVal₂ : Nat → Type u) (pcwf₁ : LamWF p₁ s₁) (pcwf₂ : LamWF p₂ s₂)
-  (HBeq : p₁ = p₂) (hTyVal : tyVal₁ = tyVal₂) :
-  HEq (pcwf₁.interp tyVal₁) (pcwf₂.interp tyVal₂) := by
-  cases HBeq; cases hTyVal; rcases PropConst.LamWF.unique pcwf₁ pcwf₂ with ⟨⟨⟩, ⟨⟩⟩; rfl
-
-def PropConst.interp_equiv (tyVal : Nat → Type u) (pcwf : LamWF p s) :
-  HEq (LamWF.interp tyVal pcwf) (interp tyVal p) := by
-  cases pcwf <;> rfl
 
 noncomputable def BoolConst.interp (tyVal : Nat → Type u) : (b : BoolConst) → b.lamCheck.interp tyVal
 | .ofProp => ofPropLift
