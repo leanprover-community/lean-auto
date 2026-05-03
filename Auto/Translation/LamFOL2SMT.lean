@@ -236,7 +236,13 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
   | .sdiv => return .qStrApp "bvsdiv" #[arg1, arg2]
   | .srem => return .qStrApp "bvsrem" #[arg1, arg2]
   | .smod => return .qStrApp "bvsmod" #[arg1, arg2]
-| .bvcst (.bvcmp _ _ op) =>
+| .bvcst (.bvcmp _ op) =>
+  match op with
+  | .ult => return .qStrApp "bvult" #[arg1, arg2]
+  | .ule => return .qStrApp "bvule" #[arg1, arg2]
+  | .slt => return .qStrApp "bvslt" #[arg1, arg2]
+  | .sle => return .qStrApp "bvsle" #[arg1, arg2]
+| .bvcst (.bvpropcmp _ op) =>
   match op with
   | .ult => return .qStrApp "bvult" #[arg1, arg2]
   | .ule => return .qStrApp "bvule" #[arg1, arg2]
@@ -245,15 +251,13 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .bvcst (.bvand _) => return .qStrApp "bvand" #[arg1, arg2]
 | .bvcst (.bvor _) => return .qStrApp "bvor" #[arg1, arg2]
 | .bvcst (.bvxor _) => return .qStrApp "bvxor" #[arg1, arg2]
-| .bvcst (.bvshOp _ smt? op) =>
-  match smt? with
-  | false =>
-    throwError "{decl_name%} :: Non-smt shift operations should not occur here"
-  | true =>
-    match op with
-    | .shl => return .qStrApp "bvshl" #[arg1, arg2]
-    | .lshr => return .qStrApp "bvlshr" #[arg1, arg2]
-    | .ashr => return .qStrApp "bvashr" #[arg1, arg2]
+| .bvcst (.bvshOp _ _) =>
+  throwError "{decl_name%} :: Non-smt shift operations should not occur here"
+| .bvcst (.bvsmtshOp _ op) =>
+  match op with
+  | .shl => return .qStrApp "bvshl" #[arg1, arg2]
+  | .lshr => return .qStrApp "bvlshr" #[arg1, arg2]
+  | .ashr => return .qStrApp "bvashr" #[arg1, arg2]
 | .bvcst (.bvappend _ _) => return .qStrApp "concat" #[arg1, arg2]
 | .ocst (.smtAttr1T name _ _) => return .attrApp name arg1 arg2
 | t           => throwError "{decl_name%} :: The arity of {repr t} is not 2"

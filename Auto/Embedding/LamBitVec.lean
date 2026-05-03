@@ -738,8 +738,7 @@ theorem LamTerm.maxEVarSucc_pushBVCast : maxEVarSucc (pushBVCast ct t) = maxEVar
             cases b <;> try apply hbr
             case bvcst bvc =>
               cases bvc <;> try apply hbr
-              case bvshOp n smt? shOp =>
-                cases smt? <;> try apply hbr
+              case bvshOp n shOp =>
                 have maxlem₁ (a b : Nat) : max a (max b a) = max b a := by
                   rw [Nat.max_comm b, Nat.max_assoc, Nat.max_eq_left (Nat.le_refl _)]
                 have maxlem₂ (a b : Nat) : max (max a (max b a)) b = max b a := by
@@ -921,8 +920,7 @@ theorem LamEquiv.pushBVCast
             cases b <;> try apply h_none_app
             case bvcst bvc =>
               cases bvc <;> try apply h_none_app
-              case bvshOp n smt? shOp =>
-                cases smt? <;> try apply h_none_app
+              case bvshOp n shOp =>
                 cases wft.getFn.getFn.getBase.getBvcst
                 cases shOp
                 case shl =>

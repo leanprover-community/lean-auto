@@ -263,36 +263,32 @@ namespace Lam2D
     | .smod            => return .app (.const ``BitVec.smod []) (.lit (.natVal n))
   | .bvneg n           => return .app (.const ``BitVec.neg []) (.lit (.natVal n))
   | .bvabs n           => return .app (.const ``BitVec.abs []) (.lit (.natVal n))
-  | .bvcmp n prop? op  =>
-    match prop? with
-    | false =>
-      match op with
-      | .ult           => return .app (.const ``BitVec.ult []) (.lit (.natVal n))
-      | .ule           => return .app (.const ``BitVec.ule []) (.lit (.natVal n))
-      | .slt           => return .app (.const ``BitVec.slt []) (.lit (.natVal n))
-      | .sle           => return .app (.const ``BitVec.sle []) (.lit (.natVal n))
-    | true =>
-      match op with
-      | .ult           => return .app (.const ``BitVec.propult []) (.lit (.natVal n))
-      | .ule           => return .app (.const ``BitVec.propule []) (.lit (.natVal n))
-      | .slt           => return .app (.const ``BitVec.propslt []) (.lit (.natVal n))
-      | .sle           => return .app (.const ``BitVec.propsle []) (.lit (.natVal n))
+  | .bvcmp n op        =>
+    match op with
+    | .ult           => return .app (.const ``BitVec.ult []) (.lit (.natVal n))
+    | .ule           => return .app (.const ``BitVec.ule []) (.lit (.natVal n))
+    | .slt           => return .app (.const ``BitVec.slt []) (.lit (.natVal n))
+    | .sle           => return .app (.const ``BitVec.sle []) (.lit (.natVal n))
+  | .bvpropcmp n op    =>
+    match op with
+    | .ult           => return .app (.const ``BitVec.propult []) (.lit (.natVal n))
+    | .ule           => return .app (.const ``BitVec.propule []) (.lit (.natVal n))
+    | .slt           => return .app (.const ``BitVec.propslt []) (.lit (.natVal n))
+    | .sle           => return .app (.const ``BitVec.propsle []) (.lit (.natVal n))
   | .bvand n           => return .app (.const ``BitVec.and []) (.lit (.natVal n))
   | .bvor n            => return .app (.const ``BitVec.or []) (.lit (.natVal n))
   | .bvxor n           => return .app (.const ``BitVec.xor []) (.lit (.natVal n))
   | .bvnot n           => return .app (.const ``BitVec.not []) (.lit (.natVal n))
-  | .bvshOp n smt? op  =>
-    match smt? with
-    | false =>
-      match op with
-      | .shl           => return .app (.const ``BitVec.shiftLeft []) (.lit (.natVal n))
-      | .lshr          => return .app (.const ``BitVec.ushiftRight []) (.lit (.natVal n))
-      | .ashr          => return .app (.const ``BitVec.sshiftRight []) (.lit (.natVal n))
-    | true =>
-      match op with
-      | .shl           => return mkApp2 (.const ``BitVec.smtHshiftLeft []) (.lit (.natVal n)) (.lit (.natVal n))
-      | .lshr          => return mkApp2 (.const ``BitVec.smtHushiftRight []) (.lit (.natVal n)) (.lit (.natVal n))
-      | .ashr          => return mkApp2 (.const ``BitVec.smtHsshiftRight []) (.lit (.natVal n)) (.lit (.natVal n))
+  | .bvshOp n op       =>
+    match op with
+    | .shl           => return .app (.const ``BitVec.shiftLeft []) (.lit (.natVal n))
+    | .lshr          => return .app (.const ``BitVec.ushiftRight []) (.lit (.natVal n))
+    | .ashr          => return .app (.const ``BitVec.sshiftRight []) (.lit (.natVal n))
+  | .bvsmtshOp n op    =>
+    match op with
+    | .shl           => return mkApp2 (.const ``BitVec.smtHshiftLeft []) (.lit (.natVal n)) (.lit (.natVal n))
+    | .lshr          => return mkApp2 (.const ``BitVec.smtHushiftRight []) (.lit (.natVal n)) (.lit (.natVal n))
+    | .ashr          => return mkApp2 (.const ``BitVec.smtHsshiftRight []) (.lit (.natVal n)) (.lit (.natVal n))
   | .bvappend n m      => return mkApp2 (.const ``BitVec.append []) (.lit (.natVal n)) (.lit (.natVal m))
   | .bvextract n h l   => return mkApp3 (.const ``BitVec.extractLsb []) (.lit (.natVal n)) (.lit (.natVal h)) (.lit (.natVal l))
   | .bvrepeat w i      => return mkApp2 (.const ``BitVec.replicate []) (.lit (.natVal w)) (.lit (.natVal i))
