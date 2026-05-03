@@ -559,145 +559,22 @@ inductive IntConst
   | ile | ilt | imax | imin
 deriving Inhabited, Hashable, Lean.ToExpr
 
-def IntConst.reprAux : IntConst → String
-| .iofNat   => "iofNat"
-| .inegSucc => "inegSucc"
-| .ineg     => "ineg"
-| .iabs     => "iabs"
-| .iadd     => "iadd"
-| .isub     => "isub"
-| .imul     => "imul"
-| .idiv     => "idiv"
-| .imod     => "imod"
-| .iediv    => "iediv"
-| .iemod    => "iemod"
-| .ile      => "ile"
-| .ilt      => "ilt"
-| .imax     => "imax"
-| .imin     => "imin"
-
-def IntConst.reprPrec (i : IntConst) (n : Nat) :=
-  match n with
-  | 0 => f!"Auto.Embedding.Lam.IntConst.{i.reprAux}"
-  | _ + 1 => f!"(.{i.reprAux})"
-
-instance : Repr IntConst where
-  reprPrec := IntConst.reprPrec
-
-def IntConst.toString : IntConst → String
-| .iofNat   => "iofNat"
-| .inegSucc => "inegSucc"
-| .ineg     => "-"
-| .iabs     => "iabs"
-| .iadd     => "+"
-| .isub     => "-"
-| .imul     => "*"
-| .idiv     => "/"
-| .imod     => "%"
-| .iediv    => "/?"
-| .iemod    => "%?"
-| .ile      => "≤"
-| .ilt      => "<"
-| .imax     => "imax"
-| .imin     => "imin"
-
-instance : ToString IntConst where
-  toString := IntConst.toString
-
-def IntConst.beq : IntConst → IntConst → Bool
-| .iofNat,   .iofNat   => true
-| .inegSucc, .inegSucc => true
-| .ineg,     .ineg     => true
-| .iabs,     .iabs     => true
-| .iadd,     .iadd     => true
-| .isub,     .isub     => true
-| .imul,     .imul     => true
-| .idiv,     .idiv     => true
-| .imod,     .imod     => true
-| .iediv,    .iediv    => true
-| .iemod,    .iemod    => true
-| .ile,      .ile      => true
-| .ilt,      .ilt      => true
-| .imax,     .imax     => true
-| .imin,     .imin     => true
-| _,         _         => false
-
-instance : BEq IntConst where
-  beq := IntConst.beq
-
-def IntConst.beq_refl {i : IntConst} : (i.beq i) = true := by
-  cases i <;> rfl
-
-def IntConst.eq_of_beq_eq_true {i₁ i₂ : IntConst} (H : i₁.beq i₂) : i₁ = i₂ := by
-  cases i₁ <;> cases i₂ <;> try (first | contradiction | rfl)
-
-instance : LawfulBEq IntConst where
-  eq_of_beq := IntConst.eq_of_beq_eq_true
-  rfl := IntConst.beq_refl
-
-def IntConst.lamCheck : IntConst → LamSort
-| .iofNat   => .func (.base .nat) (.base .int)
-| .inegSucc => .func (.base .nat) (.base .int)
-| .ineg     => .func (.base .int) (.base .int)
-| .iabs     => .func (.base .int) (.base .int)
-| .iadd     => .func (.base .int) (.func (.base .int) (.base .int))
-| .isub     => .func (.base .int) (.func (.base .int) (.base .int))
-| .imul     => .func (.base .int) (.func (.base .int) (.base .int))
-| .idiv     => .func (.base .int) (.func (.base .int) (.base .int))
-| .imod     => .func (.base .int) (.func (.base .int) (.base .int))
-| .iediv    => .func (.base .int) (.func (.base .int) (.base .int))
-| .iemod    => .func (.base .int) (.func (.base .int) (.base .int))
-| .ile      => .func (.base .int) (.func (.base .int) (.base .prop))
-| .ilt      => .func (.base .int) (.func (.base .int) (.base .prop))
-| .imax     => .func (.base .int) (.func (.base .int) (.base .int))
-| .imin     => .func (.base .int) (.func (.base .int) (.base .int))
-
-inductive IntConst.LamWF : IntConst → LamSort → Type
-  | ofIOfNat   : LamWF .iofNat (.func (.base .nat) (.base .int))
-  | ofINegSucc : LamWF .inegSucc (.func (.base .nat) (.base .int))
-  | ofIneg     : LamWF .ineg (.func (.base .int) (.base .int))
-  | ofIabs     : LamWF .iabs (.func (.base .int) (.base .int))
-  | ofIadd     : LamWF .iadd (.func (.base .int) (.func (.base .int) (.base .int)))
-  | ofIsub     : LamWF .isub (.func (.base .int) (.func (.base .int) (.base .int)))
-  | ofImul     : LamWF .imul (.func (.base .int) (.func (.base .int) (.base .int)))
-  | ofIdiv     : LamWF .idiv (.func (.base .int) (.func (.base .int) (.base .int)))
-  | ofImod     : LamWF .imod (.func (.base .int) (.func (.base .int) (.base .int)))
-  | ofIediv    : LamWF .iediv (.func (.base .int) (.func (.base .int) (.base .int)))
-  | ofIemod    : LamWF .iemod (.func (.base .int) (.func (.base .int) (.base .int)))
-  | ofIle      : LamWF .ile (.func (.base .int) (.func (.base .int) (.base .prop)))
-  | ofIlt      : LamWF .ilt (.func (.base .int) (.func (.base .int) (.base .prop)))
-  | ofImax     : LamWF .imax (.func (.base .int) (.func (.base .int) (.base .int)))
-  | ofImin     : LamWF .imin (.func (.base .int) (.func (.base .int) (.base .int)))
-
-def IntConst.LamWF.unique {i : IntConst} {s₁ s₂ : LamSort}
-  (iwf₁ : LamWF i s₁) (iwf₂ : LamWF i s₂) : s₁ = s₂ ∧ HEq iwf₁ iwf₂ := by
-  cases iwf₁ <;> cases iwf₂ <;> trivial
-
-def IntConst.LamWF.ofIntConst : (i : IntConst) → (s : LamSort) × IntConst.LamWF i s
-| .iofNat   => ⟨.func (.base .nat) (.base .int), .ofIOfNat⟩
-| .inegSucc => ⟨.func (.base .nat) (.base .int), .ofINegSucc⟩
-| .ineg     => ⟨.func (.base .int) (.base .int), .ofIneg⟩
-| .iabs     => ⟨.func (.base .int) (.base .int), .ofIabs⟩
-| .iadd     => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofIadd⟩
-| .isub     => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofIsub⟩
-| .imul     => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofImul⟩
-| .idiv     => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofIdiv⟩
-| .imod     => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofImod⟩
-| .iediv    => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofIediv⟩
-| .iemod    => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofIemod⟩
-| .ile      => ⟨.func (.base .int) (.func (.base .int) (.base .prop)), .ofIle⟩
-| .ilt      => ⟨.func (.base .int) (.func (.base .int) (.base .prop)), .ofIlt⟩
-| .imax     => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofImax⟩
-| .imin     => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofImin⟩
-
-def IntConst.lamWF_complete (wf : LamWF i s) : LamWF.ofIntConst i = ⟨s, wf⟩ := by
-  cases wf <;> rfl
-
-def IntConst.lamCheck_of_LamWF (H : LamWF i s) : i.lamCheck = s := by
-  cases H <;> rfl
-
-def IntConst.LamWF.ofCheck (H : i.lamCheck = s) : LamWF i s := by
-  cases H; cases i <;> constructor
+mkConstFamily IntConst with
+  | iofNat   | ofIOfNat   | (.func (.base .nat) (.base .int))                                        | "iofNat"   | iofNatLift
+  | inegSucc | ofINegSucc | (.func (.base .nat) (.base .int))                                        | "inegSucc" | inegSuccLift
+  | ineg     | ofIneg     | (.func (.base .int) (.base .int))                                        | "-"        | inegLift
+  | iabs     | ofIabs     | (.func (.base .int) (.base .int))                                        | "iabs"     | iabsLift
+  | iadd     | ofIadd     | (.func (.base .int) (.func (.base .int) (.base .int)))                   | "+"        | iaddLift
+  | isub     | ofIsub     | (.func (.base .int) (.func (.base .int) (.base .int)))                   | "-"        | isubLift
+  | imul     | ofImul     | (.func (.base .int) (.func (.base .int) (.base .int)))                   | "*"        | imulLift
+  | idiv     | ofIdiv     | (.func (.base .int) (.func (.base .int) (.base .int)))                   | "/"        | idivLift
+  | imod     | ofImod     | (.func (.base .int) (.func (.base .int) (.base .int)))                   | "%"        | imodLift
+  | iediv    | ofIediv    | (.func (.base .int) (.func (.base .int) (.base .int)))                   | "/?"       | iedivLift
+  | iemod    | ofIemod    | (.func (.base .int) (.func (.base .int) (.base .int)))                   | "%?"       | iemodLift
+  | ile      | ofIle      | (.func (.base .int) (.func (.base .int) (.base .prop)))                  | "≤"        | ileLift
+  | ilt      | ofIlt      | (.func (.base .int) (.func (.base .int) (.base .prop)))                  | "<"        | iltLift
+  | imax     | ofImax     | (.func (.base .int) (.func (.base .int) (.base .int)))                   | "imax"     | imaxLift
+  | imin     | ofImin     | (.func (.base .int) (.func (.base .int) (.base .int)))                   | "imin"     | iminLift
 
 inductive StringConst
   | strVal (s : String)
@@ -1915,50 +1792,6 @@ theorem NatConst.LamWF.interp_lvalIrrelevance
 def NatConst.interp_equiv (tyVal : Nat → Type u) (ncwf : LamWF n s) :
   HEq (LamWF.interp tyVal ncwf) (interp tyVal n) := by
   cases ncwf <;> rfl
-
-def IntConst.interp (tyVal : Nat → Type u) : (i : IntConst) → i.lamCheck.interp tyVal
-| .iofNat   => iofNatLift
-| .inegSucc => inegSuccLift
-| .ineg     => inegLift
-| .iabs     => iabsLift
-| .iadd     => iaddLift
-| .isub     => isubLift
-| .imul     => imulLift
-| .idiv     => idivLift
-| .imod     => imodLift
-| .iediv    => iedivLift
-| .iemod    => iemodLift
-| .ile      => ileLift
-| .ilt      => iltLift
-| .imax     => imaxLift
-| .imin     => iminLift
-
-def IntConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF i s) → s.interp tyVal
-| .ofIOfNat   => iofNatLift
-| .ofINegSucc => inegSuccLift
-| .ofIneg     => inegLift
-| .ofIabs     => iabsLift
-| .ofIadd     => iaddLift
-| .ofIsub     => isubLift
-| .ofImul     => imulLift
-| .ofIdiv     => idivLift
-| .ofImod     => imodLift
-| .ofIediv    => iedivLift
-| .ofIemod    => iemodLift
-| .ofIle      => ileLift
-| .ofIlt      => iltLift
-| .ofImax     => imaxLift
-| .ofImin     => iminLift
-
-theorem IntConst.LamWF.interp_lvalIrrelevance
-  (tyVal₁ tyVal₂ : Nat → Type u) (icwf₁ : LamWF i₁ s₁) (icwf₂ : LamWF i₂ s₂)
-  (HBeq : i₁ = i₂) (hTyVal : tyVal₁ = tyVal₂) :
-  HEq (icwf₁.interp tyVal₁) (icwf₂.interp tyVal₂) := by
-  cases HBeq; cases hTyVal; rcases IntConst.LamWF.unique icwf₁ icwf₂ with ⟨⟨⟩, ⟨⟩⟩; rfl
-
-def IntConst.interp_equiv (tyVal : Nat → Type u) (icwf : LamWF i s) :
-  HEq (LamWF.interp tyVal icwf) (interp tyVal i) := by
-  cases icwf <;> rfl
 
 def StringConst.interp (tyVal : Nat → Type u) : (b : StringConst) → b.lamCheck.interp tyVal
 | .strVal s  => GLift.up s
