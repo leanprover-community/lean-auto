@@ -411,13 +411,13 @@ inductive PropConst
 deriving Inhabited, Hashable, Lean.ToExpr
 
 mkConstFamily PropConst with
-  | trueE  | ofTrueE  | (.base .prop)                                                       | "True"  | GLift.up True
-  | falseE | ofFalseE | (.base .prop)                                                       | "False" | GLift.up False
-  | not    | ofNot    | (.func (.base .prop) (.base .prop))                                 | "¬"     | notLift
-  | and    | ofAnd    | (.func (.base .prop) (.func (.base .prop) (.base .prop)))           | "∧"     | andLift
-  | or     | ofOr     | (.func (.base .prop) (.func (.base .prop) (.base .prop)))           | "∨"     | orLift
-  | imp    | ofImp    | (.func (.base .prop) (.func (.base .prop) (.base .prop)))           | "→"     | impLift
-  | iff    | ofIff    | (.func (.base .prop) (.func (.base .prop) (.base .prop)))           | "↔"     | iffLift
+  | trueE  | ofTrueE  | (.base .prop)                                             | "True"  | GLift.up True
+  | falseE | ofFalseE | (.base .prop)                                             | "False" | GLift.up False
+  | not    | ofNot    | (.func (.base .prop) (.base .prop))                       | "¬"     | notLift
+  | and    | ofAnd    | (.func (.base .prop) (.func (.base .prop) (.base .prop))) | "∧"     | andLift
+  | or     | ofOr     | (.func (.base .prop) (.func (.base .prop) (.base .prop))) | "∨"     | orLift
+  | imp    | ofImp    | (.func (.base .prop) (.func (.base .prop) (.base .prop))) | "→"     | impLift
+  | iff    | ofIff    | (.func (.base .prop) (.func (.base .prop) (.base .prop))) | "↔"     | iffLift
 
 inductive BoolConst
   | ofProp
@@ -429,12 +429,12 @@ inductive BoolConst
 deriving Inhabited, Hashable, Lean.ToExpr
 
 mkConstFamily ncInterp BoolConst with
-  | ofProp | ofOfProp | (.func (.base .prop) (.base .bool))                                     | "ofProp" | ofPropLift
-  | trueb  | ofTrueB  | (.base .bool)                                                           | "true"   | GLift.up true
-  | falseb | ofFalseB | (.base .bool)                                                           | "false"  | GLift.up false
-  | notb   | ofNotB   | (.func (.base .bool) (.base .bool))                                     | "!"      | notbLift
-  | andb   | ofAndB   | (.func (.base .bool) (.func (.base .bool) (.base .bool)))               | "&&"     | andbLift
-  | orb    | ofOrB    | (.func (.base .bool) (.func (.base .bool) (.base .bool)))               | "||"     | orbLift
+  | ofProp | ofOfProp | (.func (.base .prop) (.base .bool))                       | "ofProp" | ofPropLift
+  | trueb  | ofTrueB  | (.base .bool)                                             | "true"   | GLift.up true
+  | falseb | ofFalseB | (.base .bool)                                             | "false"  | GLift.up false
+  | notb   | ofNotB   | (.func (.base .bool) (.base .bool))                       | "!"      | notbLift
+  | andb   | ofAndB   | (.func (.base .bool) (.func (.base .bool) (.base .bool))) | "&&"     | andbLift
+  | orb    | ofOrB    | (.func (.base .bool) (.func (.base .bool) (.base .bool))) | "||"     | orbLift
 
 inductive NatConst
   | natVal (n : Nat)

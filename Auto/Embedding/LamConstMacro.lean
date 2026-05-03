@@ -12,8 +12,8 @@ Generates the ~80 lines of boilerplate (`reprAux`, `reprPrec`, `Repr`,
 Usage:
 ```
 mkConstFamily PropConst with
-  | trueE  | ofTrueE  | (.base .prop)                                              | "True"  | GLift.up True
-  | falseE | ofFalseE | (.base .prop)                                              | "False" | GLift.up False
+  | trueE  | ofTrueE  | (.base .prop) | "True"  | GLift.up True
+  | falseE | ofFalseE | (.base .prop) | "False" | GLift.up False
   …
 ```
 
