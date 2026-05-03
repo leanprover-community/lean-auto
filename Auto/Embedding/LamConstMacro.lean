@@ -3,7 +3,7 @@ import Lean
 /-!
 # `mkConstFamily` — macro for the constant-family scaffolding in `LamBase.lean`.
 
-Generates the ~80 lines of boilerplate (`reprAux`, `reprPrec`, `Repr`,
+Generates the boilerplates (`reprAux`, `reprPrec`, `Repr`,
 `toString`, `ToString`, `beq`, `BEq`, `LawfulBEq`, `lamCheck`, `LamWF`,
 `LamWF.unique`, `LamWF.ofX`, `lamWF_complete`, `lamCheck_of_LamWF`,
 `LamWF.ofCheck`, `interp`, `LamWF.interp`, `interp_lvalIrrelevance`,
@@ -14,7 +14,7 @@ Usage:
 mkConstFamily PropConst with
   | trueE  | ofTrueE  | (.base .prop) | "True"  | GLift.up True
   | falseE | ofFalseE | (.base .prop) | "False" | GLift.up False
-  …
+  ......
 ```
 
 Each row supplies (ctor name [+ optional `(name : type)` binders], LamWF ctor
