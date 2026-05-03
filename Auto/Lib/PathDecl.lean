@@ -7,8 +7,9 @@ namespace Auto
 namespace PathDecl
 
 /--
-  Return path to the build directory of `lean-auto`,
-  assuming that the built `olean` files are in the `.lake/build`
+  Return path to the build directory of `lean-auto`
+  (presumable `<src-root>/.lake/build`),
+  assuming that the built `olean` files are in the `.lake/build/lib`
   folder of the source code folder
 -/
 def buildDir : CoreM System.FilePath := do
