@@ -2,6 +2,7 @@ import Lean
 import Auto.IR.TPTP_TH0
 import Auto.Parser.TPTP
 import Auto.Embedding.LamBase
+import Auto.Lib.PathDecl
 open Lean
 
 initialize
@@ -83,7 +84,12 @@ register_option auto.tptp.solver.name : SolverName := {
   descr := "Name of the designated TPTP solver"
 }
 
-register_option auto.tptp.zipperposition.path : String := {
+register_option auto.tptp.zipperposition.useDefault : Bool := {
+  defValue := true
+  descr := "Use the automatically downloaded zipperposition executable"
+}
+
+register_option auto.tptp.zipperposition.customPath : String := {
   defValue := "zipperposition"
   descr := "Path to zipperposition, defaults to \"zipperposition\""
 }
@@ -111,8 +117,28 @@ private def createAux (path : String) (args : Array String) : MetaM SolverProc :
     IO.Process.spawn {stdin := .piped, stdout := .piped, stderr := .piped,
                       cmd := path, args := args}
 
+-- Mirrors `lakefile.lean/namespace Zipperposition/exeName`
+def zipperpositionDefaultPath : CoreM System.FilePath := do
+  let buildDir ← PathDecl.buildDir
+  let exeName :=
+    if System.Platform.isOSX then
+      "zipperposition-bin-macos-big-sur.exe"
+    else
+      "zipperposition.exe"
+  return buildDir / exeName
+
 def queryZipperposition (query : String) : MetaM (Bool × String) := do
-  let path := auto.tptp.zipperposition.path.get (← getOptions)
+  let useDefault := auto.tptp.zipperposition.useDefault.get (← getOptions)
+  let specifiedPath := auto.tptp.zipperposition.customPath.get (← getOptions)
+  let defaultPath ← zipperpositionDefaultPath
+  if useDefault && !(← defaultPath.pathExists) then
+    throwError (
+      s!"Cannot find automatically downloaded zipperposition executable. " ++
+      s!"Try running \"lake build\" at the root directory of lean-auto's source code (" ++
+      s!"presumably at \"{← PathDecl.root}\"), and see if \"zipperposition.exe\" pops up " ++
+      s!"in \".lake/build\"."
+    )
+  let path := (if useDefault then defaultPath.toString else specifiedPath)
   let tlim := auto.tptp.timeout.get (← getOptions)
   let solver ← createAux path #["-i=tptp", "-o=tptp", "--mode=ho-competitive", s!"-t={tlim}"]
   solver.stdin.putStr s!"{query}\n"
