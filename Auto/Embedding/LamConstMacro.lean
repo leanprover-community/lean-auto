@@ -222,8 +222,13 @@ private def emitBeqLemmas (c : ConstFamilyCtx) : CommandElabM Unit := do
   elabCommand <| ← `(
     theorem $beqReflId : ∀ {x : $tyName:ident}, $beqId x x = true := by
       intro x; cases x <;> first | rfl | simp [$beqId:ident])
-  -- eq_of_beq: handles parameterless (rfl/contradiction) and parameterized
-  -- (extract underlying Prop equality from `==`).
+  -- eq_of_beq: handles parameterless (rfl/contradiction) and parameterized.
+  -- For N-binder ctors, beq unfolds to a left-associative `&& = true` chain
+  -- `((b₁ == b₁') && (b₂ == b₂')) && (b₃ == b₃') = true`.
+  -- We peel the right side off iteratively via `Bool.and_eq_true.mp`, applying
+  -- `LawfulBEq.eq_of_beq` to each rightmost claim to substitute it.  When the
+  -- chain is exhausted (h is a single `==`), the loop fails out and we close
+  -- with one final substitution + `rfl`.
   elabCommand <| ← `(
     theorem $eqOfBeqId : ∀ {x y : $tyName:ident}, $beqId x y = true → x = y := by
       intro x y h
@@ -231,10 +236,10 @@ private def emitBeqLemmas (c : ConstFamilyCtx) : CommandElabM Unit := do
         first
           | rfl
           | contradiction
-          | (simp only [$beqId:ident, Bool.and_eq_true] at h
-             repeat' (first | rfl | (apply congrArg) | (apply congrArg₂)
-                            | (cases LawfulBEq.eq_of_beq h.1; clear h; rename_i h)
-                            | (cases LawfulBEq.eq_of_beq h; rfl))))
+          | (simp only [$beqId:ident] at h
+             repeat first
+               | cases LawfulBEq.eq_of_beq h; rfl
+               | obtain ⟨h, hr⟩ := (Bool.and_eq_true _ _).mp h; cases LawfulBEq.eq_of_beq hr))
   elabCommand <| ← `(
     instance : LawfulBEq $tyName:ident where
       eq_of_beq := $eqOfBeqId
