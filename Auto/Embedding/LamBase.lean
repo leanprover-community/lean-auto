@@ -428,91 +428,13 @@ inductive BoolConst
   | orb    -- Boolean `or`
 deriving Inhabited, Hashable, Lean.ToExpr
 
-def BoolConst.reprAux : BoolConst → String
-| .ofProp => "ofProp"
-| .trueb  => "trueb"
-| .falseb => "falseb"
-| .notb   => "notb"
-| .andb   => "andb"
-| .orb    => "orb"
-
-def BoolConst.reprPrec (b : BoolConst) (n : Nat) :=
-  match n with
-  | 0 => f!"Auto.Embedding.Lam.BoolConst.{b.reprAux}"
-  | _ + 1 => f!"(.{b.reprAux})"
-
-instance : Repr BoolConst where
-  reprPrec := BoolConst.reprPrec
-
-def BoolConst.toString : BoolConst → String
-| .ofProp => "ofProp"
-| .trueb  => "true"
-| .falseb => "false"
-| .notb   => "!"
-| .andb   => "&&"
-| .orb    => "||"
-
-instance : ToString BoolConst where
-  toString := BoolConst.toString
-
-def BoolConst.beq : BoolConst → BoolConst → Bool
-| .ofProp, .ofProp => true
-| .trueb,  .trueb  => true
-| .falseb, .falseb => true
-| .notb,   .notb   => true
-| .andb,   .andb   => true
-| .orb,    .orb    => true
-| _,       _       => false
-
-instance : BEq BoolConst where
-  beq := BoolConst.beq
-
-def BoolConst.beq_refl {b : BoolConst} : (b.beq b) = true := by
-  cases b <;> rfl
-
-def BoolConst.eq_of_beq_eq_true {b₁ b₂ : BoolConst} (H : b₁.beq b₂) : b₁ = b₂ := by
-  cases b₁ <;> cases b₂ <;> first | contradiction | rfl
-
-instance : LawfulBEq BoolConst where
-  eq_of_beq := BoolConst.eq_of_beq_eq_true
-  rfl := BoolConst.beq_refl
-
-def BoolConst.lamCheck : BoolConst → LamSort
-| .ofProp => .func (.base .prop) (.base .bool)
-| .trueb => .base .bool
-| .falseb => .base .bool
-| .notb => .func (.base .bool) (.base .bool)
-| .andb => .func (.base .bool) (.func (.base .bool) (.base .bool))
-| .orb => .func (.base .bool) (.func (.base .bool) (.base .bool))
-
-inductive BoolConst.LamWF : BoolConst → LamSort → Type
-  | ofOfProp     : LamWF .ofProp (.func (.base .prop) (.base .bool))
-  | ofTrueB      : LamWF .trueb (.base .bool)
-  | ofFalseB     : LamWF .falseb (.base .bool)
-  | ofNotB       : LamWF .notb (.func (.base .bool) (.base .bool))
-  | ofAndB       : LamWF .andb (.func (.base .bool) (.func (.base .bool) (.base .bool)))
-  | ofOrB        : LamWF .orb (.func (.base .bool) (.func (.base .bool) (.base .bool)))
-
-def BoolConst.LamWF.unique {b : BoolConst} {s₁ s₂ : LamSort}
-  (bcwf₁ : LamWF b s₁) (bcwf₂ : LamWF b s₂) : s₁ = s₂ ∧ HEq bcwf₁ bcwf₂ := by
-  cases bcwf₁ <;> cases bcwf₂ <;> trivial
-
-def BoolConst.LamWF.ofBoolConst : (b : BoolConst) → (s : LamSort) × BoolConst.LamWF b s
-| .ofProp     => ⟨.func (.base .prop) (.base .bool), .ofOfProp⟩
-| .trueb      => ⟨.base .bool, .ofTrueB⟩
-| .falseb     => ⟨.base .bool, .ofFalseB⟩
-| .notb       => ⟨.func (.base .bool) (.base .bool), .ofNotB⟩
-| .andb       => ⟨.func (.base .bool) (.func (.base .bool) (.base .bool)), .ofAndB⟩
-| .orb        => ⟨.func (.base .bool) (.func (.base .bool) (.base .bool)), .ofOrB⟩
-
-def BoolConst.lamWF_complete (wf : LamWF b s) : LamWF.ofBoolConst b = ⟨s, wf⟩ := by
-  cases wf <;> rfl
-
-def BoolConst.lamCheck_of_LamWF (H : LamWF b s) : b.lamCheck = s := by
-  cases H <;> rfl
-
-def BoolConst.LamWF.ofCheck (H : b.lamCheck = s) : LamWF b s := by
-  cases H; cases b <;> constructor
+mkConstFamily ncInterp BoolConst with
+  | ofProp | ofOfProp | (.func (.base .prop) (.base .bool))                                     | "ofProp" | ofPropLift
+  | trueb  | ofTrueB  | (.base .bool)                                                           | "true"   | GLift.up true
+  | falseb | ofFalseB | (.base .bool)                                                           | "false"  | GLift.up false
+  | notb   | ofNotB   | (.func (.base .bool) (.base .bool))                                     | "!"      | notbLift
+  | andb   | ofAndB   | (.func (.base .bool) (.func (.base .bool) (.base .bool)))               | "&&"     | andbLift
+  | orb    | ofOrB    | (.func (.base .bool) (.func (.base .bool) (.base .bool)))               | "||"     | orbLift
 
 inductive NatConst
   | natVal (n : Nat)
@@ -1959,32 +1881,6 @@ structure LamValuation extends LamTyVal where
   varVal   : ∀ (n : Nat), (lamVarTy n).interp tyVal
   ilVal    : ∀ (n : Nat), ILLift.{u} ((lamILTy n).interp tyVal)
   eVarVal  : ∀ (n : Nat), (lamEVarTy n).interp tyVal
-
-noncomputable def BoolConst.interp (tyVal : Nat → Type u) : (b : BoolConst) → b.lamCheck.interp tyVal
-| .ofProp => ofPropLift
-| .trueb  => GLift.up true
-| .falseb => GLift.up false
-| .notb   => notbLift
-| .andb   => andbLift
-| .orb    => orbLift
-
-noncomputable def BoolConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF b s) → s.interp tyVal
-| .ofOfProp => ofPropLift
-| .ofTrueB  => GLift.up true
-| .ofFalseB => GLift.up false
-| .ofNotB   => notbLift
-| .ofAndB   => andbLift
-| .ofOrB    => orbLift
-
-theorem BoolConst.LamWF.interp_lvalIrrelevance
-  (tyVal₁ tyVal₂ : Nat → Type u) (bcwf₁ : LamWF b₁ s₁) (bcwf₂ : LamWF b₂ s₂)
-  (HBeq : b₁ = b₂) (hTyVal : tyVal₁ = tyVal₂) :
-  HEq (bcwf₁.interp tyVal₁) (bcwf₂.interp tyVal₂) := by
-  cases HBeq; cases hTyVal; rcases BoolConst.LamWF.unique bcwf₁ bcwf₂ with ⟨⟨⟩, ⟨⟩⟩; rfl
-
-def BoolConst.interp_equiv (tyVal : Nat → Type u) (bcwf : LamWF b s) :
-  HEq (LamWF.interp tyVal bcwf) (interp tyVal b) := by
-  cases bcwf <;> rfl
 
 def NatConst.interp (tyVal : Nat → Type u) : (n : NatConst) → n.lamCheck.interp tyVal
 | .natVal n => GLift.up n
