@@ -442,116 +442,17 @@ inductive NatConst
   | nle | nlt | nmax | nmin
 deriving Inhabited, Hashable, Lean.ToExpr
 
-def NatConst.reprAux : NatConst → String
-| .natVal n => s!"natVal {n}"
-| .nadd     => "nadd"
-| .nsub     => "nsub"
-| .nmul     => "nmul"
-| .ndiv     => "ndiv"
-| .nmod     => "nmod"
-| .nle      => "nle"
-| .nlt      => "nlt"
-| .nmax     => "nmax"
-| .nmin     => "nmin"
-
-def NatConst.reprPrec (nc : NatConst) (n : Nat) :=
-  match n with
-  | 0 => f!"Auto.Embedding.Lam.NatConst.{nc.reprAux}"
-  | _ + 1 => f!"(.{nc.reprAux})"
-
-instance : Repr NatConst where
-  reprPrec := NatConst.reprPrec
-
-def NatConst.toString : NatConst → String
-| .natVal n => s!"{n} : Nat"
-| .nadd     => "+"
-| .nsub     => "-"
-| .nmul     => "*"
-| .ndiv     => "/"
-| .nmod     => "%"
-| .nle      => "≤"
-| .nlt      => "<"
-| .nmax     => "nmax"
-| .nmin     => "nmin"
-
-instance : ToString NatConst where
-  toString := NatConst.toString
-
-def NatConst.beq : NatConst → NatConst → Bool
-| .natVal n, .natVal m => Nat.beq n m
-| .nadd,     .nadd  => true
-| .nsub,     .nsub  => true
-| .nmul,     .nmul  => true
-| .ndiv,     .ndiv  => true
-| .nmod,     .nmod  => true
-| .nle,      .nle   => true
-| .nlt,      .nlt   => true
-| .nmax,     .nmax  => true
-| .nmin,     .nmin  => true
-| _,         _      => false
-
-instance : BEq NatConst where
-  beq := NatConst.beq
-
-def NatConst.beq_refl {n : NatConst} : (n.beq n) = true := by
-  cases n <;> first | rfl | apply Nat.beq_refl
-
-def NatConst.eq_of_beq_eq_true {n₁ n₂ : NatConst} (H : n₁.beq n₂) : n₁ = n₂ := by
-  cases n₁ <;> cases n₂ <;> try (first | contradiction | rfl)
-  case natVal.natVal n m => apply congrArg; apply Nat.eq_of_beq_eq_true H
-
-instance : LawfulBEq NatConst where
-  eq_of_beq := NatConst.eq_of_beq_eq_true
-  rfl := NatConst.beq_refl
-
-def NatConst.lamCheck : NatConst → LamSort
-| .natVal _ => .base .nat
-| .nadd     => .func (.base .nat) (.func (.base .nat) (.base .nat))
-| .nsub     => .func (.base .nat) (.func (.base .nat) (.base .nat))
-| .nmul     => .func (.base .nat) (.func (.base .nat) (.base .nat))
-| .ndiv     => .func (.base .nat) (.func (.base .nat) (.base .nat))
-| .nmod     => .func (.base .nat) (.func (.base .nat) (.base .nat))
-| .nle      => .func (.base .nat) (.func (.base .nat) (.base .prop))
-| .nlt      => .func (.base .nat) (.func (.base .nat) (.base .prop))
-| .nmax     => .func (.base .nat) (.func (.base .nat) (.base .nat))
-| .nmin     => .func (.base .nat) (.func (.base .nat) (.base .nat))
-
-inductive NatConst.LamWF : NatConst → LamSort → Type
-  | ofNatVal n : LamWF (.natVal n) (.base .nat)
-  | ofNadd     : LamWF .nadd (.func (.base .nat) (.func (.base .nat) (.base .nat)))
-  | ofNsub     : LamWF .nsub (.func (.base .nat) (.func (.base .nat) (.base .nat)))
-  | ofNmul     : LamWF .nmul (.func (.base .nat) (.func (.base .nat) (.base .nat)))
-  | ofNdiv     : LamWF .ndiv (.func (.base .nat) (.func (.base .nat) (.base .nat)))
-  | ofNmod     : LamWF .nmod (.func (.base .nat) (.func (.base .nat) (.base .nat)))
-  | ofNle      : LamWF .nle (.func (.base .nat) (.func (.base .nat) (.base .prop)))
-  | ofNlt      : LamWF .nlt (.func (.base .nat) (.func (.base .nat) (.base .prop)))
-  | ofNmax     : LamWF .nmax (.func (.base .nat) (.func (.base .nat) (.base .nat)))
-  | ofNmin     : LamWF .nmin (.func (.base .nat) (.func (.base .nat) (.base .nat)))
-
-def NatConst.LamWF.unique {n : NatConst} {s₁ s₂ : LamSort}
-  (nwf₁ : LamWF n s₁) (nwf₂ : LamWF n s₂) : s₁ = s₂ ∧ HEq nwf₁ nwf₂ := by
-  cases nwf₁ <;> cases nwf₂ <;> trivial
-
-def NatConst.LamWF.ofNatConst : (n : NatConst) → (s : LamSort) × NatConst.LamWF n s
-| .natVal n => ⟨.base .nat, .ofNatVal n⟩
-| .nadd     => ⟨.func (.base .nat) (.func (.base .nat) (.base .nat)), .ofNadd⟩
-| .nsub     => ⟨.func (.base .nat) (.func (.base .nat) (.base .nat)), .ofNsub⟩
-| .nmul     => ⟨.func (.base .nat) (.func (.base .nat) (.base .nat)), .ofNmul⟩
-| .ndiv     => ⟨.func (.base .nat) (.func (.base .nat) (.base .nat)), .ofNdiv⟩
-| .nmod     => ⟨.func (.base .nat) (.func (.base .nat) (.base .nat)), .ofNmod⟩
-| .nle      => ⟨.func (.base .nat) (.func (.base .nat) (.base .prop)), .ofNle⟩
-| .nlt      => ⟨.func (.base .nat) (.func (.base .nat) (.base .prop)), .ofNlt⟩
-| .nmax     => ⟨.func (.base .nat) (.func (.base .nat) (.base .nat)), .ofNmax⟩
-| .nmin     => ⟨.func (.base .nat) (.func (.base .nat) (.base .nat)), .ofNmin⟩
-
-def NatConst.lamWF_complete (wf : LamWF n s) : LamWF.ofNatConst n = ⟨s, wf⟩ := by
-  cases wf <;> rfl
-
-def NatConst.lamCheck_of_LamWF (H : LamWF n s) : n.lamCheck = s := by
-  cases H <;> rfl
-
-def NatConst.LamWF.ofCheck (H : n.lamCheck = s) : LamWF n s := by
-  cases H; cases n <;> constructor
+mkConstFamily NatConst with
+  | natVal (n : Nat) | ofNatVal | (.base .nat)                                              | s!"{n} : Nat" | GLift.up n
+  | nadd  | ofNadd | (.func (.base .nat) (.func (.base .nat) (.base .nat)))                 | "+"     | naddLift
+  | nsub  | ofNsub | (.func (.base .nat) (.func (.base .nat) (.base .nat)))                 | "-"     | nsubLift
+  | nmul  | ofNmul | (.func (.base .nat) (.func (.base .nat) (.base .nat)))                 | "*"     | nmulLift
+  | ndiv  | ofNdiv | (.func (.base .nat) (.func (.base .nat) (.base .nat)))                 | "/"     | ndivLift
+  | nmod  | ofNmod | (.func (.base .nat) (.func (.base .nat) (.base .nat)))                 | "%"     | nmodLift
+  | nle   | ofNle  | (.func (.base .nat) (.func (.base .nat) (.base .prop)))                | "≤"     | nleLift
+  | nlt   | ofNlt  | (.func (.base .nat) (.func (.base .nat) (.base .prop)))                | "<"     | nltLift
+  | nmax  | ofNmax | (.func (.base .nat) (.func (.base .nat) (.base .nat)))                 | "nmax"  | nmaxLift
+  | nmin  | ofNmin | (.func (.base .nat) (.func (.base .nat) (.base .nat)))                 | "nmin"  | nminLift
 
 inductive IntConst
   | iofNat | inegSucc | ineg | iabs
@@ -560,21 +461,21 @@ inductive IntConst
 deriving Inhabited, Hashable, Lean.ToExpr
 
 mkConstFamily IntConst with
-  | iofNat   | ofIOfNat   | (.func (.base .nat) (.base .int))                                        | "iofNat"   | iofNatLift
-  | inegSucc | ofINegSucc | (.func (.base .nat) (.base .int))                                        | "inegSucc" | inegSuccLift
-  | ineg     | ofIneg     | (.func (.base .int) (.base .int))                                        | "-"        | inegLift
-  | iabs     | ofIabs     | (.func (.base .int) (.base .int))                                        | "iabs"     | iabsLift
-  | iadd     | ofIadd     | (.func (.base .int) (.func (.base .int) (.base .int)))                   | "+"        | iaddLift
-  | isub     | ofIsub     | (.func (.base .int) (.func (.base .int) (.base .int)))                   | "-"        | isubLift
-  | imul     | ofImul     | (.func (.base .int) (.func (.base .int) (.base .int)))                   | "*"        | imulLift
-  | idiv     | ofIdiv     | (.func (.base .int) (.func (.base .int) (.base .int)))                   | "/"        | idivLift
-  | imod     | ofImod     | (.func (.base .int) (.func (.base .int) (.base .int)))                   | "%"        | imodLift
-  | iediv    | ofIediv    | (.func (.base .int) (.func (.base .int) (.base .int)))                   | "/?"       | iedivLift
-  | iemod    | ofIemod    | (.func (.base .int) (.func (.base .int) (.base .int)))                   | "%?"       | iemodLift
-  | ile      | ofIle      | (.func (.base .int) (.func (.base .int) (.base .prop)))                  | "≤"        | ileLift
-  | ilt      | ofIlt      | (.func (.base .int) (.func (.base .int) (.base .prop)))                  | "<"        | iltLift
-  | imax     | ofImax     | (.func (.base .int) (.func (.base .int) (.base .int)))                   | "imax"     | imaxLift
-  | imin     | ofImin     | (.func (.base .int) (.func (.base .int) (.base .int)))                   | "imin"     | iminLift
+  | iofNat   | ofIOfNat   | (.func (.base .nat) (.base .int))                       | "iofNat"   | iofNatLift
+  | inegSucc | ofINegSucc | (.func (.base .nat) (.base .int))                       | "inegSucc" | inegSuccLift
+  | ineg     | ofIneg     | (.func (.base .int) (.base .int))                       | "-"        | inegLift
+  | iabs     | ofIabs     | (.func (.base .int) (.base .int))                       | "iabs"     | iabsLift
+  | iadd     | ofIadd     | (.func (.base .int) (.func (.base .int) (.base .int)))  | "+"        | iaddLift
+  | isub     | ofIsub     | (.func (.base .int) (.func (.base .int) (.base .int)))  | "-"        | isubLift
+  | imul     | ofImul     | (.func (.base .int) (.func (.base .int) (.base .int)))  | "*"        | imulLift
+  | idiv     | ofIdiv     | (.func (.base .int) (.func (.base .int) (.base .int)))  | "/"        | idivLift
+  | imod     | ofImod     | (.func (.base .int) (.func (.base .int) (.base .int)))  | "%"        | imodLift
+  | iediv    | ofIediv    | (.func (.base .int) (.func (.base .int) (.base .int)))  | "/?"       | iedivLift
+  | iemod    | ofIemod    | (.func (.base .int) (.func (.base .int) (.base .int)))  | "%?"       | iemodLift
+  | ile      | ofIle      | (.func (.base .int) (.func (.base .int) (.base .prop))) | "≤"        | ileLift
+  | ilt      | ofIlt      | (.func (.base .int) (.func (.base .int) (.base .prop))) | "<"        | iltLift
+  | imax     | ofImax     | (.func (.base .int) (.func (.base .int) (.base .int)))  | "imax"     | imaxLift
+  | imin     | ofImin     | (.func (.base .int) (.func (.base .int) (.base .int)))  | "imin"     | iminLift
 
 inductive StringConst
   | strVal (s : String)
@@ -586,99 +487,14 @@ inductive StringConst
   | srepall
 deriving Inhabited, Hashable, Lean.ToExpr
 
-def StringConst.reprAux : StringConst → String
-| .strVal s  => s!"strVal \"{s}\""
-| .slength   => "slength"
-| .sapp      => "sapp"
-| .sle       => "sle"
-| .slt       => "slt"
-| .sprefixof => "sprefixof"
-| .srepall   => "srepall"
-
-def StringConst.reprPrec (s : StringConst) (n : Nat) :=
-  match n with
-  | 0 => f!"Auto.Embedding.Lam.StringConst.{s.reprAux}"
-  | _ + 1 => f!"(.{s.reprAux})"
-
-instance : Repr StringConst where
-  reprPrec := StringConst.reprPrec
-
-def StringConst.toString : StringConst → String
-| .strVal s => s!"({s} : String)"
-| .slength => "length"
-| .sapp => "++"
-| .sle => "≤"
-| .slt => "<"
-| .sprefixof => "is_prefix_of"
-| .srepall => "replace_all"
-
-instance : ToString StringConst where
-  toString := StringConst.toString
-
-def StringConst.beq : StringConst → StringConst → Bool
-| .strVal m,  .strVal n  => m == n
-| .slength,   .slength   => true
-| .sapp,      .sapp      => true
-| .sle,       .sle       => true
-| .slt,       .slt       => true
-| .sprefixof, .sprefixof => true
-| .srepall,   .srepall   => true
-| _,          _          => false
-
-instance : BEq StringConst where
-  beq := StringConst.beq
-
-def StringConst.beq_refl {s : StringConst} : (s.beq s) = true := by
-  cases s <;> try rfl
-  case strVal s => apply BEq.rfl (α := String)
-
-def StringConst.eq_of_beq_eq_true {s₁ s₂ : StringConst} (H : s₁.beq s₂) : s₁ = s₂ := by
-  cases s₁ <;> cases s₂ <;> try (first | contradiction | rfl)
-  case strVal.strVal n m => apply congrArg; apply LawfulBEq.eq_of_beq (α := String) H
-
-instance : LawfulBEq StringConst where
-  eq_of_beq := StringConst.eq_of_beq_eq_true
-  rfl := StringConst.beq_refl
-
-def StringConst.lamCheck : StringConst → LamSort
-| .strVal _  => .base .string
-| .slength   => .func (.base .string) (.base .nat)
-| .sapp      => .func (.base .string) (.func (.base .string) (.base .string))
-| .sle       => .func (.base .string) (.func (.base .string) (.base .prop))
-| .slt       => .func (.base .string) (.func (.base .string) (.base .prop))
-| .sprefixof => .func (.base .string) (.func (.base .string) (.base .bool))
-| .srepall   => .func (.base .string) (.func (.base .string) (.func (.base .string) (.base .string)))
-
-inductive StringConst.LamWF : StringConst → LamSort → Type
-  | ofStrVal s  : LamWF (.strVal s) (.base .string)
-  | ofSlength   : LamWF .slength (.func (.base .string) (.base .nat))
-  | ofSapp      : LamWF .sapp (.func (.base .string) (.func (.base .string) (.base .string)))
-  | ofSle       : LamWF .sle (.func (.base .string) (.func (.base .string) (.base .prop)))
-  | ofSlt       : LamWF .slt (.func (.base .string) (.func (.base .string) (.base .prop)))
-  | ofSprefixof : LamWF .sprefixof (.func (.base .string) (.func (.base .string) (.base .bool)))
-  | ofSrepall   : LamWF .srepall (.func (.base .string) (.func (.base .string) (.func (.base .string) (.base .string))))
-
-def StringConst.LamWF.unique {s : StringConst} {s₁ s₂ : LamSort}
-  (iwf₁ : LamWF s s₁) (iwf₂ : LamWF s s₂) : s₁ = s₂ ∧ HEq iwf₁ iwf₂ := by
-  cases iwf₁ <;> cases iwf₂ <;> trivial
-
-def StringConst.LamWF.ofStringConst : (sc : StringConst) → (s : LamSort) × StringConst.LamWF sc s
-| .strVal s  => ⟨.base .string, .ofStrVal s⟩
-| .slength   => ⟨.func (.base .string) (.base .nat), .ofSlength⟩
-| .sapp      => ⟨.func (.base .string) (.func (.base .string) (.base .string)), .ofSapp⟩
-| .sle       => ⟨.func (.base .string) (.func (.base .string) (.base .prop)), .ofSle⟩
-| .slt       => ⟨.func (.base .string) (.func (.base .string) (.base .prop)), .ofSlt⟩
-| .sprefixof => ⟨.func (.base .string) (.func (.base .string) (.base .bool)), .ofSprefixof⟩
-| .srepall   => ⟨.func (.base .string) (.func (.base .string) (.func (.base .string) (.base .string))), .ofSrepall⟩
-
-def StringConst.lamWF_complete (wf : LamWF sc s) : LamWF.ofStringConst sc = ⟨s, wf⟩ := by
-  cases wf <;> rfl
-
-def StringConst.lamCheck_of_LamWF (H : LamWF sc s) : sc.lamCheck = s := by
-  cases H <;> rfl
-
-def StringConst.LamWF.ofCheck (H : sc.lamCheck = s) : LamWF sc s := by
-  cases H; cases sc <;> constructor
+mkConstFamily StringConst with
+  | strVal (s : String) | ofStrVal | (.base .string)                                                                          | s!"({s} : String)" | GLift.up s
+  | slength   | ofSlength   | (.func (.base .string) (.base .nat))                                                            | "length"            | slengthLift
+  | sapp      | ofSapp      | (.func (.base .string) (.func (.base .string) (.base .string)))                                 | "++"                | sappLift
+  | sle       | ofSle       | (.func (.base .string) (.func (.base .string) (.base .prop)))                                   | "≤"                 | sleLift
+  | slt       | ofSlt       | (.func (.base .string) (.func (.base .string) (.base .prop)))                                   | "<"                 | sltLift
+  | sprefixof | ofSprefixof | (.func (.base .string) (.func (.base .string) (.base .bool)))                                   | "is_prefix_of"      | sprefixofLift
+  | srepall   | ofSrepall   | (.func (.base .string) (.func (.base .string) (.func (.base .string) (.base .string))))         | "replace_all"       | srepallLift
 
 inductive BVAOp where
   | add
@@ -1758,68 +1574,6 @@ structure LamValuation extends LamTyVal where
   varVal   : ∀ (n : Nat), (lamVarTy n).interp tyVal
   ilVal    : ∀ (n : Nat), ILLift.{u} ((lamILTy n).interp tyVal)
   eVarVal  : ∀ (n : Nat), (lamEVarTy n).interp tyVal
-
-def NatConst.interp (tyVal : Nat → Type u) : (n : NatConst) → n.lamCheck.interp tyVal
-| .natVal n => GLift.up n
-| .nadd     => naddLift
-| .nsub     => nsubLift
-| .nmul     => nmulLift
-| .ndiv     => ndivLift
-| .nmod     => nmodLift
-| .nle      => nleLift
-| .nlt      => nltLift
-| .nmax     => nmaxLift
-| .nmin     => nminLift
-
-def NatConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF i s) → s.interp tyVal
-| .ofNatVal n => GLift.up n
-| .ofNadd     => naddLift
-| .ofNsub     => nsubLift
-| .ofNmul     => nmulLift
-| .ofNdiv     => ndivLift
-| .ofNmod     => nmodLift
-| .ofNle      => nleLift
-| .ofNlt      => nltLift
-| .ofNmax     => nmaxLift
-| .ofNmin     => nminLift
-
-theorem NatConst.LamWF.interp_lvalIrrelevance
-  (tyVal₁ tyVal₂ : Nat → Type u) (ncwf₁ : LamWF n₁ s₁) (ncwf₂ : LamWF n₂ s₂)
-  (HBeq : n₁ = n₂) (hTyVal : tyVal₁ = tyVal₂) :
-  HEq (ncwf₁.interp tyVal₁) (ncwf₂.interp tyVal₂) := by
-  cases HBeq; cases hTyVal; rcases NatConst.LamWF.unique ncwf₁ ncwf₂ with ⟨⟨⟩, ⟨⟩⟩; rfl
-
-def NatConst.interp_equiv (tyVal : Nat → Type u) (ncwf : LamWF n s) :
-  HEq (LamWF.interp tyVal ncwf) (interp tyVal n) := by
-  cases ncwf <;> rfl
-
-def StringConst.interp (tyVal : Nat → Type u) : (b : StringConst) → b.lamCheck.interp tyVal
-| .strVal s  => GLift.up s
-| .slength   => slengthLift
-| .sapp      => sappLift
-| .sle       => sleLift
-| .slt       => sltLift
-| .sprefixof => sprefixofLift
-| .srepall   => srepallLift
-
-def StringConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF i s) → s.interp tyVal
-| .ofStrVal s  => GLift.up s
-| .ofSlength   => slengthLift
-| .ofSapp      => sappLift
-| .ofSle       => sleLift
-| .ofSlt       => sltLift
-| .ofSprefixof => sprefixofLift
-| .ofSrepall   => srepallLift
-
-theorem StringConst.LamWF.interp_lvalIrrelevance
-  (tyVal₁ tyVal₂ : Nat → Type u) (scwf₁ : LamWF sc₁ s₁) (scwf₂ : LamWF sc₂ s₂)
-  (HBeq : sc₁ = sc₂) (hTyVal : tyVal₁ = tyVal₂) :
-  HEq (scwf₁.interp tyVal₁) (scwf₂.interp tyVal₂) := by
-  cases HBeq; cases hTyVal; rcases StringConst.LamWF.unique scwf₁ scwf₂ with ⟨⟨⟩, ⟨⟩⟩; rfl
-
-def StringConst.interp_equiv (tyVal : Nat → Type u) (scwf : LamWF sc s) :
-  HEq (LamWF.interp tyVal scwf) (interp tyVal sc) := by
-  cases scwf <;> rfl
 
 def BVAOp.interp (n : Nat) : (op : BVAOp) →
   GLift.{1, u} (BitVec n) → GLift.{1, u} (BitVec n) → GLift.{1, u} (BitVec n)
