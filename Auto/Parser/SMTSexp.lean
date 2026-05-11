@@ -10,10 +10,10 @@ open Meta
 inductive LexVal
   | lparen
   | rparen
-  | num (n : Nat)
+  | nat (n : Nat)
   | rat (n : Nat) (m : Nat)
   | str (s : String)
-  | symb (s : String)
+  | symb (s : String) -- excluding reserved words
   | kw (s : String)
   | reserved (s : String) -- e.g. "forall" and "exists"
   | comment (s : String)
@@ -26,7 +26,7 @@ open LexVal
 def LexVal.toString : LexVal → String
 | .lparen  => "("
 | .rparen  => ")"
-| .num n   => s!"{n}"
+| .nat n   => s!"{n}"
 | .rat n m =>
   let pow := s!"{m}".length - 1
   if m != Nat.pow 10 pow then
@@ -58,7 +58,7 @@ def LexVal.ofString (s : String) (attr : String) : LexVal :=
   match attr with
   | "("           => .lparen
   | ")"           => .rparen
-  | "numeral"     => .num s.toNat!
+  | "numeral"     => .nat s.toNat!
   | "decimal"     =>
     if let [a, b] := s.splitOn "." then
       let a := a.toNat!
@@ -70,25 +70,29 @@ def LexVal.ofString (s : String) (attr : String) : LexVal :=
       panic! s!"LexVal.ofString :: {repr s} is not a valid decimal number"
   | "hexadecimal" =>
     let hdigs := s.drop 2
-    .num (hdigs.foldl (fun x c => x * 16 + hexDigitToNat c) 0)
+    .nat (hdigs.foldl (fun x c => x * 16 + hexDigitToNat c) 0)
   | "binary" =>
     let bdigs := s.drop 2
-    .num (bdigs.foldl (fun x c => x * 2 + c.toNat - '0'.toNat) 0)
+    .nat (bdigs.foldl (fun x c => x * 2 + c.toNat - '0'.toNat) 0)
   | "string" =>
     let subs := ((s.drop 1).take (s.length - 2)).toString.splitOn "\"\""
     .str (String.intercalate "\"" subs)
-  | "simplesymbol" => .symb s
+  | "simplesymbol" =>
+    -- "forall", "exists", "lambda", "let", and "_" are valid simple symbols
+    -- at the lexical level; identify them as reserved words / underscore here
+    match s with
+    | "forall" => .reserved "forall"
+    | "exists" => .reserved "exists"
+    | "lambda" => .reserved "lambda"
+    | "let"    => .reserved "let"
+    | "_"      => .underscore
+    | _        => .symb s
   | "quotedsymbol" => .symb ((s.drop 1).take (s.length - 2)).toString
   | "keyword"      => .kw (s.drop 1).toString
   | "comment"      =>
     let rn : Nat := if String.Pos.Raw.get s (String.Pos.Raw.prev s (String.Pos.Raw.prev s s.rawEndPos)) == '\r' then 1 else 0
     .comment ((s.drop 1).take (s.length - 2 - rn)).toString
   | "reserved"     => .reserved s
-  | "forall"       => .reserved "forall"
-  | "exists"       => .reserved "exists"
-  | "lambda"       => .reserved "lambda"
-  | "let"          => .reserved "let"
-  | "_"            => .underscore
   | _              => panic! s!"LexVal.ofString :: {repr attr} is not a valid attribute"
 
 inductive Term where
@@ -174,15 +178,9 @@ def lexTerm [Monad m] [Lean.MonadError m] (s : String) (p : String.Pos.Raw)
       return .incomplete ⟨0, "", pstk⟩ p
     match nextLexicon p lst with
     | ⟨.complete, matched, _, state⟩ =>
-      -- It is possible for there to be more than one attr if "forall", "exists", or "let" is interpreted
-      -- both as a symbol and as a reserved word. If this happens, the reserved word should be prioritized
       let attr ←
         match (SMT.lexiconADFA.getAttrs state).toList with
         | [attr] => pure attr
-        | [attr1, attr2] =>
-          if attr1 == "forall" || attr1 == "exists" || attr1 == "lambda" || attr1 == "let" || attr1 == "_" then pure attr1
-          else if attr2 == "forall" || attr2 == "exists" || attr2 == "lambda" || attr2 == "let" || attr2 == "_" then pure attr2
-          else throwError "parseTerm :: Attribute conflict not caused by forall, exists, lambda, let, or _"
         | _ => throwError "parseTerm :: Invalid number of attributes"
 
       p := matched.stopPos
@@ -579,7 +577,7 @@ partial def parseImplication (args : List Term) (symbolMap : Std.HashMap String 
 partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTermConstraint : ParseTermConstraint) : MetaM Expr := do
   Core.checkSystem "{decl_name%}"
   match e with
-  | atom (num n) => correctType (Expr.lit (Literal.natVal n)) parseTermConstraint
+  | atom (nat n) => correctType (Expr.lit (Literal.natVal n)) parseTermConstraint
   | atom (rat _ _) => throwError "parseTerm :: Rational/real numbers not supported yet"
   | atom (str s) => correctType (Expr.lit (Literal.strVal s)) parseTermConstraint
   | atom (symb s) =>

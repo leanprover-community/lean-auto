@@ -1,6 +1,6 @@
 import Lean
 import Auto.IR.SMT
-import Auto.Parser.SMTParser
+import Auto.Parser.SMTSexp
 open Lean
 
 initialize

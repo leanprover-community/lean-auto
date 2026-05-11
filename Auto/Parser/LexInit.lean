@@ -4,24 +4,9 @@ open Lean
 
 namespace Auto.Lexer
 
--- SMT-LIB2 compilant lexer
+-- SMT-LIB2 compliant lexer
 --〈spec_constant〉 ::= 〈numeral〉 | 〈decimal〉 | 〈hexadecimal〉 | 〈binary〉 | 〈string〉
---〈s_expr 〉 ::= 〈spec_constant〉 | 〈symbol〉 | 〈keyword〉 | ( 〈s_expr〉∗ )
-
--- ⟨index⟩ ::= ⟨numeral⟩ | ⟨symbol⟩
--- ⟨identifier⟩ ::= ⟨symbol⟩ | (_ ⟨symbol⟩ ⟨index⟩+)
--- ⟨sort⟩ ::= ⟨identifier⟩ | (⟨identifier⟩ ⟨sort⟩+)
--- ⟨sorted_var⟩ ::= (⟨symbol⟩ ⟨sort⟩)
--- ⟨var_binding⟩ ::= (⟨symbol⟩ ⟨term⟩)
--- ⟨term⟩ ::= ⟨spec_constant⟩ | (forall (⟨sorted_var⟩+) ⟨term⟩) | (exists (⟨sorted_var⟩+) ⟨term⟩) | (let (⟨var_binding⟩+) ⟨term⟩)
-
-/- Ignored for now:
-    - Attributes
-    - Qual_identifiers
-    - Patterns
-    - Match_cases
-    - Some of the Term forms that require any of the above -/
-
+--〈s_expr〉 ::= 〈spec_constant〉 | 〈symbol〉 | 〈keyword〉 | ( 〈s_expr〉∗ )
 namespace SMT
 
 open Regex
@@ -77,13 +62,6 @@ def lparen : ERE := .inStr "("
 
 def rparen : ERE := .inStr ")"
 
-def underscore : ERE := .ofStr "_"
-
-def SMTforall : ERE := .ofStr "forall"
-def SMTexists : ERE := .ofStr "exists"
-def SMTlambda : ERE := .ofStr "lambda" -- This is not part of SMT-lib 2.6 but can be output by cvc5's hints
-def SMTlet : ERE := .ofStr "let"
-
 /-- Special constants -/
 def specConst : ERE := .plus #[
   .attr numeral "numeral",
@@ -93,9 +71,14 @@ def specConst : ERE := .plus #[
   .attr string "string"
 ]
 
-def sexpr : ERE := .plus #[
+/-- The lexicon used by the SMT term parser. It is the disjoint union of
+    the SMT-lib lexical categories that may appear in a term. The reserved
+    words `forall`/`exists`/`lambda`/`let` and the special character `_`
+    are recognized post-lex by the parser by inspecting the simple-symbol
+    contents — they are not lexical categories. -/
+def lexicon : ERE := .plus #[
   specConst,
-  -- For lexical analysis, do not distinguish between keyword and symbol
+  -- For lexical analysis, do not distinguish reserved words
   symbol,
   .attr keyword "keyword",
   .attr lparen "(",
@@ -103,63 +86,17 @@ def sexpr : ERE := .plus #[
   .attr comment "comment"
 ]
 
--- ⟨index⟩ ::= ⟨numeral⟩ | ⟨symbol⟩
-def index : ERE := .plus #[
-  .attr numeral "numeral",
-  symbol
-]
-
--- ⟨identifier⟩ ::= ⟨symbol⟩ | (_ ⟨symbol⟩ ⟨index⟩+)
-def identifier : ERE := .plus #[
-  symbol,
-  .attr lparen "(",
-  .attr underscore "_",
-  .attr rparen ")",
-  index
-]
-
--- ⟨sort⟩ ::= ⟨identifier⟩ | (⟨identifier⟩ ⟨sort⟩+)
-def sort : ERE := .plus #[
-  identifier,
-  .attr lparen "(",
-  .attr rparen ")"
-]
-
--- ⟨sorted_var⟩ ::= (⟨symbol⟩ ⟨sort⟩)
-def sorted_var : ERE := .plus #[
-  symbol,
-  .attr lparen "(",
-  .attr rparen ")",
-  sort
-]
-
--- ⟨term⟩ ::= ⟨spec_constant⟩ | ⟨forall (⟨sorted_var⟩+) ⟨term⟩ | ⟨exists (⟨sorted_var⟩+) ⟨term⟩
-def term : ERE := .plus #[
-  specConst,
-  .attr SMTforall "forall",
-  .attr SMTexists "exists",
-  .attr SMTlambda "lambda",
-  .attr SMTlet "let",
-  .attr lparen "(",
-  .attr rparen ")",
-  sorted_var
-]
-
--- Good property: Each state have at most one attribute!
 /-
 #eval string.toADFA
 #eval specConst.toADFA
-#eval sexpr.toADFA
-#eval identifier.toADFA -- State 6 has two attributes, not sure if that's a problem
-#eval sort.toADFA -- State 6 has two attributes, not sure if that's a problem
-#eval sorted_var.toADFA -- State 6 has two attributes, not sure if that's a problem
-#eval term.toADFA -- States 9, 36, and 37 have multiple attributes, not sure if that's a problem
+-- Good property: Each state have at most one attribute!
+#eval lexicon.toADFA
 -/
 
 local instance : Hashable Char where
   hash c := hash c.val
 
-initialize lexiconADFA : ADFA Char ← pure term.toADFA
+initialize lexiconADFA : ADFA Char ← pure lexicon.toADFA
 
 end SMT
 
