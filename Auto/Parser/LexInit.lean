@@ -5,7 +5,7 @@ open Lean
 namespace Auto.Lexer
 
 /-
-  SMT-LIB2 compilant lexer
+  SMT-LIB2 compliant lexer
   Contains all lexical categories used in 〈spec_constant〉 and 〈s_expr〉
 
  〈spec_constant〉 ::= 〈numeral〉 | 〈decimal〉 | 〈hexadecimal〉 | 〈binary〉 | 〈string〉
