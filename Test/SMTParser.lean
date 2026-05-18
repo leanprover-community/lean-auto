@@ -1,6 +1,6 @@
 import Lean
 import Auto.Parser.LexInit
-import Auto.Parser.SMTSexp
+import Auto.Parser.SMTParser
 
 /-
   Sanity checks for SMT parser
