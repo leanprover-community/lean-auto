@@ -24,6 +24,16 @@ def testTerms : Array String := #[
   "(=> (and (= _wfNat (lambda ((_n Int)) (>= _n 0))) (forall ((_m _myStructure)) (= (_wf_myStructure _m) (=> ((_ is _mk) _m) (_wfNat (_field2_ _m)))))) (forall ((_m _myStructure)) (= (_wf_myStructure _m) (>= (_field2_ _m) 0))))"
 ]
 
+-- Int × Int as a type Expr
+private def intIntT : Expr :=
+  mkApp2 (mkConst ``Prod [.zero, .zero]) (mkConst ``Int) (mkConst ``Int)
+
+-- A sample value of type Int × (Int × Int)
+private def sampleNestedPair : Expr :=
+  let i n := mkApp (mkConst ``Int.ofNat) (Expr.lit (.natVal n))
+  mkApp4 (mkConst ``Prod.mk [.zero, .zero]) (mkConst ``Int) intIntT (i 0)
+    (mkApp4 (mkConst ``Prod.mk [.zero, .zero]) (mkConst ``Int) (mkConst ``Int) (i 1) (i 2))
+
 def testMaps : Array (Std.HashMap String Expr) := #[
   Std.HashMap.ofArray #[("_x", Expr.lit (.natVal 1)), ("_y", Expr.lit (.natVal 2)), ("_z", Expr.lit (.natVal 3))],
   {},
@@ -32,10 +42,42 @@ def testMaps : Array (Std.HashMap String Expr) := #[
     ("_a", Expr.lit (.natVal 1)), ("_b", Expr.lit (.natVal 2)), ("_c", Expr.lit (.natVal 3)),
     ("_d", Expr.lit (.natVal 1)), ("_e", Expr.lit (.natVal 2)), ("_f", Expr.lit (.natVal 3))
   ],
-  Std.HashMap.ofArray #[("_Prod.snd", Expr.lit (.natVal 1)), ("_Prod.snd_0", Expr.lit (.natVal 1)), ("_Prod.fst_0", Expr.lit (.natVal 1))],
-  Std.HashMap.ofArray #[("_Prod.snd", Expr.lit (.natVal 1)), ("_Prod.snd_0", Expr.lit (.natVal 1)), ("_Prod.fst", Expr.lit (.natVal 1)), ("_Prod.fst_0", Expr.lit (.natVal 1))],
-  -- Std.HashMap.ofArray #[("_P", Lean.mkConst ``sorryAx [.zero]), ("_Prod.mk", Expr.const ``Prod.mk [.zero, .zero])]
-  -- TODO
+  Std.HashMap.ofArray #[
+    ("_x", sampleNestedPair),
+    -- _Prod.snd_0 : Int × (Int × Int) → Int × Int  (snd of outer pair)
+    ("_Prod.snd_0", mkApp2 (mkConst ``Prod.snd [.zero, .zero]) (mkConst ``Int) intIntT),
+    -- _Prod.snd : Int × Int → Int  (snd of inner pair)
+    ("_Prod.snd", mkApp2 (mkConst ``Prod.snd [.zero, .zero]) (mkConst ``Int) (mkConst ``Int)),
+    -- _Prod.fst_0 : Int × (Int × Int) → Int  (fst of outer pair)
+    ("_Prod.fst_0", mkApp2 (mkConst ``Prod.fst [.zero, .zero]) (mkConst ``Int) intIntT)
+  ],
+  Std.HashMap.ofArray #[
+    ("_x", sampleNestedPair),
+    -- _Prod.snd_0 : Int × (Int × Int) → Int × Int  (snd of outer pair)
+    ("_Prod.snd_0", mkApp2 (mkConst ``Prod.snd [.zero, .zero]) (mkConst ``Int) intIntT),
+    -- _Prod.snd : Int × Int → Int  (snd of inner pair)
+    ("_Prod.snd", mkApp2 (mkConst ``Prod.snd [.zero, .zero]) (mkConst ``Int) (mkConst ``Int)),
+    -- _Prod.fst_0 : Int × (Int × Int) → Int  (fst of outer pair)
+    ("_Prod.fst_0", mkApp2 (mkConst ``Prod.fst [.zero, .zero]) (mkConst ``Int) intIntT),
+    -- _Prod.fst : Int × Int → Int  (fst of inner pair)
+    ("_Prod.fst", mkApp2 (mkConst ``Prod.fst [.zero, .zero]) (mkConst ``Int) (mkConst ``Int))
+  ],
+  Std.HashMap.ofArray #[
+    ("_P", Expr.lam `x (mkConst ``Int) (mkConst ``True) .default),
+    ("_Prod.mk", Expr.lam `a (mkConst ``Int) (Expr.lam `b (mkConst ``Int) (Expr.bvar 1) .default) .default)
+  ],
+  Std.HashMap.ofArray #[
+    ("_myStructure", mkConst ``Int),
+    ("_sum", Expr.lam `m (mkConst ``Int) (Expr.bvar 0) .default),
+    ("_x", Expr.lit (.natVal 1))
+  ],
+  Std.HashMap.ofArray #[
+    ("_wfNat", Expr.lam `n (mkConst ``Int) (mkConst ``True) .default),
+    ("_myStructure", mkConst ``Int),
+    ("_wf_myStructure", Expr.lam `m (mkConst ``Int) (mkConst ``True) .default),
+    ("_mk", mkConst ``Int.ofNat),
+    ("_field2_", Expr.lam `i (mkConst ``Int) (Expr.bvar 0) .default)
+  ]
 ]
 
 def test : MetaM Unit := do
