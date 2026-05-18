@@ -136,7 +136,7 @@ local instance : Hashable Char := ⟨fun c => hash c.val⟩
   This is because wee rely on the property that:
      For each lexicon `l` with a white space at position `p`, the
      part of `l` before `p` will always be identified as `incomplete`
-     by `ERE.ADFALexEagerL SMTSexp.lexiconADFA`, and never as `done`.
+     by `ERE.ADFALexEagerL SMT.lexiconADFA`, and never as `done`.
 -/
 def parseSexp (s : String) (p : String.Pos.Raw) (partialResult : PartialResult) : ParseResult := Id.run <| do
   if p == s.rawEndPos then
@@ -165,7 +165,7 @@ def parseSexp (s : String) (p : String.Pos.Raw) (partialResult : PartialResult) 
       return .incomplete ⟨0, "", pstk⟩ p
     match nextLexicon p lst with
     | ⟨.complete, matched, _, state⟩ =>
-      -- A unique attribute should be returned, according to `SMTSexp.lexiconADFA`
+      -- A unique attribute should be returned, according to `SMT.lexiconADFA`
       let [attr] := (SMT.lexiconADFA.getAttrs state).toList
         | return panic! s!"parseSexp :: Unexpected error"
       p := matched.stopPos
@@ -221,7 +221,7 @@ def longSexp : Nat → Sexp
 #eval testit (toString (longSexp 20)) ⟨0⟩ (print:=false)
 #eval testit "djn (abcde |fg| h (12 3) 0x50 34.4 (0b0 x2_& |🍉| \"dl\"\"\")) Not here" ⟨3⟩
 #eval testit "(abcde 0x" ⟨0⟩
-#eval IO.println <| Regex.ERE.ADFALexEagerL SMTSexp.lexiconADFA "abc".toSubstring {}
+#eval IO.println <| Regex.ERE.ADFALexEagerL SMT.lexiconADFA "abc".toSubstring {}
 
 def testResume : IO Unit := do
   let strs := ["(abcde\n", "|ab", "\nu\n", "|", "ua", "ab)"]
