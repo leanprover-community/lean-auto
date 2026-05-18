@@ -4,9 +4,15 @@ open Lean
 
 namespace Auto.Lexer
 
--- SMT-LIB2 compliant lexer
---〈spec_constant〉 ::= 〈numeral〉 | 〈decimal〉 | 〈hexadecimal〉 | 〈binary〉 | 〈string〉
---〈s_expr〉 ::= 〈spec_constant〉 | 〈symbol〉 | 〈keyword〉 | ( 〈s_expr〉∗ )
+/-
+  SMT-LIB2 compliant lexer
+  Contains all lexical categories used in 〈spec_constant〉 and 〈s_expr〉
+
+ 〈spec_constant〉 ::= 〈numeral〉 | 〈decimal〉 | 〈hexadecimal〉 | 〈binary〉 | 〈string〉
+ 〈s_expr〉 ::= 〈spec_constant〉 | 〈symbol〉 | 〈keyword〉 | ( 〈s_expr〉∗ )
+
+  See https://smt-lib.org/papers/smt-lib-reference-v2.7-r2025-07-07.pdf P23
+-/
 namespace SMT
 
 open Regex
@@ -87,10 +93,14 @@ def lexicon : ERE := .plus #[
 ]
 
 /-
+
 #eval string.toADFA
+
 #eval specConst.toADFA
--- Good property: Each state have at most one attribute!
+
+-- Good property: Each state has at most one attribute!
 #eval lexicon.toADFA
+
 -/
 
 local instance : Hashable Char where
