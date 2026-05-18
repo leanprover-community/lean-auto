@@ -127,7 +127,7 @@ where
                       cmd := path, args := args}
 
 def getTerm (s : String) : MetaM (Parser.SMTSexp.Sexp × String) := do
-  match ← parseSexp s ⟨0⟩ {} with
+  match parseSexp s ⟨0⟩ {} with
   | .complete se p => return (se, Substring.Raw.toString ⟨s, p, s.rawEndPos⟩)
   | .incomplete _ _ => throwError s!"{decl_name%} :: Incomplete input {s}"
   | .malformed => throwError s!"{decl_name%} :: Malformed (prefix of) input {s}"

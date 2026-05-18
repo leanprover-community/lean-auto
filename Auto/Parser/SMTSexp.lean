@@ -29,7 +29,7 @@ def LexVal.toString : LexVal → String
 | .rat n m =>
   let pow := s!"{m}".length - 1
   if m != Nat.pow 10 pow then
-    panic!"LexVal :: .rat {n} {m} is not yet supported, because {m} is not a power of 10"
+    panic! s!"{decl_name%} :: .rat {n} {m} is not yet supported, because {m} is not a power of 10"
   else
     let nint := n / m
     let nfrac := n % m
@@ -64,7 +64,7 @@ def LexVal.ofString (s : String) (attr : String) : LexVal :=
       let b := b.toNat!
       .rat (a * fracPow + b) fracPow
     else
-      panic! s!"LexVal.ofString :: {repr s} is not a valid decimal number"
+      panic! s!"{decl_name%} :: {repr s} is not a valid decimal number"
   | "hexadecimal" =>
     let hdigs := s.drop 2
     .nat (hdigs.foldl (fun x c => x * 16 + hexDigitToNat c) 0)
@@ -80,7 +80,7 @@ def LexVal.ofString (s : String) (attr : String) : LexVal :=
   | "comment"      =>
     let rn : Nat := if String.Pos.Raw.get s (String.Pos.Raw.prev s (String.Pos.Raw.prev s s.rawEndPos)) == '\r' then 1 else 0
     .comment ((s.drop 1).take (s.length - 2 - rn)).toString
-  | _              => panic! s!"LexVal.ofString :: {repr attr} is not a valid attribute"
+  | _              => panic! s!"{decl_name%} :: {repr attr} is not a valid attribute"
 
 inductive Sexp where
   | atom : LexVal → Sexp
@@ -167,7 +167,7 @@ def parseSexp (s : String) (p : String.Pos.Raw) (partialResult : PartialResult) 
     | ⟨.complete, matched, _, state⟩ =>
       -- A unique attribute should be returned, according to `SMT.lexiconADFA`
       let [attr] := (SMT.lexiconADFA.getAttrs state).toList
-        | return panic! s!"parseSexp :: Unexpected error"
+        | return panic! s!"{decl_name%} :: Unexpected error"
       p := matched.stopPos
       let lexval := LexVal.ofString (lexpart ++ matched.toString) attr
       -- Restore lexer state
@@ -200,7 +200,7 @@ def parseSexp (s : String) (p : String.Pos.Raw) (partialResult : PartialResult) 
         pstk := pstk.modify (pstk.size - 1) (fun arr => arr.push (.atom l))
     | ⟨.incomplete, m, _, lst'⟩ => return .incomplete ⟨lst', lexpart ++ m.toString, pstk⟩ m.stopPos
     | ⟨.malformed, _, _, _⟩  => return .malformed
-  return panic! s!"parseSexp :: Unexpected error when parsing string {s}"
+  return panic! s!"{decl_name%} :: Unexpected error when parsing string {s}"
 
 /-
 
