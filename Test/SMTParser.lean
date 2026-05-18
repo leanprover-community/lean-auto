@@ -1,6 +1,6 @@
 import Lean
 import Auto.Parser.LexInit
-import Auto.Parser.SMTSexp
+import Auto.Parser.SMTParser
 
 /-
   Sanity checks for SMT parser
@@ -11,6 +11,7 @@ namespace Parser.SMTTerm
 open Lexer
 open Lean
 open Meta
+open Parser.SMTSexp
 
 def testTerms : Array String := #[
   "(=> (not (<= _x _z)) (>= (+ _x (* (- 1) _z)) 1))",
@@ -82,7 +83,7 @@ def testMaps : Array (Std.HashMap String Expr) := #[
 
 def test : MetaM Unit := do
   for (s, mp) in testTerms.zip testMaps do
-    let .complete t _ ← lexTerm s ⟨0⟩ {}
+    let .complete t _ := parseSexp s ⟨0⟩ {}
       | throwError ""
     let e ← parseTermAndAbstractSelectors t mp #[]
     trace[Compiler] "{e}"
