@@ -30,7 +30,7 @@ def LexVal.toString : LexVal → String
 | .rat n m =>
   let pow := s!"{m}".length - 1
   if m != Nat.pow 10 pow then
-    panic!"LexVal :: .rat {n} {m} is not yet supported, because {m} is not a power of 10"
+    panic! s!"{decl_name%} :: .rat {n} {m} is not yet supported, because {m} is not a power of 10"
   else
     let nint := n / m
     let nfrac := n % m
@@ -67,7 +67,7 @@ def LexVal.ofString (s : String) (attr : String) : LexVal :=
       let b := b.toNat!
       .rat (a * fracPow + b) fracPow
     else
-      panic! s!"LexVal.ofString :: {repr s} is not a valid decimal number"
+      panic! s!"{decl_name%} :: {repr s} is not a valid decimal number"
   | "hexadecimal" =>
     let hdigs := s.drop 2
     .nat (hdigs.foldl (fun x c => x * 16 + hexDigitToNat c) 0)
@@ -93,7 +93,7 @@ def LexVal.ofString (s : String) (attr : String) : LexVal :=
     let rn : Nat := if String.Pos.Raw.get s (String.Pos.Raw.prev s (String.Pos.Raw.prev s s.rawEndPos)) == '\r' then 1 else 0
     .comment ((s.drop 1).take (s.length - 2 - rn)).toString
   | "reserved"     => .reserved s
-  | _              => panic! s!"LexVal.ofString :: {repr attr} is not a valid attribute"
+  | _              => panic! s!"{decl_name%} :: {repr attr} is not a valid attribute"
 
 inductive Term where
   | atom : LexVal → Term
@@ -181,7 +181,7 @@ def lexTerm [Monad m] [Lean.MonadError m] (s : String) (p : String.Pos.Raw)
       let attr ←
         match (SMT.lexiconADFA.getAttrs state).toList with
         | [attr] => pure attr
-        | _ => throwError "parseTerm :: Invalid number of attributes"
+        | _ => throwError "{decl_name%} :: Invalid number of attributes"
 
       p := matched.stopPos
       let lexval := LexVal.ofString (lexpart ++ matched.toString) attr
@@ -215,14 +215,14 @@ def lexTerm [Monad m] [Lean.MonadError m] (s : String) (p : String.Pos.Raw)
         pstk := pstk.modify (pstk.size - 1) (fun arr => arr.push (.atom l))
     | ⟨.incomplete, m, _, lst'⟩ => return .incomplete ⟨lst', lexpart ++ m.toString, pstk⟩ m.stopPos
     | ⟨.malformed, _, _, _⟩  => return .malformed
-  throwError s!"parseSexp :: Unexpected error when parsing string {s}"
+  throwError s!"{decl_name%} :: Unexpected error when parsing string {s}"
 
 partial def lexAllTerms [Monad m] [Lean.MonadError m] (s : String) (p : String.Pos.Raw) (acc : List Term) : m (List Term) := do
   match ← lexTerm s p {} with
   | .complete e p =>
     let restTerms ← lexAllTerms s p acc
     return e :: restTerms
-  | .malformed .. => throwError "lexAllTerms: malformed input {s} (lexing from position {p})"
+  | .malformed .. => throwError "{decl_name%} :: malformed input {s} (lexing from position {p})"
   | .incomplete .. => return acc
 
 inductive SymbolInput
@@ -359,7 +359,7 @@ def correctType (e : Expr) (parseTermConstraint : ParseTermConstraint) : MetaM E
     else if (← isDefEq eType (mkConst ``Bool)) && t.isProp then whnf $ ← mkAppM ``Eq #[e, mkConst ``true]
     else if (← isDefEq eType (mkConst ``Nat)) && (← isDefEq t (mkConst ``Int)) then return ← mkAppM ``Int.ofNat #[e]
     else if (← isDefEq eType (mkConst ``Int)) && (← isDefEq t (mkConst ``Nat)) then return ← mkAppM ``Int.natAbs #[e]
-    else throwError "correctType :: {e} is parsed as {eType} which is not a {t}"
+    else throwError "{decl_name%} :: {e} is parsed as {eType} which is not a {t}"
 
 mutual
 /-- Given a sorted var of the form `(symbol type)`, returns the string of the symbol and the type as an Expr -/
@@ -369,7 +369,7 @@ partial def parseSortedVar (sortedVar : Term) (symbolMap : Std.HashMap String Ex
     match sortedVar with
     | #[var, varType] =>
       let atom (symb varSymbol) := var
-        | throwError "parseSortedVar :: Failed to parse {var} as the variable of a sortedVar"
+        | throwError "{decl_name%} :: Failed to parse {var} as the variable of a sortedVar"
       let varTypeExp ← parseTerm varType symbolMap noConstraint
       match parseTermConstraint with
       | noConstraint => return (varSymbol, varTypeExp)
@@ -380,9 +380,9 @@ partial def parseSortedVar (sortedVar : Term) (symbolMap : Std.HashMap String Ex
         tAndVarTypeExpCompatible := tAndVarTypeExpCompatible || ((← isDefEq varTypeExp (mkConst ``Nat)) && (← isDefEq t (mkConst ``Int)))
         tAndVarTypeExpCompatible := tAndVarTypeExpCompatible || ((← isDefEq varTypeExp (mkConst ``Int)) && (← isDefEq t (mkConst ``Nat)))
         if tAndVarTypeExpCompatible then return (varSymbol, t)
-        else throwError "parseSortedVar :: {sortedVar} is parsed as having type {varTypeExp} which is not the expected type {t}"
-    | _ => throwError "parseSortedVar :: Failed to parse {sortedVar} as a sortedVar"
-  | _ => throwError "parseSortedVar :: {sortedVar} is supposed to be a sortedVar, not an atom"
+        else throwError "{decl_name%} :: {sortedVar} is parsed as having type {varTypeExp} which is not the expected type {t}"
+    | _ => throwError "{decl_name%} :: Failed to parse {sortedVar} as a sortedVar"
+  | _ => throwError "{decl_name%} :: {sortedVar} is supposed to be a sortedVar, not an atom"
 
 partial def parseForallBodyWithSortedVars (vs : List Term) (sortedVars : Array (String × Expr))
   (symbolMap : Std.HashMap String Expr) (forallBody : Term) : MetaM Expr := do
@@ -392,7 +392,7 @@ partial def parseForallBodyWithSortedVars (vs : List Term) (sortedVars : Array (
     let mut sortedVarDecls := #[]
     for sortedVar in sortedVars do
       let some sortedVarDecl := lctx.findFromUserName? sortedVar.1.toName
-        | throwError "parseForall :: Unknown sorted var name {sortedVar.1} (parseForall input: {vs})"
+        | throwError "{decl_name%} :: Unknown sorted var name {sortedVar.1} (parseForall input: {vs})"
       symbolMap := symbolMap.insert sortedVar.1 (mkFVar sortedVarDecl.fvarId)
       sortedVarDecls := sortedVarDecls.push sortedVarDecl
     let body ← parseTerm forallBody symbolMap (expectedType (.sort 0))
@@ -400,7 +400,7 @@ partial def parseForallBodyWithSortedVars (vs : List Term) (sortedVars : Array (
 
 partial def parseForall (vs : List Term) (symbolMap : Std.HashMap String Expr) : MetaM Expr := do
   let [app sortedVars, forallBody] := vs
-    | throwError "parseForall :: Unexpected input list {vs}"
+    | throwError "{decl_name%} :: Unexpected input list {vs}"
   let sortedVars ← sortedVars.mapM (fun sv => parseSortedVar sv symbolMap noConstraint)
   let sortedVarsWithIndices := sortedVars.mapFinIdx (fun idx val pf => (val, Fin.mk idx pf))
   let mut curPropBoolChoice := some $ (sortedVarsWithIndices.filter (fun ((_, t), _) => t.isProp)).map (fun (_, idx) => (idx, false))
@@ -414,7 +414,7 @@ partial def parseForall (vs : List Term) (symbolMap : Std.HashMap String Expr) :
       return ← parseForallBodyWithSortedVars vs sortedVars symbolMap forallBody
     catch _ =>
       continue
-  throwError "parseForall :: Failed to parse for all expression with vs: {vs}"
+  throwError "{decl_name%} :: Failed to parse for all expression with vs: {vs}"
 
 partial def parseExistsBodyWithSortedVars (vs : List Term) (sortedVars : Array (String × Expr))
   (symbolMap : Std.HashMap String Expr) (existsBody : Term) : MetaM Expr := do
@@ -424,7 +424,7 @@ partial def parseExistsBodyWithSortedVars (vs : List Term) (sortedVars : Array (
     let mut sortedVarDecls := #[]
     for sortedVar in sortedVars do
       let some sortedVarDecl := lctx.findFromUserName? sortedVar.1.toName
-        | throwError "parseForall :: Unknown sorted var name {sortedVar.1} (parseForall input: {vs})"
+        | throwError "{decl_name%} :: Unknown sorted var name {sortedVar.1} (parseForall input: {vs})"
       symbolMap := symbolMap.insert sortedVar.1 (mkFVar sortedVarDecl.fvarId)
       sortedVarDecls := sortedVarDecls.push sortedVarDecl
     let lamBody ← parseTerm existsBody symbolMap (expectedType (.sort 0))
@@ -436,7 +436,7 @@ partial def parseExistsBodyWithSortedVars (vs : List Term) (sortedVars : Array (
 
 partial def parseExists (vs : List Term) (symbolMap : Std.HashMap String Expr) : MetaM Expr := do
   let [app sortedVars, existsBody] := vs
-    | throwError "parseExists :: Unexpected input list {vs}"
+    | throwError "{decl_name%} :: Unexpected input list {vs}"
   let sortedVars ← sortedVars.mapM (fun sv => parseSortedVar sv symbolMap noConstraint)
   let sortedVarsWithIndices := sortedVars.mapFinIdx (fun idx val pf => (val, Fin.mk idx pf))
   let mut curPropBoolChoice := some $ (sortedVarsWithIndices.filter (fun ((_, t), _) => t.isProp)).map (fun (_, idx) => (idx, false))
@@ -450,7 +450,7 @@ partial def parseExists (vs : List Term) (symbolMap : Std.HashMap String Expr) :
       return ← parseExistsBodyWithSortedVars vs sortedVars symbolMap existsBody
     catch _ =>
       continue
-  throwError "parseExists :: Failed to parse exists expression with vs: {vs}"
+  throwError "{decl_name%} :: Failed to parse exists expression with vs: {vs}"
 
 /-- Note: The `parseTermConstraint` argument passed into `parseLambdaBodyWithSortedVars` corresponds to the expected type of the
     entire lambda expression, not the expected type of the lambda's body. -/
@@ -462,7 +462,7 @@ partial def parseLambdaBodyWithSortedVars (vs : List Term) (sortedVars : Array (
     let mut sortedVarDecls := #[]
     for sortedVar in sortedVars do
       let some sortedVarDecl := lctx.findFromUserName? sortedVar.1.toName
-        | throwError "parseForall :: Unknown sorted var name {sortedVar.1} (parseForall input: {vs})"
+        | throwError "{decl_name%} :: Unknown sorted var name {sortedVar.1} (parseForall input: {vs})"
       symbolMap := symbolMap.insert sortedVar.1 (mkFVar sortedVarDecl.fvarId)
       sortedVarDecls := sortedVarDecls.push sortedVarDecl
     match parseTermConstraint with
@@ -471,13 +471,13 @@ partial def parseLambdaBodyWithSortedVars (vs : List Term) (sortedVars : Array (
       Meta.mkLambdaFVars (sortedVarDecls.map (fun decl => mkFVar decl.fvarId)) body
     | expectedType t =>
       let tBody := t.getForallBody
-      if tBody.hasLooseBVars then throwError "parseLambdaBodyWithSortedVars :: {t} is a dependent type"
+      if tBody.hasLooseBVars then throwError "{decl_name%} :: {t} is a dependent type"
       let body ← parseTerm lambdaBody symbolMap (expectedType tBody)
       Meta.mkLambdaFVars (sortedVarDecls.map (fun decl => mkFVar decl.fvarId)) body
 
 partial def parseLambda (vs : List Term) (symbolMap : Std.HashMap String Expr) (parseTermConstraint : ParseTermConstraint) : MetaM Expr := do
   let [app sortedVars, lambdaBody] := vs
-    | throwError "parseLambda :: Unexpected input list {vs}"
+    | throwError "{decl_name%} :: Unexpected input list {vs}"
   match parseTermConstraint with
   | noConstraint =>
     let sortedVars ← sortedVars.mapM (fun sv => parseSortedVar sv symbolMap noConstraint)
@@ -493,11 +493,11 @@ partial def parseLambda (vs : List Term) (symbolMap : Std.HashMap String Expr) (
         return ← parseLambdaBodyWithSortedVars vs sortedVars symbolMap lambdaBody noConstraint
       catch _ =>
         continue
-    throwError "parseLambda :: Failed to parse lambda expression with vs: {vs}"
+    throwError "{decl_name%} :: Failed to parse lambda expression with vs: {vs}"
   | expectedType t =>
     let lambdaArgTypes := (getExplicitForallArgumentTypes t).toArray
     if lambdaArgTypes.size != sortedVars.size then
-      throwError "parseLambda :: Expected {lambdaArgTypes.size} arguments, but got {sortedVars.size} in {vs}"
+      throwError "{decl_name%} :: Expected {lambdaArgTypes.size} arguments, but got {sortedVars.size} in {vs}"
     let sortedVars ← (sortedVars.zip lambdaArgTypes).mapM (fun (sv, t) => parseSortedVar sv symbolMap (expectedType t))
     parseLambdaBodyWithSortedVars vs sortedVars symbolMap lambdaBody parseTermConstraint
 
@@ -508,16 +508,16 @@ partial def parseVarBinding (varBinding : Term) (symbolMap : Std.HashMap String 
     match varBinding with
     | #[var, varValue] =>
       let atom (symb var) := var
-        | throwError "parseVarBinding :: Failed to parse {var} as the variable of a var binding"
+        | throwError "{decl_name%} :: Failed to parse {var} as the variable of a var binding"
       let varValue ← parseTerm varValue symbolMap noConstraint
       let varType ← inferType varValue
       return (var, varType, varValue)
-    | _ => throwError "parseVarBinding :: Failed to parse {varBinding} as a var binding"
-  | _ => throwError "parseVarBinding :: {varBinding} is supposed to be a varBinding, not an atom"
+    | _ => throwError "{decl_name%} :: Failed to parse {varBinding} as a var binding"
+  | _ => throwError "{decl_name%} :: {varBinding} is supposed to be a varBinding, not an atom"
 
 partial def parseLet (vs : List Term) (symbolMap : Std.HashMap String Expr) (parseTermConstraint : ParseTermConstraint) : MetaM Expr := do
   let [app varBindings, letBody] := vs
-    | throwError "parsseLet :: Unexpected input list {vs}"
+    | throwError "{decl_name%} :: Unexpected input list {vs}"
   let varBindings ← varBindings.mapM (fun vb => parseVarBinding vb symbolMap)
   withLocalDeclsD (varBindings.map fun (n, ty, _) => (n.toName, fun _ => pure ty)) fun _ => do
     let lctx ← getLCtx
@@ -525,7 +525,7 @@ partial def parseLet (vs : List Term) (symbolMap : Std.HashMap String Expr) (par
     let mut varBindingDecls := #[]
     for varBinding in varBindings do
       let some varBindingDecl := lctx.findFromUserName? varBinding.1.toName
-        | throwError "parseLet :: Unknown var binding name {varBinding.1} (parseLet input: {vs})"
+        | throwError "{decl_name%} :: Unknown var binding name {varBinding.1} (parseLet input: {vs})"
       symbolMap := symbolMap.insert varBinding.1 (mkFVar varBindingDecl.fvarId)
       varBindingDecls := varBindingDecls.push varBindingDecl
     let body ← parseTerm letBody symbolMap parseTermConstraint
@@ -552,7 +552,7 @@ partial def parseLeftAssocApp (headSymbol : Name) (args : List Term) (symbolMap 
     let arg2 ← parseTerm arg2 symbolMap parseTermConstraint
     let acc ← mkAppM headSymbol #[arg1, arg2]
     parseLeftAssocAppAux headSymbol restArgs symbolMap acc parseTermConstraint
-  | _ => throwError "parseLeftAssocApplication :: Insufficient arguments given to {headSymbol}. args: {args}"
+  | _ => throwError "{decl_name%} :: Insufficient arguments given to {headSymbol}. args: {args}"
 
 /-- Note: parseImplicationAux expects to receive args in reverse order
     (meaining if args = `[x, y, z]`, this should become `z => y => x`) -/
@@ -570,7 +570,7 @@ partial def parseImplication (args : List Term) (symbolMap : Std.HashMap String 
   | lastArg :: (lastArg2 :: restArgs) =>
     let lastArg ← parseTerm lastArg symbolMap (expectedType (.sort 0))
     parseImplicationAux (lastArg2 :: restArgs) symbolMap lastArg
-  | _ => throwError "parseImplication :: Insufficient arguments given. args: {args}"
+  | _ => throwError "{decl_name%} :: Insufficient arguments given. args: {args}"
 
 /-- The entry function for the variety of mutually recursive functions used to parse SMT terms. `symbolMap` is used to map smt constants to the original
     Lean expressions they are meant to represent. `parseTermConstraint` is used to indicate whether the output expression must be a particular type. -/
@@ -578,7 +578,7 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
   Core.checkSystem "{decl_name%}"
   match e with
   | atom (nat n) => correctType (Expr.lit (Literal.natVal n)) parseTermConstraint
-  | atom (rat _ _) => throwError "parseTerm :: Rational/real numbers not supported yet"
+  | atom (rat _ _) => throwError "{decl_name%} :: Rational/real numbers not supported yet"
   | atom (str s) => correctType (Expr.lit (Literal.strVal s)) parseTermConstraint
   | atom (symb s) =>
     match symbolMap.get? s with
@@ -586,7 +586,7 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
     | none =>
       match builtInSymbolMap.get? s with
       | some v => correctType v parseTermConstraint
-      | none => throwError "parseTerm :: Unknown symbol {s}"
+      | none => throwError "{decl_name%} :: Unknown symbol {s}"
   | app vs =>
     match vs.toList with
     | atom (reserved "forall") :: restVs => correctType (← parseForall restVs symbolMap) parseTermConstraint
@@ -600,7 +600,7 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
       let idtType ← inferType parsedTesterArg -- `idtType` is the type of the inductive datatype of which `ctor` is a constructor
       -- Check that `idtType` is an inductive datatype
       if ← matchConstInduct idtType.getAppFn (fun _ => pure true) (fun _ _ => pure false) then
-        throwError "parseTerm :: Tester applied not {testerArg} of type {idtType} which is not an inductive datatype"
+        throwError "{decl_name%} :: Tester applied not {testerArg} of type {idtType} which is not an inductive datatype"
       let ctorType ← inferType parsedCtor
       let ctorArgTypes := (getForallArgumentTypes ctorType).toArray
       withLocalDeclsD (ctorArgTypes.mapFinIdx fun idx ty _ => ((.str .anonymous ("arg" ++ idx.repr)), fun _ => pure ty)) fun ctorArgs => do
@@ -620,7 +620,7 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
             let argType ← inferType arg
             if argType.isProp then mkAppM s1 #[arg]
             else if (← isDefEq argType (mkConst ``Bool)) then mkAppM s2 #[arg]
-            else throwError "parseTerm :: {arg} was not be interpreted as Prop or Bool in {e}"
+            else throwError "{decl_name%} :: {arg} was not be interpreted as Prop or Bool in {e}"
           | expectedType t =>
             if t.isProp then
               let arg ← parseTerm arg symbolMap (expectedType t)
@@ -629,8 +629,8 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
               let arg ← parseTerm arg symbolMap (expectedType t)
               mkAppM s2 #[arg]
             else
-              throwError "parseTerm :: {e} is parsed as {arg} which is not a {t}"
-        | _ => throwError "parseTerm :: Invalid unary symbol application {e}"
+              throwError "{decl_name%} :: {e} is parsed as {arg} which is not a {t}"
+        | _ => throwError "{decl_name%} :: Invalid unary symbol application {e}"
       | [(s, TwoExactNoConstraint)] =>
         match restVs with
         | [arg1, arg2] =>
@@ -640,8 +640,8 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
           correctType res parseTermConstraint
         | _arg1 :: (_arg2 :: _restArgs) =>
           -- **TODO**: Interpret `(< a b c)` as `(and (< a b) (< b c))`
-          throwError "parseTerm :: TwoExact symbol with more than two arguments not implemented yet (e: {e})"
-        | _ => throwError "parseTerm :: Invalid application {e}"
+          throwError "{decl_name%} :: TwoExact symbol with more than two arguments not implemented yet (e: {e})"
+        | _ => throwError "{decl_name%} :: Invalid application {e}"
       | [(s, TwoExactEq)] =>
         match restVs with
         | [arg1, arg2] =>
@@ -660,8 +660,8 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
             correctType (← mkAppM s #[arg1', arg2]) parseTermConstraint
         | _arg1 :: (_arg2 :: _restArgs) =>
           -- **TODO**: Interpret `(= a b c)` as `(and (= a b) (= b c))`
-          throwError "parseTerm :: TwoExact symbol with more than two arguments not implemented yet (e: {e})"
-        | _ => throwError "parseTerm :: Invalid application {e}"
+          throwError "{decl_name%} :: TwoExact symbol with more than two arguments not implemented yet (e: {e})"
+        | _ => throwError "{decl_name%} :: Invalid application {e}"
       | [(s, LeftAssocNoConstraint)] => parseLeftAssocApp s restVs symbolMap parseTermConstraint
       | [(s1, LeftAssocAllProp), (s2, LeftAssocAllBool)] =>
         match parseTermConstraint with
@@ -669,7 +669,7 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
         | expectedType t =>
           if t.isProp then parseLeftAssocApp s1 restVs symbolMap (expectedType t)
           else if (← isDefEq t (mkConst ``Bool)) then parseLeftAssocApp s2 restVs symbolMap (expectedType t)
-          else throwError "parseTerm :: {e} has a head symbol {s} that does not permit it to have type {t}"
+          else throwError "{decl_name%} :: {e} has a head symbol {s} that does not permit it to have type {t}"
       | [(s, Minus)] =>
         match restVs with
         | [arg] => -- Subtraction is left associative, but if it takes in just one argument, Minus is interpreted as negation
@@ -682,7 +682,7 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
               parseLeftAssocApp s restVs symbolMap (expectedType (mkConst ``Nat))
             | expectedType t =>
               if (← isDefEq t (mkConst ``Nat)) then parseLeftAssocApp s restVs symbolMap (expectedType t)
-              else throwError "parseTerm :: {e} has a head symbol {s} that does not permit it to have type {t}"
+              else throwError "{decl_name%} :: {e} has a head symbol {s} that does not permit it to have type {t}"
           else
             parseLeftAssocApp s restVs symbolMap parseTermConstraint
       | [(_, Ite)] =>
@@ -694,7 +694,7 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
           let thenBranch ← parseTerm thenBranch symbolMap parseTermConstraint
           let elseBranch ← parseTerm elseBranch symbolMap parseTermConstraint
           mkAppM ``ite #[cond, thenBranch, elseBranch]
-        | _ => throwError "parseTerm :: {e} has ite as a head symbol but does not take in exactly three arguments"
+        | _ => throwError "{decl_name%} :: {e} has ite as a head symbol but does not take in exactly three arguments"
       | [] =>
         match symbolMap.get? s with
         | some symbolExp =>
@@ -703,10 +703,10 @@ partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTer
           let args ← (restVs.zip expectedArgTypes).mapM (fun (t, expectedArgType) => parseTerm t symbolMap (expectedType expectedArgType))
           let res ← mkAppM' symbolExp args.toArray
           correctType res parseTermConstraint
-        | none => throwError "parseTerm :: Unknown symbol {s} in term {e}"
-      | _ => throwError "parseTerm :: Unexpected result of smtSymbolToLeanName {s}"
-    | _ => throwError "parseTerm :: Invalid term application {e}"
-  | _ => throwError "parseTerm :: Invalid term {e}" -- All other atoms shouldn't exist as standalone terms
+        | none => throwError "{decl_name%} :: Unknown symbol {s} in term {e}"
+      | _ => throwError "{decl_name%} :: Unexpected result of smtSymbolToLeanName {s}"
+    | _ => throwError "{decl_name%} :: Invalid term application {e}"
+  | _ => throwError "{decl_name%} :: Invalid term {e}" -- All other atoms shouldn't exist as standalone terms
 end
 
 initialize
