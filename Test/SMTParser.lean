@@ -82,7 +82,7 @@ def testMaps : Array (Std.HashMap String Expr) := #[
 
 def test : MetaM Unit := do
   for (s, mp) in testTerms.zip testMaps do
-    let .complete t _ ← lexTerm s ⟨0⟩ {}
+    let .complete t _ ← parseSexp s ⟨0⟩ {}
       | throwError ""
     let e ← parseTermAndAbstractSelectors t mp #[]
     trace[Compiler] "{e}"
