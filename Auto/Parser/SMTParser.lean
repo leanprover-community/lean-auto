@@ -95,19 +95,19 @@ def LexVal.ofString (s : String) (attr : String) : LexVal :=
   | "reserved"     => .reserved s
   | _              => panic! s!"{decl_name%} :: {repr attr} is not a valid attribute"
 
-inductive Term where
-  | atom : LexVal → Term
-  | app  : Array Term → Term
+inductive Sexp where
+  | atom : LexVal → Sexp
+  | app  : Array Sexp → Sexp
 deriving Inhabited, BEq, Hashable
 
-open Term
+open Sexp
 
-partial def Term.toString : Term → String
+partial def Sexp.toString : Sexp → String
 | .atom l => ToString.toString l
 | .app ls => "(" ++ String.intercalate " " (ls.map toString).toList ++ ")"
 
-instance : ToString Term where
-  toString e := Term.toString e
+instance : ToString Sexp where
+  toString e := Sexp.toString e
 
 structure PartialResult where
   -- Lexer state
@@ -115,7 +115,7 @@ structure PartialResult where
   -- Partially matched lexicon
   lexpart : String := ""
   -- Parser stack
-  pstk    : Array (Array Term) := #[]
+  pstk    : Array (Array Sexp) := #[]
 deriving Inhabited, BEq, Hashable
 
 def PartialResult.toString : PartialResult → String := fun ⟨lst, lexpart, pstk⟩ =>
@@ -124,19 +124,19 @@ def PartialResult.toString : PartialResult → String := fun ⟨lst, lexpart, ps
 instance : ToString PartialResult where
   toString := PartialResult.toString
 
-inductive LexResult where
-  -- SMTTerm: Result
+inductive ParseResult where
+  -- Sexp: Result
   -- String.pos: The position of the next character
-  | complete   : Term → String.Pos.Raw → LexResult
+  | complete   : Sexp → String.Pos.Raw → ParseResult
   -- Array (Array Sexp): Parser stack
   -- Nat: State of lexer
   -- String.pos: The position of the next character
-  | incomplete : PartialResult → String.Pos.Raw → LexResult
+  | incomplete : PartialResult → String.Pos.Raw → ParseResult
   -- Malformed input
-  | malformed  : LexResult
+  | malformed  : ParseResult
 deriving Inhabited, BEq, Hashable
 
-def LexResult.toString : LexResult → String
+def ParseResult.toString : ParseResult → String
 | .complete s p => s!"ParseResult.complete {s} {p}"
 | .incomplete pr p => s!"ParseResult.incomplete {pr} {p}"
 | .malformed => "ParseResult.malformed"
@@ -150,8 +150,8 @@ local instance : Hashable Char := ⟨fun c => hash c.val⟩
      part of `l` before `p` will always be identified as `incomplete`
      by `ERE.ADFALexEagerL SMT.lexiconADFA`, and never as `done`.
 -/
-def lexTerm [Monad m] [Lean.MonadError m] (s : String) (p : String.Pos.Raw)
-  (partialResult : PartialResult) : m LexResult := do
+def parseSexp [Monad m] [Lean.MonadError m] (s : String) (p : String.Pos.Raw)
+  (partialResult : PartialResult) : m ParseResult := do
   if p == s.rawEndPos then
     return .incomplete partialResult p
   let nextLexicon (p : String.Pos.Raw) (lst : Nat) :=
@@ -217,8 +217,8 @@ def lexTerm [Monad m] [Lean.MonadError m] (s : String) (p : String.Pos.Raw)
     | ⟨.malformed, _, _, _⟩  => return .malformed
   throwError s!"{decl_name%} :: Unexpected error when parsing string {s}"
 
-partial def lexAllTerms [Monad m] [Lean.MonadError m] (s : String) (p : String.Pos.Raw) (acc : List Term) : m (List Term) := do
-  match ← lexTerm s p {} with
+partial def lexAllTerms [Monad m] [Lean.MonadError m] (s : String) (p : String.Pos.Raw) (acc : List Sexp) : m (List Sexp) := do
+  match ← parseSexp s p {} with
   | .complete e p =>
     let restTerms ← lexAllTerms s p acc
     return e :: restTerms
@@ -363,7 +363,7 @@ def correctType (e : Expr) (parseTermConstraint : ParseTermConstraint) : MetaM E
 
 mutual
 /-- Given a sorted var of the form `(symbol type)`, returns the string of the symbol and the type as an Expr -/
-partial def parseSortedVar (sortedVar : Term) (symbolMap : Std.HashMap String Expr) (parseTermConstraint : ParseTermConstraint) : MetaM (String × Expr) := do
+partial def parseSortedVar (sortedVar : Sexp) (symbolMap : Std.HashMap String Expr) (parseTermConstraint : ParseTermConstraint) : MetaM (String × Expr) := do
   match sortedVar with
   | app sortedVar =>
     match sortedVar with
@@ -384,8 +384,8 @@ partial def parseSortedVar (sortedVar : Term) (symbolMap : Std.HashMap String Ex
     | _ => throwError "{decl_name%} :: Failed to parse {sortedVar} as a sortedVar"
   | _ => throwError "{decl_name%} :: {sortedVar} is supposed to be a sortedVar, not an atom"
 
-partial def parseForallBodyWithSortedVars (vs : List Term) (sortedVars : Array (String × Expr))
-  (symbolMap : Std.HashMap String Expr) (forallBody : Term) : MetaM Expr := do
+partial def parseForallBodyWithSortedVars (vs : List Sexp) (sortedVars : Array (String × Expr))
+  (symbolMap : Std.HashMap String Expr) (forallBody : Sexp) : MetaM Expr := do
   withLocalDeclsD (sortedVars.map fun (n, ty) => (n.toName, fun _ => pure ty)) fun _ => do
     let lctx ← getLCtx
     let mut symbolMap := symbolMap
@@ -398,7 +398,7 @@ partial def parseForallBodyWithSortedVars (vs : List Term) (sortedVars : Array (
     let body ← parseTerm forallBody symbolMap (expectedType (.sort 0))
     Meta.mkForallFVars (sortedVarDecls.map (fun decl => mkFVar decl.fvarId)) body
 
-partial def parseForall (vs : List Term) (symbolMap : Std.HashMap String Expr) : MetaM Expr := do
+partial def parseForall (vs : List Sexp) (symbolMap : Std.HashMap String Expr) : MetaM Expr := do
   let [app sortedVars, forallBody] := vs
     | throwError "{decl_name%} :: Unexpected input list {vs}"
   let sortedVars ← sortedVars.mapM (fun sv => parseSortedVar sv symbolMap noConstraint)
@@ -416,8 +416,8 @@ partial def parseForall (vs : List Term) (symbolMap : Std.HashMap String Expr) :
       continue
   throwError "{decl_name%} :: Failed to parse for all expression with vs: {vs}"
 
-partial def parseExistsBodyWithSortedVars (vs : List Term) (sortedVars : Array (String × Expr))
-  (symbolMap : Std.HashMap String Expr) (existsBody : Term) : MetaM Expr := do
+partial def parseExistsBodyWithSortedVars (vs : List Sexp) (sortedVars : Array (String × Expr))
+  (symbolMap : Std.HashMap String Expr) (existsBody : Sexp) : MetaM Expr := do
   withLocalDeclsD (sortedVars.map fun (n, ty) => (n.toName, fun _ => pure ty)) fun _ => do
     let lctx ← getLCtx
     let mut symbolMap := symbolMap
@@ -434,7 +434,7 @@ partial def parseExistsBodyWithSortedVars (vs : List Term) (sortedVars : Array (
       res ← Meta.mkAppM ``Exists #[res]
     return res
 
-partial def parseExists (vs : List Term) (symbolMap : Std.HashMap String Expr) : MetaM Expr := do
+partial def parseExists (vs : List Sexp) (symbolMap : Std.HashMap String Expr) : MetaM Expr := do
   let [app sortedVars, existsBody] := vs
     | throwError "{decl_name%} :: Unexpected input list {vs}"
   let sortedVars ← sortedVars.mapM (fun sv => parseSortedVar sv symbolMap noConstraint)
@@ -454,8 +454,8 @@ partial def parseExists (vs : List Term) (symbolMap : Std.HashMap String Expr) :
 
 /-- Note: The `parseTermConstraint` argument passed into `parseLambdaBodyWithSortedVars` corresponds to the expected type of the
     entire lambda expression, not the expected type of the lambda's body. -/
-partial def parseLambdaBodyWithSortedVars (vs : List Term) (sortedVars : Array (String × Expr))
-  (symbolMap : Std.HashMap String Expr) (lambdaBody : Term) (parseTermConstraint : ParseTermConstraint) : MetaM Expr := do
+partial def parseLambdaBodyWithSortedVars (vs : List Sexp) (sortedVars : Array (String × Expr))
+  (symbolMap : Std.HashMap String Expr) (lambdaBody : Sexp) (parseTermConstraint : ParseTermConstraint) : MetaM Expr := do
   withLocalDeclsD (sortedVars.map fun (n, ty) => (n.toName, fun _ => pure ty)) fun _ => do
     let lctx ← getLCtx
     let mut symbolMap := symbolMap
@@ -475,7 +475,7 @@ partial def parseLambdaBodyWithSortedVars (vs : List Term) (sortedVars : Array (
       let body ← parseTerm lambdaBody symbolMap (expectedType tBody)
       Meta.mkLambdaFVars (sortedVarDecls.map (fun decl => mkFVar decl.fvarId)) body
 
-partial def parseLambda (vs : List Term) (symbolMap : Std.HashMap String Expr) (parseTermConstraint : ParseTermConstraint) : MetaM Expr := do
+partial def parseLambda (vs : List Sexp) (symbolMap : Std.HashMap String Expr) (parseTermConstraint : ParseTermConstraint) : MetaM Expr := do
   let [app sortedVars, lambdaBody] := vs
     | throwError "{decl_name%} :: Unexpected input list {vs}"
   match parseTermConstraint with
@@ -502,7 +502,7 @@ partial def parseLambda (vs : List Term) (symbolMap : Std.HashMap String Expr) (
     parseLambdaBodyWithSortedVars vs sortedVars symbolMap lambdaBody parseTermConstraint
 
 /-- Given a varBinding of the form `(symbol value)` returns the string of the symbol, the type of the value, and the value itself -/
-partial def parseVarBinding (varBinding : Term) (symbolMap : Std.HashMap String Expr) : MetaM (String × Expr × Expr) := do
+partial def parseVarBinding (varBinding : Sexp) (symbolMap : Std.HashMap String Expr) : MetaM (String × Expr × Expr) := do
   match varBinding with
   | app varBinding =>
     match varBinding with
@@ -515,7 +515,7 @@ partial def parseVarBinding (varBinding : Term) (symbolMap : Std.HashMap String 
     | _ => throwError "{decl_name%} :: Failed to parse {varBinding} as a var binding"
   | _ => throwError "{decl_name%} :: {varBinding} is supposed to be a varBinding, not an atom"
 
-partial def parseLet (vs : List Term) (symbolMap : Std.HashMap String Expr) (parseTermConstraint : ParseTermConstraint) : MetaM Expr := do
+partial def parseLet (vs : List Sexp) (symbolMap : Std.HashMap String Expr) (parseTermConstraint : ParseTermConstraint) : MetaM Expr := do
   let [app varBindings, letBody] := vs
     | throwError "{decl_name%} :: Unexpected input list {vs}"
   let varBindings ← varBindings.mapM (fun vb => parseVarBinding vb symbolMap)
@@ -535,7 +535,7 @@ partial def parseLet (vs : List Term) (symbolMap : Std.HashMap String Expr) (par
       res := .letE varBinding.1.toName varBinding.2.1 varBinding.2.2 res true
     return res
 
-partial def parseLeftAssocAppAux (headSymbol : Name) (args : List Term) (symbolMap : Std.HashMap String Expr)
+partial def parseLeftAssocAppAux (headSymbol : Name) (args : List Sexp) (symbolMap : Std.HashMap String Expr)
   (acc : Expr) (parseTermConstraint : ParseTermConstraint) : MetaM Expr := do
   match args with
   | [] => return acc
@@ -544,7 +544,7 @@ partial def parseLeftAssocAppAux (headSymbol : Name) (args : List Term) (symbolM
     let acc ← mkAppM headSymbol #[acc, arg]
     parseLeftAssocAppAux headSymbol restArgs symbolMap acc parseTermConstraint
 
-partial def parseLeftAssocApp (headSymbol : Name) (args : List Term) (symbolMap : Std.HashMap String Expr)
+partial def parseLeftAssocApp (headSymbol : Name) (args : List Sexp) (symbolMap : Std.HashMap String Expr)
   (parseTermConstraint : ParseTermConstraint) : MetaM Expr := do
   match args with
   | arg1 :: (arg2 :: restArgs) =>
@@ -556,7 +556,7 @@ partial def parseLeftAssocApp (headSymbol : Name) (args : List Term) (symbolMap 
 
 /-- Note: parseImplicationAux expects to receive args in reverse order
     (meaining if args = `[x, y, z]`, this should become `z => y => x`) -/
-partial def parseImplicationAux (args : List Term) (symbolMap : Std.HashMap String Expr) (acc : Expr) : MetaM Expr := do
+partial def parseImplicationAux (args : List Sexp) (symbolMap : Std.HashMap String Expr) (acc : Expr) : MetaM Expr := do
   match args with
   | [] => return acc
   | arg :: restArgs =>
@@ -565,7 +565,7 @@ partial def parseImplicationAux (args : List Term) (symbolMap : Std.HashMap Stri
     parseImplicationAux restArgs symbolMap acc
 
 /-- SMT implication is right associative -/
-partial def parseImplication (args : List Term) (symbolMap : Std.HashMap String Expr) : MetaM Expr := do
+partial def parseImplication (args : List Sexp) (symbolMap : Std.HashMap String Expr) : MetaM Expr := do
   match args.reverse with
   | lastArg :: (lastArg2 :: restArgs) =>
     let lastArg ← parseTerm lastArg symbolMap (expectedType (.sort 0))
@@ -574,7 +574,7 @@ partial def parseImplication (args : List Term) (symbolMap : Std.HashMap String 
 
 /-- The entry function for the variety of mutually recursive functions used to parse SMT terms. `symbolMap` is used to map smt constants to the original
     Lean expressions they are meant to represent. `parseTermConstraint` is used to indicate whether the output expression must be a particular type. -/
-partial def parseTerm (e : Term) (symbolMap : Std.HashMap String Expr) (parseTermConstraint : ParseTermConstraint) : MetaM Expr := do
+partial def parseTerm (e : Sexp) (symbolMap : Std.HashMap String Expr) (parseTermConstraint : ParseTermConstraint) : MetaM Expr := do
   Core.checkSystem "{decl_name%}"
   match e with
   | atom (nat n) => correctType (Expr.lit (Literal.natVal n)) parseTermConstraint
@@ -714,13 +714,13 @@ initialize
 
 /-- Calls `parseTerm` on `e` and then abstracts all of the metavariables corresponding to selectors given by `selMVars` (replacing
     the first metavariable with `selMVars` with `Expr.bvar 0` and so on) -/
-def parseTermAndAbstractSelectors (e : Term) (symbolMap : Std.HashMap String Expr) (selMVars : Array Expr) : MetaM Expr := do
+def parseTermAndAbstractSelectors (e : Sexp) (symbolMap : Std.HashMap String Expr) (selMVars : Array Expr) : MetaM Expr := do
   let res ← parseTerm e symbolMap noConstraint
   res.abstractM selMVars
 
 /-- Calls `parseTerm` on `e` and then abstracts all of the metavariables corresponding to selectors given by `selMVars` (replacing
     the first metavariable with `selMVars` with `Expr.bvar 0` and so on). Returns `none` if any error occurs. -/
-def tryParseTermAndAbstractSelectors (e : Term) (symbolMap : Std.HashMap String Expr) (selMVars : Array Expr) : MetaM (Option Expr) := do
+def tryParseTermAndAbstractSelectors (e : Sexp) (symbolMap : Std.HashMap String Expr) (selMVars : Array Expr) : MetaM (Option Expr) := do
   try
     let res ← parseTerm e symbolMap noConstraint
     res.abstractM selMVars
