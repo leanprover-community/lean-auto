@@ -13,7 +13,7 @@ namespace Auto.Lexer
 
   See https://smt-lib.org/papers/smt-lib-reference-v2.7-r2025-07-07.pdf P23
 -/
-namespace SMTSexp
+namespace SMT
 
 open Regex
 
@@ -103,6 +103,6 @@ local instance : Hashable Char where
 
 initialize lexiconADFA : ADFA Char ← pure lexicons.toADFA
 
-end SMTSexp
+end SMT
 
 end Auto.Lexer

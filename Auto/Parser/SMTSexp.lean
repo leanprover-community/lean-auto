@@ -142,7 +142,7 @@ def parseSexp (s : String) (p : String.Pos.Raw) (partialResult : PartialResult) 
   if p == s.rawEndPos then
     return .incomplete partialResult p
   let nextLexicon (p : String.Pos.Raw) (lst : Nat) :=
-    Regex.ERE.ADFALexEagerL SMTSexp.lexiconADFA ⟨s, p, s.rawEndPos⟩
+    Regex.ERE.ADFALexEagerL SMT.lexiconADFA ⟨s, p, s.rawEndPos⟩
       {strict := true, initS := lst, prependBeginS := false, appendEndS := false}
   let mut lst := partialResult.lst
   let mut lexpart := partialResult.lexpart
@@ -156,7 +156,7 @@ def parseSexp (s : String) (p : String.Pos.Raw) (partialResult : PartialResult) 
       -- Skip whitespace characters
       while p != endPos do
         let c := String.Pos.Raw.get! s p
-        if SMTSexp.whitespace.contains c then
+        if SMT.whitespace.contains c then
           p := p + c
         else
           break
@@ -166,7 +166,7 @@ def parseSexp (s : String) (p : String.Pos.Raw) (partialResult : PartialResult) 
     match nextLexicon p lst with
     | ⟨.complete, matched, _, state⟩ =>
       -- A unique attribute should be returned, according to `SMTSexp.lexiconADFA`
-      let [attr] := (SMTSexp.lexiconADFA.getAttrs state).toList
+      let [attr] := (SMT.lexiconADFA.getAttrs state).toList
         | return panic! s!"parseSexp :: Unexpected error"
       p := matched.stopPos
       let lexval := LexVal.ofString (lexpart ++ matched.toString) attr
@@ -191,7 +191,7 @@ def parseSexp (s : String) (p : String.Pos.Raw) (partialResult : PartialResult) 
         -- Ordinary lexicons must be separated by whitespace or parentheses
         match String.Pos.Raw.get? s p with
         | some c =>
-          if !SMTSexp.whitespace.contains c ∧ c != ')' ∧ c != '(' then
+          if !SMT.whitespace.contains c ∧ c != ')' ∧ c != '(' then
             return .malformed
         | none => pure ()
         if pstk.size == 0 then
