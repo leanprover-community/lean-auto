@@ -97,6 +97,7 @@ namespace Auto.Solver.SMT
 
 open IR.SMT
 open Parser.SMTTerm
+open Parser.SMTSexp
 
 abbrev SolverProc := IO.Process.Child ⟨.piped, .piped, .piped⟩
 
@@ -125,7 +126,7 @@ where
     IO.Process.spawn {stdin := .piped, stdout := .piped, stderr := .piped,
                       cmd := path, args := args}
 
-def getTerm (s : String) : MetaM (Parser.SMTTerm.Sexp × String) := do
+def getTerm (s : String) : MetaM (Parser.SMTSexp.Sexp × String) := do
   match ← parseSexp s ⟨0⟩ {} with
   | .complete se p => return (se, Substring.Raw.toString ⟨s, p, s.rawEndPos⟩)
   | .incomplete _ _ => throwError s!"{decl_name%} :: Incomplete input {s}"
@@ -134,7 +135,7 @@ def getTerm (s : String) : MetaM (Parser.SMTTerm.Sexp × String) := do
 /--
   Recover id of valid facts from unsat core. Refer to `lamFOL2SMT`
 -/
-def validFactOfUnsatCore (unsatCore : Parser.SMTTerm.Sexp) : MetaM (Array Nat) := do
+def validFactOfUnsatCore (unsatCore : Parser.SMTSexp.Sexp) : MetaM (Array Nat) := do
   let .app unsatCore := unsatCore
     | throwError "{decl_name%} :: Malformed unsat core `{unsatCore}`"
   let mut ret := #[]
@@ -148,7 +149,7 @@ def validFactOfUnsatCore (unsatCore : Parser.SMTTerm.Sexp) : MetaM (Array Nat) :
   return ret
 
 /-- Only put declarations in the query -/
-def querySolver (query : Array IR.SMT.Command) : MetaM (Option (Parser.SMTTerm.Sexp × String)) := do
+def querySolver (query : Array IR.SMT.Command) : MetaM (Option (Parser.SMTSexp.Sexp × String)) := do
   if !(auto.smt.get (← getOptions)) then
     throwError "{decl_name%} :: Unexpected error"
   if (auto.smt.solver.name.get (← getOptions) == .none) then

@@ -2,10 +2,10 @@ import Lean
 import Auto.Parser.LexInit
 
 namespace Auto
-namespace Parser.SMTTerm
 open Lexer
 open Lean
-open Meta
+
+namespace Parser.SMTSexp
 
 inductive LexVal
   | lparen
@@ -216,6 +216,14 @@ def parseSexp [Monad m] [Lean.MonadError m] (s : String) (p : String.Pos.Raw)
     | ⟨.incomplete, m, _, lst'⟩ => return .incomplete ⟨lst', lexpart ++ m.toString, pstk⟩ m.stopPos
     | ⟨.malformed, _, _, _⟩  => return .malformed
   throwError s!"{decl_name%} :: Unexpected error when parsing string {s}"
+
+end Parser.SMTSexp
+
+namespace Parser.SMTTerm
+open Meta
+open Parser.SMTSexp
+open Parser.SMTSexp.LexVal
+open Parser.SMTSexp.Sexp
 
 partial def lexAllTerms [Monad m] [Lean.MonadError m] (s : String) (p : String.Pos.Raw) (acc : List Sexp) : m (List Sexp) := do
   match ← parseSexp s p {} with
@@ -727,3 +735,7 @@ def tryParseTermAndAbstractSelectors (e : Sexp) (symbolMap : Std.HashMap String 
   catch err =>
     trace[auto.smt.parseTermErrors] "Error parsing {e}. Error: {err.toMessageData}"
     return none
+
+end Parser.SMTTerm
+
+end Auto

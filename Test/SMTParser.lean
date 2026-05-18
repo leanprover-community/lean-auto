@@ -11,6 +11,7 @@ namespace Parser.SMTTerm
 open Lexer
 open Lean
 open Meta
+open Parser.SMTSexp
 
 def testTerms : Array String := #[
   "(=> (not (<= _x _z)) (>= (+ _x (* (- 1) _z)) 1))",
