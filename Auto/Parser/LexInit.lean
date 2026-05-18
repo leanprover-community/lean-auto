@@ -77,9 +77,14 @@ def specConst : ERE := .plus #[
   .attr string "string"
 ]
 
-def lexicons : ERE := .plus #[
+/-- The lexicon used by the SMT term parser. It is the disjoint union of
+    the SMT-lib lexical categories that may appear in a term. The reserved
+    words `forall`/`exists`/`lambda`/`let` and the special character `_`
+    are recognized post-lex by the parser by inspecting the simple-symbol
+    contents — they are not lexical categories. -/
+def lexicon : ERE := .plus #[
   specConst,
-  -- For lexical analysis, do not distinguish between keyword and symbol
+  -- For lexical analysis, do not distinguish reserved words
   symbol,
   .attr keyword "keyword",
   .attr lparen "(",
@@ -93,15 +98,15 @@ def lexicons : ERE := .plus #[
 
 #eval specConst.toADFA
 
--- Good property: Each state have at most one attribute!
-#eval lexicons.toADFA
+-- Good property: Each state has at most one attribute!
+#eval lexicon.toADFA
 
 -/
 
 local instance : Hashable Char where
   hash c := hash c.val
 
-initialize lexiconADFA : ADFA Char ← pure lexicons.toADFA
+initialize lexiconADFA : ADFA Char ← pure lexicon.toADFA
 
 end SMT
 
