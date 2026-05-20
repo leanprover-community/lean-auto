@@ -64,8 +64,9 @@ def withAutoSolverConfigOptions
       let o := auto.tptp.trust.set o true
       let o := auto.mono.mode.set o MonoMode.hol
       match sn with
-      | .zipperposition => auto.tptp.zipperposition.path.set o path
-      | .zipperposition_exe => o -- `zipperposition_exe` is built in and does not need a path to be set
+      | .zipperposition =>
+        let o := auto.tptp.zipperposition.useDefault.set o false
+        auto.tptp.zipperposition.customPath.set o path
       | .zeport _       => auto.tptp.zeport.path.set o path
       | .eproverHo      => auto.tptp.eproverHo.path.set o path
       | .vampire        => auto.tptp.vampire.path.set o path) <|

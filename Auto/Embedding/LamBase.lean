@@ -1,6 +1,7 @@
 import Lean
 import Auto.Embedding.Lift
 import Auto.Embedding.LCtx
+import Auto.Embedding.LamConstMacro
 import Auto.Lib.ExprExtra
 import Auto.Lib.NatExtra
 import Auto.Lib.IntExtra
@@ -409,94 +410,14 @@ inductive PropConst
   | iff      : PropConst -- Propositional `iff`
 deriving Inhabited, Hashable, Lean.ToExpr
 
-def PropConst.reprAux : PropConst → String
-| trueE  => "trueE"
-| falseE => "falseE"
-| not    => "not"
-| and    => "and"
-| or     => "or"
-| imp    => "imp"
-| iff    => "iff"
-
-def PropConst.reprPrec (p : PropConst) (n : Nat) :=
-  match n with
-  | 0 => f!"Auto.Embedding.Lam.PropConst.{p.reprAux}"
-  | _ + 1 => f!"({p.reprAux})"
-
-instance : Repr PropConst where
-  reprPrec := PropConst.reprPrec
-
-def PropConst.toString : PropConst → String
-| trueE  => "True"
-| falseE => "False"
-| not    => "¬"
-| and    => "∧"
-| or     => "∨"
-| imp    => "→"
-| iff    => "↔"
-
-instance : ToString PropConst where
-  toString := PropConst.toString
-
-def PropConst.beq : PropConst → PropConst → Bool
-| trueE,  trueE  => true
-| falseE, falseE => true
-| not,    not    => true
-| and,    and    => true
-| or,     or     => true
-| imp,    imp    => true
-| iff,    iff    => true
-| _,       _     => false
-
-instance : BEq PropConst where
-  beq := PropConst.beq
-
-def PropConst.beq_refl {p : PropConst} : (p.beq p) = true := by
-  cases p <;> rfl
-
-def PropConst.eq_of_beq_eq_true {p₁ p₂ : PropConst} (H : p₁.beq p₂) : p₁ = p₂ := by
-  cases p₁ <;> cases p₂ <;> first | contradiction | rfl
-
-instance : LawfulBEq PropConst where
-  eq_of_beq := PropConst.eq_of_beq_eq_true
-  rfl := PropConst.beq_refl
-
-def PropConst.lamCheck : PropConst → LamSort
-| .trueE  => .base .prop
-| .falseE => .base .prop
-| .not    => .func (.base .prop) (.base .prop)
-| .and | .or | .imp | .iff => .func (.base .prop) (.func (.base .prop) (.base .prop))
-
-inductive PropConst.LamWF : PropConst → LamSort → Type
-  | ofTrueE      : LamWF .trueE (.base .prop)
-  | ofFalseE     : LamWF .falseE (.base .prop)
-  | ofNot        : LamWF .not (.func (.base .prop) (.base .prop))
-  | ofAnd        : LamWF .and (.func (.base .prop) (.func (.base .prop) (.base .prop)))
-  | ofOr         : LamWF .or (.func (.base .prop) (.func (.base .prop) (.base .prop)))
-  | ofImp        : LamWF .imp (.func (.base .prop) (.func (.base .prop) (.base .prop)))
-  | ofIff        : LamWF .iff (.func (.base .prop) (.func (.base .prop) (.base .prop)))
-
-def PropConst.LamWF.unique {p : PropConst} {s₁ s₂ : LamSort}
-  (pcwf₁ : LamWF p s₁) (pcwf₂ : LamWF p s₂) : s₁ = s₂ ∧ HEq pcwf₁ pcwf₂ := by
-  cases pcwf₁ <;> cases pcwf₂ <;> trivial
-
-def PropConst.LamWF.ofPropConst : (p : PropConst) → (s : LamSort) × PropConst.LamWF p s
-| .trueE      => ⟨.base .prop, .ofTrueE⟩
-| .falseE     => ⟨.base .prop, .ofFalseE⟩
-| .not        => ⟨.func (.base .prop) (.base .prop), .ofNot⟩
-| .and        => ⟨.func (.base .prop) (.func (.base .prop) (.base .prop)), .ofAnd⟩
-| .or         => ⟨.func (.base .prop) (.func (.base .prop) (.base .prop)), .ofOr⟩
-| .imp        => ⟨.func (.base .prop) (.func (.base .prop) (.base .prop)), .ofImp⟩
-| .iff        => ⟨.func (.base .prop) (.func (.base .prop) (.base .prop)), .ofIff⟩
-
-def PropConst.lamWF_complete (wf : LamWF p s) : LamWF.ofPropConst p = ⟨s, wf⟩ := by
-  cases wf <;> rfl
-
-def PropConst.lamCheck_of_LamWF (H : LamWF p s) : p.lamCheck = s := by
-  cases H <;> rfl
-
-def PropConst.LamWF.ofCheck (H : p.lamCheck = s) : LamWF p s := by
-  cases H; cases p <;> constructor
+mkConstFamily PropConst with
+  | trueE  | ofTrueE  | (.base .prop)                                             | "True"  | GLift.up True
+  | falseE | ofFalseE | (.base .prop)                                             | "False" | GLift.up False
+  | not    | ofNot    | (.func (.base .prop) (.base .prop))                       | "¬"     | notLift
+  | and    | ofAnd    | (.func (.base .prop) (.func (.base .prop) (.base .prop))) | "∧"     | andLift
+  | or     | ofOr     | (.func (.base .prop) (.func (.base .prop) (.base .prop))) | "∨"     | orLift
+  | imp    | ofImp    | (.func (.base .prop) (.func (.base .prop) (.base .prop))) | "→"     | impLift
+  | iff    | ofIff    | (.func (.base .prop) (.func (.base .prop) (.base .prop))) | "↔"     | iffLift
 
 inductive BoolConst
   | ofProp
@@ -507,91 +428,13 @@ inductive BoolConst
   | orb    -- Boolean `or`
 deriving Inhabited, Hashable, Lean.ToExpr
 
-def BoolConst.reprAux : BoolConst → String
-| .ofProp => "ofProp"
-| .trueb  => "trueb"
-| .falseb => "falseb"
-| .notb   => "notb"
-| .andb   => "andb"
-| .orb    => "orb"
-
-def BoolConst.reprPrec (b : BoolConst) (n : Nat) :=
-  match n with
-  | 0 => f!"Auto.Embedding.Lam.BoolConst.{b.reprAux}"
-  | _ + 1 => f!"(.{b.reprAux})"
-
-instance : Repr BoolConst where
-  reprPrec := BoolConst.reprPrec
-
-def BoolConst.toString : BoolConst → String
-| .ofProp => "ofProp"
-| .trueb  => "true"
-| .falseb => "false"
-| .notb   => "!"
-| .andb   => "&&"
-| .orb    => "||"
-
-instance : ToString BoolConst where
-  toString := BoolConst.toString
-
-def BoolConst.beq : BoolConst → BoolConst → Bool
-| .ofProp, .ofProp => true
-| .trueb,  .trueb  => true
-| .falseb, .falseb => true
-| .notb,   .notb   => true
-| .andb,   .andb   => true
-| .orb,    .orb    => true
-| _,       _       => false
-
-instance : BEq BoolConst where
-  beq := BoolConst.beq
-
-def BoolConst.beq_refl {b : BoolConst} : (b.beq b) = true := by
-  cases b <;> rfl
-
-def BoolConst.eq_of_beq_eq_true {b₁ b₂ : BoolConst} (H : b₁.beq b₂) : b₁ = b₂ := by
-  cases b₁ <;> cases b₂ <;> first | contradiction | rfl
-
-instance : LawfulBEq BoolConst where
-  eq_of_beq := BoolConst.eq_of_beq_eq_true
-  rfl := BoolConst.beq_refl
-
-def BoolConst.lamCheck : BoolConst → LamSort
-| .ofProp => .func (.base .prop) (.base .bool)
-| .trueb => .base .bool
-| .falseb => .base .bool
-| .notb => .func (.base .bool) (.base .bool)
-| .andb => .func (.base .bool) (.func (.base .bool) (.base .bool))
-| .orb => .func (.base .bool) (.func (.base .bool) (.base .bool))
-
-inductive BoolConst.LamWF : BoolConst → LamSort → Type
-  | ofOfProp     : LamWF .ofProp (.func (.base .prop) (.base .bool))
-  | ofTrueB      : LamWF .trueb (.base .bool)
-  | ofFalseB     : LamWF .falseb (.base .bool)
-  | ofNotB       : LamWF .notb (.func (.base .bool) (.base .bool))
-  | ofAndB       : LamWF .andb (.func (.base .bool) (.func (.base .bool) (.base .bool)))
-  | ofOrB        : LamWF .orb (.func (.base .bool) (.func (.base .bool) (.base .bool)))
-
-def BoolConst.LamWF.unique {b : BoolConst} {s₁ s₂ : LamSort}
-  (bcwf₁ : LamWF b s₁) (bcwf₂ : LamWF b s₂) : s₁ = s₂ ∧ HEq bcwf₁ bcwf₂ := by
-  cases bcwf₁ <;> cases bcwf₂ <;> trivial
-
-def BoolConst.LamWF.ofBoolConst : (b : BoolConst) → (s : LamSort) × BoolConst.LamWF b s
-| .ofProp     => ⟨.func (.base .prop) (.base .bool), .ofOfProp⟩
-| .trueb      => ⟨.base .bool, .ofTrueB⟩
-| .falseb     => ⟨.base .bool, .ofFalseB⟩
-| .notb       => ⟨.func (.base .bool) (.base .bool), .ofNotB⟩
-| .andb       => ⟨.func (.base .bool) (.func (.base .bool) (.base .bool)), .ofAndB⟩
-| .orb        => ⟨.func (.base .bool) (.func (.base .bool) (.base .bool)), .ofOrB⟩
-
-def BoolConst.lamWF_complete (wf : LamWF b s) : LamWF.ofBoolConst b = ⟨s, wf⟩ := by
-  cases wf <;> rfl
-
-def BoolConst.lamCheck_of_LamWF (H : LamWF b s) : b.lamCheck = s := by
-  cases H <;> rfl
-
-def BoolConst.LamWF.ofCheck (H : b.lamCheck = s) : LamWF b s := by
-  cases H; cases b <;> constructor
+mkConstFamily ncInterp BoolConst with
+  | ofProp | ofOfProp | (.func (.base .prop) (.base .bool))                       | "ofProp" | ofPropLift
+  | trueb  | ofTrueB  | (.base .bool)                                             | "true"   | GLift.up true
+  | falseb | ofFalseB | (.base .bool)                                             | "false"  | GLift.up false
+  | notb   | ofNotB   | (.func (.base .bool) (.base .bool))                       | "!"      | notbLift
+  | andb   | ofAndB   | (.func (.base .bool) (.func (.base .bool) (.base .bool))) | "&&"     | andbLift
+  | orb    | ofOrB    | (.func (.base .bool) (.func (.base .bool) (.base .bool))) | "||"     | orbLift
 
 inductive NatConst
   | natVal (n : Nat)
@@ -599,116 +442,17 @@ inductive NatConst
   | nle | nlt | nmax | nmin
 deriving Inhabited, Hashable, Lean.ToExpr
 
-def NatConst.reprAux : NatConst → String
-| .natVal n => s!"natVal {n}"
-| .nadd     => "nadd"
-| .nsub     => "nsub"
-| .nmul     => "nmul"
-| .ndiv     => "ndiv"
-| .nmod     => "nmod"
-| .nle      => "nle"
-| .nlt      => "nlt"
-| .nmax     => "nmax"
-| .nmin     => "nmin"
-
-def NatConst.reprPrec (nc : NatConst) (n : Nat) :=
-  match n with
-  | 0 => f!"Auto.Embedding.Lam.NatConst.{nc.reprAux}"
-  | _ + 1 => f!"(.{nc.reprAux})"
-
-instance : Repr NatConst where
-  reprPrec := NatConst.reprPrec
-
-def NatConst.toString : NatConst → String
-| .natVal n => s!"{n} : Nat"
-| .nadd     => "+"
-| .nsub     => "-"
-| .nmul     => "*"
-| .ndiv     => "/"
-| .nmod     => "%"
-| .nle      => "≤"
-| .nlt      => "<"
-| .nmax     => "nmax"
-| .nmin     => "nmin"
-
-instance : ToString NatConst where
-  toString := NatConst.toString
-
-def NatConst.beq : NatConst → NatConst → Bool
-| .natVal n, .natVal m => Nat.beq n m
-| .nadd,     .nadd  => true
-| .nsub,     .nsub  => true
-| .nmul,     .nmul  => true
-| .ndiv,     .ndiv  => true
-| .nmod,     .nmod  => true
-| .nle,      .nle   => true
-| .nlt,      .nlt   => true
-| .nmax,     .nmax  => true
-| .nmin,     .nmin  => true
-| _,         _      => false
-
-instance : BEq NatConst where
-  beq := NatConst.beq
-
-def NatConst.beq_refl {n : NatConst} : (n.beq n) = true := by
-  cases n <;> first | rfl | apply Nat.beq_refl
-
-def NatConst.eq_of_beq_eq_true {n₁ n₂ : NatConst} (H : n₁.beq n₂) : n₁ = n₂ := by
-  cases n₁ <;> cases n₂ <;> try (first | contradiction | rfl)
-  case natVal.natVal n m => apply congrArg; apply Nat.eq_of_beq_eq_true H
-
-instance : LawfulBEq NatConst where
-  eq_of_beq := NatConst.eq_of_beq_eq_true
-  rfl := NatConst.beq_refl
-
-def NatConst.lamCheck : NatConst → LamSort
-| .natVal _ => .base .nat
-| .nadd     => .func (.base .nat) (.func (.base .nat) (.base .nat))
-| .nsub     => .func (.base .nat) (.func (.base .nat) (.base .nat))
-| .nmul     => .func (.base .nat) (.func (.base .nat) (.base .nat))
-| .ndiv     => .func (.base .nat) (.func (.base .nat) (.base .nat))
-| .nmod     => .func (.base .nat) (.func (.base .nat) (.base .nat))
-| .nle      => .func (.base .nat) (.func (.base .nat) (.base .prop))
-| .nlt      => .func (.base .nat) (.func (.base .nat) (.base .prop))
-| .nmax     => .func (.base .nat) (.func (.base .nat) (.base .nat))
-| .nmin     => .func (.base .nat) (.func (.base .nat) (.base .nat))
-
-inductive NatConst.LamWF : NatConst → LamSort → Type
-  | ofNatVal n : LamWF (.natVal n) (.base .nat)
-  | ofNadd     : LamWF .nadd (.func (.base .nat) (.func (.base .nat) (.base .nat)))
-  | ofNsub     : LamWF .nsub (.func (.base .nat) (.func (.base .nat) (.base .nat)))
-  | ofNmul     : LamWF .nmul (.func (.base .nat) (.func (.base .nat) (.base .nat)))
-  | ofNdiv     : LamWF .ndiv (.func (.base .nat) (.func (.base .nat) (.base .nat)))
-  | ofNmod     : LamWF .nmod (.func (.base .nat) (.func (.base .nat) (.base .nat)))
-  | ofNle      : LamWF .nle (.func (.base .nat) (.func (.base .nat) (.base .prop)))
-  | ofNlt      : LamWF .nlt (.func (.base .nat) (.func (.base .nat) (.base .prop)))
-  | ofNmax     : LamWF .nmax (.func (.base .nat) (.func (.base .nat) (.base .nat)))
-  | ofNmin     : LamWF .nmin (.func (.base .nat) (.func (.base .nat) (.base .nat)))
-
-def NatConst.LamWF.unique {n : NatConst} {s₁ s₂ : LamSort}
-  (nwf₁ : LamWF n s₁) (nwf₂ : LamWF n s₂) : s₁ = s₂ ∧ HEq nwf₁ nwf₂ := by
-  cases nwf₁ <;> cases nwf₂ <;> trivial
-
-def NatConst.LamWF.ofNatConst : (n : NatConst) → (s : LamSort) × NatConst.LamWF n s
-| .natVal n => ⟨.base .nat, .ofNatVal n⟩
-| .nadd     => ⟨.func (.base .nat) (.func (.base .nat) (.base .nat)), .ofNadd⟩
-| .nsub     => ⟨.func (.base .nat) (.func (.base .nat) (.base .nat)), .ofNsub⟩
-| .nmul     => ⟨.func (.base .nat) (.func (.base .nat) (.base .nat)), .ofNmul⟩
-| .ndiv     => ⟨.func (.base .nat) (.func (.base .nat) (.base .nat)), .ofNdiv⟩
-| .nmod     => ⟨.func (.base .nat) (.func (.base .nat) (.base .nat)), .ofNmod⟩
-| .nle      => ⟨.func (.base .nat) (.func (.base .nat) (.base .prop)), .ofNle⟩
-| .nlt      => ⟨.func (.base .nat) (.func (.base .nat) (.base .prop)), .ofNlt⟩
-| .nmax     => ⟨.func (.base .nat) (.func (.base .nat) (.base .nat)), .ofNmax⟩
-| .nmin     => ⟨.func (.base .nat) (.func (.base .nat) (.base .nat)), .ofNmin⟩
-
-def NatConst.lamWF_complete (wf : LamWF n s) : LamWF.ofNatConst n = ⟨s, wf⟩ := by
-  cases wf <;> rfl
-
-def NatConst.lamCheck_of_LamWF (H : LamWF n s) : n.lamCheck = s := by
-  cases H <;> rfl
-
-def NatConst.LamWF.ofCheck (H : n.lamCheck = s) : LamWF n s := by
-  cases H; cases n <;> constructor
+mkConstFamily NatConst with
+  | natVal (n : Nat) | ofNatVal | (.base .nat)                               | s!"{n} : Nat" | GLift.up n
+  | nadd  | ofNadd | (.func (.base .nat) (.func (.base .nat) (.base .nat)))  | "+"     | naddLift
+  | nsub  | ofNsub | (.func (.base .nat) (.func (.base .nat) (.base .nat)))  | "-"     | nsubLift
+  | nmul  | ofNmul | (.func (.base .nat) (.func (.base .nat) (.base .nat)))  | "*"     | nmulLift
+  | ndiv  | ofNdiv | (.func (.base .nat) (.func (.base .nat) (.base .nat)))  | "/"     | ndivLift
+  | nmod  | ofNmod | (.func (.base .nat) (.func (.base .nat) (.base .nat)))  | "%"     | nmodLift
+  | nle   | ofNle  | (.func (.base .nat) (.func (.base .nat) (.base .prop))) | "≤"     | nleLift
+  | nlt   | ofNlt  | (.func (.base .nat) (.func (.base .nat) (.base .prop))) | "<"     | nltLift
+  | nmax  | ofNmax | (.func (.base .nat) (.func (.base .nat) (.base .nat)))  | "nmax"  | nmaxLift
+  | nmin  | ofNmin | (.func (.base .nat) (.func (.base .nat) (.base .nat)))  | "nmin"  | nminLift
 
 inductive IntConst
   | iofNat | inegSucc | ineg | iabs
@@ -716,145 +460,22 @@ inductive IntConst
   | ile | ilt | imax | imin
 deriving Inhabited, Hashable, Lean.ToExpr
 
-def IntConst.reprAux : IntConst → String
-| .iofNat   => "iofNat"
-| .inegSucc => "inegSucc"
-| .ineg     => "ineg"
-| .iabs     => "iabs"
-| .iadd     => "iadd"
-| .isub     => "isub"
-| .imul     => "imul"
-| .idiv     => "idiv"
-| .imod     => "imod"
-| .iediv    => "iediv"
-| .iemod    => "iemod"
-| .ile      => "ile"
-| .ilt      => "ilt"
-| .imax     => "imax"
-| .imin     => "imin"
-
-def IntConst.reprPrec (i : IntConst) (n : Nat) :=
-  match n with
-  | 0 => f!"Auto.Embedding.Lam.IntConst.{i.reprAux}"
-  | _ + 1 => f!"(.{i.reprAux})"
-
-instance : Repr IntConst where
-  reprPrec := IntConst.reprPrec
-
-def IntConst.toString : IntConst → String
-| .iofNat   => "iofNat"
-| .inegSucc => "inegSucc"
-| .ineg     => "-"
-| .iabs     => "iabs"
-| .iadd     => "+"
-| .isub     => "-"
-| .imul     => "*"
-| .idiv     => "/"
-| .imod     => "%"
-| .iediv    => "/?"
-| .iemod    => "%?"
-| .ile      => "≤"
-| .ilt      => "<"
-| .imax     => "imax"
-| .imin     => "imin"
-
-instance : ToString IntConst where
-  toString := IntConst.toString
-
-def IntConst.beq : IntConst → IntConst → Bool
-| .iofNat,   .iofNat   => true
-| .inegSucc, .inegSucc => true
-| .ineg,     .ineg     => true
-| .iabs,     .iabs     => true
-| .iadd,     .iadd     => true
-| .isub,     .isub     => true
-| .imul,     .imul     => true
-| .idiv,     .idiv     => true
-| .imod,     .imod     => true
-| .iediv,    .iediv    => true
-| .iemod,    .iemod    => true
-| .ile,      .ile      => true
-| .ilt,      .ilt      => true
-| .imax,     .imax     => true
-| .imin,     .imin     => true
-| _,         _         => false
-
-instance : BEq IntConst where
-  beq := IntConst.beq
-
-def IntConst.beq_refl {i : IntConst} : (i.beq i) = true := by
-  cases i <;> rfl
-
-def IntConst.eq_of_beq_eq_true {i₁ i₂ : IntConst} (H : i₁.beq i₂) : i₁ = i₂ := by
-  cases i₁ <;> cases i₂ <;> try (first | contradiction | rfl)
-
-instance : LawfulBEq IntConst where
-  eq_of_beq := IntConst.eq_of_beq_eq_true
-  rfl := IntConst.beq_refl
-
-def IntConst.lamCheck : IntConst → LamSort
-| .iofNat   => .func (.base .nat) (.base .int)
-| .inegSucc => .func (.base .nat) (.base .int)
-| .ineg     => .func (.base .int) (.base .int)
-| .iabs     => .func (.base .int) (.base .int)
-| .iadd     => .func (.base .int) (.func (.base .int) (.base .int))
-| .isub     => .func (.base .int) (.func (.base .int) (.base .int))
-| .imul     => .func (.base .int) (.func (.base .int) (.base .int))
-| .idiv     => .func (.base .int) (.func (.base .int) (.base .int))
-| .imod     => .func (.base .int) (.func (.base .int) (.base .int))
-| .iediv    => .func (.base .int) (.func (.base .int) (.base .int))
-| .iemod    => .func (.base .int) (.func (.base .int) (.base .int))
-| .ile      => .func (.base .int) (.func (.base .int) (.base .prop))
-| .ilt      => .func (.base .int) (.func (.base .int) (.base .prop))
-| .imax     => .func (.base .int) (.func (.base .int) (.base .int))
-| .imin     => .func (.base .int) (.func (.base .int) (.base .int))
-
-inductive IntConst.LamWF : IntConst → LamSort → Type
-  | ofIOfNat   : LamWF .iofNat (.func (.base .nat) (.base .int))
-  | ofINegSucc : LamWF .inegSucc (.func (.base .nat) (.base .int))
-  | ofIneg     : LamWF .ineg (.func (.base .int) (.base .int))
-  | ofIabs     : LamWF .iabs (.func (.base .int) (.base .int))
-  | ofIadd     : LamWF .iadd (.func (.base .int) (.func (.base .int) (.base .int)))
-  | ofIsub     : LamWF .isub (.func (.base .int) (.func (.base .int) (.base .int)))
-  | ofImul     : LamWF .imul (.func (.base .int) (.func (.base .int) (.base .int)))
-  | ofIdiv     : LamWF .idiv (.func (.base .int) (.func (.base .int) (.base .int)))
-  | ofImod     : LamWF .imod (.func (.base .int) (.func (.base .int) (.base .int)))
-  | ofIediv    : LamWF .iediv (.func (.base .int) (.func (.base .int) (.base .int)))
-  | ofIemod    : LamWF .iemod (.func (.base .int) (.func (.base .int) (.base .int)))
-  | ofIle      : LamWF .ile (.func (.base .int) (.func (.base .int) (.base .prop)))
-  | ofIlt      : LamWF .ilt (.func (.base .int) (.func (.base .int) (.base .prop)))
-  | ofImax     : LamWF .imax (.func (.base .int) (.func (.base .int) (.base .int)))
-  | ofImin     : LamWF .imin (.func (.base .int) (.func (.base .int) (.base .int)))
-
-def IntConst.LamWF.unique {i : IntConst} {s₁ s₂ : LamSort}
-  (iwf₁ : LamWF i s₁) (iwf₂ : LamWF i s₂) : s₁ = s₂ ∧ HEq iwf₁ iwf₂ := by
-  cases iwf₁ <;> cases iwf₂ <;> trivial
-
-def IntConst.LamWF.ofIntConst : (i : IntConst) → (s : LamSort) × IntConst.LamWF i s
-| .iofNat   => ⟨.func (.base .nat) (.base .int), .ofIOfNat⟩
-| .inegSucc => ⟨.func (.base .nat) (.base .int), .ofINegSucc⟩
-| .ineg     => ⟨.func (.base .int) (.base .int), .ofIneg⟩
-| .iabs     => ⟨.func (.base .int) (.base .int), .ofIabs⟩
-| .iadd     => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofIadd⟩
-| .isub     => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofIsub⟩
-| .imul     => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofImul⟩
-| .idiv     => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofIdiv⟩
-| .imod     => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofImod⟩
-| .iediv    => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofIediv⟩
-| .iemod    => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofIemod⟩
-| .ile      => ⟨.func (.base .int) (.func (.base .int) (.base .prop)), .ofIle⟩
-| .ilt      => ⟨.func (.base .int) (.func (.base .int) (.base .prop)), .ofIlt⟩
-| .imax     => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofImax⟩
-| .imin     => ⟨.func (.base .int) (.func (.base .int) (.base .int)), .ofImin⟩
-
-def IntConst.lamWF_complete (wf : LamWF i s) : LamWF.ofIntConst i = ⟨s, wf⟩ := by
-  cases wf <;> rfl
-
-def IntConst.lamCheck_of_LamWF (H : LamWF i s) : i.lamCheck = s := by
-  cases H <;> rfl
-
-def IntConst.LamWF.ofCheck (H : i.lamCheck = s) : LamWF i s := by
-  cases H; cases i <;> constructor
+mkConstFamily IntConst with
+  | iofNat   | ofIOfNat   | (.func (.base .nat) (.base .int))                       | "iofNat"   | iofNatLift
+  | inegSucc | ofINegSucc | (.func (.base .nat) (.base .int))                       | "inegSucc" | inegSuccLift
+  | ineg     | ofIneg     | (.func (.base .int) (.base .int))                       | "-"        | inegLift
+  | iabs     | ofIabs     | (.func (.base .int) (.base .int))                       | "iabs"     | iabsLift
+  | iadd     | ofIadd     | (.func (.base .int) (.func (.base .int) (.base .int)))  | "+"        | iaddLift
+  | isub     | ofIsub     | (.func (.base .int) (.func (.base .int) (.base .int)))  | "-"        | isubLift
+  | imul     | ofImul     | (.func (.base .int) (.func (.base .int) (.base .int)))  | "*"        | imulLift
+  | idiv     | ofIdiv     | (.func (.base .int) (.func (.base .int) (.base .int)))  | "/"        | idivLift
+  | imod     | ofImod     | (.func (.base .int) (.func (.base .int) (.base .int)))  | "%"        | imodLift
+  | iediv    | ofIediv    | (.func (.base .int) (.func (.base .int) (.base .int)))  | "/?"       | iedivLift
+  | iemod    | ofIemod    | (.func (.base .int) (.func (.base .int) (.base .int)))  | "%?"       | iemodLift
+  | ile      | ofIle      | (.func (.base .int) (.func (.base .int) (.base .prop))) | "≤"        | ileLift
+  | ilt      | ofIlt      | (.func (.base .int) (.func (.base .int) (.base .prop))) | "<"        | iltLift
+  | imax     | ofImax     | (.func (.base .int) (.func (.base .int) (.base .int)))  | "imax"     | imaxLift
+  | imin     | ofImin     | (.func (.base .int) (.func (.base .int) (.base .int)))  | "imin"     | iminLift
 
 inductive StringConst
   | strVal (s : String)
@@ -866,99 +487,14 @@ inductive StringConst
   | srepall
 deriving Inhabited, Hashable, Lean.ToExpr
 
-def StringConst.reprAux : StringConst → String
-| .strVal s  => s!"strVal \"{s}\""
-| .slength   => "slength"
-| .sapp      => "sapp"
-| .sle       => "sle"
-| .slt       => "slt"
-| .sprefixof => "sprefixof"
-| .srepall   => "srepall"
-
-def StringConst.reprPrec (s : StringConst) (n : Nat) :=
-  match n with
-  | 0 => f!"Auto.Embedding.Lam.StringConst.{s.reprAux}"
-  | _ + 1 => f!"(.{s.reprAux})"
-
-instance : Repr StringConst where
-  reprPrec := StringConst.reprPrec
-
-def StringConst.toString : StringConst → String
-| .strVal s => s!"({s} : String)"
-| .slength => "length"
-| .sapp => "++"
-| .sle => "≤"
-| .slt => "<"
-| .sprefixof => "is_prefix_of"
-| .srepall => "replace_all"
-
-instance : ToString StringConst where
-  toString := StringConst.toString
-
-def StringConst.beq : StringConst → StringConst → Bool
-| .strVal m,  .strVal n  => m == n
-| .slength,   .slength   => true
-| .sapp,      .sapp      => true
-| .sle,       .sle       => true
-| .slt,       .slt       => true
-| .sprefixof, .sprefixof => true
-| .srepall,   .srepall   => true
-| _,          _          => false
-
-instance : BEq StringConst where
-  beq := StringConst.beq
-
-def StringConst.beq_refl {s : StringConst} : (s.beq s) = true := by
-  cases s <;> try rfl
-  case strVal s => apply BEq.rfl (α := String)
-
-def StringConst.eq_of_beq_eq_true {s₁ s₂ : StringConst} (H : s₁.beq s₂) : s₁ = s₂ := by
-  cases s₁ <;> cases s₂ <;> try (first | contradiction | rfl)
-  case strVal.strVal n m => apply congrArg; apply LawfulBEq.eq_of_beq (α := String) H
-
-instance : LawfulBEq StringConst where
-  eq_of_beq := StringConst.eq_of_beq_eq_true
-  rfl := StringConst.beq_refl
-
-def StringConst.lamCheck : StringConst → LamSort
-| .strVal _  => .base .string
-| .slength   => .func (.base .string) (.base .nat)
-| .sapp      => .func (.base .string) (.func (.base .string) (.base .string))
-| .sle       => .func (.base .string) (.func (.base .string) (.base .prop))
-| .slt       => .func (.base .string) (.func (.base .string) (.base .prop))
-| .sprefixof => .func (.base .string) (.func (.base .string) (.base .bool))
-| .srepall   => .func (.base .string) (.func (.base .string) (.func (.base .string) (.base .string)))
-
-inductive StringConst.LamWF : StringConst → LamSort → Type
-  | ofStrVal s  : LamWF (.strVal s) (.base .string)
-  | ofSlength   : LamWF .slength (.func (.base .string) (.base .nat))
-  | ofSapp      : LamWF .sapp (.func (.base .string) (.func (.base .string) (.base .string)))
-  | ofSle       : LamWF .sle (.func (.base .string) (.func (.base .string) (.base .prop)))
-  | ofSlt       : LamWF .slt (.func (.base .string) (.func (.base .string) (.base .prop)))
-  | ofSprefixof : LamWF .sprefixof (.func (.base .string) (.func (.base .string) (.base .bool)))
-  | ofSrepall   : LamWF .srepall (.func (.base .string) (.func (.base .string) (.func (.base .string) (.base .string))))
-
-def StringConst.LamWF.unique {s : StringConst} {s₁ s₂ : LamSort}
-  (iwf₁ : LamWF s s₁) (iwf₂ : LamWF s s₂) : s₁ = s₂ ∧ HEq iwf₁ iwf₂ := by
-  cases iwf₁ <;> cases iwf₂ <;> trivial
-
-def StringConst.LamWF.ofStringConst : (sc : StringConst) → (s : LamSort) × StringConst.LamWF sc s
-| .strVal s  => ⟨.base .string, .ofStrVal s⟩
-| .slength   => ⟨.func (.base .string) (.base .nat), .ofSlength⟩
-| .sapp      => ⟨.func (.base .string) (.func (.base .string) (.base .string)), .ofSapp⟩
-| .sle       => ⟨.func (.base .string) (.func (.base .string) (.base .prop)), .ofSle⟩
-| .slt       => ⟨.func (.base .string) (.func (.base .string) (.base .prop)), .ofSlt⟩
-| .sprefixof => ⟨.func (.base .string) (.func (.base .string) (.base .bool)), .ofSprefixof⟩
-| .srepall   => ⟨.func (.base .string) (.func (.base .string) (.func (.base .string) (.base .string))), .ofSrepall⟩
-
-def StringConst.lamWF_complete (wf : LamWF sc s) : LamWF.ofStringConst sc = ⟨s, wf⟩ := by
-  cases wf <;> rfl
-
-def StringConst.lamCheck_of_LamWF (H : LamWF sc s) : sc.lamCheck = s := by
-  cases H <;> rfl
-
-def StringConst.LamWF.ofCheck (H : sc.lamCheck = s) : LamWF sc s := by
-  cases H; cases sc <;> constructor
+mkConstFamily StringConst with
+  | strVal (s : String) | ofStrVal | (.base .string)                                                                  | s!"({s} : String)" | GLift.up s
+  | slength   | ofSlength   | (.func (.base .string) (.base .nat))                                                    | "length"            | slengthLift
+  | sapp      | ofSapp      | (.func (.base .string) (.func (.base .string) (.base .string)))                         | "++"                | sappLift
+  | sle       | ofSle       | (.func (.base .string) (.func (.base .string) (.base .prop)))                           | "≤"                 | sleLift
+  | slt       | ofSlt       | (.func (.base .string) (.func (.base .string) (.base .prop)))                           | "<"                 | sltLift
+  | sprefixof | ofSprefixof | (.func (.base .string) (.func (.base .string) (.base .bool)))                           | "is_prefix_of"      | sprefixofLift
+  | srepall   | ofSrepall   | (.func (.base .string) (.func (.base .string) (.func (.base .string) (.base .string)))) | "replace_all"       | srepallLift
 
 inductive BVAOp where
   | add
@@ -1017,6 +553,17 @@ instance : LawfulBEq BVAOp where
   eq_of_beq := BVAOp.eq_of_beq_eq_true
   rfl := BVAOp.beq_refl
 
+def BVAOp.interp (n : Nat) : (op : BVAOp) →
+  GLift.{1, u} (BitVec n) → GLift.{1, u} (BitVec n) → GLift.{1, u} (BitVec n)
+| .add  => bvaddLift n
+| .sub  => bvsubLift n
+| .mul  => bvmulLift n
+| .udiv => bvudivLift n
+| .urem => bvuremLift n
+| .sdiv => bvsdivLift n
+| .srem => bvsremLift n
+| .smod => bvsmodLift n
+
 inductive BVCmp where
   | ult
   | ule
@@ -1060,6 +607,20 @@ instance : LawfulBEq BVCmp where
   eq_of_beq := BVCmp.eq_of_beq_eq_true
   rfl := BVCmp.beq_refl
 
+def BVCmp.interp (n : Nat) : (op : BVCmp) →
+  GLift.{1, u} (BitVec n) → GLift.{1, u} (BitVec n) → GLift.{1, u} Bool
+| .ult => bvultLift n
+| .ule => bvuleLift n
+| .slt => bvsltLift n
+| .sle => bvsleLift n
+
+def BVCmp.propinterp (n : Nat) : (op : BVCmp) →
+  GLift.{1, u} (BitVec n) → GLift.{1, u} (BitVec n) → GLift.{1, u} Prop
+| .ult => bvpropultLift n
+| .ule => bvpropuleLift n
+| .slt => bvpropsltLift n
+| .sle => bvpropsleLift n
+
 inductive BVShOp where
   | shl
   | lshr
@@ -1099,6 +660,26 @@ instance : LawfulBEq BVShOp where
   eq_of_beq := BVShOp.eq_of_beq_eq_true
   rfl := BVShOp.beq_refl
 
+def BVShOp.interp (n : Nat) : (op : BVShOp) →
+  GLift.{1, u} (BitVec n) → GLift.{1, u} Nat → GLift.{1, u} (BitVec n)
+| .shl         => bvshlLift n
+| .lshr        => bvlshrLift n
+| .ashr        => bvashrLift n
+
+def BVShOp.smtinterp (n : Nat) : (op : BVShOp) →
+  GLift.{1, u} (BitVec n) → GLift.{1, u} (BitVec n) → GLift.{1, u} (BitVec n)
+| .shl         => bvsmtshlLift n
+| .lshr        => bvsmtlshrLift n
+| .ashr        => bvsmtashrLift n
+
+-- `ToString` instances for the helper op types, used by the `mkConstFamily`
+-- macro's auto-generated `reprAux` for `BitVecConst`.  `BVCmp.toString` and
+-- `BVShOp.toString` take a `Bool` flag (prop?/smt?); we default to `false`,
+-- which gives the unflagged display form.
+instance : ToString BVAOp := ⟨BVAOp.toString⟩
+instance : ToString BVCmp := ⟨BVCmp.toString false⟩
+instance : ToString BVShOp := ⟨BVShOp.toString false⟩
+
 /--
   Following `https://smtlib.cs.uiowa.edu/logics-all.shtml#QF_BV`
 -/
@@ -1115,14 +696,18 @@ inductive BitVecConst
   | bvaOp (n : Nat) (op : BVAOp)
   | bvneg (n : Nat)
   | bvabs (n : Nat)
-  | bvcmp (n : Nat) (prop? : Bool) (op : BVCmp)
+  -- Bool-valued comparison: `BitVec n → BitVec n → Bool`
+  | bvcmp (n : Nat) (op : BVCmp)
+  -- Prop-valued comparison: `BitVec n → BitVec n → Prop`
+  | bvpropcmp (n : Nat) (op : BVCmp)
   | bvand (n : Nat)
   | bvor (n : Nat)
   | bvxor (n : Nat)
   | bvnot (n : Nat)
-  -- `smt? = true => smt version (BitVec n → BitVec n → BitVec n)`
-  -- `smt? = false => Lean version (BitVec n → Nat → BitVec n)`
-  | bvshOp (n : Nat) (smt? : Bool) (op : BVShOp)
+  -- Lean version: `BitVec n → Nat → BitVec n`
+  | bvshOp (n : Nat) (op : BVShOp)
+  -- SMT version: `BitVec n → BitVec n → BitVec n`
+  | bvsmtshOp (n : Nat) (op : BVShOp)
   | bvappend (n m : Nat)
   | bvextract (n hi lo : Nat)
   -- `BitVec.replicate`
@@ -1132,293 +717,74 @@ inductive BitVecConst
 deriving Inhabited, Hashable, Lean.ToExpr
 
 def BitVecConst.bvadd (n : Nat) := BitVecConst.bvaOp n .add
-
 def BitVecConst.bvsub (n : Nat) := BitVecConst.bvaOp n .sub
-
 def BitVecConst.bvmul (n : Nat) := BitVecConst.bvaOp n .mul
-
 def BitVecConst.bvudiv (n : Nat) := BitVecConst.bvaOp n .udiv
-
 def BitVecConst.bvurem (n : Nat) := BitVecConst.bvaOp n .urem
-
 def BitVecConst.bvsdiv (n : Nat) := BitVecConst.bvaOp n .sdiv
-
 def BitVecConst.bvsrem (n : Nat) := BitVecConst.bvaOp n .srem
-
 def BitVecConst.bvsmod (n : Nat) := BitVecConst.bvaOp n .smod
+def BitVecConst.bvult (n : Nat) := BitVecConst.bvcmp n .ult
+def BitVecConst.bvule (n : Nat) := BitVecConst.bvcmp n .ule
+def BitVecConst.bvslt (n : Nat) := BitVecConst.bvcmp n .slt
+def BitVecConst.bvsle (n : Nat) := BitVecConst.bvcmp n .sle
+def BitVecConst.bvpropult (n : Nat) := BitVecConst.bvpropcmp n .ult
+def BitVecConst.bvpropule (n : Nat) := BitVecConst.bvpropcmp n .ule
+def BitVecConst.bvpropslt (n : Nat) := BitVecConst.bvpropcmp n .slt
+def BitVecConst.bvpropsle (n : Nat) := BitVecConst.bvpropcmp n .sle
+def BitVecConst.bvshl (n : Nat) := BitVecConst.bvshOp n .shl
+def BitVecConst.bvlshr (n : Nat) := BitVecConst.bvshOp n .lshr
+def BitVecConst.bvashr (n : Nat) := BitVecConst.bvshOp n .ashr
+def BitVecConst.bvsmtshl (n : Nat) := BitVecConst.bvsmtshOp n .shl
+def BitVecConst.bvsmtlshr (n : Nat) := BitVecConst.bvsmtshOp n .lshr
+def BitVecConst.bvsmtashr (n : Nat) := BitVecConst.bvsmtshOp n .ashr
 
-def BitVecConst.bvult (n : Nat) := BitVecConst.bvcmp n false .ult
-
-def BitVecConst.bvule (n : Nat) := BitVecConst.bvcmp n false .ule
-
-def BitVecConst.bvslt (n : Nat) := BitVecConst.bvcmp n false .slt
-
-def BitVecConst.bvsle (n : Nat) := BitVecConst.bvcmp n false .sle
-
-def BitVecConst.bvpropult (n : Nat) := BitVecConst.bvcmp n true .ult
-
-def BitVecConst.bvpropule (n : Nat) := BitVecConst.bvcmp n true .ule
-
-def BitVecConst.bvpropslt (n : Nat) := BitVecConst.bvcmp n true .slt
-
-def BitVecConst.bvpropsle (n : Nat) := BitVecConst.bvcmp n true .sle
-
-def BitVecConst.bvshl (n : Nat) := BitVecConst.bvshOp n false .shl
-
-def BitVecConst.bvlshr (n : Nat) := BitVecConst.bvshOp n false .lshr
-
-def BitVecConst.bvashr (n : Nat) := BitVecConst.bvshOp n false .ashr
-
-def BitVecConst.bvsmtshl (n : Nat) := BitVecConst.bvshOp n true .shl
-
-def BitVecConst.bvsmtlshr (n : Nat) := BitVecConst.bvshOp n true .lshr
-
-def BitVecConst.bvsmtashr (n : Nat) := BitVecConst.bvshOp n true .ashr
-
-def BitVecConst.reprAux : BitVecConst → String
-| .bvVal n i => s!"bvVal {n} {i}"
-| .bvofNat n => s!"bvofNat {n}"
-| .bvtoNat n => s!"bvtoNat {n}"
-| .bvofInt n => s!"bvofInt {n}"
-| .bvtoInt n => s!"bvtoInt {n}"
-| .bvmsb n   => s!"bvmsb {n}"
-| .bvaOp n op => op.repr n
-| .bvneg n   => s!"bvneg {n}"
-| .bvabs n   => s!"bvabs {n}"
-| .bvcmp n prop? cmp => cmp.repr n prop?
-| .bvand n   => s!"bvand {n}"
-| .bvor n    => s!"bvor {n}"
-| .bvxor n   => s!"bvxor {n}"
-| .bvnot n   => s!"bvnot {n}"
-| .bvshOp n smt? shOp => shOp.repr n smt?
-| .bvappend n m      => s!"bvappend {n} {m}"
-| .bvextract n hi lo => s!"bvextract {n} {hi} {lo}"
-| .bvrepeat w i      => s!"bvrepeat {w} {i}"
-| .bvzeroExtend w v  => s!"bvzeroExtend {w} {v}"
-| .bvsignExtend w v  => s!"bvsignExtend {w} {v}"
-
-def BitVecConst.reprPrec (b : BitVecConst) (n : Nat) :=
-  match n with
-  | 0 => f!"Auto.Embedding.Lam.BitVecConst.{b.reprAux}"
-  | _ + 1 => f!"(.{b.reprAux})"
-
-instance : Repr BitVecConst where
-  reprPrec := BitVecConst.reprPrec
-
-def BitVecConst.toString : BitVecConst → String
-| .bvVal n i => ToString.toString <| repr (BitVec.ofNat n i)
-| .bvofNat n => s!"bvofNat {n}"
-| .bvtoNat n => s!"bvtoNat {n}"
-| .bvofInt n => s!"bvofInt {n}"
-| .bvtoInt n => s!"bvtoInt {n}"
-| .bvmsb n => s!"bvmsb {n}"
-| .bvaOp _ op => op.toString
-| .bvneg _ => s!"-"
-| .bvabs _ => s!"bvabs"
-| .bvcmp _ prop? op => op.toString prop?
-| .bvand _ => s!"&&&"
-| .bvor _ => s!"|||"
-| .bvxor _ => s!"^^^"
-| .bvnot _ => s!"!"
-| .bvshOp _ smt? shOp => shOp.toString smt?
-| .bvappend _ _ => s!"++"
-| .bvextract _ hi lo => s!"bvextract {hi} {lo}"
-| .bvrepeat _ i => s!"bvrepeat {i}"
-| .bvzeroExtend _ v => s!"bvzeroExtend {v}"
-| .bvsignExtend _ v => s!"bvsignExtend {v}"
-
-instance : ToString BitVecConst where
-  toString := BitVecConst.toString
-
-def BitVecConst.beq : BitVecConst → BitVecConst → Bool
-| .bvVal n₁ i₁,        .bvVal n₂ i₂        => n₁.beq n₂ && i₁.beq i₂
-| .bvofNat n₁,         .bvofNat n₂         => n₁.beq n₂
-| .bvtoNat n₁,         .bvtoNat n₂         => n₁.beq n₂
-| .bvofInt n₁,         .bvofInt n₂         => n₁.beq n₂
-| .bvtoInt n₁,         .bvtoInt n₂         => n₁.beq n₂
-| .bvmsb n₁,           .bvmsb n₂           => n₁.beq n₂
-| .bvaOp n₁ op₁,       .bvaOp n₂ op₂       => n₁.beq n₂ && op₁.beq op₂
-| .bvneg n₁,           .bvneg n₂           => n₁.beq n₂
-| .bvabs n₁,           .bvabs n₂           => n₁.beq n₂
-| .bvcmp n₁ prop₁ op₁, .bvcmp n₂ prop₂ op₂ => n₁.beq n₂ && prop₁ == prop₂ && op₁.beq op₂
-| .bvand n₁,           .bvand n₂           => n₁.beq n₂
-| .bvor n₁,            .bvor n₂            => n₁.beq n₂
-| .bvxor n₁,           .bvxor n₂           => n₁.beq n₂
-| .bvnot n₁,           .bvnot n₂           => n₁.beq n₂
-| .bvshOp n₁ s₁ op₁,   .bvshOp n₂ s₂ op₂   => n₁.beq n₂ && s₁ == s₂ && op₁.beq op₂
-| .bvappend n₁ m₁,     .bvappend n₂ m₂     => n₁.beq n₂ && m₁.beq m₂
-| .bvextract n₁ h₁ l₁, .bvextract n₂ h₂ l₂ => n₁.beq n₂ && h₁.beq h₂ && l₁.beq l₂
-| .bvrepeat w₁ i₁,     .bvrepeat w₂ i₂     => w₁.beq w₂ && i₁.beq i₂
-| .bvzeroExtend w₁ v₁, .bvzeroExtend w₂ v₂ => w₁.beq w₂ && v₁.beq v₂
-| .bvsignExtend w₁ v₁, .bvsignExtend w₂ v₂ => w₁.beq w₂ && v₁.beq v₂
-| _,       _       => false
-
-instance : BEq BitVecConst where
-  beq := BitVecConst.beq
-
-def BitVecConst.beq_refl {b : BitVecConst} : (b.beq b) = true := by
-  cases b <;> dsimp [beq] <;> rw [Nat.beq_refl] <;> (try rw [Nat.beq_refl]) <;> (try rfl) <;>
-    (try rw [Nat.beq_refl]) <;> (try rfl)
-  case bvaOp => rw [BVAOp.beq_refl]; rfl
-  case bvcmp => rw [BEq.rfl (α := Bool)]; rw [BVCmp.beq_refl]; rfl
-  case bvshOp => rw [BEq.rfl (α := Bool)]; rw [BVShOp.beq_refl]; rfl
-
-def BitVecConst.eq_of_beq_eq_true {b₁ b₂ : BitVecConst} (H : b₁.beq b₂) : b₁ = b₂ := by
-  cases b₁ <;> cases b₂ <;> (try contradiction) <;> (try rw [Nat.eq_of_beq_eq_true H]) <;>
-    dsimp [beq] at H <;> rw [Bool.and_eq_true] at H <;> (try rw [Bool.and_eq_true] at H) <;>
-    (try rw [Nat.eq_of_beq_eq_true H.right]) <;> (try rw [Nat.eq_of_beq_eq_true H.left]) <;>
-    (try rw [Nat.eq_of_beq_eq_true H.left.left])
-  case bvaOp.bvaOp =>
-    rw [BVAOp.eq_of_beq_eq_true H.right]
-  case bvcmp.bvcmp =>
-    rw [LawfulBEq.eq_of_beq H.left.right, BVCmp.eq_of_beq_eq_true H.right]
-  case bvshOp.bvshOp =>
-    rw [LawfulBEq.eq_of_beq H.left.right, BVShOp.eq_of_beq_eq_true H.right]
-  case bvextract.bvextract =>
-    rw [Nat.eq_of_beq_eq_true H.left.right]
-
-instance : LawfulBEq BitVecConst where
-  eq_of_beq := BitVecConst.eq_of_beq_eq_true
-  rfl := BitVecConst.beq_refl
-
-def BitVecConst.lamCheck : BitVecConst → LamSort
-| .bvVal n _        => .base (.bv n)
-| .bvofNat n        => .func (.base .nat) (.base (.bv n))
-| .bvtoNat n        => .func (.base (.bv n)) (.base .nat)
-| .bvofInt n        => .func (.base .int) (.base (.bv n))
-| .bvtoInt n        => .func (.base (.bv n)) (.base .int)
-| .bvmsb n          => .func (.base (.bv n)) (.base .bool)
-| .bvaOp n _        => .func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n)))
-| .bvneg n          => .func (.base (.bv n)) (.base (.bv n))
-| .bvabs n          => .func (.base (.bv n)) (.base (.bv n))
-| .bvcmp n prop? _ =>
-  match prop? with
-  | false => .func (.base (.bv n)) (.func (.base (.bv n)) (.base .bool))
-  | true => .func (.base (.bv n)) (.func (.base (.bv n)) (.base .prop))
-| .bvand n          => .func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n)))
-| .bvor n           => .func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n)))
-| .bvxor n          => .func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n)))
-| .bvnot n          => .func (.base (.bv n)) (.base (.bv n))
-| .bvshOp n smt? _ =>
-  match smt? with
-  | false => .func (.base (.bv n)) (.func (.base .nat) (.base (.bv n)))
-  | true  => .func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n)))
-| .bvappend n m     => .func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv (Nat.add n m))))
-| .bvextract n h l  => .func (.base (.bv n)) (.base (.bv (Nat.add (Nat.sub h l) 1)))
-| .bvrepeat w i     => .func (.base (.bv w)) (.base (.bv (Nat.mul w i)))
-| .bvzeroExtend w v => .func (.base (.bv w)) (.base (.bv v))
-| .bvsignExtend w v => .func (.base (.bv w)) (.base (.bv v))
-
-inductive BitVecConst.LamWF : BitVecConst → LamSort → Type
-  | ofBvVal n i        : LamWF (.bvVal n i) (.base (.bv n))
-  | ofBvofNat n        : LamWF (.bvofNat n) (.func (.base .nat) (.base (.bv n)))
-  | ofBvtoNat n        : LamWF (.bvtoNat n) (.func (.base (.bv n)) (.base .nat))
-  | ofBvofInt n        : LamWF (.bvofInt n) (.func (.base .int) (.base (.bv n)))
-  | ofBvtoInt n        : LamWF (.bvtoInt n) (.func (.base (.bv n)) (.base .int))
-  | ofBvmsb n          : LamWF (.bvmsb n) (.func (.base (.bv n)) (.base .bool))
-  | ofBvaOp n op       : LamWF (.bvaOp n op) (.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))))
-  | ofBvneg n          : LamWF (.bvneg n) (.func (.base (.bv n)) (.base (.bv n)))
-  | ofBvabs n          : LamWF (.bvabs n) (.func (.base (.bv n)) (.base (.bv n)))
-  | ofBvcmp n op       : LamWF (.bvcmp n false op) (.func (.base (.bv n)) (.func (.base (.bv n)) (.base .bool)))
-  | ofBvpropcmp n op   : LamWF (.bvcmp n true op) (.func (.base (.bv n)) (.func (.base (.bv n)) (.base .prop)))
-  | ofBvand n          : LamWF (.bvand n) (.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))))
-  | ofBvor n           : LamWF (.bvor n) (.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))))
-  | ofBvxor n          : LamWF (.bvxor n) (.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))))
-  | ofBvnot n          : LamWF (.bvnot n) (.func (.base (.bv n)) (.base (.bv n)))
-  | ofBvshOp n op      : LamWF (.bvshOp n false op) (.func (.base (.bv n)) (.func (.base .nat) (.base (.bv n))))
-  | ofBvsmtshOp n op   : LamWF (.bvshOp n true op) (.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))))
-  | ofBvappend n m     : LamWF (.bvappend n m) (.func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv (Nat.add n m)))))
-  | ofBvextract n h l  : LamWF (.bvextract n h l) (.func (.base (.bv n)) (.base (.bv (Nat.add (Nat.sub h l) 1))))
-  | ofBvrepeat w i     : LamWF (.bvrepeat w i) (.func (.base (.bv w)) (.base (.bv (Nat.mul w i))))
-  | ofBvzeroExtend w v : LamWF (.bvzeroExtend w v) (.func (.base (.bv w)) (.base (.bv v)))
-  | ofBvsignExtend w v : LamWF (.bvsignExtend w v) (.func (.base (.bv w)) (.base (.bv v)))
+mkConstFamily BitVecConst with
+  | bvVal (n : Nat) (i : Nat)        | ofBvVal        | (.base (.bv n))                                                                  | ToString.toString (repr (BitVec.ofNat n i)) | GLift.up (BitVec.ofNat n i)
+  | bvofNat (n : Nat)                | ofBvofNat      | (.func (.base .nat) (.base (.bv n)))                                             | s!"bvofNat {n}"                    | bvofNatLift n
+  | bvtoNat (n : Nat)                | ofBvtoNat      | (.func (.base (.bv n)) (.base .nat))                                             | s!"bvtoNat {n}"                    | bvtoNatLift n
+  | bvofInt (n : Nat)                | ofBvofInt      | (.func (.base .int) (.base (.bv n)))                                             | s!"bvofInt {n}"                    | bvofIntLift n
+  | bvtoInt (n : Nat)                | ofBvtoInt      | (.func (.base (.bv n)) (.base .int))                                             | s!"bvtoInt {n}"                    | bvtoIntLift n
+  | bvmsb (n : Nat)                  | ofBvmsb        | (.func (.base (.bv n)) (.base .bool))                                            | s!"bvmsb {n}"                      | bvmsbLift n
+  | bvaOp (n : Nat) (op : BVAOp)     | ofBvaOp        | (.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))))                  | op.toString                        | op.interp n
+  | bvneg (n : Nat)                  | ofBvneg        | (.func (.base (.bv n)) (.base (.bv n)))                                          | "-"                                | bvnegLift n
+  | bvabs (n : Nat)                  | ofBvabs        | (.func (.base (.bv n)) (.base (.bv n)))                                          | "bvabs"                            | bvabsLift n
+  | bvcmp (n : Nat) (op : BVCmp)     | ofBvcmp        | (.func (.base (.bv n)) (.func (.base (.bv n)) (.base .bool)))                    | op.toString false                  | op.interp n
+  | bvpropcmp (n : Nat) (op : BVCmp) | ofBvpropcmp    | (.func (.base (.bv n)) (.func (.base (.bv n)) (.base .prop)))                    | op.toString true                   | op.propinterp n
+  | bvand (n : Nat)                  | ofBvand        | (.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))))                  | "&&&"                              | bvandLift n
+  | bvor (n : Nat)                   | ofBvor         | (.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))))                  | "|||"                              | bvorLift n
+  | bvxor (n : Nat)                  | ofBvxor        | (.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))))                  | "^^^"                              | bvxorLift n
+  | bvnot (n : Nat)                  | ofBvnot        | (.func (.base (.bv n)) (.base (.bv n)))                                          | "!"                                | bvnotLift n
+  | bvshOp (n : Nat) (op : BVShOp)   | ofBvshOp       | (.func (.base (.bv n)) (.func (.base .nat) (.base (.bv n))))                     | op.toString false                  | op.interp n
+  | bvsmtshOp (n : Nat) (op : BVShOp)| ofBvsmtshOp    | (.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))))                  | op.toString true                   | op.smtinterp n
+  | bvappend (n : Nat) (m : Nat)     | ofBvappend     | (.func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv (Nat.add n m)))))      | "++"                               | bvappendLift n m
+  | bvextract (n : Nat) (hi : Nat) (lo : Nat) | ofBvextract | (.func (.base (.bv n)) (.base (.bv (Nat.add (Nat.sub hi lo) 1))))           | s!"bvextract {hi} {lo}"            | bvextractLift n hi lo
+  | bvrepeat (w : Nat) (i : Nat)     | ofBvrepeat     | (.func (.base (.bv w)) (.base (.bv (Nat.mul w i))))                              | s!"bvrepeat {i}"                   | bvrepeatLift w i
+  | bvzeroExtend (w : Nat) (v : Nat) | ofBvzeroExtend | (.func (.base (.bv w)) (.base (.bv v)))                                          | s!"bvzeroExtend {v}"               | bvzeroExtendLift w v
+  | bvsignExtend (w : Nat) (v : Nat) | ofBvsignExtend | (.func (.base (.bv w)) (.base (.bv v)))                                          | s!"bvsignExtend {v}"               | bvsignExtendLift w v
 
 def BitVecConst.LamWF.ofBvadd (n : Nat) := LamWF.ofBvaOp n .add
-
 def BitVecConst.LamWF.ofBvsub (n : Nat) := LamWF.ofBvaOp n .sub
-
 def BitVecConst.LamWF.ofBvmul (n : Nat) := LamWF.ofBvaOp n .mul
-
 def BitVecConst.LamWF.ofBvudiv (n : Nat) := LamWF.ofBvaOp n .udiv
-
 def BitVecConst.LamWF.ofBvurem (n : Nat) := LamWF.ofBvaOp n .urem
-
 def BitVecConst.LamWF.ofBvsdiv (n : Nat) := LamWF.ofBvaOp n .sdiv
-
 def BitVecConst.LamWF.ofBvsrem (n : Nat) := LamWF.ofBvaOp n .srem
-
 def BitVecConst.LamWF.ofBvsmod (n : Nat) := LamWF.ofBvaOp n .smod
-
 def BitVecConst.LamWF.ofBvult (n : Nat) := LamWF.ofBvcmp n .ult
-
 def BitVecConst.LamWF.ofBvule (n : Nat) := LamWF.ofBvcmp n .ule
-
 def BitVecConst.LamWF.ofBvslt (n : Nat) := LamWF.ofBvcmp n .slt
-
 def BitVecConst.LamWF.ofBvsle (n : Nat) := LamWF.ofBvcmp n .sle
-
 def BitVecConst.LamWF.ofBvpropult (n : Nat) := LamWF.ofBvpropcmp n .ult
-
 def BitVecConst.LamWF.ofBvpropule (n : Nat) := LamWF.ofBvpropcmp n .ule
-
 def BitVecConst.LamWF.ofBvpropslt (n : Nat) := LamWF.ofBvpropcmp n .slt
-
 def BitVecConst.LamWF.ofBvpropsle (n : Nat) := LamWF.ofBvpropcmp n .sle
-
 def BitVecConst.LamWF.ofBvshl (n : Nat) := LamWF.ofBvshOp n .shl
-
 def BitVecConst.LamWF.ofBvlshr (n : Nat) := LamWF.ofBvshOp n .lshr
-
 def BitVecConst.LamWF.ofBvashr (n : Nat) := LamWF.ofBvshOp n .ashr
-
 def BitVecConst.LamWF.ofBvsmtshl (n : Nat) := LamWF.ofBvsmtshOp n .shl
-
 def BitVecConst.LamWF.ofBvsmtlshr (n : Nat) := LamWF.ofBvsmtshOp n .lshr
-
 def BitVecConst.LamWF.ofBvsmtashr (n : Nat) := LamWF.ofBvsmtshOp n .ashr
-
-def BitVecConst.LamWF.unique {b : BitVecConst} {s₁ s₂ : LamSort}
-  (bcwf₁ : LamWF b s₁) (bcwf₂ : LamWF b s₂) : s₁ = s₂ ∧ HEq bcwf₁ bcwf₂ := by
-  cases bcwf₁ <;> cases bcwf₂ <;> trivial
-
-def BitVecConst.LamWF.ofBitVecConst : (b : BitVecConst) → (s : LamSort) × BitVecConst.LamWF b s
-| .bvVal n i        => ⟨.base (.bv n), .ofBvVal n i⟩
-| .bvofNat n        => ⟨.func (.base .nat) (.base (.bv n)), .ofBvofNat n⟩
-| .bvtoNat n        => ⟨.func (.base (.bv n)) (.base .nat), .ofBvtoNat n⟩
-| .bvofInt n        => ⟨.func (.base .int) (.base (.bv n)), .ofBvofInt n⟩
-| .bvtoInt n        => ⟨.func (.base (.bv n)) (.base .int), .ofBvtoInt n⟩
-| .bvmsb n          => ⟨.func (.base (.bv n)) (.base .bool), .ofBvmsb n⟩
-| .bvaOp n op       => ⟨.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))), .ofBvaOp n op⟩
-| .bvneg n          => ⟨.func (.base (.bv n)) (.base (.bv n)), .ofBvneg n⟩
-| .bvabs n          => ⟨.func (.base (.bv n)) (.base (.bv n)), .ofBvabs n⟩
-| .bvcmp n prop? op =>
-  match prop? with
-  | false => ⟨.func (.base (.bv n)) (.func (.base (.bv n)) (.base .bool)), .ofBvcmp n op⟩
-  | true => ⟨.func (.base (.bv n)) (.func (.base (.bv n)) (.base .prop)), .ofBvpropcmp n op⟩
-| .bvand n          => ⟨.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))), .ofBvand n⟩
-| .bvor n           => ⟨.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))), .ofBvor n⟩
-| .bvxor n          => ⟨.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))), .ofBvxor n⟩
-| .bvnot n          => ⟨.func (.base (.bv n)) (.base (.bv n)), .ofBvnot n⟩
-| .bvshOp n smt? op =>
-  match smt? with
-  | false => ⟨.func (.base (.bv n)) (.func (.base .nat) (.base (.bv n))), .ofBvshOp n op⟩
-  | true  => ⟨.func (.base (.bv n)) (.func (.base (.bv n)) (.base (.bv n))), .ofBvsmtshOp n op⟩
-| .bvappend n m     => ⟨.func (.base (.bv n)) (.func (.base (.bv m)) (.base (.bv (Nat.add n m)))), .ofBvappend n m⟩
-| .bvextract n h l  => ⟨.func (.base (.bv n)) (.base (.bv (Nat.add (Nat.sub h l) 1))), .ofBvextract n h l⟩
-| .bvrepeat w i     => ⟨.func (.base (.bv w)) (.base (.bv (Nat.mul w i))), .ofBvrepeat w i⟩
-| .bvzeroExtend w v => ⟨.func (.base (.bv w)) (.base (.bv v)), .ofBvzeroExtend w v⟩
-| .bvsignExtend w v => ⟨.func (.base (.bv w)) (.base (.bv v)), .ofBvsignExtend w v⟩
-
-def BitVecConst.lamWF_complete (wf : LamWF b s) : LamWF.ofBitVecConst b = ⟨s, wf⟩ := by
-  cases wf <;> rfl
-
-def BitVecConst.lamCheck_of_LamWF (H : LamWF b s) : b.lamCheck = s := by
-  cases H <;> rfl
-
-def BitVecConst.LamWF.ofCheck (H : b.lamCheck = s) : LamWF b s := by
-  cases H; cases b <;> try constructor
-  case bvcmp n prop? op => cases prop? <;> constructor
-  case bvshOp n smt? op => cases smt? <;> constructor
 
 inductive OtherConst
   /--
@@ -1739,11 +1105,11 @@ instance : ToString LamBaseTerm where
 def LamBaseTerm.beq : LamBaseTerm → LamBaseTerm → Bool
 | .pcst pc₁,    .pcst pc₂    => pc₁.beq pc₂
 | .bcst bc₁,    .bcst bc₂    => bc₁.beq bc₂
-| .ncst nc₁,    .ncst nc₂    => NatConst.beq nc₁ nc₂
-| .icst ic₁,    .icst ic₂    => IntConst.beq ic₁ ic₂
-| .scst sc₁,    .scst sc₂    => StringConst.beq sc₁ sc₂
-| .bvcst l₁,    .bvcst l₂    => BitVecConst.beq l₁ l₂
-| .ocst o₁,     .ocst o₂     => OtherConst.beq o₁ o₂
+| .ncst nc₁,    .ncst nc₂    => nc₁.beq nc₂
+| .icst ic₁,    .icst ic₂    => ic₁.beq ic₂
+| .scst sc₁,    .scst sc₂    => sc₁.beq sc₂
+| .bvcst l₁,    .bvcst l₂    => l₁.beq l₂
+| .ocst o₁,     .ocst o₂     => o₁.beq o₂
 | .eqI n₁,      .eqI n₂      => n₁.beq n₂
 | .forallEI n₁, .forallEI n₂ => n₁.beq n₂
 | .existEI n₁,  .existEI n₂  => n₁.beq n₂
@@ -2038,261 +1404,6 @@ structure LamValuation extends LamTyVal where
   varVal   : ∀ (n : Nat), (lamVarTy n).interp tyVal
   ilVal    : ∀ (n : Nat), ILLift.{u} ((lamILTy n).interp tyVal)
   eVarVal  : ∀ (n : Nat), (lamEVarTy n).interp tyVal
-
-def PropConst.interp (tyVal : Nat → Type u) : (p : PropConst) → p.lamCheck.interp tyVal
-| .trueE      => GLift.up True
-| .falseE     => GLift.up False
-| .not        => notLift
-| .and        => andLift
-| .or         => orLift
-| .imp        => impLift
-| .iff        => iffLift
-
-def PropConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF p s) → s.interp tyVal
-| .ofTrueE      => GLift.up True
-| .ofFalseE     => GLift.up False
-| .ofNot        => notLift
-| .ofAnd        => andLift
-| .ofOr         => orLift
-| .ofImp        => impLift
-| .ofIff        => iffLift
-
-theorem PropConst.LamWF.interp_lvalIrrelevance
-  (tyVal₁ tyVal₂ : Nat → Type u) (pcwf₁ : LamWF p₁ s₁) (pcwf₂ : LamWF p₂ s₂)
-  (HBeq : p₁ = p₂) (hTyVal : tyVal₁ = tyVal₂) :
-  HEq (pcwf₁.interp tyVal₁) (pcwf₂.interp tyVal₂) := by
-  cases HBeq; cases hTyVal; rcases PropConst.LamWF.unique pcwf₁ pcwf₂ with ⟨⟨⟩, ⟨⟩⟩; rfl
-
-def PropConst.interp_equiv (tyVal : Nat → Type u) (pcwf : LamWF p s) :
-  HEq (LamWF.interp tyVal pcwf) (interp tyVal p) := by
-  cases pcwf <;> rfl
-
-noncomputable def BoolConst.interp (tyVal : Nat → Type u) : (b : BoolConst) → b.lamCheck.interp tyVal
-| .ofProp => ofPropLift
-| .trueb  => GLift.up true
-| .falseb => GLift.up false
-| .notb   => notbLift
-| .andb   => andbLift
-| .orb    => orbLift
-
-noncomputable def BoolConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF b s) → s.interp tyVal
-| .ofOfProp => ofPropLift
-| .ofTrueB  => GLift.up true
-| .ofFalseB => GLift.up false
-| .ofNotB   => notbLift
-| .ofAndB   => andbLift
-| .ofOrB    => orbLift
-
-theorem BoolConst.LamWF.interp_lvalIrrelevance
-  (tyVal₁ tyVal₂ : Nat → Type u) (bcwf₁ : LamWF b₁ s₁) (bcwf₂ : LamWF b₂ s₂)
-  (HBeq : b₁ = b₂) (hTyVal : tyVal₁ = tyVal₂) :
-  HEq (bcwf₁.interp tyVal₁) (bcwf₂.interp tyVal₂) := by
-  cases HBeq; cases hTyVal; rcases BoolConst.LamWF.unique bcwf₁ bcwf₂ with ⟨⟨⟩, ⟨⟩⟩; rfl
-
-def BoolConst.interp_equiv (tyVal : Nat → Type u) (bcwf : LamWF b s) :
-  HEq (LamWF.interp tyVal bcwf) (interp tyVal b) := by
-  cases bcwf <;> rfl
-
-def NatConst.interp (tyVal : Nat → Type u) : (n : NatConst) → n.lamCheck.interp tyVal
-| .natVal n => GLift.up n
-| .nadd     => naddLift
-| .nsub     => nsubLift
-| .nmul     => nmulLift
-| .ndiv     => ndivLift
-| .nmod     => nmodLift
-| .nle      => nleLift
-| .nlt      => nltLift
-| .nmax     => nmaxLift
-| .nmin     => nminLift
-
-def NatConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF i s) → s.interp tyVal
-| .ofNatVal n => GLift.up n
-| .ofNadd     => naddLift
-| .ofNsub     => nsubLift
-| .ofNmul     => nmulLift
-| .ofNdiv     => ndivLift
-| .ofNmod     => nmodLift
-| .ofNle      => nleLift
-| .ofNlt      => nltLift
-| .ofNmax     => nmaxLift
-| .ofNmin     => nminLift
-
-theorem NatConst.LamWF.interp_lvalIrrelevance
-  (tyVal₁ tyVal₂ : Nat → Type u) (ncwf₁ : LamWF n₁ s₁) (ncwf₂ : LamWF n₂ s₂)
-  (HBeq : n₁ = n₂) (hTyVal : tyVal₁ = tyVal₂) :
-  HEq (ncwf₁.interp tyVal₁) (ncwf₂.interp tyVal₂) := by
-  cases HBeq; cases hTyVal; rcases NatConst.LamWF.unique ncwf₁ ncwf₂ with ⟨⟨⟩, ⟨⟩⟩; rfl
-
-def NatConst.interp_equiv (tyVal : Nat → Type u) (ncwf : LamWF n s) :
-  HEq (LamWF.interp tyVal ncwf) (interp tyVal n) := by
-  cases ncwf <;> rfl
-
-def IntConst.interp (tyVal : Nat → Type u) : (i : IntConst) → i.lamCheck.interp tyVal
-| .iofNat   => iofNatLift
-| .inegSucc => inegSuccLift
-| .ineg     => inegLift
-| .iabs     => iabsLift
-| .iadd     => iaddLift
-| .isub     => isubLift
-| .imul     => imulLift
-| .idiv     => idivLift
-| .imod     => imodLift
-| .iediv    => iedivLift
-| .iemod    => iemodLift
-| .ile      => ileLift
-| .ilt      => iltLift
-| .imax     => imaxLift
-| .imin     => iminLift
-
-def IntConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF i s) → s.interp tyVal
-| .ofIOfNat   => iofNatLift
-| .ofINegSucc => inegSuccLift
-| .ofIneg     => inegLift
-| .ofIabs     => iabsLift
-| .ofIadd     => iaddLift
-| .ofIsub     => isubLift
-| .ofImul     => imulLift
-| .ofIdiv     => idivLift
-| .ofImod     => imodLift
-| .ofIediv    => iedivLift
-| .ofIemod    => iemodLift
-| .ofIle      => ileLift
-| .ofIlt      => iltLift
-| .ofImax     => imaxLift
-| .ofImin     => iminLift
-
-theorem IntConst.LamWF.interp_lvalIrrelevance
-  (tyVal₁ tyVal₂ : Nat → Type u) (icwf₁ : LamWF i₁ s₁) (icwf₂ : LamWF i₂ s₂)
-  (HBeq : i₁ = i₂) (hTyVal : tyVal₁ = tyVal₂) :
-  HEq (icwf₁.interp tyVal₁) (icwf₂.interp tyVal₂) := by
-  cases HBeq; cases hTyVal; rcases IntConst.LamWF.unique icwf₁ icwf₂ with ⟨⟨⟩, ⟨⟩⟩; rfl
-
-def IntConst.interp_equiv (tyVal : Nat → Type u) (icwf : LamWF i s) :
-  HEq (LamWF.interp tyVal icwf) (interp tyVal i) := by
-  cases icwf <;> rfl
-
-def StringConst.interp (tyVal : Nat → Type u) : (b : StringConst) → b.lamCheck.interp tyVal
-| .strVal s  => GLift.up s
-| .slength   => slengthLift
-| .sapp      => sappLift
-| .sle       => sleLift
-| .slt       => sltLift
-| .sprefixof => sprefixofLift
-| .srepall   => srepallLift
-
-def StringConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF i s) → s.interp tyVal
-| .ofStrVal s  => GLift.up s
-| .ofSlength   => slengthLift
-| .ofSapp      => sappLift
-| .ofSle       => sleLift
-| .ofSlt       => sltLift
-| .ofSprefixof => sprefixofLift
-| .ofSrepall   => srepallLift
-
-theorem StringConst.LamWF.interp_lvalIrrelevance
-  (tyVal₁ tyVal₂ : Nat → Type u) (scwf₁ : LamWF sc₁ s₁) (scwf₂ : LamWF sc₂ s₂)
-  (HBeq : sc₁ = sc₂) (hTyVal : tyVal₁ = tyVal₂) :
-  HEq (scwf₁.interp tyVal₁) (scwf₂.interp tyVal₂) := by
-  cases HBeq; cases hTyVal; rcases StringConst.LamWF.unique scwf₁ scwf₂ with ⟨⟨⟩, ⟨⟩⟩; rfl
-
-def StringConst.interp_equiv (tyVal : Nat → Type u) (scwf : LamWF sc s) :
-  HEq (LamWF.interp tyVal scwf) (interp tyVal sc) := by
-  cases scwf <;> rfl
-
-def BVAOp.interp (n : Nat) : (op : BVAOp) →
-  GLift.{1, u} (BitVec n) → GLift.{1, u} (BitVec n) → GLift.{1, u} (BitVec n)
-| .add  => bvaddLift n
-| .sub  => bvsubLift n
-| .mul  => bvmulLift n
-| .udiv => bvudivLift n
-| .urem => bvuremLift n
-| .sdiv => bvsdivLift n
-| .srem => bvsremLift n
-| .smod => bvsmodLift n
-
-def BVCmp.interp (n : Nat) : (op : BVCmp) →
-  GLift.{1, u} (BitVec n) → GLift.{1, u} (BitVec n) → GLift.{1, u} Bool
-| .ult => bvultLift n
-| .ule => bvuleLift n
-| .slt => bvsltLift n
-| .sle => bvsleLift n
-
-def BVCmp.propinterp (n : Nat) : (op : BVCmp) →
-  GLift.{1, u} (BitVec n) → GLift.{1, u} (BitVec n) → GLift.{1, u} Prop
-| .ult => bvpropultLift n
-| .ule => bvpropuleLift n
-| .slt => bvpropsltLift n
-| .sle => bvpropsleLift n
-
-def BVShOp.interp (n : Nat) : (op : BVShOp) →
-  GLift.{1, u} (BitVec n) → GLift.{1, u} Nat → GLift.{1, u} (BitVec n)
-| .shl         => bvshlLift n
-| .lshr        => bvlshrLift n
-| .ashr        => bvashrLift n
-
-def BVShOp.smtinterp (n : Nat) : (op : BVShOp) →
-  GLift.{1, u} (BitVec n) → GLift.{1, u} (BitVec n) → GLift.{1, u} (BitVec n)
-| .shl         => bvsmtshlLift n
-| .lshr        => bvsmtlshrLift n
-| .ashr        => bvsmtashrLift n
-
-def BitVecConst.interp (tyVal : Nat → Type u) : (b : BitVecConst) → b.lamCheck.interp tyVal
-| .bvVal n i         => GLift.up (BitVec.ofNat n i)
-| .bvofNat n         => bvofNatLift n
-| .bvtoNat n         => bvtoNatLift n
-| .bvofInt n         => bvofIntLift n
-| .bvtoInt n         => bvtoIntLift n
-| .bvmsb n           => bvmsbLift n
-| .bvaOp n op        => op.interp n
-| .bvneg n           => bvnegLift n
-| .bvabs n           => bvabsLift n
-| .bvcmp n false op  => op.interp n
-| .bvcmp n true op   => op.propinterp n
-| .bvand n           => bvandLift n
-| .bvor n            => bvorLift n
-| .bvxor n           => bvxorLift n
-| .bvnot n           => bvnotLift n
-| .bvshOp n false op => op.interp n
-| .bvshOp n true op  => op.smtinterp n
-| .bvappend n m      => bvappendLift n m
-| .bvextract n h l   => bvextractLift n h l
-| .bvrepeat w i      => bvrepeatLift w i
-| .bvzeroExtend w v  => bvzeroExtendLift w v
-| .bvsignExtend w v  => bvsignExtendLift w v
-
-def BitVecConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF b s) → s.interp tyVal
-| .ofBvVal n i        => GLift.up (BitVec.ofNat n i)
-| .ofBvofNat n        => bvofNatLift n
-| .ofBvtoNat n        => bvtoNatLift n
-| .ofBvofInt n        => bvofIntLift n
-| .ofBvtoInt n        => bvtoIntLift n
-| .ofBvmsb n          => bvmsbLift n
-| .ofBvaOp n op       => op.interp n
-| .ofBvneg n          => bvnegLift n
-| .ofBvabs n          => bvabsLift n
-| .ofBvcmp n op       => op.interp n
-| .ofBvpropcmp n op   => op.propinterp n
-| .ofBvand n          => bvandLift n
-| .ofBvor n           => bvorLift n
-| .ofBvxor n          => bvxorLift n
-| .ofBvnot n          => bvnotLift n
-| .ofBvshOp n op      => op.interp n
-| .ofBvsmtshOp n op   => op.smtinterp n
-| .ofBvappend n m     => bvappendLift n m
-| .ofBvextract n h l  => bvextractLift n h l
-| .ofBvrepeat w i     => bvrepeatLift w i
-| .ofBvzeroExtend w v => bvzeroExtendLift w v
-| .ofBvsignExtend w v => bvsignExtendLift w v
-
-theorem BitVecConst.LamWF.interp_lvalIrrelevance
-  (tyVal₁ tyVal₂ : Nat → Type u) (bcwf₁ : LamWF b₁ s₁) (bcwf₂ : LamWF b₂ s₂)
-  (HBeq : b₁ = b₂) (hTyVal : tyVal₁ = tyVal₂) :
-  HEq (bcwf₁.interp tyVal₁) (bcwf₂.interp tyVal₂) := by
-  cases HBeq; cases hTyVal; rcases BitVecConst.LamWF.unique bcwf₁ bcwf₂ with ⟨⟨⟩, ⟨⟩⟩; rfl
-
-def BitVecConst.interp_equiv (tyVal : Nat → Type u) (bcwf : LamWF b s) :
-  HEq (LamWF.interp tyVal bcwf) (interp tyVal b) := by
-  cases bcwf <;> rfl
 
 noncomputable def LamBaseTerm.interp (lval : LamValuation.{u}) : (b : LamBaseTerm) → (b.lamCheck lval.toLamTyVal).interp lval.tyVal
 | .pcst pc    => pc.interp lval.tyVal

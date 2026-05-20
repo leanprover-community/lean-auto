@@ -44,7 +44,6 @@ def transPropConst : PropConst → String
 | .or         => "(|)"
 | .imp        => "(=>)"
 -- Zipperposition seems buggy on (<=>)
--- Note: At least for some problems, (=) seeems to work better than s!"(^ [L : {transLamSort (.base .prop)}, R : {transLamSort (.base .prop)}] : L = R)"
 | .iff        => "(=)"
 
 def transBoolConst : BoolConst → String
