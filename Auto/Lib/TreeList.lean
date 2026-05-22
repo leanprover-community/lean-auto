@@ -80,6 +80,11 @@ def push {α : Type u} {n : Nat} {s : CBStatus} : CBTreeList α n s → (x : α)
 | .pe l r, x => appe (push l x).snd r
 | .ee l r, x => appe (pushEmpty l x).snd r
 
+-- **TODO**
+def pushManyRev {α : Type u} {n : Nat} {s : CBStatus} (t : CBTreeList α n s) : (xs : List α) → (s' : CBStatus) × CBTreeList α (n + xs.length) s'
+| .nil => ⟨s, t⟩
+| .cons x xs => (pushManyRev t xs).snd.push x
+
 def get {α : Type u} {n : Nat} {s : CBStatus} (t : CBTreeList α n s) (i : Nat) (h : i < n) : α :=
   match n, s, t with
   | _, _, .f x => x
@@ -97,6 +102,24 @@ def get {α : Type u} {n : Nat} {s : CBStatus} (t : CBTreeList α n s) (i : Nat)
   | _, _, @CBTreeList.fe _ m' l _ => get l i h
   | _, _, @CBTreeList.pe _ m' l _ => get l i h
   | 0, .e, .ee _ _ => False.elim (Nat.not_lt_zero _ h)
+
+def toList {α : Type u} {n : Nat} {s : CBStatus} : CBTreeList α n s → List α
+| .f x => [x]
+| .e => []
+| .ff l r => l.toList ++ r.toList
+| .fp l r => l.toList ++ r.toList
+| .fe l _ => l.toList
+| .pe l _ => l.toList
+| .ee _ _ => []
+
+def toListRev {α : Type u} {n : Nat} {s : CBStatus} : CBTreeList α n s → List α
+| .f x => [x]
+| .e => []
+| .ff l r => r.toList ++ l.toList
+| .fp l r => r.toList ++ l.toList
+| .fe l _ => l.toList
+| .pe l _ => l.toList
+| .ee _ _ => []
 
 theorem get_fapp {α : Type u} {m n : Nat} {s : CBStatus} {l : CBTreeList α m .f} {r : CBTreeList α n s} {i : Nat} (h : i < m + n) :
   (l.fapp r).snd.get i h = if hi : i < m then l.get i hi else r.get (i - m) (Nat.sub_lt_left_of_lt_add (Nat.le_of_not_lt hi) h) := by
@@ -162,6 +185,25 @@ theorem get_push {α : Type u} {n : Nat} {s : CBStatus} {t : CBTreeList α n s} 
     rw [get_push_eq]
     simp only [Nat.lt_irrefl, ↓reduceDIte]
 
+theorem toList_size {α : Type u} {n : Nat} {s : CBStatus} {t : CBTreeList α n s} :
+  t.toList.length = n := by
+  induction t <;> simp [toList, List.length_append, *]
+
+theorem toList_get {α : Type u} {n : Nat} {s : CBStatus} {t : CBTreeList α n s} {i : Nat} (h : i < n) :
+  t.toList[i]'(toList_size ▸ h) = t.get i h := by
+  induction t generalizing i <;> simp only [toList, get, List.getElem_append, toList_size]
+  case e => contradiction
+  case f => cases Nat.lt_one_iff.mp h; simp
+  case ff m n l r ihl ihr =>
+    by_cases hi : i < m <;> simp only [hi, ihl, ↓reduceDIte]
+    case neg => exact ihr (Nat.sub_lt_left_of_lt_add (Nat.le_of_not_lt hi) h)
+  case fp m n l r ihl ihr =>
+    by_cases hi : i < m <;> simp only [hi, ihl, ↓reduceDIte]
+    case neg => exact ihr (Nat.sub_lt_left_of_lt_add (Nat.le_of_not_lt hi) h)
+  case fe m l r ihl ihr => rw [ihl]
+  case pe m l r ihl ihr => rw [ihl]
+  case ee => contradiction
+
 end CBTreeList
 
 structure TreeList (α : Type u) where
@@ -176,14 +218,29 @@ def push {α : Type u} : TreeList α → α → TreeList α
   match CBTreeList.push d x with
   | ⟨s', o⟩ => ⟨n + 1, s', o⟩
 
-def get {α : Type u} (t : TreeList α) (i : Nat) (h : i < t.length) :=
+def getInternal {α : Type u} (t : TreeList α) (i : Nat) (h : i < t.length) :=
   t.data.get i h
 
+def get!Internal {α : Type u} [Inhabited α] (t : TreeList α) (i : Nat) : α :=
+  if h : i < t.length then t.data.get i h else default
+
 instance {α : Type u} : GetElem (TreeList α) Nat α fun xs i => i < xs.length where
-  getElem xs i h := xs.data.get i h
+  getElem t i h := t.getInternal i h
+
+instance {α : Type u} : GetElem? (TreeList α) Nat α fun xs i => i < xs.length where
+  getElem? t i := decidableGetElem? t i
+  getElem! t i := t.get!Internal i
 
 @[grind =] theorem getElem_push {α : Type u} {xs : TreeList α} {x : α} {i : Nat} (h : i < (xs.push x).length) :
   (xs.push x)[i] = if h : i < xs.length then xs[i] else x := CBTreeList.get_push h
+
+instance {α : Type u} : LawfulGetElem (TreeList α) Nat α fun xs i => i < xs.length where
+  getElem?_def xs i h := by
+    simp only [getElem?, decidableGetElem?]
+    split <;> rfl
+  getElem!_def xs i := by
+    simp only [getElem!, getElem?, decidableGetElem?, get!Internal]
+    split <;> rfl
 
 end TreeList
 
