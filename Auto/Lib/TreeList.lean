@@ -27,44 +27,69 @@ inductive CBTreeList (α : Type u) : Nat → CBStatus → Type u
   | e : CBTreeList α 0 .e
   | ff {m n : Nat} : CBTreeList α m .f → CBTreeList α n .f → CBTreeList α (m + n) .f
   | fp {m n : Nat} : CBTreeList α m .f → CBTreeList α n .p → CBTreeList α (m + n) .p
-  | fe {m n : Nat} : CBTreeList α m .f → CBTreeList α n .e → CBTreeList α (m + n) .p
-  | pe {m n : Nat} : CBTreeList α m .p → CBTreeList α n .e → CBTreeList α (m + n) .p
-  | ee {m n : Nat} : CBTreeList α m .e → CBTreeList α n .e → CBTreeList α (m + n) .e
+  | fe {m : Nat} : CBTreeList α m .f → CBTreeList α 0 .e → CBTreeList α m .p
+  | pe {m : Nat} : CBTreeList α m .p → CBTreeList α 0 .e → CBTreeList α m .p
+  | ee : CBTreeList α 0 .e → CBTreeList α 0 .e → CBTreeList α 0 .e
+  deriving Repr
 
 namespace CBTreeList
 
-theorem CBTreeList.empty_only_if_zero {α : Type u} {n : Nat} (t : CBTreeList α n .e) : n = 0 := by
-  revert t; generalize h : CBStatus.e = s; intro t
-  induction t <;> try contradiction
-  case e => rfl
-  case ee hl hr => rw [hl h, hr h]
+theorem empty_iff_zero {α : Type u} {n : Nat} {s : CBStatus} (t : CBTreeList α n s) : s = .e ↔ n = 0 := by
+  induction t <;> simp_all
 
-def CBTreeList.fjoin {α : Type u} {m n : Nat} {s : CBStatus} (l : CBTreeList α m .f) (r : CBTreeList α n s) : (s' : CBStatus) × CBTreeList α (m + n) s' :=
+def fjoin {α : Type u} {m n : Nat} {s : CBStatus} (l : CBTreeList α m .f) (r : CBTreeList α n s) : (s' : CBStatus) × CBTreeList α (m + n) s' :=
   match s with
   | .f => ⟨.f, .ff l r⟩
   | .p => ⟨.p, .fp l r⟩
-  | .e => ⟨.p, .fe l r⟩
+  | .e =>
+    match r with
+    | .e => ⟨.p, .fe l .e⟩
+    | .ee rl rr => ⟨.p, .fe l (.ee rl rr)⟩
 
-def CBTreeList.clear {α : Type u} {n : Nat} (s : CBStatus) : CBTreeList α n s → CBTreeList α 0 .e
+def joine {α : Type u} {m : Nat} {s : CBStatus} (l : CBTreeList α m s) (r : CBTreeList α 0 .e) : (s' : CBStatus) × CBTreeList α m s' :=
+  match s with
+  | .f => ⟨.p, .fe l r⟩
+  | .p => ⟨.p, .pe l r⟩
+  | .e =>
+    match l with
+    | .e => ⟨.e, .ee .e r⟩
+    | .ee ll lr => ⟨.e, .ee (.ee ll lr) r⟩
+
+def clear {α : Type u} {n : Nat} (s : CBStatus) : CBTreeList α n s → CBTreeList α 0 .e
 | .f _ => .e
 | .e => .e
 | .ff l r => .ee (clear _ l) (clear _ r)
 | .fp l r => .ee (clear _ l) (clear _ r)
 | .fe l r => .ee (clear _ l) (clear _ r)
-| .pe l r => .ee (clear _ l) (CBTreeList.empty_only_if_zero r ▸ r)
-| .ee l r => .ee (CBTreeList.empty_only_if_zero l ▸ l) (CBTreeList.empty_only_if_zero r ▸ r)
+| .pe l r => .ee (clear _ l) r
+| .ee l r => .ee l r
 
-def CBTreeList.push {α : Type u} {n : Nat} {s : CBStatus} : CBTreeList α n s → (x : α) → (s' : CBStatus) × CBTreeList α (n + 1) s'
+def pushEmpty {α : Type u} {n : Nat} : CBTreeList α n .e → (x : α) → (s' : CBStatus) × CBTreeList α 1 s'
+| .e, x => ⟨.f, .f x⟩
+| .ee l r, x =>
+  match pushEmpty l x with
+  | ⟨s', o⟩ => joine o r
+
+def push {α : Type u} {n : Nat} {s : CBStatus} : CBTreeList α n s → (x : α) → (s' : CBStatus) × CBTreeList α (n + 1) s'
 | .f l, x => ⟨.f, .ff (.f l) (.f x)⟩
 | .e, x => ⟨.f, .f x⟩
-| .ff l r, x => sorry
-| .fp l r, x => sorry
-| .fe l r, x => sorry
-| .pe l r, x => sorry
-| .ee l r, x => sorry
+| .ff l r, x => CBTreeList.fjoin (.ff l r) (pushEmpty (clear .f (.ff l r)) x).snd
+| .fp l r, x => Nat.add_assoc _ _ _ ▸ CBTreeList.fjoin l (push r x).snd
+| .fe l r, x => CBTreeList.fjoin l (push r x).snd
+| .pe l r, x => joine (push l x).snd r
+| .ee l r, x => joine (pushEmpty l x).snd r
 
 end CBTreeList
 
 def TreeList (α : Type u) := (n : Nat) × (s : CBStatus) × CBTreeList α n s
+
+namespace TreeList
+
+def push {α : Type u} : TreeList α → α → TreeList α
+| ⟨n, _, t⟩, x =>
+  match CBTreeList.push t x with
+  | ⟨s', o⟩ => ⟨n + 1, s', o⟩
+
+end TreeList
 
 end Auto
