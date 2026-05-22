@@ -74,7 +74,8 @@ def push {α : Type u} {n : Nat} {s : CBStatus} : CBTreeList α n s → (x : α)
 | .f l, x => ⟨.f, .ff (.f l) (.f x)⟩
 | .e, x => ⟨.f, .f x⟩
 | .ff l r, x => CBTreeList.fjoin (.ff l r) (pushEmpty (clear .f (.ff l r)) x).snd
-| .fp l r, x => Nat.add_assoc _ _ _ ▸ CBTreeList.fjoin l (push r x).snd
+| @CBTreeList.fp _ m n l r, x =>
+  (CBTreeList.fjoin l (push r x).snd : (s' : CBStatus) × CBTreeList α (m + (n + 1)) s')
 | .fe l r, x => CBTreeList.fjoin l (push r x).snd
 | .pe l r, x => joine (push l x).snd r
 | .ee l r, x => joine (pushEmpty l x).snd r
