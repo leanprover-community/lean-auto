@@ -290,6 +290,8 @@ def push {α : Type u} (xs : TreeList α) (x : α) : TreeList α :=
   match CBTreeList.push xs.data x with
   | ⟨s', o⟩ => ⟨xs.length + 1, s', o⟩
 
+theorem length_push {α : Type u} (xs : TreeList α) (x : α) : (xs.push x).length = xs.length + 1 := rfl
+
 def getInternal {α : Type u} (t : TreeList α) (i : Nat) (h : i < t.length) :=
   t.data.get i h
 
@@ -318,16 +320,18 @@ def append {α : Type u} (xs ys : TreeList α) : TreeList α :=
   match CBTreeList.append xs.data ys.data with
   | ⟨s', o⟩ => ⟨xs.length + ys.length, s', o⟩
 
+theorem length_append {α : Type u} (xs ys : TreeList α) : (xs.append ys).length = xs.length + ys.length := rfl
+
 def getElem_append {α : Type u} {xs ys : TreeList α} {i : Nat} (h : i < (xs.append ys).length) :
   (xs.append ys)[i] = if hi : i < xs.length then xs[i] else ys[i - xs.length]'((Nat.sub_lt_left_of_lt_add (Nat.le_of_not_lt hi) h)) :=
   CBTreeList.get_append _
 
 def toList {α : Type u} (xs : TreeList α) : List α := xs.data.toList
 
-theorem toList_length {α : Type u} {xs : TreeList α} : xs.toList.length = xs.length := CBTreeList.toList_length
+theorem length_toList {α : Type u} {xs : TreeList α} : xs.toList.length = xs.length := CBTreeList.toList_length
 
-theorem toList_get {α : Type u} {xs : TreeList α} {i : Nat} (h : i < xs.length) :
-  xs.toList[i]'(toList_length ▸ h) = xs[i] := CBTreeList.toList_get _
+theorem getElem_eq_getElem_toList {α : Type u} {xs : TreeList α} {i : Nat} (h : i < xs.length) :
+  xs.toList[i]'(length_toList ▸ h) = xs[i] := CBTreeList.toList_get _
 
 end TreeList
 

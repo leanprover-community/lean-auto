@@ -74,6 +74,7 @@ inductive CoCJ : TreeList CoCTerm → CoCTerm → CoCTerm → Type
     --------------------
     Γ, x : A, Γ' ⊢ x : A
   -/
+  -- **TODO**
   | ofBVar
       {lctx : TreeList CoCTerm} (n : Nat) (h : n < lctx.length) :
     CoCJ lctx (.b n) lctx[n]
