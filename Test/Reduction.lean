@@ -1,5 +1,6 @@
 import Auto.Lib.ExprExtra
 import Auto.Lib.BinTree
+import Auto.Lib.TreeList
 
 set_option lazyReduce.printTime true
 set_option maxRecDepth 10000 in
@@ -56,5 +57,23 @@ def sdk : (foldAgain (simplebt 1 12))[100]? = Option.some 100 := Eq.refl (Option
 
 #eval (foldAgain (simplebt 1 12))[100]?
 -/
+
+def l₁ : CBTreeList Nat 1 .f := .f 1
+def l₂ : CBTreeList Nat 2 .f := (l₁.append l₁).snd
+def l₃ : CBTreeList Nat 5 .f := ((l₂.append l₂).snd.append l₁).snd
+def l₄ : CBTreeList Nat 10 .f := (l₃.append l₃).snd
+def l₅ : CBTreeList Nat 20 .f := (l₄.append l₄).snd
+def l₆ : CBTreeList Nat 40 .f := (l₅.append l₅).snd
+def l₇ : CBTreeList Nat 80 .f := (l₆.append l₆).snd
+def l₈ : CBTreeList Nat 160 .f := (l₇.append l₇).snd
+set_option maxRecDepth 4000
+def l₉ : CBTreeList Nat 320 .f := (l₈.append l₈).snd
+def l₁₀ : CBTreeList Nat 640 .f := (l₉.append l₉).snd
+def l₁₁ : CBTreeList Nat 1280 .f := (l₁₀.append l₁₀).snd
+
+-- set_option maxRecDepth 10000
+-- set_option maxHeartbeats 2000000
+-- def cbt500 : CBTreeList Nat 2000 .p :=
+--   (List.foldl TreeList.push TreeList.empty (List.range 2000)).data
 
 #check 2
