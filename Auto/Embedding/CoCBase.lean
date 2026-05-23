@@ -3,6 +3,20 @@ import Auto.Lib.TreeList
 
 namespace Auto.Embedding.CoC
 
+inductive SortConst
+  /-- `Sort 1` -/
+  | «1»
+  /-- `Sort 2` -/
+  | «2»
+  /-- `Sort u` -/
+  | «u»
+  /-- `Type u` -/
+  | «u+1»
+  /-- `Sort v` -/
+  | «v»
+  /-- `Type v` -/
+  | «v+1»
+
 inductive PropConst
   | trueE    : PropConst -- Propositional `true`
   | falseE   : PropConst -- Propositional `false`
@@ -29,7 +43,10 @@ inductive NatConst
 deriving Inhabited, Hashable, Lean.ToExpr
 
 inductive CoCBaseTerm
+  /-- Lean `Prop`, i.e. `Sort 0` -/
   | prop
+  /-- Lean Sorts, e.g. `Type 1`, `Sort u`, `Type v`. Excluding `Sort 0` since we already have `prop` -/
+  | type : SortConst → CoCBaseTerm
   | bool
   | nat
   | pcst : PropConst → CoCBaseTerm
@@ -50,7 +67,13 @@ inductive CoCTerm
   | «∀» : CoCTerm → CoCTerm → CoCTerm
 
 -- CoC Judgements, `Γ ⊢ term : type`
+-- **TODO**
 inductive CoCJ : TreeList CoCTerm → CoCTerm → CoCTerm → Type
+  /--
+          Γ ⊢ A : K
+    --------------------
+    Γ, x : A, Γ' ⊢ x : A
+  -/
   | ofBVar
       {lctx : TreeList CoCTerm} (n : Nat) (h : n < lctx.length) :
     CoCJ lctx (.b n) lctx[n]
