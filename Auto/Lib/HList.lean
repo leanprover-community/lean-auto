@@ -171,7 +171,7 @@ theorem HList.reverseAux_eq_append {xs : HList β as} {ys : HList β bs} :
       apply HEq.symm; apply HList.append_assoc
     case h₂ =>
       congr
-      case e_3.h =>
+      case e_3 =>
         dsimp [List.reverseAux]; rw [List.reverseAux_eq_append (bs := [a])]
       case e_5 =>
         apply HEq.symm; apply IH

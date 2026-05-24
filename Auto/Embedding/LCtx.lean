@@ -764,13 +764,13 @@ section push
       dsimp at heq; rw [← heq]
       rw [HList.ofFun_succ];
       congr
-      case e_4.h =>
+      case e_4 =>
         dsimp; rw [pushLCtxs_cons_succ_Fn]
         apply List.ofFun_ofPushLCtx; rfl
       case e_6 =>
         apply HEq.trans _ (ofFun_ofPushLCtxDep rfl xs lctx)
         congr
-        case e_2.h => apply pushLCtxs_cons_succ_Fn
+        case e_2 => apply pushLCtxs_cons_succ_Fn
         case e_4 => apply pushLCtxsDep_cons_succ_Fn
 
   theorem HList.ofFun_getD_eq_some
