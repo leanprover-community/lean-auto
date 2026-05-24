@@ -69,6 +69,10 @@ inductive CoCTerm
 -- CoC Judgements, `Γ ⊢ term : type`
 -- **TODO**
 inductive CoCJ : TreeList CoCTerm → CoCTerm → CoCTerm → Type
+  -- **TODO**
+  -- | ofWeak
+  --     {Γ : TreeList CoCTerm} {Δ : TreeList CoCTerm} {t : CoCTerm} {s : CoCTerm}
+  --     (hΓΔ : Γ ≼ Δ) (hΓ : CoCJ Γ t s) : CoCJ Δ t x
   /--
           Γ ⊢ A : K
     --------------------
