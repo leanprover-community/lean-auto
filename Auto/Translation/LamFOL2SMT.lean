@@ -39,6 +39,8 @@ private inductive LamAtomic where
   /- Term atom -/
   | term     : Nat → LamAtomic
   | etom     : Nat → LamAtomic
+  /- Well-formed predicate (for the given LamSort) -/
+  | wfPred  : LamSort → LamAtomic
   /-
     · To SMT solvers `.bvofNat` is the same as `.bvofInt`
     · `.bvtoInt` can be defined using `.bvtoNat`
@@ -53,6 +55,7 @@ private def LamAtomic.toString : LamAtomic → String
 | .sort n     => s!"sort {n}"
 | .term n     => s!"term {n}"
 | .etom n     => s!"etom {n}"
+| .wfPred s   => s!"wfPred {s}"
 | .bvOfNat n  => s!"bvOfNat {n}"
 | .bvToNat n  => s!"bvToNat {n}"
 | .compCtor t => s!"compCtor {t}"
@@ -91,6 +94,8 @@ def LamAtomic.toLeanExpr
     let .some e := etomValMap.get? n
       | throwError "{decl_name%} :: Unknown etom {n}"
     return e
+  | .wfPred s => do -- Well-formed predicates don't have exact direct Lean analogues, but are always equivalent to `fun _ => True` in Lean
+    return Expr.lam .anonymous (← Lam2D.interpLamSortAsUnlifted tyValMap s) (mkConst ``True) .default
   | .bvOfNat n => do
     let e := Expr.app (.const ``BitVec.ofNat []) (.lit (.natVal n))
     return e
@@ -142,6 +147,9 @@ where
       | throwError "{decl_name%} :: Unexpected term atom {repr (LamTerm.atom n)}"
     exprToSuggestion e
   | .etom n => return s!"sk{n}"
+  | .wfPred s => do
+    let suggestion ← sni.suggestNameForSort s
+    return "wf" ++ suggestion.capitalize
   | .bvOfNat n => exprToSuggestion (Expr.app (.const ``BitVec.ofNat []) (.lit (.natVal n)))
   | .bvToNat n => exprToSuggestion (Expr.app (.const ``BitVec.toNat []) (.lit (.natVal n)))
   -- **TODO**
@@ -162,19 +170,19 @@ private def lamBaseSort2SSort : LamBaseSort → SSort
   | _   => .app (.symb "Empty") #[]
 | .bv n   => .app (.indexed "BitVec" #[.inr n]) #[]
 
-private def lamSortAtom2String (sni : SMTNamingInfo) (n : Nat) : TransM LamAtomic LamSort String := do
+private def lamSortAtom2String (sni : SMTNamingInfo) (n : Nat) : TransM LamAtomic String := do
   if !(← hIn (.sort n)) then
     let name ← h2Symb (.sort n) (← sni.suggestNameForAtomic (.sort n))
     addCommand (.declSort name 0)
   return ← h2Symb (.sort n) .none
 
-private def lamSort2SSortAux (sni : SMTNamingInfo) : LamSort → TransM LamAtomic LamSort SSort
+private def lamSort2SSortAux (sni : SMTNamingInfo) : LamSort → TransM LamAtomic SSort
 | .atom n => do return .app (.symb (← lamSortAtom2String sni n)) #[]
 | .base b => return lamBaseSort2SSort b
 | .func _ _ => throwError "{decl_name%} :: Unexpected error. Higher order input?"
 
 /-- Only translates first-order types -/
-private def lamSort2SSort (sni : SMTNamingInfo) : LamSort → TransM LamAtomic LamSort (List SSort × SSort)
+private def lamSort2SSort (sni : SMTNamingInfo) : LamSort → TransM LamAtomic (List SSort × SSort)
 | .func argTy resTy => do
   let (smargs, smres) ← lamSort2SSort sni resTy
   let smarg ← lamSort2SSortAux sni argTy
@@ -194,7 +202,7 @@ mutual
       If `s` does not correspond to a structure or inductive datatype that has been translated to an SMT datatype, then
       the `selInfos?` field should be `none`. -/
   private partial def defineWfConstraint (sni : SMTNamingInfo) (s : LamSort) (selInfos? : Option (Array SelectorInfo))
-    : TransM LamAtomic LamSort (Option String) := do
+    : TransM LamAtomic (Option String) := do
     trace[auto.lamFOL2SMT] "Calling defineWfConstraint on {s}"
     match s, selInfos? with
     | .atom n, none => return none -- The well-formed predicate for every atom that doesn't correspond to a datatype is `True`
@@ -240,8 +248,7 @@ mutual
                   let selOutputTypeName ← h2Symb (.sort n) none
                   -- Check whether `selOutputType` is one of the datatypes whose well-formed constraint is currently being defined
                   if ctorInfos.contains selOutputTypeName then
-                    let some selOutputTypeWfConstraint ← h2SymbWf selOutputType $ some ("wf" ++ selOutputTypeName.capitalize)
-                      | throwError "{decl_name%} :: h2SymbWf returned none given {s} even though {s} has a nontrivial well-formed predicate"
+                    let selOutputTypeWfConstraint ← h2Symb (.wfPred (.atom n)) $ some ("wf" ++ selOutputTypeName.capitalize)
                     wfSelectorTerms := wfSelectorTerms.push $ .qStrApp selOutputTypeWfConstraint #[.qStrApp selName #[.bvar 0]]
                   else -- `selOutputType` does not correspond to one of the datatypes whose well-formed constraint is being defined, so we can ignore it
                     continue
@@ -278,12 +285,7 @@ mutual
         /- Define the well-formed constraints for `s` in terms of `wfCstrConjunctions` (note we must do this even if they are equivalent to `True`)
            because `h2SymbWf` may have been called on the datatypes that appear in `selInfos`. -/
         let dnames ← wfCstrConjunctions.mapM (fun (datatype, _, _) => do disposableName (← sni.suggestNameForSort datatype))
-        let wfConstraintNames ← wfCstrConjunctions.mapM (fun (datatype, datatypeName, _) => h2SymbWf datatype $ some ("wf" ++ datatypeName.capitalize))
-        let wfConstraintNames ← wfConstraintNames.mapM
-          (fun wfConstraintNameOpt =>
-            match wfConstraintNameOpt with
-            | some wfConstraintName => pure wfConstraintName
-            | none => throwError "{decl_name%} :: h2SymbWf returned returned none for one of the datatypes in {selInfos}")
+        let wfConstraintNames ← wfCstrConjunctions.mapM (fun (datatype, datatypeName, _) => h2Symb (.wfPred datatype) $ some ("wf" ++ datatypeName.capitalize))
         let mut funDefs : Array (String × Array (String × SSort) × SSort × STerm) := #[]
         for (wfConstraintName, (datatype, datatypeName, wfCstrConjunction)) in wfConstraintNames.zip wfCstrConjunctions do
           funDefs := funDefs.push (wfConstraintName, #[(dnames[0]!, ← lamSort2SSortAux sni datatype)], lamBaseSort2SSort .bool, wfCstrConjunction)
@@ -294,8 +296,7 @@ mutual
             return some wfConstraintName
         throwError "{decl_name%} :: After defining the well-formed constraints for {selInfos}, failed to find the well-formed constraint name corresponding to {s}"
     | .base .nat, none =>
-      let some name ← h2SymbWf s (some "wfNat")
-        | throwError "{decl_name%} :: h2SymbWf returned none given {s} even though {s} has a nontrivial well-formed predicate"
+      let name ← h2Symb (.wfPred s) (some "wfNat")
       let dname ← disposableName (← sni.suggestNameForSort s)
       addCommand (.defFun false name #[(dname, lamBaseSort2SSort .nat)] (lamBaseSort2SSort .bool) (.qStrApp ">=" #[.bvar 0, .sConst (.num 0)]))
       return some name
@@ -312,25 +313,27 @@ mutual
       If `s` does not correspond to a structure or inductive datatype that has been translated to an SMT datatype, then
       the `datatypeSelInfos?` field should be `none`. -/
   private partial def getWfConstraint (sni : SMTNamingInfo) (s : LamSort) (datatypeSelInfos? : Option (Array SelectorInfo))
-    : TransM LamAtomic LamSort (Option String) := do
-    match (← getWfPredicatesMap).get? s with
-    | some (some wf_pred) => return some wf_pred
-    | some none => return none -- The well-formed constraint corresponding to `s` is equivalent to `True`
+    : TransM LamAtomic (Option String) := do
+    match (← getH2lMap).get? (.wfPred s) with
+    | some wfPred => return some wfPred
     | none =>
-      let some wf_pred ← defineWfConstraint sni s datatypeSelInfos?
+      let some wfPred ← defineWfConstraint sni s datatypeSelInfos?
         | return none -- The well-formed constraint corresponding to `s` is equivalent to `True`
-      return some wf_pred
+      return some wfPred
 
   /-- Adds a well-formed constraint asserting that `name` of sort `s` is well-formed. If `s`'s well-formed constraint is equivalent
       to `True`, then `addWfConstraint` doesn't assert anything. -/
-  private partial def addWfConstraint (sni : SMTNamingInfo) (name : String) (s : LamSort) : TransM LamAtomic LamSort Unit := do
+  private partial def addWfConstraint (sni : SMTNamingInfo) (name : String) (s : LamSort) : TransM LamAtomic Unit := do
     let some resWfConstraint ← getWfConstraint sni s.getResTy none
       | pure () -- If `getWfConstraint` returns `none`, then `s`'s well-formed constraint is equivalent to `True`
     let args ← (Array.mk s.getArgTys).mapM (fun s => do return (s, ← IR.SMT.disposableName (← sni.suggestNameForSort s)))
     let fnApp := .qStrApp name (args.zipIdx.map (fun (_, n) => .bvar (args.size - 1 - n)))
     let mut fnConstr := .qStrApp resWfConstraint #[fnApp]
     for (argTy, argName) in args.reverse do
-      match ← getWfConstraint sni argTy none with -- **TODO** Is it always correct to use `none` here?
+      -- `none` can be used in the `getWfConstraint` call below because the argument is only used if `argTy` hasn't had its
+      -- well-formed constraint defined yet Since `lamFOL2SMT` calls `defineWfConstraint` on all datatypes before translating
+      -- terms, `argTy` can't be a datatype that hasn't had its well-formed constraint defined yet
+      match ← getWfConstraint sni argTy none with
       | some argWfConstraint =>
         let argWf := .qStrApp argWfConstraint #[.bvar 0]
         fnConstr := .forallE argName (← lamSort2SSortAux sni argTy) $ .qStrApp "=>" #[argWf, fnConstr]
@@ -343,14 +346,14 @@ private def int2STerm : Int → STerm
 | .ofNat n   => .sConst (.num n)
 | .negSucc n => .qIdApp (QualIdent.ofString "-") #[.sConst (.num (Nat.succ n))]
 
-private def lamBvOfNat2String (sni : SMTNamingInfo) (n : Nat) : TransM LamAtomic LamSort String := do
+private def lamBvOfNat2String (sni : SMTNamingInfo) (n : Nat) : TransM LamAtomic String := do
   if !(← hIn (.bvOfNat n)) then
     let name ← h2Symb (.bvOfNat n) (← sni.suggestNameForAtomic (.bvOfNat n))
     let (argSorts, resSort) ← lamSort2SSort sni (.func (.base .int) (.base (.bv n)))
     addCommand (.declFun name ⟨argSorts⟩ resSort)
   return ← h2Symb (.bvOfNat n) .none
 
-private def lamBvToNat2String (sni : SMTNamingInfo) (n : Nat) : TransM LamAtomic LamSort String := do
+private def lamBvToNat2String (sni : SMTNamingInfo) (n : Nat) : TransM LamAtomic String := do
   if !(← hIn (.bvToNat n)) then
     let name ← h2Symb (.bvToNat n) (← sni.suggestNameForAtomic (.bvToNat n))
     let (argSorts, resSort) ← lamSort2SSort sni (.func (.base (.bv n)) (.base .int))
@@ -362,11 +365,11 @@ private def bitVec2STerm (n i : Nat) : STerm :=
   let digs := (List.range (n - digs.length)).map (fun _ => false) ++ digs
   .sConst (.binary digs)
 
-private def lamBaseTerm2STerm_Arity3 (arg1 arg2 arg3 : STerm) : LamBaseTerm → TransM LamAtomic LamSort STerm
+private def lamBaseTerm2STerm_Arity3 (arg1 arg2 arg3 : STerm) : LamBaseTerm → TransM LamAtomic STerm
 | .scst .srepall => return .qStrApp "str.replace_all" #[arg1, arg2, arg3]
 | t              => throwError "{decl_name%} :: The arity of {repr t} is not 3"
 
-private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → TransM LamAtomic LamSort STerm
+private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → TransM LamAtomic STerm
 | .pcst .and  => return .qStrApp "and" #[arg1, arg2]
 | .pcst .or   => return .qStrApp "or" #[arg1, arg2]
 | .pcst .imp  => return .qStrApp "=>" #[arg1, arg2]
@@ -433,7 +436,7 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .ocst (.smtAttr1T name _ _) => return .attrApp name arg1 arg2
 | t           => throwError "{decl_name%} :: The arity of {repr t} is not 2"
 
-private def lamBaseTerm2STerm_Arity1 (sni : SMTNamingInfo) (arg : STerm) : LamBaseTerm → TransM LamAtomic LamSort STerm
+private def lamBaseTerm2STerm_Arity1 (sni : SMTNamingInfo) (arg : STerm) : LamBaseTerm → TransM LamAtomic STerm
 | .pcst .not             => return .qStrApp "not" #[arg]
 | .bcst .ofProp          => return arg
 | .bcst .notb            => return .qStrApp "not" #[arg]
@@ -499,7 +502,7 @@ where
     let andExpr := .qStrApp "bvand" #[arg, .qStrApp "bvshl" #[bitVec2STerm n 1, bitVec2STerm n (n - 1)]]
     .qStrApp "not" #[.qStrApp "=" #[andExpr, bitVec2STerm n 0]]
 
-private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtomic LamSort STerm
+private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtomic STerm
 | .pcst .trueE        => return .qStrApp "true" #[]
 | .pcst .falseE       => return .qStrApp "false" #[]
 | .bcst .trueb        => return .qStrApp "true" #[]
@@ -509,7 +512,7 @@ private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtomic LamSort 
 | .bvcst (.bvVal n i) => return bitVec2STerm n i
 | t                   => throwError "{decl_name%} :: The arity of {repr t} is not 0"
 
-def lamTermAtom2String (sni : SMTNamingInfo) (lamVarTy : Array LamSort) (n : Nat) : TransM LamAtomic LamSort (LamSort × String) := do
+def lamTermAtom2String (sni : SMTNamingInfo) (lamVarTy : Array LamSort) (n : Nat) : TransM LamAtomic (LamSort × String) := do
   let .some s := lamVarTy[n]?
     | throwError "{decl_name%} :: Unexpected term atom {repr (LamTerm.atom n)}"
   -- Empty type is not inhabited
@@ -522,7 +525,7 @@ def lamTermAtom2String (sni : SMTNamingInfo) (lamVarTy : Array LamSort) (n : Nat
     addWfConstraint sni name s
   return (s, ← h2Symb (.term n) .none)
 
-def lamTermEtom2String (sni : SMTNamingInfo) (lamEVarTy : Array LamSort) (n : Nat) : TransM LamAtomic LamSort (LamSort × String) := do
+def lamTermEtom2String (sni : SMTNamingInfo) (lamEVarTy : Array LamSort) (n : Nat) : TransM LamAtomic (LamSort × String) := do
   let .some s := lamEVarTy[n]?
     | throwError "{decl_name%} :: Unexpected etom {repr (LamTerm.etom n)}"
   -- Empty type is not inhabited
@@ -536,7 +539,7 @@ def lamTermEtom2String (sni : SMTNamingInfo) (lamEVarTy : Array LamSort) (n : Na
   return (s, ← h2Symb (.etom n) .none)
 
 private def lamTerm2STermAux (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Array LamSort) (args : Array STerm) :
-  LamTerm → TransM LamAtomic LamSort STerm
+  LamTerm → TransM LamAtomic STerm
 | .atom n => do
   let (s, name) ← lamTermAtom2String sni lamVarTy n
   if args.size != s.getArgTys.length then
@@ -556,7 +559,7 @@ private def lamTerm2STermAux (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Array L
   | _         => throwError "{decl_name%} :: Argument number mismatch. Higher order input?"
 | t => throwError "{decl_name%} :: Unexpected head term {repr t}"
 
-def lamQuantified2STerm (sni : SMTNamingInfo) (forall? : Bool) (s : LamSort) (body : TransM LamAtomic LamSort STerm) : TransM LamAtomic LamSort STerm := do
+def lamQuantified2STerm (sni : SMTNamingInfo) (forall? : Bool) (s : LamSort) (body : TransM LamAtomic STerm) : TransM LamAtomic STerm := do
   -- Empty type is not inhabited
   if s == .base .empty then
     return .qStrApp "true" #[]
@@ -571,7 +574,7 @@ def lamQuantified2STerm (sni : SMTNamingInfo) (forall? : Bool) (s : LamSort) (bo
   | false => return .existE dname s' body'
 
 private partial def lamTerm2STerm (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Array LamSort) :
-  LamTerm → TransM LamAtomic LamSort STerm
+  LamTerm → TransM LamAtomic STerm
 | .base b => lamBaseTerm2STerm_Arity0 b
 | .bvar n => return .bvar n
 | .app _ (.app _ (.base (.eqI _)) _) _ =>
@@ -607,7 +610,7 @@ where
   | t => (#[], t)
 
 private def tryLamTerm2Sterm (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Array LamSort) (t : LamTerm) :
-  TransM LamAtomic LamSort (Option STerm) := do
+  TransM LamAtomic (Option STerm) := do
   try
     return some (← lamTerm2STerm sni lamVarTy lamEVarTy t)
   catch e =>
@@ -615,64 +618,7 @@ private def tryLamTerm2Sterm (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Array L
     return none
 
 private def lamMutualIndInfo2STerm (sni : SMTNamingInfo) (mind : MutualIndInfo) :
-  TransM LamAtomic LamSort (IR.SMT.Command ×
-    Array (String × LamSort × LamTerm) ×
-    Array (String × LamSort × LamTerm)) := do
-  let mut infos := #[]
-  let mut compCtors := #[]
-  let mut compProjs := #[]
-  -- Go through `type` and call `h2Symb` on all the atoms so that there won't
-  --   be declared during the following `lamSort2SSort`
-  for ⟨type, _, _⟩ in mind do
-    let .atom sn := type
-      | throwError "{decl_name%} :: Inductive type {type} is not a sort atom"
-    -- Do not use `lamSortAtom2String` because we don't want to `declare-sort`
-    let _ ← h2Symb (.sort sn) (← sni.suggestNameForAtomic (.sort sn))
-  for ⟨type, ctors, projs⟩ in mind do
-    let .atom sn := type
-      | throwError "{decl_name%} :: Unexpected error"
-    let mut projInfos : Array (LamSort × String) := #[]
-    if let .some projs := projs then
-      if ctors.length != 1 then
-        throwError "{decl_name%} :: Unexpected error"
-      for (s, t) in projs do
-        let mut projname := ""
-        match t with
-        | .atom n => projname ← h2Symb (.term n) (← sni.suggestNameForAtomic (.term n))
-        | .etom n => projname ← h2Symb (.etom n) (← sni.suggestNameForAtomic (.etom n))
-        | t       =>
-          projname ← h2Symb (.compProj t) (← sni.suggestNameForAtomic (.compProj t))
-          compProjs := compProjs.push (projname, s, t)
-        projInfos := projInfos.push (s, projname)
-    let sname ← h2Symb (.sort sn) .none
-    let mut cstrDecls : Array ConstrDecl := #[]
-    for (s, t) in ctors do
-      let mut ctorname := ""
-      match t with
-      -- Do not use `lamSortAtom2String` because we don't want to `declare-fun`
-      | .atom n => ctorname ← h2Symb (.term n) (← sni.suggestNameForAtomic (.term n))
-      -- Do not use `lamSortEtom2String` because we don't want to `declare-fun`
-      | .etom n => ctorname ← h2Symb (.etom n) (← sni.suggestNameForAtomic (.etom n))
-      | t       =>
-        ctorname ← h2Symb (.compCtor t) (← sni.suggestNameForAtomic (.compCtor t))
-        compCtors := compCtors.push (ctorname, s, t)
-      let (argTys, _) ← lamSort2SSort sni s
-      let mut selDecls := #[]
-      if projs.isSome then
-        if argTys.length != projInfos.size then
-          throwError "{decl_name%} :: Unexpected error"
-        selDecls := ((Array.mk argTys).zip projInfos).map (fun (argTy, _, name) => (name, argTy))
-      else
-        selDecls := (Array.mk argTys).zipIdx.map (fun (argTy, idx) =>
-          (ctorname ++ s!"_sel{idx}", argTy))
-      cstrDecls := cstrDecls.push ⟨ctorname, selDecls⟩
-    infos := infos.push (sname, 0, ⟨#[], cstrDecls⟩)
-  return (.declDtypes infos, compCtors, compProjs)
-
-/-- Like `lamMutualIndInfo2STerm` but also returns the `infos` passed into the `declDtypes` command
-    and a `SelectorInfo` array -/
-private def lamMutualIndInfo2STermWithInfos (sni : SMTNamingInfo) (mind : MutualIndInfo) :
-  TransM LamAtomic LamSort (IR.SMT.Command ×
+  TransM LamAtomic (IR.SMT.Command ×
     Array (String × LamSort × LamTerm) ×
     Array (String × LamSort × LamTerm) ×
     Array (String × Nat × DatatypeDecl) ×
@@ -748,7 +694,7 @@ private def lamMutualIndInfo2STermWithInfos (sni : SMTNamingInfo) (mind : Mutual
 
 private def compEqn
   (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Array LamSort)
-  (compInfo : String × LamSort × LamTerm) : TransM LamAtomic LamSort IR.SMT.Command := do
+  (compInfo : String × LamSort × LamTerm) : TransM LamAtomic IR.SMT.Command := do
   let (name, s, t) := compInfo
   let argTys := s.getArgTys
   let sbvars := (List.range argTys.length).map (fun n => .bvar (argTys.length - 1 - n))
@@ -811,43 +757,12 @@ open SMT in
 def lamFOL2SMT
   (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Array LamSort)
   (facts : Array LamTerm) (minds : Array MutualIndInfo) :
-  TransM LamAtomic LamSort (Array IR.SMT.Command × Array STerm) := do
-  let _ ← sortAuxDecls.mapM addCommand
-  let _ ← termAuxDecls.mapM addCommand
-  let mut compCtorProjs := #[]
-  for mind in minds do
-    let (dsdecl, compCtors, compProjs) ← lamMutualIndInfo2STerm sni mind
-    trace[auto.lamFOL2SMT] "MutualIndInfo translated to command {dsdecl}"
-    addCommand dsdecl
-    compCtorProjs := compCtorProjs.append (compCtors ++ compProjs)
-  let compEqns ← compCtorProjs.mapM (compEqn sni lamVarTy lamEVarTy)
-  let _ ← compEqns.mapM addCommand
-  let mut validFacts := #[]
-  for (t, idx) in facts.zipIdx do
-    let stermOpt ←
-      if (← getIgnoreUnusableFactsM) then
-        tryLamTerm2Sterm sni lamVarTy lamEVarTy t
-      else
-        lamTerm2STerm sni lamVarTy lamEVarTy t
-    let some sterm := stermOpt
-      | continue -- If `getIgnoreUnusableFactsM` is true, then silently ignore facts that cannot be translated to STerms and move on to the next fact
-    validFacts := validFacts.push sterm
-    trace[auto.lamFOL2SMT] "λ term {repr t} translated to SMT term {sterm}"
-    addCommand (.assert (.attr sterm #[.symb "named" s!"valid_fact_{idx}"]))
-  let commands ← getCommands
-  return (commands, validFacts)
-
-open SMT in
-/-- Identical to `lamFOL2SMT` but it also outputs `Auto.IR.SMT.State.l2hMap`, `Auto.IR.SMT.getWfPredicatesInvMap`, and selector information -/
-def lamFOL2SMTWithExtraInfo
-  (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Array LamSort)
-  (facts : Array LamTerm) (minds : Array MutualIndInfo) :
-  TransM LamAtomic LamSort (Array IR.SMT.Command × Array STerm × Std.HashMap String LamAtomic × Std.HashMap String LamSort × Array SelectorInfo) := do
+  TransM LamAtomic (Array IR.SMT.Command × Array STerm × Array SelectorInfo) := do
   let _ ← sortAuxDecls.mapM addCommand
   let _ ← termAuxDecls.mapM addCommand
   let mut selInfos : Array SelectorInfo := #[]
   for mind in minds do
-    let (dsdecl, compCtors, compProjs, mindInfos, mindSelInfos) ← lamMutualIndInfo2STermWithInfos sni mind
+    let (dsdecl, compCtors, compProjs, mindInfos, mindSelInfos) ← lamMutualIndInfo2STerm sni mind
     trace[auto.lamFOL2SMT] "MutualIndInfo {mind} translated to command {dsdecl}"
     trace[auto.lamFOL2SMT] "mindInfos for {mind}: {mindInfos.map (fun x => (x.1, DatatypeDecl.toString x.2.2))}"
     trace[auto.lamFOL2SMT] "Selector infos for {mind}: {mindSelInfos}"
@@ -883,8 +798,6 @@ def lamFOL2SMTWithExtraInfo
     trace[auto.lamFOL2SMT] "λ term {repr t} translated to SMT term {sterm}"
     addCommand (.assert (.attr sterm #[.symb "named" s!"valid_fact_{idx}"]))
   let commands ← getCommands
-  let l2hMap ← Auto.IR.SMT.getL2hMap
-  let wfPredicatesInvMap ← Auto.IR.SMT.getWfPredicatesInvMap
-  return (commands, validFacts, l2hMap, wfPredicatesInvMap, selInfos)
+  return (commands, validFacts, selInfos)
 
 end Auto

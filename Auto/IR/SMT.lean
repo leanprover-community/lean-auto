@@ -395,8 +395,6 @@ section
 
   -- Type of (identifiers in higher-level logic)
   variable (ω : Type) [BEq ω] [Hashable ω]
-  -- Type of (sorts in higher-level logic)
-  variable (φ : Type) [BEq φ] [Hashable φ]
 
   /--
     The main purpose of this state is for name generation
@@ -424,46 +422,39 @@ section
     --   been used for `k` times (`k > 0`), return `n' ++ s!"_{k - 1}"`.
     -- `usedNames` records the `k - 1` for each `n'`
     usedNames : Std.HashMap String Nat := {}
-    -- Map from SMT sorts to the names of their corresponding well-formed predicates.
-    -- If an SMT sort's well-formed predicate would be equivalent to `True`, no
-    -- well-formed predicate needs to be created, so `wfPredicatesMap` maps that sort
-    -- to `none`
-    wfPredicatesMap : Std.HashMap φ (Option String) := {}
-    -- Inverse of `wfPredicates`
-    wfPredicatesInvMap : Std.HashMap String φ := {}
     -- List of commands
     commands  : Array Command      := #[]
 
-  abbrev TransM := StateRefT (State ω φ) MetaM
+  abbrev TransM := StateRefT (State ω) MetaM
 
   @[always_inline]
-  instance : Monad (TransM ω φ) :=
+  instance : Monad (TransM ω) :=
     inferInstance
 
-  instance : Inhabited (TransM ω φ α) where
+  instance : Inhabited (TransM ω α) where
     default := fun _ => throw default
 
   variable {ω : Type} [BEq ω] [Hashable ω] [ToString ω]
   variable {φ : Type} [BEq φ] [Hashable φ] [ToString φ]
 
-  @[inline] def TransM.run (x : TransM ω φ α) (s : State ω φ := {}) : MetaM (α × State ω φ) :=
+  @[inline] def TransM.run (x : TransM ω α) (s : State ω := {}) : MetaM (α × State ω) :=
     StateRefT'.run x s
 
-  @[inline] def TransM.run' (x : TransM ω φ α) (s : State ω φ := {}) : MetaM α :=
+  @[inline] def TransM.run' (x : TransM ω α) (s : State ω := {}) : MetaM α :=
     Prod.fst <$> StateRefT'.run x s
 
-  #genMonadState (TransM ω φ)
+  #genMonadState (TransM ω)
 
-  def getMapSize : TransM ω φ Nat := do
+  def getMapSize : TransM ω Nat := do
     let size := (← getH2lMap).size
     assert! ((← getL2hMap).size == size)
     return size
 
-  def hIn (e : ω) : TransM ω φ Bool := do
+  def hIn (e : ω) : TransM ω Bool := do
     return (← getH2lMap).contains e
 
   /- Note that this function will add the processed name to `usedNames` -/
-  def processSuggestedName (nameSuggestion : String) : TransM ω φ String := do
+  def processSuggestedName (nameSuggestion : String) : TransM ω String := do
     let mut preName := nameSuggestion.map (fun c => if allowed c then c else '_')
     if preName.all (fun c => c == '_') then
       preName := "pl_" ++ preName
@@ -488,13 +479,13 @@ section
 
 
   /- Generate names that does not correspond to high-level construct -/
-  partial def disposableName (nameSuggestion : String) : TransM ω φ String := processSuggestedName nameSuggestion
+  partial def disposableName (nameSuggestion : String) : TransM ω String := processSuggestedName nameSuggestion
 
   /--
     Turn high-level construct into low-level symbol
     Note that this function is idempotent
   -/
-  partial def h2Symb (cstr : ω) (nameSuggestion : Option String) : TransM ω φ String := do
+  partial def h2Symb (cstr : ω) (nameSuggestion : Option String) : TransM ω String := do
     trace[auto.lamFOL2SMT] "Calling h2Symb on {cstr} with nameSuggestion {nameSuggestion}"
     let l2hMap ← getL2hMap
     let h2lMap ← getH2lMap
@@ -507,21 +498,7 @@ section
     setH2lMap (h2lMap.insert cstr name)
     return name
 
-  /-- Like `hySymb` but produces names for well-formed predicates of sort `s` (of type `φ`) rather than of
-      constructs (of type `ω`) -/
-  partial def h2SymbWf (s : φ) (nameSuggestion : Option String) : TransM ω φ (Option String) := do
-    let wfPredicatesMap ← getWfPredicatesMap
-    let wfPredicatesInvMap ← getWfPredicatesInvMap
-    if let some name := wfPredicatesMap.get? s then
-      return name
-    let .some nameSuggestion := nameSuggestion
-      | throwError "{decl_name%} :: Fresh well-formed predicate for {s} without name suggestion"
-    let name ← processSuggestedName nameSuggestion
-    setWfPredicatesInvMap (wfPredicatesInvMap.insert name s)
-    setWfPredicatesMap (wfPredicatesMap.insert s name)
-    return name
-
-  def addCommand (c : Command) : TransM ω φ Unit := do
+  def addCommand (c : Command) : TransM ω Unit := do
     let commands ← getCommands
     setCommands (commands.push c)
 
