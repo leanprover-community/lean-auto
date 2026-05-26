@@ -584,9 +584,17 @@ section Complex
 
 end Complex
 
--- Ad-hoc support
+-- SMT support
 
-section Adhoc
+section SMT
+
+  set_option auto.tptp false
+  set_option auto.native false
+  set_option auto.smt true
+  set_option auto.smt.trust true
+
+  set_option auto.mono.ciInstDefEq false
+  set_option auto.mono.termLikeDefEq false
 
   -- If-then-else
   example (h₁ : if 2 < 3 then False else True) (h₂ : 2 < 3) : False := by
@@ -667,6 +675,12 @@ section Adhoc
 
   example (a b c d : Nat) (h₁ : a ≤ b) (h₂ : c ≥ d) : b ≥ a ∧ d ≤ c := by auto
 
+  example : 10 % 0 = 10 := by
+    auto
+
+  example : 10 / 0 = 0 := by
+    auto
+
   -- Integer
   example
     (a b : Int)
@@ -685,6 +699,12 @@ section Adhoc
   example : (3 : Int) = ((nat_lit 3) : Int) := by auto
 
   example : (-3 : Int) = (-(nat_lit 3) : Int) := by auto
+
+  example : (10 : Int) % (0 : Int) = 10 := by
+    auto
+
+  example : (10 : Int) / (0 : Int) = 0 := by
+    auto
 
   -- String
   example (a b : String)
@@ -716,22 +736,26 @@ section Adhoc
     a.rotateLeft w = a.rotateLeft w ∧
     a.rotateRight w = a.rotateRight w := by auto
 
+  -- SMT attributes
+  open Auto.SMT.Attribute in
+  example (f : Int → Int) (H : forall x, trigger (f x) (f x > x)) :
+    (forall x, (f x) + 1 > x) := by
+    auto [H]
+
+end SMT
+
+-- TPTP Support
+
+section TPTP
+
   -- TPTP/SMT support for `Empty`
-  set_option auto.tptp true in
   example (f : ((Empty → Prop) → Prop) → Prop) :
     f Auto.Embedding.forallF = f Auto.Embedding.forallF := by auto
 
-  set_option auto.tptp true in
   example (f : ((Empty → Prop) → Prop) → Prop) :
     f Exists = f Exists := by auto
 
-  -- SMT attributes
-  open Auto.SMT.Attribute in
-  set_option auto.tptp false in
-  example : trigger (fun (x : Nat) => x) True = True := by
-    auto
-
-end Adhoc
+end TPTP
 
 -- Issues
 section Issues

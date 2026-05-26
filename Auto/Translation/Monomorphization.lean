@@ -35,6 +35,11 @@ register_option auto.mono.recordInstInst : Bool := {
   descr := "Whether to record instances of constants with the `instance` attribute"
 }
 
+register_option auto.mono.ciInstDefEq : Bool := {
+  defValue := true,
+  descr := "Whether to generate definitional equalities for constant instances"
+}
+
 register_option auto.mono.ciInstDefEq.mode : Meta.TransparencyMode := {
   defValue := .default
   descr := "Transparency level used when collecting definitional equality" ++
@@ -44,6 +49,11 @@ register_option auto.mono.ciInstDefEq.mode : Meta.TransparencyMode := {
 register_option auto.mono.ciInstDefEq.maxHeartbeats : Nat := {
   defValue := 2048
   descr := "Heartbeats allocated to each unification of constant instance"
+}
+
+register_option auto.mono.termLikeDefEq : Bool := {
+  defValue := true,
+  descr := "Whether to generate definitional equalities for term-like subterms"
 }
 
 register_option auto.mono.termLikeDefEq.mode : Meta.TransparencyMode := {
@@ -631,7 +641,9 @@ where
     return lhs == rhs
 
 def initializeMonoM (lemmas : Array Lemma) : MonoM Unit := do
-  let lemmas := lemmas ++ (← termLikeDefEqDefEqs lemmas)
+  let mut lemmas := lemmas
+  if auto.mono.termLikeDefEq.get (← getOptions) then
+    lemmas := lemmas ++ (← termLikeDefEqDefEqs lemmas)
   let lemmaInsts ← liftM <| lemmas.mapM (fun lem => do
     let li ← LemmaInst.ofLemmaHOL lem
     trace[auto.mono.printLemmaInst] "New {li}"
@@ -676,7 +688,8 @@ def saturate : MonoM Unit := do
       return
     match ← dequeueActive? with
     | .some (.inl ci) =>
-      generateCiInstDefEq ci
+      if auto.mono.ciInstDefEq.get (← getOptions) then
+        generateCiInstDefEq ci
       let lisArr ← getLisArr
       trace[auto.mono.match] "Matching against {ci}"
       for (lis, idx) in lisArr.zipIdx do
