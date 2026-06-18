@@ -420,7 +420,7 @@ theorem LamThmValid.ofLamThmValidD (H : LamThmValidD lval lctx t) :
     case htys => rw [ofFun_pushs]; rfl
     case hhl => apply eqRec_heq'
   case h₂ =>
-    dsimp; apply HList.ofFun_getD_eq_some _ _ _ hlt
+    apply HList.ofFun_getD_eq_some _ _ _ hlt
 
 theorem LamThmValid.eVarIrrelevance
   (lval₁ : LamValuation.{u}) (lval₂ : LamValuation.{u})
@@ -891,7 +891,7 @@ theorem LamEquiv.not_imp_not
   LamEquiv lval lctx (.base .prop) (.mkImp (.mkNot t₁) (.mkNot t₂)) (.mkImp t₂ t₁) := by
   exists (LamWF.mkImp (.mkNot wf₁) (.mkNot wf₂)); exists (LamWF.mkImp wf₂ wf₁); intro lctxTerm
   dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, LamTerm.mkImp, impLift, notLift]
-  apply GLift.down.inj; dsimp; apply propext (Iff.intro ?mp ?mpr)
+  apply GLift.down.inj; apply propext (Iff.intro ?mp ?mpr)
   case mp =>
     intro nin h; apply Classical.byContradiction; intro nh'; apply nin nh' h
   case mpr =>
@@ -903,7 +903,7 @@ theorem LamEquiv.imp_swap
   (wf₃ : LamWF lval.toLamTyVal ⟨lctx, t₃, .base .prop⟩) :
   LamEquiv lval lctx (.base .prop) (.mkImp t₁ (.mkImp t₂ t₃)) (.mkImp t₂ (.mkImp t₁ t₃)) := by
   exists .mkImp wf₁ (.mkImp wf₂ wf₃); exists .mkImp wf₂ (.mkImp wf₁ wf₃); intro lctxTerm
-  apply GLift.down.inj; dsimp; apply propext (Iff.intro ?mp ?mpr) <;> intro f <;> exact fun a b => f b a
+  apply GLift.down.inj; apply propext (Iff.intro ?mp ?mpr) <;> intro f <;> exact fun a b => f b a
 
 theorem LamValid.eq_refl
   (wfA : LamWF lval.toLamTyVal ⟨lctx, a, s⟩) : LamValid lval lctx (.mkEq s a a) := by
@@ -1011,7 +1011,7 @@ theorem LamEquiv.eqFunextH
     exists LamWF.mkForallEF (.ofApp _ (.ofApp _ (.ofBase (.ofEq _)) wfFn₁) wfFn₂)
     exists LamWF.mkEq (.ofLam _ wfFn₁) (.ofLam _ wfFn₂); intro lctxTerm
     dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, LamWF.mkEq, eqLiftFn, forallLiftFn]
-    apply GLift.down.inj; dsimp; apply propext (Iff.intro ?mp ?mpr)
+    apply GLift.down.inj; apply propext (Iff.intro ?mp ?mpr)
     case mp => apply funext
     case mpr => intro h x; apply _root_.congrFun h
 

@@ -198,29 +198,28 @@ theorem LamTerm.maxEVarSucc_etaReduce1? (heq : etaReduce1? t = .some t') :
   t'.maxEVarSucc = t.maxEVarSucc := by
   match t, heq with
   | .lam s (.app s' body (.bvar 0)), heq =>
-    dsimp [etaReduce1?] at heq; dsimp [maxEVarSucc]
-    rw [Nat.max, Nat.max_zero_right]; revert heq
-    match h : bvarLower? body with
-    | .some body' =>
-      dsimp; intro h'; cases h'
+    dsimp [maxEVarSucc]
+    rw [Nat.max, Nat.max_zero_right]
+    simp only [etaReduce1?] at heq
+    split at heq
+    · rename_i body' h; cases heq
       rw [maxEVarSucc_bvarLower? h]
-    | .none => intro h'; cases h'
+    · cases heq
 
 theorem LamEquiv.etaReduce1?
   (wft : LamWF lval.toLamTyVal ⟨lctx, t, rty⟩) (heq : LamTerm.etaReduce1? t = .some t') :
   LamEquiv lval lctx rty t t' := by
   match t, heq with
   | .lam s (.app s' body (.bvar 0)), heq =>
-    dsimp [LamTerm.etaReduce1?] at heq; revert heq
-    match h : body.bvarLower? with
-    | .some body' =>
-      dsimp; intro h'; cases h'
+    simp only [LamTerm.etaReduce1?] at heq
+    split at heq
+    · rename_i body' h; cases heq
       cases (LamTerm.bvarLower?_spec.mp h); clear h
       match wft with
       | .ofLam argTy (.ofApp _ HBody HBVar) =>
         cases (show s = s' by cases HBVar; rfl); clear HBVar
         apply symm (LamEquiv.etaExpand1 (.fromBVarLift _ HBody))
-    | .none => intro h; cases h
+    · cases heq
 
 theorem LamGenConv.etaReduce1? : LamGenConv lval LamTerm.etaReduce1? := by
   intros t₁ t₂ heq lctx rty wf; apply LamEquiv.etaReduce1? wf heq
@@ -648,7 +647,7 @@ theorem LamEquiv.ofIntensionalizeEq1
   cases wfEq; case ofApp wfr HFn => cases HFn; case ofApp wfl wfEq =>
     cases wfEq; case ofBase b => cases b; case ofEq =>
       dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, LamWF.mkForallE]; apply GLift.down.inj
-      dsimp [forallLiftFn, eqLiftFn]; apply propext (Iff.intro ?mp ?mpr)
+      apply propext (Iff.intro ?mp ?mpr)
       case mp => apply funext
       case mpr => intro h x; apply _root_.congrFun h x
 
@@ -964,7 +963,7 @@ theorem LamWF.interp_instantiate1.{u}
   case eqBody => rw [pushLCtxAt_zero]
   case eqLarge =>
     apply eq_of_heq; apply LamWF.interp_heq <;> try rfl
-    case h.HLCtxTermEq =>
+    case HLCtxTermEq =>
       apply HEq.trans (HEq.symm (pushLCtxAtDep_zero _ _)) _
       apply pushLCtxAtDep_heq <;> try rfl
       apply LamWF.interp_heq <;> try rfl
