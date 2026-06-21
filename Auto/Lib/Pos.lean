@@ -166,8 +166,8 @@ theorem ofNat'.equivAux (rd n : Nat) : rd ≥ n → ofNat'WF n = ofNat'RD rd n :
   case succ rd' IH =>
     dsimp [ofNat'RD]
     match n with
-    | 0 => rw [ofNat'WF]
-    | 1 => rw [ofNat'WF]
+    | 0 => rw [ofNat'WF]; rfl
+    | 1 => rw [ofNat'WF]; rfl
     | n' + 2 =>
       rw [ofNat'WF.succSucc]; simp;
       have heq' : Nat.mod (n' + 2) 2 = n' % 2 := by
