@@ -54,6 +54,11 @@ register_option auto.smt.rconsProof : Bool := {
   descr := "Enable/Disable proof reconstruction"
 }
 
+register_option auto.smt.additionalFlags : String := {
+  defValue := ""
+  descr := "Additional flags to pass to the SMT solver (with each flag separated by spaces)"
+}
+
 namespace Auto
 
 namespace Solver.SMT
@@ -105,11 +110,13 @@ private def emitCommands (p : SolverProc) (c : Array IR.SMT.Command) : IO Unit :
 
 def createSolver (name : SolverName) : MetaM SolverProc := do
   let tlim := auto.smt.timeout.get (← getOptions)
+  let additionalFlags := auto.smt.additionalFlags.get (← getOptions)
+  let additionalFlags := (additionalFlags.split " ").toArray.map toString
   match name with
   | .none => throwError "{decl_name%} :: Unexpected error"
-  | .z3   => createAux "z3" #["-in", "-smt2", s!"-T:{tlim}"]
+  | .z3   => createAux "z3" (#["-in", "-smt2", s!"-T:{tlim}"] ++ additionalFlags)
   | .cvc4 => throwError "cvc4 is not supported"
-  | .cvc5 => createAux "cvc5" #[s!"--tlimit={tlim * 1000}", "--produce-models", "--enum-inst"]
+  | .cvc5 => createAux "cvc5" (#[s!"--tlimit={tlim * 1000}", "--produce-models", "--enum-inst"] ++ additionalFlags)
 where
   createAux (path : String) (args : Array String) : MetaM SolverProc :=
     IO.Process.spawn {stdin := .piped, stdout := .piped, stderr := .piped,
