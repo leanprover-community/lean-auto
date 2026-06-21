@@ -228,7 +228,7 @@ structure ConstrDecl where
   name     : String
   selDecls : Array (String × SSort)
 
-private def ConstrDecl.toString : ConstrDecl → Array SIdent → String
+protected def ConstrDecl.toString : ConstrDecl → Array SIdent → String
 | ⟨name, selDecls⟩, binders =>
   let pre := s!"({SIdent.symb name}"
   let selDecls := selDecls.map (fun (name, sort) => s!"({SIdent.symb name} " ++ SSort.toString sort binders ++ ")")
@@ -241,7 +241,7 @@ structure DatatypeDecl where
   params : Array String
   cstrDecls : Array ConstrDecl
 
-private def DatatypeDecl.toString : DatatypeDecl → String := fun ⟨params, cstrDecls⟩ =>
+protected def DatatypeDecl.toString : DatatypeDecl → String := fun ⟨params, cstrDecls⟩ =>
   let scstrDecls := cstrDecls.map (fun d => ConstrDecl.toString d (params.map SIdent.symb))
   let scstrDecls := "(" ++ String.intercalate " " scstrDecls.toList ++ ")"
   if params.size == 0 then
@@ -298,6 +298,7 @@ instance : ToString SMTOption where
                 ( declare-sort 〈symbol〉 〈numeral〉 )
                 ( define-fun 〈function_def〉 )
                 ( define-fun-rec 〈function_def〉 )
+                ( define-funs-rec ( ⟨function_dec⟩ⁿ⁺¹ ) ( ⟨term⟩ⁿ⁺¹ ) )
                 ( define-sort 〈symbol〉 ( 〈symbol〉∗ ) 〈sort〉 )
                 ( declare-datatype 〈symbol〉 〈datatype_dec〉)
                 ...
@@ -324,12 +325,23 @@ inductive Command where
   | declSort   : (name : String) → (arity : Nat) → Command
   | defFun     : (isRec : Bool) → (name : String) → (args : Array (String × SSort)) →
                    (resTy : SSort) → (body : STerm) → Command
+  -- `defFuns` is used for the command `define-funs-rec`.
+  -- Its argument is structured differently the smt-lib standard
+  -- to ensure that the number of function declarations matches the number
+  -- of function definitions. The argument is an array.
+  -- Each element in the array contains:
+  -- `String` : Function name
+  -- `Array (String × SSort)` : Function args
+  -- `SSort` : Function return sort
+  -- `STerm` : Function body
+  | defFuns    : Array (String × Array (String × SSort) × SSort × STerm) → Command
   | defSort    : (name : String) → (args : Array String) → (body : SSort) → Command
   | declDtype  : (name : String) → DatatypeDecl → Command
   -- String × Nat : sort_dec
   -- String : Name of datatype
   -- Nat    : Number of parameters of the datatype
   | declDtypes : Array (String × Nat × DatatypeDecl) → Command
+  | echo       : String → Command
   | exit       : Command
 
 def Command.toString : Command → String
@@ -354,6 +366,15 @@ def Command.toString : Command → String
   let binders := "(" ++ String.intercalate " " (args.map (fun (name, sort) => s!"({SIdent.symb name} {sort})")).toList ++ ") "
   let trail := s!"{resTy} " ++ STerm.toString body (args.map (fun (name, _) => SIdent.symb name)) ++ ")"
   pre ++ binders ++ trail
+| .defFuns defs =>
+  let pre := "(define-funs-rec "
+  let declStringOfDef : String × Array (String × SSort) × SSort × STerm → String := fun (name, args, resSort, _) =>
+    let argBinders := "(" ++ String.intercalate " " (args.map (fun (name, sort) => s!"({SIdent.symb name} {sort})")).toList ++ ") "
+    s!"({SIdent.symb name} {argBinders} {resSort})"
+  let decls := "(" ++ String.intercalate " " (defs.map declStringOfDef).toList ++ ") "
+  let bodies := "(" ++ String.intercalate " " (defs.map (fun (_, args, _, body) => STerm.toString body (args.map (fun (name, _) => SIdent.symb name)))).toList ++ ")"
+  let trail := ")"
+  pre ++ decls ++ bodies ++ trail
 | .defSort name args body              =>
   let pre := s!"(define-sort {SIdent.symb name} ("
   let sargs := String.intercalate " " args.toList ++ ") "
@@ -365,6 +386,7 @@ def Command.toString : Command → String
   let sort_decs := String.intercalate " " (infos.toList.map (fun (name, args, _) => s!"({SIdent.symb name} {args})"))
   let datatype_decs := String.intercalate " " (infos.toList.map (fun (_, _, ddecl) => ddecl.toString))
   s!"(declare-datatypes ({sort_decs}) ({datatype_decs}))"
+| .echo s                              => s!"(echo \"{s}\")"
 | .exit                                => "(exit)"
 
 instance : ToString Command where
