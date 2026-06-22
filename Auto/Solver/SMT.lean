@@ -112,6 +112,7 @@ def createSolver (name : SolverName) : MetaM SolverProc := do
   let tlim := auto.smt.timeout.get (← getOptions)
   let additionalFlags := auto.smt.additionalFlags.get (← getOptions)
   let additionalFlags := (additionalFlags.split " ").toArray.map toString
+  let additionalFlags := additionalFlags.filter (· != "")
   match name with
   | .none => throwError "{decl_name%} :: Unexpected error"
   | .z3   => createAux "z3" (#["-in", "-smt2", s!"-T:{tlim}"] ++ additionalFlags)

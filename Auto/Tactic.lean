@@ -294,7 +294,7 @@ def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : L
     | _ => throwError "{decl_name%} :: Unexpected error")
   let sni : SMT.SMTNamingInfo :=
     {tyVal := (← LamReif.getTyVal), varVal := (← LamReif.getVarVal), lamEVarTy := (← LamReif.getLamEVarTy)}
-  let ((commands, validFacts), state) ← (lamFOL2SMT sni lamVarTy lamEVarTy exportLamTerms exportInds).run
+  let ((commands, validFacts, _), state) ← (lamFOL2SMT sni lamVarTy lamEVarTy exportLamTerms exportInds).run
   for cmd in commands do
     trace[auto.smt.printCommands] "{cmd}"
   if (auto.smt.save.get (← getOptions)) then

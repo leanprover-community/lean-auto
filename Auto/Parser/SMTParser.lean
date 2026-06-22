@@ -3,10 +3,6 @@ import Auto.Parser.LexInit
 import Auto.Parser.SMTSexp
 open Lean
 
-/-
-  **TODO:** Review code
-  This file is taken from the `hammer` branch
--/
 namespace Auto
 
 namespace Parser.SMTTerm
