@@ -11,11 +11,11 @@ instance : BEq Int where
 
 theorem Int.beq_def {a b : Int} : (a == b) = Int.beq a b := rfl
 
-def Int.beq_refl : {i : Int} → (Int.beq i i) = true
+theorem Int.beq_refl : {i : Int} → (Int.beq i i) = true
 | .ofNat n => Nat.beq_refl' n
 | .negSucc n => Nat.beq_refl' n
 
-def Int.eq_of_beq_eq_true {i₁ i₂ : Int} : Int.beq i₁ i₂ → i₁ = i₂ :=
+theorem Int.eq_of_beq_eq_true {i₁ i₂ : Int} : Int.beq i₁ i₂ → i₁ = i₂ :=
   match i₁, i₂ with
   | .ofNat n₁, .ofNat n₂ => fun H => congrArg _ (Nat.eq_of_beq_eq_true H)
   | .negSucc n₁, .negSucc n₂ => fun H => congrArg _ (Nat.eq_of_beq_eq_true H)

@@ -606,6 +606,7 @@ where
     (ts.push arg, t)
   | t => (#[], t)
 
+set_option linter.unusedVariables false in -- Disabling this linter because it currently yields false positives
 private def lamMutualIndInfo2STerm (sni : SMTNamingInfo) (mind : MutualIndInfo) :
   TransM LamAtomic (
     -- Composite constructors

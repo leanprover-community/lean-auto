@@ -3,7 +3,7 @@ import Auto.Lib.BoolExtra
 namespace Auto
 
 /-- A version of `Nat.beq_refl` that reduces to `Eq.refl` -/
-def Nat.beq_refl' : (a : Nat) → (a.beq a) = true
+theorem Nat.beq_refl' : (a : Nat) → (a.beq a) = true
 | 0 => rfl
 | n + 1 => Nat.beq_refl' n
 

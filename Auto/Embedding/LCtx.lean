@@ -377,7 +377,7 @@ section push
     HEq (fun n => pushLCtxAtDep x (.succ pos) lctx (.succ n)) (pushLCtxAtDep x pos (fun n => lctx (.succ n))) :=
     restoreAtDep_succ_succ_Fn _ _ _
 
-  def pushLCtxAtDep_comm {α : Sort w} {β : α → Sort x} {rty : Nat → α} {lctxty : α → Sort u}
+  theorem pushLCtxAtDep_comm {α : Sort w} {β : α → Sort x} {rty : Nat → α} {lctxty : α → Sort u}
     (f : ∀ (x : α), lctxty x → β x) {xty : α} (x : lctxty xty) (pos : Nat)
     (lctx : ∀ n, lctxty (rty n)) (n : Nat) :
       f _ (pushLCtxAtDep x pos lctx n) = pushLCtxAtDep (lctxty:=β) (f xty x) pos (fun n => f _ (lctx n)) n := by
@@ -389,11 +389,11 @@ section push
       | _ + 1 => rfl
     | false => rfl
 
-  def pushLCtxAtDep.nonDep {rty : Nat → α} {lctxty : Sort u}
+  theorem pushLCtxAtDep.nonDep {rty : Nat → α} {lctxty : Sort u}
     {xty : α} (x : lctxty) (pos : Nat) (lctx : Nat → lctxty) (n : Nat) :
     @pushLCtxAtDep _ (fun _ => lctxty) xty x pos rty lctx n = pushLCtxAt x pos lctx n := rfl
 
-  def pushLCtxAtDep_absorbAux {rty : Nat → α} {lctxty : α → Sort u}
+  theorem pushLCtxAtDep_absorbAux {rty : Nat → α} {lctxty : α → Sort u}
     {xty : α} (x : lctxty xty) (pos : Nat) (lctx : ∀ n, lctxty (rty n)) (n : Nat) :
     HEq
       (@pushLCtxAtDep _ lctxty _ x pos rty lctx n)
@@ -907,26 +907,26 @@ section add_nat
     addAt lvl (.succ pos) (.succ n) = .succ (addAt lvl pos n) := by
     dsimp [addAt]; rw [mapAt_succ_succ]
 
-  def addAt_succ_l (lvl pos : Nat) (n : Nat) :
+  theorem addAt_succ_l (lvl pos : Nat) (n : Nat) :
     addAt (.succ lvl) pos n = succAt pos (addAt lvl pos n) := by
     unfold addAt
     have heq: (fun x => x + (lvl + 1)) = (fun x => (x + lvl).succ) := by
       apply funext; intro x; apply Nat.add_succ
     rw [heq, mapAt_comp pos Nat.succ (fun x => x + lvl) n]
 
-  def addAt_succ_r (lvl pos : Nat) (n : Nat) :
+  theorem addAt_succ_r (lvl pos : Nat) (n : Nat) :
     addAt (.succ lvl) pos n = addAt lvl pos (succAt pos n) := by
     dsimp [addAt];
     have heq : (fun x => x + Nat.succ lvl) = (fun x => (Nat.succ x) + lvl) := by
       apply funext; intros x; rw [Nat.succ_add]; rfl
     rw [heq]; rw [mapAt_comp pos (fun x => x + lvl) Nat.succ n]
 
-  def addAt_zero (pos : Nat) : addAt 0 pos = id := by
+  theorem addAt_zero (pos : Nat) : addAt 0 pos = id := by
     apply funext; intro n;
     dsimp [addAt];
     rw [mapAt_id_eq_id']; rfl
 
-  def add.one (pos : Nat) : addAt 1 pos = succAt pos:= rfl
+  theorem add.one (pos : Nat) : addAt 1 pos = succAt pos:= rfl
 
 end add_nat
 

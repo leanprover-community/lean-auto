@@ -1108,7 +1108,7 @@ def LamWF.topBetaAux (ltv : LamTyVal)
       LamWF.instantiate1 ltv lctx (argTy:=argTy') wfArg wfBody
   | .app _ _ _ => .ofApp _ wfFn wfArg
 
-def LamWF.interp_topBetaAux.{u} (lval : LamValuation.{u})
+theorem LamWF.interp_topBetaAux.{u} (lval : LamValuation.{u})
   {arg : LamTerm} {argTy : LamSort} {fn : LamTerm} {resTy : LamSort}
   (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal)
   (wfArg : LamWF lval.toLamTyVal ⟨lctxTy, arg, argTy⟩)

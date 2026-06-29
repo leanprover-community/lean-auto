@@ -275,7 +275,7 @@ private def emitLamWFInductive (c : ConstFamilyCtx) : CommandElabM Unit := do
 private def emitLamWFUnique (c : ConstFamilyCtx) : CommandElabM Unit := do
   let { lamWFUniqueId, tyName, lamSortId, lamWFId, .. } := c
   elabCommand <| ← `(
-    def $lamWFUniqueId {x : $tyName:ident} {s₁ s₂ : $lamSortId}
+    theorem $lamWFUniqueId {x : $tyName:ident} {s₁ s₂ : $lamSortId}
         (w₁ : $lamWFId x s₁) (w₂ : $lamWFId x s₂) : s₁ = s₂ ∧ HEq w₁ w₂ := by
       cases w₁ <;> cases w₂ <;> trivial)
 
@@ -347,7 +347,7 @@ private def emitInterpLemmas (c : ConstFamilyCtx) : CommandElabM Unit := do
       cases Hxy; cases hTyVal
       rcases $lamWFUniqueId w₁ w₂ with ⟨⟨⟩, ⟨⟩⟩; rfl)
   elabCommand <| ← `(
-    def $interpEquivId (tyVal : Nat → Type $uId:ident) {x : $tyName:ident} {s : $lamSortId}
+    theorem $interpEquivId (tyVal : Nat → Type $uId:ident) {x : $tyName:ident} {s : $lamSortId}
         (w : $lamWFId x s) :
         HEq ($lamWFInterpId tyVal w) ($interpId tyVal x) := by
       cases w <;> rfl)

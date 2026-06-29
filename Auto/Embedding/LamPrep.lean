@@ -391,7 +391,7 @@ def LamTerm.not_eq_true_equiv_eq_false? (t : LamTerm) : Option LamTerm :=
     .some (.mkEq (.base .prop) lhs (.base .falseE))
   | _ => .none
 
-def LamTerm.maxEVarSucc_not_eq_true_equiv_eq_false?
+theorem LamTerm.maxEVarSucc_not_eq_true_equiv_eq_false?
   (heq : LamTerm.not_eq_true_equiv_eq_false? t = .some t') :
   t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
@@ -425,7 +425,7 @@ def LamTerm.not_eq_false_equiv_eq_true? (t : LamTerm) : Option LamTerm :=
     .some (.mkEq (.base .prop) lhs (.base .trueE))
   | _ => .none
 
-def LamTerm.maxEVarSucc_not_eq_false_equiv_eq_true?
+theorem LamTerm.maxEVarSucc_not_eq_false_equiv_eq_true?
   (heq : LamTerm.not_eq_false_equiv_eq_true? t = .some t') :
   t'.maxEVarSucc = t.maxEVarSucc :=
   match t, heq with
