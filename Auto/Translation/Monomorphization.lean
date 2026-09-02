@@ -538,8 +538,8 @@ def LemmaInst.monomorphic? (li : LemmaInst) : MetaM (Option LemmaInst) := do
       and `activeCi`\
   (3) Repeat:\
       · Dequeue an element `active`\
-      · If it is a `ConstInst`, match against all existing `LemmaInst`;
-        If it is a `LemmaInst`, match against all existing `ConstInst`\
+      · If it is a `ConstInst`, match against all processed `LemmaInst`s;
+        If it is a `LemmaInst`, match against all processed `ConstInst`s\
       · For all the new `LemmaInst`s generated and all the `ConstInst`s
         occurring in them to `active`
 -/
@@ -549,6 +549,12 @@ structure State where
   -- During initialization, we supply an array `lemmas` of lemmas
   --   `liArr[i]` are instances of `lemmas[i]`.
   lisArr : Array LemmaInsts            := #[]
+  -- "Processed" `ConstInst`s that have already been dequeued from `active` and had
+  -- their corresponding matching pass run.
+  prcCis : Array ConstInst             := #[]
+  -- `LemmaInst`s that have already been dequeued from `active` and had their
+  -- corresponding matching pass run, together with their position in `lisArr`.
+  prcLis : Array (LemmaInst × Nat)     := #[]
   -- Definitional equalities from instance relations between `ConstInst`s
   ciInstDefEqs : Array LemmaInst       := #[]
   -- The `Nat` in `LemmaInst × Nat` indicates the `LemmaInst`'s
@@ -695,21 +701,9 @@ def saturate : MonoM Unit := do
     | .some (.inl ci) =>
       if auto.mono.ciInstDefEq.get (← getOptions) then
         generateCiInstDefEq ci
-      let lisArr ← getLisArr
       trace[auto.mono.match] "Matching against {ci}"
-      for (lis, idx) in lisArr.zipIdx do
-        cnt := cnt + 1
-        for li in lis do
-          let newLis_cnt ← matchCiAndLi ci li idx cnt
-          let newLis := newLis_cnt.fst
-          setLisArr ((← getLisArr).set! idx newLis)
-          cnt := newLis_cnt.snd
-          if (← saturationThresholdReached? cnt) then
-            return
-    | .some (.inr (li, idx)) =>
-      trace[auto.mono.match] "Matching against {li}"
-      let cis := ((← getCiMap).toArray.map Prod.snd).flatMap id
-      for ci in cis do
+      -- Only match against already-processed `LemmaInst`s.
+      for (li, idx) in (← getPrcLis) do
         cnt := cnt + 1
         let newLis_cnt ← matchCiAndLi ci li idx cnt
         let newLis := newLis_cnt.fst
@@ -717,6 +711,19 @@ def saturate : MonoM Unit := do
         cnt := newLis_cnt.snd
         if (← saturationThresholdReached? cnt) then
           return
+      setPrcCis ((← getPrcCis).push ci)
+    | .some (.inr (li, idx)) =>
+      trace[auto.mono.match] "Matching against {li}"
+      -- Only match against already-processed `ConstInst`s.
+      for ci in (← getPrcCis) do
+        cnt := cnt + 1
+        let newLis_cnt ← matchCiAndLi ci li idx cnt
+        let newLis := newLis_cnt.fst
+        setLisArr ((← getLisArr).set! idx newLis)
+        cnt := newLis_cnt.snd
+        if (← saturationThresholdReached? cnt) then
+          return
+      setPrcLis ((← getPrcLis).push (li, idx))
     | .none =>
       trace[auto.mono] "Monomorphization Saturated after {cnt} small steps"
       return
@@ -764,8 +771,8 @@ where
   generateCiInstDefEq (ci : ConstInst) : MonoM Unit := do
     if isTrigger ci.head then
       return
-    let cis := ((← getCiMap).toArray.map Prod.snd).flatMap id
-    for (ci', _) in cis.zipIdx do
+    let cis ← getPrcCis
+    for ci' in cis do
       if (← ci.toExpr) != (← ci'.toExpr) && !(isTrigger ci.head) && !(isTrigger ci'.head) then
         if let .some (proof, eq, _) ← bidirectionalOfInstanceEq ci ci' then
           let eq := Expr.eraseMData (← Core.betaReduce eq)
