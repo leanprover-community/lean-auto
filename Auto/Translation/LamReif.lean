@@ -1214,7 +1214,6 @@ def reifMapLam0Arg2NoLit : Std.HashMap (Name × Name) (Expr × LamTerm) :=
   Std.HashMap.ofList [
     ((``NatCast.natCast, ``Int), (.const ``Int.ofNat [], .base .iofNat)),
     ((``Neg.neg, ``Int),         (.const ``Int.neg [], .base .ineg)),
-    ((`Abs.abs, ``Int),          (.const ``Int.abs [], .base .iabs)),
     ((``LE.le, ``Nat),           (.const ``Nat.le [], .base .nle)),
     ((``LE.le, ``Int),           (.const ``Int.le [], .base .ile)),
     ((``LE.le, ``String),        (.const ``String.le [], .base .sle)),
@@ -1380,6 +1379,14 @@ def processLam0Arg3 (e fn arg₁ arg₂ _arg₃ : Expr) : MetaM (Option LamTerm)
             | throwError "{decl_name%} :: OfNat.ofNat instance is not based on a nat literal"
           return .some (.base (.bvVal n nv))
       return .none
+    | _ => return .none
+  | .const `abs _ =>
+    match arg₁ with
+    | .const ``Int _ =>
+      if (← Meta.isDefEqD fn (.const `abs [.zero])) then
+        return .some (.base .iabs)
+      else
+        return .none
     | _ => return .none
   | _ => return .none
 
