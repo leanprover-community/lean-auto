@@ -424,6 +424,17 @@ def newInhabitation (inh : Expr) (deriv : DTr) (s : LamSort) : ReifM Unit := do
   let pos ← addREntryToRTable (.nonempty s)
   setInhabitations ((← getInhabitations).insert s (inh, deriv, pos))
 
+structure RealReifHandler where
+  realTypeName : Name
+  realTypeExpr : Expr
+  arg2NoLit    : List ((Name × Name) × (Expr × LamTerm))
+  arg4NoLit    : List ((Name × Name × Name) × (Expr × LamTerm))
+  ofNatConst   : Expr
+  zeroConst    : Expr
+  oneConst     : Expr
+
+initialize realReifExt : IO.Ref (Option RealReifHandler) ← IO.mkRef none
+
 /-
   Computes `upFunc` and `downFunc` between `s.interpAsUnlifted` and `s.interpAsLifted`
   · `upFunc` is such that `upFunc f` is equivalent to `f↑`
@@ -460,6 +471,11 @@ partial def updownFunc (s : LamSort) : ReifM (Expr × Expr × Expr × Expr) :=
       return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
     | .int =>
       let ty := Expr.const ``Int []
+      return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
+    | .real => do
+      let .some h ← realReifExt.get
+        | throwError "{decl_name%} :: real sort requires importing `Auto.MathlibReal`"
+      let ty := h.realTypeExpr
       return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
     | .isto0 p =>
       let ty :=
@@ -1016,6 +1032,10 @@ def processTypeExpr (e : Expr) : ReifM LamSort := do
       return .base (.bv n)
     else
       newTypeExpr e
+  | e@(.const name []) => do
+    if let .some h ← realReifExt.get then
+      if name == h.realTypeName then return .base .real
+    newTypeExpr e
   | _ => newTypeExpr e
 
 -- At this point, there should only be non-dependent `∀`s in the type.
@@ -1214,7 +1234,6 @@ def reifMapLam0Arg2NoLit : Std.HashMap (Name × Name) (Expr × LamTerm) :=
   Std.HashMap.ofList [
     ((``NatCast.natCast, ``Int), (.const ``Int.ofNat [], .base .iofNat)),
     ((``Neg.neg, ``Int),         (.const ``Int.neg [], .base .ineg)),
-    ((`Abs.abs, ``Int),          (.const ``Int.abs [], .base .iabs)),
     ((``LE.le, ``Nat),           (.const ``Nat.le [], .base .nle)),
     ((``LE.le, ``Int),           (.const ``Int.le [], .base .ile)),
     ((``LE.le, ``String),        (.const ``String.le [], .base .sle)),
@@ -1260,6 +1279,7 @@ def reifMapLam0Arg2Natlit : Std.HashMap (Name × Name) (Array ((Nat → Expr) ×
                 (fun n => .app (.const ``BitVec.propsgt []) (.lit (.natVal n)), fun n => .bvpropsgt n)])
   ]
 
+open LamCstrD in
 /--
   fn   : .const _ _
   arg₁ : .const _ _
@@ -1346,6 +1366,14 @@ def processLam0Arg2 (e fn arg₁ _arg₂ : Expr) : MetaM (Option LamTerm) := do
     if let .some (e', t) := reifMapLam0Arg2NoLit.get? (fnName, arg₁Name) then
       if (← Meta.isDefEqD e e') then
         return .some t
+    if let .some h ← realReifExt.get then
+      if let .some (e', t) := h.arg2NoLit.lookup (fnName, arg₁Name) then
+        if (← Meta.isDefEqD e e') then
+          return .some t
+    if let .some h ← realReifExt.get then
+      if arg₁ == h.realTypeExpr then
+        if ← Meta.isDefEqD e h.zeroConst then return .some (.base (.rcst .rzero))
+        if ← Meta.isDefEqD e h.oneConst  then return .some (.base (.rcst .rone))
   if arg₁.isApp then
     let .app arg₁fn arg₁arg := arg₁
       | throwError "{decl_name%} :: Unexpected error"
@@ -1380,7 +1408,42 @@ def processLam0Arg3 (e fn arg₁ arg₂ _arg₃ : Expr) : MetaM (Option LamTerm)
             | throwError "{decl_name%} :: OfNat.ofNat instance is not based on a nat literal"
           return .some (.base (.bvVal n nv))
       return .none
-    | _ => return .none
+    | _ => do
+      match ← realReifExt.get with
+      | .some h =>
+        if arg₁ == h.realTypeExpr then
+          if let .lit (.natVal nv) := arg₂ then
+            if nv == 0 then
+              if (← Meta.isDefEqD e h.zeroConst) then
+                return .some (.base .rzero)
+              else
+                return .none
+            else if nv == 1 then
+              if (← Meta.isDefEqD e h.oneConst) then
+                return .some (.base .rone)
+              else
+                return .none
+            else
+              if (← Meta.isDefEqD e (.app h.ofNatConst arg₂)) then
+                return .some (.mkROfNat (.base (.natVal nv)))
+              else
+                return .none
+        return .none
+      | .none => return .none
+  | .const `abs _ =>
+    match arg₁ with
+    | .const ``Int _ =>
+      if (← Meta.isDefEqD fn (.const `abs [.zero])) then
+        return .some (.base .iabs)
+      else
+        return .none
+    | _ => do
+      match ← realReifExt.get with
+      | .some h =>
+        if arg₁ == h.realTypeExpr && (← Meta.isDefEqD fn (.const `abs [.zero])) then
+          return .some (.base .rabs)
+        return .none
+      | .none => return .none
   | _ => return .none
 
 def processLam0Arg4 (e fn arg₁ arg₂ _arg₃ _arg₄ : Expr) : MetaM (Option LamTerm) := do
@@ -1395,6 +1458,11 @@ def processLam0Arg4 (e fn arg₁ arg₂ _arg₃ _arg₄ : Expr) : MetaM (Option 
       if (← Meta.isDefEqD e e') then
         return .some t
       return .none
+    if let .some h ← realReifExt.get then
+      if let .some (e', t) := h.arg4NoLit.lookup (fnName, arg₁name, arg₂name) then
+        if (← Meta.isDefEqD e e') then
+          return .some t
+        return .none
   if arg₁.isApp && arg₂.isConst then
     let .app arg₁fn arg₁arg := arg₁
       | throwError "{decl_name%} :: Unexpected error"
@@ -1488,6 +1556,16 @@ partial def reifTerm (lctx : Std.HashMap FVarId Nat) : Expr → ReifM LamTerm
   let lamArg ← reifTerm lctx arg
   let argTy ← Meta.inferType arg
   let lamTy ← reifType argTy
+  if let LamTerm.base (LamBaseTerm.ncst (NatConst.natVal exp)) := lamArg then
+    if let .app _ fnHead fnArg := lamFn then
+      if let LamTerm.base (LamBaseTerm.bcst bval) := fnArg then
+        let sgn := bval == BoolConst.trueb
+        if let .app _ fnHead2 fnArg2 := fnHead then
+          if let LamTerm.base (LamBaseTerm.ncst (NatConst.natVal base)) := fnArg2 then
+            if let .atom n := fnHead2 then
+              let fnExpr ← lookupVarVal! n
+              if fnExpr.fst.isAppOf ``OfScientific.ofScientific then
+                return .base (.sciVal base sgn exp)
   return .app lamTy lamFn lamArg
 | .lam name ty body binfo => do
   let lamTy ← reifType ty
@@ -1495,7 +1573,8 @@ partial def reifTerm (lctx : Std.HashMap FVarId Nat) : Expr → ReifM LamTerm
     let body' := body.instantiate1 fvar
     reifTerm (lctx.insert fvar.fvarId! lctx.size) body'
   return .lam lamTy body
-| e => processTermExpr lctx e
+| e => do
+  processTermExpr lctx e
 
 def reifTermCheckType (e : Expr) : ReifM (LamSort × LamTerm) := do
   let t ← reifTerm .emptyWithCapacity e
@@ -1540,9 +1619,12 @@ def reifInhabitations (inhs : Array UMonoFact) : ReifM (Array LamSort) := do
 def reifInd (ind : SimpleIndVal) : ReifM (Option IndInfo) := do
   let ⟨name, type, ctors, projs⟩ := ind
   if name == ``Nat || name == ``Int || name == ``Bool ||
-     name == ``String || name == ``String.Pos.Raw || name == ``Empty ||
-     name == ``BitVec then
+     name == ``String || name == ``String.Pos.Raw ||
+     name == ``Empty || name == ``BitVec then
     return .none
+  if let .some h ← realReifExt.get then
+    if h.realTypeName == name then
+      return .none
   -- For now, do not reify inductively defined proposition
   if ← isIndProp name then
     return .none
@@ -1644,52 +1726,51 @@ section BuildChecker
     return tyValExpr
 
   /-- **Build `LamVarTy` and `varVal`** -/
-  def buildVarExpr (tyValExpr : Expr) : ReifM Expr := do
+  def buildVarExpr (R?Expr : Expr) (tyValExpr : Expr) : ReifM Expr := do
     let u ← getU
     let lamSortExpr := Expr.const ``LamSort []
     let varValPair := (← getVarVal).toList
     let vars ← varValPair.mapM (fun (e, s) => do
       let sExpr := toExpr s
-      return Lean.mkApp3 (.const ``varSigmaMk [u]) tyValExpr sExpr (← varValInterp e s))
+      return Lean.mkApp4 (.const ``varSigmaMk [u]) R?Expr tyValExpr sExpr (← varValInterp e s))
+    let interpExpr := Lean.mkApp2 (.const ``LamSort.interp [u]) R?Expr tyValExpr
     return exprListToBinTree vars u (Lean.mkApp2
-      (.const ``Sigma [.zero, u]) lamSortExpr
-      (.app (.const ``LamSort.interp [u]) tyValExpr))
+      (.const ``Sigma [.zero, u]) lamSortExpr interpExpr)
 
   /-- **Build `lamILTy` and `ilVal`** -/
-  def buildILExpr (tyValExpr : Expr) : ReifM Expr := do
+  def buildILExpr (R?Expr : Expr) (tyValExpr : Expr) : ReifM Expr := do
     let u ← getU
     let lamSortExpr := Expr.const ``LamSort []
     let lamILTy := (← getLamILTy).toList
-    -- `ils : List ((s : LamSort) × ILLift.{u} (s.interp tyVal))`
+    -- `ils : List ((s : LamSort) × ILLift.{u} (s.interp R tyVal))`
     let ils ← lamILTy.mapM (fun s => do
       let sExpr := toExpr s
       let ilVal ← mkImportingILLift s
-      return Lean.mkApp3 (.const ``ilSigmaMk [u]) tyValExpr sExpr ilVal)
+      return Lean.mkApp4 (.const ``ilSigmaMk [u]) R?Expr tyValExpr sExpr ilVal)
+    let ilβExpr := Lean.mkApp2 (.const ``ilβ [u]) R?Expr tyValExpr
     return exprListToBinTree ils u (Lean.mkApp2
-      (.const ``Sigma [.zero, u]) lamSortExpr
-      (.app (.const ``ilβ [u]) tyValExpr))
+      (.const ``Sigma [.zero, u]) lamSortExpr ilβExpr)
 
-  def buildCPValExpr : ReifM Expr := do
+  def buildCPValExpr (R?Expr : Expr) : ReifM Expr := do
     let u ← getU
     let tyValExpr ← buildTyVal
     let tyValTy := Expr.forallE `_ (.const ``Nat []) (.sort (.succ u)) .default
     let lamValuationExpr ← Meta.withLetDecl `tyVal tyValTy tyValExpr fun tyValFVarExpr => do
-      let varExpr ← buildVarExpr tyValFVarExpr
-      let ilExpr ← buildILExpr tyValFVarExpr
-      let checkerValuationExpr := Lean.mkApp3 (.const ``CPVal.mk [u]) tyValExpr varExpr ilExpr
+      let varExpr ← buildVarExpr R?Expr tyValFVarExpr
+      let ilExpr ← buildILExpr R?Expr tyValFVarExpr
+      let checkerValuationExpr := Lean.mkApp4 (.const ``CPVal.mk [u]) R?Expr tyValExpr varExpr ilExpr
       Meta.mkLetFVars #[tyValFVarExpr] checkerValuationExpr
     return lamValuationExpr
 
   /-- `lvalExpr` is the `LamValuation` -/
-  def buildImportTableExpr (chkValExpr : Expr) : ReifM (Expr × Expr) := do
-    -- let startTime ← IO.monoMsNow
+  def buildImportTableExpr (R?Expr : Expr) (chkValExpr : Expr) : ReifM (Expr × Expr) := do
     let u ← getU
     let mut importTable : BinTree Expr := BinTree.leaf
     let mut importedFactsTree : BinTree REntry := BinTree.leaf
     for (t, (e, _, ti, n)) in (← getAssertions).toList do
       let tExpr := Lean.toExpr ti
       let ieExpr := Expr.app (.const ``ImportEntry.valid []) tExpr
-      let itEntry := Lean.mkApp3 (.const ``importTablePSigmaMk [u]) chkValExpr ieExpr e
+      let itEntry := Lean.mkApp4 (.const ``importTablePSigmaMk [u]) R?Expr chkValExpr ieExpr e
       importTable := importTable.insert n itEntry
       if t.maxLooseBVarSucc != 0 || t.maxEVarSucc != 0 then
         throwError "{decl_name%} :: Invalid imported fact {t}"
@@ -1700,55 +1781,60 @@ section BuildChecker
       let ieExpr := Expr.app (.const ``ImportEntry.nonempty []) sExpr
       let (upFunc, _, _, sil) ← updownFunc s
       let inhLift := Lean.mkApp2 (.const ``Nonempty.intro [.succ u]) sil (.app upFunc inh)
-      let itEntry := Lean.mkApp3 (.const ``importTablePSigmaMk [u]) chkValExpr ieExpr inhLift
+      let itEntry := Lean.mkApp4 (.const ``importTablePSigmaMk [u]) R?Expr chkValExpr ieExpr inhLift
       importTable := importTable.insert n itEntry
       let vEntry := REntry.nonempty s
       importedFactsTree := importedFactsTree.insert n vEntry
+    let psigmaβ := Lean.mkApp2 (.const ``importTablePSigmaβ [u]) R?Expr chkValExpr
     let type := Lean.mkApp2 (.const ``PSigma [.succ .zero, .zero])
-      (.const ``ImportEntry []) (.app (.const ``importTablePSigmaβ [u]) chkValExpr)
+      (.const ``ImportEntry []) psigmaβ
     let importTableExpr := (@instToExprBinTreeOfToLevel Expr
       (instExprToExprId type) ⟨.zero, Prop⟩).toExpr importTable
     let importedFacts := Lean.toExpr importedFactsTree
     return (importTableExpr, importedFacts)
 
+  open Auto.Lam2D in
   /--
     `re` is the entry we want to retrieve from the `validTable`
     The `expr` returned is a proof of the `LamThmValid`-ness of the entry
   -/
   def buildFullCheckerExprFor_directReduce (re : REntry) : ReifM Expr := do
     printCheckerStats
+    let R?Expr ← getRealOpt
     let startTime ← IO.monoMsNow
     let u ← getU
-    let cpvExpr ← buildCPValExpr
-    let cpvTy := Expr.const ``CPVal [u]
+    let cpvExpr ← buildCPValExpr R?Expr
+    let cpvTy := Lean.mkAppN (.const ``CPVal [u]) #[R?Expr]
     let checker ← Meta.withLetDecl `cpval cpvTy cpvExpr fun cpvFVarExpr => do
-      let (itExpr, _) ← buildImportTableExpr cpvFVarExpr
+      let (itExpr, _) ← buildImportTableExpr R?Expr cpvFVarExpr
       let csExpr ← buildChkStepsExpr
       let .valid lctx t := re
         | throwError "{decl_name%} :: {re} is not a `valid` entry"
       let vExpr := Lean.toExpr (← lookupREntryPos! re)
       let eqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr (lctx, t)]]
-      let getEntry := Lean.mkApp7 (.const ``Checker.getValidExport_directReduce [u])
+      let getEntry := Lean.mkApp8 (.const ``Checker.getValidExport_directReduce [u]) R?Expr
         (Lean.toExpr lctx) (Lean.toExpr t) cpvFVarExpr itExpr csExpr vExpr eqExpr
       let getEntry ← Meta.mkLetFVars #[cpvFVarExpr] getEntry
       trace[auto.buildChecker] "Checker expression built in time {(← IO.monoMsNow) - startTime}ms"
       return getEntry
     return checker
 
+  open Auto.Lam2D in
   /--
     `re` is the entry we want to retrieve from the `validTable`
     The `expr` returned is a proof of the `LamThmValid`-ness of the entry
   -/
   def buildFullCheckerExprFor_indirectReduce (re : REntry) : ReifM Expr := do
     printCheckerStats
+    let R?Expr ← getRealOpt
     let startTime ← IO.monoMsNow
     let u ← getU
     let lvtExpr := Lean.toExpr (BinTree.ofListGet ((← getVarVal).map Prod.snd).toList)
     let litExpr := Lean.toExpr (BinTree.ofListGet (← getLamILTy).toList)
-    let cpvExpr ← buildCPValExpr
-    let cpvTy := Expr.const ``CPVal [u]
+    let cpvExpr ← buildCPValExpr R?Expr
+    let cpvTy := Lean.mkAppN (.const ``CPVal [u]) #[R?Expr]
     let checker ← Meta.withLetDecl `cpval cpvTy cpvExpr fun cpvFVarExpr => do
-      let (itExpr, ifExpr) ← buildImportTableExpr cpvFVarExpr
+      let (itExpr, ifExpr) ← buildImportTableExpr R?Expr cpvFVarExpr
       let csExpr ← buildChkStepsExpr
       let .valid lctx t := re
         | throwError "{decl_name%} :: {re} is not a `valid` entry"
@@ -1758,7 +1844,7 @@ section BuildChecker
       let hLitExpr ← Meta.mkAppM ``Eq.refl #[litExpr]
       let heqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr (lctx, t)]]
       let getEntry := Lean.mkAppN (.const ``Checker.getValidExport_indirectReduce [u])
-        #[cpvFVarExpr, itExpr, csExpr, vExpr, ifExpr, hImportExpr,
+        #[R?Expr, cpvFVarExpr, itExpr, csExpr, vExpr, ifExpr, hImportExpr,
           lvtExpr, litExpr, hLvtExpr, hLitExpr, Lean.toExpr lctx, Lean.toExpr t, heqExpr]
       let getEntry ← Meta.mkLetFVars #[cpvFVarExpr] getEntry
       trace[auto.buildChecker] "Checker expression built in time {(← IO.monoMsNow) - startTime}ms"
@@ -1792,18 +1878,20 @@ section BuildChecker
       (Lean.toExpr (← getLamEVarTyTree))
     mkNativeAuxDecl `lam_ssrefl_rr (Lean.mkConst ``RTable) runResultExpr
 
+  open Auto.Lam2D in
   def buildFullCheckerExprFor_indirectReduce_reflection (re : REntry) : ReifM Expr := do
     printCheckerStats
+    let R?Expr ← getRealOpt
     let startTime ← IO.monoMsNow
     let u ← getU
     let lvtExpr := Lean.toExpr (BinTree.ofListGet ((← getVarVal).map Prod.snd).toList)
     let lvtNativeName ← mkNativeAuxDecl `lam_ssrefl_lvt (Expr.app (.const ``BinTree [.zero]) (Lean.mkConst ``LamSort)) lvtExpr
     let litExpr := Lean.toExpr (BinTree.ofListGet (← getLamILTy).toList)
     let litNativeName ← mkNativeAuxDecl `lam_ssrefl_lit (Expr.app (.const ``BinTree [.zero]) (Lean.mkConst ``LamSort)) litExpr
-    let cpvExpr ← buildCPValExpr
-    let cpvTy := Expr.const ``CPVal [u]
+    let cpvExpr ← buildCPValExpr R?Expr
+    let cpvTy := Lean.mkAppN (.const ``CPVal [u]) #[R?Expr]
     let checker ← Meta.withLetDecl `cpval cpvTy cpvExpr fun cpvFVarExpr => do
-      let (itExpr, ifExpr) ← buildImportTableExpr cpvFVarExpr
+      let (itExpr, ifExpr) ← buildImportTableExpr R?Expr cpvFVarExpr
       let ifNativeName ← mkNativeAuxDecl `lam_ssrefl_if (Expr.app (.const ``BinTree [.zero]) (Lean.mkConst ``REntry)) ifExpr
       let csExpr ← buildChkStepsExpr
       let csNativeName ← mkNativeAuxDecl `lam_ssrefl_cs (Lean.mkConst ``ChkSteps) csExpr
@@ -1820,7 +1908,7 @@ section BuildChecker
       let heqRflPrf ← Meta.mkEqRefl (toExpr true)
       let heqExpr := mkApp3 (Lean.mkConst ``Lean.ofReduceBool) (Lean.mkConst heqNativeName) (toExpr true) heqRflPrf
       let getEntry := Lean.mkAppN (.const ``Checker.getValidExport_indirectReduce_reflection [u])
-        #[cpvFVarExpr, itExpr, csExpr, vExpr, ifExpr, hImportExpr,
+        #[R?Expr, cpvFVarExpr, itExpr, csExpr, vExpr, ifExpr, hImportExpr,
           lvtExpr, litExpr, hLvtExpr, hLitExpr, Lean.toExpr lctx, Lean.toExpr t, heqExpr]
       let getEntry ← Meta.mkLetFVars #[cpvFVarExpr] getEntry
       trace[auto.buildChecker] "Checker expression built in time {(← IO.monoMsNow) - startTime}ms"

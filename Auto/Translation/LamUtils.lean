@@ -179,17 +179,39 @@ namespace Lam2D
 
   open Embedding Lam LamCstrD
 
-  def interpLamBaseSortAsUnlifted : LamBaseSort → Expr
-  | .prop    => .sort .zero
-  | .bool    => .const ``Bool []
-  | .nat     => .const ``Nat []
-  | .int     => .const ``Int []
+  structure RealReconstructionHandler where
+    baseSort    : Expr
+    interpConst : RealConst → CoreM Expr
+
+  initialize realReconstructionExt : IO.Ref (Option RealReconstructionHandler) ← IO.mkRef none
+
+  def getRealOpt : MetaM Expr := do
+    let β ← Meta.withLocalDeclD `R (.sort (.succ .zero)) fun Rf => do
+      Meta.mkLambdaFVars #[Rf] (← Meta.mkAppM ``Auto.RealTy #[Rf])
+    let sigmaTy ← Meta.mkAppM ``Sigma #[β]
+    match (← realReconstructionExt.get) with
+      | none => Meta.mkAppOptM ``Option.none #[some sigmaTy]
+      | some h => do
+        let R := h.baseSort
+        let inst ← Meta.synthInstance (← Meta.mkAppM ``Auto.RealTy #[R])
+        let sig ← Meta.mkAppOptM ``Sigma.mk #[none, some β, some R, some inst]
+        Meta.mkAppOptM ``Option.some #[some sigmaTy, some sig]
+
+  def interpLamBaseSortAsUnlifted : LamBaseSort → CoreM Expr
+  | .prop    => return .sort .zero
+  | .bool    => return .const ``Bool []
+  | .nat     => return .const ``Nat []
+  | .int     => return .const ``Int []
+  | .real    => do
+    let .some h ← realReconstructionExt.get
+      | throwError "Lean-auto is trying to use reals without importing the mathlib instantiation."
+    return h.baseSort
   | .isto0 p =>
     match p with
-    | .xH => .const ``String []
-    | .xO .xH => .const ``Empty []
-    | _   => .const ``Empty []
-  | .bv n    => .app (.const ``BitVec []) (.lit (.natVal n))
+    | .xH => return .const ``String []
+    | .xO .xH => return .const ``Empty []
+    | _   => return .const ``Empty []
+  | .bv n    => return .app (.const ``BitVec []) (.lit (.natVal n))
 
   def interpPropConstAsUnlifted : PropConst → CoreM Expr
   | .trueE      => return .const ``True []
@@ -309,7 +331,7 @@ namespace Lam2D
     let .some e := tyVal.get? n
       | throwError "{decl_name%} :: Cannot find fvarId assigned to type atom {n}"
     return e
-  | .base b => return Lam2D.interpLamBaseSortAsUnlifted b
+  | .base b => return ← Lam2D.interpLamBaseSortAsUnlifted b
   | .func s₁ s₂ => do
     return .forallE `_ (← interpLamSortAsUnlifted tyVal s₁) (← interpLamSortAsUnlifted tyVal s₂) .default
 
@@ -334,6 +356,10 @@ namespace Lam2D
   | .bcst bc    => Lam2D.interpBoolConstAsUnlifted bc
   | .ncst nc    => Lam2D.interpNatConstAsUnlifted nc
   | .icst ic    => Lam2D.interpIntConstAsUnlifted ic
+  | .rcst rc    => do
+    let .some h ← realReconstructionExt.get
+      | throwError "reals require `import Auto.MathlibReal`"
+    h.interpConst rc
   | .scst sc    => Lam2D.interpStringConstAsUnlifted sc
   | .bvcst bvc  => Lam2D.interpBitVecConstAsUnlifted bvc
   | .ocst oc    => interpOtherConstAsUnlifted tyVal oc

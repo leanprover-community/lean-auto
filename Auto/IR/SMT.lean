@@ -98,13 +98,33 @@ inductive SpecConst where
   -- `.binary [xₖ₋₁, ⋯, x₁, x₀]` represents `xₖ₋₁⋯x₁x₀`
   | binary : List Bool → SpecConst
   | num    : Nat → SpecConst
+  | scientific  : Nat -> Bool -> Nat -> SpecConst
 
 def SpecConst.toString : SpecConst → String
 | .str s     => "\"" ++ String.join (s.toList.map specCharRepr) ++ "\""
 | .binary bs => bs.foldl (fun acc b => acc.push (if b then '1' else '0')) "#b"
 | .num n     => ToString.toString (repr n)
+| .scientific n sgn exp   => sciToDecimalString n sgn exp
 where specCharRepr (c : Char) : String :=
   "\\u{" ++ String.ofList (Nat.toDigits 16 c.toNat) ++ "}"
+      stripTrailingZeros (s : String) : String :=
+        let t := (s.toList.reverse.dropWhile (· == '0')).reverse
+        if t.isEmpty then "0" else String.ofList t
+      sciToDecimalString (n : Nat) (sgn : Bool) (exp : Nat) : String :=
+        if n == 0 then "0.0"
+        else
+          let digits := ToString.toString n
+          let (intRaw, decRaw) : String × String :=
+            if !sgn || exp == 0 then
+              (digits ++ String.ofList (List.replicate exp '0'), "")
+            else
+              let len := digits.length
+              if exp < len then
+                let k := len - exp
+                (String.Slice.toString (digits.take k), String.Slice.toString (digits.drop k))
+              else
+                ("0", String.ofList (List.replicate (exp - len) '0') ++ digits)
+          intRaw ++ "." ++ stripTrailingZeros decRaw
 
 mutual
 

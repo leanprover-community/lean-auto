@@ -444,7 +444,7 @@ def callNative_direct
     return e)
   return mkAppN proof (ss ++ ts)
 
-open Embedding.Lam in
+open Embedding.Lam Auto.Lam2D in
 /--
   If `prover?` is specified, use the specified one.
   Otherwise use the one determined by `Solver.Native.queryNative`
@@ -461,7 +461,8 @@ def queryNative
   LamReif.printProofs
   Reif.setDeclName? declName?
   let checker ← LamReif.buildCheckerExprFor contra
-  Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
+  let R?Expr ← getRealOpt
+  Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[R?Expr, checker]
 
 def rewriteIteCondDecide (lemmas : Array Lemma) : MetaM (Array Lemma) := do
   -- Simplify `ite`
@@ -548,6 +549,7 @@ def evalAuto : Tactic
       absurd.assign proof
 | _ => throwUnsupportedSyntax
 
+open Auto.LamReif Auto.Lam2D in
 /--
   Run `auto`'s preprocessing and monomorphization to abstract the
   problem into an essentially higher-order problem
@@ -606,7 +608,8 @@ where
     LamReif.printProofs
     Reif.setDeclName? declName?
     let checker ← LamReif.buildCheckerExprFor contra
-    let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
+    let R?Expr ← getRealOpt
+    let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[R?Expr, checker]
     let (goalFVars, goalId) ← goalId.introN (atomVals.size + etoms.size)
     let (goalCtx, goalId) ← goalId.introN (exportInhs.size + exportFacts.size)
     let goalCtxWithDeriv := goalCtx.zip ((nonemptyWithDTrs ++ validWithDTrs).map Prod.snd)
