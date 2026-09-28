@@ -33,7 +33,7 @@ jobs:
     steps:
       - name: Install MSYS2 (Windows)
         if: matrix.os == 'windows-latest'
-        uses: msys2/setup-msys2@v2
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
         with:
           path-type: inherit
           install: curl unzip
@@ -46,14 +46,14 @@ jobs:
           ./elan-init.sh -y --default-toolchain none
           echo "$HOME/.elan/bin" >> $GITHUB_PATH
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Build package
         run: lake build
 
       - name: Create release for tag
         if: github.ref_type == 'tag'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
 
       - name: Upload release archive
         if: github.ref_type == 'tag'
