@@ -26,6 +26,7 @@ inductive LamBaseSort
   | bool   : LamBaseSort            -- GLift `Bool`
   | nat    : LamBaseSort            -- GLift `Nat`
   | int    : LamBaseSort            -- GLift `Int`
+  | real   : LamBaseSort            -- GLift `Real`
   /--
     For each `p : Pos`, `isto0 p` is an interpreted sort
     `p`       `isto0 p`
@@ -48,6 +49,7 @@ def LamBaseSort.reprPrec (b : LamBaseSort) (n : Nat) :=
     | .bool => "bool"
     | .nat  => "nat"
     | .int  => "int"
+    | .real => "real"
     | .isto0 p =>
       match p with
       | .xH => "string"
@@ -66,6 +68,7 @@ def LamBaseSort.toString : LamBaseSort → String
 | .bool   => "Bool"
 | .nat    => "Nat"
 | .int    => "Int"
+| .real   => "Real"
 | .isto0 p =>
   match p with
   | .xH => "String"
@@ -80,6 +83,7 @@ def LamBaseSort.beq : LamBaseSort → LamBaseSort → Bool
 | .bool,     .bool     => true
 | .nat,      .nat      => true
 | .int,      .int      => true
+| .real,     .real     => true
 | .isto0 p₁, .isto0 p₂ => p₁.beq p₂
 | .bv n,     .bv m     => n.beq m
 | _,         _         => false
@@ -94,6 +98,7 @@ theorem LamBaseSort.beq_refl : {b : LamBaseSort} → (b.beq b) = true
 | .bool    => rfl
 | .nat     => rfl
 | .int     => rfl
+| .real    => rfl
 | .isto0 _ => Pos.beq_refl
 | .bv n    => Nat.beq_refl' n
 
@@ -103,37 +108,50 @@ theorem LamBaseSort.eq_of_beq_eq_true {b₁ b₂ : LamBaseSort} : b₁.beq b₂ 
   | .bool,    .bool    => fun _ => rfl
   | .nat,     .nat     => fun _ => rfl
   | .int,     .int     => fun _ => rfl
+  | .real,    .real    => fun _ => rfl
   | .isto0 p, .isto0 q => fun H => Pos.eq_of_beq_eq_true H ▸ rfl
   | .bv n,    .bv m    => fun H => Nat.eq_of_beq_eq_true H ▸ rfl
   | .prop,    .bool    => fun H => by cases H
   | .prop,    .nat     => fun H => by cases H
   | .prop,    .int     => fun H => by cases H
+  | .prop,    .real    => fun H => by cases H
   | .prop,    .isto0 p => fun H => by cases H
   | .prop,    .bv m    => fun H => by cases H
   | .bool,    .prop    => fun H => by cases H
   | .bool,    .nat     => fun H => by cases H
   | .bool,    .int     => fun H => by cases H
+  | .bool,    .real    => fun H => by cases H
   | .bool,    .isto0 p => fun H => by cases H
   | .bool,    .bv m    => fun H => by cases H
   | .nat,     .prop    => fun H => by cases H
   | .nat,     .bool    => fun H => by cases H
   | .nat,     .int     => fun H => by cases H
+  | .nat,     .real    => fun H => by cases H
   | .nat,     .isto0 p => fun H => by cases H
   | .nat,     .bv m    => fun H => by cases H
   | .int,     .prop    => fun H => by cases H
   | .int,     .bool    => fun H => by cases H
   | .int,     .nat     => fun H => by cases H
+  | .int,     .real    => fun H => by cases H
   | .int,     .isto0 p => fun H => by cases H
   | .int,     .bv m    => fun H => by cases H
+  | .real,    .prop    => fun H => by cases H
+  | .real,    .bool    => fun H => by cases H
+  | .real,    .nat     => fun H => by cases H
+  | .real,    .int     => fun H => by cases H
+  | .real,    .isto0 p => fun H => by cases H
+  | .real,    .bv m    => fun H => by cases H
   | .isto0 p, .prop    => fun H => by cases H
   | .isto0 p, .bool    => fun H => by cases H
   | .isto0 p, .nat     => fun H => by cases H
   | .isto0 p, .int     => fun H => by cases H
+  | .isto0 p, .real    => fun H => by cases H
   | .isto0 p, .bv m    => fun H => by cases H
   | .bv n,    .prop    => fun H => by cases H
   | .bv n,    .bool    => fun H => by cases H
   | .bv n,    .nat     => fun H => by cases H
   | .bv n,    .int     => fun H => by cases H
+  | .bv n,    .real    => fun H => by cases H
   | .bv n,    .isto0 p => fun H => by cases H
 
 instance : LawfulBEq LamBaseSort where
@@ -145,11 +163,14 @@ instance : LawfulBEq LamBaseSort where
 | .xO .xH => GLift Empty
 | _       => GLift Empty
 
+variable (R? : Option ((R : Type) × RealTy R))
+
 @[reducible] def LamBaseSort.interp.{u} : LamBaseSort → Type u
 | .prop    => GLift Prop
 | .bool    => GLift Bool
 | .nat     => GLift Nat
 | .int     => GLift Int
+| .real    => realLiftTy R?
 | .isto0 p => isto0_interp p
 | .bv n    => GLift (BitVec n)
 
@@ -389,17 +410,17 @@ theorem LamSort.getArgTysN_mkFuncs_eq_l_iff :
 
 @[reducible] def LamSort.interp.{u} (val : Nat → Type u) : LamSort → Type u
 | .atom n => val n
-| .base b => b.interp
+| .base b => b.interp R?
 | .func dom cod => interp val dom → interp val cod
 
-def LamSort.curry (f : HList (LamSort.interp tyVal) tys → LamSort.interp tyVal s) :
-  LamSort.interp tyVal (s.mkFuncs tys) :=
+def LamSort.curry (f : HList (LamSort.interp R? tyVal) tys → LamSort.interp R? tyVal s) :
+  LamSort.interp R? tyVal (s.mkFuncs tys) :=
   match tys with
   | .nil => f .nil
   | .cons _ _ => fun x => LamSort.curry (fun xs => f (.cons x xs))
 
-def LamSort.curryRev (f : HList (LamSort.interp tyVal) tys → LamSort.interp tyVal s) :
-  LamSort.interp tyVal (s.mkFuncsRev tys) :=
+def LamSort.curryRev (f : HList (LamSort.interp R? tyVal) tys → LamSort.interp R? tyVal s) :
+  LamSort.interp R? tyVal (s.mkFuncsRev tys) :=
   match tys with
   | .nil => f .nil
   | .cons _ tys => LamSort.curryRev (tys:=tys) (fun xs x => f (.cons x xs))
@@ -480,6 +501,30 @@ mkConstFamily IntConst with
   | ilt      | ofIlt      | (.func (.base .int) (.func (.base .int) (.base .prop))) | "<"        | iltLift
   | imax     | ofImax     | (.func (.base .int) (.func (.base .int) (.base .int)))  | "imax"     | imaxLift
   | imin     | ofImin     | (.func (.base .int) (.func (.base .int) (.base .int)))  | "imin"     | iminLift
+
+inductive RealConst
+  | rneg | rabs | radd | rsub | rmul | rdiv
+  | rle | rlt | rmax | rmin
+  | rofNat | rofInt | rzero | rone
+  | sciVal (n : Nat) (sgn : Bool) (exp : Nat)
+deriving Inhabited, Hashable, Lean.ToExpr
+
+mkConstFamily ncInterp RealConst with
+  | sciVal (n : Nat) (sgn : Bool) (exp : Nat) | ofSciVal | (.base .real)             | s!"{n}*10^{if sgn then "-" else ""}{exp} : Real" | rofScientificLift n sgn exp
+  | rzero    | ofRzero   | (.base .real)                                             | "rzero"    | rzeroLift
+  | rone     | ofRone    | (.base .real)                                             | "rone"     | roneLift
+  | rofNat   | ofROfNat  | (.func (.base .nat) (.base .real))                        | "rofNat"   | rofNatLift
+  | rofInt   | ofROfInt  | (.func (.base .int) (.base .real))                        | "rofInt"   | rofIntLift
+  | rneg     | ofRneg    | (.func (.base .real) (.base .real))                       | "-"        | rnegLift
+  | rabs     | ofRabs    | (.func (.base .real) (.base .real))                       | "rabs"     | rabsLift
+  | radd     | ofRadd    | (.func (.base .real) (.func (.base .real) (.base .real))) | "+"        | raddLift
+  | rsub     | ofRsub    | (.func (.base .real) (.func (.base .real) (.base .real))) | "-"        | rsubLift
+  | rmul     | ofRmul    | (.func (.base .real) (.func (.base .real) (.base .real))) | "*"        | rmulLift
+  | rdiv     | ofRdiv    | (.func (.base .real) (.func (.base .real) (.base .real))) | "/"        | rdivLift
+  | rle      | ofRle     | (.func (.base .real) (.func (.base .real) (.base .prop))) | "≤"        | rleLift
+  | rlt      | ofRlt     | (.func (.base .real) (.func (.base .real) (.base .prop))) | "<"        | rltLift
+  | rmax     | ofRmax    | (.func (.base .real) (.func (.base .real) (.base .real))) | "rmax"     | rmaxLift
+  | rmin     | ofRmin    | (.func (.base .real) (.func (.base .real) (.base .real))) | "rmin"     | rminLift
 
 inductive StringConst
   | strVal (s : String)
@@ -821,8 +866,8 @@ inductive OtherConst.LamWF : OtherConst → LamSort → Type
 def OtherConst.LamWF.ofOtherConst : (oc : OtherConst) → (s : LamSort) × OtherConst.LamWF oc s
 | .smtAttr1T n sattr sterm => ⟨.func sattr (.func sterm sterm), .ofSmtAttr1T n sattr sterm⟩
 
-def OtherConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF p s) → s.interp tyVal
-| .ofSmtAttr1T _ sattr sterm => constId (a:=LamSort.interp tyVal sattr) (b:=LamSort.interp tyVal sterm)
+def OtherConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF p s) → s.interp R? tyVal
+| .ofSmtAttr1T _ sattr sterm => constId (a:=LamSort.interp R? tyVal sattr) (b:=LamSort.interp R? tyVal sterm)
 
 def OtherConst.toString : OtherConst → String
 | .smtAttr1T n _ _ => s!"attr[{n}]"
@@ -856,11 +901,11 @@ instance : LawfulBEq OtherConst where
 def OtherConst.lamCheck : OtherConst → LamSort
 | .smtAttr1T _ sattr sterm => .func sattr (.func sterm sterm)
 
-def OtherConst.interp (tyVal : Nat → Type u) : (o : OtherConst) → o.lamCheck.interp tyVal
-| .smtAttr1T _ sattr sterm => fun (_ : sattr.interp tyVal) (term : sterm.interp tyVal) => term
+def OtherConst.interp (tyVal : Nat → Type u) : (o : OtherConst) → o.lamCheck.interp R? tyVal
+| .smtAttr1T _ sattr sterm => fun (_ : sattr.interp R? tyVal) (term : sterm.interp R? tyVal) => term
 
 theorem OtherConst.interp_equiv (tyVal : Nat → Type u) (ocwf : LamWF p s) :
-  HEq (LamWF.interp tyVal ocwf) (interp tyVal p) := by
+  HEq (LamWF.interp R? tyVal ocwf) (interp R? tyVal p) := by
   cases ocwf <;> rfl
 
 theorem OtherConst.LamWF.unique {o : OtherConst} {s₁ s₂ : LamSort}
@@ -870,7 +915,7 @@ theorem OtherConst.LamWF.unique {o : OtherConst} {s₁ s₂ : LamSort}
 theorem OtherConst.LamWF.interp_lvalIrrelevance
   (tyVal₁ tyVal₂ : Nat → Type u) (ocwf₁ : LamWF b₁ s₁) (ocwf₂ : LamWF b₂ s₂)
   (HBeq : b₁ = b₂) (hTyVal : tyVal₁ = tyVal₂) :
-  HEq (ocwf₁.interp tyVal₁) (ocwf₂.interp tyVal₂) := by
+  HEq (ocwf₁.interp R? tyVal₁) (ocwf₂.interp R? tyVal₂) := by
   cases HBeq; cases hTyVal; rcases OtherConst.LamWF.unique ocwf₁ ocwf₂ with ⟨⟨⟩, ⟨⟩⟩; rfl
 
 theorem OtherConst.lamWF_complete (wf : LamWF sc s) : LamWF.ofOtherConst sc = ⟨s, wf⟩ := by
@@ -904,6 +949,7 @@ inductive LamBaseTerm
   | bcst     : BoolConst   → LamBaseTerm
   | ncst     : NatConst    → LamBaseTerm
   | icst     : IntConst    → LamBaseTerm
+  | rcst     : RealConst   → LamBaseTerm
   | scst     : StringConst → LamBaseTerm
   | bvcst    : BitVecConst → LamBaseTerm
   | ocst     : OtherConst  → LamBaseTerm
@@ -961,6 +1007,21 @@ def LamBaseTerm.ile := LamBaseTerm.icst .ile
 def LamBaseTerm.ilt := LamBaseTerm.icst .ilt
 def LamBaseTerm.imax := LamBaseTerm.icst .imax
 def LamBaseTerm.imin := LamBaseTerm.icst .imin
+def LamBaseTerm.sciVal (n : Nat) (sgn : Bool) (exp : Nat) := LamBaseTerm.rcst (.sciVal n sgn exp)
+def LamBaseTerm.rzero := LamBaseTerm.rcst .rzero
+def LamBaseTerm.rone := LamBaseTerm.rcst .rone
+def LamBaseTerm.rofNat := LamBaseTerm.rcst .rofNat
+def LamBaseTerm.rofInt := LamBaseTerm.rcst .rofInt
+def LamBaseTerm.rneg := LamBaseTerm.rcst .rneg
+def LamBaseTerm.rabs := LamBaseTerm.rcst .rabs
+def LamBaseTerm.radd := LamBaseTerm.rcst .radd
+def LamBaseTerm.rsub := LamBaseTerm.rcst .rsub
+def LamBaseTerm.rmul := LamBaseTerm.rcst .rmul
+def LamBaseTerm.rdiv := LamBaseTerm.rcst .rdiv
+def LamBaseTerm.rle := LamBaseTerm.rcst .rle
+def LamBaseTerm.rlt := LamBaseTerm.rcst .rlt
+def LamBaseTerm.rmax := LamBaseTerm.rcst .rmax
+def LamBaseTerm.rmin := LamBaseTerm.rcst .rmin
 def LamBaseTerm.strVal (s : String) := LamBaseTerm.scst (.strVal s)
 def LamBaseTerm.slength := LamBaseTerm.scst .slength
 def LamBaseTerm.sapp := LamBaseTerm.scst .sapp
@@ -1020,6 +1081,10 @@ def LamBaseTerm.isIcst : LamBaseTerm → Bool
 | .icst _ => true
 | _       => false
 
+def LamBaseTerm.isRcst : LamBaseTerm → Bool
+| .rcst _ => true
+| _       => false
+
 def LamBaseTerm.isScst : LamBaseTerm → Bool
 | .scst _ => true
 | _       => false
@@ -1067,6 +1132,7 @@ def LamBaseTerm.reprPrec (l : LamBaseTerm) (n : Nat) :=
     | .bcst bc    => f!"bcst {BoolConst.reprPrec bc 1}"
     | .ncst nc    => f!"ncst {NatConst.reprPrec nc 1}"
     | .icst ic    => f!"icst {IntConst.reprPrec ic 1}"
+    | .rcst rc    => f!"rcst {RealConst.reprPrec rc 1}"
     | .scst sc    => f!"scst {StringConst.reprPrec sc 1}"
     | .bvcst bvc  => f!"bvcst {BitVecConst.reprPrec bvc 1}"
     | .ocst oc    => f!"ocst {OtherConst.reprPrec oc 1}"
@@ -1091,6 +1157,7 @@ def LamBaseTerm.toString : LamBaseTerm → String
 | .bcst bc    => s!"{bc}"
 | .ncst nc    => s!"{nc}"
 | .icst ic    => s!"{ic}"
+| .rcst rc    => s!"{rc}"
 | .scst sc    => s!"{sc}"
 | .bvcst bvc  => s!"{bvc}"
 | .ocst oc    => s!"{oc}"
@@ -1111,6 +1178,7 @@ def LamBaseTerm.beq : LamBaseTerm → LamBaseTerm → Bool
 | .bcst bc₁,    .bcst bc₂    => bc₁.beq bc₂
 | .ncst nc₁,    .ncst nc₂    => nc₁.beq nc₂
 | .icst ic₁,    .icst ic₂    => ic₁.beq ic₂
+| .rcst rc₁,    .rcst rc₂    => rc₁.beq rc₂
 | .scst sc₁,    .scst sc₂    => sc₁.beq sc₂
 | .bvcst l₁,    .bvcst l₂    => l₁.beq l₂
 | .ocst o₁,     .ocst o₂     => o₁.beq o₂
@@ -1133,6 +1201,7 @@ theorem LamBaseTerm.beq_refl {b : LamBaseTerm} : (b.beq b) = true := by
   case bcst bc => apply BEq.rfl (α := BoolConst)
   case ncst n => apply BEq.rfl (α := NatConst)
   case icst i => apply BEq.rfl (α := IntConst)
+  case rcst r => apply BEq.rfl (α := RealConst)
   case scst s => apply BEq.rfl (α := StringConst)
   case bvcst s => apply BEq.rfl (α := BitVecConst)
   case ocst o => apply BEq.rfl (α := OtherConst)
@@ -1144,6 +1213,7 @@ theorem LamBaseTerm.eq_of_beq_eq_true {b₁ b₂ : LamBaseTerm} (H : b₁.beq b�
   case bcst.bcst bc₁ bc₂ => apply LawfulBEq.eq_of_beq (α := BoolConst) H
   case ncst.ncst nc₁ nc₂ => apply LawfulBEq.eq_of_beq (α := NatConst) H
   case icst.icst n₁ n₂ => apply LawfulBEq.eq_of_beq (α := IntConst) H
+  case rcst.rcst r₁ r₂ => apply LawfulBEq.eq_of_beq (α := RealConst) H
   case scst.scst s₁ s₂ => apply LawfulBEq.eq_of_beq (α := StringConst) H
   case bvcst.bvcst v₁ v₂ => apply LawfulBEq.eq_of_beq (α := BitVecConst) H
   case ocst.ocst o₁ o₂ => apply LawfulBEq.eq_of_beq (α := OtherConst) H
@@ -1158,6 +1228,7 @@ def LamBaseTerm.containsSort (b : LamBaseTerm) (s : LamSort) : Bool :=
   | .bcst _     => false
   | .ncst _     => false
   | .icst _     => false
+  | .rcst _     => false
   | .scst _     => false
   | .bvcst _    => false
   | .ocst _     => false
@@ -1183,6 +1254,7 @@ def LamBaseTerm.lamCheck (ltv : LamTyVal) : LamBaseTerm → LamSort
 | .bcst bc    => bc.lamCheck
 | .ncst nc    => nc.lamCheck
 | .icst ic    => ic.lamCheck
+| .rcst rc    => rc.lamCheck
 | .scst sc    => sc.lamCheck
 | .bvcst bvc  => bvc.lamCheck
 | .ocst oc    => oc.lamCheck
@@ -1208,8 +1280,9 @@ inductive LamBaseTerm.LamWF (ltv : LamTyVal) : LamBaseTerm → LamSort → Type
   | ofBcst       : (bcwf : BoolConst.LamWF bc s) → LamWF ltv (.bcst bc) s
   | ofNcst       : (ncwf : NatConst.LamWF nc s) → LamWF ltv (.ncst nc) s
   | ofIcst       : (icwf : IntConst.LamWF ic s) → LamWF ltv (.icst ic) s
+  | ofRcst       : (rcwf : RealConst.LamWF rc s) → LamWF ltv (.rcst rc) s
   | ofScst       : (scwf : StringConst.LamWF sc s) → LamWF ltv (.scst sc) s
-  | ofBvcst      : (bvcwf : BitVecConst.LamWF bvc s) → LamWF ltv (.bvcst bvc) s
+  | ofBvcst     : (bvcwf : BitVecConst.LamWF bvc s) → LamWF ltv (.bvcst bvc) s
   | ofOcst       : (ocwf : OtherConst.LamWF oc s) → LamWF ltv (.ocst oc) s
   | ofEqI n      : LamWF ltv (.eqI n) (.func (ltv.lamILTy n) (.func (ltv.lamILTy n) (.base .prop)))
   | ofForallEI n : LamWF ltv (.forallEI n) (.func (.func (ltv.lamILTy n) (.base .prop)) (.base .prop))
@@ -1231,6 +1304,8 @@ theorem LamBaseTerm.LamWF.unique {ltv : LamTyVal} {b : LamBaseTerm} {s₁ s₂ :
     rcases NatConst.LamWF.unique wf₁ wf₂ with ⟨⟨⟩, ⟨⟩⟩; trivial
   case ofIcst.ofIcst ic wf₁ wf₂ =>
     rcases IntConst.LamWF.unique wf₁ wf₂ with ⟨⟨⟩, ⟨⟩⟩; trivial
+  case ofRcst.ofRcst rc wf₁ wf₂ =>
+    rcases RealConst.LamWF.unique wf₁ wf₂ with ⟨⟨⟩, ⟨⟩⟩; trivial
   case ofScst.ofScst sc wf₁ wf₂ =>
     rcases StringConst.LamWF.unique wf₁ wf₂ with ⟨⟨⟩, ⟨⟩⟩; trivial
   case ofBvcst.ofBvcst bvc wf₁ wf₂ =>
@@ -1283,6 +1358,21 @@ abbrev LamBaseTerm.LamWF.ofIle {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIl
 abbrev LamBaseTerm.LamWF.ofIlt {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofIlt
 abbrev LamBaseTerm.LamWF.ofImax {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofImax
 abbrev LamBaseTerm.LamWF.ofImin {ltv : LamTyVal} := LamWF.ofIcst (ltv:=ltv) .ofImin
+abbrev LamBaseTerm.LamWF.ofSciVal {ltv : LamTyVal} (n : Nat) (sgn : Bool) (exp : Nat) := LamWF.ofRcst (ltv:=ltv) (.ofSciVal n sgn exp)
+abbrev LamBaseTerm.LamWF.ofRzero {ltv : LamTyVal} := LamWF.ofRcst (ltv:=ltv) .ofRzero
+abbrev LamBaseTerm.LamWF.ofRone {ltv : LamTyVal} := LamWF.ofRcst (ltv:=ltv) .ofRone
+abbrev LamBaseTerm.LamWF.ofROfNat {ltv : LamTyVal} := LamWF.ofRcst (ltv:=ltv) .ofROfNat
+abbrev LamBaseTerm.LamWF.ofROfInt {ltv : LamTyVal} := LamWF.ofRcst (ltv:=ltv) .ofROfInt
+abbrev LamBaseTerm.LamWF.ofRneg {ltv : LamTyVal} := LamWF.ofRcst (ltv:=ltv) .ofRneg
+abbrev LamBaseTerm.LamWF.ofRabs {ltv : LamTyVal} := LamWF.ofRcst (ltv:=ltv) .ofRabs
+abbrev LamBaseTerm.LamWF.ofRadd {ltv : LamTyVal} := LamWF.ofRcst (ltv:=ltv) .ofRadd
+abbrev LamBaseTerm.LamWF.ofRsub {ltv : LamTyVal} := LamWF.ofRcst (ltv:=ltv) .ofRsub
+abbrev LamBaseTerm.LamWF.ofRmul {ltv : LamTyVal} := LamWF.ofRcst (ltv:=ltv) .ofRmul
+abbrev LamBaseTerm.LamWF.ofRdiv {ltv : LamTyVal} := LamWF.ofRcst (ltv:=ltv) .ofRdiv
+abbrev LamBaseTerm.LamWF.ofRle {ltv : LamTyVal} := LamWF.ofRcst (ltv:=ltv) .ofRle
+abbrev LamBaseTerm.LamWF.ofRlt {ltv : LamTyVal} := LamWF.ofRcst (ltv:=ltv) .ofRlt
+abbrev LamBaseTerm.LamWF.ofRmax {ltv : LamTyVal} := LamWF.ofRcst (ltv:=ltv) .ofRmax
+abbrev LamBaseTerm.LamWF.ofRmin {ltv : LamTyVal} := LamWF.ofRcst (ltv:=ltv) .ofRmin
 abbrev LamBaseTerm.LamWF.ofStrVal {ltv : LamTyVal} (s : String) := LamWF.ofScst (ltv:=ltv) (.ofStrVal s)
 abbrev LamBaseTerm.LamWF.ofSlength {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSlength
 abbrev LamBaseTerm.LamWF.ofSapp {ltv : LamTyVal} := LamWF.ofScst (ltv:=ltv) .ofSapp
@@ -1338,6 +1428,9 @@ def LamBaseTerm.LamWF.getNcst (wf : LamWF ltv (.ncst nc) s) : NatConst.LamWF nc 
 def LamBaseTerm.LamWF.getIcst (wf : LamWF ltv (.icst ic) s) : IntConst.LamWF ic s :=
   match wf with | .ofIcst icwf => icwf
 
+def LamBaseTerm.LamWF.getRcst (wf : LamWF ltv (.rcst rc) s) : RealConst.LamWF rc s :=
+  match wf with | .ofRcst rcwf => rcwf
+
 def LamBaseTerm.LamWF.getScst (wf : LamWF ltv (.scst sc) s) : StringConst.LamWF sc s :=
   match wf with | .ofScst scwf => scwf
 
@@ -1349,6 +1442,7 @@ def LamBaseTerm.LamWF.ofLamBaseTerm (ltv : LamTyVal) : (b : LamBaseTerm) → (s 
 | .bcst bc    => have ⟨s, wf⟩ := BoolConst.LamWF.ofBoolConst bc; ⟨s, .ofBcst wf⟩
 | .ncst nc    => have ⟨s, wf⟩ := NatConst.LamWF.ofNatConst nc; ⟨s, .ofNcst wf⟩
 | .icst ic    => have ⟨s, wf⟩ := IntConst.LamWF.ofIntConst ic; ⟨s, .ofIcst wf⟩
+| .rcst rc    => have ⟨s, wf⟩ := RealConst.LamWF.ofRealConst rc; ⟨s, .ofRcst wf⟩
 | .scst sc    => have ⟨s, wf⟩ := StringConst.LamWF.ofStringConst sc; ⟨s, .ofScst wf⟩
 | .bvcst bvc  => have ⟨s, wf⟩ := BitVecConst.LamWF.ofBitVecConst bvc; ⟨s, .ofBvcst wf⟩
 | .ocst oc    => have ⟨s, wf⟩ := OtherConst.LamWF.ofOtherConst oc; ⟨s, .ofOcst wf⟩
@@ -1367,6 +1461,7 @@ theorem LamBaseTerm.lamWF_complete (wf : LamWF ltv b s) : LamWF.ofLamBaseTerm lt
   case ofBcst bc wf => dsimp [LamWF.ofLamBaseTerm]; rw [BoolConst.lamWF_complete wf]
   case ofNcst bc wf => dsimp [LamWF.ofLamBaseTerm]; rw [NatConst.lamWF_complete wf]
   case ofIcst ic wf => dsimp [LamWF.ofLamBaseTerm]; rw [IntConst.lamWF_complete]
+  case ofRcst rc wf => dsimp [LamWF.ofLamBaseTerm]; rw [RealConst.lamWF_complete]
   case ofScst bc wf => dsimp [LamWF.ofLamBaseTerm]; rw [StringConst.lamWF_complete wf]
   case ofBvcst bc wf => dsimp [LamWF.ofLamBaseTerm]; rw [BitVecConst.lamWF_complete wf]
   case ofOcst oc wf => dsimp [LamWF.ofLamBaseTerm]; rw [OtherConst.lamWF_complete wf]
@@ -1377,6 +1472,7 @@ theorem LamBaseTerm.lamCheck_of_LamWF (H : LamWF ltv b s) : b.lamCheck ltv = s :
   case ofBcst bc wf => apply BoolConst.lamCheck_of_LamWF wf
   case ofNcst bc wf => apply NatConst.lamCheck_of_LamWF wf
   case ofIcst bc wf => apply IntConst.lamCheck_of_LamWF wf
+  case ofRcst bc wf => apply RealConst.lamCheck_of_LamWF wf
   case ofScst sc wf => apply StringConst.lamCheck_of_LamWF wf
   case ofBvcst sc wf => apply BitVecConst.lamCheck_of_LamWF wf
   case ofOcst oc wf => apply OtherConst.lamCheck_of_LamWF wf
@@ -1387,6 +1483,7 @@ def LamBaseTerm.LamWF.ofCheck (H : b.lamCheck ltv = s) : LamWF ltv b s := by
   case refl.bcst => apply BoolConst.LamWF.ofCheck; rfl
   case refl.ncst => apply NatConst.LamWF.ofCheck; rfl
   case refl.icst => apply IntConst.LamWF.ofCheck; rfl
+  case refl.rcst => apply RealConst.LamWF.ofCheck; rfl
   case refl.scst => apply StringConst.LamWF.ofCheck; rfl
   case refl.bvcst => apply BitVecConst.LamWF.ofCheck; rfl
   case refl.ocst => apply OtherConst.LamWF.ofCheck; rfl
@@ -1405,62 +1502,64 @@ noncomputable def ILLift.default (β : Type u) : ILLift β :=
 
 structure LamValuation extends LamTyVal where
   tyVal    : Nat → Type u
-  varVal   : ∀ (n : Nat), (lamVarTy n).interp tyVal
-  ilVal    : ∀ (n : Nat), ILLift.{u} ((lamILTy n).interp tyVal)
-  eVarVal  : ∀ (n : Nat), (lamEVarTy n).interp tyVal
+  varVal   : ∀ (n : Nat), (lamVarTy n).interp R? tyVal
+  ilVal    : ∀ (n : Nat), ILLift.{u} ((lamILTy n).interp R? tyVal)
+  eVarVal  : ∀ (n : Nat), (lamEVarTy n).interp R? tyVal
 
-noncomputable def LamBaseTerm.interp (lval : LamValuation.{u}) : (b : LamBaseTerm) → (b.lamCheck lval.toLamTyVal).interp lval.tyVal
-| .pcst pc    => pc.interp lval.tyVal
-| .bcst bc    => bc.interp lval.tyVal
-| .ncst nc    => nc.interp lval.tyVal
-| .icst ic    => ic.interp lval.tyVal
-| .scst sc    => sc.interp lval.tyVal
-| .bvcst bvc  => bvc.interp lval.tyVal
-| .ocst oc    => oc.interp lval.tyVal
+noncomputable def LamBaseTerm.interp (lval : LamValuation.{u} R?) : (b : LamBaseTerm) → (b.lamCheck lval.toLamTyVal).interp R? lval.tyVal
+| .pcst pc    => pc.interp R? lval.tyVal
+| .bcst bc    => bc.interp R? lval.tyVal
+| .ncst nc    => nc.interp R? lval.tyVal
+| .icst ic    => ic.interp R? lval.tyVal
+| .rcst rc    => rc.interp R? lval.tyVal
+| .scst sc    => sc.interp R? lval.tyVal
+| .bvcst bvc  => bvc.interp R? lval.tyVal
+| .ocst oc    => oc.interp R? lval.tyVal
 | .eqI n      => (lval.ilVal n).eqL.eqF
 | .forallEI n => (lval.ilVal n).forallL.forallF
 | .existEI n  => (lval.ilVal n).existL.existF
 | .iteI n     => (lval.ilVal n).iteL.iteF
-| .eq s       => eqLiftFn (s.interp lval.tyVal)
-| .forallE s  => forallLiftFn (s.interp lval.tyVal)
-| .existE s   => existLiftFn (s.interp lval.tyVal)
-| .ite s      => iteLiftFn (s.interp lval.tyVal)
+| .eq s       => eqLiftFn (s.interp R? lval.tyVal)
+| .forallE s  => forallLiftFn (s.interp R? lval.tyVal)
+| .existE s   => existLiftFn (s.interp R? lval.tyVal)
+| .ite s      => iteLiftFn (s.interp R? lval.tyVal)
 
-noncomputable def LamBaseTerm.LamWF.interp (lval : LamValuation.{u}) : (lwf : LamWF lval.toLamTyVal b s) → s.interp lval.tyVal
-| .ofPcst wf    => wf.interp lval.tyVal
-| .ofBcst wf    => wf.interp lval.tyVal
-| .ofNcst wf    => wf.interp lval.tyVal
-| .ofIcst wf    => wf.interp lval.tyVal
-| .ofScst wf    => wf.interp lval.tyVal
-| .ofBvcst wf   => wf.interp lval.tyVal
-| .ofOcst wf    => wf.interp lval.tyVal
+noncomputable def LamBaseTerm.LamWF.interp (lval : LamValuation.{u} R?) : (lwf : LamWF lval.toLamTyVal b s) → s.interp R? lval.tyVal
+| .ofPcst wf    => wf.interp R? lval.tyVal
+| .ofBcst wf    => wf.interp R? lval.tyVal
+| .ofNcst wf    => wf.interp R? lval.tyVal
+| .ofIcst wf    => wf.interp R? lval.tyVal
+| .ofRcst wf    => wf.interp R? lval.tyVal
+| .ofScst wf    => wf.interp R? lval.tyVal
+| .ofBvcst wf   => wf.interp R? lval.tyVal
+| .ofOcst wf    => wf.interp R? lval.tyVal
 | .ofEqI n      => (lval.ilVal n).eqL.eqF
 | .ofForallEI n => (lval.ilVal n).forallL.forallF
 | .ofExistEI n  => (lval.ilVal n).existL.existF
 | .ofIteI n     => (lval.ilVal n).iteL.iteF
-| .ofEq s       => @eqLiftFn (s.interp lval.tyVal)
-| .ofForallE s  => @forallLiftFn (s.interp lval.tyVal)
-| .ofExistE s   => @existLiftFn (s.interp lval.tyVal)
-| .ofIte s      => iteLiftFn (s.interp lval.tyVal)
+| .ofEq s       => @eqLiftFn (s.interp R? lval.tyVal)
+| .ofForallE s  => @forallLiftFn (s.interp R? lval.tyVal)
+| .ofExistE s   => @existLiftFn (s.interp R? lval.tyVal)
+| .ofIte s      => iteLiftFn (s.interp R? lval.tyVal)
 
-theorem LamBaseTerm.LamWF.interp_heq (lval : LamValuation.{u})
+theorem LamBaseTerm.LamWF.interp_heq (lval : LamValuation.{u} R?)
   (lwf₁ : LamWF lval.toLamTyVal b₁ s₁)
   (lwf₂ : LamWF lval.toLamTyVal b₂ s₂)
-  (HBeq : b₁ = b₂) : HEq (LamWF.interp lval lwf₁) (LamWF.interp lval lwf₂) := by
+  (HBeq : b₁ = b₂) : HEq (LamWF.interp R? lval lwf₁) (LamWF.interp R? lval lwf₂) := by
   cases HBeq;
   cases LamWF.unique lwf₁ lwf₂
   case intro seq lweq =>
     cases seq; cases lweq; apply HEq.rfl
 
 theorem LamBaseTerm.LamWF.interp_lvalIrrelevance
-  (lval₁ lval₂ : LamValuation.{u})
+  (lval₁ lval₂ : LamValuation.{u} R?)
   (lwf₁ : LamWF lval₁.toLamTyVal b₁ s₁)
   (lwf₂ : LamWF lval₂.toLamTyVal b₂ s₂)
   (HBeq : b₁ = b₂)
   (hTyVal : lval₁.tyVal = lval₂.tyVal)
   (hLamILTy : lval₁.lamILTy = lval₂.lamILTy)
   (hILVal : HEq lval₁.ilVal lval₂.ilVal) :
-  HEq (LamWF.interp lval₁ lwf₁) (LamWF.interp lval₂ lwf₂) := by
+  HEq (LamWF.interp R? lval₁ lwf₁) (LamWF.interp R? lval₂ lwf₂) := by
   cases HBeq
   cases lval₁
   case mk toLamTyVal₁ tyVal₁ varVal₁ ilVal₁ eVarVal₁ =>
@@ -1478,24 +1577,26 @@ theorem LamBaseTerm.LamWF.interp_lvalIrrelevance
           case ofBcst => apply BoolConst.LamWF.interp_lvalIrrelevance <;> rfl
           case ofNcst => apply NatConst.LamWF.interp_lvalIrrelevance <;> rfl
           case ofIcst => apply IntConst.LamWF.interp_lvalIrrelevance <;> rfl
+          case ofRcst => apply RealConst.LamWF.interp_lvalIrrelevance <;> rfl
           case ofScst => apply StringConst.LamWF.interp_lvalIrrelevance <;> rfl
           case ofBvcst => apply BitVecConst.LamWF.interp_lvalIrrelevance <;> rfl
           case ofOcst => apply OtherConst.LamWF.interp_lvalIrrelevance <;> rfl
 
-theorem LamBaseTerm.interp_equiv (lval : LamValuation.{u})
+theorem LamBaseTerm.interp_equiv (lval : LamValuation.{u} R?)
   (lwf : LamWF lval.toLamTyVal b s) :
-  HEq (LamWF.interp lval lwf) (interp lval b) := by
+  HEq (LamWF.interp R? lval lwf) (interp R? lval b) := by
   cases lwf <;> try rfl
   case ofPcst => apply PropConst.interp_equiv
   case ofBcst => apply BoolConst.interp_equiv
   case ofNcst => apply NatConst.interp_equiv
   case ofIcst => apply IntConst.interp_equiv
+  case ofRcst => apply RealConst.interp_equiv
   case ofScst => apply StringConst.interp_equiv
   case ofBvcst => apply BitVecConst.interp_equiv
   case ofOcst => apply OtherConst.interp_equiv
 
-def LamValuation.insertEVarAt (lval : LamValuation.{u})
-  (ty : LamSort) (val : ty.interp lval.tyVal) (pos : Nat) :=
+def LamValuation.insertEVarAt (lval : LamValuation.{u} R?)
+  (ty : LamSort) (val : ty.interp R? lval.tyVal) (pos : Nat) :=
   {lval with lamEVarTy := replaceAt ty pos lval.lamEVarTy,
              eVarVal := replaceAtDep val pos lval.eVarVal}
 
@@ -1511,8 +1612,8 @@ theorem LamTyVal.insertEVarAt_eVarIrrelevance
   case false => rfl
 
 theorem LamValuation.insertEVarAt_eVarIrrelevance
-  {lval₁ : LamValuation.{u}} {val} (H : n < pos) :
-  let lval₂ := lval₁.insertEVarAt ty val pos;
+  {lval₁ : LamValuation.{u} R?} {val} (H : n < pos) :
+  let lval₂ := lval₁.insertEVarAt R? ty val pos;
   lval₁.lamEVarTy n = lval₂.lamEVarTy n ∧ HEq (lval₁.eVarVal n) (lval₂.eVarVal n) := by
   dsimp [insertEVarAt, replaceAt, replaceAtDep]
   cases h : Nat.beq n pos
@@ -1734,6 +1835,10 @@ abbrev LamTerm.imodeq : LamTerm :=
     (.app (.base .int) (.app (.base .int) (.base .iemod) (.bvar 1)) (.bvar 2)))
     (.app (.base .int) (.app (.base .int) (.base .iemod) (.bvar 0)) (.bvar 2)))))
 
+abbrev LamTerm.rge : LamTerm := .flipApp (.base .rle) (.base .real) (.base .real) (.base .prop)
+
+abbrev LamTerm.rgt : LamTerm := .flipApp (.base .rlt) (.base .real) (.base .real) (.base .prop)
+
 theorem LamTerm.maxEVarSucc_imodeq : LamTerm.maxEVarSucc imodeq = 0 := rfl
 
 abbrev LamTerm.sge : LamTerm := .flipApp (.base .sle) (.base .string) (.base .string) (.base .prop)
@@ -1888,6 +1993,8 @@ theorem LamTerm.maxEVarSucc_mkIte :
 
 def LamTerm.mkNatVal (n : Nat) : LamTerm := .base (.natVal n)
 
+def LamTerm.mkSciVal (n : Nat) (sgn : Bool) (exp : Nat) : LamTerm := .base (.sciVal n sgn exp)
+
 theorem LamTerm.maxEVarSucc_mkNatVal : (mkNatVal n).maxEVarSucc = 0 := rfl
 
 def LamTerm.mkNatBinOp (binOp : NatConst) (a b : LamTerm) : LamTerm :=
@@ -1924,6 +2031,12 @@ def LamTerm.mkIntBinOp (binOp : IntConst) (a b : LamTerm) : LamTerm :=
 theorem LamTerm.maxEVarSucc_mkIntBinOp :
   (mkIntBinOp op a b).maxEVarSucc = max a.maxEVarSucc b.maxEVarSucc := by
   dsimp [mkIntBinOp, maxEVarSucc]; simp [Nat.max]
+
+def LamTerm.mkROfNat (n : LamTerm) : LamTerm :=
+  .app (.base .nat) (.base .rofNat) n
+
+def LamTerm.mkROfInt (i : LamTerm) : LamTerm :=
+  .app (.base .int) (.base .rofInt) i
 
 /-- Make `BitVec.ofNat n i` -/
 def LamTerm.mkBvofNat (n : Nat) (i : LamTerm) : LamTerm :=
@@ -2708,6 +2821,8 @@ def LamWF.mkIte {ltv : LamTyVal}
 
 def LamWF.mkNatVal {ltv : LamTyVal} : LamWF ltv ⟨lctx, .mkNatVal n, .base .nat⟩ := .ofBase (.ofNatVal n)
 
+def LamWF.mkSciVal {ltv : LamTyVal} : LamWF ltv ⟨lctx, .mkSciVal n sgn exp, .base .real⟩ := .ofBase (.ofSciVal n sgn exp)
+
 def LamWF.mkNatBinOp {ltv : LamTyVal}
   (wfop : NatConst.LamWF binOp (.func (.base .nat) (.func (.base .nat) s)))
   (wfa : LamWF ltv ⟨lctx, a, .base .nat⟩) (wfb : LamWF ltv ⟨lctx, b, .base .nat⟩) :
@@ -3050,42 +3165,42 @@ def LamWF.ofLamCheck? {ltv : LamTyVal} :
       rw [LamSort.eq_of_beq_eq_true h₂] at h₁
       apply LamWF.ofLamCheck? h₁
 
-noncomputable def LamWF.interp.{u} (lval : LamValuation.{u})
-  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal) :
-  (lwf : LamWF lval.toLamTyVal ⟨lctxTy, t, rty⟩) → rty.interp lval.tyVal
+noncomputable def LamWF.interp.{u} (lval : LamValuation.{u} R?)
+  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp R? lval.tyVal) :
+  (lwf : LamWF lval.toLamTyVal ⟨lctxTy, t, rty⟩) → rty.interp R? lval.tyVal
 | .ofAtom n => lval.varVal n
 | .ofEtom n => lval.eVarVal n
-| .ofBase H => LamBaseTerm.LamWF.interp lval H
+| .ofBase H => LamBaseTerm.LamWF.interp R? lval H
 | .ofBVar n => lctxTerm n
 | @ofLam _ _ argTy _ body H =>
-  fun (x : argTy.interp lval.tyVal) =>
+  fun (x : argTy.interp R? lval.tyVal) =>
     LamWF.interp lval (pushLCtx argTy lctxTy) (pushLCtxDep (rty:=lctxTy) x lctxTerm) H
 | .ofApp _ HFn HArg =>
   let mfn := LamWF.interp lval lctxTy lctxTerm HFn
   let marg := LamWF.interp lval lctxTy lctxTerm HArg
   mfn marg
 
-theorem LamWF.interp_eq (lval : LamValuation.{u})
-  {lctxTerm₁ : ∀ n, (lctxTy n).interp lval.tyVal}
-  {lctxTerm₂ : ∀ n, (lctxTy n).interp lval.tyVal}
+theorem LamWF.interp_eq (lval : LamValuation.{u} R?)
+  {lctxTerm₁ : ∀ n, (lctxTy n).interp R? lval.tyVal}
+  {lctxTerm₂ : ∀ n, (lctxTy n).interp R? lval.tyVal}
   (HLCtxTermEq : HEq lctxTerm₁ lctxTerm₂)
   (lwf₁ : LamWF lval.toLamTyVal ⟨lctxTy, t₁, rty⟩)
   (lwf₂ : LamWF lval.toLamTyVal ⟨lctxTy, t₂, rty⟩)
   (HTeq : t₁ = t₂) :
-  LamWF.interp lval lctxTy lctxTerm₁ lwf₁ = LamWF.interp lval lctxTy lctxTerm₂ lwf₂ := by
+  LamWF.interp R? lval lctxTy lctxTerm₁ lwf₁ = LamWF.interp R? lval lctxTy lctxTerm₂ lwf₂ := by
   cases HTeq; cases HLCtxTermEq;
   have HUniq := LamWF.unique lwf₁ lwf₂
   rcases HUniq with ⟨⟨⟩, ⟨⟩⟩; rfl
 
-theorem LamWF.interp_heq (lval : LamValuation.{u})
+theorem LamWF.interp_heq (lval : LamValuation.{u} R?)
   {lctxTy₁ lctxTy₂ : Nat → LamSort} (HLCtxTyEq : lctxTy₁ = lctxTy₂)
-  {lctxTerm₁ : ∀ n, (lctxTy₁ n).interp lval.tyVal}
-  {lctxTerm₂ : ∀ n, (lctxTy₂ n).interp lval.tyVal}
+  {lctxTerm₁ : ∀ n, (lctxTy₁ n).interp R? lval.tyVal}
+  {lctxTerm₂ : ∀ n, (lctxTy₂ n).interp R? lval.tyVal}
   (HLCtxTermEq : HEq lctxTerm₁ lctxTerm₂)
   (lwf₁ : LamWF lval.toLamTyVal ⟨lctxTy₁, t₁, rty₁⟩)
   (lwf₂ : LamWF lval.toLamTyVal ⟨lctxTy₂, t₂, rty₂⟩)
   (HTeq : t₁ = t₂) :
-  HEq (LamWF.interp lval lctxTy₁ lctxTerm₁ lwf₁) (LamWF.interp lval lctxTy₂ lctxTerm₂ lwf₂) := by
+  HEq (LamWF.interp R? lval lctxTy₁ lctxTerm₁ lwf₁) (LamWF.interp R? lval lctxTy₂ lctxTerm₂ lwf₂) := by
   cases HTeq; cases HLCtxTyEq; cases HLCtxTermEq;
   have HUniq := LamWF.unique lwf₁ lwf₂
   cases HUniq; case intro left right =>
@@ -3095,31 +3210,31 @@ theorem LamWF.interp_heq (lval : LamValuation.{u})
 theorem LamWF.interp_substLCtxTerm
   {wf : LamWF lval.toLamTyVal ⟨lctxTy, t, s⟩}
   {wf' : LamWF lval.toLamTyVal ⟨lctxTy', t, s⟩}
-  {lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal}
-  {lctxTerm' : ∀ n, (lctxTy' n).interp lval.tyVal}
+  {lctxTerm : ∀ n, (lctxTy n).interp R? lval.tyVal}
+  {lctxTerm' : ∀ n, (lctxTy' n).interp R? lval.tyVal}
   (HLCtxTyEq : lctxTy = lctxTy') (HLCtxTermEq : HEq lctxTerm lctxTerm') :
-  LamWF.interp lval lctxTy lctxTerm wf = LamWF.interp lval lctxTy' lctxTerm' wf' := by
+  LamWF.interp R? lval lctxTy lctxTerm wf = LamWF.interp R? lval lctxTy' lctxTerm' wf' := by
   cases HLCtxTyEq; cases HLCtxTermEq; rcases (LamWF.unique wf wf') with ⟨_, ⟨⟩⟩; rfl
 
 -- In most use cases, we would have `b = .prop`
 theorem LamWF.interp_substLCtxTerm_rec
   {wf : LamWF lval.toLamTyVal ⟨lctxTy, t, s⟩}
-  {lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal}
-  {lctxTerm' : ∀ n, (lctxTy' n).interp lval.tyVal}
+  {lctxTerm : ∀ n, (lctxTy n).interp R? lval.tyVal}
+  {lctxTerm' : ∀ n, (lctxTy' n).interp R? lval.tyVal}
   (HLCtxTyEq : lctxTy = lctxTy') (HLCtxTermEq : HEq lctxTerm lctxTerm') :
-  LamWF.interp lval lctxTy lctxTerm wf = LamWF.interp lval lctxTy' lctxTerm' (HLCtxTyEq ▸ wf) := by
+  LamWF.interp R? lval lctxTy lctxTerm wf = LamWF.interp R? lval lctxTy' lctxTerm' (HLCtxTyEq ▸ wf) := by
   cases HLCtxTyEq; cases HLCtxTermEq; rfl
 
 theorem LamWF.interp_substWF
   {wf wf' : LamWF lval.toLamTyVal ⟨lctxTy, t, s⟩}
-  {lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal} :
-  LamWF.interp lval lctxTy lctxTerm wf = LamWF.interp lval lctxTy lctxTerm wf' :=
-  LamWF.interp_substLCtxTerm rfl HEq.rfl
+  {lctxTerm : ∀ n, (lctxTy n).interp R? lval.tyVal} :
+  LamWF.interp R? lval lctxTy lctxTerm wf = LamWF.interp R? lval lctxTy lctxTerm wf' :=
+  LamWF.interp_substLCtxTerm R? rfl HEq.rfl
 
 theorem LamWF.interp_prop_eqExists
   {wf : LamWF lval.toLamTyVal ⟨lctx, t, .base .prop⟩} :
-  (∃ (wf : LamWF lval.toLamTyVal ⟨lctx, t, .base .prop⟩), GLift.down (LamWF.interp lval lctx lctxTerm wf)) =
-  GLift.down (LamWF.interp lval lctx lctxTerm wf) :=
+  (∃ (wf : LamWF lval.toLamTyVal ⟨lctx, t, .base .prop⟩), GLift.down (LamWF.interp R? lval lctx lctxTerm wf)) =
+  GLift.down (LamWF.interp R? lval lctx lctxTerm wf) :=
   propext (Iff.intro
     (fun ⟨wf', H'⟩ => Eq.mp (by
       apply congrArg; apply eq_of_heq; apply interp_heq <;> rfl) H')
@@ -3127,73 +3242,73 @@ theorem LamWF.interp_prop_eqExists
 
 theorem LamWF.interp_prop_eqForall
   {wf : LamWF lval.toLamTyVal ⟨lctx, t, .base .prop⟩} :
-  (∀ (wf : LamWF lval.toLamTyVal ⟨lctx, t, .base .prop⟩), GLift.down (LamWF.interp lval lctx lctxTerm wf)) =
-  GLift.down (LamWF.interp lval lctx lctxTerm wf) :=
+  (∀ (wf : LamWF lval.toLamTyVal ⟨lctx, t, .base .prop⟩), GLift.down (LamWF.interp R? lval lctx lctxTerm wf)) =
+  GLift.down (LamWF.interp R? lval lctx lctxTerm wf) :=
   propext (Iff.intro
     (fun H => H wf)
     (fun H wf => Eq.mp (by
       apply congrArg; apply eq_of_heq; apply interp_heq <;> rfl) H))
 
 theorem LamWF.interp_atom
-  {lval : LamValuation.{u}}
+  {lval : LamValuation.{u} R?}
   (wft : LamWF lval.toLamTyVal ⟨lctxTy, .atom n, s⟩) {lctxTerm} :
-  HEq (wft.interp lval lctxTy lctxTerm) (lval.varVal n) :=
+  HEq (wft.interp R? lval lctxTy lctxTerm) (lval.varVal n) :=
   match wft with
   | .ofAtom _ => HEq.rfl
 
 theorem LamWF.interp_etom
-  {lval : LamValuation.{u}}
+  {lval : LamValuation.{u} R?}
   (wft : LamWF lval.toLamTyVal ⟨lctxTy, .etom n, s⟩) {lctxTerm} :
-  HEq (wft.interp lval lctxTy lctxTerm) (lval.eVarVal n) :=
+  HEq (wft.interp R? lval lctxTy lctxTerm) (lval.eVarVal n) :=
   match wft with
   | .ofEtom _ => HEq.rfl
 
 theorem LamWF.interp_base
-  {lval : LamValuation.{u}}
+  {lval : LamValuation.{u} R?}
   (wft : LamWF lval.toLamTyVal ⟨lctxTy, .base b, s⟩) {lctxTerm} :
-  wft.interp lval lctxTy lctxTerm = wft.getBase.interp lval :=
+  wft.interp R? lval lctxTy lctxTerm = wft.getBase.interp R? lval :=
   match wft with
   | .ofBase _ => rfl
 
 theorem LamWF.interp_base'
-  {lval : LamValuation.{u}}
+  {lval : LamValuation.{u} R?}
   (wft : LamWF lval.toLamTyVal ⟨lctxTy, .base b, s⟩) {lctxTerm} :
-  HEq (wft.interp lval lctxTy lctxTerm) (b.interp lval) :=
+  HEq (wft.interp R? lval lctxTy lctxTerm) (b.interp R? lval) :=
   match wft with
-  | .ofBase _ => LamBaseTerm.interp_equiv _ _
+  | .ofBase _ => LamBaseTerm.interp_equiv _ _ _
 
 theorem LamWF.interp_bvar
-  {lval : LamValuation.{u}}
+  {lval : LamValuation.{u} R?}
   (wft : LamWF lval.toLamTyVal ⟨lctxTy, .bvar n, s⟩) {lctxTerm} :
-  HEq (wft.interp lval lctxTy lctxTerm) (lctxTerm n) :=
+  HEq (wft.interp R? lval lctxTy lctxTerm) (lctxTerm n) :=
   match wft with
   | .ofBVar _ => HEq.rfl
 
 theorem LamWF.interp_lam
-  {lval : LamValuation.{u}}
+  {lval : LamValuation.{u} R?}
   (wft : LamWF lval.toLamTyVal ⟨lctxTy, .lam argTy body, .func argTy resTy⟩) {lctxTerm} :
-  wft.interp lval lctxTy lctxTerm = (fun x => wft.getLam.interp lval
+  wft.interp R? lval lctxTy lctxTerm = (fun x => wft.getLam.interp R? lval
     (pushLCtx argTy lctxTy) (pushLCtxDep x lctxTerm)) :=
   match wft with
   | .ofLam _ _ => rfl
 
 theorem LamWF.interp_app
-  {lval : LamValuation.{u}}
+  {lval : LamValuation.{u} R?}
   (wft : LamWF lval.toLamTyVal ⟨lctxTy, .app argTy fn arg, s⟩) {lctxTerm} :
-  wft.interp lval lctxTy lctxTerm = (wft.getFn.interp lval lctxTy lctxTerm) (wft.getArg.interp lval lctxTy lctxTerm) :=
+  wft.interp R? lval lctxTy lctxTerm = (wft.getFn.interp R? lval lctxTy lctxTerm) (wft.getArg.interp R? lval lctxTy lctxTerm) :=
   match wft with
   | .ofApp _ _ _ => rfl
 
 theorem LamWF.interp_bvarAppsRev
-  {lval : LamValuation.{u}}
+  {lval : LamValuation.{u} R?}
   (wft : LamWF lval.toLamTyVal ⟨pushLCtxs lctxTy.reverse lctxTy', t, LamSort.mkFuncs s lctxTy⟩)
   (wfAp : LamWF lval.toLamTyVal ⟨pushLCtxs lctxTy.reverse lctxTy', t.bvarAppsRev lctxTy, s⟩)
-  {valPre : HList (LamSort.interp lval.tyVal) lctxTy → LamSort.interp lval.tyVal s}
-  {lctxTerm : HList (LamSort.interp lval.tyVal) lctxTy}
-  {lctxTerm' : ∀ (n : Nat), (lctxTy' n).interp lval.tyVal}
-  (ht : HEq (wft.interp lval _ (pushLCtxsDep lctxTerm.reverse lctxTerm')) (LamSort.curry valPre)) :
+  {valPre : HList (LamSort.interp R? lval.tyVal) lctxTy → LamSort.interp R? lval.tyVal s}
+  {lctxTerm : HList (LamSort.interp R? lval.tyVal) lctxTy}
+  {lctxTerm' : ∀ (n : Nat), (lctxTy' n).interp R? lval.tyVal}
+  (ht : HEq (wft.interp R? lval _ (pushLCtxsDep lctxTerm.reverse lctxTerm')) (LamSort.curry R? valPre)) :
   HEq
-    (LamWF.interp lval (pushLCtxs lctxTy.reverse lctxTy') (pushLCtxsDep lctxTerm.reverse lctxTerm') wfAp)
+    (LamWF.interp R? lval (pushLCtxs lctxTy.reverse lctxTy') (pushLCtxsDep lctxTerm.reverse lctxTerm') wfAp)
     (valPre lctxTerm) := by
   induction lctxTerm generalizing t lctxTy' lctxTerm'
   case nil =>
@@ -3203,13 +3318,13 @@ theorem LamWF.interp_bvarAppsRev
     rw [List.reverse_cons, pushLCtxs_append_singleton] at wft
     dsimp [LamTerm.bvarAppsRev] at wfAp ⊢
     rw [List.reverse_cons, pushLCtxs_append_singleton] at wfAp
-    rw [interp_substLCtxTerm_rec (by rw [List.reverse_cons])
+    rw [interp_substLCtxTerm_rec _ (by rw [List.reverse_cons])
       (pushLCtxsDep_substxs _ _ _ List.reverse_cons HList.reverse_cons)]
-    rw [interp_substLCtxTerm_rec
+    rw [interp_substLCtxTerm_rec _
       (pushLCtxs_append_singleton _ _ _) (pushLCtxsDep_append_singleton _ _ _)]
     rw [LamWF.interp_substWF (wf':=wfAp)]
     apply IH (LamWF.ofApp _ wft LamWF.bvarAppsRev_Aux)
-    simp only[interp]; apply HEq.trans (b:=LamSort.curry valPre lterm) <;> try rfl
+    simp only[interp]; apply HEq.trans (b:=LamSort.curry R? valPre lterm) <;> try rfl
     case h₁ =>
       apply heq_of_eq; apply congr
       case h₁ =>
@@ -3218,20 +3333,20 @@ theorem LamWF.interp_bvarAppsRev
         apply HEq.symm; apply HEq.trans _ (pushLCtxsDep_append_singleton _ _ _)
         apply pushLCtxsDep_substxs; rw [List.reverse_cons]; apply HList.reverse_cons
       case h₂ =>
-        apply eq_of_heq; apply HEq.trans (LamWF.interp_bvar _)
+        apply eq_of_heq; apply HEq.trans (LamWF.interp_bvar _ _)
         apply HEq.trans (pushLCtxsDep_ge _ (Nat.le_of_eq List.length_reverse))
         rw [List.length_reverse, Nat.sub_self]; rfl
 
 theorem LamWF.interp_eqForallEF
   {wf : LamWF lval.toLamTyVal ⟨pushLCtx s lctx, t, .base .prop⟩} :
-  GLift.down (LamWF.interp lval lctx lctxTerm (.mkForallEF wf)) = (∀ x,
-    GLift.down (LamWF.interp lval (pushLCtx s lctx) (pushLCtxDep x lctxTerm) wf)) := rfl
+  GLift.down (LamWF.interp R? lval lctx lctxTerm (.mkForallEF wf)) = (∀ x,
+    GLift.down (LamWF.interp R? lval (pushLCtx s lctx) (pushLCtxDep x lctxTerm) wf)) := rfl
 
 theorem LamWF.interp_eqForallEFN'
-  {lval : LamValuation.{u}} {lctxTerm : ∀ n, (lctx n).interp lval.tyVal}
+  {lval : LamValuation.{u} R?} {lctxTerm : ∀ n, (lctx n).interp R? lval.tyVal}
   {wf : LamWF lval.toLamTyVal ⟨pushLCtxs ls lctx, t, .base .prop⟩} :
-  GLift.down (LamWF.interp lval lctx lctxTerm (.mkForallEFN' wf)) = (∀ xs,
-    GLift.down (LamWF.interp lval (pushLCtxs ls lctx) (pushLCtxsDep xs lctxTerm) wf)) := by
+  GLift.down (LamWF.interp R? lval lctx lctxTerm (.mkForallEFN' wf)) = (∀ xs,
+    GLift.down (LamWF.interp R? lval (pushLCtxs ls lctx) (pushLCtxsDep xs lctxTerm) wf)) := by
   generalize LamWF.mkForallEFN' wf = wfMkF
   induction ls generalizing t
   case nil =>
@@ -3257,27 +3372,27 @@ theorem LamWF.interp_eqForallEFN'
     case HLCtxTermEq => apply HEq.symm; apply pushLCtxsDep_cons
 
 theorem LamWF.interp_eqForallEFN
-  {lval : LamValuation.{u}} {ls : List LamSort} {lctxTerm : ∀ n, (lctx n).interp lval.tyVal}
+  {lval : LamValuation.{u} R?} {ls : List LamSort} {lctxTerm : ∀ n, (lctx n).interp R? lval.tyVal}
   {wf : LamWF lval.toLamTyVal ⟨pushLCtxs ls.reverse lctx, t, .base .prop⟩} :
-  GLift.down (LamWF.interp lval lctx lctxTerm (.mkForallEFN wf)) = (∀ xs,
-    GLift.down (LamWF.interp lval (pushLCtxs ls.reverse lctx) (pushLCtxsDep xs lctxTerm) wf)) := by
-  apply Eq.trans _ interp_eqForallEFN'; apply congrArg
+  GLift.down (LamWF.interp R? lval lctx lctxTerm (.mkForallEFN wf)) = (∀ xs,
+    GLift.down (LamWF.interp R? lval (pushLCtxs ls.reverse lctx) (pushLCtxsDep xs lctxTerm) wf)) := by
+  apply Eq.trans _ (interp_eqForallEFN' _); apply congrArg
   apply eq_of_heq; apply interp_heq <;> try rfl
   rw [List.reverse_reverse]
 
 theorem LamWF.interp_bvarApps
-  {lval : LamValuation.{u}}
+  {lval : LamValuation.{u} R?}
   (wft : LamWF lval.toLamTyVal ⟨pushLCtxs (List.reverseAux tyex lctx) lctx', t, LamSort.mkFuncsRev s lctx⟩)
   (wfAp : LamWF lval.toLamTyVal ⟨pushLCtxs (List.reverseAux tyex lctx) lctx', LamTerm.bvarApps t lctx (List.length tyex), s⟩)
-  {valPre : HList (LamSort.interp lval.tyVal) lctx → LamSort.interp lval.tyVal s}
-  {termex : HList (LamSort.interp lval.tyVal) tyex}
-  {lctxTerm : HList (LamSort.interp lval.tyVal) lctx}
-  {lctxTerm' : ∀ (n : Nat), (lctx' n).interp lval.tyVal}
-  (ht : HEq (wft.interp lval _ (pushLCtxsDep (HList.reverseAux termex lctxTerm) lctxTerm')) (LamSort.curryRev valPre)) :
+  {valPre : HList (LamSort.interp R? lval.tyVal) lctx → LamSort.interp R? lval.tyVal s}
+  {termex : HList (LamSort.interp R? lval.tyVal) tyex}
+  {lctxTerm : HList (LamSort.interp R? lval.tyVal) lctx}
+  {lctxTerm' : ∀ (n : Nat), (lctx' n).interp R? lval.tyVal}
+  (ht : HEq (wft.interp R? lval _ (pushLCtxsDep (HList.reverseAux termex lctxTerm) lctxTerm')) (LamSort.curryRev R? valPre)) :
   HEq
-    (LamWF.interp lval
+    (LamWF.interp R? lval
       (pushLCtxs (List.reverseAux tyex lctx) lctx')
-      (pushLCtxsDep (lctxty:=LamSort.interp lval.tyVal) (HList.reverseAux termex lctxTerm) lctxTerm')
+      (pushLCtxsDep (lctxty:=LamSort.interp R? lval.tyVal) (HList.reverseAux termex lctxTerm) lctxTerm')
       wfAp)
     (valPre lctxTerm) := by
   induction lctxTerm generalizing s tyex
@@ -3290,7 +3405,7 @@ theorem LamWF.interp_bvarApps
       case h₁ =>
         apply @IH (lty::tyex) (.func lty s) wft _ (fun lctxTerm lx => valPre (.cons lx lctxTerm)) (.cons lx termex) ht
       case h₂ =>
-        apply HEq.trans (LamWF.interp_bvar _);
+        apply HEq.trans (LamWF.interp_bvar _ _);
         clear s t wft valPre ht HFn HArg IH
         dsimp [pushLCtxs, pushLCtxsDep]
         have hlt : tyex.length < (tyex.reverseAux (lty :: lctx)).length := by
@@ -3310,21 +3425,21 @@ theorem LamWF.interp_bvarApps
           case right => rw [Nat.sub_self]; rfl
 
 theorem LamWF.interp_insertEVarAt_eIdx
-  {lval : LamValuation.{u}} {val : LamSort.interp lval.tyVal ty}
+  {lval : LamValuation.{u} R?} {val : LamSort.interp R? lval.tyVal ty}
   (lwf : LamWF {lval.toLamTyVal with lamEVarTy := replaceAt ty pos lamEVarTy'} ⟨lctxTy, .etom pos, rty⟩)
-  {lctxTerm : ∀ (n : Nat), LamSort.interp lval.tyVal (lctxTy n)}
-  {eVarVal' : (n : Nat) → LamSort.interp lval.tyVal (lamEVarTy' n)} :
+  {lctxTerm : ∀ (n : Nat), LamSort.interp R? lval.tyVal (lctxTy n)}
+  {eVarVal' : (n : Nat) → LamSort.interp R? lval.tyVal (lamEVarTy' n)} :
   let lval' := {lval with lamEVarTy := replaceAt ty pos lamEVarTy',
                           eVarVal := replaceAtDep val pos eVarVal'}
-  HEq (lwf.interp lval' lctxTy lctxTerm) val := by
+  HEq (lwf.interp R? lval' lctxTy lctxTerm) val := by
   cases lwf; simp only [interp, replaceAtDep]; simp only [replaceAt]
   rw [Nat.beq_refl]; rfl
 
 theorem LamWF.interp_eVarIrrelevance
-  (lval₁ : LamValuation.{u}) (lval₂ : LamValuation.{u})
+  (lval₁ : LamValuation.{u} R?) (lval₂ : LamValuation.{u} R?)
   {lctxTy₁ lctxTy₂ : Nat → LamSort}
-  {lctxTerm₁ : ∀ n, (lctxTy₁ n).interp lval₁.tyVal}
-  {lctxTerm₂ : ∀ n, (lctxTy₂ n).interp lval₂.tyVal}
+  {lctxTerm₁ : ∀ n, (lctxTy₁ n).interp R? lval₁.tyVal}
+  {lctxTerm₂ : ∀ n, (lctxTy₂ n).interp R? lval₂.tyVal}
   {t : LamTerm} {rty : LamSort}
   (lwf₁ : LamWF lval₁.toLamTyVal ⟨lctxTy₁, t, rty⟩)
   (lwf₂ : LamWF lval₂.toLamTyVal ⟨lctxTy₂, t, rty⟩)
@@ -3337,7 +3452,7 @@ theorem LamWF.interp_eVarIrrelevance
   (hLCtxTerm : HEq lctxTerm₁ lctxTerm₂)
   (hirr : ∀ n, n < t.maxEVarSucc →
     lval₁.lamEVarTy n = lval₂.lamEVarTy n ∧ HEq (lval₁.eVarVal n) (lval₂.eVarVal n)) :
-  HEq (LamWF.interp lval₁ lctxTy₁ lctxTerm₁ lwf₁) (LamWF.interp lval₂ lctxTy₂ lctxTerm₂ lwf₂) := by
+  HEq (LamWF.interp R? lval₁ lctxTy₁ lctxTerm₁ lwf₁) (LamWF.interp R? lval₂ lctxTy₂ lctxTerm₂ lwf₂) := by
   rcases lval₁ with ⟨⟨lamVarTy₁, lamILTy₁, lamEVarTy₁⟩, tyVal₁, varVal₁, ilVal₁, eVarVal₁⟩
   rcases lval₂ with ⟨⟨lamVarTy₂, lamILTy₂, lamEVarTy₂⟩, tyVal₂, varVal₂, ilVal₂, eVarVal₂⟩
   dsimp at hLamVarTy hLamILTy hTyVal hVarVal hILVal hirr
@@ -3352,8 +3467,8 @@ theorem LamWF.interp_eVarIrrelevance
         apply (hirr _ _).left; exact .refl
       dsimp at lwf₂;
       let lwf₂' := htyeq ▸ lwf₂;
-      let lval₂ : LamValuation := ⟨⟨lamVarTy₁, lamILTy₁, lamEVarTy₂⟩, tyVal₁, varVal₁, ilVal₁, eVarVal₂⟩
-      apply HEq.trans _ (LamWF.interp_heq (lval:=lval₂) (lwf₁ := lwf₂') rfl HEq.rfl _ rfl)
+      let lval₂ : LamValuation _ := ⟨⟨lamVarTy₁, lamILTy₁, lamEVarTy₂⟩, tyVal₁, varVal₁, ilVal₁, eVarVal₂⟩
+      apply HEq.trans _ (LamWF.interp_heq _ (lval:=lval₂) (lwf₁ := lwf₂') rfl HEq.rfl _ rfl)
       cases lwf₂'; dsimp [interp]; apply (hirr _ _).right; exact .refl
     case base b =>
       cases lwf₁; cases lwf₂; simp only [interp]
@@ -3375,15 +3490,15 @@ theorem LamWF.interp_eVarIrrelevance
             apply (hirr n (Nat.le_trans hlt (Nat.le_max_right _ _)))
 
 theorem LamWF.interp_lctxIrrelevance
-  (lval : LamValuation.{u}) {lctxTy₁ lctxTy₂ : Nat → LamSort}
-  {lctxTerm₁ : ∀ n, (lctxTy₁ n).interp lval.tyVal}
-  {lctxTerm₂ : ∀ n, (lctxTy₂ n).interp lval.tyVal}
+  (lval : LamValuation.{u} R?) {lctxTy₁ lctxTy₂ : Nat → LamSort}
+  {lctxTerm₁ : ∀ n, (lctxTy₁ n).interp R? lval.tyVal}
+  {lctxTerm₂ : ∀ n, (lctxTy₂ n).interp R? lval.tyVal}
   {t : LamTerm} {rty : LamSort}
   (lwf₁ : LamWF lval.toLamTyVal ⟨lctxTy₁, t, rty⟩)
   (lwf₂ : LamWF lval.toLamTyVal ⟨lctxTy₂, t, rty⟩)
   (hirr : ∀ n, n < t.maxLooseBVarSucc →
     lctxTy₁ n = lctxTy₂ n ∧ HEq (lctxTerm₁ n) (lctxTerm₂ n)) :
-  HEq (LamWF.interp lval lctxTy₁ lctxTerm₁ lwf₁) (LamWF.interp lval lctxTy₂ lctxTerm₂ lwf₂) := by
+  HEq (LamWF.interp R? lval lctxTy₁ lctxTerm₁ lwf₁) (LamWF.interp R? lval lctxTy₂ lctxTerm₂ lwf₂) := by
   induction t generalizing lctxTy₁ lctxTy₂ rty <;> try (cases lwf₁; cases lwf₂; rfl)
   case base b =>
     cases lwf₁; cases lwf₂; simp only [interp]; apply LamBaseTerm.LamWF.interp_heq <;> rfl
@@ -3391,7 +3506,7 @@ theorem LamWF.interp_lctxIrrelevance
     cases lwf₁; simp only [interp]
     have htyeq : lctxTy₁ n = lctxTy₂ n := by
       apply (hirr _ _).left; exact .refl
-    rw [htyeq] at lwf₂; apply HEq.trans (b:=interp _ _ lctxTerm₂ lwf₂)
+    rw [htyeq] at lwf₂; apply HEq.trans (b:=interp _ _ _ lctxTerm₂ lwf₂)
     case h₁ =>
       cases lwf₂; simp only [interp]; apply (hirr _ _).right; exact .refl
     case h₂ =>

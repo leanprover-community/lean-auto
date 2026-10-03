@@ -6,6 +6,8 @@ public import Auto.Embedding.LamBase
 
 namespace Auto.Embedding.Lam
 
+variable (R? : Option ((R : Type) × RealTy R))
+
 def LamTerm.mapBVarAt (idx : Nat) (f : Nat → Nat) (t : LamTerm) : LamTerm :=
   match t with
   | .atom n       => .atom n
@@ -71,11 +73,11 @@ def LamWF.fromMapBVarAt
   (HWF : LamWF lamVarTy ⟨restoreAt idx restore lctx, rterm.mapBVarAt idx f, rty⟩) :
   LamWF lamVarTy ⟨lctx, rterm, rty⟩ := LamWF.fromMapBVarAtAux covP idx rterm rfl rfl HWF
 
-theorem LamWF.mapBVarAt.correct (lval : LamValuation.{u}) {restoreDep : _}
-  (covPD : coPairDep (LamSort.interp lval.tyVal) f restore restoreDep) (idx : Nat)
-  {lctxTy : Nat → LamSort} (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal) :
+theorem LamWF.mapBVarAt.correct (lval : LamValuation.{u} R?) {restoreDep : _}
+  (covPD : coPairDep (LamSort.interp R? lval.tyVal) f restore restoreDep) (idx : Nat)
+  {lctxTy : Nat → LamSort} (lctxTerm : ∀ n, (lctxTy n).interp R? lval.tyVal) :
   (rterm : LamTerm) → (HWF : LamWF lval.toLamTyVal ⟨lctxTy, rterm, rTy⟩) →
-  LamWF.interp lval lctxTy lctxTerm HWF = LamWF.interp lval
+  LamWF.interp R? lval lctxTy lctxTerm HWF = LamWF.interp R? lval
     (restoreAt idx restore lctxTy)
     (restoreAtDep idx restoreDep lctxTerm)
     (mapBVarAt (restore:=restore) covPD.left idx rterm HWF)
@@ -84,7 +86,7 @@ theorem LamWF.mapBVarAt.correct (lval : LamValuation.{u}) {restoreDep : _}
 | .base _, .ofBase _ => rfl
 | .bvar n, .ofBVar _ => by
   simp only [mapBVarAt, LamWF.interp]
-  apply eq_of_heq; apply HEq.symm (HEq.trans (interp_bvar _) _)
+  apply eq_of_heq; apply HEq.symm (HEq.trans (interp_bvar _ _) _)
   apply (coPairDepAt.ofCoPairDep covPD).right
 | .lam argTy body, .ofLam bodyTy wfBody => by
   apply funext; intros x
@@ -273,14 +275,14 @@ def LamWF.fromBVarLiftsIdx
   LamWF.fromMapBVarAt (coPair.ofPushsPops _ _ heq) idx rterm HWF
 
 theorem LamWF.interp_bvarLiftsIdx
-  (lval : LamValuation.{u}) {idx lvl : Nat}
-  {tys : List LamSort} (xs : HList (LamSort.interp lval.tyVal) tys) (heq : tys.length = lvl)
-  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal)
+  (lval : LamValuation.{u} R?) {idx lvl : Nat}
+  {tys : List LamSort} (xs : HList (LamSort.interp R? lval.tyVal) tys) (heq : tys.length = lvl)
+  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp R? lval.tyVal)
   (rterm : LamTerm) (HWF : LamWF lval.toLamTyVal ⟨lctxTy, rterm, rTy⟩) :
-  LamWF.interp lval lctxTy lctxTerm HWF = LamWF.interp lval
+  LamWF.interp R? lval lctxTy lctxTerm HWF = LamWF.interp R? lval
     (pushLCtxsAt tys idx lctxTy) (pushLCtxsAtDep xs idx lctxTerm)
     (bvarLiftsIdx heq rterm HWF) :=
-  LamWF.mapBVarAt.correct lval (coPairDep.ofPushsDepPopsDep _ _ heq) idx lctxTerm rterm HWF
+  LamWF.mapBVarAt.correct _ lval (coPairDep.ofPushsDepPopsDep _ _ heq) idx lctxTerm rterm HWF
 
 def LamWF.bvarLifts
   {lamVarTy lctx} {lvl : Nat}
@@ -297,14 +299,14 @@ def LamWF.fromBVarLifts
   LamWF.fromBVarLiftsIdx (idx:=0) heq rterm (Eq.mp (by rw [pushLCtxsAt_zero]) HWF)
 
 theorem LamWF.interp_bvarLifts
-  (lval : LamValuation.{u}) {lvl : Nat}
-  {tys : List LamSort} (xs : HList (LamSort.interp lval.tyVal) tys) (heq : tys.length = lvl)
-  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal)
+  (lval : LamValuation.{u} R?) {lvl : Nat}
+  {tys : List LamSort} (xs : HList (LamSort.interp R? lval.tyVal) tys) (heq : tys.length = lvl)
+  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp R? lval.tyVal)
   (rterm : LamTerm) (HWF : LamWF lval.toLamTyVal ⟨lctxTy, rterm, rTy⟩) :
-  LamWF.interp lval lctxTy lctxTerm HWF = LamWF.interp lval
+  LamWF.interp R? lval lctxTy lctxTerm HWF = LamWF.interp R? lval
     (pushLCtxs tys lctxTy) (pushLCtxsDep xs lctxTerm)
     (bvarLifts heq rterm HWF) := by
-  apply Eq.trans (LamWF.interp_bvarLiftsIdx (idx:=0) _ xs heq _ lctxTerm _ _)
+  apply Eq.trans (LamWF.interp_bvarLiftsIdx _ (idx:=0) _ xs heq _ lctxTerm _ _)
   apply interp_substLCtxTerm; rw [pushLCtxsAt_zero]; apply pushLCtxsAtDep_zero
 
 def LamWF.bvarLiftIdx {lamVarTy lctx} (idx : Nat)
@@ -318,14 +320,14 @@ def LamWF.fromBVarLiftIdx {lamVarTy lctx} (idx : Nat)
   LamWF.fromMapBVarAt (coPair.ofPushPop _) idx rterm HWF
 
 theorem LamWF.interp_bvarLiftIdx
-  (lval : LamValuation.{u}) {idx : Nat}
-  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal)
-  {xty : LamSort} (x : LamSort.interp lval.tyVal xty)
+  (lval : LamValuation.{u} R?) {idx : Nat}
+  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp R? lval.tyVal)
+  {xty : LamSort} (x : LamSort.interp R? lval.tyVal xty)
   (rterm : LamTerm) (HWF : LamWF lval.toLamTyVal ⟨lctxTy, rterm, rTy⟩) :
-  LamWF.interp lval lctxTy lctxTerm HWF = LamWF.interp lval
+  LamWF.interp R? lval lctxTy lctxTerm HWF = LamWF.interp R? lval
     (pushLCtxAt xty idx lctxTy) (pushLCtxAtDep x idx lctxTerm)
     (bvarLiftIdx idx rterm HWF) :=
-  LamWF.mapBVarAt.correct lval (coPairDep.ofPushDepPopDep _) idx lctxTerm rterm HWF
+  LamWF.mapBVarAt.correct _ lval (coPairDep.ofPushDepPopDep _) idx lctxTerm rterm HWF
 
 def LamWF.bvarLift {lamVarTy lctx}
   (rterm : LamTerm) (HWF : LamWF lamVarTy ⟨lctx, rterm, rTy⟩) :
@@ -338,13 +340,13 @@ def LamWF.fromBVarLift {lamVarTy lctx}
   LamWF.fromBVarLiftIdx (s:=s) 0 _ (Eq.mp (by rw [pushLCtxAt_zero]) HWF)
 
 theorem LamWF.interp_bvarLift
-  (lval : LamValuation.{u})
-  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp lval.tyVal)
-  {xty : LamSort} (x : LamSort.interp lval.tyVal xty)
+  (lval : LamValuation.{u} R?)
+  (lctxTy : Nat → LamSort) (lctxTerm : ∀ n, (lctxTy n).interp R? lval.tyVal)
+  {xty : LamSort} (x : LamSort.interp R? lval.tyVal xty)
   (rterm : LamTerm) (HWF : LamWF lval.toLamTyVal ⟨lctxTy, rterm, rTy⟩) :
-  LamWF.interp lval lctxTy lctxTerm HWF = LamWF.interp lval
+  LamWF.interp R? lval lctxTy lctxTerm HWF = LamWF.interp R? lval
     (pushLCtx xty lctxTy) (pushLCtxDep x lctxTerm) (bvarLift rterm HWF) := by
-  apply Eq.trans (LamWF.interp_bvarLiftIdx (idx:=0) _ _ lctxTerm x _ _)
+  apply Eq.trans (LamWF.interp_bvarLiftIdx _ (idx:=0) _ _ lctxTerm x _ _)
   apply interp_substLCtxTerm; rw [pushLCtxAt_zero]; apply pushLCtxAtDep_zero
 
 def LamWF.pushLCtxAt_ofBVar :

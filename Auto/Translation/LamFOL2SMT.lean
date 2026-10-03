@@ -162,6 +162,7 @@ private def lamBaseSort2SSort : LamBaseSort → SSort
 -- `Nat ≅ {x : Int | x ≥ 0}`
 | .nat    => .app (.symb "Int") #[]
 | .int    => .app (.symb "Int") #[]
+| .real   => .app (.symb "Real") #[]
 | .isto0 p =>
   match p with
   | .xH => .app (.symb "String") #[]
@@ -398,6 +399,14 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .icst .ilt  => return .qStrApp "<" #[arg1, arg2]
 | .icst .imax => return .qStrApp "ite" #[.qStrApp "<=" #[arg1, arg2], arg2, arg1]
 | .icst .imin => return .qStrApp "ite" #[.qStrApp "<=" #[arg1, arg2], arg1, arg2]
+| .rcst .radd => return .qStrApp "+" #[arg1, arg2]
+| .rcst .rsub => return .qStrApp "-" #[arg1, arg2]
+| .rcst .rmul => return .qStrApp "*" #[arg1, arg2]
+| .rcst .rdiv => return .qStrApp "rdiv" #[arg1, arg2]
+| .rcst .rle  => return .qStrApp "<=" #[arg1, arg2]
+| .rcst .rlt  => return .qStrApp "<" #[arg1, arg2]
+| .rcst .rmax => return .qStrApp "ite" #[.qStrApp "<=" #[arg1, arg2], arg2, arg1]
+| .rcst .rmin => return .qStrApp "ite" #[.qStrApp "<=" #[arg1, arg2], arg1, arg2]
 | .scst .sapp => return .qStrApp "str.++" #[arg1, arg2]
 | .scst .sle  => return .qStrApp "str.<=" #[arg1, arg2]
 | .scst .slt  => return .qStrApp "str.<" #[arg1, arg2]
@@ -446,6 +455,10 @@ private def lamBaseTerm2STerm_Arity1 (sni : SMTNamingInfo) (arg : STerm) : LamBa
 | .icst .inegSucc        => return .qStrApp "-" #[int2STerm (-1), arg]
 | .icst .ineg            => return .qStrApp "-" #[int2STerm 0, arg]
 | .icst .iabs            => return .qStrApp "abs" #[arg]
+| .rcst .rofNat          => return if let .sConst (.num n) := arg then .sConst (.scientific n false 0) else .qStrApp "to_real" #[arg]
+| .rcst .rofInt          => return if let .sConst (.num n) := arg then .sConst (.scientific n false 0) else .qStrApp "to_real" #[arg]
+| .rcst .rneg            => return .qStrApp "-" #[.sConst (.scientific 0 false 0), arg]
+| .rcst .rabs            => return .qStrApp "rabs" #[arg]
 | .scst .slength         => return .qStrApp "str.len" #[arg]
 -- To SMT solvers `.bvofNat` is the same as `.bvofInt`
 | .bvcst (.bvofNat n)    => do
@@ -509,7 +522,10 @@ private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtomic STerm
 | .pcst .falseE       => return .qStrApp "false" #[]
 | .bcst .trueb        => return .qStrApp "true" #[]
 | .bcst .falseb       => return .qStrApp "false" #[]
+| .rcst .rzero        => return .sConst (.scientific 0 false 0)
+| .rcst .rone         => return .sConst (.scientific 1 false 0)
 | .ncst (.natVal n)   => return .sConst (.num n)
+| .rcst (.sciVal n sgn exp) => return .sConst (.scientific n sgn exp)
 | .scst (.strVal s)   => return .sConst (.str s)
 | .bvcst (.bvVal n i) => return bitVec2STerm n i
 | t                   => throwError "{decl_name%} :: The arity of {repr t} is not 0"
@@ -728,7 +744,11 @@ def termAuxDecls : Array IR.SMT.Command :=
     .defFun false "iediv" #[("x", .app (.symb "Int") #[]), ("y", .app (.symb "Int") #[])] (.app (.symb "Int") #[])
       (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "y" #[], .sConst (.num 0)], .sConst (.num 0), .qStrApp "div" #[.qStrApp "x" #[], .qStrApp "y" #[]]]),
     .defFun false "iemod" #[("x", .app (.symb "Int") #[]), ("y", .app (.symb "Int") #[])] (.app (.symb "Int") #[])
-      (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "y" #[], .sConst (.num 0)], .qStrApp "x" #[], .qStrApp "mod" #[.qStrApp "x" #[], .qStrApp "y" #[]]])
+      (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "y" #[], .sConst (.num 0)], .qStrApp "x" #[], .qStrApp "mod" #[.qStrApp "x" #[], .qStrApp "y" #[]]]),
+    .defFun false "rdiv" #[("x", .app (.symb "Real") #[]), ("y", .app (.symb "Real") #[])] (.app (.symb "Real") #[])
+      (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "y" #[], .sConst (.scientific 0 false 0)], .sConst (.scientific 0 false 0), .qStrApp "/" #[.qStrApp "x" #[], .qStrApp "y" #[]]]),
+    .defFun false "rabs" #[("x", .app (.symb "Real") #[])] (.app (.symb "Real") #[])
+      (.qStrApp "ite" #[.qStrApp ">=" #[.qStrApp "x" #[], .sConst (.scientific 0 false 0)], .qStrApp "x" #[], .qStrApp "-" #[.sConst (.scientific 0 false 0), .qStrApp "x" #[]]])
    ]
 
 /--
