@@ -1,12 +1,12 @@
 module
 
-public import Auto.Embedding.LamBase.LamSort
+public import Auto.Embedding.LamBase.Sort
 public import Auto.Embedding.LamBase.Const
 public import Auto.Embedding.LamBase.BitVec
-public import Auto.Embedding.LamBase.LamBaseTerm
+public import Auto.Embedding.LamBase.BaseTerm
 public import Auto.Embedding.LamBase.Valuation
-public import Auto.Embedding.LamBase.LamTerm
-public import Auto.Embedding.LamBase.LamWF
+public import Auto.Embedding.LamBase.Term
+public import Auto.Embedding.LamBase.WF
 public import Auto.Embedding.LamBase.Interp
 
 /-!
