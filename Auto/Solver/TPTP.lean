@@ -162,14 +162,10 @@ def queryZEPort (zept : ZEPortType) (query : String) : MetaM (Bool × String) :=
   let mut idx := 0
   -- Synchronization
   while true do
-    try
-      IO.FS.createDir s!"./.zeport_ignore/tmp{idx}"
-      break
-    catch e =>
-      let estr := toString (← (Exception.toMessageData e).format)
-      if String.Pos.Raw.extract estr ⟨0⟩ ⟨44⟩ != "already exists (error code: 17, file exists)" then
-        throwError "{decl_name%} :: Unexpected error"
-      idx := idx + (← IO.rand 0 100)
+    match ← (IO.FS.createDir s!"./.zeport_ignore/tmp{idx}").toBaseIO with
+    | .ok _ => break
+    | .error (.alreadyExists ..) => idx := idx + (← IO.rand 0 100)
+    | .error e => throwError "{decl_name%} :: Unexpected error {e}"
   IO.FS.withFile s!"./.zeport_ignore/problem{idx}.p" .writeNew (fun stream => stream.putStr query)
   let solver ← createSolver path idx
   let stdout ← solver.stdout.readToEnd

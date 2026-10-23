@@ -242,7 +242,7 @@ end generic
 
 section push
 
-  @[reducible] def pushLCtx (x : α) (lctx : Nat → α) (n : Nat) : α :=
+  abbrev pushLCtx (x : α) (lctx : Nat → α) (n : Nat) : α :=
     match n with
     | 0 => x
     | n' + 1 => lctx n'
