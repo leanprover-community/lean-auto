@@ -6,7 +6,7 @@ public meta import Lean
 public meta section
 
 /-!
-# `mkConstFamily` — macro for the constant-family scaffolding in `LamBase.lean`.
+# `mkConstFamily` — macro for the constant-family scaffolding in `LamBase/Const.lean` and `LamBase/BitVec.lean`.
 
 Generates the boilerplates (`reprAux`, `reprPrec`, `Repr`,
 `toString`, `ToString`, `beq`, `BEq`, `LawfulBEq`, `lamCheck`, `LamWF`,
