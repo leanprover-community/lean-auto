@@ -151,19 +151,42 @@ theorem Judge.wfCtx {Γ : List CoCTerm} {j : JudgeForm} (h : Judge Γ j) : WfCtx
 theorem HasType.wfCtx {Γ : List CoCTerm} {t T : CoCTerm} (h : HasType Γ t T) : WfCtx Γ :=
   Judge.wfCtx h
 
+/-! Derived rules, which build the well-formed contexts that the primitive rules take -/
+
+/-- `Judge.var`, where `rfl` checks the type of the variable by computing it -/
+theorem Judge.var' {Γ : List CoCTerm} {n : Nat} {T : CoCTerm} (hΓ : WfCtx Γ)
+    (h : Γ[n]?.map (·.bvarLifts (n + 1)) = some T) : HasType Γ (.b n) T := by
+  obtain ⟨A, hA, rfl⟩ := Option.map_eq_some_iff.mp h
+  exact .var hΓ hA
+
+/-- `Judge.pi`, where `B` is derived in the context `A :: Γ`, given that it is well formed -/
+theorem Judge.pi' {Γ : List CoCTerm} {A B : CoCTerm} {s s' r : CoCSort}
+    (hA : HasType Γ A s.toCoCTerm) (hj : s.join s' = some r)
+    (hB : WfCtx (A :: Γ) → HasType (A :: Γ) B s'.toCoCTerm) :
+    HasType Γ (.«∀» s' A B) r.toCoCTerm :=
+  .pi hA (hB (.cons hA)) hj
+
+/--
+  `Judge.lam`, where `B` and `b` are derived in the context `A :: Γ`, given that it is
+  well formed
+-/
+theorem Judge.lam' {Γ : List CoCTerm} {A B b : CoCTerm} {s s' r : CoCSort}
+    (hA : HasType Γ A s.toCoCTerm) (hj : s.join s' = some r)
+    (hB : WfCtx (A :: Γ) → HasType (A :: Γ) B s'.toCoCTerm)
+    (hb : WfCtx (A :: Γ) → HasType (A :: Γ) b B) :
+    HasType Γ (.«λ» s' A B b) (.«∀» s' A B) :=
+  .lam (.pi' hA hj hB) (hb (.cons hA))
+
+
 -- Regression checks: small derivations
+section Examples
 
 /-- The polymorphic identity `λ α : Type, λ x : α, x : ∀ α : Type, α → α` -/
 example : HasType []
     (.«λ» .«1» (CoCSort.toCoCTerm .«1») (.«∀» .«1» (.b 0) (.b 1)) (.«λ» .«1» (.b 0) (.b 1) (.b 0)))
     (.«∀» .«1» (CoCSort.toCoCTerm .«1») (.«∀» .«1» (.b 0) (.b 1))) :=
-  have hTy : HasType [] (CoCSort.toCoCTerm .«1») (CoCSort.toCoCTerm .«2») := .base .nil rfl
-  have hα : HasType [CoCSort.toCoCTerm .«1»] (.b 0) (CoCSort.toCoCTerm .«1») :=
-    .var (A := CoCSort.toCoCTerm .«1») (.cons hTy) rfl
-  have wf : WfCtx [.b 0, CoCSort.toCoCTerm .«1»] := .cons hα
-  have hPi : HasType [CoCSort.toCoCTerm .«1»] (.«∀» .«1» (.b 0) (.b 1)) (CoCSort.toCoCTerm .«1») :=
-    .pi hα (.var (A := CoCSort.toCoCTerm .«1») wf rfl) rfl
-  .lam (.pi hTy hPi rfl) (.lam hPi (.var (A := .b 0) wf rfl))
+  .lam' (.base .nil rfl) rfl (fun wf => .pi' (.var' wf rfl) rfl fun wf => .var' wf rfl)
+    fun wf => .lam' (.var' wf rfl) rfl (fun wf => .var' wf rfl) fun wf => .var' wf rfl
 
 /-- The type-level function `λ x : Nat, Nat`, of type `∀ x : Nat, Sort 1` -/
 abbrev constNat : CoCTerm := .«λ» .«2» tyNat (CoCSort.toCoCTerm .«1») tyNat
@@ -171,16 +194,49 @@ abbrev constNat : CoCTerm := .«λ» .«2» tyNat (CoCSort.toCoCTerm .«1») tyN
 /-- `3 : (λ x : Nat, Nat) 3`, by `β`-conversion -/
 example : HasType [] (.t (.ncst (.natVal 3)))
     (.a .«2» tyNat (CoCSort.toCoCTerm .«1») constNat (.t (.ncst (.natVal 3)))) :=
-  have hNat : HasType [] tyNat (CoCSort.toCoCTerm .«1») := .base .nil rfl
-  have h3 : HasType [] (.t (.ncst (.natVal 3))) tyNat := .base .nil rfl
-  have hBody : HasType [tyNat] tyNat (CoCSort.toCoCTerm .«1») := .base (.cons hNat) rfl
-  have hSort : HasType [tyNat] (CoCSort.toCoCTerm .«1») (CoCSort.toCoCTerm .«2») :=
-    .base (.cons hNat) rfl
-  have hPi : HasType [] (.«∀» .«2» tyNat (CoCSort.toCoCTerm .«1»)) (CoCSort.toCoCTerm .«2») :=
-    .pi hNat hSort rfl
-  have hApp : HasType [] (.a .«2» tyNat (CoCSort.toCoCTerm .«1») constNat (.t (.ncst (.natVal 3))))
-      (CoCSort.toCoCTerm .«1») := .app (.lam hPi hBody) h3
-  .conv h3 hApp ⟨tyNat, .refl _,
-    .single (.beta .«2» tyNat (CoCSort.toCoCTerm .«1») tyNat (.t (.ncst (.natVal 3))))⟩
+  .conv (.base .nil rfl)
+    (.app (.lam' (.base .nil rfl) rfl (fun wf => .base wf rfl) fun wf => .base wf rfl)
+      (.base .nil rfl))
+    ⟨tyNat, .refl _, .single (.beta _ _ _ _ _)⟩
+
+/-- `Nat → Sort u`, the type of the motive of `Nat.rec` -/
+abbrev natMotiveTy : CoCTerm := .«∀» .«u+1» tyNat (CoCSort.toCoCTerm .u)
+
+/-- `motive x`, where the bound variable `k` is the motive `motive : Nat → Sort u` -/
+abbrev natMotiveApp (k : Nat) (x : CoCTerm) : CoCTerm :=
+  .a .«u+1» tyNat (CoCSort.toCoCTerm .u) (.b k) x
+
+/-- `x + 1`, which is definitionally `Nat.succ x` -/
+abbrev natSucc (x : CoCTerm) : CoCTerm :=
+  .a .«1» tyNat tyNat (.a .«1» tyNat (.«∀» .«1» tyNat tyNat) (.t (.ncst .nadd)) x)
+    (.t (.ncst (.natVal 1)))
+
+/-- `∀ n : Nat, motive n → motive (n + 1)`, under the binders `motive` and `motive 0` -/
+abbrev natRecStepTy : CoCTerm :=
+  .«∀» .u tyNat (.«∀» .u (natMotiveApp 2 (.b 0)) (natMotiveApp 3 (natSucc (.b 1))))
+
+/--
+  The type of `@Nat.rec`, which is a type at `Sort (imax (u+1) u)`:
+  `∀ motive : Nat → Sort u, motive 0 → (∀ n : Nat, motive n → motive (n + 1)) →
+    ∀ t : Nat, motive t`.
+  The embedding has no `Nat.succ`, so `n.succ` is written `n + 1`, which is
+  definitionally equal to it
+-/
+example : HasType []
+    (.«∀» .u natMotiveTy (.«∀» .u (natMotiveApp 0 (.t (.ncst (.natVal 0))))
+      (.«∀» .u natRecStepTy (.«∀» .u tyNat (natMotiveApp 3 (.b 0))))))
+    (CoCSort.toCoCTerm .«imax (u+1) u») :=
+  -- `motive : Nat → Sort u`
+  .pi' (.pi' (.base .nil rfl) rfl fun wf => .base wf rfl) rfl fun wf =>
+  -- `motive 0`
+  .pi' (.app (.var' wf rfl) (.base wf rfl)) rfl fun wf =>
+  -- `∀ n : Nat, motive n → motive (n + 1)`
+  .pi' (.pi' (.base wf rfl) rfl fun wf =>
+      .pi' (.app (.var' wf rfl) (.var' wf rfl)) rfl fun wf =>
+      .app (.var' wf rfl) (.app (.app (.base wf rfl) (.var' wf rfl)) (.base wf rfl))) rfl fun wf =>
+  -- `∀ t : Nat, motive t`
+  .pi' (.base wf rfl) rfl fun wf => .app (.var' wf rfl) (.var' wf rfl)
+
+end Examples
 
 end Auto.Embedding.CoC
