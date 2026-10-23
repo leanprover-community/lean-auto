@@ -6,42 +6,44 @@ public import Auto.Embedding.LamConv
 
 namespace Auto.Embedding.Lam
 
+variable (R? : Option ((R : Type) × RealTy R))
+
 theorem LamValid.bvarLowers?
-  (hv : LamValid lval (pushLCtxs ss lctx) t)
+  (hv : LamValid R? lval (pushLCtxs ss lctx) t)
   (hlvl : ss.length = lvl)
   (heq : LamTerm.bvarLowers? lvl t = .some t')
-  (hInh : HList (LamNonempty lval.tyVal) ss) :
-  LamValid lval lctx t' := by
+  (hInh : HList (LamNonempty R? lval.tyVal) ss) :
+  LamValid R? lval lctx t' := by
   cases LamTerm.bvarLowers?_spec.mp heq
   have ⟨wft', ht'⟩ := hv; have hInh' := hInh.map (fun s inh => Classical.choice inh)
   exists LamWF.fromBVarLifts hlvl _ wft'; intro lctxTerm
   have ht'' := ht' (pushLCtxsDep hInh' lctxTerm)
-  rw [LamWF.interp_bvarLifts lval hInh' hlvl]; apply Eq.mp _ ht''
+  rw [LamWF.interp_bvarLifts _ lval hInh' hlvl]; apply Eq.mp _ ht''
   apply congrArg; apply LamWF.interp_substWF
 
 theorem LamThmValid.bvarLowers?
-  (hv : LamThmValid lval (ss ++ lctx) t)
+  (hv : LamThmValid R? lval (ss ++ lctx) t)
   (hlvl : ss.length = lvl)
   (heq : LamTerm.bvarLowers? lvl t = .some t')
-  (hInh : HList (LamNonempty lval.tyVal) ss) :
-  LamThmValid lval lctx t' := fun lctx' =>
-  have hv' := hv lctx'; LamValid.bvarLowers? (by rw [pushLCtxs_append] at hv'; exact hv') hlvl heq hInh
+  (hInh : HList (LamNonempty R? lval.tyVal) ss) :
+  LamThmValid R? lval lctx t' := fun lctx' =>
+  have hv' := hv lctx'; LamValid.bvarLowers? _ (by rw [pushLCtxs_append] at hv'; exact hv') hlvl heq hInh
 
 theorem LamValid.bvarLower?
-  (hv : LamValid lval (pushLCtx s lctx) t)
+  (hv : LamValid R? lval (pushLCtx s lctx) t)
   (heq : LamTerm.bvarLower? t = .some t')
-  (hInh : LamNonempty lval.tyVal s) :
-  LamValid lval lctx t' :=
-  LamValid.bvarLowers? (ss:=[s])
+  (hInh : LamNonempty R? lval.tyVal s) :
+  LamValid R? lval lctx t' :=
+  LamValid.bvarLowers? _ (ss:=[s])
     (by rw [pushLCtxs_singleton]; exact hv)
     rfl heq (HList.cons hInh HList.nil)
 
 theorem LamThmValid.bvarLower?
-  (hv : LamThmValid lval (s :: lctx) t)
+  (hv : LamThmValid R? lval (s :: lctx) t)
   (heq : LamTerm.bvarLower? t = .some t')
-  (hInh : LamNonempty lval.tyVal s) :
-  LamThmValid lval lctx t' := fun lctx' =>
-  have hv' := hv lctx'; LamValid.bvarLower? (by rw [pushLCtxs_cons] at hv'; exact hv') heq hInh
+  (hInh : LamNonempty R? lval.tyVal s) :
+  LamThmValid R? lval lctx t' := fun lctx' =>
+  have hv' := hv lctx'; LamValid.bvarLower? _ (by rw [pushLCtxs_cons] at hv'; exact hv') heq hInh
 
 def LamTerm.impApp? (t₁₂ t₁ : LamTerm) : Option LamTerm :=
   match t₁₂ with
@@ -77,8 +79,8 @@ theorem LamTerm.maxEVarSucc_impApp?
         rw [h] at heq; cases heq
 
 theorem LamValid.impApp
-  (v₁₂ : LamValid lval lctx t₁₂) (v₁ : LamValid lval lctx t₁)
-  (heq : LamTerm.impApp? t₁₂ t₁ = .some t₂) : LamValid lval lctx t₂ := by
+  (v₁₂ : LamValid R? lval lctx t₁₂) (v₁ : LamValid R? lval lctx t₁)
+  (heq : LamTerm.impApp? t₁₂ t₁ = .some t₂) : LamValid R? lval lctx t₂ := by
   dsimp [LamTerm.impApp?] at heq
   cases t₁₂ <;> try cases heq
   case app bp₁ hypimp concl =>
@@ -105,9 +107,9 @@ theorem LamValid.impApp
         rw [h] at heq; cases heq
 
 theorem LamThmValid.impApp
-  (H₁₂ : LamThmValid lval lctx t₁₂) (H₁ : LamThmValid lval lctx t₁)
-  (heq : LamTerm.impApp? t₁₂ t₁ = .some res) : LamThmValid lval lctx res :=
-  fun lctx' => LamValid.impApp (H₁₂ lctx') (H₁ lctx') heq
+  (H₁₂ : LamThmValid R? lval lctx t₁₂) (H₁ : LamThmValid R? lval lctx t₁)
+  (heq : LamTerm.impApp? t₁₂ t₁ = .some res) : LamThmValid R? lval lctx res :=
+  fun lctx' => LamValid.impApp _ (H₁₂ lctx') (H₁ lctx') heq
 
 def LamTerm.impApps? (t : LamTerm) (ps : List LamTerm) : Option LamTerm :=
   match ps with
@@ -130,8 +132,8 @@ theorem LamTerm.maxEVarSucc_impApps?
     | .none => rw [h] at heq; cases heq
 
 theorem LamValid.impApps
-  (vt : LamValid lval lctx t) (vps : HList (LamValid lval lctx) ps)
-  (heq : LamTerm.impApps? t ps = .some t') : LamValid lval lctx t' := by
+  (vt : LamValid R? lval lctx t) (vps : HList (LamValid R? lval lctx) ps)
+  (heq : LamTerm.impApps? t ps = .some t') : LamValid R? lval lctx t' := by
   induction ps generalizing t
   case nil => cases heq; exact vt
   case cons head tail IH =>
@@ -142,18 +144,18 @@ theorem LamValid.impApps
       | .some t'' =>
         rw [hap] at heq; dsimp at heq
         apply IH _ vTail heq
-        apply LamValid.impApp vt vHead hap
+        apply LamValid.impApp _ vt vHead hap
       | .none => rw [hap] at heq; cases heq
 
 theorem LamThmValid.impApps
-  (vt : LamThmValid lval lctx t) (vps : HList (LamThmValid lval lctx) ps)
-  (heq : LamTerm.impApps? t ps = .some t') : LamThmValid lval lctx t' :=
-  fun lctx' => LamValid.impApps (vt lctx') (vps.map (fun _ tv => tv lctx')) heq
+  (vt : LamThmValid R? lval lctx t) (vps : HList (LamThmValid R? lval lctx) ps)
+  (heq : LamTerm.impApps? t ps = .some t') : LamThmValid R? lval lctx t' :=
+  fun lctx' => LamValid.impApps _ (vt lctx') (vps.map (fun _ tv => tv lctx')) heq
 
-theorem LamThmValid.define {lval : LamValuation.{u}}
-  (wft : LamThmWF lval [] s t) (heVar : t.maxEVarSucc ≤ eidx) :
-  ∃ val, LamThmValid (lval.insertEVarAt s val eidx) [] (.mkEq s (.etom eidx) t) := by
-  exists LamWF.interp lval dfLCtxTy (dfLCtxTerm _) (wft dfLCtxTy)
+theorem LamThmValid.define {lval : LamValuation.{u} R?}
+  (wft : LamThmWF R? lval [] s t) (heVar : t.maxEVarSucc ≤ eidx) :
+  ∃ val, LamThmValid R? (lval.insertEVarAt R? s val eidx) [] (.mkEq s (.etom eidx) t) := by
+  exists LamWF.interp _ lval dfLCtxTy (dfLCtxTerm _ _) (wft dfLCtxTy)
   apply LamThmValid.ofLamThmValidD
   let ltv₁ := lval.toLamTyVal
   let ltv₂ := { lval.toLamTyVal with lamEVarTy := replaceAt s eidx lval.lamEVarTy}
@@ -162,11 +164,11 @@ theorem LamThmValid.define {lval : LamValuation.{u}}
   apply And.intro
   case left =>
     rw [LamTerm.maxLooseBVarSucc_mkEq]; dsimp [LamTerm.maxLooseBVarSucc]
-    rw [Nat.max_zero_left]; have ⟨_, hlb⟩ := LamThmWFD.ofLamThmWF wft; apply hlb
+    rw [Nat.max_zero_left]; have ⟨_, hlb⟩ := LamThmWFD.ofLamThmWF _ wft; apply hlb
   case right =>
     exists LamWF.mkEq LamWF.insertEVarAt_eIdx wft'
     intro lctxTerm; dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, LamTerm.mkEq, eqLiftFn]
-    apply eq_of_heq; apply HEq.trans (LamWF.interp_insertEVarAt_eIdx _)
+    apply eq_of_heq; apply HEq.trans (LamWF.interp_insertEVarAt_eIdx _ _)
     apply LamWF.interp_eVarIrrelevance <;> try rfl
     intro n hn; apply LamValuation.insertEVarAt_eVarIrrelevance
     apply Nat.le_trans hn heVar
@@ -189,13 +191,13 @@ section Skolemization
     ⟨fun q => Classical.choose (h q), fun q => Classical.choose_spec (h q)⟩
 
   theorem LamThmValid.skolemize
-    (vt : LamThmValid lval lctx (.mkExistE s p)) (heVar : p.maxEVarSucc ≤ eidx) :
-    ∃ val, LamThmValid (lval.insertEVarAt (s.mkFuncsRev lctx) val eidx) lctx (.app s p (LamTerm.bvarApps (.etom eidx) lctx 0)) := by
-    have ⟨hSucc, ⟨wft, ht⟩⟩ := LamThmValidD.ofLamThmValid vt
+    (vt : LamThmValid R? lval lctx (.mkExistE s p)) (heVar : p.maxEVarSucc ≤ eidx) :
+    ∃ val, LamThmValid R? (lval.insertEVarAt R? (s.mkFuncsRev lctx) val eidx) lctx (.app s p (LamTerm.bvarApps (.etom eidx) lctx 0)) := by
+    have ⟨hSucc, ⟨wft, ht⟩⟩ := LamThmValidD.ofLamThmValid _ vt
     cases wft; case ofApp HArg HFn => cases HFn; case ofBase Hb => cases Hb; case ofExistE =>
       dsimp [LamWF.interp, LamBaseTerm.LamWF.interp, LamTerm.mkExistE, existLiftFn] at ht;
       have ⟨valPre, hvalPre⟩ := choose_spec' ht
-      exists LamSort.curryRev valPre; apply LamThmValid.ofLamThmValidD; apply And.intro;
+      exists LamSort.curryRev _ valPre; apply LamThmValid.ofLamThmValidD; apply And.intro;
       case left =>
         dsimp [LamTerm.maxLooseBVarSucc]; rw [Nat.max_le]; apply And.intro (Nat.max_le.mp hSucc).right
         apply Nat.le_trans LamTerm.maxLooseBVarSucc_bvarApps; rw [Nat.max_le]
@@ -215,20 +217,20 @@ section Skolemization
           apply Nat.le_trans H heVar
         case h₂ =>
           apply HEq.symm
-          apply LamWF.interp_bvarApps (tyex:=[]) (termex:=.nil) LamWF.insertEVarAt_eIdx
+          apply LamWF.interp_bvarApps _ (tyex:=[]) (termex:=.nil) LamWF.insertEVarAt_eIdx
           apply LamWF.interp_insertEVarAt_eIdx
 
   theorem LamThmValid.skolemize?
-    (vt : LamThmValid lval lctx t) (heq : t.skolemize? eidx lctx = .some (s, t'))
+    (vt : LamThmValid R? lval lctx t) (heq : t.skolemize? eidx lctx = .some (s, t'))
     (heVar : t.maxEVarSucc ≤ eidx) :
-    ∃ val, LamThmValid (lval.insertEVarAt (s.mkFuncsRev lctx) val eidx) lctx t' := by
-    have ⟨_, ⟨wft, ht⟩⟩ := LamThmValidD.ofLamThmValid vt
+    ∃ val, LamThmValid R? (lval.insertEVarAt R? (s.mkFuncsRev lctx) val eidx) lctx t' := by
+    have ⟨_, ⟨wft, ht⟩⟩ := LamThmValidD.ofLamThmValid _ vt
     match t, heq with
     | .app _ (.base (.existE s)) p, Eq.refl _ =>
       match wft with
       | .ofApp _ (.ofBase (.ofExistE _)) HArg =>
         dsimp [LamTerm.maxEVarSucc] at heVar; rw [Nat.max_le] at heVar
-        apply LamThmValid.skolemize vt heVar.right
+        apply LamThmValid.skolemize _ vt heVar.right
 
 end Skolemization
 
