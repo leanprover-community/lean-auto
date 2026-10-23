@@ -290,6 +290,7 @@ theorem LamWF.interp_eVarIrrelevance
   (hLamVarTy : lval₁.lamVarTy = lval₂.lamVarTy)
   (hLamILTy : lval₁.lamILTy = lval₂.lamILTy)
   (hTyVal : HEq lval₁.tyVal lval₂.tyVal)
+  (hLaterVal : HEq lval₁.laterVal lval₂.laterVal)
   (hVarVal : HEq lval₁.varVal lval₂.varVal)
   (hILVal : HEq lval₁.ilVal lval₂.ilVal)
   (hLCtxTy : lctxTy₁ = lctxTy₂)
@@ -297,12 +298,12 @@ theorem LamWF.interp_eVarIrrelevance
   (hirr : ∀ n, n < t.maxEVarSucc →
     lval₁.lamEVarTy n = lval₂.lamEVarTy n ∧ HEq (lval₁.eVarVal n) (lval₂.eVarVal n)) :
   HEq (LamWF.interp lval₁ lctxTy₁ lctxTerm₁ lwf₁) (LamWF.interp lval₂ lctxTy₂ lctxTerm₂ lwf₂) := by
-  rcases lval₁ with ⟨⟨lamVarTy₁, lamILTy₁, lamEVarTy₁⟩, tyVal₁, varVal₁, ilVal₁, eVarVal₁⟩
-  rcases lval₂ with ⟨⟨lamVarTy₂, lamILTy₂, lamEVarTy₂⟩, tyVal₂, varVal₂, ilVal₂, eVarVal₂⟩
-  dsimp at hLamVarTy hLamILTy hTyVal hVarVal hILVal hirr
-  cases hLamVarTy; cases hLamILTy; cases hTyVal
+  rcases lval₁ with ⟨⟨lamVarTy₁, lamILTy₁, lamEVarTy₁⟩, tyVal₁, laterVal₁, varVal₁, ilVal₁, eVarVal₁⟩
+  rcases lval₂ with ⟨⟨lamVarTy₂, lamILTy₂, lamEVarTy₂⟩, tyVal₂, laterVal₂, varVal₂, ilVal₂, eVarVal₂⟩
+  dsimp at hLamVarTy hLamILTy hTyVal hLaterVal hVarVal hILVal hirr
+  cases hLamVarTy; cases hLamILTy; cases hTyVal; cases hLaterVal
   cases hVarVal; cases hILVal; cases hLCtxTy; cases hLCtxTerm
-  case refl.refl.refl.refl.refl.refl =>
+  next =>
     dsimp; dsimp at varVal₁ ilVal₁ eVarVal₁ lctxTerm₁ lwf₁ eVarVal₂ lwf₂
     induction t generalizing lctxTy₁ rty <;> try (cases lwf₁; cases lwf₂; rfl)
     case etom n =>
@@ -311,7 +312,7 @@ theorem LamWF.interp_eVarIrrelevance
         apply (hirr _ _).left; exact .refl
       dsimp at lwf₂;
       let lwf₂' := htyeq ▸ lwf₂;
-      let lval₂ : LamValuation := ⟨⟨lamVarTy₁, lamILTy₁, lamEVarTy₂⟩, tyVal₁, varVal₁, ilVal₁, eVarVal₂⟩
+      let lval₂ : LamValuation := ⟨⟨lamVarTy₁, lamILTy₁, lamEVarTy₂⟩, tyVal₁, laterVal₁, varVal₁, ilVal₁, eVarVal₂⟩
       apply HEq.trans _ (LamWF.interp_heq (lval:=lval₂) (lwf₁ := lwf₂') rfl HEq.rfl _ rfl)
       cases lwf₂'; dsimp [interp]; apply (hirr _ _).right; exact .refl
     case base b =>

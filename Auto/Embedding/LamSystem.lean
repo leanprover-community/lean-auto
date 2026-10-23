@@ -8,10 +8,10 @@ namespace Auto.Embedding.Lam
 
 @[reducible] def dfLCtxTy : Nat → LamSort := fun _ => .base .prop
 
-@[reducible] def dfLCtxTerm (val : Nat → Type u) : ∀ n, LamSort.interp val (dfLCtxTy n) :=
+@[reducible] def dfLCtxTerm (val : TyVal.{u}) : ∀ n, LamSort.interp val (dfLCtxTy n) :=
   fun _ => GLift.up.{1, u} False
 
-def LamNonempty (tyVal : Nat → Type u) (s : LamSort) := Nonempty (s.interp tyVal)
+def LamNonempty (tyVal : TyVal.{u}) (s : LamSort) := Nonempty (s.interp tyVal)
 
 def LamWF.generalizeTy (wf : LamWF ltv ⟨lctx, t, s⟩) :
   (s : LamSort) × LamWF ltv ⟨lctx, t, s⟩ := ⟨s, wf⟩
@@ -377,6 +377,7 @@ theorem LamValid.eVarIrrelevance
   (hLamVarTy : lval₁.lamVarTy = lval₂.lamVarTy)
   (hLamILTy : lval₁.lamILTy = lval₂.lamILTy)
   (hTyVal : HEq lval₁.tyVal lval₂.tyVal)
+  (hLaterVal : HEq lval₁.laterVal lval₂.laterVal)
   (hVarVal : HEq lval₁.varVal lval₂.varVal)
   (hILVal : HEq lval₁.ilVal lval₂.ilVal)
   (hLCtxTy : lctxTy₁ = lctxTy₂)
@@ -385,10 +386,10 @@ theorem LamValid.eVarIrrelevance
   (hValid : LamValid lval₁ lctxTy₁ t) : LamValid lval₂ lctxTy₂ t := by
   have ⟨wfv, hv⟩ := hValid
   have irr := fun eq₁ eq₂ => LamWF.eVarIrrelevance eq₁ eq₂ (fun n H => (hirr n H).left) wfv
-  rcases lval₁ with ⟨⟨lamVarTy₁, lamILTy₁, lamEVarTy₁⟩, tyVal₁, varVal₁, ilVal₁, eVarVal₁⟩
-  rcases lval₂ with ⟨⟨lamVarTy₂, lamILTy₂, lamEVarTy₂⟩, tyVal₂, varVal₂, ilVal₂, eVarVal₂⟩
-  dsimp at hLamVarTy hLamILTy hTyVal hVarVal hILVal hirr irr
-  cases hLamVarTy; cases hLamILTy; cases hTyVal
+  rcases lval₁ with ⟨⟨lamVarTy₁, lamILTy₁, lamEVarTy₁⟩, tyVal₁, laterVal₁, varVal₁, ilVal₁, eVarVal₁⟩
+  rcases lval₂ with ⟨⟨lamVarTy₂, lamILTy₂, lamEVarTy₂⟩, tyVal₂, laterVal₂, varVal₂, ilVal₂, eVarVal₂⟩
+  dsimp at hLamVarTy hLamILTy hTyVal hLaterVal hVarVal hILVal hirr irr
+  cases hLamVarTy; cases hLamILTy; cases hTyVal; cases hLaterVal
   cases hVarVal; cases hILVal; cases hLCtxTy
   exists (irr rfl rfl); intro lctxTerm;
   apply Eq.mp _ (hv lctxTerm); apply congrArg
@@ -432,6 +433,7 @@ theorem LamThmValid.eVarIrrelevance
   (hLamVarTy : lval₁.lamVarTy = lval₂.lamVarTy)
   (hLamILTy : lval₁.lamILTy = lval₂.lamILTy)
   (hTyVal : HEq lval₁.tyVal lval₂.tyVal)
+  (hLaterVal : HEq lval₁.laterVal lval₂.laterVal)
   (hVarVal : HEq lval₁.varVal lval₂.varVal)
   (hILVal : HEq lval₁.ilVal lval₂.ilVal)
   (hLCtxTy : lctx₁ = lctx₂)
@@ -440,7 +442,7 @@ theorem LamThmValid.eVarIrrelevance
   LamThmValid lval₁ lctx₁ t → LamThmValid lval₂ lctx₂ t :=
   fun h lctx' => LamValid.eVarIrrelevance lval₁ lval₂
     (lctxTy₁:=pushLCtxs lctx₁ lctx') (lctxTy₂:=pushLCtxs lctx₂ lctx')
-    hLamVarTy hLamILTy hTyVal hVarVal hILVal
+    hLamVarTy hLamILTy hTyVal hLaterVal hVarVal hILVal
     (by rw [hLCtxTy]) hirr (h lctx')
 
 @[irreducible] def LamThmWF.ofLamThmEquiv_l (teq : LamThmEquiv lval lctx rty t₁ t₂) :

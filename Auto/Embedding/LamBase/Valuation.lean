@@ -21,7 +21,8 @@ noncomputable def ILLift.default (β : Type u) : ILLift β :=
   ⟨EqLift.default β, ForallLift.default β, ExistLift.default β, IteLift.default β⟩
 
 structure LamValuation extends LamTyVal where
-  tyVal    : Nat → Type u
+  tyVal    : TyVal.{u}
+  laterVal : LaterVal tyVal.later
   varVal   : ∀ (n : Nat), (lamVarTy n).interp tyVal
   ilVal    : ∀ (n : Nat), ILLift.{u} ((lamILTy n).interp tyVal)
   eVarVal  : ∀ (n : Nat), (lamEVarTy n).interp tyVal
@@ -34,6 +35,7 @@ noncomputable def LamBaseTerm.interp (lval : LamValuation.{u}) : (b : LamBaseTer
 | .scst sc    => sc.interp lval.tyVal
 | .bvcst bvc  => bvc.interp lval.tyVal
 | .ocst oc    => oc.interp lval.tyVal
+| .lcst lc    => lc.interp lval.tyVal lval.laterVal
 | .eqI n      => (lval.ilVal n).eqL.eqF
 | .forallEI n => (lval.ilVal n).forallL.forallF
 | .existEI n  => (lval.ilVal n).existL.existF
@@ -51,6 +53,7 @@ noncomputable def LamBaseTerm.LamWF.interp (lval : LamValuation.{u}) : (lwf : La
 | .ofScst wf    => wf.interp lval.tyVal
 | .ofBvcst wf   => wf.interp lval.tyVal
 | .ofOcst wf    => wf.interp lval.tyVal
+| .ofLcst wf    => wf.interp lval.tyVal lval.laterVal
 | .ofEqI n      => (lval.ilVal n).eqL.eqF
 | .ofForallEI n => (lval.ilVal n).forallL.forallF
 | .ofExistEI n  => (lval.ilVal n).existL.existF
@@ -75,21 +78,22 @@ theorem LamBaseTerm.LamWF.interp_lvalIrrelevance
   (lwf₂ : LamWF lval₂.toLamTyVal b₂ s₂)
   (HBeq : b₁ = b₂)
   (hTyVal : lval₁.tyVal = lval₂.tyVal)
+  (hLaterVal : HEq lval₁.laterVal lval₂.laterVal)
   (hLamILTy : lval₁.lamILTy = lval₂.lamILTy)
   (hILVal : HEq lval₁.ilVal lval₂.ilVal) :
   HEq (LamWF.interp lval₁ lwf₁) (LamWF.interp lval₂ lwf₂) := by
   cases HBeq
   cases lval₁
-  case mk toLamTyVal₁ tyVal₁ varVal₁ ilVal₁ eVarVal₁ =>
+  case mk toLamTyVal₁ tyVal₁ laterVal₁ varVal₁ ilVal₁ eVarVal₁ =>
     cases toLamTyVal₁
     case mk lamVarTy₁ lamILTy₁ lamEVarTy₁ =>
       cases lval₂
-      case mk toLamTyVal₂ tyVal₂ varVal₂ ilVal₂ eVarVal₂ =>
+      case mk toLamTyVal₂ tyVal₂ laterVal₂ varVal₂ ilVal₂ eVarVal₂ =>
         cases toLamTyVal₂
         case mk lamVarTy₂ lamILTy₂ lamEVarTy₂ =>
           dsimp at varVal₁ ilVal₁ eVarVal₁ lwf₁ varVal₂ ilVal₂ eVarVal₂ lwf₂
-          dsimp at hTyVal hLamILTy hILVal;
-          cases hTyVal; cases hLamILTy; cases hILVal
+          dsimp at hTyVal hLaterVal hLamILTy hILVal;
+          cases hTyVal; cases hLaterVal; cases hLamILTy; cases hILVal
           cases lwf₁ <;> cases lwf₂ <;> dsimp [interp] <;> try apply HEq.rfl
           case ofPcst => apply PropConst.LamWF.interp_lvalIrrelevance <;> rfl
           case ofBcst => apply BoolConst.LamWF.interp_lvalIrrelevance <;> rfl
@@ -98,6 +102,7 @@ theorem LamBaseTerm.LamWF.interp_lvalIrrelevance
           case ofScst => apply StringConst.LamWF.interp_lvalIrrelevance <;> rfl
           case ofBvcst => apply BitVecConst.LamWF.interp_lvalIrrelevance <;> rfl
           case ofOcst => apply OtherConst.LamWF.interp_lvalIrrelevance <;> rfl
+          case ofLcst => apply LaterConst.LamWF.interp_lvalIrrelevance <;> rfl
 
 theorem LamBaseTerm.interp_equiv (lval : LamValuation.{u})
   (lwf : LamWF lval.toLamTyVal b s) :
@@ -110,6 +115,7 @@ theorem LamBaseTerm.interp_equiv (lval : LamValuation.{u})
   case ofScst => apply StringConst.interp_equiv
   case ofBvcst => apply BitVecConst.interp_equiv
   case ofOcst => apply OtherConst.interp_equiv
+  case ofLcst => apply LaterConst.interp_equiv
 
 def LamValuation.insertEVarAt (lval : LamValuation.{u})
   (ty : LamSort) (val : ty.interp lval.tyVal) (pos : Nat) :=

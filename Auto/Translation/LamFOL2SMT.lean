@@ -168,6 +168,7 @@ private def lamBaseSort2SSort : LamBaseSort → SSort
   | .xO .xH => .app (.symb "Empty") #[]
   | _   => .app (.symb "Empty") #[]
 | .bv n   => .app (.indexed "BitVec" #[.inr n]) #[]
+| .later .real => .app (.symb "Real") #[]
 
 private def lamSortAtom2String (sni : SMTNamingInfo) (n : Nat) : TransM LamAtomic String := do
   if !(← hIn (.sort n)) then
@@ -436,6 +437,7 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
   | .ashr => return .qStrApp "bvashr" #[arg1, arg2]
 | .bvcst (.bvappend _ _) => return .qStrApp "concat" #[arg1, arg2]
 | .ocst (.smtAttr1T name _ _) => return .attrApp name arg1 arg2
+| .lcst lc    => throwError "{decl_name%} :: Constant {lc} of later-declared type is not supported yet"
 | t           => throwError "{decl_name%} :: The arity of {repr t} is not 2"
 
 private def lamBaseTerm2STerm_Arity1 (sni : SMTNamingInfo) (arg : STerm) : LamBaseTerm → TransM LamAtomic STerm

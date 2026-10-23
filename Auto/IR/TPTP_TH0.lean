@@ -34,6 +34,7 @@ def transLamBaseSort : LamBaseSort → String
   | .xO .xH => "s_empty"
   | _   => "s_empty"
 | .bv n    => s!"s_bv{n}"
+| .later .real => "s_real"
 
 def transLamSort : LamSort → String
 | .atom n => s!"s_a{n}"
@@ -71,6 +72,9 @@ def transStringConst : StringConst → String
 
 def transBitVecConst (bvc : BitVecConst) : String := "t_" ++ bvc.reprAux.replace " " "_"
 
+def transLaterConst : LaterConst → String
+| .real rc => "t_r" ++ rc.reprAux
+
 def transNatConstSort (nc : NatConst) := transLamSort nc.lamCheck
 
 def transIntConstSort (ic : IntConst) := transLamSort ic.lamCheck
@@ -79,6 +83,8 @@ def transStringConstSort (sc : StringConst) := transLamSort sc.lamCheck
 
 def transBitVecConstSort (bvc : BitVecConst) := transLamSort bvc.lamCheck
 
+def transLaterConstSort (lc : LaterConst) := transLamSort lc.lamCheck
+
 def transLamBaseTerm : LamBaseTerm → Except String String
 | .pcst pc    => .ok (transPropConst pc)
 | .bcst bc    => .ok (transBoolConst bc)
@@ -86,6 +92,7 @@ def transLamBaseTerm : LamBaseTerm → Except String String
 | .icst ic    => .ok (transIntConst ic)
 | .scst sc    => .ok (transStringConst sc)
 | .bvcst bvc  => .ok (transBitVecConst bvc)
+| .lcst lc    => .ok (transLaterConst lc)
 -- TODO: translate to λx => x?
 | .ocst _     => .error "transLamBaseTerm :: attributes not supported in TPTP"
 | .eqI _      => .error "transLamBaseTerm :: eqI should not occur here"

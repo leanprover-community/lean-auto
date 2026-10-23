@@ -137,7 +137,8 @@ section CVal
 
   /-- Checker Partial Valuation (Valuation without `lamEVarTy` and `eVarVal`) -/
   structure CPVal where
-    tyVal     : Nat → Type u
+    tyVal     : TyVal.{u}
+    laterVal  : LaterVal tyVal.later
     var       : BinTree ((s : LamSort) × (s.interp tyVal))
     il        : BinTree ((s : LamSort) × (ILLift.{u} (s.interp tyVal)))
 
@@ -145,22 +146,22 @@ section CVal
   structure CVal (lamEVarTy : BinTree LamSort) extends CPVal where
     eVarVal   : ∀ (n : Nat), ((lamEVarTy.get? n).getD (.base .prop)).interp tyVal
 
-  abbrev eVarTy (tyVal : Nat → Type u) (lamEVarTy : BinTree LamSort) :=
+  abbrev eVarTy (tyVal : TyVal.{u}) (lamEVarTy : BinTree LamSort) :=
     ∀ (n : Nat), ((lamEVarTy.get? n).getD (.base .prop)).interp tyVal
 
   /-- Used in checker metacode to construct `var` -/
-  abbrev varSigmaMk.{u} (tyVal : Nat → Type u) :=
+  abbrev varSigmaMk.{u} (tyVal : TyVal.{u}) :=
     @Sigma.mk LamSort (LamSort.interp tyVal)
 
   /-- Used in checker metacode to construct `il` -/
-  abbrev ilβ.{u} (tyVal : Nat → Type u) (s : LamSort) : Type u :=
+  abbrev ilβ.{u} (tyVal : TyVal.{u}) (s : LamSort) : Type u :=
     ILLift.{u} (s.interp tyVal)
 
   /-- Used in checker metacode to construct `il` -/
-  abbrev ilSigmaMk.{u} (tyVal : Nat → Type u) :=
+  abbrev ilSigmaMk.{u} (tyVal : TyVal.{u}) :=
     @Sigma.mk LamSort (ilβ.{u} tyVal)
 
-  noncomputable def ilVal.default (lamILTy : Nat → LamSort) (tyVal : Nat → Type u) :
+  noncomputable def ilVal.default (lamILTy : Nat → LamSort) (tyVal : TyVal.{u}) :
     ∀ (n : Nat), ILLift.{u} ((lamILTy n).interp tyVal) :=
     fun n => ILLift.default ((lamILTy n).interp tyVal)
 
@@ -170,7 +171,7 @@ section CVal
      fun n => (levt.get? n).getD (.base .prop)⟩
 
   noncomputable def CVal.toLamValuation (cv : CVal.{u} levt) : LamValuation :=
-    ⟨cv.toLamTyVal, cv.tyVal,
+    ⟨cv.toLamTyVal, cv.tyVal, cv.laterVal,
      fun n => ((cv.var.get? n).getD ⟨.base .prop, GLift.up False⟩).snd,
      fun n => ((cv.il.get? n).getD ⟨.base .prop, ILLift.default _⟩).snd,
      cv.eVarVal⟩
@@ -192,14 +193,14 @@ section CVal
      fun _ => .base .prop⟩
 
   noncomputable def CPVal.toLamValuationEraseEtom (cpv : CPVal.{u}) : LamValuation :=
-    ⟨cpv.toLamTyValEraseEtom, cpv.tyVal,
+    ⟨cpv.toLamTyValEraseEtom, cpv.tyVal, cpv.laterVal,
      fun n => ((cpv.var.get? n).getD ⟨.base .prop, GLift.up False⟩).snd,
      fun n => ((cpv.il.get? n).getD ⟨.base .prop, ILLift.default _⟩).snd,
      fun _ => GLift.up False⟩
 
   noncomputable def CPVal.toLamValuationWithEVar (cpv : CPVal.{u}) (letv : Nat → LamSort)
     (eVarVal : ∀ (n : Nat), (letv n).interp cpv.tyVal) : LamValuation :=
-    ⟨cpv.toLamTyValWithLamEVarTy letv, cpv.tyVal,
+    ⟨cpv.toLamTyValWithLamEVarTy letv, cpv.tyVal, cpv.laterVal,
      fun n => ((cpv.var.get? n).getD ⟨.base .prop, GLift.up False⟩).snd,
      fun n => ((cpv.il.get? n).getD ⟨.base .prop, ILLift.default _⟩).snd,
      eVarVal⟩

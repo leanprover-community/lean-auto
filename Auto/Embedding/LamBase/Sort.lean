@@ -11,11 +11,55 @@ public import Auto.Lib.ListExtra
 
 @[expose] public section
 
-/-! Interpreted base sorts `LamBaseSort` and simple types `LamSort` -/
+/-! Interpreted base sorts `LamBaseSort`, simple types `LamSort` and their valuation `TyVal` -/
 
 namespace Auto.Embedding.Lam
 
 open ToExprExtra
+
+/--
+  Types that are declared after `lean-auto` (e.g. Mathlib's `Real`), but
+  which we want to treat as interpreted sorts. Their interpretations
+  are supplied by the valuation (`TyVal.later`), together with the
+  interpretations of their associated constants (see `LamBase/Later.lean`)
+-/
+inductive LaterType
+  | real : LaterType
+deriving Hashable, Inhabited, Lean.ToExpr
+
+def LaterType.reprPrec (t : LaterType) (n : Nat) :=
+  let str :=
+    match t with
+    | .real => "real"
+  if n == 0 then
+    f!"Auto.Embedding.Lam.LaterType." ++ str
+  else
+    f!"(.{str})"
+
+instance : Repr LaterType where
+  reprPrec t n := t.reprPrec n
+
+def LaterType.toString : LaterType → String
+| .real => "Real"
+
+instance : ToString LaterType where
+  toString := LaterType.toString
+
+def LaterType.beq : LaterType → LaterType → Bool
+| .real, .real => true
+
+instance : BEq LaterType where
+  beq := LaterType.beq
+
+theorem LaterType.beq_refl : {t : LaterType} → (t.beq t) = true
+| .real => rfl
+
+theorem LaterType.eq_of_beq_eq_true {t₁ t₂ : LaterType} (H : t₁.beq t₂) : t₁ = t₂ := by
+  cases t₁ <;> cases t₂ <;> first | rfl | contradiction
+
+instance : LawfulBEq LaterType where
+  eq_of_beq := LaterType.eq_of_beq_eq_true
+  rfl := LaterType.beq_refl
 
 /-- Interpreted sorts -/
 inductive LamBaseSort
@@ -32,11 +76,14 @@ inductive LamBaseSort
   -/
   | isto0  : Pos → LamBaseSort
   | bv     : (n : Nat) → LamBaseSort -- GLift `BitVec n`
+  | later  : LaterType → LamBaseSort -- Interpreted by `TyVal.later`
 deriving Hashable, Inhabited, Lean.ToExpr
 
 def LamBaseSort.string := LamBaseSort.isto0 .xH
 
 def LamBaseSort.empty := LamBaseSort.isto0 (.xO .xH)
+
+def LamBaseSort.real := LamBaseSort.later .real
 
 def LamBaseSort.reprPrec (b : LamBaseSort) (n : Nat) :=
   let str :=
@@ -50,6 +97,7 @@ def LamBaseSort.reprPrec (b : LamBaseSort) (n : Nat) :=
       | .xH => "string"
       | _   => "empty"
     | .bv n => s!"bv {n}"
+    | .later t => s!"later {LaterType.reprPrec t 1}"
   if n == 0 then
     f!"LamBaseSort." ++ str
   else
@@ -68,6 +116,7 @@ def LamBaseSort.toString : LamBaseSort → String
   | .xH => "String"
   | _ => "Empty"
 | .bv n   => s!"BitVec {n}"
+| .later t => s!"{t}"
 
 instance : ToString LamBaseSort where
   toString := LamBaseSort.toString
@@ -79,6 +128,7 @@ def LamBaseSort.beq : LamBaseSort → LamBaseSort → Bool
 | .int,      .int      => true
 | .isto0 p₁, .isto0 p₂ => p₁.beq p₂
 | .bv n,     .bv m     => n.beq m
+| .later t₁, .later t₂ => t₁.beq t₂
 | _,         _         => false
 
 instance : BEq LamBaseSort where
@@ -93,6 +143,7 @@ theorem LamBaseSort.beq_refl : {b : LamBaseSort} → (b.beq b) = true
 | .int     => rfl
 | .isto0 _ => Pos.beq_refl
 | .bv n    => Nat.beq_refl' n
+| .later t => LaterType.beq_refl (t := t)
 
 theorem LamBaseSort.eq_of_beq_eq_true {b₁ b₂ : LamBaseSort} : b₁.beq b₂ → b₁ = b₂ :=
   match b₁, b₂ with
@@ -102,36 +153,49 @@ theorem LamBaseSort.eq_of_beq_eq_true {b₁ b₂ : LamBaseSort} : b₁.beq b₂ 
   | .int,     .int     => fun _ => rfl
   | .isto0 p, .isto0 q => fun H => Pos.eq_of_beq_eq_true H ▸ rfl
   | .bv n,    .bv m    => fun H => Nat.eq_of_beq_eq_true H ▸ rfl
+  | .later s, .later t => fun H => LaterType.eq_of_beq_eq_true (t₁ := s) (t₂ := t) H ▸ rfl
   | .prop,    .bool    => fun H => by cases H
   | .prop,    .nat     => fun H => by cases H
   | .prop,    .int     => fun H => by cases H
   | .prop,    .isto0 p => fun H => by cases H
   | .prop,    .bv m    => fun H => by cases H
+  | .prop,    .later t => fun H => by cases H
   | .bool,    .prop    => fun H => by cases H
   | .bool,    .nat     => fun H => by cases H
   | .bool,    .int     => fun H => by cases H
   | .bool,    .isto0 p => fun H => by cases H
   | .bool,    .bv m    => fun H => by cases H
+  | .bool,    .later t => fun H => by cases H
   | .nat,     .prop    => fun H => by cases H
   | .nat,     .bool    => fun H => by cases H
   | .nat,     .int     => fun H => by cases H
   | .nat,     .isto0 p => fun H => by cases H
   | .nat,     .bv m    => fun H => by cases H
+  | .nat,     .later t => fun H => by cases H
   | .int,     .prop    => fun H => by cases H
   | .int,     .bool    => fun H => by cases H
   | .int,     .nat     => fun H => by cases H
   | .int,     .isto0 p => fun H => by cases H
   | .int,     .bv m    => fun H => by cases H
+  | .int,     .later t => fun H => by cases H
   | .isto0 p, .prop    => fun H => by cases H
   | .isto0 p, .bool    => fun H => by cases H
   | .isto0 p, .nat     => fun H => by cases H
   | .isto0 p, .int     => fun H => by cases H
   | .isto0 p, .bv m    => fun H => by cases H
+  | .isto0 p, .later t => fun H => by cases H
   | .bv n,    .prop    => fun H => by cases H
   | .bv n,    .bool    => fun H => by cases H
   | .bv n,    .nat     => fun H => by cases H
   | .bv n,    .int     => fun H => by cases H
   | .bv n,    .isto0 p => fun H => by cases H
+  | .bv n,    .later t => fun H => by cases H
+  | .later s, .prop    => fun H => by cases H
+  | .later s, .bool    => fun H => by cases H
+  | .later s, .nat     => fun H => by cases H
+  | .later s, .int     => fun H => by cases H
+  | .later s, .isto0 p => fun H => by cases H
+  | .later s, .bv m    => fun H => by cases H
 
 instance : LawfulBEq LamBaseSort where
   eq_of_beq := LamBaseSort.eq_of_beq_eq_true
@@ -142,13 +206,14 @@ instance : LawfulBEq LamBaseSort where
 | .xO .xH => GLift Empty
 | _       => GLift Empty
 
-@[reducible] def LamBaseSort.interp.{u} : LamBaseSort → Type u
+@[reducible] def LamBaseSort.interp.{u} (later : LaterType → Type u) : LamBaseSort → Type u
 | .prop    => GLift Prop
 | .bool    => GLift Bool
 | .nat     => GLift Nat
 | .int     => GLift Int
 | .isto0 p => isto0_interp p
 | .bv n    => GLift (BitVec n)
+| .later t => later t
 
 inductive LamSort
 | atom : Nat → LamSort
@@ -384,9 +449,16 @@ theorem LamSort.getArgTysN_mkFuncs_eq_l_iff :
         case mp => intro h; cases h; apply IH.mp h₁
         case mpr => intro h; have h₂ := (IH (s:=s)).mpr h; rw [h₁] at h₂; cases h₂; rfl
 
-@[reducible] def LamSort.interp.{u} (val : Nat → Type u) : LamSort → Type u
-| .atom n => val n
-| .base b => b.interp
+/-- Valuation of sorts -/
+structure TyVal where
+  /-- Interpretation of `.atom n` -/
+  atom  : Nat → Type u
+  /-- Interpretation of `.base (.later t)` -/
+  later : LaterType → Type u
+
+@[reducible] def LamSort.interp.{u} (val : TyVal.{u}) : LamSort → Type u
+| .atom n => val.atom n
+| .base b => b.interp val.later
 | .func dom cod => interp val dom → interp val cod
 
 def LamSort.curry (f : HList (LamSort.interp tyVal) tys → LamSort.interp tyVal s) :

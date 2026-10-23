@@ -163,6 +163,15 @@ namespace LamExportUtils
   def collectLamTermsBitvecs (ts : Array LamTerm) : Std.HashSet BitVecConst :=
     ts.foldl (fun hs t => mergeHashSet hs (collectLamTermBitvecs t)) Std.HashSet.emptyWithCapacity
 
+  def collectLamTermLaterConsts : LamTerm → Std.HashSet LaterConst
+  | .base (.lcst lc) => Std.HashSet.emptyWithCapacity.insert lc
+  | .lam _ body => collectLamTermLaterConsts body
+  | .app _ fn arg => mergeHashSet (collectLamTermLaterConsts fn) (collectLamTermLaterConsts arg)
+  | _ => Std.HashSet.emptyWithCapacity
+
+  def collectLamTermsLaterConsts (ts : Array LamTerm) : Std.HashSet LaterConst :=
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermLaterConsts t)) Std.HashSet.emptyWithCapacity
+
   def collectLamTermIteSorts : LamTerm → Std.HashSet LamSort
   | .base (.ite s) => Std.HashSet.emptyWithCapacity.insert s
   | .lam _ body => collectLamTermIteSorts body
@@ -179,6 +188,13 @@ namespace Lam2D
 
   open Embedding Lam LamCstrD
 
+  /--
+    Later-declared types are not available when `lean-auto` is compiled,
+    so we refer to them by name
+  -/
+  def interpLaterTypeAsUnlifted : LaterType → Expr
+  | .real => .const `Real []
+
   def interpLamBaseSortAsUnlifted : LamBaseSort → Expr
   | .prop    => .sort .zero
   | .bool    => .const ``Bool []
@@ -190,6 +206,7 @@ namespace Lam2D
     | .xO .xH => .const ``Empty []
     | _   => .const ``Empty []
   | .bv n    => .app (.const ``BitVec []) (.lit (.natVal n))
+  | .later t => interpLaterTypeAsUnlifted t
 
   def interpPropConstAsUnlifted : PropConst → CoreM Expr
   | .trueE      => return .const ``True []
@@ -300,6 +317,18 @@ namespace Lam2D
   | .bvzeroExtend w v  => return mkApp2 (.const ``BitVec.zeroExtend []) (.lit (.natVal w)) (.lit (.natVal v))
   | .bvsignExtend w v  => return mkApp2 (.const ``BitVec.signExtend []) (.lit (.natVal w)) (.lit (.natVal v))
 
+  def interpRealConstAsUnlifted (rc : RealConst) : MetaM Expr := do
+    let real := interpLaterTypeAsUnlifted .real
+    let op := match rc with
+      | .add => ``HAdd.hAdd
+      | .sub => ``HSub.hSub
+      | .mul => ``HMul.hMul
+      | .div => ``HDiv.hDiv
+    Meta.mkAppOptM op #[real, real, real, .none]
+
+  def interpLaterConstAsUnlifted : LaterConst → MetaM Expr
+  | .real rc => interpRealConstAsUnlifted rc
+
   /--
     Takes a `s : LamSort` and produces the `un-lifted` version of `s.interp`
       (note that `s.interp` is lifted)
@@ -337,6 +366,7 @@ namespace Lam2D
   | .scst sc    => Lam2D.interpStringConstAsUnlifted sc
   | .bvcst bvc  => Lam2D.interpBitVecConstAsUnlifted bvc
   | .ocst oc    => interpOtherConstAsUnlifted tyVal oc
+  | .lcst lc    => Lam2D.interpLaterConstAsUnlifted lc
   | .eqI _      => throwError (decl_name% ++ " :: " ++ LamExportUtils.exportError.ImpPolyLog)
   | .forallEI _ => throwError (decl_name% ++ " :: " ++ LamExportUtils.exportError.ImpPolyLog)
   | .existEI _  => throwError (decl_name% ++ " :: " ++ LamExportUtils.exportError.ImpPolyLog)

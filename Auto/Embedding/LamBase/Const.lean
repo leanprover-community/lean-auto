@@ -138,7 +138,7 @@ inductive OtherConst.LamWF : OtherConst → LamSort → Type
 def OtherConst.LamWF.ofOtherConst : (oc : OtherConst) → (s : LamSort) × OtherConst.LamWF oc s
 | .smtAttr1T n sattr sterm => ⟨.func sattr (.func sterm sterm), .ofSmtAttr1T n sattr sterm⟩
 
-def OtherConst.LamWF.interp (tyVal : Nat → Type u) : (lwf : LamWF p s) → s.interp tyVal
+def OtherConst.LamWF.interp (tyVal : TyVal.{u}) : (lwf : LamWF p s) → s.interp tyVal
 | .ofSmtAttr1T _ sattr sterm => constId (a:=LamSort.interp tyVal sattr) (b:=LamSort.interp tyVal sterm)
 
 def OtherConst.toString : OtherConst → String
@@ -173,10 +173,10 @@ instance : LawfulBEq OtherConst where
 def OtherConst.lamCheck : OtherConst → LamSort
 | .smtAttr1T _ sattr sterm => .func sattr (.func sterm sterm)
 
-def OtherConst.interp (tyVal : Nat → Type u) : (o : OtherConst) → o.lamCheck.interp tyVal
+def OtherConst.interp (tyVal : TyVal.{u}) : (o : OtherConst) → o.lamCheck.interp tyVal
 | .smtAttr1T _ sattr sterm => fun (_ : sattr.interp tyVal) (term : sterm.interp tyVal) => term
 
-theorem OtherConst.interp_equiv (tyVal : Nat → Type u) (ocwf : LamWF p s) :
+theorem OtherConst.interp_equiv (tyVal : TyVal.{u}) (ocwf : LamWF p s) :
   HEq (LamWF.interp tyVal ocwf) (interp tyVal p) := by
   cases ocwf <;> rfl
 
@@ -185,7 +185,7 @@ theorem OtherConst.LamWF.unique {o : OtherConst} {s₁ s₂ : LamSort}
   cases ocwf₁ <;> cases ocwf₂ <;> trivial
 
 theorem OtherConst.LamWF.interp_lvalIrrelevance
-  (tyVal₁ tyVal₂ : Nat → Type u) (ocwf₁ : LamWF b₁ s₁) (ocwf₂ : LamWF b₂ s₂)
+  (tyVal₁ tyVal₂ : TyVal.{u}) (ocwf₁ : LamWF b₁ s₁) (ocwf₂ : LamWF b₂ s₂)
   (HBeq : b₁ = b₂) (hTyVal : tyVal₁ = tyVal₂) :
   HEq (ocwf₁.interp tyVal₁) (ocwf₂.interp tyVal₂) := by
   cases HBeq; cases hTyVal; rcases OtherConst.LamWF.unique ocwf₁ ocwf₂ with ⟨⟨⟩, ⟨⟩⟩; rfl

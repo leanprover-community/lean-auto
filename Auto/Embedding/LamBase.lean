@@ -3,6 +3,7 @@ module
 public import Auto.Embedding.LamBase.Sort
 public import Auto.Embedding.LamBase.Const
 public import Auto.Embedding.LamBase.BitVec
+public import Auto.Embedding.LamBase.Later
 public import Auto.Embedding.LamBase.BaseTerm
 public import Auto.Embedding.LamBase.Valuation
 public import Auto.Embedding.LamBase.Term

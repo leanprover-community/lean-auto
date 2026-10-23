@@ -16,11 +16,13 @@ def lam2TH0 (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort) (facts : Arra
   let ncHs := LamExportUtils.collectLamTermsNatConsts facts
   let icHs := LamExportUtils.collectLamTermsIntConsts facts
   let scHs := LamExportUtils.collectLamTermsStringConsts facts
+  let lcHs := LamExportUtils.collectLamTermsLaterConsts facts
   let sorts :=
     ["thf(sortdecl_nat, type, s_nat: $tType).",
      "thf(sortdecl_int, type, s_int: $tType).",
      "thf(sortdecl_string, type, s_string: $tType).",
-     "thf(sortdecl_empty, type, s_empty: $tType)."] ++
+     "thf(sortdecl_empty, type, s_empty: $tType).",
+     "thf(sortdecl_real, type, s_real: $tType)."] ++
     bvLengthHs.toList.map (fun l => s!"thf(sortdecl_bv{l}, type, s_bv{l}: $tType).") ++
     typeHs.toList.map (fun i => s!"thf(sortdecl_{i}, type, s_a{i}: $tType).")
   let types :=
@@ -28,6 +30,7 @@ def lam2TH0 (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort) (facts : Arra
     icHs.toList.map (fun ic => s!"thf(typedecl_icst_{transIntConst ic}, type, {transIntConst ic}: {transIntConstSort ic}).") ++
     scHs.toList.map (fun sc => s!"thf(typedecl_icst_{transStringConst sc}, type, {transStringConst sc}: {transStringConstSort sc}).") ++
     bvHs.toList.map (fun bvc => s!"thf(typedecl_bv{transBitVecConst bvc}, type, t_bv{transBitVecConst bvc}: {transBitVecConstSort bvc}).") ++
+    lcHs.toList.map (fun lc => s!"thf(typedecl_lcst_{transLaterConst lc}, type, {transLaterConst lc}: {transLaterConstSort lc}).") ++
      (← termHs.toList.mapM (fun i => do
       let .some s := lamVarTy[i]?
         | throwError "{decl_name%} :: Unexpected error"

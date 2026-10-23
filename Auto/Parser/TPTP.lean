@@ -358,6 +358,7 @@ def ident2LamSort (s : String) : Option LamSort :=
   | "s_int"    => .some (.base .int)
   | "s_string" => .some (.base .string)
   | "s_empty"  => .some (.base .empty)
+  | "s_real"   => .some (.base .real)
   | _ =>
     if s.take 3 == "s_a" then
       match (s.drop 3).toNat? with
@@ -426,6 +427,15 @@ def ident2IntConst (s : String) : Option IntConst :=
   | "t_ilt"      => .some .ilt
   | "t_imax"     => .some .imax
   | "t_imin"     => .some .imin
+  | _ => .none
+
+open Embedding.Lam in
+def ident2LaterConst (s : String) : Option LaterConst :=
+  match s with
+  | "t_radd" => .some (.real .add)
+  | "t_rsub" => .some (.real .sub)
+  | "t_rmul" => .some (.real .mul)
+  | "t_rdiv" => .some (.real .div)
   | _ => .none
 
 open Embedding.Lam in
@@ -668,6 +678,10 @@ def ident2LamConstr (pi : ParsingInfo) (s : String) : LamConstr :=
       | "t_b" =>
         match ident2BitVecConst s with
         | .some bv => .term bv.lamCheck (.base (.bvcst bv))
+        | .none   => .error s!"Unknown identifier {s}"
+      | "t_r" =>
+        match ident2LaterConst s with
+        | .some lc => .term lc.lamCheck (.base (.lcst lc))
         | .none   => .error s!"Unknown identifier {s}"
       | _ => .error s!"Unknown identifier {s}"
     | _   => .error s!"Unknown identifier {s}"

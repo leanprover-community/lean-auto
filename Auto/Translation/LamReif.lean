@@ -105,7 +105,7 @@ structure State where
   -- `u` is the universe level that all constants will lift to
   -- Something about the universes level `u`
   -- Suppose `u ← getU`
-  -- · `tyVal : Nat → Type u`
+  -- · `tyVal : TyVal.{u}`
   -- · `LamValuation.{u}`
   -- · All the `GLift/GLift.up/GLift.down` has level parameter list `[?, u]`
   u             : Level
@@ -470,6 +470,7 @@ partial def updownFunc (s : LamSort) : ReifM (Expr × Expr × Expr × Expr) :=
     | .bv n =>
       let ty := Expr.app (.const ``BitVec []) (.lit (.natVal n))
       return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
+    | .later t => throwError "{decl_name%} :: Later-declared type {t} is not supported yet"
   | .func s₁ s₂ => do
     let (uf₁, df₁, ty₁, tyUp₁) ← updownFunc s₁
     let (uf₂, df₂, ty₂, tyUp₂) ← updownFunc s₂
@@ -1638,9 +1639,17 @@ section BuildChecker
     -- `tyVal : List (Type u)`
     let tyVal : List Expr := (← getTyVal).toList.map (fun (e, lvl) =>
       Expr.app (.const ``Embedding.GLift [lvl, u]) e)
-    -- `tyValExpr : Nat → Type u`
-    let tyValExpr := exprListToLCtx tyVal (.succ u) (.sort (.succ u)) (.sort u)
-    return tyValExpr
+    -- `atomExpr : Nat → Type u`
+    let atomExpr := exprListToLCtx tyVal (.succ u) (.sort (.succ u)) (.sort u)
+    -- `laterExpr : LaterType → Type u`. Later-declared types are not reified yet
+    let laterExpr := Expr.lam `_ (.const ``LaterType []) (.const ``PUnit [.succ u]) .default
+    -- `tyValExpr : TyVal.{u}`
+    return Lean.mkApp2 (.const ``TyVal.mk [u]) atomExpr laterExpr
+
+  /-- **Build `laterVal`** -/
+  def buildLaterValExpr (tyValExpr : Expr) : ReifM Expr := do
+    let u ← getU
+    return .app (.const ``LaterVal.default [u]) (.app (.const ``TyVal.later [u]) tyValExpr)
 
   /-- **Build `LamVarTy` and `varVal`** -/
   def buildVarExpr (tyValExpr : Expr) : ReifM Expr := do
@@ -1671,11 +1680,12 @@ section BuildChecker
   def buildCPValExpr : ReifM Expr := do
     let u ← getU
     let tyValExpr ← buildTyVal
-    let tyValTy := Expr.forallE `_ (.const ``Nat []) (.sort (.succ u)) .default
+    let tyValTy := Expr.const ``TyVal [u]
     let lamValuationExpr ← Meta.withLetDecl `tyVal tyValTy tyValExpr fun tyValFVarExpr => do
+      let laterValExpr ← buildLaterValExpr tyValFVarExpr
       let varExpr ← buildVarExpr tyValFVarExpr
       let ilExpr ← buildILExpr tyValFVarExpr
-      let checkerValuationExpr := Lean.mkApp3 (.const ``CPVal.mk [u]) tyValExpr varExpr ilExpr
+      let checkerValuationExpr := Lean.mkApp4 (.const ``CPVal.mk [u]) tyValExpr laterValExpr varExpr ilExpr
       Meta.mkLetFVars #[tyValFVarExpr] checkerValuationExpr
     return lamValuationExpr
 
