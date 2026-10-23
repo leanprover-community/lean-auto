@@ -138,10 +138,16 @@ def LamBaseTerm.bvextract (n h l : Nat) := LamBaseTerm.bvcst (.bvextract n h l)
 def LamBaseTerm.bvrepeat (w i : Nat) := LamBaseTerm.bvcst (.bvrepeat w i)
 def LamBaseTerm.bvzeroExtend (w v : Nat) := LamBaseTerm.bvcst (.bvzeroExtend w v)
 def LamBaseTerm.bvsignExtend (w v : Nat) := LamBaseTerm.bvcst (.bvsignExtend w v)
+def LamBaseTerm.rzero := LamBaseTerm.lcst (.real .zero)
+def LamBaseTerm.rone := LamBaseTerm.lcst (.real .one)
 def LamBaseTerm.radd := LamBaseTerm.lcst (.real .add)
 def LamBaseTerm.rsub := LamBaseTerm.lcst (.real .sub)
 def LamBaseTerm.rmul := LamBaseTerm.lcst (.real .mul)
 def LamBaseTerm.rdiv := LamBaseTerm.lcst (.real .div)
+def LamBaseTerm.rneg := LamBaseTerm.lcst (.real .neg)
+def LamBaseTerm.rinv := LamBaseTerm.lcst (.real .inv)
+def LamBaseTerm.rofNat := LamBaseTerm.lcst (.real .ofNat)
+def LamBaseTerm.rofInt := LamBaseTerm.lcst (.real .ofInt)
 
 def LamBaseTerm.isBcst : LamBaseTerm → Bool
 | .bcst _ => true
@@ -470,10 +476,16 @@ abbrev LamBaseTerm.LamWF.ofBvextract {ltv : LamTyVal} (n h l : Nat) := LamWF.ofB
 abbrev LamBaseTerm.LamWF.ofBvrepeat {ltv : LamTyVal} (w i : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvrepeat w i)
 abbrev LamBaseTerm.LamWF.ofBvzeroExtend {ltv : LamTyVal} (w v : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvzeroExtend w v)
 abbrev LamBaseTerm.LamWF.ofBvsignExtend {ltv : LamTyVal} (w v : Nat) := LamWF.ofBvcst (ltv:=ltv) (.ofBvsignExtend w v)
+abbrev LamBaseTerm.LamWF.ofRzero {ltv : LamTyVal} := LamWF.ofLcst (ltv:=ltv) (.ofReal .ofZero)
+abbrev LamBaseTerm.LamWF.ofRone {ltv : LamTyVal} := LamWF.ofLcst (ltv:=ltv) (.ofReal .ofOne)
 abbrev LamBaseTerm.LamWF.ofRadd {ltv : LamTyVal} := LamWF.ofLcst (ltv:=ltv) (.ofReal .ofAdd)
 abbrev LamBaseTerm.LamWF.ofRsub {ltv : LamTyVal} := LamWF.ofLcst (ltv:=ltv) (.ofReal .ofSub)
 abbrev LamBaseTerm.LamWF.ofRmul {ltv : LamTyVal} := LamWF.ofLcst (ltv:=ltv) (.ofReal .ofMul)
 abbrev LamBaseTerm.LamWF.ofRdiv {ltv : LamTyVal} := LamWF.ofLcst (ltv:=ltv) (.ofReal .ofDiv)
+abbrev LamBaseTerm.LamWF.ofRneg {ltv : LamTyVal} := LamWF.ofLcst (ltv:=ltv) (.ofReal .ofNeg)
+abbrev LamBaseTerm.LamWF.ofRinv {ltv : LamTyVal} := LamWF.ofLcst (ltv:=ltv) (.ofReal .ofInv)
+abbrev LamBaseTerm.LamWF.ofRofNat {ltv : LamTyVal} := LamWF.ofLcst (ltv:=ltv) (.ofReal .ofOfNat)
+abbrev LamBaseTerm.LamWF.ofRofInt {ltv : LamTyVal} := LamWF.ofLcst (ltv:=ltv) (.ofReal .ofOfInt)
 
 def LamBaseTerm.LamWF.getPcst (wf : LamWF ltv (.pcst pc) s) : PropConst.LamWF pc s :=
   match wf with | .ofPcst pcwf => pcwf

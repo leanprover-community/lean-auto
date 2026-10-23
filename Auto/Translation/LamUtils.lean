@@ -319,12 +319,17 @@ namespace Lam2D
 
   def interpRealConstAsUnlifted (rc : RealConst) : MetaM Expr := do
     let real := interpLaterTypeAsUnlifted .real
-    let op := match rc with
-      | .add => ``HAdd.hAdd
-      | .sub => ``HSub.hSub
-      | .mul => ``HMul.hMul
-      | .div => ``HDiv.hDiv
-    Meta.mkAppOptM op #[real, real, real, .none]
+    match rc with
+    | .zero => Meta.mkAppOptM ``OfNat.ofNat #[real, mkRawNatLit 0, .none]
+    | .one => Meta.mkAppOptM ``OfNat.ofNat #[real, mkRawNatLit 1, .none]
+    | .add => Meta.mkAppOptM ``HAdd.hAdd #[real, real, real, .none]
+    | .sub => Meta.mkAppOptM ``HSub.hSub #[real, real, real, .none]
+    | .mul => Meta.mkAppOptM ``HMul.hMul #[real, real, real, .none]
+    | .div => Meta.mkAppOptM ``HDiv.hDiv #[real, real, real, .none]
+    | .neg => Meta.mkAppOptM ``Neg.neg #[real, .none]
+    | .inv => Meta.mkAppOptM ``Inv.inv #[real, .none]
+    | .ofNat => Meta.mkAppOptM ``Nat.cast #[real, .none]
+    | .ofInt => Meta.mkAppOptM ``Int.cast #[real, .none]
 
   def interpLaterConstAsUnlifted : LaterConst → MetaM Expr
   | .real rc => interpRealConstAsUnlifted rc

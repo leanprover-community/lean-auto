@@ -498,6 +498,7 @@ private def lamBaseTerm2STerm_Arity1 (sni : SMTNamingInfo) (arg : STerm) : LamBa
     return .qIdApp (.ident (.indexed "sign_extend" #[.inr (v - w)])) #[arg]
   else
     return .qIdApp (.ident (.indexed "extract" #[.inr (v - 1), .inr 0])) #[arg]
+| .lcst lc        => throwError "{decl_name%} :: Constant {lc} of later-declared type is not supported yet"
 | t               => throwError "{decl_name%} :: The arity of {repr t} is not 1"
 where
   solverName : MetaM Solver.SMT.SolverName := do
@@ -514,6 +515,7 @@ private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtomic STerm
 | .ncst (.natVal n)   => return .sConst (.num n)
 | .scst (.strVal s)   => return .sConst (.str s)
 | .bvcst (.bvVal n i) => return bitVec2STerm n i
+| .lcst lc            => throwError "{decl_name%} :: Constant {lc} of later-declared type is not supported yet"
 | t                   => throwError "{decl_name%} :: The arity of {repr t} is not 0"
 
 def lamTermAtom2String (sni : SMTNamingInfo) (lamVarTy : Array LamSort) (n : Nat) : TransM LamAtomic (LamSort × String) := do

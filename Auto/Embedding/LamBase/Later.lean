@@ -14,14 +14,20 @@ namespace Auto.Embedding.Lam
 
 /-- Constants associated with `LaterType.real` -/
 inductive RealConst
-  | add | sub | mul | div
+  | zero | one | add | sub | mul | div | neg | inv | ofNat | ofInt
 deriving Inhabited, Hashable, Lean.ToExpr
 
 def RealConst.reprAux : RealConst → String
+| .zero => "zero"
+| .one => "one"
 | .add => "add"
 | .sub => "sub"
 | .mul => "mul"
 | .div => "div"
+| .neg => "neg"
+| .inv => "inv"
+| .ofNat => "ofNat"
+| .ofInt => "ofInt"
 
 def RealConst.reprPrec (c : RealConst) (n : Nat) : Std.Format :=
   match n with
@@ -32,19 +38,31 @@ instance : Repr RealConst where
   reprPrec := RealConst.reprPrec
 
 def RealConst.toString : RealConst → String
+| .zero => "0 : Real"
+| .one => "1 : Real"
 | .add => "+"
 | .sub => "-"
 | .mul => "*"
 | .div => "/"
+| .neg => "-"
+| .inv => "inv"
+| .ofNat => "rofNat"
+| .ofInt => "rofInt"
 
 instance : ToString RealConst where
   toString := RealConst.toString
 
 def RealConst.beq : RealConst → RealConst → Bool
+| .zero, .zero => true
+| .one, .one => true
 | .add, .add => true
 | .sub, .sub => true
 | .mul, .mul => true
 | .div, .div => true
+| .neg, .neg => true
+| .inv, .inv => true
+| .ofNat, .ofNat => true
+| .ofInt, .ofInt => true
 | _,    _    => false
 
 instance : BEq RealConst where
@@ -63,26 +81,44 @@ instance : LawfulBEq RealConst where
   rfl := RealConst.beq_refl
 
 def RealConst.lamCheck : RealConst → LamSort
+| .zero => .base .real
+| .one => .base .real
 | .add => .func (.base .real) (.func (.base .real) (.base .real))
 | .sub => .func (.base .real) (.func (.base .real) (.base .real))
 | .mul => .func (.base .real) (.func (.base .real) (.base .real))
 | .div => .func (.base .real) (.func (.base .real) (.base .real))
+| .neg => .func (.base .real) (.base .real)
+| .inv => .func (.base .real) (.base .real)
+| .ofNat => .func (.base .nat) (.base .real)
+| .ofInt => .func (.base .int) (.base .real)
 
 inductive RealConst.LamWF : RealConst → LamSort → Type
+  | ofZero : LamWF .zero (.base .real)
+  | ofOne : LamWF .one (.base .real)
   | ofAdd : LamWF .add (.func (.base .real) (.func (.base .real) (.base .real)))
   | ofSub : LamWF .sub (.func (.base .real) (.func (.base .real) (.base .real)))
   | ofMul : LamWF .mul (.func (.base .real) (.func (.base .real) (.base .real)))
   | ofDiv : LamWF .div (.func (.base .real) (.func (.base .real) (.base .real)))
+  | ofNeg : LamWF .neg (.func (.base .real) (.base .real))
+  | ofInv : LamWF .inv (.func (.base .real) (.base .real))
+  | ofOfNat : LamWF .ofNat (.func (.base .nat) (.base .real))
+  | ofOfInt : LamWF .ofInt (.func (.base .int) (.base .real))
 
 theorem RealConst.LamWF.unique {c : RealConst} {s₁ s₂ : LamSort}
   (rcwf₁ : LamWF c s₁) (rcwf₂ : LamWF c s₂) : s₁ = s₂ ∧ HEq rcwf₁ rcwf₂ := by
   cases rcwf₁ <;> cases rcwf₂ <;> trivial
 
 def RealConst.LamWF.ofRealConst : (c : RealConst) → (s : LamSort) × RealConst.LamWF c s
+| .zero => ⟨_, .ofZero⟩
+| .one => ⟨_, .ofOne⟩
 | .add => ⟨_, .ofAdd⟩
 | .sub => ⟨_, .ofSub⟩
 | .mul => ⟨_, .ofMul⟩
 | .div => ⟨_, .ofDiv⟩
+| .neg => ⟨_, .ofNeg⟩
+| .inv => ⟨_, .ofInv⟩
+| .ofNat => ⟨_, .ofOfNat⟩
+| .ofInt => ⟨_, .ofOfInt⟩
 
 theorem RealConst.lamWF_complete (wf : LamWF c s) : LamWF.ofRealConst c = ⟨s, wf⟩ := by
   cases wf <;> rfl
@@ -95,40 +131,72 @@ def RealConst.LamWF.ofCheck (H : c.lamCheck = s) : LamWF c s := by
 
 /-- Un-lifted interpretation of the constants associated with `LaterType.real` -/
 structure RealInterpUnlifted (R : Type) where
+  zero : R
+  one : R
   add : R → R → R
   sub : R → R → R
   mul : R → R → R
   div : R → R → R
+  neg : R → R
+  inv : R → R
+  ofNat : Nat → R
+  ofInt : Int → R
 
 /-- Interpretation of the constants associated with `LaterType.real` -/
 structure RealInterp (R : Type u) where
+  zero : R
+  one : R
   add : R → R → R
   sub : R → R → R
   mul : R → R → R
   div : R → R → R
+  neg : R → R
+  inv : R → R
+  ofNat : GLift.{1, u} Nat → R
+  ofInt : GLift.{1, u} Int → R
 
 def RealInterpUnlifted.toRealInterp.{u} (ri : RealInterpUnlifted R) : RealInterp (GLift.{1, u} R) where
+  zero := GLift.up ri.zero
+  one := GLift.up ri.one
   add x y := GLift.up (ri.add x.down y.down)
   sub x y := GLift.up (ri.sub x.down y.down)
   mul x y := GLift.up (ri.mul x.down y.down)
   div x y := GLift.up (ri.div x.down y.down)
+  neg x := GLift.up (ri.neg x.down)
+  inv x := GLift.up (ri.inv x.down)
+  ofNat n := GLift.up (ri.ofNat n.down)
+  ofInt n := GLift.up (ri.ofInt n.down)
 
-def RealInterp.default (R : Type u) : RealInterp R :=
-  ⟨fun x _ => x, fun x _ => x, fun x _ => x, fun x _ => x⟩
+/-- Interpretation of the constants associated with `LaterType.real` when `Real` is interpreted as `PUnit` -/
+def RealInterp.default : RealInterp PUnit.{u + 1} :=
+  ⟨.unit, .unit, fun _ _ => .unit, fun _ _ => .unit, fun _ _ => .unit, fun _ _ => .unit,
+   fun _ => .unit, fun _ => .unit, fun _ => .unit, fun _ => .unit⟩
 
 def RealConst.interp (tyVal : TyVal.{u}) (ri : RealInterp (tyVal.later .real)) :
   (c : RealConst) → c.lamCheck.interp tyVal
+| .zero => ri.zero
+| .one => ri.one
 | .add => ri.add
 | .sub => ri.sub
 | .mul => ri.mul
 | .div => ri.div
+| .neg => ri.neg
+| .inv => ri.inv
+| .ofNat => ri.ofNat
+| .ofInt => ri.ofInt
 
 def RealConst.LamWF.interp (tyVal : TyVal.{u}) (ri : RealInterp (tyVal.later .real)) :
   (lwf : LamWF c s) → s.interp tyVal
+| .ofZero => ri.zero
+| .ofOne => ri.one
 | .ofAdd => ri.add
 | .ofSub => ri.sub
 | .ofMul => ri.mul
 | .ofDiv => ri.div
+| .ofNeg => ri.neg
+| .ofInv => ri.inv
+| .ofOfNat => ri.ofNat
+| .ofOfInt => ri.ofInt
 
 theorem RealConst.interp_equiv (tyVal : TyVal.{u}) (ri : RealInterp (tyVal.later .real))
   (rcwf : LamWF c s) : HEq (LamWF.interp tyVal ri rcwf) (interp tyVal ri c) := by
@@ -215,8 +283,9 @@ def LaterConst.LamWF.ofCheck (H : l.lamCheck = s) : LamWF l s := by
 structure LaterVal (later : LaterType → Type u) where
   real : RealInterp (later .real)
 
-def LaterVal.default (later : LaterType → Type u) : LaterVal later :=
-  ⟨RealInterp.default _⟩
+/-- Valuation of later-declared constants when all later-declared types are interpreted as `PUnit` -/
+def LaterVal.default : LaterVal (fun _ => PUnit.{u + 1}) :=
+  ⟨RealInterp.default⟩
 
 def LaterConst.interp (tyVal : TyVal.{u}) (lv : LaterVal tyVal.later) :
   (l : LaterConst) → l.lamCheck.interp tyVal

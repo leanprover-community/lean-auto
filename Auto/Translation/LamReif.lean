@@ -1646,10 +1646,10 @@ section BuildChecker
     -- `tyValExpr : TyVal.{u}`
     return Lean.mkApp2 (.const ``TyVal.mk [u]) atomExpr laterExpr
 
-  /-- **Build `laterVal`** -/
-  def buildLaterValExpr (tyValExpr : Expr) : ReifM Expr := do
+  /-- **Build `laterVal`**, matching the `PUnit` interpretation in `buildTyVal` -/
+  def buildLaterValExpr : ReifM Expr := do
     let u ← getU
-    return .app (.const ``LaterVal.default [u]) (.app (.const ``TyVal.later [u]) tyValExpr)
+    return .const ``LaterVal.default [u]
 
   /-- **Build `LamVarTy` and `varVal`** -/
   def buildVarExpr (tyValExpr : Expr) : ReifM Expr := do
@@ -1682,7 +1682,7 @@ section BuildChecker
     let tyValExpr ← buildTyVal
     let tyValTy := Expr.const ``TyVal [u]
     let lamValuationExpr ← Meta.withLetDecl `tyVal tyValTy tyValExpr fun tyValFVarExpr => do
-      let laterValExpr ← buildLaterValExpr tyValFVarExpr
+      let laterValExpr ← buildLaterValExpr
       let varExpr ← buildVarExpr tyValFVarExpr
       let ilExpr ← buildILExpr tyValFVarExpr
       let checkerValuationExpr := Lean.mkApp4 (.const ``CPVal.mk [u]) tyValExpr laterValExpr varExpr ilExpr

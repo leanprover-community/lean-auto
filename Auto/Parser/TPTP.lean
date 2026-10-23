@@ -432,10 +432,16 @@ def ident2IntConst (s : String) : Option IntConst :=
 open Embedding.Lam in
 def ident2LaterConst (s : String) : Option LaterConst :=
   match s with
+  | "t_rzero" => .some (.real .zero)
+  | "t_rone" => .some (.real .one)
   | "t_radd" => .some (.real .add)
   | "t_rsub" => .some (.real .sub)
   | "t_rmul" => .some (.real .mul)
   | "t_rdiv" => .some (.real .div)
+  | "t_rneg" => .some (.real .neg)
+  | "t_rinv" => .some (.real .inv)
+  | "t_rofNat" => .some (.real .ofNat)
+  | "t_rofInt" => .some (.real .ofInt)
   | _ => .none
 
 open Embedding.Lam in
