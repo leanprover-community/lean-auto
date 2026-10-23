@@ -7,7 +7,6 @@ public import Auto.Lib.MetaExtra
 public import Auto.Translation.ReifM
 public import Auto.Translation.LamUtils
 public import Auto.Translation.SMTAttributes
-public import Auto.MathlibEmulator
 public import Auto.Embedding.LamChecker
 public import Auto.Embedding.LamInhReasoning
 
@@ -1628,11 +1627,11 @@ section BuildChecker
 
     -- Given a list of expression of type `ty`, construct the corresponding `BinTree`
   private def exprListToBinTree (l : List Expr) (lvl : Level) (ty : Expr) :=
-    (@instToExprBinTreeOfToLevel Expr (instExprToExprId ty) ⟨lvl, Prop⟩).toExpr (BinTree.ofListGet l)
+    (@instToExprBinTree Expr (instExprToExprId ty) { toLevel := lvl }).toExpr (BinTree.ofListGet l)
 
     -- Given a list of expression of type `ty`, construct the corresponding `lctx`
   private def exprListToLCtx (l : List Expr) (lvl : Level) (ty : Expr) :=
-    @BinTree.toLCtx Expr ⟨lvl, Prop⟩ (instExprToExprId ty) (BinTree.ofListGet l)
+    @BinTree.toLCtx Expr { toLevel := lvl } (instExprToExprId ty) (BinTree.ofListGet l)
 
   def buildTyVal : ReifM Expr := do
     let u ← getU
@@ -1706,8 +1705,8 @@ section BuildChecker
       importedFactsTree := importedFactsTree.insert n vEntry
     let type := Lean.mkApp2 (.const ``PSigma [.succ .zero, .zero])
       (.const ``ImportEntry []) (.app (.const ``importTablePSigmaβ [u]) chkValExpr)
-    let importTableExpr := (@instToExprBinTreeOfToLevel Expr
-      (instExprToExprId type) ⟨.zero, Prop⟩).toExpr importTable
+    let importTableExpr := (@instToExprBinTree Expr
+      (instExprToExprId type) { toLevel := .zero }).toExpr importTable
     let importedFacts := Lean.toExpr importedFactsTree
     return (importTableExpr, importedFacts)
 

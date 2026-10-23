@@ -1,7 +1,6 @@
 module
 
 public import Lean
-public import Auto.MathlibEmulator
 public import Auto.Lib.BoolExtra
 public import Auto.Lib.NatExtra
 public import Auto.Lib.OptionExtra

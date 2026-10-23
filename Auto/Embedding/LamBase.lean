@@ -10,7 +10,6 @@ public import Auto.Lib.IntExtra
 public import Auto.Lib.HEqExtra
 public import Auto.Lib.ListExtra
 -- import Mathlib.Data.Real.Basic
-public import Auto.MathlibEmulator
 
 @[expose] public section
 

@@ -1,6 +1,6 @@
 module
 
-public import Auto.MathlibEmulator
+public import Lean
 
 @[expose] public section
 
