@@ -486,7 +486,7 @@ def runAuto
     let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
       let s ← get
       let u ← computeMaxLevel s.facts
-      (reifMAction s.facts s.inhTys s.inds).run' {u := u})
+      (reifMAction s.facts s.inhTys s.inds).run' (← LamReif.State.init u))
     trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
     trace[auto.tactic.printProof] "{proof}"
     return proof
@@ -578,7 +578,7 @@ def runMono
     let ((proof, goalId, atomVals, derivs), _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM _) do
       let s ← get
       let u ← computeMaxLevel s.facts
-      (reifMAction s.facts s.inhTys s.inds).run' {u := u})
+      (reifMAction s.facts s.inhTys s.inds).run' (← LamReif.State.init u))
     trace[auto.tactic] "Auto found proof of {← Meta.inferType proof}"
     trace[auto.tactic.printProof] "{proof}"
     return (proof, goalId, atomVals, derivs)
@@ -647,7 +647,7 @@ def monoInterface
     let uvalids ← liftM <| Reif.getFacts
     let uinhs ← liftM <| Reif.getInhTys
     let u ← computeMaxLevel uvalids
-    (afterReify uvalids uinhs).run' {u := u})
+    (afterReify uvalids uinhs).run' (← LamReif.State.init u))
   return proof
 
 /--
@@ -668,7 +668,7 @@ def runNativeProverWithAuto
   let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
     let s ← get
     let u ← computeMaxLevel s.facts
-    (afterReify s.facts s.inhTys).run' {u := u})
+    (afterReify s.facts s.inhTys).run' (← LamReif.State.init u))
   trace[auto.tactic] "{decl_name%} :: Found proof of {← Meta.inferType proof}"
   return proof
 

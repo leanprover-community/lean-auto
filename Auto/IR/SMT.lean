@@ -98,11 +98,14 @@ inductive SpecConst where
   -- `.binary [xₖ₋₁, ⋯, x₁, x₀]` represents `xₖ₋₁⋯x₁x₀`
   | binary : List Bool → SpecConst
   | num    : Nat → SpecConst
+  -- `.decimal n` represents the decimal `n.0`
+  | decimal : Nat → SpecConst
 
 def SpecConst.toString : SpecConst → String
 | .str s     => "\"" ++ String.join (s.toList.map specCharRepr) ++ "\""
 | .binary bs => bs.foldl (fun acc b => acc.push (if b then '1' else '0')) "#b"
 | .num n     => ToString.toString (repr n)
+| .decimal n => ToString.toString (repr n) ++ ".0"
 where specCharRepr (c : Char) : String :=
   "\\u{" ++ String.ofList (Nat.toDigits 16 c.toNat) ++ "}"
 

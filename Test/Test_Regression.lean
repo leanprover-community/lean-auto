@@ -780,6 +780,73 @@ section TPTP
 
 end TPTP
 
+
+-- Native prover's handling of `Real` (a `LaterType`)
+section NativeReal
+
+  /-
+    `lean-auto` cannot import Mathlib, so this section uses a stand-in `Real`.
+    When `Real` and its operations are treated like builtin types (e.g. `Nat`, `Int`),
+    the hypotheses sent to the native prover (see `trace.auto.lam2D.printHyps`)
+    should mention `Real`'s `+, -, *, /, -·, ·⁻¹` as-is, instead of free variables
+    for uninterpreted atoms.
+  -/
+
+  -- Use smt solver to test correctness of translation
+  set_option auto.smt true
+  set_option auto.smt.trust true
+  set_option auto.tptp false
+  set_option auto.native false
+
+  structure _root_.Real where
+    val : Rat
+
+  namespace Real
+
+  @[irreducible] private def zero : Real := ⟨0⟩
+  @[irreducible] private def one : Real := ⟨1⟩
+  @[irreducible] private def add (x y : Real) : Real := ⟨x.val + y.val⟩
+  @[irreducible] private def neg (x : Real) : Real := ⟨-x.val⟩
+  @[irreducible] private def mul (x y : Real) : Real := ⟨x.val * y.val⟩
+  @[irreducible] private def inv' (x : Real) : Real := ⟨x.val⁻¹⟩
+
+  instance : Zero Real := ⟨zero⟩
+  instance : One Real := ⟨one⟩
+  instance : Add Real := ⟨add⟩
+  instance : Neg Real := ⟨neg⟩
+  instance : Mul Real := ⟨mul⟩
+  instance : Inv Real := ⟨inv'⟩
+  instance : Sub Real := ⟨fun a b => a + -b⟩
+  instance : Div Real := ⟨fun a b => a * b⁻¹⟩
+  instance : NatCast Real := ⟨fun n => ⟨n⟩⟩
+  instance : IntCast Real := ⟨fun z => ⟨z⟩⟩
+
+  end Real
+
+  example (x y : Real) (h : x = 1 * y) : x = 1 * y := by
+    fail_if_success auto []
+    exact h
+
+  -- Lean's `x / 0 = 0` and `0⁻¹ = 0`, which do not hold for SMT-LIB's `/`
+  example (x : Real) : x / 0 = 0 ∧ (0 : Real)⁻¹ = 0 := by auto
+
+  example (x y : Real) (h : x + y = x * y) : y + x = Real.add y x := by auto [h]
+
+  example (x y : Real) (h : -x = y⁻¹) : y⁻¹ = -x := by auto [h]
+
+  example (x y : Real) (h : ∀ a b : Real, a * b = b * a) : x * y = y * x := by auto [h]
+
+  example (f : Real → Real) (y z : Real) (h : ∀ x, f x = x + x) : f (y * z) = y * z + y * z := by auto [h]
+
+  example : ∀ x : Real, ∃ y : Real, y = x - x := by auto
+
+  -- Mixing with builtin types
+  example (n : Nat) (x : Real) (h₁ : n * n = n + n) (h₂ : x * x = x + x) :
+    n + n = n * n ∧ x + x = x * x := by auto [h₁, h₂]
+
+end NativeReal
+
+
 -- Issues
 section Issues
 

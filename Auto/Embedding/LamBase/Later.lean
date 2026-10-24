@@ -279,12 +279,16 @@ def LaterConst.LamWF.ofCheck (H : l.lamCheck = s) : LamWF l s := by
   cases H; cases l
   case real rc => apply LamWF.ofReal; apply RealConst.LamWF.ofCheck; rfl
 
+/-- Interpretation of later-declared types (`TyVal.later`), given the interpretation of each of them -/
+@[reducible] def LaterType.interp (real : Type u) : LaterType → Type u
+| .real => real
+
 /-- Interpretation of the constants associated with each later-declared type -/
 structure LaterVal (later : LaterType → Type u) where
   real : RealInterp (later .real)
 
 /-- Valuation of later-declared constants when all later-declared types are interpreted as `PUnit` -/
-def LaterVal.default : LaterVal (fun _ => PUnit.{u + 1}) :=
+def LaterVal.default : LaterVal (LaterType.interp PUnit.{u + 1}) :=
   ⟨RealInterp.default⟩
 
 def LaterConst.interp (tyVal : TyVal.{u}) (lv : LaterVal tyVal.later) :

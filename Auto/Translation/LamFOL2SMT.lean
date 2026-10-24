@@ -437,7 +437,10 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
   | .ashr => return .qStrApp "bvashr" #[arg1, arg2]
 | .bvcst (.bvappend _ _) => return .qStrApp "concat" #[arg1, arg2]
 | .ocst (.smtAttr1T name _ _) => return .attrApp name arg1 arg2
-| .lcst lc    => throwError "{decl_name%} :: Constant {lc} of later-declared type is not supported yet"
+| .lcst (.real .add) => return .qStrApp "+" #[arg1, arg2]
+| .lcst (.real .sub) => return .qStrApp "-" #[arg1, arg2]
+| .lcst (.real .mul) => return .qStrApp "*" #[arg1, arg2]
+| .lcst (.real .div) => return .qStrApp "rdiv" #[arg1, arg2]
 | t           => throwError "{decl_name%} :: The arity of {repr t} is not 2"
 
 private def lamBaseTerm2STerm_Arity1 (sni : SMTNamingInfo) (arg : STerm) : LamBaseTerm → TransM LamAtomic STerm
@@ -498,7 +501,10 @@ private def lamBaseTerm2STerm_Arity1 (sni : SMTNamingInfo) (arg : STerm) : LamBa
     return .qIdApp (.ident (.indexed "sign_extend" #[.inr (v - w)])) #[arg]
   else
     return .qIdApp (.ident (.indexed "extract" #[.inr (v - 1), .inr 0])) #[arg]
-| .lcst lc        => throwError "{decl_name%} :: Constant {lc} of later-declared type is not supported yet"
+| .lcst (.real .neg)     => return .qStrApp "-" #[.sConst (.decimal 0), arg]
+| .lcst (.real .inv)     => return .qStrApp "rinv" #[arg]
+| .lcst (.real .ofNat)   => return .qStrApp "to_real" #[arg]
+| .lcst (.real .ofInt)   => return .qStrApp "to_real" #[arg]
 | t               => throwError "{decl_name%} :: The arity of {repr t} is not 1"
 where
   solverName : MetaM Solver.SMT.SolverName := do
@@ -515,7 +521,8 @@ private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtomic STerm
 | .ncst (.natVal n)   => return .sConst (.num n)
 | .scst (.strVal s)   => return .sConst (.str s)
 | .bvcst (.bvVal n i) => return bitVec2STerm n i
-| .lcst lc            => throwError "{decl_name%} :: Constant {lc} of later-declared type is not supported yet"
+| .lcst (.real .zero) => return .sConst (.decimal 0)
+| .lcst (.real .one)  => return .sConst (.decimal 1)
 | t                   => throwError "{decl_name%} :: The arity of {repr t} is not 0"
 
 def lamTermAtom2String (sni : SMTNamingInfo) (lamVarTy : Array LamSort) (n : Nat) : TransM LamAtomic (LamSort × String) := do
@@ -732,7 +739,11 @@ def termAuxDecls : Array IR.SMT.Command :=
     .defFun false "iediv" #[("x", .app (.symb "Int") #[]), ("y", .app (.symb "Int") #[])] (.app (.symb "Int") #[])
       (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "y" #[], .sConst (.num 0)], .sConst (.num 0), .qStrApp "div" #[.qStrApp "x" #[], .qStrApp "y" #[]]]),
     .defFun false "iemod" #[("x", .app (.symb "Int") #[]), ("y", .app (.symb "Int") #[])] (.app (.symb "Int") #[])
-      (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "y" #[], .sConst (.num 0)], .qStrApp "x" #[], .qStrApp "mod" #[.qStrApp "x" #[], .qStrApp "y" #[]]])
+      (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "y" #[], .sConst (.num 0)], .qStrApp "x" #[], .qStrApp "mod" #[.qStrApp "x" #[], .qStrApp "y" #[]]]),
+    .defFun false "rdiv" #[("x", .app (.symb "Real") #[]), ("y", .app (.symb "Real") #[])] (.app (.symb "Real") #[])
+      (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "y" #[], .sConst (.decimal 0)], .sConst (.decimal 0), .qStrApp "/" #[.qStrApp "x" #[], .qStrApp "y" #[]]]),
+    .defFun false "rinv" #[("x", .app (.symb "Real") #[])] (.app (.symb "Real") #[])
+      (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "x" #[], .sConst (.decimal 0)], .sConst (.decimal 0), .qStrApp "/" #[.sConst (.decimal 1), .qStrApp "x" #[]]])
    ]
 
 /--
