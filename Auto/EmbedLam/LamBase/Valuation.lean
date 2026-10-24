@@ -32,6 +32,7 @@ noncomputable def LamBaseTerm.interp (lval : LamValuation.{u}) : (b : LamBaseTer
 | .bcst bc    => bc.interp lval.tyVal
 | .ncst nc    => nc.interp lval.tyVal
 | .icst ic    => ic.interp lval.tyVal
+| .qcst qc    => qc.interp lval.tyVal
 | .scst sc    => sc.interp lval.tyVal
 | .bvcst bvc  => bvc.interp lval.tyVal
 | .ocst oc    => oc.interp lval.tyVal
@@ -50,6 +51,7 @@ noncomputable def LamBaseTerm.LamWF.interp (lval : LamValuation.{u}) : (lwf : La
 | .ofBcst wf    => wf.interp lval.tyVal
 | .ofNcst wf    => wf.interp lval.tyVal
 | .ofIcst wf    => wf.interp lval.tyVal
+| .ofQcst wf    => wf.interp lval.tyVal
 | .ofScst wf    => wf.interp lval.tyVal
 | .ofBvcst wf   => wf.interp lval.tyVal
 | .ofOcst wf    => wf.interp lval.tyVal
@@ -99,6 +101,7 @@ theorem LamBaseTerm.LamWF.interp_lvalIrrelevance
           case ofBcst => apply BoolConst.LamWF.interp_lvalIrrelevance <;> rfl
           case ofNcst => apply NatConst.LamWF.interp_lvalIrrelevance <;> rfl
           case ofIcst => apply IntConst.LamWF.interp_lvalIrrelevance <;> rfl
+          case ofQcst => apply RatConst.LamWF.interp_lvalIrrelevance <;> rfl
           case ofScst => apply StringConst.LamWF.interp_lvalIrrelevance <;> rfl
           case ofBvcst => apply BitVecConst.LamWF.interp_lvalIrrelevance <;> rfl
           case ofOcst => apply OtherConst.LamWF.interp_lvalIrrelevance <;> rfl
@@ -112,6 +115,7 @@ theorem LamBaseTerm.interp_equiv (lval : LamValuation.{u})
   case ofBcst => apply BoolConst.interp_equiv
   case ofNcst => apply NatConst.interp_equiv
   case ofIcst => apply IntConst.interp_equiv
+  case ofQcst => apply RatConst.interp_equiv
   case ofScst => apply StringConst.interp_equiv
   case ofBvcst => apply BitVecConst.interp_equiv
   case ofOcst => apply OtherConst.interp_equiv

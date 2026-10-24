@@ -5,7 +5,7 @@ public import Auto.EmbedLam.LamBase.ConstMacro
 
 @[expose] public section
 
-/-! Interpreted constants over `Prop`, `Bool`, `Nat`, `Int` and `String`, and `OtherConst` -/
+/-! Interpreted constants over `Prop`, `Bool`, `Nat`, `Int`, `Rat` and `String`, and `OtherConst` -/
 
 namespace Auto.Embedding.Lam
 
@@ -87,6 +87,29 @@ mkConstFamily IntConst with
   | ilt      | ofIlt      | (.func (.base .int) (.func (.base .int) (.base .prop))) | "<"        | iltLift
   | imax     | ofImax     | (.func (.base .int) (.func (.base .int) (.base .int)))  | "imax"     | imaxLift
   | imin     | ofImin     | (.func (.base .int) (.func (.base .int) (.base .int)))  | "imin"     | iminLift
+
+inductive RatConst
+  | qofInt | qofScientific
+  | qadd | qsub | qmul | qdiv | qneg | qinv
+  | qle | qlt | qmax | qmin | qabs | qfloor | qceil
+deriving Inhabited, Hashable, Lean.ToExpr
+
+mkConstFamily RatConst with
+  | qofInt        | ofQOfInt        | (.func (.base .int) (.base .rat))                                            | "qofInt"        | qofIntLift
+  | qofScientific | ofQOfScientific | (.func (.base .nat) (.func (.base .bool) (.func (.base .nat) (.base .rat)))) | "qofScientific" | qofScientificLift
+  | qadd          | ofQadd          | (.func (.base .rat) (.func (.base .rat) (.base .rat)))                       | "+"             | qaddLift
+  | qsub          | ofQsub          | (.func (.base .rat) (.func (.base .rat) (.base .rat)))                       | "-"             | qsubLift
+  | qmul          | ofQmul          | (.func (.base .rat) (.func (.base .rat) (.base .rat)))                       | "*"             | qmulLift
+  | qdiv          | ofQdiv          | (.func (.base .rat) (.func (.base .rat) (.base .rat)))                       | "/"             | qdivLift
+  | qneg          | ofQneg          | (.func (.base .rat) (.base .rat))                                            | "-"             | qnegLift
+  | qinv          | ofQinv          | (.func (.base .rat) (.base .rat))                                            | "qinv"          | qinvLift
+  | qle           | ofQle           | (.func (.base .rat) (.func (.base .rat) (.base .prop)))                      | "≤"             | qleLift
+  | qlt           | ofQlt           | (.func (.base .rat) (.func (.base .rat) (.base .prop)))                      | "<"             | qltLift
+  | qmax          | ofQmax          | (.func (.base .rat) (.func (.base .rat) (.base .rat)))                       | "qmax"          | qmaxLift
+  | qmin          | ofQmin          | (.func (.base .rat) (.func (.base .rat) (.base .rat)))                       | "qmin"          | qminLift
+  | qabs          | ofQabs          | (.func (.base .rat) (.base .rat))                                            | "qabs"          | qabsLift
+  | qfloor        | ofQfloor        | (.func (.base .rat) (.base .int))                                            | "qfloor"        | qfloorLift
+  | qceil         | ofQceil         | (.func (.base .rat) (.base .int))                                            | "qceil"         | qceilLift
 
 inductive StringConst
   | strVal (s : String)

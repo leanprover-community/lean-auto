@@ -73,6 +73,7 @@ inductive LamBaseSort
   | bool   : LamBaseSort            -- GLift `Bool`
   | nat    : LamBaseSort            -- GLift `Nat`
   | int    : LamBaseSort            -- GLift `Int`
+  | rat    : LamBaseSort            -- GLift `Rat`
   /--
     For each `p : Pos`, `isto0 p` is an interpreted sort
     `p`       `isto0 p`
@@ -100,6 +101,7 @@ def LamBaseSort.reprPrec (b : LamBaseSort) (n : Nat) :=
     | .bool => "bool"
     | .nat  => "nat"
     | .int  => "int"
+    | .rat  => "rat"
     | .isto0 p =>
       match p with
       | .xH => "string"
@@ -119,6 +121,7 @@ def LamBaseSort.toString : LamBaseSort → String
 | .bool   => "Bool"
 | .nat    => "Nat"
 | .int    => "Int"
+| .rat    => "Rat"
 | .isto0 p =>
   match p with
   | .xH => "String"
@@ -134,6 +137,7 @@ def LamBaseSort.beq : LamBaseSort → LamBaseSort → Bool
 | .bool,     .bool     => true
 | .nat,      .nat      => true
 | .int,      .int      => true
+| .rat,      .rat      => true
 | .isto0 p₁, .isto0 p₂ => p₁.beq p₂
 | .bv n,     .bv m     => n.beq m
 | .later t₁, .later t₂ => t₁.beq t₂
@@ -149,6 +153,7 @@ theorem LamBaseSort.beq_refl : {b : LamBaseSort} → (b.beq b) = true
 | .bool    => rfl
 | .nat     => rfl
 | .int     => rfl
+| .rat     => rfl
 | .isto0 _ => Pos.beq_refl
 | .bv n    => Nat.beq_refl' n
 | .later t => LaterType.beq_refl (t := t)
@@ -159,49 +164,64 @@ theorem LamBaseSort.eq_of_beq_eq_true {b₁ b₂ : LamBaseSort} : b₁.beq b₂ 
   | .bool,    .bool    => fun _ => rfl
   | .nat,     .nat     => fun _ => rfl
   | .int,     .int     => fun _ => rfl
+  | .rat,     .rat     => fun _ => rfl
   | .isto0 p, .isto0 q => fun H => Pos.eq_of_beq_eq_true H ▸ rfl
   | .bv n,    .bv m    => fun H => Nat.eq_of_beq_eq_true H ▸ rfl
   | .later s, .later t => fun H => LaterType.eq_of_beq_eq_true (t₁ := s) (t₂ := t) H ▸ rfl
   | .prop,    .bool    => fun H => by cases H
   | .prop,    .nat     => fun H => by cases H
   | .prop,    .int     => fun H => by cases H
+  | .prop,    .rat     => fun H => by cases H
   | .prop,    .isto0 p => fun H => by cases H
   | .prop,    .bv m    => fun H => by cases H
   | .prop,    .later t => fun H => by cases H
   | .bool,    .prop    => fun H => by cases H
   | .bool,    .nat     => fun H => by cases H
   | .bool,    .int     => fun H => by cases H
+  | .bool,    .rat     => fun H => by cases H
   | .bool,    .isto0 p => fun H => by cases H
   | .bool,    .bv m    => fun H => by cases H
   | .bool,    .later t => fun H => by cases H
   | .nat,     .prop    => fun H => by cases H
   | .nat,     .bool    => fun H => by cases H
   | .nat,     .int     => fun H => by cases H
+  | .nat,     .rat     => fun H => by cases H
   | .nat,     .isto0 p => fun H => by cases H
   | .nat,     .bv m    => fun H => by cases H
   | .nat,     .later t => fun H => by cases H
   | .int,     .prop    => fun H => by cases H
   | .int,     .bool    => fun H => by cases H
   | .int,     .nat     => fun H => by cases H
+  | .int,     .rat     => fun H => by cases H
   | .int,     .isto0 p => fun H => by cases H
   | .int,     .bv m    => fun H => by cases H
   | .int,     .later t => fun H => by cases H
+  | .rat,     .prop    => fun H => by cases H
+  | .rat,     .bool    => fun H => by cases H
+  | .rat,     .nat     => fun H => by cases H
+  | .rat,     .int     => fun H => by cases H
+  | .rat,     .isto0 p => fun H => by cases H
+  | .rat,     .bv m    => fun H => by cases H
+  | .rat,     .later t => fun H => by cases H
   | .isto0 p, .prop    => fun H => by cases H
   | .isto0 p, .bool    => fun H => by cases H
   | .isto0 p, .nat     => fun H => by cases H
   | .isto0 p, .int     => fun H => by cases H
+  | .isto0 p, .rat     => fun H => by cases H
   | .isto0 p, .bv m    => fun H => by cases H
   | .isto0 p, .later t => fun H => by cases H
   | .bv n,    .prop    => fun H => by cases H
   | .bv n,    .bool    => fun H => by cases H
   | .bv n,    .nat     => fun H => by cases H
   | .bv n,    .int     => fun H => by cases H
+  | .bv n,    .rat     => fun H => by cases H
   | .bv n,    .isto0 p => fun H => by cases H
   | .bv n,    .later t => fun H => by cases H
   | .later s, .prop    => fun H => by cases H
   | .later s, .bool    => fun H => by cases H
   | .later s, .nat     => fun H => by cases H
   | .later s, .int     => fun H => by cases H
+  | .later s, .rat     => fun H => by cases H
   | .later s, .isto0 p => fun H => by cases H
   | .later s, .bv m    => fun H => by cases H
 
@@ -219,6 +239,7 @@ instance : LawfulBEq LamBaseSort where
 | .bool    => GLift Bool
 | .nat     => GLift Nat
 | .int     => GLift Int
+| .rat     => GLift Rat
 | .isto0 p => isto0_interp p
 | .bv n    => GLift (BitVec n)
 | .later t => later t

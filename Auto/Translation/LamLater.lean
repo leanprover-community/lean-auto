@@ -48,9 +48,9 @@ def LaterType.enabled (t : LaterType) (opts : Options) : Bool := t.option.get op
 /-- Constants of `t`, in the order of the fields of the un-lifted interpretation of `t` -/
 def LaterType.consts : LaterType → Array LaterConst
 | .real    => #[.zero, .one, .add, .sub, .mul, .div, .neg, .inv, .ofNat, .ofInt,
-               .le, .lt, .max, .min, .abs, .ofScientific, .floor, .ceil].map .real
+               .le, .lt, .max, .min, .abs, .ofScientific, .floor, .ceil, .pow, .sqrt, .ofRat].map .real
 | .complex => #[.zero, .one, .I, .add, .sub, .mul, .div, .neg, .inv, .ofNat, .ofInt,
-               .ofReal, .re, .im, .mk].map .complex
+               .ofReal, .re, .im, .mk, .normSq, .conj, .norm, .pow, .ofRat].map .complex
 
 /-- Constants of `t` interpreting the numerals `0`, `1` and `n` (as a function of `n : Nat`) -/
 def LaterType.numerals : LaterType → LaterConst × LaterConst × LaterConst
@@ -69,7 +69,9 @@ def LaterType.derivedForms : LaterType → Array (MetaM Expr × LamTerm)
   let flip (lc : LaterConst) : LamTerm := .lam s (.lam s (.app s (.app s (.base (.lcst lc)) (.bvar 0)) (.bvar 1)))
   #[(Meta.mkAppOptM ``GE.ge #[real, .none], flip (.real .le)),
     (Meta.mkAppOptM ``GT.gt #[real, .none], flip (.real .lt))]
-| .complex => #[]
+| .complex =>
+  let complex := Lam2D.interpLaterTypeAsUnlifted .complex
+  #[(Meta.mkAppOptM `Star.star #[complex, .none], .base (.lcst (.complex .conj)))]
 
 /-- Un-lifted interpretation of the constants of `t`, given their canonical forms -/
 def LaterType.mkInterp (t : LaterType) (canons : Array Expr) : Expr :=
@@ -121,6 +123,13 @@ structure LaterInfo where
     `Real.add` for `.real .add`
   -/
   index   : Std.HashMap Name (Array LaterForm)   := {}
+  /--
+    Head constants of the canonical forms `f c` whose last argument `c` is explicit,
+    e.g. `DFunLike.coe` for `DFunLike.coe Complex.normSq`. During reification, `f` and
+    `c` are separate term-like expressions, so applications `f c` with these heads are
+    also checked by `reifTerm?`
+  -/
+  appHeads : Std.HashSet Name                    := {}
 deriving Inhabited
 
 /-- The recognized later-declared type whose Lean type is `e` -/
@@ -199,6 +208,10 @@ private def LaterInfo.add (li : LaterInfo) (t : LaterType) : MetaM LaterInfo := 
     for c in ← headChain form.canon do
       li := { li with index := li.index.insert c ((li.index.getD c #[]).push form) }
       heads := heads.push (c, name)
+    if let .app f _ := form.canon then
+      if let .forallE _ _ _ .default ← Meta.whnfD (← Meta.inferType f) then
+        if let .some c := form.canon.getAppFn.constName? then
+          li := { li with appHeads := li.appHeads.insert c }
   trace[auto.lamLater] "Recognized `{ty}`. Head constants of canonical forms: {heads}"
   return li
 

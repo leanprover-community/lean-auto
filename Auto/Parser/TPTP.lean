@@ -356,6 +356,7 @@ def ident2LamSort (s : String) : Option LamSort :=
   match s with
   | "s_nat"    => .some (.base .nat)
   | "s_int"    => .some (.base .int)
+  | "s_rat"    => .some (.base .rat)
   | "s_string" => .some (.base .string)
   | "s_empty"  => .some (.base .empty)
   | "s_real"   => .some (.base .real)
@@ -451,6 +452,9 @@ def ident2LaterConst (s : String) : Option LaterConst :=
   | "t_rofScientific" => .some (.real .ofScientific)
   | "t_rfloor" => .some (.real .floor)
   | "t_rceil" => .some (.real .ceil)
+  | "t_rpow" => .some (.real .pow)
+  | "t_rsqrt" => .some (.real .sqrt)
+  | "t_rofRat" => .some (.real .ofRat)
   | "t_czero" => .some (.complex .zero)
   | "t_cone" => .some (.complex .one)
   | "t_cI" => .some (.complex .I)
@@ -466,6 +470,31 @@ def ident2LaterConst (s : String) : Option LaterConst :=
   | "t_cre" => .some (.complex .re)
   | "t_cim" => .some (.complex .im)
   | "t_cmk" => .some (.complex .mk)
+  | "t_cnormSq" => .some (.complex .normSq)
+  | "t_cconj" => .some (.complex .conj)
+  | "t_cnorm" => .some (.complex .norm)
+  | "t_cpow" => .some (.complex .pow)
+  | "t_cofRat" => .some (.complex .ofRat)
+  | _ => .none
+
+open Embedding.Lam in
+def ident2RatConst (s : String) : Option RatConst :=
+  match s with
+  | "t_qofInt" => .some .qofInt
+  | "t_qofScientific" => .some .qofScientific
+  | "t_qadd" => .some .qadd
+  | "t_qsub" => .some .qsub
+  | "t_qmul" => .some .qmul
+  | "t_qdiv" => .some .qdiv
+  | "t_qneg" => .some .qneg
+  | "t_qinv" => .some .qinv
+  | "t_qle" => .some .qle
+  | "t_qlt" => .some .qlt
+  | "t_qmax" => .some .qmax
+  | "t_qmin" => .some .qmin
+  | "t_qabs" => .some .qabs
+  | "t_qfloor" => .some .qfloor
+  | "t_qceil" => .some .qceil
   | _ => .none
 
 open Embedding.Lam in
@@ -700,6 +729,10 @@ def ident2LamConstr (pi : ParsingInfo) (s : String) : LamConstr :=
       | "t_i" =>
         match ident2IntConst s with
         | .some i => .term i.lamCheck (.base (.icst i))
+        | .none   => .error s!"Unknown identifier {s}"
+      | "t_q" =>
+        match ident2RatConst s with
+        | .some q => .term q.lamCheck (.base (.qcst q))
         | .none   => .error s!"Unknown identifier {s}"
       | "t_s" =>
         match ident2StringConst s with

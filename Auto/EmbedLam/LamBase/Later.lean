@@ -16,6 +16,7 @@ namespace Auto.Embedding.Lam
 inductive RealConst
   | zero | one | add | sub | mul | div | neg | inv | ofNat | ofInt
   | le | lt | max | min | abs | ofScientific | floor | ceil
+  | pow | sqrt | ofRat
 deriving Inhabited, Hashable, Lean.ToExpr
 
 def RealConst.reprAux : RealConst → String
@@ -37,6 +38,9 @@ def RealConst.reprAux : RealConst → String
 | .ofScientific => "ofScientific"
 | .floor => "floor"
 | .ceil => "ceil"
+| .pow => "pow"
+| .sqrt => "sqrt"
+| .ofRat => "ofRat"
 
 def RealConst.reprPrec (c : RealConst) (n : Nat) : Std.Format :=
   match n with
@@ -65,6 +69,9 @@ def RealConst.toString : RealConst → String
 | .ofScientific => "ofScientific"
 | .floor => "floor"
 | .ceil => "ceil"
+| .pow => "^"
+| .sqrt => "sqrt"
+| .ofRat => "rofRat"
 
 instance : ToString RealConst where
   toString := RealConst.toString
@@ -88,6 +95,9 @@ def RealConst.beq : RealConst → RealConst → Bool
 | .ofScientific, .ofScientific => true
 | .floor, .floor => true
 | .ceil, .ceil => true
+| .pow, .pow => true
+| .sqrt, .sqrt => true
+| .ofRat, .ofRat => true
 | _,    _    => false
 
 instance : BEq RealConst where
@@ -124,6 +134,9 @@ def RealConst.lamCheck : RealConst → LamSort
 | .ofScientific => (.func (.base .nat) (.func (.base .bool) (.func (.base .nat) (.base .real))))
 | .floor => (.func (.base .real) (.base .int))
 | .ceil => (.func (.base .real) (.base .int))
+| .pow => (.func (.base .real) (.func (.base .nat) (.base .real)))
+| .sqrt => (.func (.base .real) (.base .real))
+| .ofRat => (.func (.base .rat) (.base .real))
 
 inductive RealConst.LamWF : RealConst → LamSort → Type
   | ofZero : LamWF .zero (.base .real)
@@ -144,6 +157,9 @@ inductive RealConst.LamWF : RealConst → LamSort → Type
   | ofOfScientific : LamWF .ofScientific (.func (.base .nat) (.func (.base .bool) (.func (.base .nat) (.base .real))))
   | ofFloor : LamWF .floor (.func (.base .real) (.base .int))
   | ofCeil : LamWF .ceil (.func (.base .real) (.base .int))
+  | ofPow : LamWF .pow (.func (.base .real) (.func (.base .nat) (.base .real)))
+  | ofSqrt : LamWF .sqrt (.func (.base .real) (.base .real))
+  | ofOfRat : LamWF .ofRat (.func (.base .rat) (.base .real))
 
 theorem RealConst.LamWF.unique {c : RealConst} {s₁ s₂ : LamSort}
   (rcwf₁ : LamWF c s₁) (rcwf₂ : LamWF c s₂) : s₁ = s₂ ∧ HEq rcwf₁ rcwf₂ := by
@@ -168,6 +184,9 @@ def RealConst.LamWF.ofRealConst : (c : RealConst) → (s : LamSort) × RealConst
 | .ofScientific => ⟨_, .ofOfScientific⟩
 | .floor => ⟨_, .ofFloor⟩
 | .ceil => ⟨_, .ofCeil⟩
+| .pow => ⟨_, .ofPow⟩
+| .sqrt => ⟨_, .ofSqrt⟩
+| .ofRat => ⟨_, .ofOfRat⟩
 
 theorem RealConst.lamWF_complete (wf : LamWF c s) : LamWF.ofRealConst c = ⟨s, wf⟩ := by
   cases wf <;> rfl
@@ -198,6 +217,9 @@ structure RealInterpUnlifted (R : Type) where
   ofScientific : Nat → Bool → Nat → R
   floor : R → Int
   ceil : R → Int
+  pow : R → Nat → R
+  sqrt : R → R
+  ofRat : Rat → R
 
 /-- Interpretation of the constants associated with `LaterType.real` -/
 structure RealInterp (R : Type u) where
@@ -219,6 +241,9 @@ structure RealInterp (R : Type u) where
   ofScientific : GLift.{1, u} Nat → GLift.{1, u} Bool → GLift.{1, u} Nat → R
   floor : R → GLift.{1, u} Int
   ceil : R → GLift.{1, u} Int
+  pow : R → GLift.{1, u} Nat → R
+  sqrt : R → R
+  ofRat : GLift.{1, u} Rat → R
 
 def RealInterpUnlifted.toRealInterp.{u} (ri : RealInterpUnlifted R) : RealInterp (GLift.{1, u} R) where
   zero := GLift.up ri.zero
@@ -239,13 +264,17 @@ def RealInterpUnlifted.toRealInterp.{u} (ri : RealInterpUnlifted R) : RealInterp
   ofScientific m s e := GLift.up (ri.ofScientific m.down s.down e.down)
   floor x := GLift.up (ri.floor x.down)
   ceil x := GLift.up (ri.ceil x.down)
+  pow x n := GLift.up (ri.pow x.down n.down)
+  sqrt x := GLift.up (ri.sqrt x.down)
+  ofRat q := GLift.up (ri.ofRat q.down)
 
 /-- Interpretation of the constants associated with `LaterType.real` when `Real` is interpreted as `PUnit` -/
 def RealInterp.default : RealInterp PUnit.{u + 1} :=
   ⟨.unit, .unit, fun _ _ => .unit, fun _ _ => .unit, fun _ _ => .unit, fun _ _ => .unit,
    fun _ => .unit, fun _ => .unit, fun _ => .unit, fun _ => .unit,
    fun _ _ => GLift.up True, fun _ _ => GLift.up True, fun _ _ => .unit, fun _ _ => .unit,
-   fun _ => .unit, fun _ _ _ => .unit, fun _ => GLift.up 0, fun _ => GLift.up 0⟩
+   fun _ => .unit, fun _ _ _ => .unit, fun _ => GLift.up 0, fun _ => GLift.up 0,
+   fun _ _ => .unit, fun _ => .unit, fun _ => .unit⟩
 
 def RealConst.interp (tyVal : TyVal.{u}) (ri : RealInterp (tyVal.later .real)) :
   (c : RealConst) → c.lamCheck.interp tyVal
@@ -267,6 +296,9 @@ def RealConst.interp (tyVal : TyVal.{u}) (ri : RealInterp (tyVal.later .real)) :
 | .ofScientific => ri.ofScientific
 | .floor => ri.floor
 | .ceil => ri.ceil
+| .pow => ri.pow
+| .sqrt => ri.sqrt
+| .ofRat => ri.ofRat
 
 def RealConst.LamWF.interp (tyVal : TyVal.{u}) (ri : RealInterp (tyVal.later .real)) :
   (lwf : LamWF c s) → s.interp tyVal
@@ -288,6 +320,9 @@ def RealConst.LamWF.interp (tyVal : TyVal.{u}) (ri : RealInterp (tyVal.later .re
 | .ofOfScientific => ri.ofScientific
 | .ofFloor => ri.floor
 | .ofCeil => ri.ceil
+| .ofPow => ri.pow
+| .ofSqrt => ri.sqrt
+| .ofOfRat => ri.ofRat
 
 theorem RealConst.interp_equiv (tyVal : TyVal.{u}) (ri : RealInterp (tyVal.later .real))
   (rcwf : LamWF c s) : HEq (LamWF.interp tyVal ri rcwf) (interp tyVal ri c) := by
@@ -306,6 +341,7 @@ theorem RealConst.LamWF.interp_lvalIrrelevance
 inductive ComplexConst
   | zero | one | I | add | sub | mul | div | neg | inv | ofNat | ofInt
   | ofReal | re | im | mk
+  | normSq | conj | norm | pow | ofRat
 deriving Inhabited, Hashable, Lean.ToExpr
 
 def ComplexConst.reprAux : ComplexConst → String
@@ -324,6 +360,11 @@ def ComplexConst.reprAux : ComplexConst → String
 | .re => "re"
 | .im => "im"
 | .mk => "mk"
+| .normSq => "normSq"
+| .conj => "conj"
+| .norm => "norm"
+| .pow => "pow"
+| .ofRat => "ofRat"
 
 def ComplexConst.reprPrec (c : ComplexConst) (n : Nat) : Std.Format :=
   match n with
@@ -349,6 +390,11 @@ def ComplexConst.toString : ComplexConst → String
 | .re => "re"
 | .im => "im"
 | .mk => "mk"
+| .normSq => "normSq"
+| .conj => "conj"
+| .norm => "norm"
+| .pow => "^"
+| .ofRat => "cofRat"
 
 instance : ToString ComplexConst where
   toString := ComplexConst.toString
@@ -369,6 +415,11 @@ def ComplexConst.beq : ComplexConst → ComplexConst → Bool
 | .re, .re => true
 | .im, .im => true
 | .mk, .mk => true
+| .normSq, .normSq => true
+| .conj, .conj => true
+| .norm, .norm => true
+| .pow, .pow => true
+| .ofRat, .ofRat => true
 | _, _ => false
 
 instance : BEq ComplexConst where
@@ -402,6 +453,11 @@ def ComplexConst.lamCheck : ComplexConst → LamSort
 | .re => (.func (.base .complex) (.base .real))
 | .im => (.func (.base .complex) (.base .real))
 | .mk => (.func (.base .real) (.func (.base .real) (.base .complex)))
+| .normSq => (.func (.base .complex) (.base .real))
+| .conj => (.func (.base .complex) (.base .complex))
+| .norm => (.func (.base .complex) (.base .real))
+| .pow => (.func (.base .complex) (.func (.base .nat) (.base .complex)))
+| .ofRat => (.func (.base .rat) (.base .complex))
 
 inductive ComplexConst.LamWF : ComplexConst → LamSort → Type
   | ofZero : LamWF .zero (.base .complex)
@@ -419,6 +475,11 @@ inductive ComplexConst.LamWF : ComplexConst → LamSort → Type
   | ofRe : LamWF .re (.func (.base .complex) (.base .real))
   | ofIm : LamWF .im (.func (.base .complex) (.base .real))
   | ofMk : LamWF .mk (.func (.base .real) (.func (.base .real) (.base .complex)))
+  | ofNormSq : LamWF .normSq (.func (.base .complex) (.base .real))
+  | ofConj : LamWF .conj (.func (.base .complex) (.base .complex))
+  | ofNorm : LamWF .norm (.func (.base .complex) (.base .real))
+  | ofPow : LamWF .pow (.func (.base .complex) (.func (.base .nat) (.base .complex)))
+  | ofOfRat : LamWF .ofRat (.func (.base .rat) (.base .complex))
 
 theorem ComplexConst.LamWF.unique {c : ComplexConst} {s₁ s₂ : LamSort}
   (ccwf₁ : LamWF c s₁) (ccwf₂ : LamWF c s₂) : s₁ = s₂ ∧ HEq ccwf₁ ccwf₂ := by
@@ -440,6 +501,11 @@ def ComplexConst.LamWF.ofComplexConst : (c : ComplexConst) → (s : LamSort) × 
 | .re => ⟨_, .ofRe⟩
 | .im => ⟨_, .ofIm⟩
 | .mk => ⟨_, .ofMk⟩
+| .normSq => ⟨_, .ofNormSq⟩
+| .conj => ⟨_, .ofConj⟩
+| .norm => ⟨_, .ofNorm⟩
+| .pow => ⟨_, .ofPow⟩
+| .ofRat => ⟨_, .ofOfRat⟩
 
 theorem ComplexConst.lamWF_complete (wf : LamWF c s) : LamWF.ofComplexConst c = ⟨s, wf⟩ := by
   cases wf <;> rfl
@@ -467,6 +533,11 @@ structure ComplexInterpUnlifted (R C : Type) where intro ::
   re : C → R
   im : C → R
   mk : R → R → C
+  normSq : C → R
+  conj : C → C
+  norm : C → R
+  pow : C → Nat → C
+  ofRat : Rat → C
 
 /-- Interpretation of the constants associated with `LaterType.complex` -/
 structure ComplexInterp (R C : Type u) where intro ::
@@ -485,6 +556,11 @@ structure ComplexInterp (R C : Type u) where intro ::
   re : C → R
   im : C → R
   mk : R → R → C
+  normSq : C → R
+  conj : C → C
+  norm : C → R
+  pow : C → GLift.{1, u} Nat → C
+  ofRat : GLift.{1, u} Rat → C
 
 def ComplexInterpUnlifted.toComplexInterp.{u} (ci : ComplexInterpUnlifted R C) :
   ComplexInterp (GLift.{1, u} R) (GLift.{1, u} C) where
@@ -503,6 +579,11 @@ def ComplexInterpUnlifted.toComplexInterp.{u} (ci : ComplexInterpUnlifted R C) :
   re z := GLift.up (ci.re z.down)
   im z := GLift.up (ci.im z.down)
   mk x y := GLift.up (ci.mk x.down y.down)
+  normSq z := GLift.up (ci.normSq z.down)
+  conj z := GLift.up (ci.conj z.down)
+  norm z := GLift.up (ci.norm z.down)
+  pow z n := GLift.up (ci.pow z.down n.down)
+  ofRat q := GLift.up (ci.ofRat q.down)
 
 /--
   Interpretation of the constants associated with `LaterType.complex` when `Complex`
@@ -511,7 +592,8 @@ def ComplexInterpUnlifted.toComplexInterp.{u} (ci : ComplexInterpUnlifted R C) :
 def ComplexInterp.default {R : Type u} (r : R) : ComplexInterp R PUnit.{u + 1} :=
   ⟨.unit, .unit, .unit, fun _ _ => .unit, fun _ _ => .unit, fun _ _ => .unit, fun _ _ => .unit,
    fun _ => .unit, fun _ => .unit, fun _ => .unit, fun _ => .unit,
-   fun _ => .unit, fun _ => r, fun _ => r, fun _ _ => .unit⟩
+   fun _ => .unit, fun _ => r, fun _ => r, fun _ _ => .unit,
+   fun _ => r, fun _ => .unit, fun _ => r, fun _ _ => .unit, fun _ => .unit⟩
 
 def ComplexConst.interp (tyVal : TyVal.{u})
   (ci : ComplexInterp (tyVal.later .real) (tyVal.later .complex)) :
@@ -531,6 +613,11 @@ def ComplexConst.interp (tyVal : TyVal.{u})
 | .re => ci.re
 | .im => ci.im
 | .mk => ci.mk
+| .normSq => ci.normSq
+| .conj => ci.conj
+| .norm => ci.norm
+| .pow => ci.pow
+| .ofRat => ci.ofRat
 
 def ComplexConst.LamWF.interp (tyVal : TyVal.{u})
   (ci : ComplexInterp (tyVal.later .real) (tyVal.later .complex)) :
@@ -550,6 +637,11 @@ def ComplexConst.LamWF.interp (tyVal : TyVal.{u})
 | .ofRe => ci.re
 | .ofIm => ci.im
 | .ofMk => ci.mk
+| .ofNormSq => ci.normSq
+| .ofConj => ci.conj
+| .ofNorm => ci.norm
+| .ofPow => ci.pow
+| .ofOfRat => ci.ofRat
 
 theorem ComplexConst.interp_equiv (tyVal : TyVal.{u})
   (ci : ComplexInterp (tyVal.later .real) (tyVal.later .complex))

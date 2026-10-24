@@ -470,6 +470,9 @@ partial def updownFunc (s : LamSort) : ReifM (Expr × Expr × Expr × Expr) :=
     | .int =>
       let ty := Expr.const ``Int []
       return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
+    | .rat =>
+      let ty := Expr.const ``Rat []
+      return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
     | .isto0 p =>
       let ty :=
         match p with
@@ -1024,6 +1027,7 @@ def processTypeExpr (e : Expr) : ReifM LamSort := do
   | .const ``Bool [] => return .base .bool
   | .const ``Nat [] => return .base .nat
   | .const ``Int [] => return .base .int
+  | .const ``Rat [] => return .base .rat
   | .const ``String [] => return .base .string
   | .const ``Empty [] => return .base .empty
   | .app (.const ``BitVec []) nExpr =>
@@ -1097,6 +1101,17 @@ def reifMapConstNilLvl : Std.HashMap Name LamTerm :=
     (``Int.le,            .base .ile),
     (``Int.lt,            .base .ilt),
     (`Int.ModEq,          .imodeq),
+    (``Rat.ofInt,         .base .qofInt),
+    (``Rat.ofScientific,  .base .qofScientific),
+    (``Rat.add,           .base .qadd),
+    (``Rat.sub,           .base .qsub),
+    (``Rat.mul,           .base .qmul),
+    (``Rat.div,           .base .qdiv),
+    (``Rat.neg,           .base .qneg),
+    (``Rat.inv,           .base .qinv),
+    (``Rat.abs,           .base .qabs),
+    (``Rat.floor,         .base .qfloor),
+    (``Rat.ceil,          .base .qceil),
     (``String.length,     .base .slength),
     (``String.append,     .base .sapp),
     (``String.isPrefixOf, .base .sprefixof),
@@ -1245,8 +1260,22 @@ def reifMapLam0Arg2NoLit : Std.HashMap (Name × Name) (Expr × LamTerm) :=
     ((``Max.max, ``Nat),         (.const ``Nat.max [], .base .nmax)),
     ((``Max.max, ``Int),         (.const ``Int.max [], .base .imax)),
     ((``Min.min, ``Nat),         (.const ``Nat.min [], .base .nmin)),
-    ((``Min.min, ``Int),         (.const ``Int.min [], .base .imin))
+    ((``Min.min, ``Int),         (.const ``Int.min [], .base .imin)),
+    ((``NatCast.natCast, ``Rat), (.lam `n (.const ``Nat []) (.app (.const ``Rat.ofInt []) (.app (.const ``Int.ofNat []) (.bvar 0))) .default, .qofNat)),
+    ((``IntCast.intCast, ``Rat), (.const ``Rat.ofInt [], .base .qofInt)),
+    ((``Neg.neg, ``Rat),         (.const ``Rat.neg [], .base .qneg)),
+    ((``Inv.inv, ``Rat),         (.const ``Rat.inv [], .base .qinv)),
+    ((``LE.le, ``Rat),           (ratInst ``LE.le ``Rat.instLE, .base .qle)),
+    ((``GE.ge, ``Rat),           (ratInst ``GE.ge ``Rat.instLE, .qge)),
+    ((``LT.lt, ``Rat),           (ratInst ``LT.lt ``Rat.instLT, .base .qlt)),
+    ((``GT.gt, ``Rat),           (ratInst ``GT.gt ``Rat.instLT, .qgt)),
+    ((``Max.max, ``Rat),         (ratInst ``Max.max ``Rat.instMax, .base .qmax)),
+    ((``Min.min, ``Rat),         (ratInst ``Min.min ``Rat.instMin, .base .qmin)),
+    ((``OfScientific.ofScientific, ``Rat), (.const ``Rat.ofScientific [], .base .qofScientific))
   ]
+where
+  /-- `@fn Rat inst` -/
+  ratInst (fn inst : Name) : Expr := mkApp2 (.const fn [.zero]) (.const ``Rat []) (.const inst [])
 
 open LamCstrD in
 /--
@@ -1292,7 +1321,11 @@ def reifMapLam0Arg4NoLit : Std.HashMap (Name × Name × Name) (Expr × LamTerm) 
     ((``HDiv.hDiv, ``Int, ``Int),             (.const ``Int.ediv [], .base .iediv)),
     ((``HMod.hMod, ``Nat, ``Nat),             (.const ``Nat.mod [], .base .nmod)),
     ((``HMod.hMod, ``Int, ``Int),             (.const ``Int.emod [], .base .iemod)),
-    ((``HAppend.hAppend, ``String, ``String), (.const ``String.append [], .base .sapp))
+    ((``HAppend.hAppend, ``String, ``String), (.const ``String.append [], .base .sapp)),
+    ((``HAdd.hAdd, ``Rat, ``Rat),             (.const ``Rat.add [], .base .qadd)),
+    ((``HSub.hSub, ``Rat, ``Rat),             (.const ``Rat.sub [], .base .qsub)),
+    ((``HMul.hMul, ``Rat, ``Rat),             (.const ``Rat.mul [], .base .qmul)),
+    ((``HDiv.hDiv, ``Rat, ``Rat),             (.const ``Rat.div [], .base .qdiv))
   ]
 
 /--
@@ -1387,6 +1420,12 @@ def processLam0Arg3 (e fn arg₁ arg₂ _arg₃ : Expr) : MetaM (Option LamTerm)
         let .lit (.natVal nv) := arg₂
           | throwError "{decl_name%} :: OfNat.ofNat instance is not based on a nat literal"
         return .some (.mkIOfNat (.base (.natVal nv)))
+      return .none
+    | .const ``Rat _ =>
+      if (← Meta.isDefEqD e (.app (.const ``Rat.ofInt []) (.app (.const ``Int.ofNat []) arg₂))) then
+        let .lit (.natVal nv) := arg₂
+          | throwError "{decl_name%} :: OfNat.ofNat instance is not based on a nat literal"
+        return .some (.app (.base .int) (.base .qofInt) (.mkIOfNat (.base (.natVal nv))))
       return .none
     | .app (.const ``BitVec []) nExpr =>
       if let .some n ← Meta.evalNat nExpr then
@@ -1499,8 +1538,32 @@ where
     | .some n => lctx.size - 1 - n
     | .none   => none
 
+/--
+  Recognize `fn arg`, where `fn` and `arg` are term-like expressions, as a form of a later-declared
+    type, e.g. `DFunLike.coe Complex.normSq`. See `LaterInfo.appHeads`
+-/
+def processLaterApp (lctx : Std.HashMap FVarId Nat) (fn arg : Expr) : ReifM (Option LamTerm) := do
+  let laterInfo ← getLaterInfo
+  if laterInfo.appHeads.isEmpty then
+    return .none
+  let isTermLike (e : Expr) : Bool :=
+    match e with
+    | .fvar fid => !lctx.contains fid
+    | .const _ _ => true
+    | _ => false
+  if !isTermLike fn || !isTermLike arg then
+    return .none
+  let fn ← Reif.resolveVal fn
+  let .some c := fn.getAppFn.constName?
+    | return .none
+  if !laterInfo.appHeads.contains c then
+    return .none
+  laterInfo.reifTerm? (.app fn (← Reif.resolveVal arg))
+
 partial def reifTerm (lctx : Std.HashMap FVarId Nat) : Expr → ReifM LamTerm
 | .app fn arg => do
+  if let .some t ← processLaterApp lctx fn arg then
+    return t
   let lamFn ← reifTerm lctx fn
   let lamArg ← reifTerm lctx arg
   let argTy ← Meta.inferType arg
@@ -1558,7 +1621,7 @@ def reifInd (ind : SimpleIndVal) : ReifM (Option IndInfo) := do
   let ⟨name, type, ctors, projs⟩ := ind
   if name == ``Nat || name == ``Int || name == ``Bool ||
      name == ``String || name == ``String.Pos.Raw || name == ``Empty ||
-     name == ``BitVec then
+     name == ``BitVec || name == ``Rat then
     return .none
   -- Later-declared types are treated as builtin types
   if ((← getLaterInfo).laterType? (.const name [])).isSome then

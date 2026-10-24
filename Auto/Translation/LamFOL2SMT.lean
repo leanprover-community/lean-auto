@@ -162,6 +162,8 @@ private def lamBaseSort2SSort : LamBaseSort → SSort
 -- `Nat ≅ {x : Int | x ≥ 0}`
 | .nat    => .app (.symb "Int") #[]
 | .int    => .app (.symb "Int") #[]
+-- `Rat ≅ {x : Real | ∃ n d : Int, d ≥ 1 ∧ x * d = n}`
+| .rat    => .app (.symb "Real") #[]
 | .isto0 p =>
   match p with
   | .xH => .app (.symb "String") #[]
@@ -304,7 +306,18 @@ mutual
       let dname ← disposableName (← sni.suggestNameForSort s)
       addCommand (.defFun false name #[(dname, lamBaseSort2SSort .nat)] (lamBaseSort2SSort .bool) (.qStrApp ">=" #[.bvar 0, .sConst (.num 0)]))
       return some name
-    | .base _b, none => return none -- `_b` is not `.nat`, so the well-formed predicate for `.base _b` is `True`
+    | .base .rat, none =>
+      let name ← h2Symb (.wfPred s) (some "wfRat")
+      let dname ← disposableName (← sni.suggestNameForSort s)
+      let nname ← disposableName "n"
+      let denname ← disposableName "d"
+      -- `∃ n d : Int, d ≥ 1 ∧ x * d = n`, where `x` is `.bvar 2`
+      let body := .existE nname (.app (.symb "Int") #[]) <| .existE denname (.app (.symb "Int") #[]) <|
+        .qStrApp "and" #[.qStrApp ">=" #[.bvar 0, .sConst (.num 1)],
+          .qStrApp "=" #[.qStrApp "*" #[.bvar 2, .qStrApp "to_real" #[.bvar 0]], .qStrApp "to_real" #[.bvar 1]]]
+      addCommand (.defFun false name #[(dname, lamBaseSort2SSort .rat)] (lamBaseSort2SSort .bool) body)
+      return some name
+    | .base _b, none => return none -- `_b` is not `.nat` or `.rat`, so the well-formed predicate for `.base _b` is `True`
     | .base b, some _ => throwError "{decl_name%} :: Unexpected input for defineWFConstraint. {s} can't both be a base type and a datatype"
     | .func _ _, _ => throwError "{decl_name%} :: Unexpected error encountered: defineWFConstraint was given a .func LamSort"
 
@@ -372,13 +385,13 @@ private def bitVec2STerm (n i : Nat) : STerm :=
 private def lamBaseTerm2STerm_Arity3 (arg1 arg2 arg3 : STerm) : LamBaseTerm → TransM LamAtomic STerm
 | .scst .srepall => return .qStrApp "str.replace_all" #[arg1, arg2, arg3]
 -- Decimal literals `OfScientific.ofScientific m s e`
-| .lcst (.real .ofScientific) =>
+| .lcst (.real .ofScientific) | .qcst .qofScientific =>
   match arg1, arg2, arg3 with
   | .sConst (.num m), .qIdApp (.ident (.symb "true")) #[], .sConst (.num e) =>
     return .sConst (.decimal m e)
   | .sConst (.num m), .qIdApp (.ident (.symb "false")) #[], .sConst (.num e) =>
     return .sConst (.decimal (m * 10 ^ e) 0)
-  | _, _, _ => throwError "{decl_name%} :: `OfScientific.ofScientific` with non-literal arguments is not supported"
+  | _, _, _ => return .qStrApp "rofScientific" #[arg1, arg2, arg3]
 | t              => throwError "{decl_name%} :: The arity of {repr t} is not 3"
 
 private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → TransM LamAtomic STerm
@@ -450,15 +463,43 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .lcst (.real .sub) => return .qStrApp "-" #[arg1, arg2]
 | .lcst (.real .mul) => return .qStrApp "*" #[arg1, arg2]
 | .lcst (.real .div) => return .qStrApp "rdiv" #[arg1, arg2]
+| .qcst .qadd => return .qStrApp "+" #[arg1, arg2]
+| .qcst .qsub => return .qStrApp "-" #[arg1, arg2]
+| .qcst .qmul => return .qStrApp "*" #[arg1, arg2]
+| .qcst .qdiv => return .qStrApp "rdiv" #[arg1, arg2]
+| .qcst .qle  => return .qStrApp "<=" #[arg1, arg2]
+| .qcst .qlt  => return .qStrApp "<" #[arg1, arg2]
+| .qcst .qmax => return .qStrApp "ite" #[.qStrApp "<=" #[arg1, arg2], arg2, arg1]
+| .qcst .qmin => return .qStrApp "ite" #[.qStrApp "<=" #[arg1, arg2], arg1, arg2]
 | .lcst (.real .le)  => return .qStrApp "<=" #[arg1, arg2]
 | .lcst (.real .lt)  => return .qStrApp "<" #[arg1, arg2]
 | .lcst (.real .max) => return .qStrApp "ite" #[.qStrApp "<=" #[arg1, arg2], arg2, arg1]
 | .lcst (.real .min) => return .qStrApp "ite" #[.qStrApp "<=" #[arg1, arg2], arg1, arg2]
+-- `x ^ n` is expanded into multiplications if `n` is a (small) literal
+| .lcst (.real .pow) =>
+  match arg2 with
+  | .sConst (.num 0) => return .sConst (.decimal 1 0)
+  | .sConst (.num n) =>
+    if n ≤ 32 then
+      return (List.replicate (n - 1) arg1).foldl (fun acc x => .qStrApp "*" #[acc, x]) arg1
+    else
+      return .qStrApp "rnpow" #[arg1, arg2]
+  | _ => return .qStrApp "rnpow" #[arg1, arg2]
 | .lcst (.complex .add) => return .qStrApp "cadd" #[arg1, arg2]
 | .lcst (.complex .sub) => return .qStrApp "csub" #[arg1, arg2]
 | .lcst (.complex .mul) => return .qStrApp "cmul" #[arg1, arg2]
 | .lcst (.complex .div) => return .qStrApp "cdiv" #[arg1, arg2]
 | .lcst (.complex .mk)  => return .qStrApp "cmk" #[arg1, arg2]
+-- `z ^ n` is expanded into multiplications if `n` is a (small) literal
+| .lcst (.complex .pow) =>
+  match arg2 with
+  | .sConst (.num 0) => return .qStrApp "cone" #[]
+  | .sConst (.num n) =>
+    if n ≤ 32 then
+      return (List.replicate (n - 1) arg1).foldl (fun acc z => .qStrApp "cmul" #[acc, z]) arg1
+    else
+      return .qStrApp "cnpow" #[arg1, arg2]
+  | _ => return .qStrApp "cnpow" #[arg1, arg2]
 | t           => throwError "{decl_name%} :: The arity of {repr t} is not 2"
 
 private def lamBaseTerm2STerm_Arity1 (sni : SMTNamingInfo) (arg : STerm) : LamBaseTerm → TransM LamAtomic STerm
@@ -523,9 +564,18 @@ private def lamBaseTerm2STerm_Arity1 (sni : SMTNamingInfo) (arg : STerm) : LamBa
 | .lcst (.real .inv)     => return .qStrApp "rinv" #[arg]
 | .lcst (.real .ofNat)   => return .qStrApp "to_real" #[arg]
 | .lcst (.real .ofInt)   => return .qStrApp "to_real" #[arg]
+| .qcst .qofInt          => return .qStrApp "to_real" #[arg]
+| .qcst .qneg            => return .qStrApp "-" #[.sConst (.decimal 0 0), arg]
+| .qcst .qinv            => return .qStrApp "rinv" #[arg]
+| .qcst .qabs            => return .qStrApp "ite" #[.qStrApp ">=" #[arg, .sConst (.decimal 0 0)], arg, .qStrApp "-" #[.sConst (.decimal 0 0), arg]]
+| .qcst .qfloor          => return .qStrApp "to_int" #[arg]
+| .qcst .qceil           => return .qStrApp "-" #[int2STerm 0, .qStrApp "to_int" #[.qStrApp "-" #[.sConst (.decimal 0 0), arg]]]
 | .lcst (.real .abs)     => return .qStrApp "ite" #[.qStrApp ">=" #[arg, .sConst (.decimal 0 0)], arg, .qStrApp "-" #[.sConst (.decimal 0 0), arg]]
 | .lcst (.real .floor)   => return .qStrApp "to_int" #[arg]
 | .lcst (.real .ceil)    => return .qStrApp "-" #[int2STerm 0, .qStrApp "to_int" #[.qStrApp "-" #[.sConst (.decimal 0 0), arg]]]
+| .lcst (.real .sqrt)    => return .qStrApp "rsqrt" #[arg]
+-- `Rat` is translated to `Real`
+| .lcst (.real .ofRat)   => return arg
 | .lcst (.complex .neg)    => return .qStrApp "cneg" #[arg]
 | .lcst (.complex .inv)    => return .qStrApp "cinv" #[arg]
 | .lcst (.complex .ofNat)  => return .qStrApp "cofInt" #[arg]
@@ -533,6 +583,11 @@ private def lamBaseTerm2STerm_Arity1 (sni : SMTNamingInfo) (arg : STerm) : LamBa
 | .lcst (.complex .ofReal) => return .qStrApp "cofReal" #[arg]
 | .lcst (.complex .re)     => return .qStrApp "cre" #[arg]
 | .lcst (.complex .im)     => return .qStrApp "cim" #[arg]
+| .lcst (.complex .normSq) => return .qStrApp "cnormSq" #[arg]
+| .lcst (.complex .conj)   => return .qStrApp "cconj" #[arg]
+| .lcst (.complex .norm)   => return .qStrApp "rsqrt" #[.qStrApp "cnormSq" #[arg]]
+-- `Rat` is translated to `Real`
+| .lcst (.complex .ofRat)  => return .qStrApp "cofReal" #[arg]
 | t               => throwError "{decl_name%} :: The arity of {repr t} is not 1"
 where
   solverName : MetaM Solver.SMT.SolverName := do
@@ -613,6 +668,11 @@ def lamQuantified2STerm (sni : SMTNamingInfo) (forall? : Bool) (s : LamSort) (bo
   if s == .base .nat then
     let connective := if forall? then "=>" else "and"
     body' := .qStrApp connective #[.qStrApp ">=" #[.bvar 0, .sConst (.num 0)], body']
+  if s == .base .rat then
+    let connective := if forall? then "=>" else "and"
+    let .some wfRat ← getWFConstraint sni s none
+      | throwError "{decl_name%} :: Unexpected error. The well-formed constraint of `Rat` is not defined"
+    body' := .qStrApp connective #[.qStrApp wfRat #[.bvar 0], body']
   match forall? with
   | true => return .forallE dname s' body'
   | false => return .existE dname s' body'
@@ -791,8 +851,49 @@ def termAuxDecls : Array IR.SMT.Command :=
       (.qStrApp "cmk" #[.qStrApp "rdiv" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "+" #[.qStrApp "*" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "cre" #[.qStrApp "z" #[]]], .qStrApp "*" #[.qStrApp "cim" #[.qStrApp "z" #[]], .qStrApp "cim" #[.qStrApp "z" #[]]]]], .qStrApp "rdiv" #[.qStrApp "-" #[.sConst (.decimal 0 0), .qStrApp "cim" #[.qStrApp "z" #[]]], .qStrApp "+" #[.qStrApp "*" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "cre" #[.qStrApp "z" #[]]], .qStrApp "*" #[.qStrApp "cim" #[.qStrApp "z" #[]], .qStrApp "cim" #[.qStrApp "z" #[]]]]]]),
     .defFun false "cdiv" #[("z", .app (.symb "Complex") #[]), ("w", .app (.symb "Complex") #[])] (.app (.symb "Complex") #[]) (.qStrApp "cmul" #[.qStrApp "z" #[], .qStrApp "cinv" #[.qStrApp "w" #[]]]),
     .defFun false "cofInt" #[("x", .app (.symb "Int") #[])] (.app (.symb "Complex") #[]) (.qStrApp "cmk" #[.qStrApp "to_real" #[.qStrApp "x" #[]], .sConst (.decimal 0 0)]),
-    .defFun false "cofReal" #[("x", .app (.symb "Real") #[])] (.app (.symb "Complex") #[]) (.qStrApp "cmk" #[.qStrApp "x" #[], .sConst (.decimal 0 0)])
+    .defFun false "cofReal" #[("x", .app (.symb "Real") #[])] (.app (.symb "Complex") #[]) (.qStrApp "cmk" #[.qStrApp "x" #[], .sConst (.decimal 0 0)]),
+    .defFun false "cnormSq" #[("z", .app (.symb "Complex") #[])] (.app (.symb "Real") #[])
+      (.qStrApp "+" #[.qStrApp "*" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "cre" #[.qStrApp "z" #[]]], .qStrApp "*" #[.qStrApp "cim" #[.qStrApp "z" #[]], .qStrApp "cim" #[.qStrApp "z" #[]]]]),
+    .defFun false "cconj" #[("z", .app (.symb "Complex") #[])] (.app (.symb "Complex") #[])
+      (.qStrApp "cmk" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "-" #[.sConst (.decimal 0 0), .qStrApp "cim" #[.qStrApp "z" #[]]]])
    ]
+
+/-- `x ^ n` for `x : Real` and `n : Nat`. Note that the second argument is never negative -/
+def rnpowDecl : IR.SMT.Command :=
+  .defFun true "rnpow" #[("x", .app (.symb "Real") #[]), ("n", .app (.symb "Int") #[])] (.app (.symb "Real") #[])
+    (.qStrApp "ite" #[.qStrApp "<=" #[.qStrApp "n" #[], .sConst (.num 0)], .sConst (.decimal 1 0),
+      .qStrApp "*" #[.qStrApp "x" #[], .qStrApp "rnpow" #[.qStrApp "x" #[], .qStrApp "-" #[.qStrApp "n" #[], .sConst (.num 1)]]]])
+
+/--
+  `OfScientific.ofScientific m s e` for `Real` and `Rat` (both translated to `Real`)
+  with non-literal arguments, i.e. `m / 10 ^ e` if `s` and `m * 10 ^ e` otherwise
+-/
+def ofScientificDecls : Array IR.SMT.Command :=
+  let int := SSort.app (.symb "Int") #[]
+  let npow10 (e : STerm) := STerm.qStrApp "npow10" #[e]
+  #[.defFun true "npow10" #[("e", int)] int
+      (.qStrApp "ite" #[.qStrApp "<=" #[.qStrApp "e" #[], .sConst (.num 0)], .sConst (.num 1),
+        .qStrApp "*" #[.sConst (.num 10), npow10 (.qStrApp "-" #[.qStrApp "e" #[], .sConst (.num 1)])]]),
+    .defFun false "rofScientific" #[("m", int), ("s", .app (.symb "Bool") #[]), ("e", int)] (.app (.symb "Real") #[])
+      (.qStrApp "ite" #[.qStrApp "s" #[],
+        .qStrApp "/" #[.qStrApp "to_real" #[.qStrApp "m" #[]], .qStrApp "to_real" #[npow10 (.qStrApp "e" #[])]],
+        .qStrApp "to_real" #[.qStrApp "*" #[.qStrApp "m" #[], npow10 (.qStrApp "e" #[])]]])]
+
+/-- `z ^ n` for `z : Complex` and `n : Nat`. Note that the second argument is never negative -/
+def cnpowDecl : IR.SMT.Command :=
+  .defFun true "cnpow" #[("z", .app (.symb "Complex") #[]), ("n", .app (.symb "Int") #[])] (.app (.symb "Complex") #[])
+    (.qStrApp "ite" #[.qStrApp "<=" #[.qStrApp "n" #[], .sConst (.num 0)], .qStrApp "cone" #[],
+      .qStrApp "cmul" #[.qStrApp "z" #[], .qStrApp "cnpow" #[.qStrApp "z" #[], .qStrApp "-" #[.qStrApp "n" #[], .sConst (.num 1)]]]])
+
+/-- `Real.sqrt`, characterized by `x ≥ 0 → √x ≥ 0 ∧ √x * √x = x` and `x < 0 → √x = 0` -/
+def rsqrtDecls : Array IR.SMT.Command :=
+  let x := STerm.bvar 0
+  let sx := STerm.qStrApp "rsqrt" #[x]
+  #[.declFun "rsqrt" #[.app (.symb "Real") #[]] (.app (.symb "Real") #[]),
+    .assert (.forallE "x" (.app (.symb "Real") #[]) (.qStrApp "and" #[
+      .qStrApp "=>" #[.qStrApp ">=" #[x, .sConst (.decimal 0 0)],
+        .qStrApp "and" #[.qStrApp ">=" #[sx, .sConst (.decimal 0 0)], .qStrApp "=" #[.qStrApp "*" #[sx, sx], x]]],
+      .qStrApp "=>" #[.qStrApp "<" #[x, .sConst (.decimal 0 0)], .qStrApp "=" #[sx, .sConst (.decimal 0 0)]]]))]
 
 /--
   `printFn : (tyValMap : _) → (varValMap : _) → (etomValMap : _) → MetaM α`
@@ -829,9 +930,25 @@ def lamFOL2SMT
   TransM LamAtomic (Array IR.SMT.Command × Array STerm × Array SelectorInfo) := do
   let _ ← sortAuxDecls.mapM addCommand
   let _ ← termAuxDecls.mapM addCommand
+  -- Auxiliary definitions involving quantifiers are only added if they are used,
+  --   because they can change how SMT solvers handle the other problems
+  let lcs := LamExportUtils.collectLamTermsLaterConsts facts
+  if lcs.contains (.real .pow) then
+    addCommand rnpowDecl
+  if lcs.contains (.complex .pow) then
+    addCommand cnpowDecl
+  if lcs.contains (.real .sqrt) || lcs.contains (.complex .norm) then
+    let _ ← rsqrtDecls.mapM addCommand
+  if lcs.contains (.real .ofScientific) || (LamExportUtils.collectLamTermsRatConsts facts).contains .qofScientific then
+    let _ ← ofScientificDecls.mapM addCommand
   let mut compCtorProjs := #[]
   let mut selInfos : Array SelectorInfo := #[]
   for mind in minds do
+    -- SMT datatypes cannot have function-typed fields, so such inductive types are
+    --   translated to uninterpreted sorts instead, e.g. bundled homomorphisms
+    if mind.any (fun ind => ind.ctors.any (fun (s, _) => s.getArgTys.any LamSort.isFunc)) then
+      trace[auto.lamFOL2SMT] "MutualIndInfo {mind} has function-typed fields and is translated to uninterpreted sorts"
+      continue
     let (compCtors, compProjs, mindInfos, mindSelInfos) ← lamMutualIndInfo2STerm sni mind
     trace[auto.lamFOL2SMT] "MutualIndInfo {mind} translated to command {Command.declDtypes mindInfos}"
     trace[auto.lamFOL2SMT] "mindInfos for {mind}: {mindInfos.map (fun x => (x.1, DatatypeDecl.toString x.2.2))}"

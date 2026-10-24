@@ -218,6 +218,14 @@ abbrev LamTerm.ige : LamTerm := .flipApp (.base .ile) (.base .int) (.base .int) 
 
 abbrev LamTerm.igt : LamTerm := .flipApp (.base .ilt) (.base .int) (.base .int) (.base .prop)
 
+abbrev LamTerm.qge : LamTerm := .flipApp (.base .qle) (.base .rat) (.base .rat) (.base .prop)
+
+abbrev LamTerm.qgt : LamTerm := .flipApp (.base .qlt) (.base .rat) (.base .rat) (.base .prop)
+
+/-- `Nat → Rat` as `qofInt ∘ iofNat` -/
+abbrev LamTerm.qofNat : LamTerm :=
+  .lam (.base .nat) (.app (.base .int) (.base .qofInt) (.app (.base .nat) (.base .iofNat) (.bvar 0)))
+
 abbrev LamTerm.imodeq : LamTerm :=
   .lam (.base .int) (.lam (.base .int) (.lam (.base .int) (.app (.base .int) (.app (.base .int) (.base (.eq (.base .int)))
     (.app (.base .int) (.app (.base .int) (.base .iemod) (.bvar 1)) (.bvar 2)))

@@ -112,6 +112,51 @@ def imaxLift.{u} (m n : GLift.{1, u} Int) :=
 def iminLift.{u} (m n : GLift.{1, u} Int) :=
   GLift.up (min m.down n.down)
 
+def qofIntLift.{u} (m : GLift.{1, u} Int) :=
+  GLift.up (Rat.ofInt m.down)
+
+def qofScientificLift.{u} (m : GLift.{1, u} Nat) (s : GLift.{1, u} Bool) (e : GLift.{1, u} Nat) :=
+  GLift.up (Rat.ofScientific m.down s.down e.down)
+
+def qaddLift.{u} (m n : GLift.{1, u} Rat) :=
+  GLift.up (Rat.add m.down n.down)
+
+def qsubLift.{u} (m n : GLift.{1, u} Rat) :=
+  GLift.up (Rat.sub m.down n.down)
+
+def qmulLift.{u} (m n : GLift.{1, u} Rat) :=
+  GLift.up (Rat.mul m.down n.down)
+
+def qdivLift.{u} (m n : GLift.{1, u} Rat) :=
+  GLift.up (Rat.div m.down n.down)
+
+def qnegLift.{u} (m : GLift.{1, u} Rat) :=
+  GLift.up (Rat.neg m.down)
+
+def qinvLift.{u} (m : GLift.{1, u} Rat) :=
+  GLift.up (Rat.inv m.down)
+
+def qleLift.{u} (m n : GLift.{1, u} Rat) :=
+  GLift.up (m.down ≤ n.down)
+
+def qltLift.{u} (m n : GLift.{1, u} Rat) :=
+  GLift.up (m.down < n.down)
+
+def qmaxLift.{u} (m n : GLift.{1, u} Rat) :=
+  GLift.up (max m.down n.down)
+
+def qminLift.{u} (m n : GLift.{1, u} Rat) :=
+  GLift.up (min m.down n.down)
+
+def qabsLift.{u} (m : GLift.{1, u} Rat) :=
+  GLift.up (Rat.abs m.down)
+
+def qfloorLift.{u} (m : GLift.{1, u} Rat) :=
+  GLift.up (Rat.floor m.down)
+
+def qceilLift.{u} (m : GLift.{1, u} Rat) :=
+  GLift.up (Rat.ceil m.down)
+
 def sappLift.{u} (m n : GLift.{1, u} String) :=
   GLift.up (String.append m.down n.down)
 

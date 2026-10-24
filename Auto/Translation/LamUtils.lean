@@ -145,6 +145,15 @@ namespace LamExportUtils
   def collectLamTermsIntConsts (ts : Array LamTerm) : Std.HashSet IntConst :=
     ts.foldl (fun hs t => mergeHashSet hs (collectLamTermIntConsts t)) Std.HashSet.emptyWithCapacity
 
+  def collectLamTermRatConsts : LamTerm → Std.HashSet RatConst
+  | .base (.qcst qc) => Std.HashSet.emptyWithCapacity.insert qc
+  | .lam _ body => collectLamTermRatConsts body
+  | .app _ fn arg => mergeHashSet (collectLamTermRatConsts fn) (collectLamTermRatConsts arg)
+  | _ => Std.HashSet.emptyWithCapacity
+
+  def collectLamTermsRatConsts (ts : Array LamTerm) : Std.HashSet RatConst :=
+    ts.foldl (fun hs t => mergeHashSet hs (collectLamTermRatConsts t)) Std.HashSet.emptyWithCapacity
+
   def collectLamTermStringConsts : LamTerm → Std.HashSet StringConst
   | .base (.scst sc) => Std.HashSet.emptyWithCapacity.insert sc
   | .lam _ body => collectLamTermStringConsts body
@@ -201,6 +210,7 @@ namespace Lam2D
   | .bool    => .const ``Bool []
   | .nat     => .const ``Nat []
   | .int     => .const ``Int []
+  | .rat     => .const ``Rat []
   | .isto0 p =>
     match p with
     | .xH => .const ``String []
@@ -257,6 +267,23 @@ namespace Lam2D
   | .ilt      => return .const ``Int.lt []
   | .imax     => return .const ``Int.max []
   | .imin     => return .const ``Int.min []
+
+  def interpRatConstAsUnlifted : RatConst → CoreM Expr
+  | .qofInt        => return .const ``Rat.ofInt []
+  | .qofScientific => return .const ``Rat.ofScientific []
+  | .qadd          => return .const ``Rat.add []
+  | .qsub          => return .const ``Rat.sub []
+  | .qmul          => return .const ``Rat.mul []
+  | .qdiv          => return .const ``Rat.div []
+  | .qneg          => return .const ``Rat.neg []
+  | .qinv          => return .const ``Rat.inv []
+  | .qle           => return mkApp2 (.const ``LE.le [.zero]) (.const ``Rat []) (.const ``Rat.instLE [])
+  | .qlt           => return mkApp2 (.const ``LT.lt [.zero]) (.const ``Rat []) (.const ``Rat.instLT [])
+  | .qmax          => return mkApp2 (.const ``Max.max [.zero]) (.const ``Rat []) (.const ``Rat.instMax [])
+  | .qmin          => return mkApp2 (.const ``Min.min [.zero]) (.const ``Rat []) (.const ``Rat.instMin [])
+  | .qabs          => return .const ``Rat.abs []
+  | .qfloor        => return .const ``Rat.floor []
+  | .qceil         => return .const ``Rat.ceil []
 
   def interpStringConstAsUnlifted : StringConst → CoreM Expr
   | .strVal s  => return .lit (.strVal s)
@@ -319,16 +346,23 @@ namespace Lam2D
   | .bvsignExtend w v  => return mkApp2 (.const ``BitVec.signExtend []) (.lit (.natVal w)) (.lit (.natVal v))
 
   /--
-    The constant `n` applied to the type arguments `tys`, followed by the synthesized
-      instance arguments, up to the first explicit argument of `n`
+    The constant `n` applied to `args` and to synthesized instance arguments:
+      `args` are used for the non-instance arguments of `n` in order, and the
+      instance arguments are synthesized, up to the first non-instance argument
+      after `args` is used up
   -/
-  def mkConstWithInsts (n : Name) (tys : Array Expr) : MetaM Expr := do
+  def mkConstWithInsts (n : Name) (args : Array Expr) : MetaM Expr := do
     let f ← Meta.mkConstWithFreshMVarLevels n
-    let nImplicit := go (← Meta.inferType f) 0
-    instantiateMVars (← Meta.mkAppOptM' f (tys.map .some ++ .replicate (nImplicit - tys.size) .none))
-  where go : Expr → Nat → Nat
-    | .forallE _ _ b bi, n => if bi.isExplicit then n else go b (n + 1)
-    | _, n => n
+    instantiateMVars (← Meta.mkAppOptM' f (go (← Meta.inferType f) args.toList))
+  where go : Expr → List Expr → Array (Option Expr)
+    | .forallE _ _ b bi, args =>
+      if bi.isInstImplicit then
+        #[.none] ++ go b args
+      else
+        match args with
+        | arg :: args => #[.some arg] ++ go b args
+        | [] => #[]
+    | _, _ => #[]
 
   def interpRealConstAsUnlifted (rc : RealConst) : MetaM Expr := do
     let real := interpLaterTypeAsUnlifted .real
@@ -351,6 +385,9 @@ namespace Lam2D
     | .ofScientific => Meta.mkAppOptM ``OfScientific.ofScientific #[real, .none]
     | .floor => mkConstWithInsts `Int.floor #[real]
     | .ceil => mkConstWithInsts `Int.ceil #[real]
+    | .pow => Meta.mkAppOptM ``HPow.hPow #[real, Expr.const ``Nat [], real, .none]
+    | .sqrt => Meta.mkConstWithFreshMVarLevels `Real.sqrt
+    | .ofRat => mkConstWithInsts `Rat.cast #[real]
 
   def interpComplexConstAsUnlifted (cc : ComplexConst) : MetaM Expr := do
     let complex := interpLaterTypeAsUnlifted .complex
@@ -370,6 +407,12 @@ namespace Lam2D
     | .re => Meta.mkConstWithFreshMVarLevels `Complex.re
     | .im => Meta.mkConstWithFreshMVarLevels `Complex.im
     | .mk => Meta.mkConstWithFreshMVarLevels `Complex.mk
+    -- `normSq` and `conj` are bundled homomorphisms applied through `DFunLike.coe`
+    | .normSq => do Meta.mkAppM `DFunLike.coe #[← Meta.mkConstWithFreshMVarLevels `Complex.normSq]
+    | .conj => do Meta.mkAppM `DFunLike.coe #[← mkConstWithInsts `starRingEnd #[complex]]
+    | .norm => Meta.mkAppOptM `Norm.norm #[complex, .none]
+    | .pow => Meta.mkAppOptM ``HPow.hPow #[complex, Expr.const ``Nat [], complex, .none]
+    | .ofRat => mkConstWithInsts `Rat.cast #[complex]
 
   def interpLaterConstAsUnlifted : LaterConst → MetaM Expr
   | .real rc => interpRealConstAsUnlifted rc
@@ -409,6 +452,7 @@ namespace Lam2D
   | .bcst bc    => Lam2D.interpBoolConstAsUnlifted bc
   | .ncst nc    => Lam2D.interpNatConstAsUnlifted nc
   | .icst ic    => Lam2D.interpIntConstAsUnlifted ic
+  | .qcst qc    => Lam2D.interpRatConstAsUnlifted qc
   | .scst sc    => Lam2D.interpStringConstAsUnlifted sc
   | .bvcst bvc  => Lam2D.interpBitVecConstAsUnlifted bvc
   | .ocst oc    => interpOtherConstAsUnlifted tyVal oc

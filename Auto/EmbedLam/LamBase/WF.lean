@@ -209,6 +209,15 @@ def LamWF.ofIge : LamWF ltv ⟨lctx, LamTerm.ige, .func (.base .int) (.func (.ba
 def LamWF.ofIgt : LamWF ltv ⟨lctx, LamTerm.igt, .func (.base .int) (.func (.base .int) (.base .prop))⟩ :=
   .flipApp (.ofBase .ofIlt)
 
+def LamWF.ofQge : LamWF ltv ⟨lctx, LamTerm.qge, .func (.base .rat) (.func (.base .rat) (.base .prop))⟩ :=
+  .flipApp (.ofBase .ofQle)
+
+def LamWF.ofQgt : LamWF ltv ⟨lctx, LamTerm.qgt, .func (.base .rat) (.func (.base .rat) (.base .prop))⟩ :=
+  .flipApp (.ofBase .ofQlt)
+
+def LamWF.ofQofNat : LamWF ltv ⟨lctx, LamTerm.qofNat, .func (.base .nat) (.base .rat)⟩ :=
+  .ofLam _ (.ofApp _ (.ofBase .ofQOfInt) (.ofApp _ (.ofBase .ofIOfNat) (.ofBVar 0)))
+
 def LamWF.ofSge : LamWF ltv ⟨lctx, LamTerm.sge, .func (.base .string) (.func (.base .string) (.base .prop))⟩ :=
   .flipApp (.ofBase .ofSle)
 

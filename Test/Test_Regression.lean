@@ -799,7 +799,7 @@ section NativeReal
   set_option auto.native false
 
   -- Stand-ins for Mathlib's `FloorRing`, `Int.floor`, `Int.ceil` and `abs`,
-  --   with the same shape of arguments
+  --   and Batteries' `RatCast` and `Rat.cast`, with the same shape of arguments
   class _root_.FloorRing (α : Type) where
     floor : α → Int
     ceil : α → Int
@@ -808,8 +808,14 @@ section NativeReal
   def _root_.Int.ceil {α : Type} [FloorRing α] : α → Int := FloorRing.ceil
   def _root_.abs {α : Type} [Max α] [Neg α] (a : α) : α := max a (-a)
 
+  class _root_.RatCast (K : Type) where
+    ratCast : Rat → K
+
+  @[reducible] def _root_.Rat.cast {K : Type} [RatCast K] : Rat → K := RatCast.ratCast
+
   structure _root_.Real where
     val : Rat
+  deriving Inhabited
 
   namespace Real
 
@@ -823,6 +829,9 @@ section NativeReal
   @[irreducible] private def le (x y : Real) : Prop := x.val ≤ y.val
   @[irreducible] private def sup (x y : Real) : Real := ⟨max x.val y.val⟩
   @[irreducible] private def inf (x y : Real) : Real := ⟨min x.val y.val⟩
+
+  -- Mathlib's `Real.sqrt` is irreducible
+  opaque sqrt : Real → Real
 
   instance : Zero Real := ⟨zero⟩
   instance : One Real := ⟨one⟩
@@ -841,6 +850,8 @@ section NativeReal
   instance : Min Real := ⟨inf⟩
   instance : OfScientific Real := ⟨fun m s e => ⟨OfScientific.ofScientific m s e⟩⟩
   instance : FloorRing Real := ⟨fun x => x.val.floor, fun x => x.val.ceil⟩
+  instance : Pow Real Nat := ⟨fun x n => ⟨x.val ^ n⟩⟩
+  instance : RatCast Real := ⟨fun q => ⟨q⟩⟩
 
   end Real
 
@@ -911,6 +922,33 @@ section NativeReal
     fail_if_success auto []
     contradiction
 
+  -- Powers, expanded into multiplications for literal exponents
+  example (x y : Real) : x ^ 2 ≥ 0 ∧ (x + y) ^ 2 = x ^ 2 + 2 * x * y + y ^ 2 ∧ x ^ 0 = 1 ∧ x ^ 1 = x := by auto
+
+  example (x : Real) (n : Nat) (h : x ^ n = 0) : x ^ (n + 1) = 0 := by auto [h]
+
+  example (x : Real) (h : False) : x ^ 2 = x := by
+    fail_if_success auto []
+    contradiction
+
+  -- `Real.sqrt`, with `Real.sqrt x = 0` for `x < 0`
+  example (x : Real) (h : x ≥ 0) : Real.sqrt x * Real.sqrt x = x ∧ Real.sqrt x ≥ 0 := by auto [h]
+
+  example : Real.sqrt 4 = 2 ∧ Real.sqrt (-1) = 0 := by auto
+
+  example (x : Real) (h : False) : Real.sqrt x * Real.sqrt x = x := by
+    fail_if_success auto []
+    contradiction
+
+  -- `Rat.cast`
+  example (q : Rat) :
+    (Rat.cast q : Real) + 1 = Rat.cast (q + 1) ∧ (Rat.cast (1.5 : Rat) : Real) = 1.5 ∧
+    (Rat.cast q : Real) ≤ Rat.cast (q + 1) := by auto
+
+  example (q : Rat) (h : False) : (Rat.cast q : Real) = Rat.cast (q + 1) := by
+    fail_if_success auto []
+    contradiction
+
 end NativeReal
 
 
@@ -928,6 +966,32 @@ section NativeComplex
   set_option auto.tptp false
   set_option auto.native false
 
+  -- Stand-ins for Mathlib's `DFunLike`, bundled homomorphisms, `Star`, `starRingEnd` and `Norm`,
+  --   with the same shape of arguments
+  class _root_.DFunLike (F : Sort _) (α : outParam (Sort _)) (β : outParam (α → Sort _)) where
+    coe : F → ∀ a : α, β a
+
+  instance (priority := 100) {F α β} [DFunLike F α fun _ => β] : CoeFun F (fun _ => α → β) where
+    coe := @DFunLike.coe _ _ _ _
+
+  structure _root_.MonoidWithZeroHom (M N : Type) where
+    toFun : M → N
+
+  instance {M N : Type} : DFunLike (MonoidWithZeroHom M N) M (fun _ => N) := ⟨MonoidWithZeroHom.toFun⟩
+
+  structure _root_.RingHom (M N : Type) where
+    toFun : M → N
+
+  instance {M N : Type} : DFunLike (RingHom M N) M (fun _ => N) := ⟨RingHom.toFun⟩
+
+  class _root_.Star (R : Type) where
+    star : R → R
+
+  def _root_.starRingEnd (R : Type) [Star R] : RingHom R R := ⟨Star.star⟩
+
+  class _root_.Norm (E : Type) where
+    norm : E → Real
+
   structure _root_.Complex where
     re : Real
     im : Real
@@ -944,13 +1008,18 @@ section NativeComplex
   instance : Sub Complex := ⟨fun z w => ⟨z.re - w.re, z.im - w.im⟩⟩
   instance : Mul Complex := ⟨fun z w => ⟨z.re * w.re - z.im * w.im, z.re * w.im + z.im * w.re⟩⟩
 
-  def normSq (z : Complex) : Real := z.re * z.re + z.im * z.im
+  -- Mathlib's `normSq` is a bundled homomorphism
+  def normSq : MonoidWithZeroHom Complex Real := ⟨fun z => z.re * z.re + z.im * z.im⟩
 
   instance : Inv Complex := ⟨fun z => ⟨z.re / normSq z, -z.im / normSq z⟩⟩
   instance : Div Complex := ⟨fun z w => z * w⁻¹⟩
   instance : NatCast Complex := ⟨fun n => ofReal n⟩
   instance : IntCast Complex := ⟨fun n => ofReal n⟩
   instance (priority := 100) (n : Nat) : OfNat Complex n := ⟨Nat.cast (OfNat.ofNat n)⟩
+  instance : Star Complex := ⟨fun z => ⟨z.re, -z.im⟩⟩
+  instance : Norm Complex := ⟨fun z => Real.sqrt (normSq z)⟩
+  instance : Pow Complex Nat := ⟨fun z n => Nat.rec 1 (fun _ w => w * z) n⟩
+  instance : RatCast Complex := ⟨fun q => ofReal (Rat.cast q)⟩
 
   def I : Complex := ⟨0, 1⟩
 
@@ -980,6 +1049,71 @@ section NativeComplex
   example (z : Complex) : Complex.mk z.re z.im = z := by auto
 
 end NativeComplex
+
+
+-- `Rat` (a builtin type, like `Nat` and `Int`)
+section Rat
+
+  /-
+    SMT solvers do not have rationals, so `Rat` is translated to `Real`
+    with the well-formed constraint `∃ n d : Int, d ≥ 1 ∧ x * d = n`
+  -/
+
+  -- Use smt solver to test correctness of translation
+  set_option auto.smt true
+  set_option auto.smt.trust true
+  set_option auto.tptp false
+  set_option auto.native false
+
+  example (x y : Rat) : x + y = y + x ∧ x * y = y * x ∧ x - y = x + -y := by auto
+
+  -- `x / 0 = 0` and `0⁻¹ = 0`
+  example (x : Rat) : x / 0 = 0 ∧ (0 : Rat)⁻¹ = 0 := by auto
+
+  example (x : Rat) (h : x ≠ 0) : x * x⁻¹ = 1 := by auto [h]
+
+  -- Numerals and decimal literals
+  example : (3 : Rat) = 1 + 2 ∧ (1.5 : Rat) + 0.5 = 2 ∧ (0.25 : Rat) * 4 = 1 := by auto
+
+  example (h : False) : (2.5 : Rat) = 250 := by
+    fail_if_success auto []
+    contradiction
+
+  -- Casts
+  example (n : Nat) (k : Int) : (n : Rat) ≥ 0 ∧ ((k + 1 : Int) : Rat) = (k : Rat) + 1 := by auto
+
+  example (k : Int) (h : False) : (k : Rat) ≥ 0 := by
+    fail_if_success auto []
+    contradiction
+
+  -- Order
+  example (x y : Rat) : (x ≥ y ↔ y ≤ x) ∧ max x y ≥ x ∧ min x y ≤ y ∧ Rat.abs x ≥ 0 := by auto
+
+  example (x : Rat) (h : False) : x < x := by
+    fail_if_success auto []
+    contradiction
+
+  example (x : Rat) :
+    Rat.floor x ≤ Rat.floor (x + 1) ∧ Rat.floor (2.5 : Rat) = 2 ∧ Rat.ceil (2.5 : Rat) = 3 := by auto
+
+  example (h : False) : Rat.ceil (2.5 : Rat) = 2 := by
+    fail_if_success auto []
+    contradiction
+
+  example (h : False) : Rat.floor (-2.5 : Rat) = -2 := by
+    fail_if_success auto []
+    contradiction
+
+  -- Rationality is respected, although both hold for `Real`
+  example (h : False) : ∃ x : Rat, x * x = 2 := by
+    fail_if_success auto []
+    contradiction
+
+  example (h : False) (h₁ : ∀ x : Rat, x * x ≠ 2) : False := by
+    fail_if_success auto [h₁]
+    contradiction
+
+end Rat
 
 
 -- Issues
