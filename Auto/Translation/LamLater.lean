@@ -2,6 +2,7 @@ module
 
 public import Lean
 public import Auto.Translation.LamUtils
+public import Auto.EmbedLam.LamBVarOp
 
 public section
 
@@ -46,7 +47,8 @@ def LaterType.enabled (t : LaterType) (opts : Options) : Bool := t.option.get op
 
 /-- Constants of `t`, in the order of the fields of the un-lifted interpretation of `t` -/
 def LaterType.consts : LaterType → Array LaterConst
-| .real    => #[.zero, .one, .add, .sub, .mul, .div, .neg, .inv, .ofNat, .ofInt].map .real
+| .real    => #[.zero, .one, .add, .sub, .mul, .div, .neg, .inv, .ofNat, .ofInt,
+               .le, .lt, .max, .min, .abs, .ofScientific, .floor, .ceil].map .real
 | .complex => #[.zero, .one, .I, .add, .sub, .mul, .div, .neg, .inv, .ofNat, .ofInt,
                .ofReal, .re, .im, .mk].map .complex
 
@@ -54,6 +56,20 @@ def LaterType.consts : LaterType → Array LaterConst
 def LaterType.numerals : LaterType → LaterConst × LaterConst × LaterConst
 | .real    => (.real .zero, .real .one, .real .ofNat)
 | .complex => (.complex .zero, .complex .one, .complex .ofNat)
+
+/--
+  Forms of `t` that are recognized as terms built from the constants of `t`, e.g.
+    `GE.ge Real _` as `λ x y, (.real .le) y x`. Each is a canonical form (whose
+    construction may fail) and the term it is recognized as
+-/
+def LaterType.derivedForms : LaterType → Array (MetaM Expr × LamTerm)
+| .real =>
+  let real := Lam2D.interpLaterTypeAsUnlifted .real
+  let s : LamSort := .base .real
+  let flip (lc : LaterConst) : LamTerm := .lam s (.lam s (.app s (.app s (.base (.lcst lc)) (.bvar 0)) (.bvar 1)))
+  #[(Meta.mkAppOptM ``GE.ge #[real, .none], flip (.real .le)),
+    (Meta.mkAppOptM ``GT.gt #[real, .none], flip (.real .lt))]
+| .complex => #[]
 
 /-- Un-lifted interpretation of the constants of `t`, given their canonical forms -/
 def LaterType.mkInterp (t : LaterType) (canons : Array Expr) : Expr :=
@@ -71,6 +87,13 @@ end Auto.Embedding.Lam
 namespace Auto.LamLater
 
 open Embedding Embedding.Lam
+
+/-- A form recognized as `term` if it is definitionally equal to `canon`, whose type is `type` -/
+structure LaterForm where
+  canon : Expr
+  type  : Expr
+  term  : LamTerm
+deriving Inhabited
 
 /--
   Later-declared types (e.g. Mathlib's `Real`) and their constants, recognized
@@ -93,10 +116,11 @@ structure LaterInfo where
   /-- Canonical form and type of each constant of the recognized later-declared types -/
   consts  : Std.HashMap LaterConst (Expr × Expr) := {}
   /--
-    Head constants of the canonical forms and of their δ-unfoldings, e.g.
-    `HAdd.hAdd`, `Add.add` and the (private) `Real.add` for `.real .add`
+    Recognized forms, indexed by the head constants of their canonical forms and of the
+    δ-unfoldings of the canonical forms, e.g. `HAdd.hAdd`, `Add.add` and the (private)
+    `Real.add` for `.real .add`
   -/
-  index   : Std.HashMap Name (Array LaterConst)  := {}
+  index   : Std.HashMap Name (Array LaterForm)   := {}
 deriving Inhabited
 
 /-- The recognized later-declared type whose Lean type is `e` -/
@@ -154,12 +178,27 @@ private def LaterInfo.add (li : LaterInfo) (t : LaterType) : MetaM LaterInfo := 
       | return li
     canons := canons.push e
   let mut li := { li with types := li.types.insert t ty, interps := li.interps.insert t (t.mkInterp canons) }
-  let mut heads := #[]
+  let mut forms := #[]
   for (lc, e) in t.consts.zip canons do
-    li := { li with consts := li.consts.insert lc (e, ← instantiateMVars (← Meta.inferType e)) }
-    for c in ← headChain e do
-      li := { li with index := li.index.insert c ((li.index.getD c #[]).push lc) }
-      heads := heads.push (c, lc.reprAux)
+    let eTy ← instantiateMVars (← Meta.inferType e)
+    li := { li with consts := li.consts.insert lc (e, eTy) }
+    forms := forms.push (⟨e, eTy, .base (.lcst lc)⟩, lc.reprAux)
+  for (mkCanon, term) in t.derivedForms do
+    let e? : Option Expr ← try pure (.some (← mkCanon)) catch err => do
+      trace[auto.lamLater] "{decl_name%} :: Cannot construct the canonical form of `{toString term}` for `{ty}`: {err.toMessageData}"
+      pure .none
+    let .some e := e?
+      | continue
+    -- The canonical form must be definitionally equal to the interpretation of `term`
+    if !(← Meta.withNewMCtxDepth <| Meta.isDefEqD e (← Lam2D.interpLamTermAsUnlifted {} {} {} 0 term)) then
+      trace[auto.lamLater] "{decl_name%} :: `{e}` is not definitionally equal to the interpretation of `{toString term}`, ignored"
+      continue
+    forms := forms.push (⟨e, ← instantiateMVars (← Meta.inferType e), term⟩, toString term)
+  let mut heads := #[]
+  for (form, name) in forms do
+    for c in ← headChain form.canon do
+      li := { li with index := li.index.insert c ((li.index.getD c #[]).push form) }
+      heads := heads.push (c, name)
   trace[auto.lamLater] "Recognized `{ty}`. Head constants of canonical forms: {heads}"
   return li
 
@@ -168,8 +207,8 @@ def LaterInfo.init : MetaM LaterInfo :=
   LaterType.all.foldlM LaterInfo.add {}
 
 /--
-  Reify `e` as a constant of a recognized later-declared type (or a numeral) if `e` is
-    definitionally equal to the canonical form of the constant. See `LaterInfo`
+  Reify `e` as a constant of a recognized later-declared type (or a numeral, or a derived
+    form) if `e` is definitionally equal to the corresponding canonical form. See `LaterInfo`
 -/
 def LaterInfo.reifTerm? (li : LaterInfo) (e : Expr) : MetaM (Option LamTerm) := do
   let .some c := e.getAppFn.constName?
@@ -196,14 +235,12 @@ def LaterInfo.reifTerm? (li : LaterInfo) (e : Expr) : MetaM (Option LamTerm) := 
     if ← isDefEqCanon canon then
       return .some res
     return .none
-  let .some lcs := li.index.get? c
+  let .some forms := li.index.get? c
     | return .none
   let ty ← instantiateMVars (← Meta.inferType e)
-  for lc in lcs do
-    let .some (canon, canonTy) := li.consts.get? lc
-      | continue
-    if ty == canonTy && (← isDefEqCanon canon) then
-      return .some (.base (.lcst lc))
+  for form in forms do
+    if ty == form.type && (← isDefEqCanon form.canon) then
+      return .some form.term
   return .none
 
 /--

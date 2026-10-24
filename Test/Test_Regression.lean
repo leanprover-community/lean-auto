@@ -798,6 +798,16 @@ section NativeReal
   set_option auto.tptp false
   set_option auto.native false
 
+  -- Stand-ins for Mathlib's `FloorRing`, `Int.floor`, `Int.ceil` and `abs`,
+  --   with the same shape of arguments
+  class _root_.FloorRing (α : Type) where
+    floor : α → Int
+    ceil : α → Int
+
+  def _root_.Int.floor {α : Type} [FloorRing α] : α → Int := FloorRing.floor
+  def _root_.Int.ceil {α : Type} [FloorRing α] : α → Int := FloorRing.ceil
+  def _root_.abs {α : Type} [Max α] [Neg α] (a : α) : α := max a (-a)
+
   structure _root_.Real where
     val : Rat
 
@@ -809,6 +819,10 @@ section NativeReal
   @[irreducible] private def neg (x : Real) : Real := ⟨-x.val⟩
   @[irreducible] private def mul (x y : Real) : Real := ⟨x.val * y.val⟩
   @[irreducible] private def inv' (x : Real) : Real := ⟨x.val⁻¹⟩
+  @[irreducible] private def lt (x y : Real) : Prop := x.val < y.val
+  @[irreducible] private def le (x y : Real) : Prop := x.val ≤ y.val
+  @[irreducible] private def sup (x y : Real) : Real := ⟨max x.val y.val⟩
+  @[irreducible] private def inf (x y : Real) : Real := ⟨min x.val y.val⟩
 
   instance : Zero Real := ⟨zero⟩
   instance : One Real := ⟨one⟩
@@ -820,6 +834,13 @@ section NativeReal
   instance : Div Real := ⟨fun a b => a * b⁻¹⟩
   instance : NatCast Real := ⟨fun n => ⟨n⟩⟩
   instance : IntCast Real := ⟨fun z => ⟨z⟩⟩
+  instance (priority := 100) (n : Nat) : OfNat Real n := ⟨Nat.cast (OfNat.ofNat n)⟩
+  instance : LT Real := ⟨lt⟩
+  instance : LE Real := ⟨le⟩
+  instance : Max Real := ⟨sup⟩
+  instance : Min Real := ⟨inf⟩
+  instance : OfScientific Real := ⟨fun m s e => ⟨OfScientific.ofScientific m s e⟩⟩
+  instance : FloorRing Real := ⟨fun x => x.val.floor, fun x => x.val.ceil⟩
 
   end Real
 
@@ -830,11 +851,11 @@ section NativeReal
   -- Lean's `x / 0 = 0` and `0⁻¹ = 0`, which do not hold for SMT-LIB's `/`
   example (x : Real) : x / 0 = 0 ∧ (0 : Real)⁻¹ = 0 := by auto
 
-  example (x y : Real) (h : x + y = x * y) : y + x = Real.add y x := by auto [h]
+  example (x y : Real) : y + x = Real.add x y := by auto
 
   example (x y : Real) (h : -x = y⁻¹) : y⁻¹ = -x := by auto [h]
 
-  example (x y : Real) (h : ∀ a b : Real, a * b = b * a) : x * y = y * x := by auto [h]
+  example (x y : Real) : x * y = y * x := by auto
 
   example (f : Real → Real) (y z : Real) (h : ∀ x, f x = x + x) : f (y * z) = y * z + y * z := by auto [h]
 
@@ -844,7 +865,121 @@ section NativeReal
   example (n : Nat) (x : Real) (h₁ : n * n = n + n) (h₂ : x * x = x + x) :
     n + n = n * n ∧ x + x = x * x := by auto [h₁, h₂]
 
+  -- Order
+  example (x y z : Real) (h₁ : x ≤ y) (h₂ : y < z) : x < z ∧ ¬ z ≤ x := by auto [h₁, h₂]
+
+  example (x y : Real) (h₁ : x ≤ y) (h₂ : x ≠ y) : x < y := by
+    fail_if_success auto [h₁]
+    auto [h₁, h₂]
+
+  example (x y : Real) (h : Real.lt x y) : x ≤ y := by auto [h]
+
+  example (x : Real) (h : False) : x < x := by
+    fail_if_success auto []
+    contradiction
+
+  -- `≥` and `>` are recognized as flipped `≤` and `<`
+  example (x y : Real) : (x ≥ y ↔ y ≤ x) ∧ (x > y ↔ y < x) := by auto
+
+  example (x y : Real) (h : False) : (x ≥ y ↔ x ≤ y) := by
+    fail_if_success auto []
+    contradiction
+
+  example (x y : Real) : max x y ≥ x ∧ min x y ≤ y ∧ abs x ≥ 0 ∧ abs (-x) = abs x := by auto
+
+  example (x y : Real) (h : False) : max x y ≤ x := by
+    fail_if_success auto []
+    contradiction
+
+  example (h : False) : abs (-1 : Real) = -1 := by
+    fail_if_success auto []
+    contradiction
+
+  -- Decimal literals
+  example : (1.5 : Real) + 0.5 = 2 ∧ (0.25 : Real) * 4 = 1 ∧ (2.5e2 : Real) = 250 := by auto
+
+  example (h : False) : (2.5 : Real) = 1.5 + 1.5 := by
+    fail_if_success auto []
+    contradiction
+
+  example (x : Real) :
+    Int.floor x ≤ Int.floor (x + 1) ∧ ((Int.floor x : Int) : Real) ≤ x ∧ x ≤ ((Int.ceil x : Int) : Real) := by auto
+
+  example : Int.floor (2.5 : Real) = 2 ∧ Int.ceil (2.5 : Real) = 3 ∧ Int.floor (-2.5 : Real) = -3 := by auto
+
+  example (h : False) : Int.floor (-2.5 : Real) = -2 := by
+    fail_if_success auto []
+    contradiction
+
 end NativeReal
+
+
+-- Handling of `Complex` (a `LaterType` that depends on `Real`)
+section NativeComplex
+
+  /-
+    Uses the stand-in `Real` of section `NativeReal`, and a stand-in `Complex`
+    mirroring `Mathlib/Basic/Complex/Basic.lean`
+  -/
+
+  -- Use smt solver to test correctness of translation
+  set_option auto.smt true
+  set_option auto.smt.trust true
+  set_option auto.tptp false
+  set_option auto.native false
+
+  structure _root_.Complex where
+    re : Real
+    im : Real
+
+  namespace Complex
+
+  def ofReal (r : Real) : Complex := ⟨r, 0⟩
+
+  instance : Coe Real Complex := ⟨ofReal⟩
+  instance : Zero Complex := ⟨ofReal 0⟩
+  instance : One Complex := ⟨ofReal 1⟩
+  instance : Add Complex := ⟨fun z w => ⟨z.re + w.re, z.im + w.im⟩⟩
+  instance : Neg Complex := ⟨fun z => ⟨-z.re, -z.im⟩⟩
+  instance : Sub Complex := ⟨fun z w => ⟨z.re - w.re, z.im - w.im⟩⟩
+  instance : Mul Complex := ⟨fun z w => ⟨z.re * w.re - z.im * w.im, z.re * w.im + z.im * w.re⟩⟩
+
+  def normSq (z : Complex) : Real := z.re * z.re + z.im * z.im
+
+  instance : Inv Complex := ⟨fun z => ⟨z.re / normSq z, -z.im / normSq z⟩⟩
+  instance : Div Complex := ⟨fun z w => z * w⁻¹⟩
+  instance : NatCast Complex := ⟨fun n => ofReal n⟩
+  instance : IntCast Complex := ⟨fun n => ofReal n⟩
+  instance (priority := 100) (n : Nat) : OfNat Complex n := ⟨Nat.cast (OfNat.ofNat n)⟩
+
+  def I : Complex := ⟨0, 1⟩
+
+  end Complex
+
+  example (z w : Complex) (h : z = 1 * w) : z = 1 * w := by
+    fail_if_success auto []
+    exact h
+
+  -- Lean's `z / 0 = 0` and `0⁻¹ = 0`
+  example (z : Complex) : z / 0 = 0 ∧ (0 : Complex)⁻¹ = 0 := by auto
+
+  example (z w : Complex) : z + w = w + z ∧ z * w = w * z ∧ z - w = z + -w := by auto
+
+  example : Complex.I * Complex.I = -1 := by auto
+
+  example (z : Complex) (h : z ≠ 0) : z * z⁻¹ = 1 := by auto [h]
+
+  example (n : Nat) (k : Int) : (2 : Complex) = 1 + 1 ∧ (n : Complex) = ((n : Real) : Complex) ∧
+    (k : Complex) = ((k : Real) : Complex) := by auto
+
+  -- Conversions between `Real` and `Complex`
+  example (x y : Real) (z w : Complex) :
+    (x : Complex).re = x ∧ (x : Complex).im = 0 ∧ (z * w).re = z.re * w.re - z.im * w.im ∧
+    ((x * y : Real) : Complex) = (x : Complex) * (y : Complex) := by auto
+
+  example (z : Complex) : Complex.mk z.re z.im = z := by auto
+
+end NativeComplex
 
 
 -- Issues

@@ -371,6 +371,14 @@ private def bitVec2STerm (n i : Nat) : STerm :=
 
 private def lamBaseTerm2STerm_Arity3 (arg1 arg2 arg3 : STerm) : LamBaseTerm → TransM LamAtomic STerm
 | .scst .srepall => return .qStrApp "str.replace_all" #[arg1, arg2, arg3]
+-- Decimal literals `OfScientific.ofScientific m s e`
+| .lcst (.real .ofScientific) =>
+  match arg1, arg2, arg3 with
+  | .sConst (.num m), .qIdApp (.ident (.symb "true")) #[], .sConst (.num e) =>
+    return .sConst (.decimal m e)
+  | .sConst (.num m), .qIdApp (.ident (.symb "false")) #[], .sConst (.num e) =>
+    return .sConst (.decimal (m * 10 ^ e) 0)
+  | _, _, _ => throwError "{decl_name%} :: `OfScientific.ofScientific` with non-literal arguments is not supported"
 | t              => throwError "{decl_name%} :: The arity of {repr t} is not 3"
 
 private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → TransM LamAtomic STerm
@@ -442,6 +450,10 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .lcst (.real .sub) => return .qStrApp "-" #[arg1, arg2]
 | .lcst (.real .mul) => return .qStrApp "*" #[arg1, arg2]
 | .lcst (.real .div) => return .qStrApp "rdiv" #[arg1, arg2]
+| .lcst (.real .le)  => return .qStrApp "<=" #[arg1, arg2]
+| .lcst (.real .lt)  => return .qStrApp "<" #[arg1, arg2]
+| .lcst (.real .max) => return .qStrApp "ite" #[.qStrApp "<=" #[arg1, arg2], arg2, arg1]
+| .lcst (.real .min) => return .qStrApp "ite" #[.qStrApp "<=" #[arg1, arg2], arg1, arg2]
 | .lcst (.complex .add) => return .qStrApp "cadd" #[arg1, arg2]
 | .lcst (.complex .sub) => return .qStrApp "csub" #[arg1, arg2]
 | .lcst (.complex .mul) => return .qStrApp "cmul" #[arg1, arg2]
@@ -511,6 +523,9 @@ private def lamBaseTerm2STerm_Arity1 (sni : SMTNamingInfo) (arg : STerm) : LamBa
 | .lcst (.real .inv)     => return .qStrApp "rinv" #[arg]
 | .lcst (.real .ofNat)   => return .qStrApp "to_real" #[arg]
 | .lcst (.real .ofInt)   => return .qStrApp "to_real" #[arg]
+| .lcst (.real .abs)     => return .qStrApp "ite" #[.qStrApp ">=" #[arg, .sConst (.decimal 0 0)], arg, .qStrApp "-" #[.sConst (.decimal 0 0), arg]]
+| .lcst (.real .floor)   => return .qStrApp "to_int" #[arg]
+| .lcst (.real .ceil)    => return .qStrApp "-" #[int2STerm 0, .qStrApp "to_int" #[.qStrApp "-" #[.sConst (.decimal 0 0), arg]]]
 | .lcst (.complex .neg)    => return .qStrApp "cneg" #[arg]
 | .lcst (.complex .inv)    => return .qStrApp "cinv" #[arg]
 | .lcst (.complex .ofNat)  => return .qStrApp "cofInt" #[arg]

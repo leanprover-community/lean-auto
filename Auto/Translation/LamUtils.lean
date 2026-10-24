@@ -318,6 +318,18 @@ namespace Lam2D
   | .bvzeroExtend w v  => return mkApp2 (.const ``BitVec.zeroExtend []) (.lit (.natVal w)) (.lit (.natVal v))
   | .bvsignExtend w v  => return mkApp2 (.const ``BitVec.signExtend []) (.lit (.natVal w)) (.lit (.natVal v))
 
+  /--
+    The constant `n` applied to the type arguments `tys`, followed by the synthesized
+      instance arguments, up to the first explicit argument of `n`
+  -/
+  def mkConstWithInsts (n : Name) (tys : Array Expr) : MetaM Expr := do
+    let f ← Meta.mkConstWithFreshMVarLevels n
+    let nImplicit := go (← Meta.inferType f) 0
+    instantiateMVars (← Meta.mkAppOptM' f (tys.map .some ++ .replicate (nImplicit - tys.size) .none))
+  where go : Expr → Nat → Nat
+    | .forallE _ _ b bi, n => if bi.isExplicit then n else go b (n + 1)
+    | _, n => n
+
   def interpRealConstAsUnlifted (rc : RealConst) : MetaM Expr := do
     let real := interpLaterTypeAsUnlifted .real
     match rc with
@@ -331,6 +343,14 @@ namespace Lam2D
     | .inv => Meta.mkAppOptM ``Inv.inv #[real, .none]
     | .ofNat => Meta.mkAppOptM ``Nat.cast #[real, .none]
     | .ofInt => Meta.mkAppOptM ``Int.cast #[real, .none]
+    | .le => Meta.mkAppOptM ``LE.le #[real, .none]
+    | .lt => Meta.mkAppOptM ``LT.lt #[real, .none]
+    | .max => Meta.mkAppOptM ``Max.max #[real, .none]
+    | .min => Meta.mkAppOptM ``Min.min #[real, .none]
+    | .abs => mkConstWithInsts `abs #[real]
+    | .ofScientific => Meta.mkAppOptM ``OfScientific.ofScientific #[real, .none]
+    | .floor => mkConstWithInsts `Int.floor #[real]
+    | .ceil => mkConstWithInsts `Int.ceil #[real]
 
   def interpComplexConstAsUnlifted (cc : ComplexConst) : MetaM Expr := do
     let complex := interpLaterTypeAsUnlifted .complex

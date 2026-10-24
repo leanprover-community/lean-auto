@@ -15,6 +15,7 @@ namespace Auto.Embedding.Lam
 /-- Constants associated with `LaterType.real` -/
 inductive RealConst
   | zero | one | add | sub | mul | div | neg | inv | ofNat | ofInt
+  | le | lt | max | min | abs | ofScientific | floor | ceil
 deriving Inhabited, Hashable, Lean.ToExpr
 
 def RealConst.reprAux : RealConst → String
@@ -28,6 +29,14 @@ def RealConst.reprAux : RealConst → String
 | .inv => "inv"
 | .ofNat => "ofNat"
 | .ofInt => "ofInt"
+| .le => "le"
+| .lt => "lt"
+| .max => "max"
+| .min => "min"
+| .abs => "abs"
+| .ofScientific => "ofScientific"
+| .floor => "floor"
+| .ceil => "ceil"
 
 def RealConst.reprPrec (c : RealConst) (n : Nat) : Std.Format :=
   match n with
@@ -48,6 +57,14 @@ def RealConst.toString : RealConst → String
 | .inv => "inv"
 | .ofNat => "rofNat"
 | .ofInt => "rofInt"
+| .le => "≤"
+| .lt => "<"
+| .max => "max"
+| .min => "min"
+| .abs => "abs"
+| .ofScientific => "ofScientific"
+| .floor => "floor"
+| .ceil => "ceil"
 
 instance : ToString RealConst where
   toString := RealConst.toString
@@ -63,6 +80,14 @@ def RealConst.beq : RealConst → RealConst → Bool
 | .inv, .inv => true
 | .ofNat, .ofNat => true
 | .ofInt, .ofInt => true
+| .le, .le => true
+| .lt, .lt => true
+| .max, .max => true
+| .min, .min => true
+| .abs, .abs => true
+| .ofScientific, .ofScientific => true
+| .floor, .floor => true
+| .ceil, .ceil => true
 | _,    _    => false
 
 instance : BEq RealConst where
@@ -91,6 +116,14 @@ def RealConst.lamCheck : RealConst → LamSort
 | .inv => .func (.base .real) (.base .real)
 | .ofNat => .func (.base .nat) (.base .real)
 | .ofInt => .func (.base .int) (.base .real)
+| .le => (.func (.base .real) (.func (.base .real) (.base .prop)))
+| .lt => (.func (.base .real) (.func (.base .real) (.base .prop)))
+| .max => (.func (.base .real) (.func (.base .real) (.base .real)))
+| .min => (.func (.base .real) (.func (.base .real) (.base .real)))
+| .abs => (.func (.base .real) (.base .real))
+| .ofScientific => (.func (.base .nat) (.func (.base .bool) (.func (.base .nat) (.base .real))))
+| .floor => (.func (.base .real) (.base .int))
+| .ceil => (.func (.base .real) (.base .int))
 
 inductive RealConst.LamWF : RealConst → LamSort → Type
   | ofZero : LamWF .zero (.base .real)
@@ -103,6 +136,14 @@ inductive RealConst.LamWF : RealConst → LamSort → Type
   | ofInv : LamWF .inv (.func (.base .real) (.base .real))
   | ofOfNat : LamWF .ofNat (.func (.base .nat) (.base .real))
   | ofOfInt : LamWF .ofInt (.func (.base .int) (.base .real))
+  | ofLe : LamWF .le (.func (.base .real) (.func (.base .real) (.base .prop)))
+  | ofLt : LamWF .lt (.func (.base .real) (.func (.base .real) (.base .prop)))
+  | ofMax : LamWF .max (.func (.base .real) (.func (.base .real) (.base .real)))
+  | ofMin : LamWF .min (.func (.base .real) (.func (.base .real) (.base .real)))
+  | ofAbs : LamWF .abs (.func (.base .real) (.base .real))
+  | ofOfScientific : LamWF .ofScientific (.func (.base .nat) (.func (.base .bool) (.func (.base .nat) (.base .real))))
+  | ofFloor : LamWF .floor (.func (.base .real) (.base .int))
+  | ofCeil : LamWF .ceil (.func (.base .real) (.base .int))
 
 theorem RealConst.LamWF.unique {c : RealConst} {s₁ s₂ : LamSort}
   (rcwf₁ : LamWF c s₁) (rcwf₂ : LamWF c s₂) : s₁ = s₂ ∧ HEq rcwf₁ rcwf₂ := by
@@ -119,6 +160,14 @@ def RealConst.LamWF.ofRealConst : (c : RealConst) → (s : LamSort) × RealConst
 | .inv => ⟨_, .ofInv⟩
 | .ofNat => ⟨_, .ofOfNat⟩
 | .ofInt => ⟨_, .ofOfInt⟩
+| .le => ⟨_, .ofLe⟩
+| .lt => ⟨_, .ofLt⟩
+| .max => ⟨_, .ofMax⟩
+| .min => ⟨_, .ofMin⟩
+| .abs => ⟨_, .ofAbs⟩
+| .ofScientific => ⟨_, .ofOfScientific⟩
+| .floor => ⟨_, .ofFloor⟩
+| .ceil => ⟨_, .ofCeil⟩
 
 theorem RealConst.lamWF_complete (wf : LamWF c s) : LamWF.ofRealConst c = ⟨s, wf⟩ := by
   cases wf <;> rfl
@@ -141,6 +190,14 @@ structure RealInterpUnlifted (R : Type) where
   inv : R → R
   ofNat : Nat → R
   ofInt : Int → R
+  le : R → R → Prop
+  lt : R → R → Prop
+  max : R → R → R
+  min : R → R → R
+  abs : R → R
+  ofScientific : Nat → Bool → Nat → R
+  floor : R → Int
+  ceil : R → Int
 
 /-- Interpretation of the constants associated with `LaterType.real` -/
 structure RealInterp (R : Type u) where
@@ -154,6 +211,14 @@ structure RealInterp (R : Type u) where
   inv : R → R
   ofNat : GLift.{1, u} Nat → R
   ofInt : GLift.{1, u} Int → R
+  le : R → R → GLift.{1, u} Prop
+  lt : R → R → GLift.{1, u} Prop
+  max : R → R → R
+  min : R → R → R
+  abs : R → R
+  ofScientific : GLift.{1, u} Nat → GLift.{1, u} Bool → GLift.{1, u} Nat → R
+  floor : R → GLift.{1, u} Int
+  ceil : R → GLift.{1, u} Int
 
 def RealInterpUnlifted.toRealInterp.{u} (ri : RealInterpUnlifted R) : RealInterp (GLift.{1, u} R) where
   zero := GLift.up ri.zero
@@ -166,11 +231,21 @@ def RealInterpUnlifted.toRealInterp.{u} (ri : RealInterpUnlifted R) : RealInterp
   inv x := GLift.up (ri.inv x.down)
   ofNat n := GLift.up (ri.ofNat n.down)
   ofInt n := GLift.up (ri.ofInt n.down)
+  le x y := GLift.up (ri.le x.down y.down)
+  lt x y := GLift.up (ri.lt x.down y.down)
+  max x y := GLift.up (ri.max x.down y.down)
+  min x y := GLift.up (ri.min x.down y.down)
+  abs x := GLift.up (ri.abs x.down)
+  ofScientific m s e := GLift.up (ri.ofScientific m.down s.down e.down)
+  floor x := GLift.up (ri.floor x.down)
+  ceil x := GLift.up (ri.ceil x.down)
 
 /-- Interpretation of the constants associated with `LaterType.real` when `Real` is interpreted as `PUnit` -/
 def RealInterp.default : RealInterp PUnit.{u + 1} :=
   ⟨.unit, .unit, fun _ _ => .unit, fun _ _ => .unit, fun _ _ => .unit, fun _ _ => .unit,
-   fun _ => .unit, fun _ => .unit, fun _ => .unit, fun _ => .unit⟩
+   fun _ => .unit, fun _ => .unit, fun _ => .unit, fun _ => .unit,
+   fun _ _ => GLift.up True, fun _ _ => GLift.up True, fun _ _ => .unit, fun _ _ => .unit,
+   fun _ => .unit, fun _ _ _ => .unit, fun _ => GLift.up 0, fun _ => GLift.up 0⟩
 
 def RealConst.interp (tyVal : TyVal.{u}) (ri : RealInterp (tyVal.later .real)) :
   (c : RealConst) → c.lamCheck.interp tyVal
@@ -184,6 +259,14 @@ def RealConst.interp (tyVal : TyVal.{u}) (ri : RealInterp (tyVal.later .real)) :
 | .inv => ri.inv
 | .ofNat => ri.ofNat
 | .ofInt => ri.ofInt
+| .le => ri.le
+| .lt => ri.lt
+| .max => ri.max
+| .min => ri.min
+| .abs => ri.abs
+| .ofScientific => ri.ofScientific
+| .floor => ri.floor
+| .ceil => ri.ceil
 
 def RealConst.LamWF.interp (tyVal : TyVal.{u}) (ri : RealInterp (tyVal.later .real)) :
   (lwf : LamWF c s) → s.interp tyVal
@@ -197,6 +280,14 @@ def RealConst.LamWF.interp (tyVal : TyVal.{u}) (ri : RealInterp (tyVal.later .re
 | .ofInv => ri.inv
 | .ofOfNat => ri.ofNat
 | .ofOfInt => ri.ofInt
+| .ofLe => ri.le
+| .ofLt => ri.lt
+| .ofMax => ri.max
+| .ofMin => ri.min
+| .ofAbs => ri.abs
+| .ofOfScientific => ri.ofScientific
+| .ofFloor => ri.floor
+| .ofCeil => ri.ceil
 
 theorem RealConst.interp_equiv (tyVal : TyVal.{u}) (ri : RealInterp (tyVal.later .real))
   (rcwf : LamWF c s) : HEq (LamWF.interp tyVal ri rcwf) (interp tyVal ri c) := by
