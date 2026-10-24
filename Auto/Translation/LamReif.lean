@@ -110,12 +110,12 @@ structure State where
   -- · `LamValuation.{u}`
   -- · All the `GLift/GLift.up/GLift.down` has level parameter list `[?, u]`
   u             : Level
-  -- Information about `Real`, if `Real` is recognized from the environment
-  realInfo?     : Option RealInfo                 := .none
+  -- Later-declared types recognized from the environment, and their constants
+  laterInfo     : LaterInfo                       := {}
 deriving Inhabited
 
 def State.init (u : Level) : MetaM State := do
-  return { u, realInfo? := ← RealInfo.init? }
+  return { u, laterInfo := ← LaterInfo.init }
 
 abbrev ReifM := StateRefT State Reif.ReifM
 
@@ -158,8 +158,10 @@ def printValuation : ReifM Unit := do
   let lamIl ← getLamILTy
   for (s, idx) in lamIl.zipIdx do
     trace[auto.lamReif.printValuation] "LamILTy {idx} := {s}"
-  if let .some ri ← getRealInfo? then
-    trace[auto.lamReif.printValuation] "Later Type {toString LaterType.real} := {ri.real}"
+  let laterInfo ← getLaterInfo
+  for t in LaterType.all do
+    if let .some ty := laterInfo.types.get? t then
+      trace[auto.lamReif.printValuation] "Later Type {t} := {ty}"
 
 def printProofs : ReifM Unit := do
   let chkMap ← getChkMap
@@ -478,10 +480,10 @@ partial def updownFunc (s : LamSort) : ReifM (Expr × Expr × Expr × Expr) :=
     | .bv n =>
       let ty := Expr.app (.const ``BitVec []) (.lit (.natVal n))
       return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
-    | .later .real =>
-      let .some ri ← getRealInfo?
-        | throwError "{decl_name%} :: `Real` is not recognized"
-      return (liftup₁ ri.real, liftdown₁ ri.real, ri.real, lift₁ ri.real)
+    | .later t =>
+      let .some ty := (← getLaterInfo).types.get? t
+        | throwError "{decl_name%} :: Later-declared type {t} is not recognized"
+      return (liftup₁ ty, liftdown₁ ty, ty, lift₁ ty)
   | .func s₁ s₂ => do
     let (uf₁, df₁, ty₁, tyUp₁) ← updownFunc s₁
     let (uf₂, df₂, ty₂, tyUp₂) ← updownFunc s₂
@@ -1011,9 +1013,8 @@ def processTypeExpr (e : Expr) : ReifM LamSort := do
   let e ← Reif.resolveTy e
   if let .some idx := tyVarMap.get? e then
     return .atom idx
-  if let .some ri ← getRealInfo? then
-    if e == ri.real then
-      return .base .real
+  if let .some t := (← getLaterInfo).laterType? e then
+    return .base (.later t)
   match e with
   | .sort lvl =>
     if ← Meta.isLevelDefEq lvl .zero then
@@ -1462,9 +1463,8 @@ def processComplexTermExpr (e : Expr) : MetaM (Option LamTerm) := do
 
 def processNewTermExpr (e : Expr) : ReifM LamTerm := do
   let e := e.eta
-  if let .some ri ← getRealInfo? then
-    if let .some t ← ri.reifTerm? e then
-      return t
+  if let .some t ← (← getLaterInfo).reifTerm? e then
+    return t
   match e with
   | .lit l => return processSimpleLit l
   | .const name lvls => do
@@ -1561,9 +1561,8 @@ def reifInd (ind : SimpleIndVal) : ReifM (Option IndInfo) := do
      name == ``BitVec then
     return .none
   -- Later-declared types are treated as builtin types
-  if let .some ri ← getRealInfo? then
-    if name == ri.real.constName! then
-      return .none
+  if ((← getLaterInfo).laterType? (.const name [])).isSome then
+    return .none
   -- For now, do not reify inductively defined proposition
   if ← isIndProp name then
     return .none
@@ -1663,11 +1662,11 @@ section BuildChecker
     -- `atomExpr : Nat → Type u`
     let atomExpr := exprListToLCtx tyVal (.succ u) (.sort (.succ u)) (.sort u)
     -- `tyValExpr : TyVal.{u}`
-    return Lean.mkApp2 (.const ``TyVal.mk [u]) atomExpr (laterTyValExpr (← getRealInfo?) u)
+    return Lean.mkApp2 (.const ``TyVal.mk [u]) atomExpr ((← getLaterInfo).laterTyValExpr u)
 
   /-- **Build `laterVal`**, matching the interpretation of `LaterType`s in `buildTyVal` -/
   def buildLaterValExpr : ReifM Expr := do
-    return laterValExpr (← getRealInfo?) (← getU)
+    return (← getLaterInfo).laterValExpr (← getU)
 
   /-- **Build `LamVarTy` and `varVal`** -/
   def buildVarExpr (tyValExpr : Expr) : ReifM Expr := do
@@ -2114,7 +2113,7 @@ open Embedding.Lam LamReif
   def optimizedStateFor (res : Array REntry) : LamReif.ReifM State := do
     let ref ← get
     let (_, s') ← ((res.foldlM (fun _ re => collectProofFor ref re) ()).run {}).run
-      { u := ref.u, realInfo? := ref.realInfo? }
+      { u := ref.u, laterInfo := ref.laterInfo }
     return s'
 
 end Lam2Lam

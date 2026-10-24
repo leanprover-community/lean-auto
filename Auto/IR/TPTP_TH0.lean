@@ -35,6 +35,7 @@ def transLamBaseSort : LamBaseSort → String
   | _   => "s_empty"
 | .bv n    => s!"s_bv{n}"
 | .later .real => "s_real"
+| .later .complex => "s_complex"
 
 def transLamSort : LamSort → String
 | .atom n => s!"s_a{n}"
@@ -74,6 +75,7 @@ def transBitVecConst (bvc : BitVecConst) : String := "t_" ++ bvc.reprAux.replace
 
 def transLaterConst : LaterConst → String
 | .real rc => "t_r" ++ rc.reprAux
+| .complex cc => "t_c" ++ cc.reprAux
 
 def transNatConstSort (nc : NatConst) := transLamSort nc.lamCheck
 

@@ -211,15 +211,281 @@ theorem RealConst.LamWF.interp_lvalIrrelevance
   cases HBeq; cases hTyVal; cases hRi
   rcases RealConst.LamWF.unique rcwf₁ rcwf₂ with ⟨⟨⟩, ⟨⟩⟩; rfl
 
+/-- Constants associated with `LaterType.complex` -/
+inductive ComplexConst
+  | zero | one | I | add | sub | mul | div | neg | inv | ofNat | ofInt
+  | ofReal | re | im | mk
+deriving Inhabited, Hashable, Lean.ToExpr
+
+def ComplexConst.reprAux : ComplexConst → String
+| .zero => "zero"
+| .one => "one"
+| .I => "I"
+| .add => "add"
+| .sub => "sub"
+| .mul => "mul"
+| .div => "div"
+| .neg => "neg"
+| .inv => "inv"
+| .ofNat => "ofNat"
+| .ofInt => "ofInt"
+| .ofReal => "ofReal"
+| .re => "re"
+| .im => "im"
+| .mk => "mk"
+
+def ComplexConst.reprPrec (c : ComplexConst) (n : Nat) : Std.Format :=
+  match n with
+  | 0 => f!"Auto.Embedding.Lam.ComplexConst.{c.reprAux}"
+  | _ + 1 => f!"(.{c.reprAux})"
+
+instance : Repr ComplexConst where
+  reprPrec := ComplexConst.reprPrec
+
+def ComplexConst.toString : ComplexConst → String
+| .zero => "0 : Complex"
+| .one => "1 : Complex"
+| .I => "I"
+| .add => "+"
+| .sub => "-"
+| .mul => "*"
+| .div => "/"
+| .neg => "-"
+| .inv => "inv"
+| .ofNat => "cofNat"
+| .ofInt => "cofInt"
+| .ofReal => "ofReal"
+| .re => "re"
+| .im => "im"
+| .mk => "mk"
+
+instance : ToString ComplexConst where
+  toString := ComplexConst.toString
+
+def ComplexConst.beq : ComplexConst → ComplexConst → Bool
+| .zero, .zero => true
+| .one, .one => true
+| .I, .I => true
+| .add, .add => true
+| .sub, .sub => true
+| .mul, .mul => true
+| .div, .div => true
+| .neg, .neg => true
+| .inv, .inv => true
+| .ofNat, .ofNat => true
+| .ofInt, .ofInt => true
+| .ofReal, .ofReal => true
+| .re, .re => true
+| .im, .im => true
+| .mk, .mk => true
+| _, _ => false
+
+instance : BEq ComplexConst where
+  beq := ComplexConst.beq
+
+theorem ComplexConst.beq_def {x y : ComplexConst} : (x == y) = x.beq y := rfl
+
+theorem ComplexConst.beq_refl {c : ComplexConst} : (c.beq c) = true := by
+  cases c <;> rfl
+
+theorem ComplexConst.eq_of_beq_eq_true {c₁ c₂ : ComplexConst} (H : c₁.beq c₂) : c₁ = c₂ := by
+  cases c₁ <;> cases c₂ <;> first | rfl | contradiction
+
+instance : LawfulBEq ComplexConst where
+  eq_of_beq := ComplexConst.eq_of_beq_eq_true
+  rfl := ComplexConst.beq_refl
+
+def ComplexConst.lamCheck : ComplexConst → LamSort
+| .zero => (.base .complex)
+| .one => (.base .complex)
+| .I => (.base .complex)
+| .add => (.func (.base .complex) (.func (.base .complex) (.base .complex)))
+| .sub => (.func (.base .complex) (.func (.base .complex) (.base .complex)))
+| .mul => (.func (.base .complex) (.func (.base .complex) (.base .complex)))
+| .div => (.func (.base .complex) (.func (.base .complex) (.base .complex)))
+| .neg => (.func (.base .complex) (.base .complex))
+| .inv => (.func (.base .complex) (.base .complex))
+| .ofNat => (.func (.base .nat) (.base .complex))
+| .ofInt => (.func (.base .int) (.base .complex))
+| .ofReal => (.func (.base .real) (.base .complex))
+| .re => (.func (.base .complex) (.base .real))
+| .im => (.func (.base .complex) (.base .real))
+| .mk => (.func (.base .real) (.func (.base .real) (.base .complex)))
+
+inductive ComplexConst.LamWF : ComplexConst → LamSort → Type
+  | ofZero : LamWF .zero (.base .complex)
+  | ofOne : LamWF .one (.base .complex)
+  | ofI : LamWF .I (.base .complex)
+  | ofAdd : LamWF .add (.func (.base .complex) (.func (.base .complex) (.base .complex)))
+  | ofSub : LamWF .sub (.func (.base .complex) (.func (.base .complex) (.base .complex)))
+  | ofMul : LamWF .mul (.func (.base .complex) (.func (.base .complex) (.base .complex)))
+  | ofDiv : LamWF .div (.func (.base .complex) (.func (.base .complex) (.base .complex)))
+  | ofNeg : LamWF .neg (.func (.base .complex) (.base .complex))
+  | ofInv : LamWF .inv (.func (.base .complex) (.base .complex))
+  | ofOfNat : LamWF .ofNat (.func (.base .nat) (.base .complex))
+  | ofOfInt : LamWF .ofInt (.func (.base .int) (.base .complex))
+  | ofOfReal : LamWF .ofReal (.func (.base .real) (.base .complex))
+  | ofRe : LamWF .re (.func (.base .complex) (.base .real))
+  | ofIm : LamWF .im (.func (.base .complex) (.base .real))
+  | ofMk : LamWF .mk (.func (.base .real) (.func (.base .real) (.base .complex)))
+
+theorem ComplexConst.LamWF.unique {c : ComplexConst} {s₁ s₂ : LamSort}
+  (ccwf₁ : LamWF c s₁) (ccwf₂ : LamWF c s₂) : s₁ = s₂ ∧ HEq ccwf₁ ccwf₂ := by
+  cases ccwf₁ <;> cases ccwf₂ <;> trivial
+
+def ComplexConst.LamWF.ofComplexConst : (c : ComplexConst) → (s : LamSort) × ComplexConst.LamWF c s
+| .zero => ⟨_, .ofZero⟩
+| .one => ⟨_, .ofOne⟩
+| .I => ⟨_, .ofI⟩
+| .add => ⟨_, .ofAdd⟩
+| .sub => ⟨_, .ofSub⟩
+| .mul => ⟨_, .ofMul⟩
+| .div => ⟨_, .ofDiv⟩
+| .neg => ⟨_, .ofNeg⟩
+| .inv => ⟨_, .ofInv⟩
+| .ofNat => ⟨_, .ofOfNat⟩
+| .ofInt => ⟨_, .ofOfInt⟩
+| .ofReal => ⟨_, .ofOfReal⟩
+| .re => ⟨_, .ofRe⟩
+| .im => ⟨_, .ofIm⟩
+| .mk => ⟨_, .ofMk⟩
+
+theorem ComplexConst.lamWF_complete (wf : LamWF c s) : LamWF.ofComplexConst c = ⟨s, wf⟩ := by
+  cases wf <;> rfl
+
+theorem ComplexConst.lamCheck_of_LamWF (H : LamWF c s) : c.lamCheck = s := by
+  cases H <;> rfl
+
+def ComplexConst.LamWF.ofCheck (H : c.lamCheck = s) : LamWF c s := by
+  cases H; cases c <;> constructor
+
+/-- Un-lifted interpretation of the constants associated with `LaterType.complex` -/
+structure ComplexInterpUnlifted (R C : Type) where intro ::
+  zero : C
+  one : C
+  I : C
+  add : C → C → C
+  sub : C → C → C
+  mul : C → C → C
+  div : C → C → C
+  neg : C → C
+  inv : C → C
+  ofNat : Nat → C
+  ofInt : Int → C
+  ofReal : R → C
+  re : C → R
+  im : C → R
+  mk : R → R → C
+
+/-- Interpretation of the constants associated with `LaterType.complex` -/
+structure ComplexInterp (R C : Type u) where intro ::
+  zero : C
+  one : C
+  I : C
+  add : C → C → C
+  sub : C → C → C
+  mul : C → C → C
+  div : C → C → C
+  neg : C → C
+  inv : C → C
+  ofNat : GLift.{1, u} Nat → C
+  ofInt : GLift.{1, u} Int → C
+  ofReal : R → C
+  re : C → R
+  im : C → R
+  mk : R → R → C
+
+def ComplexInterpUnlifted.toComplexInterp.{u} (ci : ComplexInterpUnlifted R C) :
+  ComplexInterp (GLift.{1, u} R) (GLift.{1, u} C) where
+  zero := GLift.up ci.zero
+  one := GLift.up ci.one
+  I := GLift.up ci.I
+  add x y := GLift.up (ci.add x.down y.down)
+  sub x y := GLift.up (ci.sub x.down y.down)
+  mul x y := GLift.up (ci.mul x.down y.down)
+  div x y := GLift.up (ci.div x.down y.down)
+  neg x := GLift.up (ci.neg x.down)
+  inv x := GLift.up (ci.inv x.down)
+  ofNat n := GLift.up (ci.ofNat n.down)
+  ofInt n := GLift.up (ci.ofInt n.down)
+  ofReal x := GLift.up (ci.ofReal x.down)
+  re z := GLift.up (ci.re z.down)
+  im z := GLift.up (ci.im z.down)
+  mk x y := GLift.up (ci.mk x.down y.down)
+
+/--
+  Interpretation of the constants associated with `LaterType.complex` when `Complex`
+    is interpreted as `PUnit`. `r` is an arbitrary element of the interpretation of `Real`
+-/
+def ComplexInterp.default {R : Type u} (r : R) : ComplexInterp R PUnit.{u + 1} :=
+  ⟨.unit, .unit, .unit, fun _ _ => .unit, fun _ _ => .unit, fun _ _ => .unit, fun _ _ => .unit,
+   fun _ => .unit, fun _ => .unit, fun _ => .unit, fun _ => .unit,
+   fun _ => .unit, fun _ => r, fun _ => r, fun _ _ => .unit⟩
+
+def ComplexConst.interp (tyVal : TyVal.{u})
+  (ci : ComplexInterp (tyVal.later .real) (tyVal.later .complex)) :
+  (c : ComplexConst) → c.lamCheck.interp tyVal
+| .zero => ci.zero
+| .one => ci.one
+| .I => ci.I
+| .add => ci.add
+| .sub => ci.sub
+| .mul => ci.mul
+| .div => ci.div
+| .neg => ci.neg
+| .inv => ci.inv
+| .ofNat => ci.ofNat
+| .ofInt => ci.ofInt
+| .ofReal => ci.ofReal
+| .re => ci.re
+| .im => ci.im
+| .mk => ci.mk
+
+def ComplexConst.LamWF.interp (tyVal : TyVal.{u})
+  (ci : ComplexInterp (tyVal.later .real) (tyVal.later .complex)) :
+  (lwf : LamWF c s) → s.interp tyVal
+| .ofZero => ci.zero
+| .ofOne => ci.one
+| .ofI => ci.I
+| .ofAdd => ci.add
+| .ofSub => ci.sub
+| .ofMul => ci.mul
+| .ofDiv => ci.div
+| .ofNeg => ci.neg
+| .ofInv => ci.inv
+| .ofOfNat => ci.ofNat
+| .ofOfInt => ci.ofInt
+| .ofOfReal => ci.ofReal
+| .ofRe => ci.re
+| .ofIm => ci.im
+| .ofMk => ci.mk
+
+theorem ComplexConst.interp_equiv (tyVal : TyVal.{u})
+  (ci : ComplexInterp (tyVal.later .real) (tyVal.later .complex))
+  (ccwf : LamWF c s) : HEq (LamWF.interp tyVal ci ccwf) (interp tyVal ci c) := by
+  cases ccwf <;> rfl
+
+theorem ComplexConst.LamWF.interp_lvalIrrelevance
+  (tyVal₁ tyVal₂ : TyVal.{u})
+  (ci₁ : ComplexInterp (tyVal₁.later .real) (tyVal₁.later .complex))
+  (ci₂ : ComplexInterp (tyVal₂.later .real) (tyVal₂.later .complex))
+  (ccwf₁ : LamWF c₁ s₁) (ccwf₂ : LamWF c₂ s₂)
+  (HBeq : c₁ = c₂) (hTyVal : tyVal₁ = tyVal₂) (hCi : HEq ci₁ ci₂) :
+  HEq (ccwf₁.interp tyVal₁ ci₁) (ccwf₂.interp tyVal₂ ci₂) := by
+  cases HBeq; cases hTyVal; cases hCi
+  rcases ComplexConst.LamWF.unique ccwf₁ ccwf₂ with ⟨⟨⟩, ⟨⟩⟩; rfl
+
 /-- Constants associated with later-declared types, one branch for each `LaterType` -/
 inductive LaterConst
-  | real : RealConst → LaterConst
+  | real    : RealConst → LaterConst
+  | complex : ComplexConst → LaterConst
 deriving Inhabited, Hashable, Lean.ToExpr
 
 def LaterConst.reprPrec (l : LaterConst) (n : Nat) :=
   let s :=
     match l with
     | .real rc => f!"real {RealConst.reprPrec rc 1}"
+    | .complex cc => f!"complex {ComplexConst.reprPrec cc 1}"
   if n == 0 then
     f!"Auto.Embedding.Lam.LaterConst." ++ s
   else
@@ -230,12 +496,15 @@ instance : Repr LaterConst where
 
 def LaterConst.toString : LaterConst → String
 | .real rc => s!"{rc}"
+| .complex cc => s!"{cc}"
 
 instance : ToString LaterConst where
   toString := LaterConst.toString
 
 def LaterConst.beq : LaterConst → LaterConst → Bool
-| .real rc₁, .real rc₂ => rc₁.beq rc₂
+| .real rc₁,    .real rc₂    => rc₁.beq rc₂
+| .complex cc₁, .complex cc₂ => cc₁.beq cc₂
+| _,            _            => false
 
 instance : BEq LaterConst where
   beq := LaterConst.beq
@@ -243,10 +512,13 @@ instance : BEq LaterConst where
 theorem LaterConst.beq_def {x y : LaterConst} : (x == y) = x.beq y := rfl
 
 theorem LaterConst.beq_refl {l : LaterConst} : (l.beq l) = true := by
-  cases l; apply RealConst.beq_refl
+  cases l
+  case real => apply RealConst.beq_refl
+  case complex => apply ComplexConst.beq_refl
 
 theorem LaterConst.eq_of_beq_eq_true {l₁ l₂ : LaterConst} (H : l₁.beq l₂) : l₁ = l₂ := by
-  cases l₁ <;> cases l₂ <;> first | contradiction | rw [RealConst.eq_of_beq_eq_true H]
+  cases l₁ <;> cases l₂ <;> first
+    | contradiction | rw [RealConst.eq_of_beq_eq_true H] | rw [ComplexConst.eq_of_beq_eq_true H]
 
 instance : LawfulBEq LaterConst where
   eq_of_beq := LaterConst.eq_of_beq_eq_true
@@ -254,55 +526,64 @@ instance : LawfulBEq LaterConst where
 
 def LaterConst.lamCheck : LaterConst → LamSort
 | .real rc => rc.lamCheck
+| .complex cc => cc.lamCheck
 
 inductive LaterConst.LamWF : LaterConst → LamSort → Type
-  | ofReal : (rcwf : RealConst.LamWF rc s) → LamWF (.real rc) s
+  | ofReal    : (rcwf : RealConst.LamWF rc s) → LamWF (.real rc) s
+  | ofComplex : (ccwf : ComplexConst.LamWF cc s) → LamWF (.complex cc) s
 
 theorem LaterConst.LamWF.unique {l : LaterConst} {s₁ s₂ : LamSort}
   (lcwf₁ : LamWF l s₁) (lcwf₂ : LamWF l s₂) : s₁ = s₂ ∧ HEq lcwf₁ lcwf₂ := by
   cases lcwf₁ <;> cases lcwf₂
   case ofReal.ofReal wf₁ wf₂ =>
     rcases RealConst.LamWF.unique wf₁ wf₂ with ⟨⟨⟩, ⟨⟩⟩; trivial
+  case ofComplex.ofComplex wf₁ wf₂ =>
+    rcases ComplexConst.LamWF.unique wf₁ wf₂ with ⟨⟨⟩, ⟨⟩⟩; trivial
 
 def LaterConst.LamWF.ofLaterConst : (l : LaterConst) → (s : LamSort) × LaterConst.LamWF l s
 | .real rc => have ⟨s, wf⟩ := RealConst.LamWF.ofRealConst rc; ⟨s, .ofReal wf⟩
+| .complex cc => have ⟨s, wf⟩ := ComplexConst.LamWF.ofComplexConst cc; ⟨s, .ofComplex wf⟩
 
 theorem LaterConst.lamWF_complete (wf : LamWF l s) : LamWF.ofLaterConst l = ⟨s, wf⟩ := by
   cases wf
   case ofReal rc wf => dsimp [LamWF.ofLaterConst]; rw [RealConst.lamWF_complete wf]
+  case ofComplex cc wf => dsimp [LamWF.ofLaterConst]; rw [ComplexConst.lamWF_complete wf]
 
 theorem LaterConst.lamCheck_of_LamWF (H : LamWF l s) : l.lamCheck = s := by
   cases H
   case ofReal rc wf => apply RealConst.lamCheck_of_LamWF wf
+  case ofComplex cc wf => apply ComplexConst.lamCheck_of_LamWF wf
 
 def LaterConst.LamWF.ofCheck (H : l.lamCheck = s) : LamWF l s := by
   cases H; cases l
   case real rc => apply LamWF.ofReal; apply RealConst.LamWF.ofCheck; rfl
+  case complex cc => apply LamWF.ofComplex; apply ComplexConst.LamWF.ofCheck; rfl
 
 /-- Interpretation of later-declared types (`TyVal.later`), given the interpretation of each of them -/
-@[reducible] def LaterType.interp (real : Type u) : LaterType → Type u
-| .real => real
+@[reducible] def LaterType.interp (real complex : Type u) : LaterType → Type u
+| .real    => real
+| .complex => complex
 
 /-- Interpretation of the constants associated with each later-declared type -/
 structure LaterVal (later : LaterType → Type u) where
-  real : RealInterp (later .real)
-
-/-- Valuation of later-declared constants when all later-declared types are interpreted as `PUnit` -/
-def LaterVal.default : LaterVal (LaterType.interp PUnit.{u + 1}) :=
-  ⟨RealInterp.default⟩
+  real    : RealInterp (later .real)
+  complex : ComplexInterp (later .real) (later .complex)
 
 def LaterConst.interp (tyVal : TyVal.{u}) (lv : LaterVal tyVal.later) :
   (l : LaterConst) → l.lamCheck.interp tyVal
 | .real rc => rc.interp tyVal lv.real
+| .complex cc => cc.interp tyVal lv.complex
 
 def LaterConst.LamWF.interp (tyVal : TyVal.{u}) (lv : LaterVal tyVal.later) :
   (lwf : LamWF l s) → s.interp tyVal
 | .ofReal rcwf => rcwf.interp tyVal lv.real
+| .ofComplex ccwf => ccwf.interp tyVal lv.complex
 
 theorem LaterConst.interp_equiv (tyVal : TyVal.{u}) (lv : LaterVal tyVal.later)
   (lcwf : LamWF l s) : HEq (LamWF.interp tyVal lv lcwf) (interp tyVal lv l) := by
   cases lcwf
   case ofReal rc wf => apply RealConst.interp_equiv
+  case ofComplex cc wf => apply ComplexConst.interp_equiv
 
 theorem LaterConst.LamWF.interp_lvalIrrelevance
   (tyVal₁ tyVal₂ : TyVal.{u})

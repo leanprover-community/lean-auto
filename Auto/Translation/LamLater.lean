@@ -20,36 +20,88 @@ register_option auto.lamLater.recognize.real : Bool := {
   descr := "Enable/Disable recognition of `Real` and its constants as interpreted sorts and constants"
 }
 
+register_option auto.lamLater.recognize.complex : Bool := {
+  defValue := true
+  descr := "Enable/Disable recognition of `Complex` and its constants as interpreted sorts and constants. Requires recognition of `Real`"
+}
+
+namespace Auto.Embedding.Lam
+
+/-- All `LaterType`s, in the order of the parameters of `LaterType.interp`.
+  Each `LaterType` comes after the `LaterType`s it depends on -/
+def LaterType.all : Array LaterType := #[.real, .complex]
+
+/-- The `LaterType`s mentioned by the sorts of the constants of `t` -/
+def LaterType.deps : LaterType → Array LaterType
+| .real    => #[]
+| .complex => #[.real]
+
+/-- The option enabling recognition of `t` -/
+def LaterType.option : LaterType → Lean.Option Bool
+| .real    => auto.lamLater.recognize.real
+| .complex => auto.lamLater.recognize.complex
+
+/-- Whether recognition of `t` is enabled -/
+def LaterType.enabled (t : LaterType) (opts : Options) : Bool := t.option.get opts
+
+/-- Constants of `t`, in the order of the fields of the un-lifted interpretation of `t` -/
+def LaterType.consts : LaterType → Array LaterConst
+| .real    => #[.zero, .one, .add, .sub, .mul, .div, .neg, .inv, .ofNat, .ofInt].map .real
+| .complex => #[.zero, .one, .I, .add, .sub, .mul, .div, .neg, .inv, .ofNat, .ofInt,
+               .ofReal, .re, .im, .mk].map .complex
+
+/-- Constants of `t` interpreting the numerals `0`, `1` and `n` (as a function of `n : Nat`) -/
+def LaterType.numerals : LaterType → LaterConst × LaterConst × LaterConst
+| .real    => (.real .zero, .real .one, .real .ofNat)
+| .complex => (.complex .zero, .complex .one, .complex .ofNat)
+
+/-- Un-lifted interpretation of the constants of `t`, given their canonical forms -/
+def LaterType.mkInterp (t : LaterType) (canons : Array Expr) : Expr :=
+  match t with
+  | .real => mkAppN (.const ``RealInterpUnlifted.mk []) (#[Lam2D.interpLaterTypeAsUnlifted .real] ++ canons)
+  | .complex => mkAppN (.const ``ComplexInterpUnlifted.intro [])
+    (#[Lam2D.interpLaterTypeAsUnlifted .real, Lam2D.interpLaterTypeAsUnlifted .complex] ++ canons)
+
+private def LaterConst.reprAux : LaterConst → String
+| .real rc => s!"real.{rc.reprAux}"
+| .complex cc => s!"complex.{cc.reprAux}"
+
+end Auto.Embedding.Lam
+
 namespace Auto.LamLater
 
 open Embedding Embedding.Lam
 
 /--
-  Information about Mathlib's `Real`, recognized from the environment at the
-    start of reification. Reification produces `Real` sorts and constants only
-    if this information is available.
-  A term-like expression `e` is reified as `.lcst (.real rc)` iff `e` is
-    definitionally equal to the canonical form of `rc`, which is the corresponding
-    field of `interp`. This is exactly what the kernel needs to check when
-    checking the interpretation of the reified term. `index` is only used to
-    select the candidates to check.
+  Later-declared types (e.g. Mathlib's `Real`) and their constants, recognized
+    from the environment at the start of reification. Reification produces sorts
+    and constants of a later-declared type only if it is recognized.
+  A term-like expression `e` is reified as `.lcst lc` iff `e` is definitionally
+    equal to the canonical form of `lc`, which is the corresponding field of the
+    un-lifted interpretation in `interps`. This is exactly what the kernel needs
+    to check when checking the interpretation of the reified term. `index` is
+    only used to select the candidates to check.
 -/
-structure RealInfo where
-  /-- `Real` -/
-  real   : Expr
-  /-- `⟨0, 1, HAdd.hAdd, ⋯⟩ : RealInterpUnlifted Real`, the interpretation of the `RealConst`s -/
-  interp : Expr
-  /-- Canonical form and type of each `RealConst` -/
-  consts : Std.HashMap RealConst (Expr × Expr)
+structure LaterInfo where
+  /-- The recognized later-declared types, e.g. `real ↦ Real` -/
+  types   : Std.HashMap LaterType Expr           := {}
+  /--
+    Un-lifted interpretation of the constants of each recognized later-declared
+    type, e.g. `⟨0, 1, HAdd.hAdd, ⋯⟩ : RealInterpUnlifted Real`
+  -/
+  interps : Std.HashMap LaterType Expr           := {}
+  /-- Canonical form and type of each constant of the recognized later-declared types -/
+  consts  : Std.HashMap LaterConst (Expr × Expr) := {}
   /--
     Head constants of the canonical forms and of their δ-unfoldings, e.g.
-    `HAdd.hAdd`, `Add.add` and the (private) `Real.add` for `RealConst.add`
+    `HAdd.hAdd`, `Add.add` and the (private) `Real.add` for `.real .add`
   -/
-  index  : Std.HashMap Name (Array RealConst)
+  index   : Std.HashMap Name (Array LaterConst)  := {}
+deriving Inhabited
 
-/-- All `RealConst`s, in the order of the fields of `RealInterpUnlifted` -/
-private def realConsts : Array RealConst :=
-  #[.zero, .one, .add, .sub, .mul, .div, .neg, .inv, .ofNat, .ofInt]
+/-- The recognized later-declared type whose Lean type is `e` -/
+def LaterInfo.laterType? (li : LaterInfo) (e : Expr) : Option LaterType :=
+  li.types.fold (fun acc t ty => if ty == e then .some t else acc) .none
 
 /--
   Head constants of `e` and its δ-unfoldings, as long as `e x₁ ⋯ xₙ` unfolds to
@@ -79,89 +131,109 @@ private def headChain (e : Expr) (fuel : Nat := 16) : MetaM (Array Name) := Meta
         break
     return ret
 
-/-- Recognize `Real` and the canonical forms of the `RealConst`s from the environment -/
-def RealInfo.init? : MetaM (Option RealInfo) := do
-  if !auto.lamLater.recognize.real.get (← getOptions) then
-    return .none
-  let .some ci := (← getEnv).find? `Real
-    | return .none
-  -- `Real : Type`
+/-- Recognize `t` and the canonical forms of its constants from the environment -/
+private def LaterInfo.add (li : LaterInfo) (t : LaterType) : MetaM LaterInfo := do
+  if !t.enabled (← getOptions) then
+    return li
+  let ty := Lam2D.interpLaterTypeAsUnlifted t
+  let .some ci := (← getEnv).find? ty.constName!
+    | return li
+  -- `ty : Type`
   if !ci.levelParams.isEmpty || ci.type != .sort (.succ .zero) then
-    trace[auto.lamLater] "{decl_name%} :: `Real` is not a type in `Type`, ignored"
-    return .none
-  let real := Expr.const `Real []
-  let mut consts := {}
-  let mut index : Std.HashMap Name (Array RealConst) := {}
-  let mut fields := #[]
-  for rc in realConsts do
-    let e? : Option Expr ← try pure (.some (← Lam2D.interpRealConstAsUnlifted rc)) catch err => do
-      trace[auto.lamLater] "{decl_name%} :: Cannot construct `{rc.reprAux}` for `Real`: {err.toMessageData}"
+    trace[auto.lamLater] "{decl_name%} :: `{ty}` is not a type in `Type`, ignored"
+    return li
+  if let .some dep := t.deps.find? (!li.types.contains ·) then
+    let depTy := Lam2D.interpLaterTypeAsUnlifted dep
+    throwError "{decl_name%} :: Recognition of `{ty}` requires `{depTy}` to be recognized, but `{depTy}` is not recognized. Set `{t.option.name}` to `false` to disable recognition of `{ty}`"
+  let mut canons := #[]
+  for lc in t.consts do
+    let e? : Option Expr ← try pure (.some (← Lam2D.interpLaterConstAsUnlifted lc)) catch err => do
+      trace[auto.lamLater] "{decl_name%} :: Cannot construct `{lc.reprAux}` for `{ty}`: {err.toMessageData}"
       pure .none
     let .some e := e?
-      | return .none
-    let ty ← instantiateMVars (← Meta.inferType e)
-    consts := consts.insert rc (e, ty)
-    fields := fields.push e
+      | return li
+    canons := canons.push e
+  let mut li := { li with types := li.types.insert t ty, interps := li.interps.insert t (t.mkInterp canons) }
+  let mut heads := #[]
+  for (lc, e) in t.consts.zip canons do
+    li := { li with consts := li.consts.insert lc (e, ← instantiateMVars (← Meta.inferType e)) }
     for c in ← headChain e do
-      index := index.insert c ((index.getD c #[]).push rc)
-  let interp := mkAppN (.const ``RealInterpUnlifted.mk []) (#[real] ++ fields)
-  trace[auto.lamLater] "Recognized `Real`. Head constants of canonical forms: {index.toList.map (fun (c, rcs) => (c, rcs.map RealConst.reprAux))}"
-  return .some { real, interp, consts, index }
+      li := { li with index := li.index.insert c ((li.index.getD c #[]).push lc) }
+      heads := heads.push (c, lc.reprAux)
+  trace[auto.lamLater] "Recognized `{ty}`. Head constants of canonical forms: {heads}"
+  return li
+
+/-- Recognize all later-declared types and their constants from the environment -/
+def LaterInfo.init : MetaM LaterInfo :=
+  LaterType.all.foldlM LaterInfo.add {}
 
 /--
-  Reify `e` as a `RealConst` (or a numeral) if `e` is definitionally
-    equal to the canonical form of the `RealConst`. See `RealInfo`
+  Reify `e` as a constant of a recognized later-declared type (or a numeral) if `e` is
+    definitionally equal to the canonical form of the constant. See `LaterInfo`
 -/
-def RealInfo.reifTerm? (ri : RealInfo) (e : Expr) : MetaM (Option LamTerm) := do
+def LaterInfo.reifTerm? (li : LaterInfo) (e : Expr) : MetaM (Option LamTerm) := do
   let .some c := e.getAppFn.constName?
     | return .none
-  let canonical (rc : RealConst) : MetaM Expr := do
-    let .some (canon, _) := ri.consts.get? rc
-      | throwError "{decl_name%} :: Unknown canonical form of {rc.reprAux}"
+  let canonical (lc : LaterConst) : MetaM Expr := do
+    let .some (canon, _) := li.consts.get? lc
+      | throwError "{decl_name%} :: Unknown canonical form of {lc.reprAux}"
     return canon
   let isDefEqCanon (canon : Expr) : MetaM Bool :=
     Meta.withNewMCtxDepth <| Meta.isDefEqD e canon
-  -- Numerals `OfNat.ofNat Real n _`
+  -- Numerals `OfNat.ofNat ty n _`, where `ty` is a recognized later-declared type
   if c == ``OfNat.ofNat then
     let #[ty, .lit (.natVal n), _] := e.getAppArgs
       | return .none
-    if ty != ri.real then
-      return .none
-    let (canon, t) ← (do
+    let .some t := li.laterType? ty
+      | return .none
+    let (zero, one, ofNat) := t.numerals
+    let (canon, res) ← (do
       match n with
-      | 0 => return (← canonical .zero, .base .rzero)
-      | 1 => return (← canonical .one, .base .rone)
-      | n => return (.app (← canonical .ofNat) (mkRawNatLit n),
-                     .app (.base .nat) (.base .rofNat) (.base (.natVal n))))
+      | 0 => return (← canonical zero, .base (.lcst zero))
+      | 1 => return (← canonical one, .base (.lcst one))
+      | n => return (.app (← canonical ofNat) (mkRawNatLit n),
+                     .app (.base .nat) (.base (.lcst ofNat)) (.base (.natVal n))))
     if ← isDefEqCanon canon then
-      return .some t
+      return .some res
     return .none
-  let .some rcs := ri.index.get? c
+  let .some lcs := li.index.get? c
     | return .none
   let ty ← instantiateMVars (← Meta.inferType e)
-  for rc in rcs do
-    let .some (canon, canonTy) := ri.consts.get? rc
+  for lc in lcs do
+    let .some (canon, canonTy) := li.consts.get? lc
       | continue
     if ty == canonTy && (← isDefEqCanon canon) then
-      return .some (.base (.lcst (.real rc)))
+      return .some (.base (.lcst lc))
   return .none
 
 /--
-  `TyVal.later : LaterType → Type u`, interpreting `Real` as `GLift Real`
-    if `Real` is recognized, and as `PUnit` otherwise
+  `TyVal.later : LaterType → Type u`, interpreting each recognized later-declared
+    type `ty` as `GLift ty`, and the others as `PUnit`
 -/
-def laterTyValExpr (ri? : Option RealInfo) (u : Level) : Expr :=
-  let realTy := match ri? with
-    | .some ri => Expr.app (.const ``GLift [.succ .zero, u]) ri.real
-    | .none => .const ``PUnit [.succ u]
-  .app (.const ``LaterType.interp [u]) realTy
+def LaterInfo.laterTyValExpr (li : LaterInfo) (u : Level) : Expr :=
+  mkAppN (.const ``LaterType.interp [u]) (LaterType.all.map fun t =>
+    match li.types.get? t with
+    | .some ty => .app (.const ``GLift [.succ .zero, u]) ty
+    | .none => .const ``PUnit [.succ u])
 
-/-- `LaterVal (laterTyValExpr ri? u)`, the interpretation of the constants of later-declared types -/
-def laterValExpr (ri? : Option RealInfo) (u : Level) : Expr :=
-  match ri? with
-  | .some ri =>
-    let real := Lean.mkApp2 (.const ``RealInterpUnlifted.toRealInterp [u]) ri.real ri.interp
-    Lean.mkApp2 (.const ``LaterVal.mk [u]) (laterTyValExpr ri? u) real
-  | .none => .const ``LaterVal.default [u]
+/--
+  `LaterVal (li.laterTyValExpr u)`, the interpretation of the constants of later-declared types.
+  The constants of a later-declared type that is not recognized are given a default interpretation
+-/
+def LaterInfo.laterValExpr (li : LaterInfo) (u : Level) : Expr :=
+  let realTy := Lam2D.interpLaterTypeAsUnlifted .real
+  let complexTy := Lam2D.interpLaterTypeAsUnlifted .complex
+  let real := match li.interps.get? .real with
+    | .some ri => Lean.mkApp2 (.const ``RealInterpUnlifted.toRealInterp [u]) realTy ri
+    | .none => .const ``RealInterp.default [u]
+  let complex := match li.interps.get? .complex with
+    | .some ci => Lean.mkApp3 (.const ``ComplexInterpUnlifted.toComplexInterp [u]) realTy complexTy ci
+    | .none =>
+      -- `ComplexInterp.default` needs an element of the interpretation of `Real`
+      let laterTy := li.laterTyValExpr u
+      let realLiftedTy := Expr.app laterTy (.const ``LaterType.real [])
+      let realZero := Lean.mkApp2 (.const ``RealInterp.zero [u]) realLiftedTy real
+      Lean.mkApp2 (.const ``ComplexInterp.default [u]) realLiftedTy realZero
+  Lean.mkApp3 (.const ``LaterVal.mk [u]) (li.laterTyValExpr u) real complex
 
 end Auto.LamLater

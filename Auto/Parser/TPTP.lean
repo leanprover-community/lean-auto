@@ -359,6 +359,7 @@ def ident2LamSort (s : String) : Option LamSort :=
   | "s_string" => .some (.base .string)
   | "s_empty"  => .some (.base .empty)
   | "s_real"   => .some (.base .real)
+  | "s_complex" => .some (.base .complex)
   | _ =>
     if s.take 3 == "s_a" then
       match (s.drop 3).toNat? with
@@ -442,6 +443,21 @@ def ident2LaterConst (s : String) : Option LaterConst :=
   | "t_rinv" => .some (.real .inv)
   | "t_rofNat" => .some (.real .ofNat)
   | "t_rofInt" => .some (.real .ofInt)
+  | "t_czero" => .some (.complex .zero)
+  | "t_cone" => .some (.complex .one)
+  | "t_cI" => .some (.complex .I)
+  | "t_cadd" => .some (.complex .add)
+  | "t_csub" => .some (.complex .sub)
+  | "t_cmul" => .some (.complex .mul)
+  | "t_cdiv" => .some (.complex .div)
+  | "t_cneg" => .some (.complex .neg)
+  | "t_cinv" => .some (.complex .inv)
+  | "t_cofNat" => .some (.complex .ofNat)
+  | "t_cofInt" => .some (.complex .ofInt)
+  | "t_cofReal" => .some (.complex .ofReal)
+  | "t_cre" => .some (.complex .re)
+  | "t_cim" => .some (.complex .im)
+  | "t_cmk" => .some (.complex .mk)
   | _ => .none
 
 open Embedding.Lam in
@@ -685,7 +701,7 @@ def ident2LamConstr (pi : ParsingInfo) (s : String) : LamConstr :=
         match ident2BitVecConst s with
         | .some bv => .term bv.lamCheck (.base (.bvcst bv))
         | .none   => .error s!"Unknown identifier {s}"
-      | "t_r" =>
+      | "t_r" | "t_c" =>
         match ident2LaterConst s with
         | .some lc => .term lc.lamCheck (.base (.lcst lc))
         | .none   => .error s!"Unknown identifier {s}"

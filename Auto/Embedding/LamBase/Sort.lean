@@ -24,13 +24,15 @@ open ToExprExtra
   interpretations of their associated constants (see `LamBase/Later.lean`)
 -/
 inductive LaterType
-  | real : LaterType
+  | real    : LaterType
+  | complex : LaterType
 deriving Hashable, Inhabited, Lean.ToExpr
 
 def LaterType.reprPrec (t : LaterType) (n : Nat) :=
   let str :=
     match t with
     | .real => "real"
+    | .complex => "complex"
   if n == 0 then
     f!"Auto.Embedding.Lam.LaterType." ++ str
   else
@@ -41,18 +43,22 @@ instance : Repr LaterType where
 
 def LaterType.toString : LaterType → String
 | .real => "Real"
+| .complex => "Complex"
 
 instance : ToString LaterType where
   toString := LaterType.toString
 
 def LaterType.beq : LaterType → LaterType → Bool
-| .real, .real => true
+| .real,    .real    => true
+| .complex, .complex => true
+| _,        _        => false
 
 instance : BEq LaterType where
   beq := LaterType.beq
 
 theorem LaterType.beq_refl : {t : LaterType} → (t.beq t) = true
-| .real => rfl
+| .real    => rfl
+| .complex => rfl
 
 theorem LaterType.eq_of_beq_eq_true {t₁ t₂ : LaterType} (H : t₁.beq t₂) : t₁ = t₂ := by
   cases t₁ <;> cases t₂ <;> first | rfl | contradiction
@@ -84,6 +90,8 @@ def LamBaseSort.string := LamBaseSort.isto0 .xH
 def LamBaseSort.empty := LamBaseSort.isto0 (.xO .xH)
 
 def LamBaseSort.real := LamBaseSort.later .real
+
+def LamBaseSort.complex := LamBaseSort.later .complex
 
 def LamBaseSort.reprPrec (b : LamBaseSort) (n : Nat) :=
   let str :=

@@ -169,6 +169,7 @@ private def lamBaseSort2SSort : LamBaseSort → SSort
   | _   => .app (.symb "Empty") #[]
 | .bv n   => .app (.indexed "BitVec" #[.inr n]) #[]
 | .later .real => .app (.symb "Real") #[]
+| .later .complex => .app (.symb "Complex") #[]
 
 private def lamSortAtom2String (sni : SMTNamingInfo) (n : Nat) : TransM LamAtomic String := do
   if !(← hIn (.sort n)) then
@@ -441,6 +442,11 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .lcst (.real .sub) => return .qStrApp "-" #[arg1, arg2]
 | .lcst (.real .mul) => return .qStrApp "*" #[arg1, arg2]
 | .lcst (.real .div) => return .qStrApp "rdiv" #[arg1, arg2]
+| .lcst (.complex .add) => return .qStrApp "cadd" #[arg1, arg2]
+| .lcst (.complex .sub) => return .qStrApp "csub" #[arg1, arg2]
+| .lcst (.complex .mul) => return .qStrApp "cmul" #[arg1, arg2]
+| .lcst (.complex .div) => return .qStrApp "cdiv" #[arg1, arg2]
+| .lcst (.complex .mk)  => return .qStrApp "cmk" #[arg1, arg2]
 | t           => throwError "{decl_name%} :: The arity of {repr t} is not 2"
 
 private def lamBaseTerm2STerm_Arity1 (sni : SMTNamingInfo) (arg : STerm) : LamBaseTerm → TransM LamAtomic STerm
@@ -501,10 +507,17 @@ private def lamBaseTerm2STerm_Arity1 (sni : SMTNamingInfo) (arg : STerm) : LamBa
     return .qIdApp (.ident (.indexed "sign_extend" #[.inr (v - w)])) #[arg]
   else
     return .qIdApp (.ident (.indexed "extract" #[.inr (v - 1), .inr 0])) #[arg]
-| .lcst (.real .neg)     => return .qStrApp "-" #[.sConst (.decimal 0), arg]
+| .lcst (.real .neg)     => return .qStrApp "-" #[.sConst (.decimal 0 0), arg]
 | .lcst (.real .inv)     => return .qStrApp "rinv" #[arg]
 | .lcst (.real .ofNat)   => return .qStrApp "to_real" #[arg]
 | .lcst (.real .ofInt)   => return .qStrApp "to_real" #[arg]
+| .lcst (.complex .neg)    => return .qStrApp "cneg" #[arg]
+| .lcst (.complex .inv)    => return .qStrApp "cinv" #[arg]
+| .lcst (.complex .ofNat)  => return .qStrApp "cofInt" #[arg]
+| .lcst (.complex .ofInt)  => return .qStrApp "cofInt" #[arg]
+| .lcst (.complex .ofReal) => return .qStrApp "cofReal" #[arg]
+| .lcst (.complex .re)     => return .qStrApp "cre" #[arg]
+| .lcst (.complex .im)     => return .qStrApp "cim" #[arg]
 | t               => throwError "{decl_name%} :: The arity of {repr t} is not 1"
 where
   solverName : MetaM Solver.SMT.SolverName := do
@@ -521,8 +534,11 @@ private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtomic STerm
 | .ncst (.natVal n)   => return .sConst (.num n)
 | .scst (.strVal s)   => return .sConst (.str s)
 | .bvcst (.bvVal n i) => return bitVec2STerm n i
-| .lcst (.real .zero) => return .sConst (.decimal 0)
-| .lcst (.real .one)  => return .sConst (.decimal 1)
+| .lcst (.real .zero) => return .sConst (.decimal 0 0)
+| .lcst (.real .one)  => return .sConst (.decimal 1 0)
+| .lcst (.complex .zero) => return .qStrApp "czero" #[]
+| .lcst (.complex .one)  => return .qStrApp "cone" #[]
+| .lcst (.complex .I)    => return .qStrApp "cI" #[]
 | t                   => throwError "{decl_name%} :: The arity of {repr t} is not 0"
 
 def lamTermAtom2String (sni : SMTNamingInfo) (lamVarTy : Array LamSort) (n : Nat) : TransM LamAtomic (LamSort × String) := do
@@ -721,7 +737,8 @@ private def compEqn
   return .assert (← eqn)
 
 def sortAuxDecls : Array IR.SMT.Command :=
-  #[.declSort "Empty" 0]
+  #[.declSort "Empty" 0,
+    .declDtypes #[("Complex", 0, ⟨#[], #[⟨"cmk", #[("cre", .app (.symb "Real") #[]), ("cim", .app (.symb "Real") #[])]⟩]⟩)]]
 
 def termAuxDecls : Array IR.SMT.Command :=
   #[.defFun false "nsub" #[("x", .app (.symb "Int") #[]), ("y", .app (.symb "Int") #[])] (.app (.symb "Int") #[])
@@ -741,9 +758,25 @@ def termAuxDecls : Array IR.SMT.Command :=
     .defFun false "iemod" #[("x", .app (.symb "Int") #[]), ("y", .app (.symb "Int") #[])] (.app (.symb "Int") #[])
       (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "y" #[], .sConst (.num 0)], .qStrApp "x" #[], .qStrApp "mod" #[.qStrApp "x" #[], .qStrApp "y" #[]]]),
     .defFun false "rdiv" #[("x", .app (.symb "Real") #[]), ("y", .app (.symb "Real") #[])] (.app (.symb "Real") #[])
-      (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "y" #[], .sConst (.decimal 0)], .sConst (.decimal 0), .qStrApp "/" #[.qStrApp "x" #[], .qStrApp "y" #[]]]),
+      (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "y" #[], .sConst (.decimal 0 0)], .sConst (.decimal 0 0), .qStrApp "/" #[.qStrApp "x" #[], .qStrApp "y" #[]]]),
     .defFun false "rinv" #[("x", .app (.symb "Real") #[])] (.app (.symb "Real") #[])
-      (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "x" #[], .sConst (.decimal 0)], .sConst (.decimal 0), .qStrApp "/" #[.sConst (.decimal 1), .qStrApp "x" #[]]])
+      (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "x" #[], .sConst (.decimal 0 0)], .sConst (.decimal 0 0), .qStrApp "/" #[.sConst (.decimal 1 0), .qStrApp "x" #[]]]),
+    .defFun false "czero" #[] (.app (.symb "Complex") #[]) (.qStrApp "cmk" #[.sConst (.decimal 0 0), .sConst (.decimal 0 0)]),
+    .defFun false "cone" #[] (.app (.symb "Complex") #[]) (.qStrApp "cmk" #[.sConst (.decimal 1 0), .sConst (.decimal 0 0)]),
+    .defFun false "cI" #[] (.app (.symb "Complex") #[]) (.qStrApp "cmk" #[.sConst (.decimal 0 0), .sConst (.decimal 1 0)]),
+    .defFun false "cadd" #[("z", .app (.symb "Complex") #[]), ("w", .app (.symb "Complex") #[])] (.app (.symb "Complex") #[])
+      (.qStrApp "cmk" #[.qStrApp "+" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "cre" #[.qStrApp "w" #[]]], .qStrApp "+" #[.qStrApp "cim" #[.qStrApp "z" #[]], .qStrApp "cim" #[.qStrApp "w" #[]]]]),
+    .defFun false "csub" #[("z", .app (.symb "Complex") #[]), ("w", .app (.symb "Complex") #[])] (.app (.symb "Complex") #[])
+      (.qStrApp "cmk" #[.qStrApp "-" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "cre" #[.qStrApp "w" #[]]], .qStrApp "-" #[.qStrApp "cim" #[.qStrApp "z" #[]], .qStrApp "cim" #[.qStrApp "w" #[]]]]),
+    .defFun false "cneg" #[("z", .app (.symb "Complex") #[])] (.app (.symb "Complex") #[])
+      (.qStrApp "cmk" #[.qStrApp "-" #[.sConst (.decimal 0 0), .qStrApp "cre" #[.qStrApp "z" #[]]], .qStrApp "-" #[.sConst (.decimal 0 0), .qStrApp "cim" #[.qStrApp "z" #[]]]]),
+    .defFun false "cmul" #[("z", .app (.symb "Complex") #[]), ("w", .app (.symb "Complex") #[])] (.app (.symb "Complex") #[])
+      (.qStrApp "cmk" #[.qStrApp "-" #[.qStrApp "*" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "cre" #[.qStrApp "w" #[]]], .qStrApp "*" #[.qStrApp "cim" #[.qStrApp "z" #[]], .qStrApp "cim" #[.qStrApp "w" #[]]]], .qStrApp "+" #[.qStrApp "*" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "cim" #[.qStrApp "w" #[]]], .qStrApp "*" #[.qStrApp "cim" #[.qStrApp "z" #[]], .qStrApp "cre" #[.qStrApp "w" #[]]]]]),
+    .defFun false "cinv" #[("z", .app (.symb "Complex") #[])] (.app (.symb "Complex") #[])
+      (.qStrApp "cmk" #[.qStrApp "rdiv" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "+" #[.qStrApp "*" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "cre" #[.qStrApp "z" #[]]], .qStrApp "*" #[.qStrApp "cim" #[.qStrApp "z" #[]], .qStrApp "cim" #[.qStrApp "z" #[]]]]], .qStrApp "rdiv" #[.qStrApp "-" #[.sConst (.decimal 0 0), .qStrApp "cim" #[.qStrApp "z" #[]]], .qStrApp "+" #[.qStrApp "*" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "cre" #[.qStrApp "z" #[]]], .qStrApp "*" #[.qStrApp "cim" #[.qStrApp "z" #[]], .qStrApp "cim" #[.qStrApp "z" #[]]]]]]),
+    .defFun false "cdiv" #[("z", .app (.symb "Complex") #[]), ("w", .app (.symb "Complex") #[])] (.app (.symb "Complex") #[]) (.qStrApp "cmul" #[.qStrApp "z" #[], .qStrApp "cinv" #[.qStrApp "w" #[]]]),
+    .defFun false "cofInt" #[("x", .app (.symb "Int") #[])] (.app (.symb "Complex") #[]) (.qStrApp "cmk" #[.qStrApp "to_real" #[.qStrApp "x" #[]], .sConst (.decimal 0 0)]),
+    .defFun false "cofReal" #[("x", .app (.symb "Real") #[])] (.app (.symb "Complex") #[]) (.qStrApp "cmk" #[.qStrApp "x" #[], .sConst (.decimal 0 0)])
    ]
 
 /--

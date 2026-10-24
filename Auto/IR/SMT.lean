@@ -92,20 +92,35 @@ structure MatchCase (α : Sort u) where
   args   : Array String
   body   : α
 
--- **TODO**: Float-point numbers?
+/-- SMT-LIB2 spec_constant -/
 inductive SpecConst where
   | str    : String → SpecConst
   -- `.binary [xₖ₋₁, ⋯, x₁, x₀]` represents `xₖ₋₁⋯x₁x₀`
   | binary : List Bool → SpecConst
+  -- `.hexadecimal [xₖ₋₁, ⋯, x₁, x₀]` represents `xₖ₋₁⋯x₁x₀`
+  | hexadecimal : List (Fin 16) → SpecConst
   | num    : Nat → SpecConst
-  -- `.decimal n` represents the decimal `n.0`
-  | decimal : Nat → SpecConst
+  -- `.decimal n e` represents the decimal `n * 10^(-e)`
+  | decimal : Nat → Nat → SpecConst
 
 def SpecConst.toString : SpecConst → String
 | .str s     => "\"" ++ String.join (s.toList.map specCharRepr) ++ "\""
-| .binary bs => bs.foldl (fun acc b => acc.push (if b then '1' else '0')) "#b"
+| .binary bs =>
+  if bs.length == 0 then
+    "#b0"
+  else
+    bs.foldl (fun acc b => acc.push (if b then '1' else '0')) "#b"
+| .hexadecimal hs =>
+  if hs.length == 0 then
+    "#x0"
+  else
+    hs.foldl (fun acc h => acc.push (Nat.digitChar h.val)) "#x"
 | .num n     => ToString.toString (repr n)
-| .decimal n => ToString.toString (repr n) ++ ".0"
+| .decimal n e =>
+  -- A decimal has at least one digit after the decimal point
+  let (n, e) := if e == 0 then (n * 10, 1) else (n, e)
+  let frac := ToString.toString (n % 10 ^ e)
+  ToString.toString (n / 10 ^ e) ++ "." ++ String.ofList (List.replicate (e - frac.length) '0') ++ frac
 where specCharRepr (c : Char) : String :=
   "\\u{" ++ String.ofList (Nat.toDigits 16 c.toNat) ++ "}"
 

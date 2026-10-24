@@ -193,7 +193,8 @@ namespace Lam2D
     so we refer to them by name
   -/
   def interpLaterTypeAsUnlifted : LaterType → Expr
-  | .real => .const `Real []
+  | .real    => .const `Real []
+  | .complex => .const `Complex []
 
   def interpLamBaseSortAsUnlifted : LamBaseSort → Expr
   | .prop    => .sort .zero
@@ -331,8 +332,28 @@ namespace Lam2D
     | .ofNat => Meta.mkAppOptM ``Nat.cast #[real, .none]
     | .ofInt => Meta.mkAppOptM ``Int.cast #[real, .none]
 
+  def interpComplexConstAsUnlifted (cc : ComplexConst) : MetaM Expr := do
+    let complex := interpLaterTypeAsUnlifted .complex
+    match cc with
+    | .zero => Meta.mkAppOptM ``OfNat.ofNat #[complex, mkRawNatLit 0, .none]
+    | .one => Meta.mkAppOptM ``OfNat.ofNat #[complex, mkRawNatLit 1, .none]
+    | .I => Meta.mkConstWithFreshMVarLevels `Complex.I
+    | .add => Meta.mkAppOptM ``HAdd.hAdd #[complex, complex, complex, .none]
+    | .sub => Meta.mkAppOptM ``HSub.hSub #[complex, complex, complex, .none]
+    | .mul => Meta.mkAppOptM ``HMul.hMul #[complex, complex, complex, .none]
+    | .div => Meta.mkAppOptM ``HDiv.hDiv #[complex, complex, complex, .none]
+    | .neg => Meta.mkAppOptM ``Neg.neg #[complex, .none]
+    | .inv => Meta.mkAppOptM ``Inv.inv #[complex, .none]
+    | .ofNat => Meta.mkAppOptM ``Nat.cast #[complex, .none]
+    | .ofInt => Meta.mkAppOptM ``Int.cast #[complex, .none]
+    | .ofReal => Meta.mkConstWithFreshMVarLevels `Complex.ofReal
+    | .re => Meta.mkConstWithFreshMVarLevels `Complex.re
+    | .im => Meta.mkConstWithFreshMVarLevels `Complex.im
+    | .mk => Meta.mkConstWithFreshMVarLevels `Complex.mk
+
   def interpLaterConstAsUnlifted : LaterConst → MetaM Expr
   | .real rc => interpRealConstAsUnlifted rc
+  | .complex cc => interpComplexConstAsUnlifted cc
 
   /--
     Takes a `s : LamSort` and produces the `un-lifted` version of `s.interp`
