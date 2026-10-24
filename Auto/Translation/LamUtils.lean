@@ -352,8 +352,7 @@ namespace Lam2D
       after `args` is used up
   -/
   def mkConstWithInsts (n : Name) (args : Array Expr) : MetaM Expr := do
-    let f ← Meta.mkConstWithFreshMVarLevels n
-    instantiateMVars (← Meta.mkAppOptM' f (go (← Meta.inferType f) args.toList))
+    instantiateMVars (← Meta.mkAppOptM n (go (← getConstInfo n).type args.toList))
   where go : Expr → List Expr → Array (Option Expr)
     | .forallE _ _ b bi, args =>
       if bi.isInstImplicit then

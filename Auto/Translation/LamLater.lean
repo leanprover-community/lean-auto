@@ -73,12 +73,19 @@ def LaterType.derivedForms : LaterType → Array (MetaM Expr × LamTerm)
   let complex := Lam2D.interpLaterTypeAsUnlifted .complex
   #[(Meta.mkAppOptM `Star.star #[complex, .none], .base (.lcst (.complex .conj)))]
 
-/-- Un-lifted interpretation of the constants of `t`, given their canonical forms -/
-def LaterType.mkInterp (t : LaterType) (canons : Array Expr) : Expr :=
-  match t with
-  | .real => mkAppN (.const ``RealInterpUnlifted.mk []) (#[Lam2D.interpLaterTypeAsUnlifted .real] ++ canons)
-  | .complex => mkAppN (.const ``ComplexInterpUnlifted.intro [])
-    (#[Lam2D.interpLaterTypeAsUnlifted .real, Lam2D.interpLaterTypeAsUnlifted .complex] ++ canons)
+/--
+  Un-lifted interpretation of the constants of `t`, given the canonical forms of the
+    recognized constants of `t`. The other constants are interpreted by the corresponding
+    fields of the default interpretation, which is built from `elems`, the elements of
+    the types `t.deps.push t`
+-/
+def LaterType.mkInterp (t : LaterType) (canons : Array (Option Expr)) (elems : Array Expr) : Expr :=
+  let (structName, mk, dflt) := match t with
+    | .real => (``RealInterpUnlifted, ``RealInterpUnlifted.mk, ``RealInterpUnlifted.default)
+    | .complex => (``ComplexInterpUnlifted, ``ComplexInterpUnlifted.intro, ``ComplexInterpUnlifted.default)
+  let tys := (t.deps.push t).map Lam2D.interpLaterTypeAsUnlifted
+  let dflt := mkAppN (.const dflt []) (tys ++ elems)
+  mkAppN (.const mk []) (tys ++ canons.mapIdx fun i canon? => canon?.getD (.proj structName i dflt))
 
 private def LaterConst.reprAux : LaterConst → String
 | .real rc => s!"real.{rc.reprAux}"
@@ -100,7 +107,9 @@ deriving Inhabited
 /--
   Later-declared types (e.g. Mathlib's `Real`) and their constants, recognized
     from the environment at the start of reification. Reification produces sorts
-    and constants of a later-declared type only if it is recognized.
+    and constants of a later-declared type only if it is recognized. The constants
+    of a recognized later-declared type are recognized individually, and those that
+    are not recognized are treated as uninterpreted atoms.
   A term-like expression `e` is reified as `.lcst lc` iff `e` is definitionally
     equal to the canonical form of `lc`, which is the corresponding field of the
     un-lifted interpretation in `interps`. This is exactly what the kernel needs
@@ -111,11 +120,16 @@ structure LaterInfo where
   /-- The recognized later-declared types, e.g. `real ↦ Real` -/
   types   : Std.HashMap LaterType Expr           := {}
   /--
+    An element of each recognized later-declared type, used to interpret
+    the constants that are not recognized
+  -/
+  elems   : Std.HashMap LaterType Expr           := {}
+  /--
     Un-lifted interpretation of the constants of each recognized later-declared
     type, e.g. `⟨0, 1, HAdd.hAdd, ⋯⟩ : RealInterpUnlifted Real`
   -/
   interps : Std.HashMap LaterType Expr           := {}
-  /-- Canonical form and type of each constant of the recognized later-declared types -/
+  /-- Canonical form and type of each recognized constant -/
   consts  : Std.HashMap LaterConst (Expr × Expr) := {}
   /--
     Recognized forms, indexed by the head constants of their canonical forms and of the
@@ -164,6 +178,22 @@ private def headChain (e : Expr) (fuel : Nat := 16) : MetaM (Array Name) := Meta
         break
     return ret
 
+/--
+  The canonical form of `lc`, if it can be constructed and its type is
+    the un-lifted interpretation of the sort of `lc`
+-/
+private def LaterConst.canonical? (lc : LaterConst) : MetaM (Option Expr) := do
+  let canon? : Option Expr ← try pure (.some (← Lam2D.interpLaterConstAsUnlifted lc)) catch err => do
+    trace[auto.lamLater] "{decl_name%} :: Cannot construct `{lc.reprAux}`: {err.toMessageData}"
+    pure .none
+  let .some canon := canon?
+    | return .none
+  let expected ← Lam2D.interpLamSortAsUnlifted {} lc.lamCheck
+  if !(← Meta.withNewMCtxDepth <| Meta.isDefEq (← Meta.inferType canon) expected) then
+    trace[auto.lamLater] "{decl_name%} :: The canonical form `{canon}` of `{lc.reprAux}` is not of type `{expected}`, ignored"
+    return .none
+  return .some canon
+
 /-- Recognize `t` and the canonical forms of its constants from the environment -/
 private def LaterInfo.add (li : LaterInfo) (t : LaterType) : MetaM LaterInfo := do
   if !t.enabled (← getOptions) then
@@ -178,21 +208,33 @@ private def LaterInfo.add (li : LaterInfo) (t : LaterType) : MetaM LaterInfo := 
   if let .some dep := t.deps.find? (!li.types.contains ·) then
     let depTy := Lam2D.interpLaterTypeAsUnlifted dep
     throwError "{decl_name%} :: Recognition of `{ty}` requires `{depTy}` to be recognized, but `{depTy}` is not recognized. Set `{t.option.name}` to `false` to disable recognition of `{ty}`"
-  let mut canons := #[]
-  for lc in t.consts do
-    let e? : Option Expr ← try pure (.some (← Lam2D.interpLaterConstAsUnlifted lc)) catch err => do
-      trace[auto.lamLater] "{decl_name%} :: Cannot construct `{lc.reprAux}` for `{ty}`: {err.toMessageData}"
-      pure .none
-    let .some e := e?
-      | return li
-    canons := canons.push e
-  let mut li := { li with types := li.types.insert t ty, interps := li.interps.insert t (t.mkInterp canons) }
+  -- Each constant is recognized individually
+  let canons ← t.consts.mapM LaterConst.canonical?
+  -- An element of `ty`, used to interpret the constants that are not recognized
+  let (zero, _, _) := t.numerals
+  let elem? : Option Expr ← match (t.consts.zip canons).findSome? (fun (lc, c?) => if lc == zero then c? else .none) with
+    | .some e => pure (.some e)
+    | .none => try pure (.some (← Meta.mkDefault ty)) catch _ => pure .none
+  let .some elem := elem?
+    | trace[auto.lamLater] "{decl_name%} :: Cannot find an element of `{ty}`, ignored"
+      return li
+  let mut li := { li with types := li.types.insert t ty, elems := li.elems.insert t elem }
+  let elems := (t.deps.push t).filterMap li.elems.get?
+  li := { li with interps := li.interps.insert t (t.mkInterp canons elems) }
   let mut forms := #[]
-  for (lc, e) in t.consts.zip canons do
-    let eTy ← instantiateMVars (← Meta.inferType e)
-    li := { li with consts := li.consts.insert lc (e, eTy) }
-    forms := forms.push (⟨e, eTy, .base (.lcst lc)⟩, lc.reprAux)
+  let mut missing := #[]
+  for (lc, e?) in t.consts.zip canons do
+    if let .some e := e? then
+      let eTy ← instantiateMVars (← Meta.inferType e)
+      li := { li with consts := li.consts.insert lc (e, eTy) }
+      forms := forms.push (⟨e, eTy, .base (.lcst lc)⟩, lc.reprAux)
+    else
+      missing := missing.push lc.reprAux
   for (mkCanon, term) in t.derivedForms do
+    -- Derived forms are recognized only if the constants they mention are recognized
+    if let .some lc := (LamExportUtils.collectLamTermLaterConsts term).toArray.find? (!li.consts.contains ·) then
+      trace[auto.lamLater] "{decl_name%} :: `{lc.reprAux}` is not recognized, so `{toString term}` is not recognized"
+      continue
     let e? : Option Expr ← try pure (.some (← mkCanon)) catch err => do
       trace[auto.lamLater] "{decl_name%} :: Cannot construct the canonical form of `{toString term}` for `{ty}`: {err.toMessageData}"
       pure .none
@@ -212,7 +254,7 @@ private def LaterInfo.add (li : LaterInfo) (t : LaterType) : MetaM LaterInfo := 
       if let .forallE _ _ _ .default ← Meta.whnfD (← Meta.inferType f) then
         if let .some c := form.canon.getAppFn.constName? then
           li := { li with appHeads := li.appHeads.insert c }
-  trace[auto.lamLater] "Recognized `{ty}`. Head constants of canonical forms: {heads}"
+  trace[auto.lamLater] "Recognized `{ty}`. Constants that are not recognized: {missing}. Head constants of canonical forms: {heads}"
   return li
 
 /-- Recognize all later-declared types and their constants from the environment -/
@@ -226,10 +268,7 @@ def LaterInfo.init : MetaM LaterInfo :=
 def LaterInfo.reifTerm? (li : LaterInfo) (e : Expr) : MetaM (Option LamTerm) := do
   let .some c := e.getAppFn.constName?
     | return .none
-  let canonical (lc : LaterConst) : MetaM Expr := do
-    let .some (canon, _) := li.consts.get? lc
-      | throwError "{decl_name%} :: Unknown canonical form of {lc.reprAux}"
-    return canon
+  let canonical? (lc : LaterConst) : Option Expr := (li.consts.get? lc).map (·.1)
   let isDefEqCanon (canon : Expr) : MetaM Bool :=
     Meta.withNewMCtxDepth <| Meta.isDefEqD e canon
   -- Numerals `OfNat.ofNat ty n _`, where `ty` is a recognized later-declared type
@@ -239,12 +278,13 @@ def LaterInfo.reifTerm? (li : LaterInfo) (e : Expr) : MetaM (Option LamTerm) := 
     let .some t := li.laterType? ty
       | return .none
     let (zero, one, ofNat) := t.numerals
-    let (canon, res) ← (do
-      match n with
-      | 0 => return (← canonical zero, .base (.lcst zero))
-      | 1 => return (← canonical one, .base (.lcst one))
-      | n => return (.app (← canonical ofNat) (mkRawNatLit n),
-                     .app (.base .nat) (.base (.lcst ofNat)) (.base (.natVal n))))
+    let canonRes? : Option (Expr × LamTerm) := match n with
+      | 0 => (canonical? zero).map (·, .base (.lcst zero))
+      | 1 => (canonical? one).map (·, .base (.lcst one))
+      | n => (canonical? ofNat).map fun canon =>
+        (.app canon (mkRawNatLit n), .app (.base .nat) (.base (.lcst ofNat)) (.base (.natVal n)))
+    let .some (canon, res) := canonRes?
+      | return .none
     if ← isDefEqCanon canon then
       return .some res
     return .none

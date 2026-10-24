@@ -221,6 +221,17 @@ structure RealInterpUnlifted (R : Type) where
   sqrt : R → R
   ofRat : Rat → R
 
+/--
+  An arbitrary un-lifted interpretation of the constants associated with `LaterType.real`,
+    used for the constants that are not recognized. `r` is an arbitrary element of `R`
+-/
+def RealInterpUnlifted.default (R : Type) (r : R) : RealInterpUnlifted R :=
+  ⟨r, r, fun _ _ => r, fun _ _ => r, fun _ _ => r, fun _ _ => r,
+   fun _ => r, fun _ => r, fun _ => r, fun _ => r,
+   fun _ _ => True, fun _ _ => True, fun _ _ => r, fun _ _ => r,
+   fun _ => r, fun _ _ _ => r, fun _ => 0, fun _ => 0,
+   fun _ _ => r, fun _ => r, fun _ => r⟩
+
 /-- Interpretation of the constants associated with `LaterType.real` -/
 structure RealInterp (R : Type u) where
   zero : R
@@ -538,6 +549,16 @@ structure ComplexInterpUnlifted (R C : Type) where intro ::
   norm : C → R
   pow : C → Nat → C
   ofRat : Rat → C
+
+/--
+  An arbitrary un-lifted interpretation of the constants associated with `LaterType.complex`,
+    used for the constants that are not recognized. `r` and `c` are arbitrary elements of `R` and `C`
+-/
+def ComplexInterpUnlifted.default (R C : Type) (r : R) (c : C) : ComplexInterpUnlifted R C :=
+  ⟨c, c, c, fun _ _ => c, fun _ _ => c, fun _ _ => c, fun _ _ => c,
+   fun _ => c, fun _ => c, fun _ => c, fun _ => c,
+   fun _ => c, fun _ => r, fun _ => r, fun _ _ => c,
+   fun _ => r, fun _ => c, fun _ => r, fun _ _ => c, fun _ => c⟩
 
 /-- Interpretation of the constants associated with `LaterType.complex` -/
 structure ComplexInterp (R C : Type u) where intro ::

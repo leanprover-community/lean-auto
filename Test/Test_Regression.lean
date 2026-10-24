@@ -838,6 +838,15 @@ section NativeReal
   instance : Add Real := ⟨add⟩
   instance : Neg Real := ⟨neg⟩
   instance : Mul Real := ⟨mul⟩
+
+  -- Constants are recognized individually: here `0`, `+` and `*` are recognized,
+  --   while `Real.inv'` is an uninterpreted atom because `Inv Real` is not declared yet
+  example (x y : Real) : x + y * 0 = x := by auto
+
+  example (h : False) : Real.inv' 1 = 1 := by
+    fail_if_success auto []
+    contradiction
+
   instance : Inv Real := ⟨inv'⟩
   instance : Sub Real := ⟨fun a b => a + -b⟩
   instance : Div Real := ⟨fun a b => a * b⁻¹⟩
@@ -1007,6 +1016,10 @@ section NativeComplex
   instance : Neg Complex := ⟨fun z => ⟨-z.re, -z.im⟩⟩
   instance : Sub Complex := ⟨fun z w => ⟨z.re - w.re, z.im - w.im⟩⟩
   instance : Mul Complex := ⟨fun z w => ⟨z.re * w.re - z.im * w.im, z.re * w.im + z.im * w.re⟩⟩
+
+  -- Constants are recognized individually: here `Complex.I`, `Complex.normSq`, `⁻¹`, `/` etc.
+  --   are not declared yet, while `*`, `Complex.re` and `Complex.im` are recognized
+  example (z w : Complex) : (z * w).re = z.re * w.re - z.im * w.im := by auto
 
   -- Mathlib's `normSq` is a bundled homomorphism
   def normSq : MonoidWithZeroHom Complex Real := ⟨fun z => z.re * z.re + z.im * z.im⟩
