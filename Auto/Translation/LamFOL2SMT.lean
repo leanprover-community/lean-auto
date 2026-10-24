@@ -1,7 +1,7 @@
 module
 
 public import Lean
-public import Auto.Embedding.LamChecker
+public import Auto.EmbedLam.LamChecker
 public import Auto.IR.SMT
 public import Auto.Solver.SMT
 public import Auto.Translation.LamUtils

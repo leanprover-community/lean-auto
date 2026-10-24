@@ -1,6 +1,6 @@
 module
 
-public import Auto.EmbedCoc.CoCModel
+public import Auto.EmbedCoC.CoCModel
 
 @[expose] public section
 

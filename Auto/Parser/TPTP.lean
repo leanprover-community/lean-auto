@@ -2,7 +2,7 @@ module
 
 public import Lean
 public import Std.Data.Iterators
-public import Auto.Embedding.LamBVarOp
+public import Auto.EmbedLam.LamBVarOp
 
 public section
 

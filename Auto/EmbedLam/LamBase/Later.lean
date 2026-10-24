@@ -1,6 +1,6 @@
 module
 
-public import Auto.Embedding.LamBase.Sort
+public import Auto.EmbedLam.LamBase.Sort
 
 @[expose] public section
 

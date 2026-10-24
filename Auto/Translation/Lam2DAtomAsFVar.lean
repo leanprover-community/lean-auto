@@ -5,7 +5,7 @@ public import Auto.Lib.ExprExtra
 public import Auto.Lib.MetaExtra
 public import Auto.Lib.MetaState
 public import Auto.Lib.ToExprExtra
-public import Auto.Embedding.LamChecker
+public import Auto.EmbedLam.LamChecker
 public import Auto.Translation.Assumptions
 public import Auto.Translation.LamUtils
 

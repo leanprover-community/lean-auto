@@ -2,7 +2,7 @@ module
 
 public import Lean
 public import Auto.Lib.MetaState
-public import Auto.Embedding.LamBase
+public import Auto.EmbedLam.LamBase
 
 public section
 

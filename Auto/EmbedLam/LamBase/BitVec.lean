@@ -1,7 +1,7 @@
 module
 
-public import Auto.Embedding.LamBase.Sort
-public import Auto.Embedding.LamBase.ConstMacro
+public import Auto.EmbedLam.LamBase.Sort
+public import Auto.EmbedLam.LamBase.ConstMacro
 
 @[expose] public section
 

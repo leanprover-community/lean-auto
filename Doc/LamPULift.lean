@@ -1,5 +1,5 @@
 import Lean
-import Auto.Embedding.Lift
+import Auto.EmbedLam.Lift
 import Auto.Translation.ReifM
 import Auto.Lib.ExprExtra
 import Auto.Lib.MonadUtils

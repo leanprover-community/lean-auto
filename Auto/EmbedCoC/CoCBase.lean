@@ -1,8 +1,8 @@
 module
 
 public import Lean
-public import Auto.Embedding.LCtx
-public import Auto.EmbedCoc.CoCSort
+public import Auto.EmbedLam.LCtx
+public import Auto.EmbedCoC.CoCSort
 
 @[expose] public section
 
@@ -20,7 +20,7 @@ meta def CoCLevelGen : List Lean.Level :=
   The universe levels of the sorts of the embedded system: the 18 simplest levels of
   the closure of `CoCLevelGen` under `max` and `imax`. `CoCSort` has one constructor
   per level, named after it, and the functions on sorts are generated from it, see
-  `Auto.EmbedCoc.CoCSort`
+  `Auto.EmbedCoC.CoCSort`
 -/
 meta def CoCLevel : List Lean.Level := simplestLevels (maxesClosure CoCLevelGen) 18
 
@@ -103,7 +103,7 @@ deriving Inhabited, DecidableEq, Hashable, Lean.ToExpr
 /--
   The sort of `Sort s`, or `none` when `s + 1` is not a `CoCSort`. Closure under
   successor is exactly what would make the tower infinite, so it is truncated at
-  the top sorts. Generated from `CoCLevel`, see `Auto.EmbedCoc.CoCSort`
+  the top sorts. Generated from `CoCLevel`, see `Auto.EmbedCoC.CoCSort`
 -/
 mkSortSucc CoCSort.succ for CoCSort from CoCLevel
 
@@ -113,7 +113,7 @@ mkSortSucc CoCSort.succ for CoCSort from CoCLevel
   is a ∀-formation that the embedding cannot express. `imax s s'` is `0` when `s'`
   is `0`, which is the impredicativity of `Prop`, and `max s s'` otherwise. A level
   parameter can be `0`, so e.g. `max 1 u` is not `u`, and `imax (u+1) u` is not
-  `u+1`. Generated from `CoCLevel`, see `Auto.EmbedCoc.CoCSort`
+  `u+1`. Generated from `CoCLevel`, see `Auto.EmbedCoC.CoCSort`
 -/
 mkSortJoin CoCSort.join for CoCSort from CoCLevel
 

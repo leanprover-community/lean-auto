@@ -1,7 +1,7 @@
 module
 
-public import Auto.Embedding.LamBase.WF
-public import Auto.Embedding.LamBase.Valuation
+public import Auto.EmbedLam.LamBase.WF
+public import Auto.EmbedLam.LamBase.Valuation
 
 @[expose] public section
 

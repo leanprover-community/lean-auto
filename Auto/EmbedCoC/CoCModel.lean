@@ -1,7 +1,7 @@
 module
 
-public import Auto.EmbedCoc.CoCBase
-public import Auto.Embedding.Lift
+public import Auto.EmbedCoC.CoCBase
+public import Auto.EmbedLam.Lift
 public import Auto.Lib.BoolExtra
 
 @[expose] public section

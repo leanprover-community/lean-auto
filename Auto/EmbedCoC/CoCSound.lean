@@ -1,7 +1,7 @@
 module
 
-public import Auto.EmbedCoc.CoCInterp
-public import Auto.EmbedCoc.CoCJudge
+public import Auto.EmbedCoC.CoCInterp
+public import Auto.EmbedCoC.CoCJudge
 
 @[expose] public section
 

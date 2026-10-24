@@ -1,7 +1,7 @@
 module
 
-public import Auto.EmbedCoc.CoCSound
-public import Auto.EmbedCoc.CoCInfer
+public import Auto.EmbedCoC.CoCSound
+public import Auto.EmbedCoC.CoCInfer
 
 @[expose] public section
 

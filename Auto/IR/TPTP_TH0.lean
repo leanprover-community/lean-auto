@@ -1,6 +1,6 @@
 module
 
-public import Auto.Embedding.LamConv
+public import Auto.EmbedLam.LamConv
 
 public section
 

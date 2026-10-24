@@ -1,12 +1,12 @@
 module
 
-public import Auto.Embedding.LamTermInterp
-public import Auto.Embedding.LamConv
-public import Auto.Embedding.LamInference
-public import Auto.Embedding.LamLCtx
-public import Auto.Embedding.LamPrep
-public import Auto.Embedding.LamBitVec
-public import Auto.Embedding.LamInductive
+public import Auto.EmbedLam.LamTermInterp
+public import Auto.EmbedLam.LamConv
+public import Auto.EmbedLam.LamInference
+public import Auto.EmbedLam.LamLCtx
+public import Auto.EmbedLam.LamPrep
+public import Auto.EmbedLam.LamBitVec
+public import Auto.EmbedLam.LamInductive
 public import Auto.Lib.BinTree
 
 @[expose] public section

@@ -1,8 +1,8 @@
 module
 
 public import Lean
-public import Auto.Embedding.Lift
-public import Auto.Embedding.LCtx
+public import Auto.EmbedLam.Lift
+public import Auto.EmbedLam.LCtx
 public import Auto.Lib.ExprExtra
 public import Auto.Lib.NatExtra
 public import Auto.Lib.IntExtra

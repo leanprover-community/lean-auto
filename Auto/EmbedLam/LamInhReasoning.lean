@@ -1,6 +1,6 @@
 module
 
-public import Auto.Embedding.LamBase
+public import Auto.EmbedLam.LamBase
 
 @[expose] public section
 

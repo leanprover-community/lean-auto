@@ -8,8 +8,8 @@ public import Auto.Translation.ReifM
 public import Auto.Translation.LamUtils
 public import Auto.Translation.LamLater
 public import Auto.Translation.SMTAttributes
-public import Auto.Embedding.LamChecker
-public import Auto.Embedding.LamInhReasoning
+public import Auto.EmbedLam.LamChecker
+public import Auto.EmbedLam.LamInhReasoning
 
 public section
 

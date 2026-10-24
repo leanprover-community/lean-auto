@@ -1,7 +1,7 @@
 module
 
 public import Lean
-public import Auto.Embedding.Lift
+public import Auto.EmbedLam.Lift
 public import Auto.Translation.Assumptions
 public import Auto.Translation.ReifM
 public import Auto.Translation.Inhabitation

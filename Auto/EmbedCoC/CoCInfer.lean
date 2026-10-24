@@ -1,6 +1,6 @@
 module
 
-public import Auto.EmbedCoc.CoCJudge
+public import Auto.EmbedCoC.CoCJudge
 
 @[expose] public section
 

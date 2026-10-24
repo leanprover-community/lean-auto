@@ -1,5 +1,5 @@
 import Auto.Tactic
-import Auto.Embedding.LamBase
+import Auto.EmbedLam.LamBase
 
 set_option auto.smt.trust true
 set_option trace.auto.smt.printCommands true

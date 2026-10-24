@@ -1,6 +1,6 @@
 module
 
-public import Auto.Embedding.LamBVarOp
+public import Auto.EmbedLam.LamBVarOp
 
 @[expose] public section
 

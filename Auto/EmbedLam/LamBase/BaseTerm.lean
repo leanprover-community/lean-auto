@@ -1,8 +1,8 @@
 module
 
-public import Auto.Embedding.LamBase.Const
-public import Auto.Embedding.LamBase.BitVec
-public import Auto.Embedding.LamBase.Later
+public import Auto.EmbedLam.LamBase.Const
+public import Auto.EmbedLam.LamBase.BitVec
+public import Auto.EmbedLam.LamBase.Later
 
 @[expose] public section
 
