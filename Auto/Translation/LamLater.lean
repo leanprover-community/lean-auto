@@ -26,6 +26,11 @@ register_option auto.lamLater.recognize.complex : Bool := {
   descr := "Enable/Disable recognition of `Complex` and its constants as interpreted sorts and constants. Requires recognition of `Real`"
 }
 
+register_option auto.lamLater.spec : Bool := {
+  defValue := false
+  descr := "Enable/Disable construction of proofs that the recognized constants of later-declared types satisfy their characterizations (e.g. `RealInterpUnlifted.CoreSpec` and `RealInterpUnlifted.ExtSpec`), from theorems in the environment. These proofs are not used yet"
+}
+
 namespace Auto.Embedding.Lam
 
 /-- All `LaterType`s, in the order of the parameters of `LaterType.interp`.
@@ -80,12 +85,27 @@ def LaterType.derivedForms : LaterType → Array (MetaM Expr × LamTerm)
     the types `t.deps.push t`
 -/
 def LaterType.mkInterp (t : LaterType) (canons : Array (Option Expr)) (elems : Array Expr) : Expr :=
-  let (structName, mk, dflt) := match t with
-    | .real => (``RealInterpUnlifted, ``RealInterpUnlifted.mk, ``RealInterpUnlifted.default)
-    | .complex => (``ComplexInterpUnlifted, ``ComplexInterpUnlifted.intro, ``ComplexInterpUnlifted.default)
+  let (structName, mk, dflt, lvls) := match t with
+    | .real => (``RealInterpUnlifted, ``RealInterpUnlifted.mk, ``RealInterpUnlifted.default, [Level.zero])
+    | .complex => (``ComplexInterpUnlifted, ``ComplexInterpUnlifted.intro, ``ComplexInterpUnlifted.default, ([] : List Level))
   let tys := (t.deps.push t).map Lam2D.interpLaterTypeAsUnlifted
-  let dflt := mkAppN (.const dflt []) (tys ++ elems)
-  mkAppN (.const mk []) (tys ++ canons.mapIdx fun i canon? => canon?.getD (.proj structName i dflt))
+  let dflt := mkAppN (.const dflt lvls) (tys ++ elems)
+  mkAppN (.const mk lvls) (tys ++ canons.mapIdx fun i canon? => canon?.getD (.proj structName i dflt))
+
+/--
+  The structures characterizing the constants of `t`, if any. The first one characterizes
+    the core constants of `t` as a whole, and the second one has an optional characterization
+    of each of the other constants of `t`. Both take the types `t.deps.push t` and the
+    un-lifted interpretation of the constants of `t` as parameters
+-/
+def LaterType.specs : LaterType → Option (Name × Name)
+| .real    => .some (``RealInterpUnlifted.CoreSpec, ``RealInterpUnlifted.ExtSpec)
+| .complex => .none
+
+/-- The field of the structures characterizing the constants of `lc`'s type (see `LaterType.specs`) for `lc` -/
+def LaterConst.specField : LaterConst → Name
+| .real rc => .mkSimple rc.reprAux
+| .complex cc => .mkSimple cc.reprAux
 
 private def LaterConst.reprAux : LaterConst → String
 | .real rc => s!"real.{rc.reprAux}"
@@ -131,6 +151,22 @@ structure LaterInfo where
   interps : Std.HashMap LaterType Expr           := {}
   /-- Canonical form and type of each recognized constant -/
   consts  : Std.HashMap LaterConst (Expr × Expr) := {}
+  /--
+    Proof of the characterization of the core constants of each recognized later-declared
+    type (see `LaterType.specs`), if it is proved from the theorems in the environment,
+    e.g. `⟨add_assoc, ⋯⟩ : RealInterpUnlifted.CoreSpec ri`. Only constructed if
+    `auto.lamLater.spec` is enabled
+  -/
+  coreSpecs : Std.HashMap LaterType Expr         := {}
+  /--
+    Characterizations of the other constants of each recognized later-declared type,
+    each with a proof if it is proved from the theorems in the environment, e.g.
+    `⟨some ⟨sub_eq_add_neg⟩, none, ⋯⟩ : RealInterpUnlifted.ExtSpec ri`. Only
+    constructed if `auto.lamLater.spec` is enabled
+  -/
+  extSpecs : Std.HashMap LaterType Expr          := {}
+  /-- The constants whose characterizations in `extSpecs` have proofs -/
+  extAvail : Std.HashSet LaterConst              := {}
   /--
     Recognized forms, indexed by the head constants of their canonical forms and of the
     δ-unfoldings of the canonical forms, e.g. `HAdd.hAdd`, `Add.add` and the (private)
@@ -194,6 +230,151 @@ private def LaterConst.canonical? (lc : LaterConst) : MetaM (Option Expr) := do
     return .none
   return .some canon
 
+/-- `intros; apply n`, closing the remaining goals by assumption -/
+private def byApply (n : Name) : CoreM Term :=
+  `(by intros; apply $(mkIdent n) <;> try assumption)
+
+/--
+  Candidate proofs of the field `field` of the structures characterizing the constants of `t`
+    (see `LaterType.specs`). Theorems are referred to by name because Mathlib is not available
+    when `lean-auto` is compiled. Each candidate is elaborated against the statement of the
+    field, and the first one that succeeds is used
+-/
+private def LaterType.specProofs (t : LaterType) (field : Name) : CoreM (Array Term) := do
+  let thms (ns : List Name) : CoreM (Array Term) := ns.toArray.mapM byApply
+  let conj (ns : List Name) : CoreM (Array Term) := do
+    let ts ← ns.toArray.mapM byApply
+    return #[← `(⟨$ts,*⟩)]
+  match t, field with
+  -- `RealInterpUnlifted.CoreSpec`
+  | .real, `add_assoc       => thms [`add_assoc]
+  | .real, `add_comm        => thms [`add_comm]
+  | .real, `zero_add        => thms [`zero_add]
+  | .real, `add_neg_cancel  => thms [`add_neg_cancel, `add_right_neg]
+  | .real, `mul_assoc       => thms [`mul_assoc]
+  | .real, `mul_comm        => thms [`mul_comm]
+  | .real, `one_mul         => thms [`one_mul]
+  | .real, `mul_add         => thms [`mul_add, `left_distrib]
+  | .real, `zero_ne_one     => thms [`zero_ne_one]
+  | .real, `mul_inv_cancel  => thms [`mul_inv_cancel₀]
+  | .real, `inv_zero        => thms [`inv_zero]
+  | .real, `le_refl         => thms [`le_refl]
+  | .real, `le_trans        => thms [`le_trans]
+  | .real, `le_antisymm     => thms [`le_antisymm]
+  | .real, `le_total        => thms [`le_total]
+  | .real, `add_le_add_left =>
+    -- The meanings of `add_le_add_left` and `add_le_add_right` have been swapped in Mathlib
+    return #[← `(fun _ _ z h => $(mkIdent `add_le_add) ($(mkIdent `le_refl) z) h)] ++
+      (← thms [`add_le_add_left, `add_le_add_right])
+  | .real, `mul_nonneg      => thms [`mul_nonneg, `Left.mul_nonneg]
+  | .real, `complete        => return #[← `(fun S => @$(mkIdent `Real.exists_isLUB) S)]
+  -- `RealInterpUnlifted.ExtSpec`
+  | .real, `sub             => thms [`sub_eq_add_neg]
+  | .real, `div             => thms [`div_eq_mul_inv]
+  | .real, `ofNat           => conj [`Nat.cast_zero, `Nat.cast_succ]
+  | .real, `ofInt           => conj [`Int.cast_one, `Int.cast_add]
+  | .real, `lt              => thms [`lt_iff_le_not_ge, `lt_iff_le_not_le]
+  | .real, `max             => conj [`max_eq_left, `max_eq_right]
+  | .real, `min             => conj [`min_eq_left, `min_eq_right]
+  | .real, `abs             => conj [`abs_of_nonneg, `abs_of_nonpos]
+  | .real, `ofScientific    => return #[← `(fun m s e => ($(mkIdent `Rat.cast_ofScientific) m s e).symm)]
+  | .real, `floor           => conj [`Int.floor_le, `Int.lt_floor_add_one]
+  | .real, `ceil            => conj [`Int.le_ceil, `Int.ceil_lt_add_one]
+  | .real, `pow             => conj [`pow_zero, `pow_succ]
+  | .real, `sqrt            => conj [`Real.sqrt_nonneg, `Real.mul_self_sqrt, `Real.sqrt_eq_zero_of_nonpos]
+  | .real, `ofRat           => conj [`Rat.cast_one, `Rat.cast_add, `Rat.cast_mul]
+  | _, _ => return #[]
+
+/-- Elaborate `stx` against `type`, returning a proof without metavariables -/
+private def elabProof (stx : Term) (type : Expr) : MetaM Expr := withoutModifyingState do
+  Core.resetMessageLog
+  let e ← Elab.Term.TermElabM.run' <| Elab.Term.withoutErrToSorry do
+    let e ← Elab.Term.elabTermEnsuringType stx type
+    Elab.Term.synthesizeSyntheticMVarsNoPostponing
+    instantiateMVars e
+  if (← Core.getMessageLog).hasErrors then
+    throwError "{decl_name%} :: Errors: {(← Core.getMessageLog).toList.map (·.data)}"
+  if e.hasMVar || e.hasSyntheticSorry then
+    throwError "{decl_name%} :: The proof `{e}` is incomplete"
+  return e
+
+/-- Reduce the projections of the structure `interpName` applied to its constructor -/
+private def reduceInterpProjs (interpName : Name) (e : Expr) : MetaM Expr :=
+  Meta.transform e (post := fun e => do
+    let .some e' ← Meta.reduceProjOf? e (· == interpName)
+      | return .continue
+    return .visit (← Meta.whnfCore e'))
+
+/--
+  The constructor of the structure `structName` applied to `params`, and the fields of the
+    structure with their statements. Each statement is also given with the projections of
+    the structure `interpName` reduced, e.g. `(RealInterpUnlifted.mk _ ⋯).add x y` to the
+    canonical form `HAdd.hAdd x y`
+-/
+private def specFields (structName interpName : Name) (params : Array Expr) :
+  MetaM (Expr × Array (Name × Expr × Expr)) := do
+  let ctor := getStructureCtor (← getEnv) structName
+  -- The interpretations of later-declared types are in `Type`
+  let lvls := ctor.levelParams.map fun _ => .zero
+  let ctorTy := ctor.type.instantiateLevelParams ctor.levelParams lvls
+  -- The fields of the structure do not depend on each other
+  let fields ← Meta.forallTelescope (← Meta.instantiateForall ctorTy params) fun xs _ =>
+    xs.mapM fun x => do
+      let stmt ← Meta.inferType x
+      return (← x.fvarId!.getUserName, stmt, ← reduceInterpProjs interpName stmt)
+  return (.const ctor.name lvls, fields)
+
+/--
+  Prove the structures characterizing the constants of `t` (see `LaterType.specs`)
+    from the theorems in the environment, given the un-lifted interpretation `interp`
+    of the constants of `t`
+-/
+private def LaterInfo.addSpecs (li : LaterInfo) (t : LaterType) (interp : Expr) : MetaM LaterInfo := do
+  let .some (coreName, extName) := t.specs
+    | return li
+  let ty := Lam2D.interpLaterTypeAsUnlifted t
+  let .some interpName := (← Meta.inferType interp).getAppFn.constName?
+    | throwError "{decl_name%} :: Unexpected interpretation {interp}"
+  let params := (t.deps.push t).map Lam2D.interpLaterTypeAsUnlifted |>.push interp
+  let prove (field : Name) (stmt : Expr) : MetaM (Option Expr) := do
+    for stx in ← LaterType.specProofs t field do
+      try
+        return .some (← elabProof stx stmt)
+      catch err =>
+        trace[auto.lamLater] "{decl_name%} :: `{stx}` does not prove `{field}` for `{ty}`: {err.toMessageData}"
+    return .none
+  let mut li := li
+  -- The core constants, as a whole
+  let (coreCtor, coreFields) ← specFields coreName interpName params
+  let mut coreProofs := #[]
+  let mut coreFailed := #[]
+  for (field, _, stmt) in coreFields do
+    match ← prove field stmt with
+    | .some proof => coreProofs := coreProofs.push proof
+    | .none => coreFailed := coreFailed.push field
+  if coreFailed.isEmpty then
+    li := { li with coreSpecs := li.coreSpecs.insert t (mkAppN coreCtor (params ++ coreProofs)) }
+  -- The other constants, each with an optional proof
+  let (extCtor, extFields) ← specFields extName interpName params
+  let mut extArgs := #[]
+  let mut extFailed := #[]
+  for (field, stmt, _) in extFields do
+    let .app (.const ``Option optLvls) plift@(.app (.const ``PLift pliftLvls) p) := stmt
+      | throwError "{decl_name%} :: Field `{field}` of `{extName}` is not of the form `Option (PLift _)`"
+    -- `p` is `ri.extProp rc`
+    let reducedP ← reduceInterpProjs interpName (← Meta.whnfD p)
+    if let .some proof ← prove field reducedP then
+      let proof := mkApp2 (.const ``PLift.up pliftLvls) p proof
+      extArgs := extArgs.push (mkApp2 (.const ``Option.some optLvls) plift proof)
+      if let .some lc := t.consts.find? (·.specField == field) then
+        li := { li with extAvail := li.extAvail.insert lc }
+    else
+      extArgs := extArgs.push (mkApp (.const ``Option.none optLvls) plift)
+      extFailed := extFailed.push field
+  li := { li with extSpecs := li.extSpecs.insert t (mkAppN extCtor (params ++ extArgs)) }
+  trace[auto.lamLater] "Characterizations of `{ty}`: core constants {if coreFailed.isEmpty then m!"proved" else m!"not proved, failed: {coreFailed.toList}"}; other constants not proved: {extFailed.toList}"
+  return li
+
 /-- Recognize `t` and the canonical forms of its constants from the environment -/
 private def LaterInfo.add (li : LaterInfo) (t : LaterType) : MetaM LaterInfo := do
   if !t.enabled (← getOptions) then
@@ -220,7 +401,10 @@ private def LaterInfo.add (li : LaterInfo) (t : LaterType) : MetaM LaterInfo := 
       return li
   let mut li := { li with types := li.types.insert t ty, elems := li.elems.insert t elem }
   let elems := (t.deps.push t).filterMap li.elems.get?
-  li := { li with interps := li.interps.insert t (t.mkInterp canons elems) }
+  let interp := t.mkInterp canons elems
+  li := { li with interps := li.interps.insert t interp }
+  if auto.lamLater.spec.get (← getOptions) then
+    li ← li.addSpecs t interp
   let mut forms := #[]
   let mut missing := #[]
   for (lc, e?) in t.consts.zip canons do
@@ -324,6 +508,26 @@ def LaterInfo.laterValExpr (li : LaterInfo) (u : Level) : Expr :=
       let realLiftedTy := Expr.app laterTy (.const ``LaterType.real [])
       let realZero := Lean.mkApp2 (.const ``RealInterp.zero [u]) realLiftedTy real
       Lean.mkApp2 (.const ``ComplexInterp.default [u]) realLiftedTy realZero
-  Lean.mkApp3 (.const ``LaterVal.mk [u]) (li.laterTyValExpr u) real complex
+  -- Characterizations of the constants of `Real`
+  let laterRealTy := Expr.app (li.laterTyValExpr u) (.const ``LaterType.real [])
+  let realLowered := Lean.mkApp2 (.const ``RealInterp.lower [u]) laterRealTy real
+  let coreSpecTy := Lean.mkApp2 (.const ``RealInterpUnlifted.CoreSpec [u]) laterRealTy realLowered
+  let coreOptTy := Expr.app (.const ``PLift [.zero]) coreSpecTy
+  let realCore := match li.interps.get? .real, li.coreSpecs.get? .real with
+    | .some ri, .some h =>
+      let h := Lean.mkApp3 (.const ``RealInterpUnlifted.CoreSpec.toRealInterp [u]) realTy ri h
+      Lean.mkApp2 (.const ``Option.some [.zero]) coreOptTy (Lean.mkApp2 (.const ``PLift.up [.zero]) coreSpecTy h)
+    | _, _ => Expr.app (.const ``Option.none [.zero]) coreOptTy
+  let realExt := match li.interps.get? .real, li.extSpecs.get? .real with
+    | .some ri, .some e => Lean.mkApp3 (.const ``RealInterpUnlifted.ExtSpec.toRealInterp [u]) realTy ri e
+    | _, _ => Lean.mkApp2 (.const ``RealInterpUnlifted.ExtSpec.none [u]) laterRealTy realLowered
+  mkAppN (.const ``LaterVal.mk [u]) #[li.laterTyValExpr u, real, complex, realCore, realExt]
+
+/--
+  The characterizations available in `li.laterValExpr u`. It must be equal to `LaterVal.specAvail`
+    of `li.laterValExpr u` by reduction, which is checked by the kernel
+-/
+def LaterInfo.specAvail (li : LaterInfo) : LaterSpecAvail :=
+  ⟨li.coreSpecs.contains .real, RealConst.all.filter fun rc => li.extAvail.contains (.real rc)⟩
 
 end Auto.LamLater

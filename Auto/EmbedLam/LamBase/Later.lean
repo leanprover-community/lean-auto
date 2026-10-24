@@ -198,7 +198,7 @@ def RealConst.LamWF.ofCheck (H : c.lamCheck = s) : LamWF c s := by
   cases H; cases c <;> constructor
 
 /-- Un-lifted interpretation of the constants associated with `LaterType.real` -/
-structure RealInterpUnlifted (R : Type) where
+structure RealInterpUnlifted (R : Type u) where
   zero : R
   one : R
   add : R → R → R
@@ -225,12 +225,116 @@ structure RealInterpUnlifted (R : Type) where
   An arbitrary un-lifted interpretation of the constants associated with `LaterType.real`,
     used for the constants that are not recognized. `r` is an arbitrary element of `R`
 -/
-def RealInterpUnlifted.default (R : Type) (r : R) : RealInterpUnlifted R :=
+def RealInterpUnlifted.default (R : Type u) (r : R) : RealInterpUnlifted R :=
   ⟨r, r, fun _ _ => r, fun _ _ => r, fun _ _ => r, fun _ _ => r,
    fun _ => r, fun _ => r, fun _ => r, fun _ => r,
    fun _ _ => True, fun _ _ => True, fun _ _ => r, fun _ _ => r,
    fun _ => r, fun _ _ _ => r, fun _ => 0, fun _ => 0,
    fun _ _ => r, fun _ => r, fun _ => r⟩
+
+/--
+  The core constants `zero, one, add, neg, mul, inv, le` of `ri` form a complete ordered
+    field (with `inv zero = zero`), which characterizes `Real` up to unique isomorphism
+-/
+structure RealInterpUnlifted.CoreSpec (ri : RealInterpUnlifted R) : Prop where
+  add_assoc : ∀ x y z, ri.add (ri.add x y) z = ri.add x (ri.add y z)
+  add_comm : ∀ x y, ri.add x y = ri.add y x
+  zero_add : ∀ x, ri.add ri.zero x = x
+  add_neg_cancel : ∀ x, ri.add x (ri.neg x) = ri.zero
+  mul_assoc : ∀ x y z, ri.mul (ri.mul x y) z = ri.mul x (ri.mul y z)
+  mul_comm : ∀ x y, ri.mul x y = ri.mul y x
+  one_mul : ∀ x, ri.mul ri.one x = x
+  mul_add : ∀ x y z, ri.mul x (ri.add y z) = ri.add (ri.mul x y) (ri.mul x z)
+  zero_ne_one : ri.zero ≠ ri.one
+  mul_inv_cancel : ∀ x, x ≠ ri.zero → ri.mul x (ri.inv x) = ri.one
+  inv_zero : ri.inv ri.zero = ri.zero
+  le_refl : ∀ x, ri.le x x
+  le_trans : ∀ x y z, ri.le x y → ri.le y z → ri.le x z
+  le_antisymm : ∀ x y, ri.le x y → ri.le y x → x = y
+  le_total : ∀ x y, ri.le x y ∨ ri.le y x
+  add_le_add_left : ∀ x y z, ri.le x y → ri.le (ri.add z x) (ri.add z y)
+  mul_nonneg : ∀ x y, ri.le ri.zero x → ri.le ri.zero y → ri.le ri.zero (ri.mul x y)
+  complete : ∀ S : R → Prop, (∃ x, S x) → (∃ b, ∀ x, S x → ri.le x b) →
+    ∃ s, (∀ x, S x → ri.le x s) ∧ ∀ b, (∀ x, S x → ri.le x b) → ri.le s b
+
+/-- All constants associated with `LaterType.real` -/
+def RealConst.all : List RealConst :=
+  [.zero, .one, .add, .sub, .mul, .div, .neg, .inv, .ofNat, .ofInt,
+   .le, .lt, .max, .min, .abs, .ofScientific, .floor, .ceil, .pow, .sqrt, .ofRat]
+
+/--
+  Characterization of each constant of `ri` other than the core constants (see `CoreSpec`).
+    It determines the constant from the core constants, except that `floor` and `ceil`
+    also use `ofInt` and `lt`, and `ofScientific` also uses `ofRat`. The core constants
+    are characterized by `CoreSpec` instead
+-/
+def RealInterpUnlifted.extProp (ri : RealInterpUnlifted R) : RealConst → Prop
+| .sub => ∀ x y, ri.sub x y = ri.add x (ri.neg y)
+| .div => ∀ x y, ri.div x y = ri.mul x (ri.inv y)
+| .ofNat => ri.ofNat 0 = ri.zero ∧ ∀ n, ri.ofNat (n + 1) = ri.add (ri.ofNat n) ri.one
+| .ofInt => ri.ofInt 1 = ri.one ∧ ∀ m n, ri.ofInt (m + n) = ri.add (ri.ofInt m) (ri.ofInt n)
+| .lt => ∀ x y, ri.lt x y ↔ ri.le x y ∧ ¬ ri.le y x
+| .max => (∀ x y, ri.le y x → ri.max x y = x) ∧ ∀ x y, ri.le x y → ri.max x y = y
+| .min => (∀ x y, ri.le x y → ri.min x y = x) ∧ ∀ x y, ri.le y x → ri.min x y = y
+| .abs => (∀ x, ri.le ri.zero x → ri.abs x = x) ∧ ∀ x, ri.le x ri.zero → ri.abs x = ri.neg x
+| .ofScientific => ∀ m s e, ri.ofScientific m s e = ri.ofRat (Rat.ofScientific m s e)
+| .floor => (∀ x, ri.le (ri.ofInt (ri.floor x)) x) ∧ ∀ x, ri.lt x (ri.add (ri.ofInt (ri.floor x)) ri.one)
+| .ceil => (∀ x, ri.le x (ri.ofInt (ri.ceil x))) ∧ ∀ x, ri.lt (ri.ofInt (ri.ceil x)) (ri.add x ri.one)
+| .pow => (∀ x, ri.pow x 0 = ri.one) ∧ ∀ x n, ri.pow x (n + 1) = ri.mul (ri.pow x n) x
+| .sqrt => (∀ x, ri.le ri.zero (ri.sqrt x)) ∧
+  (∀ x, ri.le ri.zero x → ri.mul (ri.sqrt x) (ri.sqrt x) = x) ∧ ∀ x, ri.le x ri.zero → ri.sqrt x = ri.zero
+| .ofRat => ri.ofRat 1 = ri.one ∧ (∀ p q, ri.ofRat (p + q) = ri.add (ri.ofRat p) (ri.ofRat q)) ∧
+  ∀ p q, ri.ofRat (p * q) = ri.mul (ri.ofRat p) (ri.ofRat q)
+| .zero | .one | .add | .neg | .mul | .inv | .le => True
+
+/--
+  Characterizations of the constants of `ri` other than the core constants (see `extProp`),
+    one optional proof per constant. Each field is named after its constant
+-/
+structure RealInterpUnlifted.ExtSpec (ri : RealInterpUnlifted R) : Type where
+  sub : Option (PLift (ri.extProp .sub))
+  div : Option (PLift (ri.extProp .div))
+  ofNat : Option (PLift (ri.extProp .ofNat))
+  ofInt : Option (PLift (ri.extProp .ofInt))
+  lt : Option (PLift (ri.extProp .lt))
+  max : Option (PLift (ri.extProp .max))
+  min : Option (PLift (ri.extProp .min))
+  abs : Option (PLift (ri.extProp .abs))
+  ofScientific : Option (PLift (ri.extProp .ofScientific))
+  floor : Option (PLift (ri.extProp .floor))
+  ceil : Option (PLift (ri.extProp .ceil))
+  pow : Option (PLift (ri.extProp .pow))
+  sqrt : Option (PLift (ri.extProp .sqrt))
+  ofRat : Option (PLift (ri.extProp .ofRat))
+
+/-- The characterization of `rc` in `e`, if available. Core constants have none -/
+def RealInterpUnlifted.ExtSpec.get? {ri : RealInterpUnlifted R} (e : ri.ExtSpec) : (rc : RealConst) → Option (PLift (ri.extProp rc))
+| .sub => e.sub
+| .div => e.div
+| .ofNat => e.ofNat
+| .ofInt => e.ofInt
+| .lt => e.lt
+| .max => e.max
+| .min => e.min
+| .abs => e.abs
+| .ofScientific => e.ofScientific
+| .floor => e.floor
+| .ceil => e.ceil
+| .pow => e.pow
+| .sqrt => e.sqrt
+| .ofRat => e.ofRat
+| .zero | .one | .add | .neg | .mul | .inv | .le => .none
+
+/-- The constants whose characterizations are available in `e`, in the order of `RealConst.all` -/
+def RealInterpUnlifted.ExtSpec.avail {ri : RealInterpUnlifted R} (e : ri.ExtSpec) : List RealConst :=
+  RealConst.all.filter fun rc => (e.get? rc).isSome
+
+theorem RealInterpUnlifted.ExtSpec.isSome_of_mem_avail {ri : RealInterpUnlifted R} {e : ri.ExtSpec} (h : rc ∈ e.avail) :
+  (e.get? rc).isSome := (List.mem_filter.mp h).right
+
+/-- No characterization is available -/
+def RealInterpUnlifted.ExtSpec.none (ri : RealInterpUnlifted R) : ri.ExtSpec :=
+  ⟨.none, .none, .none, .none, .none, .none, .none, .none, .none, .none, .none, .none, .none, .none⟩
 
 /-- Interpretation of the constants associated with `LaterType.real` -/
 structure RealInterp (R : Type u) where
@@ -256,7 +360,7 @@ structure RealInterp (R : Type u) where
   sqrt : R → R
   ofRat : GLift.{1, u} Rat → R
 
-def RealInterpUnlifted.toRealInterp.{u} (ri : RealInterpUnlifted R) : RealInterp (GLift.{1, u} R) where
+def RealInterpUnlifted.toRealInterp.{u} {R : Type} (ri : RealInterpUnlifted R) : RealInterp (GLift.{1, u} R) where
   zero := GLift.up ri.zero
   one := GLift.up ri.one
   add x y := GLift.up (ri.add x.down y.down)
@@ -286,6 +390,88 @@ def RealInterp.default : RealInterp PUnit.{u + 1} :=
    fun _ _ => GLift.up True, fun _ _ => GLift.up True, fun _ _ => .unit, fun _ _ => .unit,
    fun _ => .unit, fun _ _ _ => .unit, fun _ => GLift.up 0, fun _ => GLift.up 0,
    fun _ _ => .unit, fun _ => .unit, fun _ => .unit⟩
+
+/--
+  `ri` with the propositions and the values of builtin types un-lifted, so that the
+    characterizations `CoreSpec` and `ExtSpec` apply to it
+-/
+def RealInterp.lower (ri : RealInterp R) : RealInterpUnlifted R where
+  zero := ri.zero
+  one := ri.one
+  add := ri.add
+  sub := ri.sub
+  mul := ri.mul
+  div := ri.div
+  neg := ri.neg
+  inv := ri.inv
+  ofNat n := ri.ofNat (GLift.up n)
+  ofInt n := ri.ofInt (GLift.up n)
+  le x y := (ri.le x y).down
+  lt x y := (ri.lt x y).down
+  max := ri.max
+  min := ri.min
+  abs := ri.abs
+  ofScientific m s e := ri.ofScientific (GLift.up m) (GLift.up s) (GLift.up e)
+  floor x := (ri.floor x).down
+  ceil x := (ri.ceil x).down
+  pow x n := ri.pow x (GLift.up n)
+  sqrt := ri.sqrt
+  ofRat q := ri.ofRat (GLift.up q)
+
+theorem RealInterpUnlifted.CoreSpec.toRealInterp {R : Type} {ri : RealInterpUnlifted R}
+  (h : ri.CoreSpec) : (ri.toRealInterp.{u}).lower.CoreSpec where
+  add_assoc x y z := congrArg GLift.up (h.add_assoc x.down y.down z.down)
+  add_comm x y := congrArg GLift.up (h.add_comm x.down y.down)
+  zero_add x := congrArg GLift.up (h.zero_add x.down)
+  add_neg_cancel x := congrArg GLift.up (h.add_neg_cancel x.down)
+  mul_assoc x y z := congrArg GLift.up (h.mul_assoc x.down y.down z.down)
+  mul_comm x y := congrArg GLift.up (h.mul_comm x.down y.down)
+  one_mul x := congrArg GLift.up (h.one_mul x.down)
+  mul_add x y z := congrArg GLift.up (h.mul_add x.down y.down z.down)
+  zero_ne_one heq := h.zero_ne_one (congrArg GLift.down heq)
+  mul_inv_cancel x hx := congrArg GLift.up (h.mul_inv_cancel x.down fun heq => hx (congrArg GLift.up heq))
+  inv_zero := congrArg GLift.up h.inv_zero
+  le_refl x := h.le_refl x.down
+  le_trans x y z := h.le_trans x.down y.down z.down
+  le_antisymm x y hxy hyx := congrArg GLift.up (h.le_antisymm x.down y.down hxy hyx)
+  le_total x y := h.le_total x.down y.down
+  add_le_add_left x y z := h.add_le_add_left x.down y.down z.down
+  mul_nonneg x y := h.mul_nonneg x.down y.down
+  complete S hne hbdd :=
+    have ⟨x, hx⟩ := hne
+    have ⟨b, hb⟩ := hbdd
+    have ⟨s, hs₁, hs₂⟩ := h.complete (fun r => S (GLift.up r)) ⟨x.down, hx⟩ ⟨b.down, fun r hr => hb (GLift.up r) hr⟩
+    ⟨GLift.up s, fun y hy => hs₁ y.down hy, fun b' hb' => hs₂ b'.down fun r hr => hb' (GLift.up r) hr⟩
+
+theorem RealInterpUnlifted.extProp_toRealInterp {R : Type} {ri : RealInterpUnlifted R} :
+  (rc : RealConst) → ri.extProp rc → (ri.toRealInterp.{u}).lower.extProp rc
+| .sub, h => fun x y => congrArg GLift.up (h x.down y.down)
+| .div, h => fun x y => congrArg GLift.up (h x.down y.down)
+| .ofNat, h => ⟨congrArg GLift.up h.left, fun n => congrArg GLift.up (h.right n)⟩
+| .ofInt, h => ⟨congrArg GLift.up h.left, fun m n => congrArg GLift.up (h.right m n)⟩
+| .lt, h => fun x y => h x.down y.down
+| .max, h => ⟨fun x y hyx => congrArg GLift.up (h.left x.down y.down hyx),
+              fun x y hxy => congrArg GLift.up (h.right x.down y.down hxy)⟩
+| .min, h => ⟨fun x y hxy => congrArg GLift.up (h.left x.down y.down hxy),
+              fun x y hyx => congrArg GLift.up (h.right x.down y.down hyx)⟩
+| .abs, h => ⟨fun x hx => congrArg GLift.up (h.left x.down hx), fun x hx => congrArg GLift.up (h.right x.down hx)⟩
+| .ofScientific, h => fun m s e => congrArg GLift.up (h m s e)
+| .floor, h => ⟨fun x => h.left x.down, fun x => h.right x.down⟩
+| .ceil, h => ⟨fun x => h.left x.down, fun x => h.right x.down⟩
+| .pow, h => ⟨fun x => congrArg GLift.up (h.left x.down), fun x n => congrArg GLift.up (h.right x.down n)⟩
+| .sqrt, h => ⟨fun x => h.left x.down, fun x hx => congrArg GLift.up (h.right.left x.down hx),
+               fun x hx => congrArg GLift.up (h.right.right x.down hx)⟩
+| .ofRat, h => ⟨congrArg GLift.up h.left, fun p q => congrArg GLift.up (h.right.left p q),
+               fun p q => congrArg GLift.up (h.right.right p q)⟩
+| .zero, h | .one, h | .add, h | .neg, h | .mul, h | .inv, h | .le, h => h
+
+def RealInterpUnlifted.ExtSpec.toRealInterp {R : Type} {ri : RealInterpUnlifted R}
+  (e : ri.ExtSpec) : (ri.toRealInterp.{u}).lower.ExtSpec :=
+  let lift (rc : RealConst) (h? : Option (PLift (ri.extProp rc))) :=
+    h?.map fun h => PLift.up (extProp_toRealInterp rc h.down)
+  ⟨lift .sub e.sub, lift .div e.div, lift .ofNat e.ofNat, lift .ofInt e.ofInt, lift .lt e.lt,
+   lift .max e.max, lift .min e.min, lift .abs e.abs, lift .ofScientific e.ofScientific,
+   lift .floor e.floor, lift .ceil e.ceil, lift .pow e.pow, lift .sqrt e.sqrt, lift .ofRat e.ofRat⟩
 
 def RealConst.interp (tyVal : TyVal.{u}) (ri : RealInterp (tyVal.later .real)) :
   (c : RealConst) → c.lamCheck.interp tyVal
@@ -768,10 +954,30 @@ def LaterConst.LamWF.ofCheck (H : l.lamCheck = s) : LamWF l s := by
 | .real    => real
 | .complex => complex
 
-/-- Interpretation of the constants associated with each later-declared type -/
+/--
+  Interpretation of the constants associated with each later-declared type, with the
+    available characterizations of the constants (see `RealInterpUnlifted.CoreSpec`
+    and `RealInterpUnlifted.ExtSpec`)
+-/
 structure LaterVal (later : LaterType → Type u) where
-  real    : RealInterp (later .real)
-  complex : ComplexInterp (later .real) (later .complex)
+  real     : RealInterp (later .real)
+  complex  : ComplexInterp (later .real) (later .complex)
+  /-- Characterization of the core constants of `real`, if available -/
+  realCore : Option (PLift real.lower.CoreSpec)
+  /-- Characterizations of the other constants of `real`, each if available -/
+  realExt  : real.lower.ExtSpec
+
+/--
+  The characterizations available in a `LaterVal`, as data that the checker
+    can compute with (the checker cannot inspect the `LaterVal` itself)
+-/
+structure LaterSpecAvail where
+  realCore : Bool
+  realExt  : List RealConst
+deriving Inhabited, Lean.ToExpr
+
+def LaterVal.specAvail (lv : LaterVal later) : LaterSpecAvail :=
+  ⟨lv.realCore.isSome, lv.realExt.avail⟩
 
 def LaterConst.interp (tyVal : TyVal.{u}) (lv : LaterVal tyVal.later) :
   (l : LaterConst) → l.lamCheck.interp tyVal

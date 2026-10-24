@@ -367,7 +367,7 @@ def newChkStep (c : ChkStep) (res? : Option EvalResult) : ReifM (Bool × EvalRes
   if let .some (res, _) := (← getChkStepCache).get? c then
     return (false, res)
   let ltv ← getLamTyValAtMeta
-  let res := c.eval ltv.lamVarTy ltv.lamILTy ⟨← getRTableTree, ← getMaxEVarSucc, ← getLamEVarTyTree⟩
+  let res := c.eval ltv.lamVarTy ltv.lamILTy (← getLaterInfo).specAvail ⟨← getRTableTree, ← getMaxEVarSucc, ← getLamEVarTyTree⟩
   if let .some res' := res? then
     if res' != res then
       throwError "{decl_name%} :: Result {res} of ChkStep {c} does not match with expected {res'}"
@@ -1405,7 +1405,22 @@ def processLam0Arg2 (e fn arg₁ _arg₂ : Expr) : MetaM (Option LamTerm) := do
               return .some (tcon n)
   return .none
 
+/--
+  fn   : .const _ _
+  arg₁ : .const _ _
+-/
+def reifMapLam0Arg3NoLit : Std.HashMap (Name × Name) (Expr × LamTerm) :=
+  Std.HashMap.ofList [
+    -- Mathlib's `abs {α} [Lattice α] [AddGroup α]`
+    ((`abs, ``Int), (.const ``Int.abs [], .base .iabs))
+  ]
+
 def processLam0Arg3 (e fn arg₁ arg₂ _arg₃ : Expr) : MetaM (Option LamTerm) := do
+  if let .const fnName _ := fn then
+    if let .const arg₁Name _ := arg₁ then
+      if let .some (e', t) := reifMapLam0Arg3NoLit.get? (fnName, arg₁Name) then
+        if (← Meta.isDefEqD e e') then
+          return .some t
   match fn with
   | .const ``OfNat.ofNat _ =>
     match arg₁ with
@@ -1845,10 +1860,12 @@ section BuildChecker
       let hImportExpr ← Meta.mkAppM ``Eq.refl #[ifExpr]
       let hLvtExpr ← Meta.mkAppM ``Eq.refl #[lvtExpr]
       let hLitExpr ← Meta.mkAppM ``Eq.refl #[litExpr]
+      let lsaExpr := Lean.toExpr (← getLaterInfo).specAvail
+      let hLsaExpr ← Meta.mkAppM ``Eq.refl #[lsaExpr]
       let heqExpr ← Meta.mkAppM ``Eq.refl #[← Meta.mkAppM ``Option.some #[Lean.toExpr (lctx, t)]]
       let getEntry := Lean.mkAppN (.const ``Checker.getValidExport_indirectReduce [u])
         #[cpvFVarExpr, itExpr, csExpr, vExpr, ifExpr, hImportExpr,
-          lvtExpr, litExpr, hLvtExpr, hLitExpr, Lean.toExpr lctx, Lean.toExpr t, heqExpr]
+          lvtExpr, litExpr, hLvtExpr, hLitExpr, lsaExpr, hLsaExpr, Lean.toExpr lctx, Lean.toExpr t, heqExpr]
       let getEntry ← Meta.mkLetFVars #[cpvFVarExpr] getEntry
       trace[auto.buildChecker] "Checker expression built in time {(← IO.monoMsNow) - startTime}ms"
       return getEntry
@@ -1889,6 +1906,8 @@ section BuildChecker
     let lvtNativeName ← mkNativeAuxDecl `lam_ssrefl_lvt (Expr.app (.const ``BinTree [.zero]) (Lean.mkConst ``LamSort)) lvtExpr
     let litExpr := Lean.toExpr (BinTree.ofListGet (← getLamILTy).toList)
     let litNativeName ← mkNativeAuxDecl `lam_ssrefl_lit (Expr.app (.const ``BinTree [.zero]) (Lean.mkConst ``LamSort)) litExpr
+    let lsaExpr := Lean.toExpr (← getLaterInfo).specAvail
+    let lsaNativeName ← mkNativeAuxDecl `lam_ssrefl_lsa (Lean.mkConst ``LaterSpecAvail) lsaExpr
     let cpvExpr ← buildCPValExpr
     let cpvTy := Expr.const ``CPVal [u]
     let checker ← Meta.withLetDecl `cpval cpvTy cpvExpr fun cpvFVarExpr => do
@@ -1902,15 +1921,16 @@ section BuildChecker
       let hImportExpr ← Meta.mkAppM ``Eq.refl #[Lean.mkConst ifNativeName]
       let hLvtExpr ← Meta.mkAppM ``Eq.refl #[Lean.mkConst lvtNativeName]
       let hLitExpr ← Meta.mkAppM ``Eq.refl #[Lean.mkConst litNativeName]
-      let heqBoolExpr := Lean.mkApp7 (.const ``Checker.getValidExport_indirectReduce_reflection_runEq [])
-        (Lean.mkConst lvtNativeName) (Lean.mkConst litNativeName) (Lean.mkConst ifNativeName)
-        (Lean.mkConst csNativeName) vExpr (Lean.toExpr lctx) (Lean.toExpr t)
+      let hLsaExpr ← Meta.mkAppM ``Eq.refl #[Lean.mkConst lsaNativeName]
+      let heqBoolExpr := Lean.mkAppN (.const ``Checker.getValidExport_indirectReduce_reflection_runEq [])
+        #[Lean.mkConst lvtNativeName, Lean.mkConst litNativeName, Lean.mkConst lsaNativeName,
+          Lean.mkConst ifNativeName, Lean.mkConst csNativeName, vExpr, Lean.toExpr lctx, Lean.toExpr t]
       let heqNativeName ← mkNativeAuxDecl `lam_ssrefl_hEq (Lean.mkConst ``Bool) heqBoolExpr
       let heqRflPrf ← Meta.mkEqRefl (toExpr true)
       let heqExpr := mkApp3 (Lean.mkConst ``Lean.ofReduceBool) (Lean.mkConst heqNativeName) (toExpr true) heqRflPrf
       let getEntry := Lean.mkAppN (.const ``Checker.getValidExport_indirectReduce_reflection [u])
         #[cpvFVarExpr, itExpr, csExpr, vExpr, ifExpr, hImportExpr,
-          lvtExpr, litExpr, hLvtExpr, hLitExpr, Lean.toExpr lctx, Lean.toExpr t, heqExpr]
+          lvtExpr, litExpr, hLvtExpr, hLitExpr, lsaExpr, hLsaExpr, Lean.toExpr lctx, Lean.toExpr t, heqExpr]
       let getEntry ← Meta.mkLetFVars #[cpvFVarExpr] getEntry
       trace[auto.buildChecker] "Checker expression built in time {(← IO.monoMsNow) - startTime}ms"
       return getEntry
@@ -2080,6 +2100,9 @@ open Embedding.Lam LamReif
       match cs with
       | .boolFacts => return .boolFacts
       | .iteSpec s => do return .iteSpec (← transLamSort ref s)
+      -- Characterizations do not contain atoms
+      | .realCoreSpec => return .realCoreSpec
+      | .realExtSpec rc => return .realExtSpec rc
     | .i cs => ChkStep.i <$>
       match cs with
       | .validOfBVarLower pv pn => return .validOfBVarLower (← transPos ref pv) (← transPos ref pn)

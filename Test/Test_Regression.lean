@@ -915,6 +915,18 @@ section NativeReal
     fail_if_success auto []
     contradiction
 
+  -- Mathlib's `abs` on `Int` (a function with two instance arguments, not `Abs.abs`)
+  example (x : Int) : abs x ≥ 0 ∧ abs (-x) = abs x ∧ abs (-3 : Int) = 3 := by auto
+
+  example (h : False) : abs (-1 : Int) = -1 := by
+    fail_if_success auto []
+    contradiction
+
+  -- The kernel checks that `abs` on `Int` is definitionally equal to `Int.abs`
+  set_option auto.smt false in
+  set_option auto.native true in
+  example (x : Int) (h : abs x ≥ 0) : abs x ≥ 0 := by auto [h]
+
   -- Decimal literals
   example : (1.5 : Real) + 0.5 = 2 ∧ (0.25 : Real) * 4 = 1 ∧ (2.5e2 : Real) = 250 := by auto
 
@@ -957,6 +969,99 @@ section NativeReal
   example (q : Rat) (h : False) : (Rat.cast q : Real) = Rat.cast (q + 1) := by
     fail_if_success auto []
     contradiction
+
+  -- Stand-ins for theorems of Mathlib, which prove the characterizations of some
+  --   constants of `Real` (see `RealInterpUnlifted.CoreSpec` and `RealInterpUnlifted.ExtSpec`)
+  theorem _root_.sub_eq_add_neg (a b : Real) : a - b = a + -b := rfl
+
+  theorem _root_.div_eq_mul_inv (a b : Real) : a / b = a * b⁻¹ := rfl
+
+  theorem _root_.lt_iff_le_not_ge {a b : Real} : a < b ↔ a ≤ b ∧ ¬ b ≤ a := by
+    show Real.lt a b ↔ Real.le a b ∧ ¬ Real.le b a
+    unfold Real.lt Real.le; grind
+
+  theorem _root_.max_eq_left {a b : Real} (h : b ≤ a) : max a b = a := by
+    show Real.sup a b = a
+    replace h : Real.le b a := h
+    unfold Real.sup; unfold Real.le at h; cases a; simp only [Real.mk.injEq]; grind
+
+  theorem _root_.max_eq_right {a b : Real} (h : a ≤ b) : max a b = b := by
+    show Real.sup a b = b
+    replace h : Real.le a b := h
+    unfold Real.sup; unfold Real.le at h; cases b; simp only [Real.mk.injEq]; grind
+
+  -- No stand-in for `min_eq_right`, so `min` is not characterized
+  theorem _root_.min_eq_left {a b : Real} (h : a ≤ b) : min a b = a := by
+    show Real.inf a b = a
+    replace h : Real.le a b := h
+    unfold Real.inf; unfold Real.le at h; cases a; simp only [Real.mk.injEq]; grind
+
+  theorem _root_.pow_zero (a : Real) : a ^ 0 = 1 := by
+    show (⟨a.val ^ 0⟩ : Real) = Real.one
+    unfold Real.one; rw [Rat.pow_zero]
+
+  theorem _root_.pow_succ (a : Real) (n : Nat) : a ^ (n + 1) = a ^ n * a := by
+    show (⟨a.val ^ (n + 1)⟩ : Real) = Real.mul ⟨a.val ^ n⟩ a
+    unfold Real.mul; rw [Rat.pow_succ]
+
+  -- The core constants are not characterized (e.g. there is no stand-in for `add_comm`),
+  --   while `sub, div, lt, max, pow` are
+  set_option auto.lamLater.spec true in
+  run_meta do
+    let li ← Auto.LamLater.LaterInfo.init
+    if li.coreSpecs.contains .real then
+      throwError "The core constants of `Real` should not be characterized"
+    let .some ext := li.extSpecs.get? .real
+      | throwError "The other constants of `Real` should have characterizations"
+    -- Fields `sub, div, ofNat, ofInt, lt, max, min, abs, ofScientific, floor, ceil, pow, sqrt, ofRat`
+    let proved := (ext.getAppArgs.extract 2).map (·.isAppOf ``Option.some)
+    unless proved == #[true, true, false, false, true, true, false, false, false, false, false, true, false, false] do
+      throwError "Unexpected characterizations {proved}"
+    -- The characterizations are checked by the kernel
+    Lean.addDecl (.defnDecl { name := `Real.extSpecTest, levelParams := [], type := ← Lean.Meta.inferType ext,
+                              value := ext, hints := .opaque, safety := .safe })
+
+  -- The characterizations are part of the valuation of the verified checker, which the
+  --   kernel checks together with the proof produced by the (emulated) native prover
+  set_option auto.lamLater.spec true in
+  set_option auto.smt false in
+  set_option auto.native true in
+  set_option auto.checker.buildMode "directReduce" in
+  example (x y : Real) (h : x - y ≤ max x y) : x - y ≤ max x y := by auto [h]
+
+  set_option auto.lamLater.spec true in
+  set_option auto.smt false in
+  set_option auto.native true in
+  set_option auto.checker.buildMode "indirectReduce" in
+  example (x y : Real) (h : x - y ≤ max x y) : x - y ≤ max x y := by auto [h]
+
+  set_option auto.lamLater.spec true in
+  set_option auto.smt false in
+  set_option auto.native true in
+  set_option auto.checker.buildMode "indirectReduce_reflection" in
+  example (x y : Real) (h : x - y ≤ max x y) : x - y ≤ max x y := by auto [h]
+
+  -- The checker step `FactStep.realExtSpec .max` produces the characterization of `max`,
+  --   which is available in the valuation
+  set_option auto.lamLater.spec true in
+  open Lean Auto Embedding.Lam in
+  run_meta do
+    let li ← Auto.LamLater.LaterInfo.init
+    let u := Level.zero
+    let tyVal := mkApp2 (.const ``TyVal.mk [u]) (.lam `_ (.const ``Nat []) (.const ``PUnit [.succ .zero]) .default)
+      (li.laterTyValExpr u)
+    let mk := mkApp2 (.const ``CPVal.mk [u]) tyVal (li.laterValExpr u)
+    let .forallE _ varTy (.forallE _ ilTy _ _) _ ← Meta.inferType mk
+      | throwError "Unexpected type of `CPVal.mk`"
+    let cpv := mkApp2 mk (← Meta.mkAppOptM ``BinTree.leaf #[varTy.appArg!]) (← Meta.mkAppOptM ``BinTree.leaf #[ilTy.appArg!])
+    let it := Expr.app (.const ``BinTree.leaf [.zero]) (mkApp2 (.const ``PSigma [.succ .zero, .zero])
+      (.const ``ImportEntry []) (.app (.const ``importTablePSigmaβ [u]) cpv))
+    let cs := toExpr (BinTree.leaf.insert 0 (ChkStep.f (.realExtSpec .max), 0) : ChkSteps)
+    let t := LamTerm.realExtSpec .max
+    let heq ← Meta.mkEqRefl (toExpr (Option.some (([] : List LamSort), t)))
+    let proof := mkAppN (.const ``Checker.getValidExport_directReduce [u])
+      #[toExpr ([] : List LamSort), toExpr t, cpv, it, cs, toExpr (0 : Nat), heq]
+    addDecl (.thmDecl { name := `Real.maxSpecTest, levelParams := [], type := ← Meta.inferType proof, value := proof })
 
 end NativeReal
 

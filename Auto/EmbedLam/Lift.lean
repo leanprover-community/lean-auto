@@ -3,6 +3,7 @@ module
 public import Auto.Lib.IsomType
 public import Auto.Lib.StringExtra
 public import Auto.Lib.BoolExtra
+public import Auto.Lib.IntExtra
 
 @[expose] public section
 
@@ -77,7 +78,7 @@ def inegLift.{u} (m : GLift.{1, u} Int) :=
   GLift.up (Int.neg m.down)
 
 def iabsLift.{u} (m : GLift.{1, u} Int) :=
-  GLift.up (ite (m.down < -m.down) (-m.down) m.down)
+  GLift.up (Int.abs m.down)
 
 def iaddLift.{u} (m n : GLift.{1, u} Int) :=
   GLift.up (Int.add m.down n.down)

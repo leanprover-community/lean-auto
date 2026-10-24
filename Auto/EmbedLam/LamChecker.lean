@@ -1,6 +1,7 @@
 module
 
 public import Auto.EmbedLam.LamTermInterp
+public import Auto.EmbedLam.LamLaterSpec
 public import Auto.EmbedLam.LamConv
 public import Auto.EmbedLam.LamInference
 public import Auto.EmbedLam.LamLCtx
@@ -518,6 +519,10 @@ inductive EtomStep where
 inductive FactStep where
   | boolFacts : FactStep
   | iteSpec  : LamSort → FactStep
+  /-- The characterization of the core constants of `Real`, if it is available in the valuation -/
+  | realCoreSpec : FactStep
+  /-- The characterization of a constant of `Real` that is not a core constant, if it is available in the valuation -/
+  | realExtSpec : RealConst → FactStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
 inductive InferenceStep where
@@ -668,6 +673,8 @@ section ChkStepToString
   def FactStep.toString : FactStep → String
   | .boolFacts => s!"boolFacts"
   | .iteSpec s => s!"iteSpec {s}"
+  | .realCoreSpec => s!"realCoreSpec"
+  | .realExtSpec rc => s!"realExtSpec {rc.reprAux}"
 
   def InferenceStep.toString : InferenceStep → String
   | .validOfBVarLower pv pn => s!"validOfBVarLower {pv} {pn}"
@@ -772,6 +779,8 @@ section ChkStepPremises
   def FactStep.premises : FactStep → List Nat
   | .boolFacts => []
   | .iteSpec _ => []
+  | .realCoreSpec => []
+  | .realExtSpec _ => []
 
   def InferenceStep.premises : InferenceStep → List Nat
   | .validOfBVarLower pv pn => [pv, pn]
@@ -1077,9 +1086,11 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
     | false => .fail
   | .none => .fail
 
-@[reducible] def FactStep.eval : (cs : FactStep) → EvalResult
+@[reducible] def FactStep.eval (lsa : LaterSpecAvail) : (cs : FactStep) → EvalResult
 | .boolFacts => .addEntry (.valid [] LamTerm.boolFacts)
 | .iteSpec s => .addEntry (.valid [] (LamTerm.iteSpec s))
+| .realCoreSpec => if lsa.realCore then .addEntry (.valid [] LamTerm.realCoreSpec) else .fail
+| .realExtSpec rc => if lsa.realExt.contains rc then .addEntry (.valid [] (LamTerm.realExtSpec rc)) else .fail
 
 @[reducible] def InferenceStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : InferenceStep) → EvalResult
 | .validOfBVarLower pv pn =>
@@ -1266,11 +1277,11 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
   | .some (lctx, s, t) => .addEntry (.wf lctx s (t.betaBounded bound))
   | .none => .fail
 
-def ChkStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : ChkStep) → EvalResult
+def ChkStep.eval (lvt lit : Nat → LamSort) (lsa : LaterSpecAvail) (r : RTable) : (cs : ChkStep) → EvalResult
 | .c s  => ConvStep.eval r s
 | .ca s => ConvAtStep.eval r s
 | .e s  => EtomStep.eval lvt lit r s
-| .f s  => FactStep.eval s
+| .f s  => FactStep.eval lsa s
 | .i s  => InferenceStep.eval lvt lit r s
 | .l s  => LCtxStep.eval r s
 | .n s  => NonemptyStep.eval lvt r s
@@ -1676,13 +1687,26 @@ theorem EtomStep.eval_correct
 
 theorem FactStep.eval_correct
   (r : RTable) (cv : CVal.{u} r.lamEVarTy):
-  (cs : FactStep) → EvalResult.correct r cv cs.eval
+  (cs : FactStep) → EvalResult.correct r cv (cs.eval cv.laterVal.specAvail)
 | .boolFacts => by
   dsimp [eval]; apply And.intro LamThmValid.boolFacts
   rw [LamTerm.maxEVarSucc_boolFacts]; apply Nat.zero_le
 | .iteSpec s => by
   dsimp [eval]; apply And.intro (LamThmValid.iteSpec _)
   rw [LamTerm.maxEVarSucc_iteSpec]; apply Nat.zero_le
+| .realCoreSpec => by
+  dsimp only [eval]; split
+  case isTrue h =>
+    apply And.intro (LamThmValid.realCoreSpec (cv.laterVal.realCore.get h).down)
+    rw [LamTerm.maxEVarSucc_realCoreSpec]; apply Nat.zero_le
+  case isFalse => exact True.intro
+| .realExtSpec rc => by
+  dsimp only [eval]; split
+  case isTrue h =>
+    have h := RealInterpUnlifted.ExtSpec.isSome_of_mem_avail (List.contains_iff_mem.mp h)
+    apply And.intro (LamThmValid.realExtSpec rc ((cv.laterVal.realExt.get? rc).get h).down)
+    rw [LamTerm.maxEVarSucc_realExtSpec]; apply Nat.zero_le
+  case isFalse => exact True.intro
 
 theorem InferenceStep.eval_correct
   (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
@@ -2260,7 +2284,7 @@ theorem WFStep.eval_correct
 
 theorem ChkStep.eval_correct
   (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
-  (cs : ChkStep) → EvalResult.correct r cv (cs.eval cv.toLamVarTy cv.toLamILTy r)
+  (cs : ChkStep) → EvalResult.correct r cv (cs.eval cv.toLamVarTy cv.toLamILTy cv.laterVal.specAvail r)
 | .c s  => ConvStep.eval_correct r cv inv s
 | .ca s => ConvAtStep.eval_correct r cv inv s
 | .e s  => EtomStep.eval_correct r cv inv s
@@ -2311,16 +2335,16 @@ def RTable.runEvalResult (r : RTable) (n : Nat) : EvalResult → RTable
 -/
 abbrev ChkSteps := BinTree (ChkStep × Nat)
 
-def ChkStep.run (lvt lit : Nat → LamSort) (r : RTable) (c : ChkStep) (n : Nat) : RTable :=
-  r.runEvalResult n (ChkStep.eval lvt lit r c)
+def ChkStep.run (lvt lit : Nat → LamSort) (lsa : LaterSpecAvail) (r : RTable) (c : ChkStep) (n : Nat) : RTable :=
+  r.runEvalResult n (ChkStep.eval lvt lit lsa r c)
 
 theorem ChkStep.run_correct
   (r : RTable) (cpv : CPVal.{u}) (inv : ∃ eV, r.inv ⟨cpv, eV⟩) (c : ChkStep) (n : Nat) :
-  ∃ eV', (ChkStep.run cpv.toLamVarTy cpv.toLamILTy r c n).inv ⟨cpv, eV'⟩ := by
+  ∃ eV', (ChkStep.run cpv.toLamVarTy cpv.toLamILTy cpv.laterVal.specAvail r c n).inv ⟨cpv, eV'⟩ := by
   have ⟨eV, inv⟩ := inv
   dsimp [ChkStep.run]
   have eval_correct := ChkStep.eval_correct r ⟨cpv, eV⟩ inv c; revert eval_correct
-  cases h : eval cpv.toLamVarTy cpv.toLamILTy r c <;> intro eval_correct
+  cases h : eval cpv.toLamVarTy cpv.toLamILTy cpv.laterVal.specAvail r c <;> intro eval_correct
   case fail => exact ⟨eV, inv⟩
   case addEntry re =>
     exists eV
@@ -2342,17 +2366,17 @@ theorem ChkStep.run_correct
       have inv' := RTable.inv_increaseMaxEVarSucc inv' (Nat.le_succ _)
       dsimp at inv'; apply inv'
 
-def ChkSteps.run (lvt lit : Nat → LamSort) (r : RTable) (cs : ChkSteps) : RTable :=
-  BinTree.foldl (fun r (c, n) => ChkStep.run lvt lit r c n) r cs
+def ChkSteps.run (lvt lit : Nat → LamSort) (lsa : LaterSpecAvail) (r : RTable) (cs : ChkSteps) : RTable :=
+  BinTree.foldl (fun r (c, n) => ChkStep.run lvt lit lsa r c n) r cs
 
 theorem ChkSteps.run_correct
   (r : RTable) (cpv : CPVal.{u}) (inv : ∃ eV, r.inv ⟨cpv, eV⟩) (cs : ChkSteps) :
-  ∃ eV', (ChkSteps.run cpv.toLamVarTy cpv.toLamILTy r cs).inv ⟨cpv, eV'⟩ := by
+  ∃ eV', (ChkSteps.run cpv.toLamVarTy cpv.toLamILTy cpv.laterVal.specAvail r cs).inv ⟨cpv, eV'⟩ := by
   dsimp [ChkSteps.run]; apply BinTree.foldl_inv (fun (r : RTable) => ∃ eV', RTable.inv r ⟨cpv, eV'⟩) inv
   intro r' (c, n) inv'; exact ChkStep.run_correct r' cpv inv' c n
 
 noncomputable def ChkSteps.runFromBeginning (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) :=
-  ChkSteps.run cpv.toLamVarTy cpv.toLamILTy ⟨it.importFacts, 0, .leaf⟩ cs
+  ChkSteps.run cpv.toLamVarTy cpv.toLamILTy cpv.laterVal.specAvail ⟨it.importFacts, 0, .leaf⟩ cs
 
 /--
   Note : Using this theorem directly in the checker will cause
@@ -2387,11 +2411,12 @@ theorem Checker.getValidExport_indirectReduceAux
   (lvt lit : BinTree LamSort)
   (hlvt : lvt = cpv.var.mapOpt (fun x => .some x.fst))
   (hlit : lit = cpv.il.mapOpt (fun x => .some x.fst))
+  (lsa : LaterSpecAvail) (hlsa : lsa = cpv.laterVal.specAvail)
   (runResult : RTable)
   (runEq : ChkSteps.run
     (fun n => (lvt.get? n).getD (.base .prop))
     (fun n => (lit.get? n).getD (.base .prop))
-    ⟨importFacts, 0, .leaf⟩ cs = runResult)
+    lsa ⟨importFacts, 0, .leaf⟩ cs = runResult)
   (lctx : List LamSort) (t : LamTerm)
   (heq : RTable.getValidExport runResult v = some (lctx, t)) :
   LamThmValid cpv.toLamValuationEraseEtom lctx t := by
@@ -2406,7 +2431,7 @@ theorem Checker.getValidExport_indirectReduceAux
     rw [← Option.getD_map (f:=@Sigma.fst LamSort _)]; dsimp
     apply congrFun; apply congrArg; rw [hlit, BinTree.get?_mapOpt]
     apply Eq.symm; apply Option.map_eq_bind
-  rw [lvtEq, litEq] at runEq; cases runEq; apply ChkSteps.run_correct
+  rw [lvtEq, litEq, hlsa] at runEq; cases runEq; apply ChkSteps.run_correct
   unfold RTable.inv BinTree.get?
   exists fun _ => BinTree.get?'_leaf _ ▸ GLift.up False
   cases hImport; apply ImportTable.importFacts_correct
@@ -2417,21 +2442,22 @@ theorem Checker.getValidExport_indirectReduce
   (lvt lit : BinTree LamSort)
   (hlvt : lvt = cpv.var.mapOpt (fun x => .some x.fst))
   (hlit : lit = cpv.il.mapOpt (fun x => .some x.fst))
+  (lsa : LaterSpecAvail) (hlsa : lsa = cpv.laterVal.specAvail)
   (lctx : List LamSort) (t : LamTerm)
   (heq : RTable.getValidExport (ChkSteps.run
     (fun n => (lvt.get? n).getD (.base .prop))
     (fun n => (lit.get? n).getD (.base .prop))
-    ⟨importFacts, 0, .leaf⟩ cs) v = some (lctx, t)) :
+    lsa ⟨importFacts, 0, .leaf⟩ cs) v = some (lctx, t)) :
   LamThmValid cpv.toLamValuationEraseEtom lctx t := Checker.getValidExport_indirectReduceAux
-    cpv it cs v importFacts hImport lvt lit hlvt hlit _ rfl lctx t heq
+    cpv it cs v importFacts hImport lvt lit hlvt hlit lsa hlsa _ rfl lctx t heq
 
 def Checker.getValidExport_indirectReduce_reflection_runEq
-  (lvt lit : BinTree LamSort) (importFacts : BinTree REntry)
+  (lvt lit : BinTree LamSort) (lsa : LaterSpecAvail) (importFacts : BinTree REntry)
   (cs : ChkSteps) (v : Nat) (lctx : List LamSort) (t : LamTerm):=
   RTable.getValidExport (ChkSteps.run
     (fun n => (lvt.get? n).getD (.base .prop))
     (fun n => (lit.get? n).getD (.base .prop))
-    ⟨importFacts, 0, .leaf⟩ cs) v == (lctx, t)
+    lsa ⟨importFacts, 0, .leaf⟩ cs) v == (lctx, t)
 
 theorem Checker.getValidExport_indirectReduce_reflection
   (cpv : CPVal.{u}) (it : ImportTable cpv) (cs : ChkSteps) (v : Nat)
@@ -2439,11 +2465,12 @@ theorem Checker.getValidExport_indirectReduce_reflection
   (lvt lit : BinTree LamSort)
   (hlvt : lvt = cpv.var.mapOpt (fun x => .some x.fst))
   (hlit : lit = cpv.il.mapOpt (fun x => .some x.fst))
+  (lsa : LaterSpecAvail) (hlsa : lsa = cpv.laterVal.specAvail)
   (lctx : List LamSort) (t : LamTerm)
-  (heq : Checker.getValidExport_indirectReduce_reflection_runEq lvt lit importFacts cs v lctx t) :
+  (heq : Checker.getValidExport_indirectReduce_reflection_runEq lvt lit lsa importFacts cs v lctx t) :
   LamThmValid cpv.toLamValuationEraseEtom lctx t :=
   Checker.getValidExport_indirectReduce cpv it cs v importFacts hImport lvt
-    lit hlvt hlit lctx t (LawfulBEq.eq_of_beq heq)
+    lit hlvt hlit lsa hlsa lctx t (LawfulBEq.eq_of_beq heq)
 
 /-- Checker utility -/
 structure RTableStatus where
