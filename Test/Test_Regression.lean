@@ -839,9 +839,13 @@ section NativeReal
   instance : Neg Real := ⟨neg⟩
   instance : Mul Real := ⟨mul⟩
 
-  -- Constants are recognized individually: here `0`, `+` and `*` are recognized,
-  --   while `Real.inv'` is an uninterpreted atom because `Inv Real` is not declared yet
-  example (x y : Real) : x + y * 0 = x := by auto
+  -- Constants are recognized individually: here `0`, `+` and `*` are recognized, while
+  --   `Real.inv'` is an uninterpreted atom because `Inv Real` is not declared yet. The SMT
+  --   translation still treats `Real` as an uninterpreted sort, because its core constants are
+  --   not characterized (see the stand-ins for theorems of Mathlib below)
+  example (x y : Real) (h : False) : x + y * 0 = x := by
+    fail_if_success auto []
+    contradiction
 
   example (h : False) : Real.inv' 1 = 1 := by
     fail_if_success auto []
@@ -863,6 +867,124 @@ section NativeReal
   instance : RatCast Real := ⟨fun q => ⟨q⟩⟩
 
   end Real
+
+  /-
+    Stand-ins for theorems of Mathlib, which prove the characterizations of the constants of
+      `Real` (see `RealInterpUnlifted.CoreSpec` and `RealInterpUnlifted.ExtSpec`). The SMT
+      translation only interprets `Real` and its constants if they are characterized.
+    They are proved from the corresponding facts about `Rat`, except for the ones that
+      the stand-in does not satisfy (completeness) or that are about the opaque `Real.sqrt`
+  -/
+  theorem Real.ext {a b : Real} (h : a.val = b.val) : a = b := by cases a; cases b; cases h; rfl
+
+  @[simp] theorem Real.zero_val : (0 : Real).val = 0 := by show Real.zero.val = 0; unfold Real.zero; rfl
+  @[simp] theorem Real.one_val : (1 : Real).val = 1 := by show Real.one.val = 1; unfold Real.one; rfl
+  @[simp] theorem Real.add_val (a b : Real) : (a + b).val = a.val + b.val := by
+    show (Real.add a b).val = _; unfold Real.add; rfl
+  @[simp] theorem Real.neg_val (a : Real) : (-a).val = -a.val := by
+    show (Real.neg a).val = _; unfold Real.neg; rfl
+  @[simp] theorem Real.mul_val (a b : Real) : (a * b).val = a.val * b.val := by
+    show (Real.mul a b).val = _; unfold Real.mul; rfl
+  @[simp] theorem Real.inv_val (a : Real) : a⁻¹.val = a.val⁻¹ := by
+    show (Real.inv' a).val = _; unfold Real.inv'; rfl
+  @[simp] theorem Real.le_iff (a b : Real) : a ≤ b ↔ a.val ≤ b.val := by
+    show Real.le a b ↔ _; unfold Real.le; rfl
+  @[simp] theorem Real.lt_iff (a b : Real) : a < b ↔ a.val < b.val := by
+    show Real.lt a b ↔ _; unfold Real.lt; rfl
+  @[simp] theorem Real.max_val (a b : Real) : (max a b).val = max a.val b.val := by
+    show (Real.sup a b).val = _; unfold Real.sup; rfl
+  @[simp] theorem Real.min_val (a b : Real) : (min a b).val = min a.val b.val := by
+    show (Real.inf a b).val = _; unfold Real.inf; rfl
+
+  -- Core constants
+  theorem _root_.add_assoc (a b c : Real) : a + b + c = a + (b + c) := Real.ext (by simp; grind)
+  theorem _root_.add_comm (a b : Real) : a + b = b + a := Real.ext (by simp; grind)
+  theorem _root_.zero_add (a : Real) : 0 + a = a := Real.ext (by simp; exact Rat.zero_add _)
+  theorem _root_.add_neg_cancel (a : Real) : a + -a = 0 := Real.ext (by simp; grind)
+  theorem _root_.mul_assoc (a b c : Real) : a * b * c = a * (b * c) := Real.ext (by simp; grind)
+  theorem _root_.mul_comm (a b : Real) : a * b = b * a := Real.ext (by simp; grind)
+  theorem _root_.one_mul (a : Real) : 1 * a = a := Real.ext (by simp)
+  theorem _root_.mul_add (a b c : Real) : a * (b + c) = a * b + a * c := Real.ext (by simp; grind)
+  theorem _root_.zero_ne_one : (0 : Real) ≠ 1 := fun h => by simpa using congrArg Real.val h
+  theorem _root_.mul_inv_cancel₀ {a : Real} (h : a ≠ 0) : a * a⁻¹ = 1 :=
+    Real.ext (by simp; exact Rat.mul_inv_cancel _ fun h' => h (Real.ext (by simpa using h')))
+  theorem _root_.inv_zero : (0 : Real)⁻¹ = 0 := Real.ext (by simp)
+  theorem _root_.le_refl (a : Real) : a ≤ a := by simp
+  theorem _root_.le_trans {a b c : Real} : a ≤ b → b ≤ c → a ≤ c := by simp; grind
+  theorem _root_.le_antisymm {a b : Real} : a ≤ b → b ≤ a → a = b := by
+    simp; intro h₁ h₂; exact Real.ext (by grind)
+  theorem _root_.le_total (a b : Real) : a ≤ b ∨ b ≤ a := by simp; grind
+  theorem _root_.add_le_add {a b c d : Real} : a ≤ b → c ≤ d → a + c ≤ b + d := by simp; grind
+  theorem _root_.mul_nonneg {a b : Real} : 0 ≤ a → 0 ≤ b → 0 ≤ a * b := by simp; exact Rat.mul_nonneg
+  -- Does not hold for the stand-in
+  theorem _root_.Real.exists_isLUB {S : Real → Prop} : (∃ x, S x) → (∃ b, ∀ x, S x → x ≤ b) →
+    ∃ s, (∀ x, S x → x ≤ s) ∧ ∀ b, (∀ x, S x → x ≤ b) → s ≤ b := sorry
+
+  -- Other constants. `div_eq_mul_inv`, `pow_zero` and `pow_succ` are polymorphic in Mathlib
+  class _root_.DivInvLaws (α : Type) [Mul α] [Inv α] [Div α] : Prop where
+    div_eq_mul_inv : ∀ a b : α, a / b = a * b⁻¹
+
+  class _root_.PowLaws (α : Type) [Mul α] [One α] [Pow α Nat] : Prop where
+    pow_zero : ∀ a : α, a ^ 0 = 1
+    pow_succ : ∀ (a : α) (n : Nat), a ^ (n + 1) = a ^ n * a
+
+  theorem _root_.div_eq_mul_inv {α : Type} [Mul α] [Inv α] [Div α] [DivInvLaws α] (a b : α) :
+    a / b = a * b⁻¹ := DivInvLaws.div_eq_mul_inv a b
+  theorem _root_.pow_zero {α : Type} [Mul α] [One α] [Pow α Nat] [PowLaws α] (a : α) :
+    a ^ 0 = 1 := PowLaws.pow_zero a
+  theorem _root_.pow_succ {α : Type} [Mul α] [One α] [Pow α Nat] [PowLaws α] (a : α) (n : Nat) :
+    a ^ (n + 1) = a ^ n * a := PowLaws.pow_succ a n
+
+  instance : DivInvLaws Real := ⟨fun _ _ => rfl⟩
+  instance : PowLaws Real := ⟨fun a => Real.ext (by show a.val ^ 0 = _; simp),
+    fun a n => Real.ext (by simp; show a.val ^ (n + 1) = a.val ^ n * a.val; exact Rat.pow_succ _ _)⟩
+
+  theorem _root_.sub_eq_add_neg (a b : Real) : a - b = a + -b := rfl
+  theorem _root_.Nat.cast_zero : ((0 : Nat) : Real) = 0 := Real.ext (by simp; rfl)
+  theorem _root_.Nat.cast_succ (n : Nat) : ((n + 1 : Nat) : Real) = n + 1 :=
+    Real.ext (by simp; show ((n + 1 : Nat) : Rat) = (n : Rat) + 1; simp)
+  theorem _root_.Int.cast_one : ((1 : Int) : Real) = 1 := Real.ext (by simp; rfl)
+  theorem _root_.Int.cast_add (m n : Int) : ((m + n : Int) : Real) = m + n :=
+    Real.ext (by simp; show ((m + n : Int) : Rat) = (m : Rat) + (n : Rat); simp)
+  theorem _root_.lt_iff_le_not_ge {a b : Real} : a < b ↔ a ≤ b ∧ ¬ b ≤ a := by simp; grind
+  theorem _root_.max_eq_left {a b : Real} (h : b ≤ a) : max a b = a := Real.ext (by simp at h ⊢; grind)
+  theorem _root_.max_eq_right {a b : Real} (h : a ≤ b) : max a b = b := Real.ext (by simp at h ⊢; grind)
+  theorem _root_.min_eq_left {a b : Real} (h : a ≤ b) : min a b = a := Real.ext (by simp at h ⊢; grind)
+  theorem _root_.min_eq_right {a b : Real} (h : b ≤ a) : min a b = b := Real.ext (by simp at h ⊢; grind)
+  theorem _root_.abs_of_nonneg {a : Real} (h : 0 ≤ a) : abs a = a := Real.ext (by simp [abs] at h ⊢; grind)
+  theorem _root_.abs_of_nonpos {a : Real} (h : a ≤ 0) : abs a = -a := Real.ext (by simp [abs] at h ⊢; grind)
+  theorem _root_.Rat.cast_ofScientific (m : Nat) (s : Bool) (e : Nat) :
+    (Rat.cast (OfScientific.ofScientific m s e : Rat) : Real) = OfScientific.ofScientific m s e := rfl
+  theorem _root_.Rat.cast_one : (Rat.cast (1 : Rat) : Real) = 1 := Real.ext (by simp; rfl)
+  theorem _root_.Rat.cast_add (p q : Rat) : (Rat.cast (p + q) : Real) = Rat.cast p + Rat.cast q :=
+    Real.ext (by simp; rfl)
+  theorem _root_.Rat.cast_mul (p q : Rat) : (Rat.cast (p * q) : Real) = Rat.cast p * Rat.cast q :=
+    Real.ext (by simp; rfl)
+  -- About the opaque `Real.sqrt`
+  theorem _root_.Real.sqrt_nonneg (x : Real) : 0 ≤ Real.sqrt x := sorry
+  theorem _root_.Real.mul_self_sqrt {x : Real} (h : 0 ≤ x) : Real.sqrt x * Real.sqrt x = x := sorry
+  theorem _root_.Real.sqrt_eq_zero_of_nonpos {x : Real} (h : x ≤ 0) : Real.sqrt x = 0 := sorry
+
+  -- The core constants are characterized, so `Real` is interpreted. Each of the other constants
+  --   is interpreted only if it is characterized, and here `Int.floor` is not
+  example (x y : Real) : x + y * 0 = x := by auto
+
+  example (h : False) : Int.floor (2.5 : Real) = 2 := by
+    fail_if_success auto []
+    contradiction
+
+  theorem _root_.Int.floor_le (a : Real) : ((Int.floor a : Int) : Real) ≤ a := by
+    show ((a.val.floor : Int) : Real) ≤ a; simp
+    show ((a.val.floor : Int) : Rat) ≤ a.val; exact Rat.floor_le _
+  theorem _root_.Int.lt_floor_add_one (a : Real) : a < ((Int.floor a : Int) : Real) + 1 := by
+    show a < ((a.val.floor : Int) : Real) + 1; simp
+    show a.val < ((a.val.floor : Int) : Rat) + 1; simpa using Rat.lt_floor_add_one a.val
+  theorem _root_.Int.le_ceil (a : Real) : a ≤ ((Int.ceil a : Int) : Real) := by
+    show a ≤ ((a.val.ceil : Int) : Real); simp
+    show a.val ≤ ((a.val.ceil : Int) : Rat); exact Rat.le_ceil
+  theorem _root_.Int.ceil_lt_add_one (a : Real) : ((Int.ceil a : Int) : Real) < a + 1 := by
+    show ((a.val.ceil : Int) : Real) < a + 1; simp
+    show ((a.val.ceil : Int) : Rat) < a.val + 1; exact Rat.ceil_lt
 
   example (x y : Real) (h : x = 1 * y) : x = 1 * y := by
     fail_if_success auto []
@@ -970,72 +1092,18 @@ section NativeReal
     fail_if_success auto []
     contradiction
 
-  -- Stand-ins for theorems of Mathlib, which prove the characterizations of some
-  --   constants of `Real` (see `RealInterpUnlifted.CoreSpec` and `RealInterpUnlifted.ExtSpec`)
-  theorem _root_.sub_eq_add_neg (a b : Real) : a - b = a + -b := rfl
-
-  theorem _root_.div_eq_mul_inv (a b : Real) : a / b = a * b⁻¹ := rfl
-
-  theorem _root_.lt_iff_le_not_ge {a b : Real} : a < b ↔ a ≤ b ∧ ¬ b ≤ a := by
-    show Real.lt a b ↔ Real.le a b ∧ ¬ Real.le b a
-    unfold Real.lt Real.le; grind
-
-  theorem _root_.max_eq_left {a b : Real} (h : b ≤ a) : max a b = a := by
-    show Real.sup a b = a
-    replace h : Real.le b a := h
-    unfold Real.sup; unfold Real.le at h; cases a; simp only [Real.mk.injEq]; grind
-
-  theorem _root_.max_eq_right {a b : Real} (h : a ≤ b) : max a b = b := by
-    show Real.sup a b = b
-    replace h : Real.le a b := h
-    unfold Real.sup; unfold Real.le at h; cases b; simp only [Real.mk.injEq]; grind
-
-  -- No stand-in for `min_eq_right`, so `min` is not characterized
-  theorem _root_.min_eq_left {a b : Real} (h : a ≤ b) : min a b = a := by
-    show Real.inf a b = a
-    replace h : Real.le a b := h
-    unfold Real.inf; unfold Real.le at h; cases a; simp only [Real.mk.injEq]; grind
-
-  theorem _root_.pow_zero (a : Real) : a ^ 0 = 1 := by
-    show (⟨a.val ^ 0⟩ : Real) = Real.one
-    unfold Real.one; rw [Rat.pow_zero]
-
-  theorem _root_.pow_succ (a : Real) (n : Nat) : a ^ (n + 1) = a ^ n * a := by
-    show (⟨a.val ^ (n + 1)⟩ : Real) = Real.mul ⟨a.val ^ n⟩ a
-    unfold Real.mul; rw [Rat.pow_succ]
-
-  -- The core constants are not characterized (e.g. there is no stand-in for `add_comm`),
-  --   while `sub, div, lt, max, pow` are
-  set_option auto.lamLater.spec true in
-  run_meta do
-    let li ← Auto.LamLater.LaterInfo.init
-    if li.coreSpecs.contains .real then
-      throwError "The core constants of `Real` should not be characterized"
-    let .some ext := li.extSpecs.get? .real
-      | throwError "The other constants of `Real` should have characterizations"
-    -- Fields `sub, div, ofNat, ofInt, lt, max, min, abs, ofScientific, floor, ceil, pow, sqrt, ofRat`
-    let proved := (ext.getAppArgs.extract 2).map (·.isAppOf ``Option.some)
-    unless proved == #[true, true, false, false, true, true, false, false, false, false, false, true, false, false] do
-      throwError "Unexpected characterizations {proved}"
-    -- The characterizations are checked by the kernel
-    Lean.addDecl (.defnDecl { name := `Real.extSpecTest, levelParams := [], type := ← Lean.Meta.inferType ext,
-                              value := ext, hints := .opaque, safety := .safe })
-
   -- The characterizations are part of the valuation of the verified checker, which the
   --   kernel checks together with the proof produced by the (emulated) native prover
-  set_option auto.lamLater.spec true in
   set_option auto.smt false in
   set_option auto.native true in
   set_option auto.checker.buildMode "directReduce" in
   example (x y : Real) (h : x - y ≤ max x y) : x - y ≤ max x y := by auto [h]
 
-  set_option auto.lamLater.spec true in
   set_option auto.smt false in
   set_option auto.native true in
   set_option auto.checker.buildMode "indirectReduce" in
   example (x y : Real) (h : x - y ≤ max x y) : x - y ≤ max x y := by auto [h]
 
-  set_option auto.lamLater.spec true in
   set_option auto.smt false in
   set_option auto.native true in
   set_option auto.checker.buildMode "indirectReduce_reflection" in
@@ -1065,7 +1133,6 @@ section NativeReal
 
   -- The checker step `FactStep.realExtSpec .max` produces the characterization of `max`,
   --   which is available in the valuation
-  set_option auto.lamLater.spec true in
   run_meta checkSpecFactStep (.realExtSpec .max) (.realExtSpec .max) `Real.maxSpecTest
 
 end NativeReal
@@ -1148,6 +1215,53 @@ section NativeComplex
 
   end Complex
 
+  /-
+    Stand-ins for theorems of Mathlib, which prove the characterizations of the constants of
+      `Complex` (see `ComplexInterpUnlifted.CoreSpec` and `ComplexInterpUnlifted.ExtSpec`).
+      The core constants `re, im, mk` are characterized by definition
+  -/
+  theorem Complex.zero_re : (0 : Complex).re = 0 := rfl
+  theorem Complex.zero_im : (0 : Complex).im = 0 := rfl
+  theorem Complex.one_re : (1 : Complex).re = 1 := rfl
+  theorem Complex.one_im : (1 : Complex).im = 0 := rfl
+  theorem Complex.I_re : Complex.I.re = 0 := rfl
+  theorem Complex.I_im : Complex.I.im = 1 := rfl
+  theorem Complex.add_re (z w : Complex) : (z + w).re = z.re + w.re := rfl
+  theorem Complex.add_im (z w : Complex) : (z + w).im = z.im + w.im := rfl
+  theorem Complex.sub_re (z w : Complex) : (z - w).re = z.re - w.re := rfl
+  theorem Complex.sub_im (z w : Complex) : (z - w).im = z.im - w.im := rfl
+  theorem Complex.mul_re (z w : Complex) : (z * w).re = z.re * w.re - z.im * w.im := rfl
+  theorem Complex.mul_im (z w : Complex) : (z * w).im = z.re * w.im + z.im * w.re := rfl
+  theorem Complex.neg_re (z : Complex) : (-z).re = -z.re := rfl
+  theorem Complex.neg_im (z : Complex) : (-z).im = -z.im := rfl
+  theorem Complex.inv_re (z : Complex) : z⁻¹.re = z.re / Complex.normSq z := rfl
+  theorem Complex.inv_im (z : Complex) : z⁻¹.im = -z.im / Complex.normSq z := rfl
+  theorem Complex.natCast_re (n : Nat) : (n : Complex).re = (n : Real) := rfl
+  theorem Complex.natCast_im (n : Nat) : (n : Complex).im = 0 := rfl
+  theorem Complex.intCast_re (n : Int) : (n : Complex).re = (n : Real) := rfl
+  theorem Complex.intCast_im (n : Int) : (n : Complex).im = 0 := rfl
+  theorem Complex.ratCast_re (q : Rat) : (Rat.cast q : Complex).re = (Rat.cast q : Real) := rfl
+  theorem Complex.ratCast_im (q : Rat) : (Rat.cast q : Complex).im = 0 := rfl
+  theorem Complex.ofReal_re (x : Real) : (Complex.ofReal x).re = x := rfl
+  theorem Complex.ofReal_im (x : Real) : (Complex.ofReal x).im = 0 := rfl
+  theorem Complex.conj_re (z : Complex) : (starRingEnd Complex z).re = z.re := rfl
+  theorem Complex.conj_im (z : Complex) : (starRingEnd Complex z).im = -z.im := rfl
+  theorem Complex.norm_def (z : Complex) : Norm.norm z = Real.sqrt (Complex.normSq z) := rfl
+  instance : DivInvLaws Complex := ⟨fun _ _ => rfl⟩
+  instance : PowLaws Complex := ⟨fun _ => rfl, fun _ _ => rfl⟩
+
+  -- Each constant is interpreted only if it is characterized, and here `Complex.normSq` is not
+  example (h : False) : Complex.normSq Complex.I = 1 := by
+    fail_if_success auto []
+    contradiction
+
+  theorem Complex.normSq_apply (z : Complex) : Complex.normSq z = z.re * z.re + z.im * z.im := rfl
+
+  example : Complex.normSq Complex.I = 1 := by auto
+
+  example (z : Complex) : (starRingEnd Complex z).im = -z.im ∧ Norm.norm Complex.I = 1 ∧ Complex.I ^ 2 = -1 := by
+    auto
+
   example (z w : Complex) (h : z = 1 * w) : z = 1 * w := by
     fail_if_success auto []
     exact h
@@ -1171,53 +1285,16 @@ section NativeComplex
 
   example (z : Complex) : Complex.mk z.re z.im = z := by auto
 
-  -- Stand-ins for theorems of Mathlib, which prove the characterizations of some constants of
-  --   `Complex` (see `ComplexInterpUnlifted.CoreSpec` and `ComplexInterpUnlifted.ExtSpec`).
-  --   The core constants `re, im, mk` are characterized by definition
-  theorem Complex.add_re (z w : Complex) : (z + w).re = z.re + w.re := rfl
-
-  theorem Complex.add_im (z w : Complex) : (z + w).im = z.im + w.im := rfl
-
-  theorem Complex.neg_re (z : Complex) : (-z).re = -z.re := rfl
-
-  theorem Complex.neg_im (z : Complex) : (-z).im = -z.im := rfl
-
-  theorem Complex.ofReal_re (x : Real) : (Complex.ofReal x).re = x := rfl
-
-  theorem Complex.ofReal_im (x : Real) : (Complex.ofReal x).im = 0 := rfl
-
-  theorem Complex.normSq_apply (z : Complex) : Complex.normSq z = z.re * z.re + z.im * z.im := rfl
-
-  -- No stand-in for `Complex.mul_im`, so `mul` is not characterized
-  theorem Complex.mul_re (z w : Complex) : (z * w).re = z.re * w.re - z.im * w.im := rfl
-
-  -- The core constants are characterized, and so are `add, neg, ofReal, normSq`
-  set_option auto.lamLater.spec true in
-  run_meta do
-    let li ← Auto.LamLater.LaterInfo.init
-    unless li.coreSpecs.contains .complex do
-      throwError "The core constants of `Complex` should be characterized"
-    let .some ext := li.extSpecs.get? .complex
-      | throwError "The other constants of `Complex` should have characterizations"
-    -- Fields `zero, one, I, add, sub, mul, div, neg, inv, ofNat, ofInt, ofReal, normSq, conj, norm, pow, ofRat`
-    let proved := (ext.getAppArgs.extract 4).map (·.isAppOf ``Option.some)
-    unless proved == #[false, false, false, true, false, false, false, true, false, false, false, true, true,
-                       false, false, false, false] do
-      throwError "Unexpected characterizations {proved}"
-
   -- The kernel checks the valuation with the characterizations, together with
   --   the proof produced by the (emulated) native prover
-  set_option auto.lamLater.spec true in
   set_option auto.smt false in
   set_option auto.native true in
   example (z w : Complex) (h : (z + w).re = z.re + w.re) : (z + w).re = z.re + w.re := by auto [h]
 
   -- The checker steps `FactStep.complexCoreSpec` and `FactStep.complexExtSpec .add` produce
   --   the characterizations, which are available in the valuation
-  set_option auto.lamLater.spec true in
   run_meta checkSpecFactStep .complexCoreSpec .complexCoreSpec `Complex.coreSpecTest
 
-  set_option auto.lamLater.spec true in
   run_meta checkSpecFactStep (.complexExtSpec .add) (.complexExtSpec .add) `Complex.addSpecTest
 
 end NativeComplex

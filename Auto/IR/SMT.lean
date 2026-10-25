@@ -509,7 +509,12 @@ section
 
   /--
     Turn high-level construct into low-level symbol
+
     Note that this function is idempotent
+
+    The names returned by this function always start with `_` (see `processSuggestedName`),
+      so we can safely write definitions for auxiliary functions with fixed names
+      which do not start with `_` (e.g. `rdiv`, `cadd`).
   -/
   partial def h2Symb (cstr : ω) (nameSuggestion : Option String) : TransM ω String := do
     let l2hMap ← getL2hMap

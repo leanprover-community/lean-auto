@@ -50,6 +50,10 @@ inductive LamAtomic where
   | bvToNat  : Nat → LamAtomic
   | compCtor : LamTerm → LamAtomic
   | compProj : LamTerm → LamAtomic
+  /-- A later-declared type without SMT interpretation, translated to an uninterpreted sort -/
+  | laterSort  : LaterType → LamAtomic
+  /-- A constant of a later-declared type without SMT interpretation, translated to an uninterpreted function -/
+  | laterConst : LaterConst → LamAtomic
 deriving Inhabited, Hashable, BEq
 
 def LamAtomic.toString : LamAtomic → String
@@ -61,6 +65,8 @@ def LamAtomic.toString : LamAtomic → String
 | .bvToNat n  => s!"bvToNat {n}"
 | .compCtor t => s!"compCtor {t}"
 | .compProj t => s!"compProj {t}"
+| .laterSort t => s!"laterSort {t}"
+| .laterConst lc => s!"laterConst {lc}"
 
 instance : ToString LamAtomic where
   toString := LamAtomic.toString
@@ -107,11 +113,56 @@ def LamAtomic.toLeanExpr
   | .compProj t => do
     let e ← Lam2D.interpLamTermAsUnlifted tyValMap varValMap etomValMap 0 t
     return e
+  | .laterSort t => return Lam2D.interpLaterTypeAsUnlifted t
+  | .laterConst lc => Lam2D.interpLaterConstAsUnlifted lc
+
+/--
+  The later-declared types and the constants of later-declared types that are given SMT
+    interpretations. The others are translated to uninterpreted sorts and functions
+-/
+structure LaterSMTInterp where
+  types  : Std.HashSet LaterType  := {}
+  consts : Std.HashSet LaterConst := {}
+
+/--
+  Interpret a later-declared type if the characterization of its core constants is
+    available, and if the later-declared types it depends on are interpreted. Interpret
+    a constant of an interpreted type if its characterization is available, and if the
+    constants mentioned in its characterization are interpreted
+-/
+def LaterSMTInterp.ofSpecAvail (lsa : LaterSpecAvail) : LaterSMTInterp := Id.run do
+  let collect := LamExportUtils.collectLamTermLaterConsts
+  let mut types : Std.HashSet LaterType := {}
+  if lsa.realCore then
+    types := types.insert .real
+  if lsa.complexCore && types.contains .real then
+    types := types.insert .complex
+  -- Constants with available characterizations, and the constants mentioned in their characterizations
+  let mut cands : Array (LaterConst × Std.HashSet LaterConst) := #[]
+  if types.contains .real then
+    let core := collect LamTerm.realCoreSpec
+    cands := cands ++ core.toArray.map (·, core)
+    cands := cands ++ lsa.realExt.toArray.map fun rc => (.real rc, collect (LamTerm.realExtSpec rc))
+  if types.contains .complex then
+    let core := collect LamTerm.complexCoreSpec
+    cands := cands ++ core.toArray.map (·, core)
+    cands := cands ++ lsa.complexExt.toArray.map fun cc => (.complex cc, collect (LamTerm.complexExtSpec cc))
+  -- Remove the constants whose characterizations mention constants that are not interpreted
+  let mut consts := Std.HashSet.ofArray (cands.map (·.fst))
+  for _ in [0:cands.size] do
+    let consts' := Std.HashSet.ofArray ((cands.filter fun (lc, deps) =>
+      consts.contains lc && deps.toList.all consts.contains).map (·.fst))
+    if consts'.size == consts.size then
+      break
+    consts := consts'
+  return ⟨types, consts⟩
 
 structure SMTNamingInfo where
   tyVal     : Array (Expr × Level)
   varVal    : Array (Expr × LamSort)
   lamEVarTy : Array LamSort
+  /-- Later-declared types and their constants that are given SMT interpretations -/
+  laterInterp : LaterSMTInterp
 
 def SMTNamingInfo.exprToSuggestion (e : Expr) : MetaM String := do
     let ppSyntax := (← PrettyPrinter.delab e).raw
@@ -149,6 +200,8 @@ where
   | .wfPred s => do
     let suggestion ← sni.suggestNameForSort s
     return "wf" ++ suggestion.capitalize
+  | .laterSort t => return toString t
+  | .laterConst lc => return toString lc
   | .bvOfNat n => exprToSuggestion (Expr.app (.const ``BitVec.ofNat []) (.lit (.natVal n)))
   | .bvToNat n => exprToSuggestion (Expr.app (.const ``BitVec.toNat []) (.lit (.natVal n)))
   -- **TODO**
@@ -156,22 +209,37 @@ where
   -- **TODO**
   | .compProj _ => return "cP"
 
-private def lamBaseSort2SSort : LamBaseSort → SSort
-| .prop   => .app (.symb "Bool") #[]
-| .bool   => .app (.symb "Bool") #[]
+/-- A later-declared type without SMT interpretation, which is translated to an uninterpreted sort -/
+private def lamLaterSort2String (sni : SMTNamingInfo) (t : LaterType) : TransM LamAtomic String := do
+  if !(← hIn (.laterSort t)) then
+    let name ← h2Symb (.laterSort t) (← sni.suggestNameForAtomic (.laterSort t))
+    addCommand (.declSort name 0)
+  return ← h2Symb (.laterSort t) .none
+
+private def lamBaseSort2SSort (sni : SMTNamingInfo) : LamBaseSort → TransM LamAtomic SSort
+| .prop   => return .app (.symb "Bool") #[]
+| .bool   => return .app (.symb "Bool") #[]
 -- `Nat ≅ {x : Int | x ≥ 0}`
-| .nat    => .app (.symb "Int") #[]
-| .int    => .app (.symb "Int") #[]
+| .nat    => return .app (.symb "Int") #[]
+| .int    => return .app (.symb "Int") #[]
 -- `Rat ≅ {x : Real | ∃ n d : Int, d ≥ 1 ∧ x * d = n}`
-| .rat    => .app (.symb "Real") #[]
+| .rat    => return .app (.symb "Real") #[]
 | .isto0 p =>
   match p with
-  | .xH => .app (.symb "String") #[]
-  | .xO .xH => .app (.symb "Empty") #[]
-  | _   => .app (.symb "Empty") #[]
-| .bv n   => .app (.indexed "BitVec" #[.inr n]) #[]
-| .later .real => .app (.symb "Real") #[]
-| .later .complex => .app (.symb "Complex") #[]
+  | .xH => return .app (.symb "String") #[]
+  | .xO .xH => return .app (.symb "Empty") #[]
+  | _   => return .app (.symb "Empty") #[]
+| .bv n   => return .app (.indexed "BitVec" #[.inr n]) #[]
+| .later .real => do
+  if sni.laterInterp.types.contains .real then
+    return .app (.symb "Real") #[]
+  else
+    return .app (.symb (← lamLaterSort2String sni .real)) #[]
+| .later .complex => do
+  if sni.laterInterp.types.contains .complex then
+    return .app (.symb "Complex") #[]
+  else
+    return .app (.symb (← lamLaterSort2String sni .complex)) #[]
 
 private def lamSortAtom2String (sni : SMTNamingInfo) (n : Nat) : TransM LamAtomic String := do
   if !(← hIn (.sort n)) then
@@ -181,7 +249,7 @@ private def lamSortAtom2String (sni : SMTNamingInfo) (n : Nat) : TransM LamAtomi
 
 private def lamSort2SSortAux (sni : SMTNamingInfo) : LamSort → TransM LamAtomic SSort
 | .atom n => do return .app (.symb (← lamSortAtom2String sni n)) #[]
-| .base b => return lamBaseSort2SSort b
+| .base b => lamBaseSort2SSort sni b
 | .func _ _ => throwError "{decl_name%} :: Unexpected error. Higher order input?"
 
 /-- Only translates first-order types -/
@@ -294,7 +362,7 @@ mutual
         let wfConstraintNames ← wfCstrConjunctions.mapM (fun (datatype, datatypeName, _) => h2Symb (.wfPred datatype) $ some ("wf" ++ datatypeName.capitalize))
         let mut funDefs : Array (String × Array (String × SSort) × SSort × STerm) := #[]
         for (wfConstraintName, (datatype, datatypeName, wfCstrConjunction)) in wfConstraintNames.zip wfCstrConjunctions do
-          funDefs := funDefs.push (wfConstraintName, #[(dnames[0]!, ← lamSort2SSortAux sni datatype)], lamBaseSort2SSort .bool, wfCstrConjunction)
+          funDefs := funDefs.push (wfConstraintName, #[(dnames[0]!, ← lamSort2SSortAux sni datatype)], ← lamBaseSort2SSort sni .bool, wfCstrConjunction)
         addCommand (.defFuns funDefs)
         -- Look up the well-formed constraint name corresponding to `s`
         for (wfConstraintName, (datatype, datatypeName, _)) in wfConstraintNames.zip wfCstrConjunctions do
@@ -304,7 +372,7 @@ mutual
     | .base .nat, none =>
       let name ← h2Symb (.wfPred s) (some "wfNat")
       let dname ← disposableName (← sni.suggestNameForSort s)
-      addCommand (.defFun false name #[(dname, lamBaseSort2SSort .nat)] (lamBaseSort2SSort .bool) (.qStrApp ">=" #[.bvar 0, .sConst (.num 0)]))
+      addCommand (.defFun false name #[(dname, ← lamBaseSort2SSort sni .nat)] (← lamBaseSort2SSort sni .bool) (.qStrApp ">=" #[.bvar 0, .sConst (.num 0)]))
       return some name
     | .base .rat, none =>
       let name ← h2Symb (.wfPred s) (some "wfRat")
@@ -315,7 +383,7 @@ mutual
       let body := .existE nname (.app (.symb "Int") #[]) <| .existE denname (.app (.symb "Int") #[]) <|
         .qStrApp "and" #[.qStrApp ">=" #[.bvar 0, .sConst (.num 1)],
           .qStrApp "=" #[.qStrApp "*" #[.bvar 2, .qStrApp "to_real" #[.bvar 0]], .qStrApp "to_real" #[.bvar 1]]]
-      addCommand (.defFun false name #[(dname, lamBaseSort2SSort .rat)] (lamBaseSort2SSort .bool) body)
+      addCommand (.defFun false name #[(dname, ← lamBaseSort2SSort sni .rat)] (← lamBaseSort2SSort sni .bool) body)
       return some name
     | .base _b, none => return none -- `_b` is not `.nat` or `.rat`, so the well-formed predicate for `.base _b` is `True`
     | .base b, some _ => throwError "{decl_name%} :: Unexpected input for defineWFConstraint. {s} can't both be a base type and a datatype"
@@ -377,24 +445,38 @@ private def lamBvToNat2String (sni : SMTNamingInfo) (n : Nat) : TransM LamAtomic
     addCommand (.declFun name ⟨argSorts⟩ resSort)
   return ← h2Symb (.bvToNat n) .none
 
+/-- A constant of a later-declared type without SMT interpretation, which is translated to an uninterpreted function -/
+private def lamLaterConst2String (sni : SMTNamingInfo) (lc : LaterConst) : TransM LamAtomic String := do
+  if !(← hIn (.laterConst lc)) then
+    let name ← h2Symb (.laterConst lc) (← sni.suggestNameForAtomic (.laterConst lc))
+    let (argSorts, resSort) ← lamSort2SSort sni lc.lamCheck
+    addCommand (.declFun name ⟨argSorts⟩ resSort)
+    addWFConstraint sni name lc.lamCheck
+  return ← h2Symb (.laterConst lc) .none
+
 private def bitVec2STerm (n i : Nat) : STerm :=
   let digs := (Nat.toDigits 2 (i % (2^n))).map (fun c => c == '1')
   let digs := (List.range (n - digs.length)).map (fun _ => false) ++ digs
   .sConst (.binary digs)
 
-private def lamBaseTerm2STerm_Arity3 (arg1 arg2 arg3 : STerm) : LamBaseTerm → TransM LamAtomic STerm
+private def lamBaseTerm2STerm_Arity3 (sni : SMTNamingInfo) (arg1 arg2 arg3 : STerm) : LamBaseTerm → TransM LamAtomic STerm
 | .scst .srepall => return .qStrApp "str.replace_all" #[arg1, arg2, arg3]
 -- Decimal literals `OfScientific.ofScientific m s e`
-| .lcst (.real .ofScientific) | .qcst .qofScientific =>
-  match arg1, arg2, arg3 with
-  | .sConst (.num m), .qIdApp (.ident (.symb "true")) #[], .sConst (.num e) =>
-    return .sConst (.decimal m e)
-  | .sConst (.num m), .qIdApp (.ident (.symb "false")) #[], .sConst (.num e) =>
-    return .sConst (.decimal (m * 10 ^ e) 0)
-  | _, _, _ => return .qStrApp "rofScientific" #[arg1, arg2, arg3]
+| .lcst (.real .ofScientific) => do
+  if sni.laterInterp.consts.contains (.real .ofScientific) then
+    return ofScientific2STerm
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .ofScientific)) #[arg1, arg2, arg3]
+| .qcst .qofScientific => return ofScientific2STerm
 | t              => throwError "{decl_name%} :: The arity of {repr t} is not 3"
+where
+  ofScientific2STerm : STerm :=
+    match arg1, arg2, arg3 with
+    | .sConst (.num m), .qIdApp (.ident (.symb "true")) #[], .sConst (.num e) => .sConst (.decimal m e)
+    | .sConst (.num m), .qIdApp (.ident (.symb "false")) #[], .sConst (.num e) => .sConst (.decimal (m * 10 ^ e) 0)
+    | _, _, _ => .qStrApp "rofScientific" #[arg1, arg2, arg3]
 
-private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → TransM LamAtomic STerm
+private def lamBaseTerm2STerm_Arity2 (sni : SMTNamingInfo) (arg1 arg2 : STerm) : LamBaseTerm → TransM LamAtomic STerm
 | .pcst .and  => return .qStrApp "and" #[arg1, arg2]
 | .pcst .or   => return .qStrApp "or" #[arg1, arg2]
 | .pcst .imp  => return .qStrApp "=>" #[arg1, arg2]
@@ -459,10 +541,26 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
   | .ashr => return .qStrApp "bvashr" #[arg1, arg2]
 | .bvcst (.bvappend _ _) => return .qStrApp "concat" #[arg1, arg2]
 | .ocst (.smtAttr1T name _ _) => return .attrApp name arg1 arg2
-| .lcst (.real .add) => return .qStrApp "+" #[arg1, arg2]
-| .lcst (.real .sub) => return .qStrApp "-" #[arg1, arg2]
-| .lcst (.real .mul) => return .qStrApp "*" #[arg1, arg2]
-| .lcst (.real .div) => return .qStrApp "rdiv" #[arg1, arg2]
+| .lcst (.real .add) => do
+  if sni.laterInterp.consts.contains (.real .add) then
+    return .qStrApp "+" #[arg1, arg2]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .add)) #[arg1, arg2]
+| .lcst (.real .sub) => do
+  if sni.laterInterp.consts.contains (.real .sub) then
+    return .qStrApp "-" #[arg1, arg2]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .sub)) #[arg1, arg2]
+| .lcst (.real .mul) => do
+  if sni.laterInterp.consts.contains (.real .mul) then
+    return .qStrApp "*" #[arg1, arg2]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .mul)) #[arg1, arg2]
+| .lcst (.real .div) => do
+  if sni.laterInterp.consts.contains (.real .div) then
+    return .qStrApp "rdiv" #[arg1, arg2]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .div)) #[arg1, arg2]
 | .qcst .qadd => return .qStrApp "+" #[arg1, arg2]
 | .qcst .qsub => return .qStrApp "-" #[arg1, arg2]
 | .qcst .qmul => return .qStrApp "*" #[arg1, arg2]
@@ -471,35 +569,77 @@ private def lamBaseTerm2STerm_Arity2 (arg1 arg2 : STerm) : LamBaseTerm → Trans
 | .qcst .qlt  => return .qStrApp "<" #[arg1, arg2]
 | .qcst .qmax => return .qStrApp "ite" #[.qStrApp "<=" #[arg1, arg2], arg2, arg1]
 | .qcst .qmin => return .qStrApp "ite" #[.qStrApp "<=" #[arg1, arg2], arg1, arg2]
-| .lcst (.real .le)  => return .qStrApp "<=" #[arg1, arg2]
-| .lcst (.real .lt)  => return .qStrApp "<" #[arg1, arg2]
-| .lcst (.real .max) => return .qStrApp "ite" #[.qStrApp "<=" #[arg1, arg2], arg2, arg1]
-| .lcst (.real .min) => return .qStrApp "ite" #[.qStrApp "<=" #[arg1, arg2], arg1, arg2]
+| .lcst (.real .le) => do
+  if sni.laterInterp.consts.contains (.real .le) then
+    return .qStrApp "<=" #[arg1, arg2]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .le)) #[arg1, arg2]
+| .lcst (.real .lt) => do
+  if sni.laterInterp.consts.contains (.real .lt) then
+    return .qStrApp "<" #[arg1, arg2]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .lt)) #[arg1, arg2]
+| .lcst (.real .max) => do
+  if sni.laterInterp.consts.contains (.real .max) then
+    return .qStrApp "ite" #[.qStrApp "<=" #[arg1, arg2], arg2, arg1]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .max)) #[arg1, arg2]
+| .lcst (.real .min) => do
+  if sni.laterInterp.consts.contains (.real .min) then
+    return .qStrApp "ite" #[.qStrApp "<=" #[arg1, arg2], arg1, arg2]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .min)) #[arg1, arg2]
 -- `x ^ n` is expanded into multiplications if `n` is a (small) literal
-| .lcst (.real .pow) =>
-  match arg2 with
-  | .sConst (.num 0) => return .sConst (.decimal 1 0)
-  | .sConst (.num n) =>
-    if n ≤ 32 then
-      return (List.replicate (n - 1) arg1).foldl (fun acc x => .qStrApp "*" #[acc, x]) arg1
-    else
-      return .qStrApp "rnpow" #[arg1, arg2]
-  | _ => return .qStrApp "rnpow" #[arg1, arg2]
-| .lcst (.complex .add) => return .qStrApp "cadd" #[arg1, arg2]
-| .lcst (.complex .sub) => return .qStrApp "csub" #[arg1, arg2]
-| .lcst (.complex .mul) => return .qStrApp "cmul" #[arg1, arg2]
-| .lcst (.complex .div) => return .qStrApp "cdiv" #[arg1, arg2]
-| .lcst (.complex .mk)  => return .qStrApp "cmk" #[arg1, arg2]
+| .lcst (.real .pow) => do
+  if sni.laterInterp.consts.contains (.real .pow) then
+    match arg2 with
+    | .sConst (.num 0) => return .sConst (.decimal 1 0)
+    | .sConst (.num n) =>
+      if n ≤ 32 then
+        return (List.replicate (n - 1) arg1).foldl (fun acc x => .qStrApp "*" #[acc, x]) arg1
+      else
+        return .qStrApp "rnpow" #[arg1, arg2]
+    | _ => return .qStrApp "rnpow" #[arg1, arg2]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .pow)) #[arg1, arg2]
+| .lcst (.complex .add) => do
+  if sni.laterInterp.consts.contains (.complex .add) then
+    return .qStrApp "cadd" #[arg1, arg2]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.complex .add)) #[arg1, arg2]
+| .lcst (.complex .sub) => do
+  if sni.laterInterp.consts.contains (.complex .sub) then
+    return .qStrApp "csub" #[arg1, arg2]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.complex .sub)) #[arg1, arg2]
+| .lcst (.complex .mul) => do
+  if sni.laterInterp.consts.contains (.complex .mul) then
+    return .qStrApp "cmul" #[arg1, arg2]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.complex .mul)) #[arg1, arg2]
+| .lcst (.complex .div) => do
+  if sni.laterInterp.consts.contains (.complex .div) then
+    return .qStrApp "cdiv" #[arg1, arg2]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.complex .div)) #[arg1, arg2]
+| .lcst (.complex .mk) => do
+  if sni.laterInterp.consts.contains (.complex .mk) then
+    return .qStrApp "cmk" #[arg1, arg2]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.complex .mk)) #[arg1, arg2]
 -- `z ^ n` is expanded into multiplications if `n` is a (small) literal
-| .lcst (.complex .pow) =>
-  match arg2 with
-  | .sConst (.num 0) => return .qStrApp "cone" #[]
-  | .sConst (.num n) =>
-    if n ≤ 32 then
-      return (List.replicate (n - 1) arg1).foldl (fun acc z => .qStrApp "cmul" #[acc, z]) arg1
-    else
-      return .qStrApp "cnpow" #[arg1, arg2]
-  | _ => return .qStrApp "cnpow" #[arg1, arg2]
+| .lcst (.complex .pow) => do
+  if sni.laterInterp.consts.contains (.complex .pow) then
+    match arg2 with
+    | .sConst (.num 0) => return .qStrApp "cone" #[]
+    | .sConst (.num n) =>
+      if n ≤ 32 then
+        return (List.replicate (n - 1) arg1).foldl (fun acc z => .qStrApp "cmul" #[acc, z]) arg1
+      else
+        return .qStrApp "cnpow" #[arg1, arg2]
+    | _ => return .qStrApp "cnpow" #[arg1, arg2]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.complex .pow)) #[arg1, arg2]
 | t           => throwError "{decl_name%} :: The arity of {repr t} is not 2"
 
 private def lamBaseTerm2STerm_Arity1 (sni : SMTNamingInfo) (arg : STerm) : LamBaseTerm → TransM LamAtomic STerm
@@ -560,34 +700,114 @@ private def lamBaseTerm2STerm_Arity1 (sni : SMTNamingInfo) (arg : STerm) : LamBa
     return .qIdApp (.ident (.indexed "sign_extend" #[.inr (v - w)])) #[arg]
   else
     return .qIdApp (.ident (.indexed "extract" #[.inr (v - 1), .inr 0])) #[arg]
-| .lcst (.real .neg)     => return .qStrApp "-" #[.sConst (.decimal 0 0), arg]
-| .lcst (.real .inv)     => return .qStrApp "rinv" #[arg]
-| .lcst (.real .ofNat)   => return .qStrApp "to_real" #[arg]
-| .lcst (.real .ofInt)   => return .qStrApp "to_real" #[arg]
+| .lcst (.real .neg) => do
+  if sni.laterInterp.consts.contains (.real .neg) then
+    return .qStrApp "-" #[.sConst (.decimal 0 0), arg]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .neg)) #[arg]
+| .lcst (.real .inv) => do
+  if sni.laterInterp.consts.contains (.real .inv) then
+    return .qStrApp "rinv" #[arg]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .inv)) #[arg]
+| .lcst (.real .ofNat) => do
+  if sni.laterInterp.consts.contains (.real .ofNat) then
+    return .qStrApp "to_real" #[arg]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .ofNat)) #[arg]
+| .lcst (.real .ofInt) => do
+  if sni.laterInterp.consts.contains (.real .ofInt) then
+    return .qStrApp "to_real" #[arg]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .ofInt)) #[arg]
 | .qcst .qofInt          => return .qStrApp "to_real" #[arg]
 | .qcst .qneg            => return .qStrApp "-" #[.sConst (.decimal 0 0), arg]
 | .qcst .qinv            => return .qStrApp "rinv" #[arg]
 | .qcst .qabs            => return .qStrApp "ite" #[.qStrApp ">=" #[arg, .sConst (.decimal 0 0)], arg, .qStrApp "-" #[.sConst (.decimal 0 0), arg]]
 | .qcst .qfloor          => return .qStrApp "to_int" #[arg]
 | .qcst .qceil           => return .qStrApp "-" #[int2STerm 0, .qStrApp "to_int" #[.qStrApp "-" #[.sConst (.decimal 0 0), arg]]]
-| .lcst (.real .abs)     => return .qStrApp "ite" #[.qStrApp ">=" #[arg, .sConst (.decimal 0 0)], arg, .qStrApp "-" #[.sConst (.decimal 0 0), arg]]
-| .lcst (.real .floor)   => return .qStrApp "to_int" #[arg]
-| .lcst (.real .ceil)    => return .qStrApp "-" #[int2STerm 0, .qStrApp "to_int" #[.qStrApp "-" #[.sConst (.decimal 0 0), arg]]]
-| .lcst (.real .sqrt)    => return .qStrApp "rsqrt" #[arg]
+| .lcst (.real .abs) => do
+  if sni.laterInterp.consts.contains (.real .abs) then
+    return .qStrApp "ite" #[.qStrApp ">=" #[arg, .sConst (.decimal 0 0)], arg, .qStrApp "-" #[.sConst (.decimal 0 0), arg]]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .abs)) #[arg]
+| .lcst (.real .floor) => do
+  if sni.laterInterp.consts.contains (.real .floor) then
+    return .qStrApp "to_int" #[arg]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .floor)) #[arg]
+| .lcst (.real .ceil) => do
+  if sni.laterInterp.consts.contains (.real .ceil) then
+    return .qStrApp "-" #[int2STerm 0, .qStrApp "to_int" #[.qStrApp "-" #[.sConst (.decimal 0 0), arg]]]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .ceil)) #[arg]
+| .lcst (.real .sqrt) => do
+  if sni.laterInterp.consts.contains (.real .sqrt) then
+    return .qStrApp "rsqrt" #[arg]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .sqrt)) #[arg]
 -- `Rat` is translated to `Real`
-| .lcst (.real .ofRat)   => return arg
-| .lcst (.complex .neg)    => return .qStrApp "cneg" #[arg]
-| .lcst (.complex .inv)    => return .qStrApp "cinv" #[arg]
-| .lcst (.complex .ofNat)  => return .qStrApp "cofInt" #[arg]
-| .lcst (.complex .ofInt)  => return .qStrApp "cofInt" #[arg]
-| .lcst (.complex .ofReal) => return .qStrApp "cofReal" #[arg]
-| .lcst (.complex .re)     => return .qStrApp "cre" #[arg]
-| .lcst (.complex .im)     => return .qStrApp "cim" #[arg]
-| .lcst (.complex .normSq) => return .qStrApp "cnormSq" #[arg]
-| .lcst (.complex .conj)   => return .qStrApp "cconj" #[arg]
-| .lcst (.complex .norm)   => return .qStrApp "rsqrt" #[.qStrApp "cnormSq" #[arg]]
+| .lcst (.real .ofRat) => do
+  if sni.laterInterp.consts.contains (.real .ofRat) then
+    return arg
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .ofRat)) #[arg]
+| .lcst (.complex .neg) => do
+  if sni.laterInterp.consts.contains (.complex .neg) then
+    return .qStrApp "cneg" #[arg]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.complex .neg)) #[arg]
+| .lcst (.complex .inv) => do
+  if sni.laterInterp.consts.contains (.complex .inv) then
+    return .qStrApp "cinv" #[arg]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.complex .inv)) #[arg]
+| .lcst (.complex .ofNat) => do
+  if sni.laterInterp.consts.contains (.complex .ofNat) then
+    return .qStrApp "cofInt" #[arg]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.complex .ofNat)) #[arg]
+| .lcst (.complex .ofInt) => do
+  if sni.laterInterp.consts.contains (.complex .ofInt) then
+    return .qStrApp "cofInt" #[arg]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.complex .ofInt)) #[arg]
+| .lcst (.complex .ofReal) => do
+  if sni.laterInterp.consts.contains (.complex .ofReal) then
+    return .qStrApp "cofReal" #[arg]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.complex .ofReal)) #[arg]
+| .lcst (.complex .re) => do
+  if sni.laterInterp.consts.contains (.complex .re) then
+    return .qStrApp "cre" #[arg]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.complex .re)) #[arg]
+| .lcst (.complex .im) => do
+  if sni.laterInterp.consts.contains (.complex .im) then
+    return .qStrApp "cim" #[arg]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.complex .im)) #[arg]
+| .lcst (.complex .normSq) => do
+  if sni.laterInterp.consts.contains (.complex .normSq) then
+    return .qStrApp "cnormSq" #[arg]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.complex .normSq)) #[arg]
+| .lcst (.complex .conj) => do
+  if sni.laterInterp.consts.contains (.complex .conj) then
+    return .qStrApp "cconj" #[arg]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.complex .conj)) #[arg]
+| .lcst (.complex .norm) => do
+  if sni.laterInterp.consts.contains (.complex .norm) then
+    return .qStrApp "rsqrt" #[.qStrApp "cnormSq" #[arg]]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.complex .norm)) #[arg]
 -- `Rat` is translated to `Real`
-| .lcst (.complex .ofRat)  => return .qStrApp "cofReal" #[arg]
+| .lcst (.complex .ofRat) => do
+  if sni.laterInterp.consts.contains (.complex .ofRat) then
+    return .qStrApp "cofReal" #[arg]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.complex .ofRat)) #[arg]
 | t               => throwError "{decl_name%} :: The arity of {repr t} is not 1"
 where
   solverName : MetaM Solver.SMT.SolverName := do
@@ -596,7 +816,7 @@ where
     let andExpr := .qStrApp "bvand" #[arg, .qStrApp "bvshl" #[bitVec2STerm n 1, bitVec2STerm n (n - 1)]]
     .qStrApp "not" #[.qStrApp "=" #[andExpr, bitVec2STerm n 0]]
 
-private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtomic STerm
+private def lamBaseTerm2STerm_Arity0 (sni : SMTNamingInfo) : LamBaseTerm → TransM LamAtomic STerm
 | .pcst .trueE        => return .qStrApp "true" #[]
 | .pcst .falseE       => return .qStrApp "false" #[]
 | .bcst .trueb        => return .qStrApp "true" #[]
@@ -604,11 +824,31 @@ private def lamBaseTerm2STerm_Arity0 : LamBaseTerm → TransM LamAtomic STerm
 | .ncst (.natVal n)   => return .sConst (.num n)
 | .scst (.strVal s)   => return .sConst (.str s)
 | .bvcst (.bvVal n i) => return bitVec2STerm n i
-| .lcst (.real .zero) => return .sConst (.decimal 0 0)
-| .lcst (.real .one)  => return .sConst (.decimal 1 0)
-| .lcst (.complex .zero) => return .qStrApp "czero" #[]
-| .lcst (.complex .one)  => return .qStrApp "cone" #[]
-| .lcst (.complex .I)    => return .qStrApp "cI" #[]
+| .lcst (.real .zero) => do
+  if sni.laterInterp.consts.contains (.real .zero) then
+    return .sConst (.decimal 0 0)
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .zero)) #[]
+| .lcst (.real .one) => do
+  if sni.laterInterp.consts.contains (.real .one) then
+    return .sConst (.decimal 1 0)
+  else
+    return .qStrApp (← lamLaterConst2String sni (.real .one)) #[]
+| .lcst (.complex .zero) => do
+  if sni.laterInterp.consts.contains (.complex .zero) then
+    return .qStrApp "czero" #[]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.complex .zero)) #[]
+| .lcst (.complex .one) => do
+  if sni.laterInterp.consts.contains (.complex .one) then
+    return .qStrApp "cone" #[]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.complex .one)) #[]
+| .lcst (.complex .I) => do
+  if sni.laterInterp.consts.contains (.complex .I) then
+    return .qStrApp "cI" #[]
+  else
+    return .qStrApp (← lamLaterConst2String sni (.complex .I)) #[]
 | t                   => throwError "{decl_name%} :: The arity of {repr t} is not 0"
 
 def lamTermAtom2String (sni : SMTNamingInfo) (lamVarTy : Array LamSort) (n : Nat) : TransM LamAtomic (LamSort × String) := do
@@ -651,10 +891,10 @@ private def lamTerm2STermAux (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Array L
   return .qIdApp (QualIdent.ofString name) args
 | .base b =>
   match args with
-  | #[]           => lamBaseTerm2STerm_Arity0 b
+  | #[]           => lamBaseTerm2STerm_Arity0 sni b
   | #[u₁]         => lamBaseTerm2STerm_Arity1 sni u₁ b
-  | #[u₁, u₂]     => lamBaseTerm2STerm_Arity2 u₁ u₂ b
-  | #[u₁, u₂, u₃] => lamBaseTerm2STerm_Arity3 u₁ u₂ u₃ b
+  | #[u₁, u₂]     => lamBaseTerm2STerm_Arity2 sni u₁ u₂ b
+  | #[u₁, u₂, u₃] => lamBaseTerm2STerm_Arity3 sni u₁ u₂ u₃ b
   | _         => throwError "{decl_name%} :: Argument number mismatch. Higher order input?"
 | t => throwError "{decl_name%} :: Unexpected head term {repr t}"
 
@@ -679,7 +919,7 @@ def lamQuantified2STerm (sni : SMTNamingInfo) (forall? : Bool) (s : LamSort) (bo
 
 private partial def lamTerm2STerm (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Array LamSort) :
   LamTerm → TransM LamAtomic STerm
-| .base b => lamBaseTerm2STerm_Arity0 b
+| .base b => lamBaseTerm2STerm_Arity0 sni b
 | .bvar n => return .bvar n
 | .app _ (.app _ (.base (.eqI _)) _) _ =>
   throwError (decl_name% ++ " :: " ++ LamExportUtils.exportError.ImpPolyLog)
@@ -928,11 +1168,12 @@ def lamFOL2SMT
   (sni : SMTNamingInfo) (lamVarTy lamEVarTy : Array LamSort)
   (facts : Array LamTerm) (minds : Array MutualIndInfo) :
   TransM LamAtomic (Array IR.SMT.Command × Array STerm × Array SelectorInfo) := do
+  trace[auto.lamFOL2SMT] "Later-declared types with SMT interpretations: {sni.laterInterp.types.toList}, constants: {sni.laterInterp.consts.toList}"
   let _ ← sortAuxDecls.mapM addCommand
   let _ ← termAuxDecls.mapM addCommand
   -- Auxiliary definitions involving quantifiers are only added if they are used,
   --   because they can change how SMT solvers handle the other problems
-  let lcs := LamExportUtils.collectLamTermsLaterConsts facts
+  let lcs := (LamExportUtils.collectLamTermsLaterConsts facts).filter sni.laterInterp.consts.contains
   if lcs.contains (.real .pow) then
     addCommand rnpowDecl
   if lcs.contains (.complex .pow) then

@@ -27,8 +27,8 @@ register_option auto.lamLater.recognize.complex : Bool := {
 }
 
 register_option auto.lamLater.spec : Bool := {
-  defValue := false
-  descr := "Enable/Disable construction of proofs that the recognized constants of later-declared types satisfy their characterizations (e.g. `RealInterpUnlifted.CoreSpec` and `RealInterpUnlifted.ExtSpec`), from theorems in the environment. These proofs are not used yet"
+  defValue := true
+  descr := "Enable/Disable construction of proofs that the recognized constants of later-declared types satisfy their characterizations (e.g. `RealInterpUnlifted.CoreSpec` and `RealInterpUnlifted.ExtSpec`), from theorems in the environment. The SMT translation only interprets later-declared types and constants whose characterizations are proved"
 }
 
 namespace Auto.Embedding.Lam

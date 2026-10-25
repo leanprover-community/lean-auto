@@ -303,8 +303,9 @@ def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : L
     match re with
     | .valid [] t => return t
     | _ => throwError "{decl_name%} :: Unexpected error")
+  let laterInterp := SMT.LaterSMTInterp.ofSpecAvail (← LamReif.getLaterInfo).specAvail
   let sni : SMT.SMTNamingInfo :=
-    {tyVal := (← LamReif.getTyVal), varVal := (← LamReif.getVarVal), lamEVarTy := (← LamReif.getLamEVarTy)}
+    {tyVal := (← LamReif.getTyVal), varVal := (← LamReif.getVarVal), lamEVarTy := (← LamReif.getLamEVarTy), laterInterp}
   let ((commands, validFacts, _), state) ← (lamFOL2SMT sni lamVarTy lamEVarTy exportLamTerms exportInds).run
   for cmd in commands do
     trace[auto.smt.printCommands] "{cmd}"
