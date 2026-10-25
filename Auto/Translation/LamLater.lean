@@ -87,20 +87,21 @@ def LaterType.derivedForms : LaterType → Array (MetaM Expr × LamTerm)
 def LaterType.mkInterp (t : LaterType) (canons : Array (Option Expr)) (elems : Array Expr) : Expr :=
   let (structName, mk, dflt, lvls) := match t with
     | .real => (``RealInterpUnlifted, ``RealInterpUnlifted.mk, ``RealInterpUnlifted.default, [Level.zero])
-    | .complex => (``ComplexInterpUnlifted, ``ComplexInterpUnlifted.intro, ``ComplexInterpUnlifted.default, ([] : List Level))
+    | .complex => (``ComplexInterpUnlifted, ``ComplexInterpUnlifted.intro, ``ComplexInterpUnlifted.default, [Level.zero])
   let tys := (t.deps.push t).map Lam2D.interpLaterTypeAsUnlifted
   let dflt := mkAppN (.const dflt lvls) (tys ++ elems)
   mkAppN (.const mk lvls) (tys ++ canons.mapIdx fun i canon? => canon?.getD (.proj structName i dflt))
 
 /--
   The structures characterizing the constants of `t`, if any. The first one characterizes
-    the core constants of `t` as a whole, and the second one has an optional characterization
-    of each of the other constants of `t`. Both take the types `t.deps.push t` and the
-    un-lifted interpretation of the constants of `t` as parameters
+    the core constants of `t` as a whole, and takes the types `t.deps.push t` and the
+    un-lifted interpretation of the constants of `t` as parameters. The second one has an
+    optional characterization of each of the other constants of `t`, and also takes the
+    un-lifted interpretations of the constants of `t.deps` (before that of `t`)
 -/
 def LaterType.specs : LaterType → Option (Name × Name)
 | .real    => .some (``RealInterpUnlifted.CoreSpec, ``RealInterpUnlifted.ExtSpec)
-| .complex => .none
+| .complex => .some (``ComplexInterpUnlifted.CoreSpec, ``ComplexInterpUnlifted.ExtSpec)
 
 /-- The field of the structures characterizing the constants of `lc`'s type (see `LaterType.specs`) for `lc` -/
 def LaterConst.specField : LaterConst → Name
@@ -283,6 +284,28 @@ private def LaterType.specProofs (t : LaterType) (field : Name) : CoreM (Array T
   | .real, `pow             => conj [`pow_zero, `pow_succ]
   | .real, `sqrt            => conj [`Real.sqrt_nonneg, `Real.mul_self_sqrt, `Real.sqrt_eq_zero_of_nonpos]
   | .real, `ofRat           => conj [`Rat.cast_one, `Rat.cast_add, `Rat.cast_mul]
+  -- `ComplexInterpUnlifted.CoreSpec`. These hold by definition if `Complex` is a structure
+  | .complex, `re_mk        => return #[← `(fun _ _ => rfl)]
+  | .complex, `im_mk        => return #[← `(fun _ _ => rfl)]
+  | .complex, `mk_re_im     => return (← thms [`Complex.eta]) ++ #[← `(fun _ => rfl)]
+  -- `ComplexInterpUnlifted.ExtSpec`
+  | .complex, `zero         => conj [`Complex.zero_re, `Complex.zero_im]
+  | .complex, `one          => conj [`Complex.one_re, `Complex.one_im]
+  | .complex, `I            => conj [`Complex.I_re, `Complex.I_im]
+  | .complex, `add          => conj [`Complex.add_re, `Complex.add_im]
+  | .complex, `sub          => conj [`Complex.sub_re, `Complex.sub_im]
+  | .complex, `mul          => conj [`Complex.mul_re, `Complex.mul_im]
+  | .complex, `div          => thms [`div_eq_mul_inv]
+  | .complex, `neg          => conj [`Complex.neg_re, `Complex.neg_im]
+  | .complex, `inv          => conj [`Complex.inv_re, `Complex.inv_im]
+  | .complex, `ofNat        => conj [`Complex.natCast_re, `Complex.natCast_im]
+  | .complex, `ofInt        => conj [`Complex.intCast_re, `Complex.intCast_im]
+  | .complex, `ofReal       => conj [`Complex.ofReal_re, `Complex.ofReal_im]
+  | .complex, `normSq       => thms [`Complex.normSq_apply]
+  | .complex, `conj         => conj [`Complex.conj_re, `Complex.conj_im]
+  | .complex, `norm         => thms [`Complex.norm_def]
+  | .complex, `pow          => conj [`pow_zero, `pow_succ]
+  | .complex, `ofRat        => conj [`Complex.ratCast_re, `Complex.ratCast_im]
   | _, _ => return #[]
 
 /-- Elaborate `stx` against `type`, returning a proof without metavariables -/
@@ -298,20 +321,20 @@ private def elabProof (stx : Term) (type : Expr) : MetaM Expr := withoutModifyin
     throwError "{decl_name%} :: The proof `{e}` is incomplete"
   return e
 
-/-- Reduce the projections of the structure `interpName` applied to its constructor -/
-private def reduceInterpProjs (interpName : Name) (e : Expr) : MetaM Expr :=
+/-- Reduce the projections of the structures `interpNames` applied to their constructors -/
+private def reduceInterpProjs (interpNames : Array Name) (e : Expr) : MetaM Expr :=
   Meta.transform e (post := fun e => do
-    let .some e' ← Meta.reduceProjOf? e (· == interpName)
+    let .some e' ← Meta.reduceProjOf? e interpNames.contains
       | return .continue
     return .visit (← Meta.whnfCore e'))
 
 /--
   The constructor of the structure `structName` applied to `params`, and the fields of the
     structure with their statements. Each statement is also given with the projections of
-    the structure `interpName` reduced, e.g. `(RealInterpUnlifted.mk _ ⋯).add x y` to the
+    the structures `interpNames` reduced, e.g. `(RealInterpUnlifted.mk _ ⋯).add x y` to the
     canonical form `HAdd.hAdd x y`
 -/
-private def specFields (structName interpName : Name) (params : Array Expr) :
+private def specFields (structName : Name) (interpNames : Array Name) (params : Array Expr) :
   MetaM (Expr × Array (Name × Expr × Expr)) := do
   let ctor := getStructureCtor (← getEnv) structName
   -- The interpretations of later-declared types are in `Type`
@@ -321,7 +344,7 @@ private def specFields (structName interpName : Name) (params : Array Expr) :
   let fields ← Meta.forallTelescope (← Meta.instantiateForall ctorTy params) fun xs _ =>
     xs.mapM fun x => do
       let stmt ← Meta.inferType x
-      return (← x.fvarId!.getUserName, stmt, ← reduceInterpProjs interpName stmt)
+      return (← x.fvarId!.getUserName, stmt, ← reduceInterpProjs interpNames stmt)
   return (.const ctor.name lvls, fields)
 
 /--
@@ -333,9 +356,17 @@ private def LaterInfo.addSpecs (li : LaterInfo) (t : LaterType) (interp : Expr) 
   let .some (coreName, extName) := t.specs
     | return li
   let ty := Lam2D.interpLaterTypeAsUnlifted t
-  let .some interpName := (← Meta.inferType interp).getAppFn.constName?
-    | throwError "{decl_name%} :: Unexpected interpretation {interp}"
-  let params := (t.deps.push t).map Lam2D.interpLaterTypeAsUnlifted |>.push interp
+  let depInterps ← t.deps.mapM fun dep => do
+    let .some depInterp := li.interps.get? dep
+      | throwError "{decl_name%} :: The interpretation of {dep} is unknown"
+    return depInterp
+  let interpNames ← (depInterps.push interp).mapM fun interp => do
+    let .some interpName := (← Meta.inferType interp).getAppFn.constName?
+      | throwError "{decl_name%} :: Unexpected interpretation {interp}"
+    return interpName
+  let tys := (t.deps.push t).map Lam2D.interpLaterTypeAsUnlifted
+  let coreParams := tys.push interp
+  let extParams := tys ++ depInterps |>.push interp
   let prove (field : Name) (stmt : Expr) : MetaM (Option Expr) := do
     for stx in ← LaterType.specProofs t field do
       try
@@ -345,7 +376,7 @@ private def LaterInfo.addSpecs (li : LaterInfo) (t : LaterType) (interp : Expr) 
     return .none
   let mut li := li
   -- The core constants, as a whole
-  let (coreCtor, coreFields) ← specFields coreName interpName params
+  let (coreCtor, coreFields) ← specFields coreName interpNames coreParams
   let mut coreProofs := #[]
   let mut coreFailed := #[]
   for (field, _, stmt) in coreFields do
@@ -353,16 +384,16 @@ private def LaterInfo.addSpecs (li : LaterInfo) (t : LaterType) (interp : Expr) 
     | .some proof => coreProofs := coreProofs.push proof
     | .none => coreFailed := coreFailed.push field
   if coreFailed.isEmpty then
-    li := { li with coreSpecs := li.coreSpecs.insert t (mkAppN coreCtor (params ++ coreProofs)) }
+    li := { li with coreSpecs := li.coreSpecs.insert t (mkAppN coreCtor (coreParams ++ coreProofs)) }
   -- The other constants, each with an optional proof
-  let (extCtor, extFields) ← specFields extName interpName params
+  let (extCtor, extFields) ← specFields extName interpNames extParams
   let mut extArgs := #[]
   let mut extFailed := #[]
   for (field, stmt, _) in extFields do
     let .app (.const ``Option optLvls) plift@(.app (.const ``PLift pliftLvls) p) := stmt
       | throwError "{decl_name%} :: Field `{field}` of `{extName}` is not of the form `Option (PLift _)`"
-    -- `p` is `ri.extProp rc`
-    let reducedP ← reduceInterpProjs interpName (← Meta.whnfD p)
+    -- `p` is e.g. `ri.extProp rc`
+    let reducedP ← reduceInterpProjs interpNames (← Meta.whnfD p)
     if let .some proof ← prove field reducedP then
       let proof := mkApp2 (.const ``PLift.up pliftLvls) p proof
       extArgs := extArgs.push (mkApp2 (.const ``Option.some optLvls) plift proof)
@@ -371,7 +402,7 @@ private def LaterInfo.addSpecs (li : LaterInfo) (t : LaterType) (interp : Expr) 
     else
       extArgs := extArgs.push (mkApp (.const ``Option.none optLvls) plift)
       extFailed := extFailed.push field
-  li := { li with extSpecs := li.extSpecs.insert t (mkAppN extCtor (params ++ extArgs)) }
+  li := { li with extSpecs := li.extSpecs.insert t (mkAppN extCtor (extParams ++ extArgs)) }
   trace[auto.lamLater] "Characterizations of `{ty}`: core constants {if coreFailed.isEmpty then m!"proved" else m!"not proved, failed: {coreFailed.toList}"}; other constants not proved: {extFailed.toList}"
   return li
 
@@ -521,13 +552,32 @@ def LaterInfo.laterValExpr (li : LaterInfo) (u : Level) : Expr :=
   let realExt := match li.interps.get? .real, li.extSpecs.get? .real with
     | .some ri, .some e => Lean.mkApp3 (.const ``RealInterpUnlifted.ExtSpec.toRealInterp [u]) realTy ri e
     | _, _ => Lean.mkApp2 (.const ``RealInterpUnlifted.ExtSpec.none [u]) laterRealTy realLowered
-  mkAppN (.const ``LaterVal.mk [u]) #[li.laterTyValExpr u, real, complex, realCore, realExt]
+  -- Characterizations of the constants of `Complex`
+  let laterComplexTy := Expr.app (li.laterTyValExpr u) (.const ``LaterType.complex [])
+  let complexLowered := Lean.mkApp3 (.const ``ComplexInterp.lower [u]) laterRealTy laterComplexTy complex
+  let complexCoreSpecTy :=
+    Lean.mkApp3 (.const ``ComplexInterpUnlifted.CoreSpec [u]) laterRealTy laterComplexTy complexLowered
+  let complexCoreOptTy := Expr.app (.const ``PLift [.zero]) complexCoreSpecTy
+  let complexCore := match li.interps.get? .complex, li.coreSpecs.get? .complex with
+    | .some ci, .some h =>
+      let h := Lean.mkApp4 (.const ``ComplexInterpUnlifted.CoreSpec.toComplexInterp [u]) realTy complexTy ci h
+      Lean.mkApp2 (.const ``Option.some [.zero]) complexCoreOptTy
+        (Lean.mkApp2 (.const ``PLift.up [.zero]) complexCoreSpecTy h)
+    | _, _ => Expr.app (.const ``Option.none [.zero]) complexCoreOptTy
+  let complexExt := match li.interps.get? .real, li.interps.get? .complex, li.extSpecs.get? .complex with
+    | .some ri, .some ci, .some e =>
+      Lean.mkApp5 (.const ``ComplexInterpUnlifted.ExtSpec.toComplexInterp [u]) realTy complexTy ri ci e
+    | _, _, _ =>
+      Lean.mkApp4 (.const ``ComplexInterpUnlifted.ExtSpec.none [u]) laterRealTy laterComplexTy realLowered complexLowered
+  mkAppN (.const ``LaterVal.mk [u])
+    #[li.laterTyValExpr u, real, complex, realCore, realExt, complexCore, complexExt]
 
 /--
   The characterizations available in `li.laterValExpr u`. It must be equal to `LaterVal.specAvail`
     of `li.laterValExpr u` by reduction, which is checked by the kernel
 -/
 def LaterInfo.specAvail (li : LaterInfo) : LaterSpecAvail :=
-  ⟨li.coreSpecs.contains .real, RealConst.all.filter fun rc => li.extAvail.contains (.real rc)⟩
+  ⟨li.coreSpecs.contains .real, RealConst.all.filter fun rc => li.extAvail.contains (.real rc),
+   li.coreSpecs.contains .complex, ComplexConst.all.filter fun cc => li.extAvail.contains (.complex cc)⟩
 
 end Auto.LamLater

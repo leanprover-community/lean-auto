@@ -714,7 +714,7 @@ def ComplexConst.LamWF.ofCheck (H : c.lamCheck = s) : LamWF c s := by
   cases H; cases c <;> constructor
 
 /-- Un-lifted interpretation of the constants associated with `LaterType.complex` -/
-structure ComplexInterpUnlifted (R C : Type) where intro ::
+structure ComplexInterpUnlifted (R C : Type u) where intro ::
   zero : C
   one : C
   I : C
@@ -740,11 +740,119 @@ structure ComplexInterpUnlifted (R C : Type) where intro ::
   An arbitrary un-lifted interpretation of the constants associated with `LaterType.complex`,
     used for the constants that are not recognized. `r` and `c` are arbitrary elements of `R` and `C`
 -/
-def ComplexInterpUnlifted.default (R C : Type) (r : R) (c : C) : ComplexInterpUnlifted R C :=
+def ComplexInterpUnlifted.default (R C : Type u) (r : R) (c : C) : ComplexInterpUnlifted R C :=
   ⟨c, c, c, fun _ _ => c, fun _ _ => c, fun _ _ => c, fun _ _ => c,
    fun _ => c, fun _ => c, fun _ => c, fun _ => c,
    fun _ => c, fun _ => r, fun _ => r, fun _ _ => c,
    fun _ => r, fun _ => c, fun _ => r, fun _ _ => c, fun _ => c⟩
+
+/-- All constants associated with `LaterType.complex` -/
+def ComplexConst.all : List ComplexConst :=
+  [.zero, .one, .I, .add, .sub, .mul, .div, .neg, .inv, .ofNat, .ofInt,
+   .ofReal, .re, .im, .mk, .normSq, .conj, .norm, .pow, .ofRat]
+
+/--
+  The core constants `re, im, mk` of `ci` form a bijection between `C` and `R × R`.
+    Together with the characterization of `R` (see `RealInterpUnlifted.CoreSpec`)
+    and of the other constants of `ci` (see `ComplexInterpUnlifted.extProp`),
+    this characterizes `Complex` up to unique isomorphism
+-/
+structure ComplexInterpUnlifted.CoreSpec (ci : ComplexInterpUnlifted R C) : Prop where
+  re_mk : ∀ x y, ci.re (ci.mk x y) = x
+  im_mk : ∀ x y, ci.im (ci.mk x y) = y
+  mk_re_im : ∀ z, ci.mk (ci.re z) (ci.im z) = z
+
+/--
+  Characterization of each constant of `ci` other than the core constants (see `CoreSpec`),
+    by its real and imaginary parts or in terms of other constants, where `ri` interprets the
+    constants of `R`. It uses the constants of `ri`, and the constants of `ci` as follows:
+    `inv` and `norm` use `normSq`, `div` uses `mul` and `inv`, and `pow` uses `one` and `mul`.
+    The core constants are characterized by `CoreSpec` instead
+-/
+def ComplexInterpUnlifted.extProp (ri : RealInterpUnlifted R) (ci : ComplexInterpUnlifted R C) :
+  ComplexConst → Prop
+| .zero => ci.re ci.zero = ri.zero ∧ ci.im ci.zero = ri.zero
+| .one => ci.re ci.one = ri.one ∧ ci.im ci.one = ri.zero
+| .I => ci.re ci.I = ri.zero ∧ ci.im ci.I = ri.one
+| .add => (∀ z w, ci.re (ci.add z w) = ri.add (ci.re z) (ci.re w)) ∧
+  ∀ z w, ci.im (ci.add z w) = ri.add (ci.im z) (ci.im w)
+| .sub => (∀ z w, ci.re (ci.sub z w) = ri.sub (ci.re z) (ci.re w)) ∧
+  ∀ z w, ci.im (ci.sub z w) = ri.sub (ci.im z) (ci.im w)
+| .mul => (∀ z w, ci.re (ci.mul z w) = ri.sub (ri.mul (ci.re z) (ci.re w)) (ri.mul (ci.im z) (ci.im w))) ∧
+  ∀ z w, ci.im (ci.mul z w) = ri.add (ri.mul (ci.re z) (ci.im w)) (ri.mul (ci.im z) (ci.re w))
+| .div => ∀ z w, ci.div z w = ci.mul z (ci.inv w)
+| .neg => (∀ z, ci.re (ci.neg z) = ri.neg (ci.re z)) ∧ ∀ z, ci.im (ci.neg z) = ri.neg (ci.im z)
+| .inv => (∀ z, ci.re (ci.inv z) = ri.div (ci.re z) (ci.normSq z)) ∧
+  ∀ z, ci.im (ci.inv z) = ri.div (ri.neg (ci.im z)) (ci.normSq z)
+| .ofNat => (∀ n, ci.re (ci.ofNat n) = ri.ofNat n) ∧ ∀ n, ci.im (ci.ofNat n) = ri.zero
+| .ofInt => (∀ n, ci.re (ci.ofInt n) = ri.ofInt n) ∧ ∀ n, ci.im (ci.ofInt n) = ri.zero
+| .ofReal => (∀ x, ci.re (ci.ofReal x) = x) ∧ ∀ x, ci.im (ci.ofReal x) = ri.zero
+| .normSq => ∀ z, ci.normSq z = ri.add (ri.mul (ci.re z) (ci.re z)) (ri.mul (ci.im z) (ci.im z))
+| .conj => (∀ z, ci.re (ci.conj z) = ci.re z) ∧ ∀ z, ci.im (ci.conj z) = ri.neg (ci.im z)
+| .norm => ∀ z, ci.norm z = ri.sqrt (ci.normSq z)
+| .pow => (∀ z, ci.pow z 0 = ci.one) ∧ ∀ z n, ci.pow z (n + 1) = ci.mul (ci.pow z n) z
+| .ofRat => (∀ q, ci.re (ci.ofRat q) = ri.ofRat q) ∧ ∀ q, ci.im (ci.ofRat q) = ri.zero
+| .re | .im | .mk => True
+
+/--
+  Characterizations of the constants of `ci` other than the core constants (see `extProp`),
+    one optional proof per constant. Each field is named after its constant
+-/
+structure ComplexInterpUnlifted.ExtSpec (ri : RealInterpUnlifted R) (ci : ComplexInterpUnlifted R C) : Type where
+  zero : Option (PLift (extProp ri ci .zero))
+  one : Option (PLift (extProp ri ci .one))
+  I : Option (PLift (extProp ri ci .I))
+  add : Option (PLift (extProp ri ci .add))
+  sub : Option (PLift (extProp ri ci .sub))
+  mul : Option (PLift (extProp ri ci .mul))
+  div : Option (PLift (extProp ri ci .div))
+  neg : Option (PLift (extProp ri ci .neg))
+  inv : Option (PLift (extProp ri ci .inv))
+  ofNat : Option (PLift (extProp ri ci .ofNat))
+  ofInt : Option (PLift (extProp ri ci .ofInt))
+  ofReal : Option (PLift (extProp ri ci .ofReal))
+  normSq : Option (PLift (extProp ri ci .normSq))
+  conj : Option (PLift (extProp ri ci .conj))
+  norm : Option (PLift (extProp ri ci .norm))
+  pow : Option (PLift (extProp ri ci .pow))
+  ofRat : Option (PLift (extProp ri ci .ofRat))
+
+/-- The characterization of `cc` in `e`, if available. Core constants have none -/
+def ComplexInterpUnlifted.ExtSpec.get? {ri : RealInterpUnlifted R} {ci : ComplexInterpUnlifted R C}
+  (e : ExtSpec ri ci) : (cc : ComplexConst) → Option (PLift (extProp ri ci cc))
+| .zero => e.zero
+| .one => e.one
+| .I => e.I
+| .add => e.add
+| .sub => e.sub
+| .mul => e.mul
+| .div => e.div
+| .neg => e.neg
+| .inv => e.inv
+| .ofNat => e.ofNat
+| .ofInt => e.ofInt
+| .ofReal => e.ofReal
+| .normSq => e.normSq
+| .conj => e.conj
+| .norm => e.norm
+| .pow => e.pow
+| .ofRat => e.ofRat
+| .re | .im | .mk => .none
+
+/-- The constants whose characterizations are available in `e`, in the order of `ComplexConst.all` -/
+def ComplexInterpUnlifted.ExtSpec.avail {ri : RealInterpUnlifted R} {ci : ComplexInterpUnlifted R C}
+  (e : ExtSpec ri ci) : List ComplexConst :=
+  ComplexConst.all.filter fun cc => (e.get? cc).isSome
+
+theorem ComplexInterpUnlifted.ExtSpec.isSome_of_mem_avail {ri : RealInterpUnlifted R}
+  {ci : ComplexInterpUnlifted R C} {e : ExtSpec ri ci} (h : cc ∈ e.avail) :
+  (e.get? cc).isSome := (List.mem_filter.mp h).right
+
+/-- No characterization is available -/
+def ComplexInterpUnlifted.ExtSpec.none (ri : RealInterpUnlifted R) (ci : ComplexInterpUnlifted R C) :
+  ExtSpec ri ci :=
+  ⟨.none, .none, .none, .none, .none, .none, .none, .none, .none, .none, .none, .none, .none, .none,
+   .none, .none, .none⟩
 
 /-- Interpretation of the constants associated with `LaterType.complex` -/
 structure ComplexInterp (R C : Type u) where intro ::
@@ -769,7 +877,7 @@ structure ComplexInterp (R C : Type u) where intro ::
   pow : C → GLift.{1, u} Nat → C
   ofRat : GLift.{1, u} Rat → C
 
-def ComplexInterpUnlifted.toComplexInterp.{u} (ci : ComplexInterpUnlifted R C) :
+def ComplexInterpUnlifted.toComplexInterp.{u} {R C : Type} (ci : ComplexInterpUnlifted R C) :
   ComplexInterp (GLift.{1, u} R) (GLift.{1, u} C) where
   zero := GLift.up ci.zero
   one := GLift.up ci.one
@@ -801,6 +909,64 @@ def ComplexInterp.default {R : Type u} (r : R) : ComplexInterp R PUnit.{u + 1} :
    fun _ => .unit, fun _ => .unit, fun _ => .unit, fun _ => .unit,
    fun _ => .unit, fun _ => r, fun _ => r, fun _ _ => .unit,
    fun _ => r, fun _ => .unit, fun _ => r, fun _ _ => .unit, fun _ => .unit⟩
+
+/--
+  `ci` with the values of builtin types un-lifted, so that the characterizations
+    `CoreSpec` and `ExtSpec` apply to it
+-/
+def ComplexInterp.lower (ci : ComplexInterp R C) : ComplexInterpUnlifted R C where
+  zero := ci.zero
+  one := ci.one
+  I := ci.I
+  add := ci.add
+  sub := ci.sub
+  mul := ci.mul
+  div := ci.div
+  neg := ci.neg
+  inv := ci.inv
+  ofNat n := ci.ofNat (GLift.up n)
+  ofInt n := ci.ofInt (GLift.up n)
+  ofReal := ci.ofReal
+  re := ci.re
+  im := ci.im
+  mk := ci.mk
+  normSq := ci.normSq
+  conj := ci.conj
+  norm := ci.norm
+  pow z n := ci.pow z (GLift.up n)
+  ofRat q := ci.ofRat (GLift.up q)
+
+theorem ComplexInterpUnlifted.CoreSpec.toComplexInterp {R C : Type} {ci : ComplexInterpUnlifted R C}
+  (h : ci.CoreSpec) : (ci.toComplexInterp.{u}).lower.CoreSpec where
+  re_mk x y := congrArg GLift.up (h.re_mk x.down y.down)
+  im_mk x y := congrArg GLift.up (h.im_mk x.down y.down)
+  mk_re_im z := congrArg GLift.up (h.mk_re_im z.down)
+
+theorem ComplexInterpUnlifted.extProp_toComplexInterp {R C : Type} {ri : RealInterpUnlifted R}
+  {ci : ComplexInterpUnlifted R C} :
+  (cc : ComplexConst) → extProp ri ci cc →
+    extProp (ri.toRealInterp.{u}).lower (ci.toComplexInterp.{u}).lower cc
+| .zero, h | .one, h | .I, h => ⟨congrArg GLift.up h.left, congrArg GLift.up h.right⟩
+| .add, h | .sub, h | .mul, h =>
+  ⟨fun z w => congrArg GLift.up (h.left z.down w.down), fun z w => congrArg GLift.up (h.right z.down w.down)⟩
+| .div, h => fun z w => congrArg GLift.up (h z.down w.down)
+| .neg, h | .inv, h | .ofReal, h | .conj, h =>
+  ⟨fun z => congrArg GLift.up (h.left z.down), fun z => congrArg GLift.up (h.right z.down)⟩
+| .ofNat, h | .ofInt, h | .ofRat, h =>
+  ⟨fun n => congrArg GLift.up (h.left n), fun n => congrArg GLift.up (h.right n)⟩
+| .normSq, h | .norm, h => fun z => congrArg GLift.up (h z.down)
+| .pow, h => ⟨fun z => congrArg GLift.up (h.left z.down), fun z n => congrArg GLift.up (h.right z.down n)⟩
+| .re, h | .im, h | .mk, h => h
+
+def ComplexInterpUnlifted.ExtSpec.toComplexInterp {R C : Type} {ri : RealInterpUnlifted R}
+  {ci : ComplexInterpUnlifted R C} (e : ExtSpec ri ci) :
+  ExtSpec (ri.toRealInterp.{u}).lower (ci.toComplexInterp.{u}).lower :=
+  let lift (cc : ComplexConst) (h? : Option (PLift (extProp ri ci cc))) :=
+    h?.map fun h => PLift.up (extProp_toComplexInterp cc h.down)
+  ⟨lift .zero e.zero, lift .one e.one, lift .I e.I, lift .add e.add, lift .sub e.sub, lift .mul e.mul,
+   lift .div e.div, lift .neg e.neg, lift .inv e.inv, lift .ofNat e.ofNat, lift .ofInt e.ofInt,
+   lift .ofReal e.ofReal, lift .normSq e.normSq, lift .conj e.conj, lift .norm e.norm, lift .pow e.pow,
+   lift .ofRat e.ofRat⟩
 
 def ComplexConst.interp (tyVal : TyVal.{u})
   (ci : ComplexInterp (tyVal.later .real) (tyVal.later .complex)) :
@@ -966,18 +1132,24 @@ structure LaterVal (later : LaterType → Type u) where
   realCore : Option (PLift real.lower.CoreSpec)
   /-- Characterizations of the other constants of `real`, each if available -/
   realExt  : real.lower.ExtSpec
+  /-- Characterization of the core constants of `complex`, if available -/
+  complexCore : Option (PLift complex.lower.CoreSpec)
+  /-- Characterizations of the other constants of `complex`, each if available -/
+  complexExt  : ComplexInterpUnlifted.ExtSpec real.lower complex.lower
 
 /--
   The characterizations available in a `LaterVal`, as data that the checker
     can compute with (the checker cannot inspect the `LaterVal` itself)
 -/
 structure LaterSpecAvail where
-  realCore : Bool
-  realExt  : List RealConst
+  realCore    : Bool
+  realExt     : List RealConst
+  complexCore : Bool
+  complexExt  : List ComplexConst
 deriving Inhabited, Lean.ToExpr
 
 def LaterVal.specAvail (lv : LaterVal later) : LaterSpecAvail :=
-  ⟨lv.realCore.isSome, lv.realExt.avail⟩
+  ⟨lv.realCore.isSome, lv.realExt.avail, lv.complexCore.isSome, lv.complexExt.avail⟩
 
 def LaterConst.interp (tyVal : TyVal.{u}) (lv : LaterVal tyVal.later) :
   (l : LaterConst) → l.lamCheck.interp tyVal

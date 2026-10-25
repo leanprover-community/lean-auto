@@ -1041,11 +1041,12 @@ section NativeReal
   set_option auto.checker.buildMode "indirectReduce_reflection" in
   example (x y : Real) (h : x - y ≤ max x y) : x - y ≤ max x y := by auto [h]
 
-  -- The checker step `FactStep.realExtSpec .max` produces the characterization of `max`,
-  --   which is available in the valuation
-  set_option auto.lamLater.spec true in
   open Lean Auto Embedding.Lam in
-  run_meta do
+  /--
+    Run the checker step `.f fs`, which should produce the valid fact `t`, with the valuation
+      built from the environment (with no atoms), and let the kernel check the result
+  -/
+  def checkSpecFactStep (fs : FactStep) (t : LamTerm) (name : Name) : MetaM Unit := do
     let li ← Auto.LamLater.LaterInfo.init
     let u := Level.zero
     let tyVal := mkApp2 (.const ``TyVal.mk [u]) (.lam `_ (.const ``Nat []) (.const ``PUnit [.succ .zero]) .default)
@@ -1056,12 +1057,16 @@ section NativeReal
     let cpv := mkApp2 mk (← Meta.mkAppOptM ``BinTree.leaf #[varTy.appArg!]) (← Meta.mkAppOptM ``BinTree.leaf #[ilTy.appArg!])
     let it := Expr.app (.const ``BinTree.leaf [.zero]) (mkApp2 (.const ``PSigma [.succ .zero, .zero])
       (.const ``ImportEntry []) (.app (.const ``importTablePSigmaβ [u]) cpv))
-    let cs := toExpr (BinTree.leaf.insert 0 (ChkStep.f (.realExtSpec .max), 0) : ChkSteps)
-    let t := LamTerm.realExtSpec .max
+    let cs := toExpr (BinTree.leaf.insert 0 (ChkStep.f fs, 0) : ChkSteps)
     let heq ← Meta.mkEqRefl (toExpr (Option.some (([] : List LamSort), t)))
     let proof := mkAppN (.const ``Checker.getValidExport_directReduce [u])
       #[toExpr ([] : List LamSort), toExpr t, cpv, it, cs, toExpr (0 : Nat), heq]
-    addDecl (.thmDecl { name := `Real.maxSpecTest, levelParams := [], type := ← Meta.inferType proof, value := proof })
+    addDecl (.thmDecl { name, levelParams := [], type := ← Meta.inferType proof, value := proof })
+
+  -- The checker step `FactStep.realExtSpec .max` produces the characterization of `max`,
+  --   which is available in the valuation
+  set_option auto.lamLater.spec true in
+  run_meta checkSpecFactStep (.realExtSpec .max) (.realExtSpec .max) `Real.maxSpecTest
 
 end NativeReal
 
@@ -1165,6 +1170,55 @@ section NativeComplex
     ((x * y : Real) : Complex) = (x : Complex) * (y : Complex) := by auto
 
   example (z : Complex) : Complex.mk z.re z.im = z := by auto
+
+  -- Stand-ins for theorems of Mathlib, which prove the characterizations of some constants of
+  --   `Complex` (see `ComplexInterpUnlifted.CoreSpec` and `ComplexInterpUnlifted.ExtSpec`).
+  --   The core constants `re, im, mk` are characterized by definition
+  theorem Complex.add_re (z w : Complex) : (z + w).re = z.re + w.re := rfl
+
+  theorem Complex.add_im (z w : Complex) : (z + w).im = z.im + w.im := rfl
+
+  theorem Complex.neg_re (z : Complex) : (-z).re = -z.re := rfl
+
+  theorem Complex.neg_im (z : Complex) : (-z).im = -z.im := rfl
+
+  theorem Complex.ofReal_re (x : Real) : (Complex.ofReal x).re = x := rfl
+
+  theorem Complex.ofReal_im (x : Real) : (Complex.ofReal x).im = 0 := rfl
+
+  theorem Complex.normSq_apply (z : Complex) : Complex.normSq z = z.re * z.re + z.im * z.im := rfl
+
+  -- No stand-in for `Complex.mul_im`, so `mul` is not characterized
+  theorem Complex.mul_re (z w : Complex) : (z * w).re = z.re * w.re - z.im * w.im := rfl
+
+  -- The core constants are characterized, and so are `add, neg, ofReal, normSq`
+  set_option auto.lamLater.spec true in
+  run_meta do
+    let li ← Auto.LamLater.LaterInfo.init
+    unless li.coreSpecs.contains .complex do
+      throwError "The core constants of `Complex` should be characterized"
+    let .some ext := li.extSpecs.get? .complex
+      | throwError "The other constants of `Complex` should have characterizations"
+    -- Fields `zero, one, I, add, sub, mul, div, neg, inv, ofNat, ofInt, ofReal, normSq, conj, norm, pow, ofRat`
+    let proved := (ext.getAppArgs.extract 4).map (·.isAppOf ``Option.some)
+    unless proved == #[false, false, false, true, false, false, false, true, false, false, false, true, true,
+                       false, false, false, false] do
+      throwError "Unexpected characterizations {proved}"
+
+  -- The kernel checks the valuation with the characterizations, together with
+  --   the proof produced by the (emulated) native prover
+  set_option auto.lamLater.spec true in
+  set_option auto.smt false in
+  set_option auto.native true in
+  example (z w : Complex) (h : (z + w).re = z.re + w.re) : (z + w).re = z.re + w.re := by auto [h]
+
+  -- The checker steps `FactStep.complexCoreSpec` and `FactStep.complexExtSpec .add` produce
+  --   the characterizations, which are available in the valuation
+  set_option auto.lamLater.spec true in
+  run_meta checkSpecFactStep .complexCoreSpec .complexCoreSpec `Complex.coreSpecTest
+
+  set_option auto.lamLater.spec true in
+  run_meta checkSpecFactStep (.complexExtSpec .add) (.complexExtSpec .add) `Complex.addSpecTest
 
 end NativeComplex
 

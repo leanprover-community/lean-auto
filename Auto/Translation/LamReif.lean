@@ -2103,6 +2103,8 @@ open Embedding.Lam LamReif
       -- Characterizations do not contain atoms
       | .realCoreSpec => return .realCoreSpec
       | .realExtSpec rc => return .realExtSpec rc
+      | .complexCoreSpec => return .complexCoreSpec
+      | .complexExtSpec cc => return .complexExtSpec cc
     | .i cs => ChkStep.i <$>
       match cs with
       | .validOfBVarLower pv pn => return .validOfBVarLower (← transPos ref pv) (← transPos ref pn)

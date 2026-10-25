@@ -523,6 +523,10 @@ inductive FactStep where
   | realCoreSpec : FactStep
   /-- The characterization of a constant of `Real` that is not a core constant, if it is available in the valuation -/
   | realExtSpec : RealConst → FactStep
+  /-- The characterization of the core constants of `Complex`, if it is available in the valuation -/
+  | complexCoreSpec : FactStep
+  /-- The characterization of a constant of `Complex` that is not a core constant, if it is available in the valuation -/
+  | complexExtSpec : ComplexConst → FactStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
 inductive InferenceStep where
@@ -675,6 +679,8 @@ section ChkStepToString
   | .iteSpec s => s!"iteSpec {s}"
   | .realCoreSpec => s!"realCoreSpec"
   | .realExtSpec rc => s!"realExtSpec {rc.reprAux}"
+  | .complexCoreSpec => s!"complexCoreSpec"
+  | .complexExtSpec cc => s!"complexExtSpec {cc.reprAux}"
 
   def InferenceStep.toString : InferenceStep → String
   | .validOfBVarLower pv pn => s!"validOfBVarLower {pv} {pn}"
@@ -781,6 +787,8 @@ section ChkStepPremises
   | .iteSpec _ => []
   | .realCoreSpec => []
   | .realExtSpec _ => []
+  | .complexCoreSpec => []
+  | .complexExtSpec _ => []
 
   def InferenceStep.premises : InferenceStep → List Nat
   | .validOfBVarLower pv pn => [pv, pn]
@@ -1091,6 +1099,9 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
 | .iteSpec s => .addEntry (.valid [] (LamTerm.iteSpec s))
 | .realCoreSpec => if lsa.realCore then .addEntry (.valid [] LamTerm.realCoreSpec) else .fail
 | .realExtSpec rc => if lsa.realExt.contains rc then .addEntry (.valid [] (LamTerm.realExtSpec rc)) else .fail
+| .complexCoreSpec => if lsa.complexCore then .addEntry (.valid [] LamTerm.complexCoreSpec) else .fail
+| .complexExtSpec cc =>
+  if lsa.complexExt.contains cc then .addEntry (.valid [] (LamTerm.complexExtSpec cc)) else .fail
 
 @[reducible] def InferenceStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : InferenceStep) → EvalResult
 | .validOfBVarLower pv pn =>
@@ -1706,6 +1717,19 @@ theorem FactStep.eval_correct
     have h := RealInterpUnlifted.ExtSpec.isSome_of_mem_avail (List.contains_iff_mem.mp h)
     apply And.intro (LamThmValid.realExtSpec rc ((cv.laterVal.realExt.get? rc).get h).down)
     rw [LamTerm.maxEVarSucc_realExtSpec]; apply Nat.zero_le
+  case isFalse => exact True.intro
+| .complexCoreSpec => by
+  dsimp only [eval]; split
+  case isTrue h =>
+    apply And.intro (LamThmValid.complexCoreSpec (cv.laterVal.complexCore.get h).down)
+    rw [LamTerm.maxEVarSucc_complexCoreSpec]; apply Nat.zero_le
+  case isFalse => exact True.intro
+| .complexExtSpec cc => by
+  dsimp only [eval]; split
+  case isTrue h =>
+    have h := ComplexInterpUnlifted.ExtSpec.isSome_of_mem_avail (List.contains_iff_mem.mp h)
+    apply And.intro (LamThmValid.complexExtSpec cc ((cv.laterVal.complexExt.get? cc).get h).down)
+    rw [LamTerm.maxEVarSucc_complexExtSpec]; apply Nat.zero_le
   case isFalse => exact True.intro
 
 theorem InferenceStep.eval_correct

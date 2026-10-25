@@ -173,4 +173,105 @@ theorem LamThmValid.realExtSpec :
 | .zero, _ | .one, _ | .add, _ | .neg, _ | .mul, _ | .inv, _ | .le, _ =>
   LamThmValid.ofInterpAsProp _ _ rfl True.intro rfl
 
+def LamTerm.mkComplexConst (cc : ComplexConst) : LamTerm := .base (.lcst (.complex cc))
+
+/-- `cc a`, where `a : s` -/
+def LamTerm.mkComplexUOp (cc : ComplexConst) (s : LamSort) (a : LamTerm) : LamTerm :=
+  .app s (.mkComplexConst cc) a
+
+/-- `cc a b`, where `a b : Complex` -/
+def LamTerm.mkComplexBinOp (cc : ComplexConst) (a b : LamTerm) : LamTerm :=
+  .app (.base .complex) (.app (.base .complex) (.mkComplexConst cc) a) b
+
+/-- The characterization `ComplexInterpUnlifted.CoreSpec` of the core constants, as a conjunction -/
+def LamTerm.complexCoreSpec : LamTerm :=
+  let r : LamSort := .base .real
+  let c : LamSort := .base .complex
+  let re := LamTerm.mkComplexUOp .re c
+  let im := LamTerm.mkComplexUOp .im c
+  let mk (x y : LamTerm) := LamTerm.app r (.app r (.mkComplexConst .mk) x) y
+  let x := LamTerm.bvar
+  .mkAnd (.mkForallEF r (.mkForallEF r (.mkEq r (re (mk (x 1) (x 0))) (x 1))))
+    (.mkAnd (.mkForallEF r (.mkForallEF r (.mkEq r (im (mk (x 1) (x 0))) (x 0))))
+      (.mkForallEF c (.mkEq c (mk (re (x 0)) (im (x 0))) (x 0))))
+
+theorem LamTerm.maxEVarSucc_complexCoreSpec : maxEVarSucc complexCoreSpec = 0 := rfl
+
+theorem LamThmValid.complexCoreSpec (h : lval.laterVal.complex.lower.CoreSpec) :
+  LamThmValid lval [] LamTerm.complexCoreSpec :=
+  LamThmValid.ofInterpAsProp _ _ rfl ⟨h.re_mk, h.im_mk, h.mk_re_im⟩ rfl
+
+/--
+  The characterization `ComplexInterpUnlifted.extProp cc` of a constant `cc` that
+    is not a core constant. Core constants are characterized by `complexCoreSpec`
+-/
+def LamTerm.complexExtSpec (cc : ComplexConst) : LamTerm :=
+  let r : LamSort := .base .real
+  let c : LamSort := .base .complex
+  let nat : LamSort := .base .nat
+  let re := LamTerm.mkComplexUOp .re c
+  let im := LamTerm.mkComplexUOp .im c
+  let normSq := LamTerm.mkComplexUOp .normSq c
+  let rzero := LamTerm.mkRealConst .zero
+  let rone := LamTerm.mkRealConst .one
+  let radd := LamTerm.mkRealBinOp .add
+  let rsub := LamTerm.mkRealBinOp .sub
+  let rmul := LamTerm.mkRealBinOp .mul
+  let rneg := LamTerm.mkRealUOp .neg r
+  let x := LamTerm.bvar
+  -- `re a = reA ∧ im a = imA`
+  let parts (a reA imA : LamTerm) := LamTerm.mkAnd (.mkEq r (re a) reA) (.mkEq r (im a) imA)
+  -- `(∀ z : s, re a = reA) ∧ ∀ z : s, im a = imA`, where `z` is `bvar 0`
+  let parts₁ (s : LamSort) (a reA imA : LamTerm) :=
+    LamTerm.mkAnd (.mkForallEF s (.mkEq r (re a) reA)) (.mkForallEF s (.mkEq r (im a) imA))
+  -- `(∀ z w, re a = reA) ∧ ∀ z w, im a = imA`, where `z` is `bvar 1` and `w` is `bvar 0`
+  let parts₂ (a reA imA : LamTerm) :=
+    LamTerm.mkAnd (.mkForallEF c (.mkForallEF c (.mkEq r (re a) reA)))
+      (.mkForallEF c (.mkForallEF c (.mkEq r (im a) imA)))
+  match cc with
+  | .zero => parts (.mkComplexConst .zero) rzero rzero
+  | .one => parts (.mkComplexConst .one) rone rzero
+  | .I => parts (.mkComplexConst .I) rzero rone
+  | .add => parts₂ (.mkComplexBinOp .add (x 1) (x 0)) (radd (re (x 1)) (re (x 0))) (radd (im (x 1)) (im (x 0)))
+  | .sub => parts₂ (.mkComplexBinOp .sub (x 1) (x 0)) (rsub (re (x 1)) (re (x 0))) (rsub (im (x 1)) (im (x 0)))
+  | .mul => parts₂ (.mkComplexBinOp .mul (x 1) (x 0))
+      (rsub (rmul (re (x 1)) (re (x 0))) (rmul (im (x 1)) (im (x 0))))
+      (radd (rmul (re (x 1)) (im (x 0))) (rmul (im (x 1)) (re (x 0))))
+  | .div => .mkForallEF c (.mkForallEF c (.mkEq c (.mkComplexBinOp .div (x 1) (x 0))
+      (.mkComplexBinOp .mul (x 1) (.mkComplexUOp .inv c (x 0)))))
+  | .neg => parts₁ c (.mkComplexUOp .neg c (x 0)) (rneg (re (x 0))) (rneg (im (x 0)))
+  | .inv =>
+    let rdiv := LamTerm.mkRealBinOp .div
+    parts₁ c (.mkComplexUOp .inv c (x 0)) (rdiv (re (x 0)) (normSq (x 0))) (rdiv (rneg (im (x 0))) (normSq (x 0)))
+  | .ofNat => parts₁ nat (.mkComplexUOp .ofNat nat (x 0)) (.mkRealUOp .ofNat nat (x 0)) rzero
+  | .ofInt =>
+    let int : LamSort := .base .int
+    parts₁ int (.mkComplexUOp .ofInt int (x 0)) (.mkRealUOp .ofInt int (x 0)) rzero
+  | .ofReal => parts₁ r (.mkComplexUOp .ofReal r (x 0)) (x 0) rzero
+  | .normSq => .mkForallEF c (.mkEq r (normSq (x 0)) (radd (rmul (re (x 0)) (re (x 0))) (rmul (im (x 0)) (im (x 0)))))
+  | .conj => parts₁ c (.mkComplexUOp .conj c (x 0)) (re (x 0)) (rneg (im (x 0)))
+  | .norm => .mkForallEF c (.mkEq r (.mkComplexUOp .norm c (x 0)) (.mkRealUOp .sqrt r (normSq (x 0))))
+  | .pow =>
+    let pow (a n : LamTerm) := LamTerm.app nat (.app c (.mkComplexConst .pow) a) n
+    .mkAnd (.mkForallEF c (.mkEq c (pow (x 0) (.mkNatVal 0)) (.mkComplexConst .one)))
+      (.mkForallEF c (.mkForallEF nat
+        (.mkEq c (pow (x 1) (.mkNatBinOp .nadd (x 0) (.mkNatVal 1))) (.mkComplexBinOp .mul (pow (x 1) (x 0)) (x 1)))))
+  | .ofRat =>
+    let rat : LamSort := .base .rat
+    parts₁ rat (.mkComplexUOp .ofRat rat (x 0)) (.mkRealUOp .ofRat rat (x 0)) rzero
+  | .re | .im | .mk => .base .trueE
+
+theorem LamTerm.maxEVarSucc_complexExtSpec (cc : ComplexConst) : maxEVarSucc (complexExtSpec cc) = 0 := by
+  cases cc <;> rfl
+
+theorem LamThmValid.complexExtSpec :
+  (cc : ComplexConst) → (h : ComplexInterpUnlifted.extProp lval.laterVal.real.lower lval.laterVal.complex.lower cc) →
+    LamThmValid lval [] (LamTerm.complexExtSpec cc)
+| .zero, h | .one, h | .I, h | .add, h | .sub, h | .mul, h | .div, h | .neg, h | .inv, h
+| .ofReal, h | .normSq, h | .conj, h | .norm, h => LamThmValid.ofInterpAsProp _ _ rfl h rfl
+| .ofNat, h | .ofInt, h | .ofRat, h =>
+  LamThmValid.ofInterpAsProp _ _ rfl ⟨fun n => h.left n.down, fun n => h.right n.down⟩ rfl
+| .pow, h => LamThmValid.ofInterpAsProp _ _ rfl ⟨h.left, fun z n => h.right z n.down⟩ rfl
+| .re, _ | .im, _ | .mk, _ => LamThmValid.ofInterpAsProp _ _ rfl True.intro rfl
+
 end Auto.Embedding.Lam
