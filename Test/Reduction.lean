@@ -3,7 +3,7 @@ import Auto.Lib.BinTree
 import Auto.Lib.TreeList
 
 set_option lazyReduce.printTime true
-set_option maxRecDepth 10000 in
+set_option maxRecDepth 20000 in
 #lazyReduce List.map (fun n => (List.range (3000 + n)).length) (List.range 10)
 
 /-
