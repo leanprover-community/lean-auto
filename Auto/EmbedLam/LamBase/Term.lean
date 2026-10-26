@@ -495,7 +495,7 @@ theorem LamTerm.maxEVarSucc_mkLamFN {t : LamTerm} :
   case cons s lctx IH =>
     dsimp [mkLamFN, maxEVarSucc]; rw [IH]
 
--- Given `t` and `[s₀, s₁, ⋯, sᵢ₋₁]`, return `∀ (? : sᵢ₋₁) ⋯ (? : s₀), t`
+-- Given `t` and `[s₀, s₁, ⋯, sᵢ₋₁]`, return `∀ (? : s₀) ⋯ (? : sᵢ₋₁), t`
 def LamTerm.mkForallEFN (t : LamTerm) : List LamSort → LamTerm
 | .nil => t
 | .cons s lctx => LamTerm.mkForallEF s (t.mkForallEFN lctx)
@@ -518,6 +518,33 @@ theorem LamTerm.mkForallEFN_append :
 theorem LamTerm.mkForallEFN_append_singleton :
   mkForallEFN t (l₁ ++ [s]) = mkForallEFN (mkForallEF s t) l₁ := by
   rw [mkForallEFN_append]; rfl
+
+-- Given `[t₀, t₁, ⋯, tᵢ₋₁]`, return `t₀ ∧ t₁ ∧ ⋯ ∧ tᵢ₋₁`, which is `True` if `i = 0`
+def LamTerm.mkAndN : List LamTerm → LamTerm
+| [] => .base .trueE
+| [t] => t
+| t :: ts => .mkAnd t (mkAndN ts)
+
+theorem LamTerm.maxEVarSucc_mkAndN
+  (hs : HList (fun t => t.maxEVarSucc ≤ n) ts) : (mkAndN ts).maxEVarSucc ≤ n := by
+  induction hs
+  case nil => exact Nat.zero_le _
+  case cons _ tys h _ IH =>
+    cases tys
+    case nil => exact h
+    case cons => dsimp [mkAndN]; rw [maxEVarSucc_mkAnd, Nat.max_le]; exact And.intro h IH
+
+-- Given `[h₀, h₁, ⋯, hᵢ₋₁]` and `t`, return `h₀ → h₁ → ⋯ → hᵢ₋₁ → t`
+def LamTerm.mkImpN (hs : List LamTerm) (t : LamTerm) : LamTerm := hs.foldr .mkImp t
+
+theorem LamTerm.maxEVarSucc_mkImpN
+  (hhs : HList (fun h => h.maxEVarSucc ≤ n) hs) (ht : t.maxEVarSucc ≤ n) :
+  (mkImpN hs t).maxEVarSucc ≤ n := by
+  induction hhs
+  case nil => exact ht
+  case cons hh _ IH =>
+    dsimp [mkImpN, List.foldr] at *; rw [maxEVarSucc_mkImp, Nat.max_le]
+    exact And.intro hh IH
 
 /-- Given `λ (_ : ty₀) ⋯ (_ : tyᵢ₋₁), body`, return `body` -/
 def LamTerm.getLamBody : LamTerm → LamTerm

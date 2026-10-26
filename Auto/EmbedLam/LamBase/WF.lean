@@ -454,6 +454,21 @@ def LamWF.mkForallEFN {ltv : LamTyVal}
     rw [List.reverse_cons, pushLCtxs_append_singleton] at wfp
     apply LamWF.mkForallEF; apply LamWF.mkForallEFN (ls:=ls) wfp
 
+def LamWF.mkAndN {ltv : LamTyVal}
+  (wfs : HList (fun t => LamWF ltv ⟨lctx, t, .base .prop⟩) ts) :
+  LamWF ltv ⟨lctx, .mkAndN ts, .base .prop⟩ :=
+  match ts, wfs with
+  | [], .nil => .ofBase .ofTrueE
+  | [_], .cons wf .nil => wf
+  | _ :: _ :: _, .cons wf wfs => .mkAnd wf (LamWF.mkAndN wfs)
+
+def LamWF.mkImpN {ltv : LamTyVal}
+  (wfhs : HList (fun h => LamWF ltv ⟨lctx, h, .base .prop⟩) hs) (wft : LamWF ltv ⟨lctx, t, .base .prop⟩) :
+  LamWF ltv ⟨lctx, .mkImpN hs t, .base .prop⟩ :=
+  match hs, wfhs with
+  | [], .nil => wft
+  | _ :: _, .cons wfh wfhs => .mkImp wfh (LamWF.mkImpN wfhs wft)
+
 def LamWF.fromMkForallEFN {ltv : LamTyVal}
   (wf : LamWF ltv ⟨lctx, .mkForallEFN p ls, .base .prop⟩) :
   LamWF ltv ⟨pushLCtxs ls.reverse lctx, p, .base .prop⟩ :=
