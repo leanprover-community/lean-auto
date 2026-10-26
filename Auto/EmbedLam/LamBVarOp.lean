@@ -307,6 +307,17 @@ theorem LamWF.interp_bvarLifts
   apply Eq.trans (LamWF.interp_bvarLiftsIdx (idx:=0) _ xs heq _ lctxTerm _ _)
   apply interp_substLCtxTerm; rw [pushLCtxsAt_zero]; apply pushLCtxsAtDep_zero
 
+/-- `t` applied to the variables bound by `∀ (x₁ : s₁) ⋯ (xₙ : sₙ)`, where `tys = [s₁, ⋯, sₙ]` -/
+theorem LamWF.interp_bvarLifts_bvarAppsRev
+  {lval : LamValuation.{u}} {lctxTerm : ∀ n, (lctx n).interp lval.tyVal}
+  (wft : LamWF lval.toLamTyVal ⟨lctx, t, LamSort.mkFuncs s tys⟩)
+  (wfAp : LamWF lval.toLamTyVal ⟨pushLCtxs tys.reverse lctx, (t.bvarLifts tys.length).bvarAppsRev tys, s⟩)
+  (xs : HList (LamSort.interp lval.tyVal) tys) :
+  LamWF.interp lval (pushLCtxs tys.reverse lctx) (pushLCtxsDep xs.reverse lctxTerm) wfAp =
+    LamSort.uncurry (wft.interp lval lctx lctxTerm) xs := by
+  rw [interp_bvarAppsRev_uncurry (LamWF.bvarLifts List.length_reverse t wft) wfAp]
+  rw [← interp_bvarLifts lval xs.reverse List.length_reverse lctx lctxTerm t wft]
+
 def LamWF.bvarLiftIdx {lamVarTy lctx} (idx : Nat)
   (rterm : LamTerm) (HWF : LamWF lamVarTy ⟨lctx, rterm, rTy⟩) :
   LamWF lamVarTy ⟨pushLCtxAt s idx lctx, rterm.bvarLiftIdx idx, rTy⟩ :=

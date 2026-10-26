@@ -469,6 +469,15 @@ def LamWF.mkImpN {ltv : LamTyVal}
   | [], .nil => wft
   | _ :: _, .cons wfh wfhs => .mkImp wfh (LamWF.mkImpN wfhs wft)
 
+theorem LamWF.fromMkImpN {ltv : LamTyVal} : {hs : List LamTerm} → LamWF ltv ⟨lctx, .mkImpN hs t, .base .prop⟩ →
+  (∀ h ∈ hs, Nonempty (LamWF ltv ⟨lctx, h, .base .prop⟩)) ∧ Nonempty (LamWF ltv ⟨lctx, t, .base .prop⟩)
+  | [], wf => ⟨fun _ h => (nomatch h), ⟨wf⟩⟩
+  | _ :: _, wf =>
+    have ⟨ih₁, ih₂⟩ := fromMkImpN (LamWF.getArg wf)
+    ⟨fun h hh => match hh with
+      | .head _ => ⟨wf.getFn.getArg⟩
+      | .tail _ hh => ih₁ h hh, ih₂⟩
+
 def LamWF.fromMkForallEFN {ltv : LamTyVal}
   (wf : LamWF ltv ⟨lctx, .mkForallEFN p ls, .base .prop⟩) :
   LamWF ltv ⟨pushLCtxs ls.reverse lctx, p, .base .prop⟩ :=

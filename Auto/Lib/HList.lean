@@ -184,4 +184,82 @@ theorem HList.reverse_cons {x : β a} {xs : HList β as} :
   HEq ((HList.cons x xs).reverse) (xs.reverse.append (.cons x .nil)) :=
   reverseAux_eq_append (xs:=xs) (ys:=.cons x .nil)
 
+theorem HList.reverseAux_reverseAux (xs : HList β as) (ys : HList β bs) :
+  HEq (reverseAux xs ys).reverse (reverseAux ys xs) := by
+  induction xs generalizing bs ys
+  case nil => apply HEq.rfl
+  case cons x xs IH => exact IH (.cons x ys)
+
+theorem HList.reverse_reverse (xs : HList β as) : HEq xs.reverse.reverse xs :=
+  reverseAux_reverseAux xs .nil
+
+theorem HList.forall_reverse {β : α → Sort _} {as : List α} {p : HList β as.reverse → Prop} :
+  (∀ xs, p xs) ↔ (∀ ys : HList β as, p ys.reverse) := by
+  refine ⟨fun h ys => h ys.reverse, fun h xs => ?_⟩
+  have hrev : ∀ {bs} (heq : bs = as) (zs : HList β bs), HEq (heq ▸ zs).reverse zs.reverse := by
+    intro _ heq _; cases heq; rfl
+  have heq := (hrev (List.reverse_reverse as) xs.reverse).trans (reverse_reverse xs)
+  exact (eq_of_heq heq) ▸ h _
+
+/-- The `i`-th element of `xs` -/
+def HList.get {β : α → Sort _} : {as : List α} → HList β as → (i : Fin as.length) → β as[i]
+  | _ :: _, .cons x _, ⟨0, _⟩ => x
+  | _ :: _, .cons _ xs, ⟨i + 1, h⟩ => get xs ⟨i, Nat.lt_of_succ_lt_succ h⟩
+
+/-- The `HList` whose `i`-th element is `f i` -/
+def HList.ofFn {β : α → Sort _} : {as : List α} → ((i : Fin as.length) → β as[i]) → HList β as
+  | [], _ => .nil
+  | _ :: _, f => .cons (f ⟨0, Nat.zero_lt_succ _⟩) (ofFn fun i => f i.succ)
+
+theorem HList.get_ofFn {β : α → Sort _} : {as : List α} → (f : (i : Fin as.length) → β as[i]) →
+  (i : Fin as.length) → (ofFn f).get i = f i
+  | _ :: _, _, ⟨0, _⟩ => rfl
+  | _ :: _, f, ⟨i + 1, h⟩ => get_ofFn (fun i => f i.succ) ⟨i, Nat.lt_of_succ_lt_succ h⟩
+
+theorem HList.ext {β : α → Sort _} : {as : List α} → {xs ys : HList β as} → (∀ i, xs.get i = ys.get i) → xs = ys
+  | [], .nil, .nil, _ => rfl
+  | _ :: _, .cons x xs, .cons y ys, h => by
+    have h₀ : x = y := h ⟨0, Nat.zero_lt_succ _⟩
+    have h₁ : xs = ys := ext fun ⟨i, hi⟩ => h ⟨i + 1, Nat.succ_lt_succ hi⟩
+    rw [h₀, h₁]
+
+theorem HList.get_map {β : α → Sort _} {γ : α → Sort _} (f : ∀ (a : α), β a → γ a) :
+  {as : List α} → (xs : HList β as) → (i : Fin as.length) → (xs.map f).get i = f as[i] (xs.get i)
+  | _ :: _, .cons _ _, ⟨0, _⟩ => rfl
+  | _ :: _, .cons _ xs, ⟨i + 1, h⟩ => get_map f xs ⟨i, Nat.lt_of_succ_lt_succ h⟩
+
+/-- `β a₁ → ⋯ → β aₙ → γ`, where `as = [a₁, ⋯, aₙ]` -/
+def HList.Funcs (β : α → Type u) : List α → Type u → Type u
+  | [], γ => γ
+  | a :: as, γ => β a → Funcs β as γ
+
+/-- Apply a curried function to the elements of `xs` -/
+def HList.uncurry {β : α → Type u} : {as : List α} → HList.Funcs β as γ → HList β as → γ
+  | [], f, .nil => f
+  | _ :: _, f, .cons x xs => uncurry (f x) xs
+
+/-- The curried form of `f` -/
+def HList.curry {β : α → Type u} : {as : List α} → (HList β as → γ) → HList.Funcs β as γ
+  | [], f => f .nil
+  | _ :: _, f => fun x => curry fun xs => f (.cons x xs)
+
+theorem HList.uncurry_curry {β : α → Type u} : {as : List α} → (f : HList β as → γ) → uncurry (curry f) = f
+  | [], _ => funext fun .nil => rfl
+  | _ :: _, f => funext fun (.cons x xs) => congrFun (uncurry_curry (fun xs => f (.cons x xs))) xs
+
+theorem HList.curry_uncurry {β : α → Type u} : {as : List α} → (f : HList.Funcs β as γ) → curry (uncurry f) = f
+  | [], _ => rfl
+  | _ :: _, f => funext fun x => curry_uncurry (f x)
+
+theorem HList.uncurry_inj {β : α → Type u} {f g : HList.Funcs β as γ} (h : uncurry f = uncurry g) : f = g := by
+  rw [← curry_uncurry f, ← curry_uncurry g, h]
+
+theorem HList.nonempty_of_forall_mem {β : α → Sort _} :
+  {as : List α} → (∀ a ∈ as, Nonempty (β a)) → Nonempty (HList β as)
+  | [], _ => ⟨.nil⟩
+  | _ :: _, h =>
+    have ⟨x⟩ := h _ List.mem_cons_self
+    have ⟨xs⟩ := nonempty_of_forall_mem fun a ha => h a (List.mem_cons_of_mem _ ha)
+    ⟨.cons x xs⟩
+
 end Auto

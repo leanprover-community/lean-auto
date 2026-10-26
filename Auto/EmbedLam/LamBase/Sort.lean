@@ -496,6 +496,27 @@ def LamSort.curry (f : HList (LamSort.interp tyVal) tys → LamSort.interp tyVal
   | .nil => f .nil
   | .cons _ _ => fun x => LamSort.curry (fun xs => f (.cons x xs))
 
+/-- Apply a curried function to the elements of `xs` -/
+def LamSort.uncurry : {tys : List LamSort} → LamSort.interp tyVal (LamSort.mkFuncs s tys) →
+  HList (LamSort.interp tyVal) tys → LamSort.interp tyVal s
+  | [], f, .nil => f
+  | _ :: _, f, .cons x xs => LamSort.uncurry (f x) xs
+
+theorem LamSort.uncurry_curry : {tys : List LamSort} →
+  (f : HList (LamSort.interp tyVal) tys → LamSort.interp tyVal s) → LamSort.uncurry (LamSort.curry f) = f
+  | [], _ => funext fun .nil => rfl
+  | _ :: _, f => funext fun (.cons x xs) => congrFun (uncurry_curry (fun xs => f (.cons x xs))) xs
+
+theorem LamSort.curry_uncurry : {tys : List LamSort} →
+  (f : LamSort.interp tyVal (LamSort.mkFuncs s tys)) → LamSort.curry (LamSort.uncurry f) = f
+  | [], _ => rfl
+  | _ :: _, f => funext fun x => curry_uncurry (f x)
+
+theorem LamSort.uncurry_heq {s₁ s₂ : LamSort} (hs : s₁ = s₂)
+  {f₁ : (LamSort.mkFuncs s₁ tys).interp tyVal} {f₂ : (LamSort.mkFuncs s₂ tys).interp tyVal}
+  (hf : HEq f₁ f₂) (xs : HList (LamSort.interp tyVal) tys) : HEq (LamSort.uncurry f₁ xs) (LamSort.uncurry f₂ xs) := by
+  cases hs; cases hf; rfl
+
 def LamSort.curryRev (f : HList (LamSort.interp tyVal) tys → LamSort.interp tyVal s) :
   LamSort.interp tyVal (s.mkFuncsRev tys) :=
   match tys with

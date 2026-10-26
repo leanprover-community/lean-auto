@@ -666,6 +666,43 @@ section push
     case h₁ => apply pushLCtxs_singleton
     case h₂ => apply pushLCtxsDep_singleton
 
+  theorem pushLCtxs_reverse_get {xs : List α} (lctx : Nat → α) (i : Fin xs.length) :
+    pushLCtxs xs.reverse lctx (xs.length - 1 - i) = xs[i] := by
+    rw [pushLCtxs_lt (by simp; omega)]
+    rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem (by simp; omega), Option.getD_some, List.getElem_reverse]
+    congr 1; omega
+
+  theorem pushLCtxsDep_reverse_get {lctxty : α → Sort u} {tys : List α} (xs : HList lctxty tys)
+    {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) (i : Fin tys.length) :
+    HEq (pushLCtxsDep xs.reverse lctx (tys.length - 1 - i)) (xs.get i) := by
+    induction xs generalizing rty
+    case nil => exact i.elim0
+    case cons ty tys x xs IH =>
+      have h₁ : HEq (pushLCtxsDep (HList.cons x xs).reverse lctx) (pushLCtxsDep xs.reverse (pushLCtxDep x lctx)) :=
+        (pushLCtxsDep_substxs _ _ _ List.reverse_cons HList.reverse_cons).trans (pushLCtxsDep_append_singleton _ _ _)
+      have hβ : (fun n => lctxty (pushLCtxs (ty :: tys).reverse rty n)) =
+        (fun n => lctxty (pushLCtxs tys.reverse (pushLCtx ty rty) n)) := by
+        rw [List.reverse_cons, pushLCtxs_append_singleton]
+      apply HEq.trans (congr_fun_heq hβ h₁ rfl)
+      match i with
+      | ⟨0, _⟩ =>
+        apply HEq.trans (pushLCtxsDep_ge _ (by simp))
+        rw [show (ty :: tys).length - 1 - 0 - tys.reverse.length = 0 by simp]; rfl
+      | ⟨i + 1, h⟩ =>
+        have := IH (pushLCtxDep x lctx) ⟨i, Nat.lt_of_succ_lt_succ h⟩
+        simp only [List.length_cons] at this ⊢
+        rw [show tys.length + 1 - 1 - (i + 1) = tys.length - 1 - i by omega]
+        exact this
+
+  theorem pushLCtxs_length_add (xs : List α) (lctx : Nat → α) (n : Nat) :
+    pushLCtxs xs lctx (xs.length + n) = lctx n := by
+    rw [pushLCtxs_ge (Nat.le_add_right _ _), Nat.add_sub_cancel_left]
+
+  theorem pushLCtxsDep_length_add {lctxty : α → Sort u} {tys : List α} (xs : HList lctxty tys)
+    {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) (n : Nat) :
+    HEq (pushLCtxsDep xs lctx (tys.length + n)) (lctx n) := by
+    apply HEq.trans (pushLCtxsDep_ge _ (Nat.le_add_right _ _)); rw [Nat.add_sub_cancel_left]
+
   @[reducible] def pushLCtxsAtDep
     {lctxty : α → Sort u} {tys : List α} (xs : HList lctxty tys) (pos : Nat)
     {rty : Nat → α} (lctx : ∀ n, lctxty (rty n)) :=

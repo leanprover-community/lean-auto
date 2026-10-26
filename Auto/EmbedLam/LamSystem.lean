@@ -39,6 +39,10 @@ def LamThmValidD (lval : LamValuation.{u}) lctx t :=
     ∀ (lctxTerm : HList (LamSort.interp lval.tyVal) lctx),
       (wf.interp lval _ (pushLCtxsDep lctxTerm (dfLCtxTerm _))).down
 
+theorem LamValid.iff_of_wf {lval : LamValuation.{u}} (wf : LamWF lval.toLamTyVal ⟨lctx, t, .base .prop⟩) :
+  LamValid lval lctx t ↔ ∀ lctxTerm, GLift.down (wf.interp lval lctx lctxTerm) :=
+  ⟨fun ⟨wf', h⟩ lctxTerm => LamWF.interp_substWF (wf := wf') (wf' := wf) ▸ h lctxTerm, fun h => ⟨wf, h⟩⟩
+
 abbrev LamEquiv (lval : LamValuation) (lctx : Nat → LamSort) (rty : LamSort)
   (t₁ t₂ : LamTerm) :=
   ∃ (wf₁ : LamWF lval.toLamTyVal ⟨lctx, t₁, rty⟩),

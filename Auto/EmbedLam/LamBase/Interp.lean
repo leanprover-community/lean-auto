@@ -143,6 +143,11 @@ theorem LamWF.interp_app
   match wft with
   | .ofApp _ _ _ => rfl
 
+theorem LamWF.interp_ofApp {lval : LamValuation.{u}} {lctxTerm : ∀ n, (lctx n).interp lval.tyVal}
+  {wfFn : LamWF lval.toLamTyVal ⟨lctx, fn, .func argTy s⟩} {wfArg : LamWF lval.toLamTyVal ⟨lctx, arg, argTy⟩} :
+  (LamWF.ofApp argTy wfFn wfArg).interp lval lctx lctxTerm =
+    (wfFn.interp lval lctx lctxTerm) (wfArg.interp lval lctx lctxTerm) := rfl
+
 theorem LamWF.interp_bvarAppsRev
   {lval : LamValuation.{u}}
   (wft : LamWF lval.toLamTyVal ⟨pushLCtxs lctxTy.reverse lctxTy', t, LamSort.mkFuncs s lctxTy⟩)
@@ -180,6 +185,37 @@ theorem LamWF.interp_bvarAppsRev
         apply eq_of_heq; apply HEq.trans (LamWF.interp_bvar _)
         apply HEq.trans (pushLCtxsDep_ge _ (Nat.le_of_eq List.length_reverse))
         rw [List.length_reverse, Nat.sub_self]; rfl
+
+/-- `interp_bvarAppsRev` for the uncurried interpretation of `t` -/
+theorem LamWF.interp_bvarAppsRev_uncurry
+  {lval : LamValuation.{u}}
+  (wft : LamWF lval.toLamTyVal ⟨pushLCtxs lctxTy.reverse lctxTy', t, LamSort.mkFuncs s lctxTy⟩)
+  (wfAp : LamWF lval.toLamTyVal ⟨pushLCtxs lctxTy.reverse lctxTy', t.bvarAppsRev lctxTy, s⟩)
+  {lctxTerm : HList (LamSort.interp lval.tyVal) lctxTy}
+  {lctxTerm' : ∀ (n : Nat), (lctxTy' n).interp lval.tyVal} :
+  LamWF.interp lval (pushLCtxs lctxTy.reverse lctxTy') (pushLCtxsDep lctxTerm.reverse lctxTerm') wfAp =
+    LamSort.uncurry (wft.interp lval _ (pushLCtxsDep lctxTerm.reverse lctxTerm')) lctxTerm :=
+  eq_of_heq (interp_bvarAppsRev wft wfAp (heq_of_eq (LamSort.curry_uncurry _).symm))
+
+theorem LamWF.interp_eqNot
+  {wf : LamWF lval.toLamTyVal ⟨lctx, t, .base .prop⟩} :
+  GLift.down (LamWF.interp lval lctx lctxTerm (.mkNot wf)) =
+    Not (GLift.down (LamWF.interp lval lctx lctxTerm wf)) := rfl
+
+theorem LamWF.interp_eqAnd
+  {wf₁ : LamWF lval.toLamTyVal ⟨lctx, t₁, .base .prop⟩} {wf₂ : LamWF lval.toLamTyVal ⟨lctx, t₂, .base .prop⟩} :
+  GLift.down (LamWF.interp lval lctx lctxTerm (.mkAnd wf₁ wf₂)) =
+    And (GLift.down (LamWF.interp lval lctx lctxTerm wf₁)) (GLift.down (LamWF.interp lval lctx lctxTerm wf₂)) := rfl
+
+theorem LamWF.interp_eqImp
+  {wf₁ : LamWF lval.toLamTyVal ⟨lctx, t₁, .base .prop⟩} {wf₂ : LamWF lval.toLamTyVal ⟨lctx, t₂, .base .prop⟩} :
+  GLift.down (LamWF.interp lval lctx lctxTerm (.mkImp wf₁ wf₂)) =
+    (GLift.down (LamWF.interp lval lctx lctxTerm wf₁) → GLift.down (LamWF.interp lval lctx lctxTerm wf₂)) := rfl
+
+theorem LamWF.interp_eqEq
+  {wf₁ : LamWF lval.toLamTyVal ⟨lctx, t₁, s⟩} {wf₂ : LamWF lval.toLamTyVal ⟨lctx, t₂, s⟩} :
+  GLift.down (LamWF.interp lval lctx lctxTerm (.mkEq wf₁ wf₂)) =
+    (LamWF.interp lval lctx lctxTerm wf₁ = LamWF.interp lval lctx lctxTerm wf₂) := rfl
 
 theorem LamWF.interp_eqForallEF
   {wf : LamWF lval.toLamTyVal ⟨pushLCtx s lctx, t, .base .prop⟩} :
@@ -223,6 +259,36 @@ theorem LamWF.interp_eqForallEFN
   apply Eq.trans _ interp_eqForallEFN'; apply congrArg
   apply eq_of_heq; apply interp_heq <;> try rfl
   rw [List.reverse_reverse]
+
+/-- `interp_eqForallEFN`, with the bound variables in the order of `ls` -/
+theorem LamWF.interp_eqForallEFN_reverse
+  {lval : LamValuation.{u}} {ls : List LamSort} {lctxTerm : ∀ n, (lctx n).interp lval.tyVal}
+  {wf : LamWF lval.toLamTyVal ⟨pushLCtxs ls.reverse lctx, t, .base .prop⟩} :
+  GLift.down (LamWF.interp lval lctx lctxTerm (.mkForallEFN wf)) = (∀ (xs : HList (LamSort.interp lval.tyVal) ls),
+    GLift.down (LamWF.interp lval (pushLCtxs ls.reverse lctx) (pushLCtxsDep xs.reverse lctxTerm) wf)) :=
+  interp_eqForallEFN.trans (propext HList.forall_reverse)
+
+theorem LamWF.interp_eqAndN
+  {wfs : HList (fun t => LamWF lval.toLamTyVal ⟨lctx, t, .base .prop⟩) ts} :
+  GLift.down (LamWF.interp lval lctx lctxTerm (.mkAndN wfs)) =
+    (∀ t ∈ ts, ∀ (wf : LamWF lval.toLamTyVal ⟨lctx, t, .base .prop⟩), GLift.down (LamWF.interp lval lctx lctxTerm wf)) :=
+  match ts, wfs with
+  | [], .nil => propext ⟨fun _ _ h => (nomatch h), fun _ => True.intro⟩
+  | [_], .cons wf .nil => by
+    rw [List.forall_mem_singleton, interp_prop_eqForall (wf:=wf)]; rfl
+  | _ :: _ :: _, .cons wf wfs => by
+    rw [List.forall_mem_cons, interp_prop_eqForall (wf:=wf), ← interp_eqAndN (wfs:=wfs)]; rfl
+
+theorem LamWF.interp_eqImpN
+  {wfhs : HList (fun h => LamWF lval.toLamTyVal ⟨lctx, h, .base .prop⟩) hs}
+  {wft : LamWF lval.toLamTyVal ⟨lctx, t, .base .prop⟩} :
+  GLift.down (LamWF.interp lval lctx lctxTerm (.mkImpN wfhs wft)) =
+    ((∀ h ∈ hs, ∀ (wf : LamWF lval.toLamTyVal ⟨lctx, h, .base .prop⟩), GLift.down (LamWF.interp lval lctx lctxTerm wf)) →
+      GLift.down (LamWF.interp lval lctx lctxTerm wft)) :=
+  match hs, wfhs with
+  | [], .nil => propext ⟨fun h _ => h, fun h => h fun _ h => nomatch h⟩
+  | _ :: _, .cons wfh wfhs => by
+    rw [List.forall_mem_cons, interp_prop_eqForall (wf:=wfh), and_imp, ← interp_eqImpN (wfhs:=wfhs)]; rfl
 
 theorem LamWF.interp_bvarApps
   {lval : LamValuation.{u}}
