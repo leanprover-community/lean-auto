@@ -162,7 +162,8 @@ def MutualIndInfo.specTerms (mind : MutualIndInfo) : List LamTerm :=
   · The projections of structures project the arguments of the constructors
   · Induction over the types of `mind`
   For simple mutual inductive types, these characterize the types of `mind` up to isomorphism,
-    given the interpretations of the other sorts of the arguments of the constructors.
+    given the interpretations of the other sorts of the arguments of the constructors
+    (see `MutualIndInfo.isomType_of_spec`).
   Arguments whose sorts mention the types of `mind` only in other sorts (e.g. `List T`, if
     `List T` is not a type of `mind`) have no induction hypotheses, so the characterization
     is weaker but still holds for such types
@@ -863,6 +864,38 @@ def target : (x : IndArg k) → x.child tyVal → Fin k
 | plain _, e => e.elim
 | recur _ l, _ => l
 
+/-- The induction hypotheses for the argument `x` with value `v`, for the motive `P` on `T` -/
+def IH {T : Fin k → Type u} (P : (j : Fin k) → T j → Prop) : (x : IndArg k) → x.type tyVal T → Prop
+| plain _, _ => True
+| recur _ l, v => ∀ xs, P l (HList.uncurry v xs)
+
+/-- Apply `g` to the elements of `T₀ ⋯ Tₖ₋₁` in the argument `x` with value `v` -/
+def fmap {T A : Fin k → Type u} (g : ∀ l, T l → A l) : (x : IndArg k) → x.type tyVal T → x.type tyVal A
+| plain _, v => v
+| recur _ l, v => HList.curry fun xs => g l (HList.uncurry v xs)
+
+/-- The value in `A` of the argument `x` with label `s`, where `rec b` is the value of the child `b` -/
+def foldArg {A : Fin k → Type u} : (x : IndArg k) → x.shape tyVal → ((b : x.child tyVal) → A (x.target tyVal b)) →
+  x.type tyVal A
+| plain _, s, _ => s
+| recur _ _, _, rec => HList.curry rec
+
+theorem eq_of_fmap_eq {T A : Fin k → Type u} {g : ∀ l, T l → A l} : (x : IndArg k) → (v w : x.type tyVal T) →
+  x.IH tyVal (fun l t => ∀ t', g l t = g l t' → t = t') v → x.fmap tyVal g v = x.fmap tyVal g w → v = w
+| plain _, _, _, _, h => h
+| recur _ _, _, _, ih, h => HList.uncurry_inj (funext fun xs =>
+    ih xs _ (congrFun ((HList.uncurry_curry _).symm.trans ((congrArg HList.uncurry h).trans (HList.uncurry_curry _))) xs))
+
+theorem exists_fmap_eq {T A : Fin k → Type u} (g : ∀ l, T l → A l) : (x : IndArg k) → (v : x.type tyVal A) →
+  x.IH tyVal (fun l a => ∃ t, g l t = a) v → ∃ w, x.fmap tyVal g w = v
+| plain _, v, _ => ⟨v, rfl⟩
+| recur _ _, v, ih =>
+  have ⟨f, hf⟩ := Classical.axiomOfChoice ih
+  ⟨HList.curry f, by
+    show HList.curry (fun xs => _) = v
+    conv => rhs; rw [← HList.curry_uncurry v]
+    apply congrArg; funext xs; rw [HList.uncurry_curry]; exact hf xs⟩
+
 end IndArg
 
 namespace IndSig
@@ -941,14 +974,16 @@ theorem ofShapeChildren_toShape_children : (x : IndArg k) → (v : x.type tyVal 
 | plain _, _, _ => rfl
 | recur _ _, v, _ => HList.curry_uncurry v
 
-/-- The induction hypotheses for the argument `x` with value `v` -/
-def IH (P : (j : Fin k) → cs.T tyVal j → Prop) : (x : IndArg k) → x.type tyVal (cs.T tyVal) → Prop
-| plain _, _ => True
-| recur _ l, v => ∀ xs, P l (HList.uncurry v xs)
+theorem foldArg_toShape {A : Fin k → Type u} (g : ∀ l, cs.T tyVal l → A l) : (x : IndArg k) →
+  (v : x.type tyVal (cs.T tyVal)) → (rec : (b : x.child tyVal) → A (x.target tyVal b)) →
+  (∀ b, rec b = g (x.target tyVal b) ⟨x.children tyVal cs v b, x.wt_children tyVal cs v b⟩) →
+  x.foldArg tyVal (x.toShape tyVal cs v) rec = x.fmap tyVal g v
+| plain _, _, _, _ => rfl
+| recur _ _, _, _, h => congrArg HList.curry (funext h)
 
 theorem IH_ofShapeChildren (P : (j : Fin k) → cs.T tyVal j → Prop) : (x : IndArg k) → (s : x.shape tyVal) →
   (f : x.child tyVal → cs.Tree tyVal) → (hf : ∀ b, cs.WT tyVal (f b) (x.target tyVal b)) →
-  (∀ b, P (x.target tyVal b) ⟨f b, hf b⟩) → x.IH tyVal cs P (x.ofShapeChildren tyVal cs s f hf)
+  (∀ b, P (x.target tyVal b) ⟨f b, hf b⟩) → x.IH tyVal P (x.ofShapeChildren tyVal cs s f hf)
 | plain _, _, _, _, _ => True.intro
 | recur _ _, _, _, _, h => fun xs => (congrArg (P _) (congrFun (HList.uncurry_curry _) xs)).mpr (h xs)
 
@@ -1024,7 +1059,7 @@ theorem mkVal_inj {j : Fin k} {c : Fin (cs j).length} {xs ys : cs.Args tyVal j c
 -/
 theorem induction (P : (j : Fin k) → cs.T tyVal j → Prop)
   (H : ∀ (j : Fin k) (c : Fin (cs j).length) (xs : cs.Args tyVal j c),
-    (∀ i, IndArg.IH tyVal cs P (cs j)[c][i] (xs.get i)) → P j (cs.mkVal tyVal j c xs)) :
+    (∀ i, IndArg.IH tyVal P (cs j)[c][i] (xs.get i)) → P j (cs.mkVal tyVal j c xs)) :
   ∀ j (t : cs.T tyVal j), P j t := by
   intro j ⟨t, ht⟩
   induction t generalizing j with
@@ -1058,7 +1093,92 @@ theorem proj_mkVal (j : Fin k) (c : Fin (cs j).length) (hc : ∀ c', c' = c) (i 
     exact IndArg.ofShapeChildren_toShape_children tyVal cs _ _ _
   exact h _
 
+/-- The values in `A` of the well-typed trees, where `alg` interprets the constructors -/
+def foldTree (A : Fin k → Type u) (alg : ∀ j (c : Fin (cs j).length), HList (IndArg.type tyVal A) (cs j)[c] → A j) :
+  (t : cs.Tree tyVal) → (j : Fin k) → cs.WT tyVal t j → A j
+| .mk a f, _, ht =>
+  ((cs.WT_mk tyVal).mp ht).1 ▸ alg a.1 a.2.1 (HList.ofFn fun i =>
+    IndArg.foldArg tyVal _ (a.2.2.get i) fun b => foldTree A alg (f ⟨i, b⟩) _ (((cs.WT_mk tyVal).mp ht).2 ⟨i, b⟩))
+
+/-- The unique homomorphism from `T` to `A`, where `alg` interprets the constructors -/
+def fold (A : Fin k → Type u) (alg : ∀ j (c : Fin (cs j).length), HList (IndArg.type tyVal A) (cs j)[c] → A j)
+  (j : Fin k) (t : cs.T tyVal j) : A j := cs.foldTree tyVal A alg t.1 j t.2
+
+theorem fold_mkVal (A : Fin k → Type u) (alg : ∀ j (c : Fin (cs j).length), HList (IndArg.type tyVal A) (cs j)[c] → A j)
+  (j : Fin k) (c : Fin (cs j).length) (xs : cs.Args tyVal j c) :
+  cs.fold tyVal A alg j (cs.mkVal tyVal j c xs) = alg j c (xs.map (IndArg.fmap tyVal (cs.fold tyVal A alg))) := by
+  show alg j c _ = _
+  apply congrArg; apply HList.ext; intro i
+  simp only [HList.get_ofFn, HList.get_map]
+  exact IndArg.foldArg_toShape tyVal cs (cs.fold tyVal A alg) _ _ _ fun _ => rfl
+
+theorem eq_mkVal (j : Fin k) (t : cs.T tyVal j) : ∃ c xs, t = cs.mkVal tyVal j c xs :=
+  cs.induction tyVal (fun j t => ∃ c xs, t = cs.mkVal tyVal j c xs) (fun _ c xs _ => ⟨c, xs, rfl⟩) j t
+
+/--
+  `alg` interprets the constructors of `cs` as the constructors of the mutual inductive types `A`:
+    they are distinct and injective, and induction holds
+-/
+structure IsInductive (A : Fin k → Type u)
+  (alg : ∀ j (c : Fin (cs j).length), HList (IndArg.type tyVal A) (cs j)[c] → A j) : Prop where
+  distinct : ∀ j (c₁ c₂ : Fin (cs j).length), c₁ ≠ c₂ → ∀ xs ys, alg j c₁ xs ≠ alg j c₂ ys
+  inject : ∀ j c xs ys, alg j c xs = alg j c ys → xs = ys
+  induction : ∀ (P : (j : Fin k) → A j → Prop),
+    (∀ j c xs, (∀ i, IndArg.IH tyVal P (cs j)[c][i] (xs.get i)) → P j (alg j c xs)) → ∀ j a, P j a
+
+theorem fold_injective {A : Fin k → Type u} {alg : ∀ j (c : Fin (cs j).length), HList (IndArg.type tyVal A) (cs j)[c] → A j}
+  (h : cs.IsInductive tyVal A alg) : ∀ j (t t' : cs.T tyVal j), cs.fold tyVal A alg j t = cs.fold tyVal A alg j t' → t = t' := by
+  apply cs.induction tyVal (fun j t => ∀ t', cs.fold tyVal A alg j t = cs.fold tyVal A alg j t' → t = t')
+  intro j c xs ih t' heq
+  obtain ⟨c', ys, rfl⟩ := cs.eq_mkVal tyVal j t'
+  rw [fold_mkVal, fold_mkVal] at heq
+  by_cases hc : c = c'
+  · subst hc
+    have hmap := h.inject j c _ _ heq
+    apply congrArg; apply HList.ext; intro i
+    have hi := congrArg (fun zs => HList.get zs i) hmap
+    simp only [HList.get_map] at hi
+    exact IndArg.eq_of_fmap_eq tyVal _ _ _ (ih i) hi
+  · exact absurd heq (h.distinct j c c' hc _ _)
+
+theorem fold_surjective {A : Fin k → Type u} {alg : ∀ j (c : Fin (cs j).length), HList (IndArg.type tyVal A) (cs j)[c] → A j}
+  (h : cs.IsInductive tyVal A alg) : ∀ j (a : A j), ∃ t, cs.fold tyVal A alg j t = a := by
+  apply h.induction (fun j a => ∃ t, cs.fold tyVal A alg j t = a)
+  intro j c xs ih
+  have hex := fun i => IndArg.exists_fmap_eq tyVal (cs.fold tyVal A alg) _ (xs.get i) (ih i)
+  refine ⟨cs.mkVal tyVal j c (HList.ofFn fun i => Classical.choose (hex i)), ?_⟩
+  rw [fold_mkVal]; apply congrArg; apply HList.ext; intro i
+  rw [HList.get_map, HList.get_ofFn]
+  exact Classical.choose_spec (hex i)
+
+/-- Mutual inductive types `A` with the signature `cs` are isomorphic to `T` -/
+theorem exists_isomType {A : Fin k → Type u} {alg : ∀ j (c : Fin (cs j).length), HList (IndArg.type tyVal A) (cs j)[c] → A j}
+  (h : cs.IsInductive tyVal A alg) :
+  ∃ (φ : ∀ j, IsomType (cs.T tyVal j) (A j)), ∀ j, (φ j).f = cs.fold tyVal A alg j :=
+  ⟨fun j => ⟨cs.fold tyVal A alg j, fun a => Classical.choose (cs.fold_surjective tyVal h j a),
+    fun _ => cs.fold_injective tyVal h j _ _ (Classical.choose_spec (cs.fold_surjective tyVal h j _)),
+    fun a => Classical.choose_spec (cs.fold_surjective tyVal h j a)⟩, fun _ => rfl⟩
+
 end IndSig
+
+/--
+  The argument of sort `s` of a constructor of `mind`: `.plain s` if `s` does not mention the types
+    of `mind`, and `.recur [B₁, ⋯, Bₘ] l` if `s` is `B₁ → ⋯ → Bₘ → Tₗ`, where `B₁ ⋯ Bₘ` do not
+    mention the types of `mind`
+-/
+def MutualIndInfo.indArg? (mind : MutualIndInfo) (s : LamSort) : Option (IndArg mind.length) :=
+  let tys := mind.map (·.type)
+  let isInd (s : LamSort) : Bool := tys.any s.contains
+  if !isInd s then
+    .some (.plain s)
+  else if s.getArgTys.any isInd then
+    .none
+  else
+    ((tys.findFinIdx? (· == s.getResTy)).map (Fin.cast (List.length_map _))).map (.recur s.getArgTys)
+
+/-- The arguments of the constructors of `mind[j]` -/
+def MutualIndInfo.ctorArgs? (mind : MutualIndInfo) (j : Fin mind.length) : Option (List (List (IndArg mind.length))) :=
+  mind[j].ctors.mapM fun (s, _) => if s.getResTy != mind[j].type then .none else s.getArgTys.mapM mind.indArg?
 
 /--
   The simple mutual inductive types described by `mind`. The sort of each argument of a
@@ -1066,20 +1186,155 @@ end IndSig
     where `B₁ ⋯ Bₘ` do not mention the types of `mind`
 -/
 def MutualIndInfo.toIndSig? (mind : MutualIndInfo) : Option (IndSig mind.length) :=
-  let tys := mind.map (·.type)
-  let isInd (s : LamSort) : Bool := tys.any s.contains
-  let arg? (s : LamSort) : Option (IndArg mind.length) :=
-    if !isInd s then
-      .some (.plain s)
-    else if s.getArgTys.any isInd then
-      .none
-    else
-      ((tys.findFinIdx? (· == s.getResTy)).map (Fin.cast (List.length_map _))).map (.recur s.getArgTys)
-  let ctors? (j : Fin mind.length) : Option (List (List (IndArg mind.length))) :=
-    mind[j].ctors.mapM fun (s, _) => if s.getResTy != mind[j].type then .none else s.getArgTys.mapM arg?
-  if h : (List.finRange mind.length).all fun j => (ctors? j).isSome then
-    .some fun j => (ctors? j).get (List.all_eq_true.mp h j (List.mem_finRange j))
+  if h : (List.finRange mind.length).all fun j => (mind.ctorArgs? j).isSome then
+    .some fun j => (mind.ctorArgs? j).get (List.all_eq_true.mp h j (List.mem_finRange j))
   else
     .none
+
+theorem MutualIndInfo.toIndSig?_ctorArgs? {mind : MutualIndInfo} {cs : IndSig mind.length} (hcs : mind.toIndSig? = .some cs)
+  (j : Fin mind.length) : mind.ctorArgs? j = .some (cs j) := by
+  unfold toIndSig? at hcs
+  split at hcs
+  case isTrue => cases hcs; exact (Option.some_get _).symm
+  case isFalse => cases hcs
+
+theorem MutualIndInfo.toIndSig?_ctors_length {mind : MutualIndInfo} {cs : IndSig mind.length} (hcs : mind.toIndSig? = .some cs)
+  (j : Fin mind.length) : (cs j).length = mind[j].ctors.length :=
+  (List.mapM_option_eq_some (MutualIndInfo.toIndSig?_ctorArgs? hcs j)).1
+
+theorem MutualIndInfo.toIndSig?_ctor {mind : MutualIndInfo} {cs : IndSig mind.length} (hcs : mind.toIndSig? = .some cs)
+  (j : Fin mind.length) (c : Fin (cs j).length) :
+  (mind[j].ctors[c.cast (MutualIndInfo.toIndSig?_ctors_length hcs j)]).1.getResTy = mind[j].type ∧
+    (mind[j].argTys (c.cast (MutualIndInfo.toIndSig?_ctors_length hcs j))).mapM mind.indArg? = .some (cs j)[c] := by
+  obtain ⟨_, hall⟩ := List.mapM_option_eq_some (MutualIndInfo.toIndSig?_ctorArgs? hcs j)
+  have h := hall c.val c.isLt
+  simp only [IndInfo.argTys, Fin.getElem_fin, Fin.val_cast]
+  generalize mind[j].ctors[c.val] = p at h ⊢
+  obtain ⟨s, t⟩ := p
+  dsimp only at h ⊢
+  split at h
+  · cases h
+  · rename_i hres
+    rw [bne_iff_ne, ne_eq, Classical.not_not] at hres
+    exact ⟨hres, h⟩
+
+theorem MutualIndInfo.toIndSig?_args_length {mind : MutualIndInfo} {cs : IndSig mind.length} (hcs : mind.toIndSig? = .some cs)
+  (j : Fin mind.length) (c : Fin (cs j).length) :
+  (cs j)[c].length = (mind[j].argTys (c.cast (MutualIndInfo.toIndSig?_ctors_length hcs j))).length :=
+  (List.mapM_option_eq_some (MutualIndInfo.toIndSig?_ctor hcs j c).2).1
+
+theorem MutualIndInfo.toIndSig?_indArg? {mind : MutualIndInfo} {cs : IndSig mind.length} (hcs : mind.toIndSig? = .some cs)
+  (j : Fin mind.length) (c : Fin (cs j).length) (i : Fin (mind[j].argTys (c.cast (MutualIndInfo.toIndSig?_ctors_length hcs j))).length) :
+  mind.indArg? (mind[j].argTys (c.cast (MutualIndInfo.toIndSig?_ctors_length hcs j)))[i] =
+    .some (cs j)[c][i.cast (MutualIndInfo.toIndSig?_args_length hcs j c).symm] :=
+  (List.mapM_option_eq_some (MutualIndInfo.toIndSig?_ctor hcs j c).2).2 i.val
+    (by rw [MutualIndInfo.toIndSig?_args_length hcs j c]; exact i.isLt)
+
+theorem MutualIndInfo.indArg?_plain {mind : MutualIndInfo} (h : mind.indArg? s = .some (.plain s')) : s' = s := by
+  unfold indArg? at h; dsimp only at h
+  split at h
+  · cases h; rfl
+  · split at h
+    · cases h
+    · obtain ⟨_, _, h⟩ := Option.map_eq_some_iff.mp h; cases h
+
+theorem MutualIndInfo.indArg?_recur {mind : MutualIndInfo} {l : Fin mind.length}
+  (h : mind.indArg? s = .some (.recur bs l)) :
+  bs = s.getArgTys ∧ mind[l].type = s.getResTy ∧ mind.recArg? s = .some l.val := by
+  unfold indArg? at h; dsimp only at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · rename_i hargs
+      obtain ⟨l', hl', h⟩ := Option.map_eq_some_iff.mp h
+      cases h
+      obtain ⟨l'', hl'', rfl⟩ := Option.map_eq_some_iff.mp hl'
+      obtain ⟨hp, _⟩ := List.findFinIdx?_eq_some_iff.mp hl''
+      refine ⟨rfl, by simpa using hp, ?_⟩
+      unfold recArg?; dsimp only
+      simp only [hargs, Bool.false_eq_true, ↓reduceIte]
+      rw [List.findIdx?_eq_map_findFinIdx?_val, hl'']; rfl
+
+theorem MutualIndInfo.indArg?_type {tyVal : TyVal.{u}} {mind : MutualIndInfo} {x : IndArg mind.length}
+  (h : mind.indArg? s = .some x) : x.type tyVal (fun l => mind[l].type.interp tyVal) = s.interp tyVal := by
+  cases x with
+  | plain s' => cases mind.indArg?_plain h; rfl
+  | recur bs l =>
+    obtain ⟨rfl, hty, _⟩ := mind.indArg?_recur h
+    show HList.Funcs _ _ _ = _
+    rw [← LamSort.interp_mkFuncs, hty, LamSort.getArgTys_getResTy_eq]
+
+theorem MutualIndInfo.toIndSig?_argType {tyVal : TyVal.{u}} {mind : MutualIndInfo} {cs : IndSig mind.length}
+  (hcs : mind.toIndSig? = .some cs) (j : Fin mind.length) (c : Fin (cs j).length)
+  (i : Fin (mind[j].argTys (c.cast (MutualIndInfo.toIndSig?_ctors_length hcs j))).length) :
+  IndArg.type tyVal (fun l => mind[l].type.interp tyVal) (cs j)[c][i.cast (MutualIndInfo.toIndSig?_args_length hcs j c).symm] =
+    (mind[j].argTys (c.cast (MutualIndInfo.toIndSig?_ctors_length hcs j)))[i].interp tyVal :=
+  indArg?_type (toIndSig?_indArg? hcs j c i)
+
+/--
+  The interpretation of the constructors of `mind` in the context `lctx`, as functions on the
+    arguments of the constructors of `cs`, whose recursive arguments are in the types of `mind`
+-/
+noncomputable def MutualIndInfo.ctorAlg (lval : LamValuation.{u}) {mind : MutualIndInfo} {cs : IndSig mind.length}
+  (hcs : mind.toIndSig? = .some cs) (lctx : Nat → LamSort) (lctxTerm : ∀ n, (lctx n).interp lval.tyVal)
+  (wf : ∀ (j : Fin mind.length) (c : Fin mind[j].ctors.length), mind[j].CtorWF lval.toLamTyVal lctx c)
+  (j : Fin mind.length) (c : Fin (cs j).length)
+  (xs : HList (IndArg.type lval.tyVal fun l => mind[l].type.interp lval.tyVal) (cs j)[c]) :
+  mind[j].type.interp lval.tyVal :=
+  LamSort.uncurry ((wf j (c.cast (toIndSig?_ctors_length hcs j))).interp lval lctx lctxTerm)
+    (HList.recast (toIndSig?_args_length hcs j c) (toIndSig?_argType hcs j c) xs)
+
+theorem MutualIndInfo.IH_of_semIH {tyVal : TyVal.{u}} {mind : MutualIndInfo}
+  {P : (j : Fin mind.length) → mind[j].type.interp tyVal → Prop} {a : LamSort} :
+  {x : IndArg mind.length} → mind.indArg? a = .some x →
+  (v : x.type tyVal (fun l => mind[l].type.interp tyVal)) → (vL : a.interp tyVal) → HEq v vL →
+  (∀ (l : Fin mind.length), mind.recArg? a = .some l.val →
+    ∀ (f : (LamSort.mkFuncs mind[l].type a.getArgTys).interp tyVal), HEq f vL → ∀ ys, P l (LamSort.uncurry f ys)) →
+  x.IH tyVal P v
+  | .plain _, _, _, _, _, _ => True.intro
+  | .recur _ l, hx, v, _, hv, hsem => by
+    obtain ⟨rfl, _, hrec⟩ := mind.indArg?_recur hx
+    intro ys
+    have h := hsem l hrec (cast LamSort.interp_mkFuncs.symm v) ((cast_heq _ _).trans hv) ys
+    have huncurry : LamSort.uncurry (cast LamSort.interp_mkFuncs.symm v) ys =
+      HList.uncurry (γ := mind[l].type.interp tyVal) v ys := LamSort.uncurry_eq_uncurry (cast_heq _ _) ys
+    rw [huncurry] at h; exact h
+
+theorem MutualIndInfo.ctorAlg_isInductive {lval : LamValuation.{u}} {mind : MutualIndInfo} {cs : IndSig mind.length}
+  (hspec : mind.SemSpec lval) (hcs : mind.toIndSig? = .some cs) (lctx : Nat → LamSort)
+  (lctxTerm : ∀ n, (lctx n).interp lval.tyVal)
+  (wf : ∀ (j : Fin mind.length) (c : Fin mind[j].ctors.length), mind[j].CtorWF lval.toLamTyVal lctx c) :
+  cs.IsInductive lval.tyVal (fun l => mind[l].type.interp lval.tyVal) (mind.ctorAlg lval hcs lctx lctxTerm wf) where
+  distinct j c₁ c₂ hne _ _ := hspec.distinct lctx lctxTerm j _ _
+    (fun h => hne (Fin.ext (by simpa using congrArg Fin.val h))) _ _ _ _
+  inject _ _ _ _ heq := HList.recast_inj (hspec.inject lctx lctxTerm _ _ _ _ _ heq)
+  induction P H := by
+    apply hspec.induction lctx lctxTerm P
+    intro j c' wf' xsL hih
+    let c : Fin (cs j).length := c'.cast (toIndSig?_ctors_length hcs j).symm
+    obtain ⟨xs, hxs⟩ := HList.exists_recast_eq (toIndSig?_args_length hcs j c) (toIndSig?_argType hcs j c) xsL
+    have heq : mind.ctorAlg lval hcs lctx lctxTerm wf j c xs = LamSort.uncurry (wf'.interp lval lctx lctxTerm) xsL := by
+      unfold ctorAlg; rw [hxs]; exact congrArg (LamSort.uncurry · xsL) LamWF.interp_substWF
+    refine heq ▸ H j c xs fun i => ?_
+    apply IH_of_semIH (toIndSig?_indArg? hcs j c (i.cast (toIndSig?_args_length hcs j c))) (xs.get i)
+      (xsL.get (i.cast (toIndSig?_args_length hcs j c))) ?_ (hih _)
+    rw [← hxs, HList.get_recast]; exact (cast_heq _ _).symm
+
+/--
+  If `mind` satisfies its spec, then its types are isomorphic to the types of the W type model `cs`
+    of `mind`, and the isomorphisms commute with the constructors
+-/
+theorem MutualIndInfo.isomType_of_spec {lval : LamValuation.{u}} {mind : MutualIndInfo} {cs : IndSig mind.length}
+  (hspec : mind.Spec lval) (hcs : mind.toIndSig? = .some cs) (lctx : Nat → LamSort)
+  (lctxTerm : ∀ n, (lctx n).interp lval.tyVal)
+  (wf : ∀ (j : Fin mind.length) (c : Fin mind[j].ctors.length), mind[j].CtorWF lval.toLamTyVal lctx c) :
+  ∃ (φ : ∀ j, IsomType (cs.T lval.tyVal j) (mind[j].type.interp lval.tyVal)),
+    ∀ j c xs, (φ j).f (cs.mkVal lval.tyVal j c xs) =
+      mind.ctorAlg lval hcs lctx lctxTerm wf j c (xs.map (IndArg.fmap lval.tyVal fun l => (φ l).f)) := by
+  obtain ⟨φ, hφ⟩ := cs.exists_isomType lval.tyVal (ctorAlg_isInductive (spec_iff_semSpec.mp hspec) hcs lctx lctxTerm wf)
+  refine ⟨φ, fun j c xs => ?_⟩
+  rw [show (fun l => (φ l).f) = cs.fold lval.tyVal _ (mind.ctorAlg lval hcs lctx lctxTerm wf) from funext hφ, hφ]
+  exact cs.fold_mkVal lval.tyVal _ _ j c xs
 
 end Auto.Embedding.Lam

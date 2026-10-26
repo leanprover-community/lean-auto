@@ -517,6 +517,17 @@ theorem LamSort.uncurry_heq {s₁ s₂ : LamSort} (hs : s₁ = s₂)
   (hf : HEq f₁ f₂) (xs : HList (LamSort.interp tyVal) tys) : HEq (LamSort.uncurry f₁ xs) (LamSort.uncurry f₂ xs) := by
   cases hs; cases hf; rfl
 
+theorem LamSort.interp_mkFuncs {tyVal : TyVal.{u}} {R : LamSort} : {bs : List LamSort} →
+  (LamSort.mkFuncs R bs).interp tyVal = HList.Funcs (LamSort.interp tyVal) bs (R.interp tyVal)
+  | [] => rfl
+  | b :: _ => congrArg (fun T => b.interp tyVal → T) interp_mkFuncs
+
+theorem LamSort.uncurry_eq_uncurry {tyVal : TyVal.{u}} {R : LamSort} : {bs : List LamSort} →
+  {f : (LamSort.mkFuncs R bs).interp tyVal} → {v : HList.Funcs (LamSort.interp tyVal) bs (R.interp tyVal)} →
+  HEq f v → (xs : HList (LamSort.interp tyVal) bs) → LamSort.uncurry f xs = HList.uncurry v xs
+  | [], _, _, h, .nil => eq_of_heq h
+  | _ :: _, _, _, h, .cons x xs => uncurry_eq_uncurry (congr_h_heq interp_mkFuncs h (HEq.refl x)) xs
+
 def LamSort.curryRev (f : HList (LamSort.interp tyVal) tys → LamSort.interp tyVal s) :
   LamSort.interp tyVal (s.mkFuncsRev tys) :=
   match tys with

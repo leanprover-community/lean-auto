@@ -262,4 +262,28 @@ theorem HList.nonempty_of_forall_mem {β : α → Sort _} :
     have ⟨xs⟩ := nonempty_of_forall_mem fun a ha => h a (List.mem_cons_of_mem _ ha)
     ⟨.cons x xs⟩
 
+/-- Cast the elements of `xs` to the elements of a list of the same length -/
+def HList.recast {β : α → Sort u} {γ : α' → Sort u} {as : List α} {as' : List α'} (hlen : as.length = as'.length)
+  (h : ∀ i : Fin as'.length, β as[i.cast hlen.symm] = γ as'[i]) (xs : HList β as) : HList γ as' :=
+  HList.ofFn fun i => cast (h i) (xs.get (i.cast hlen.symm))
+
+theorem HList.get_recast {β : α → Sort u} {γ : α' → Sort u} {as : List α} {as' : List α'} {hlen : as.length = as'.length}
+  {h : ∀ i : Fin as'.length, β as[i.cast hlen.symm] = γ as'[i]} (xs : HList β as) (i : Fin as'.length) :
+  (HList.recast hlen h xs).get i = cast (h i) (xs.get (i.cast hlen.symm)) := HList.get_ofFn _ _
+
+theorem HList.recast_inj {β : α → Sort u} {γ : α' → Sort u} {as : List α} {as' : List α'} {hlen : as.length = as'.length}
+  {h : ∀ i : Fin as'.length, β as[i.cast hlen.symm] = γ as'[i]} {xs ys : HList β as}
+  (heq : HList.recast hlen h xs = HList.recast hlen h ys) : xs = ys := by
+  apply HList.ext; intro i
+  have := congrArg (fun zs => HList.get zs (i.cast hlen)) heq
+  simp only [HList.get_recast] at this
+  exact eq_of_heq ((cast_heq _ _).symm.trans ((heq_of_eq this).trans (cast_heq _ _)))
+
+theorem HList.exists_recast_eq {β : α → Sort u} {γ : α' → Sort u} {as : List α} {as' : List α'}
+  (hlen : as.length = as'.length) (h : ∀ i : Fin as'.length, β as[i.cast hlen.symm] = γ as'[i])
+  (ys : HList γ as') : ∃ xs, HList.recast hlen h xs = ys :=
+  ⟨HList.ofFn fun i => cast (h (i.cast hlen)).symm (ys.get (i.cast hlen)), by
+    apply HList.ext; intro i
+    rw [HList.get_recast, HList.get_ofFn, cast_cast]; rfl⟩
+
 end Auto

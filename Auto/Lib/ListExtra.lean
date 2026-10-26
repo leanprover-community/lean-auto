@@ -136,4 +136,24 @@ theorem List.length_reverseAux (l₁ l₂ : List α) : (l₁.reverseAux l₂).le
 def List.reverse_IsomType : IsomType (List α) (List α) :=
   ⟨List.reverse, List.reverse, List.reverse_reverse, List.reverse_reverse⟩
 
+theorem List.mapM_option_eq_some {f : α → Option β} : {l : List α} → {l' : List β} → l.mapM f = .some l' →
+  ∃ (h : l'.length = l.length), ∀ (i : Nat) (hi : i < l'.length), f (l[i]'(h ▸ hi)) = .some l'[i]
+  | [], _, h => by
+    rw [List.mapM_nil] at h; cases h
+    exact ⟨rfl, fun _ hi => absurd hi (Nat.not_lt_zero _)⟩
+  | a :: l, l', h => by
+    rw [List.mapM_cons] at h
+    cases hfa : f a with
+    | none => simp [hfa] at h
+    | some b =>
+      cases hfl : l.mapM f with
+      | none => simp [hfa, hfl] at h
+      | some bs =>
+        simp only [hfa, hfl] at h; cases h
+        obtain ⟨hlen, hall⟩ := mapM_option_eq_some hfl
+        refine ⟨by simp [hlen], fun i hi => ?_⟩
+        cases i with
+        | zero => exact hfa
+        | succ i => exact hall i (by simpa using hi)
+
 end Auto
