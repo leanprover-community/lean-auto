@@ -28,7 +28,7 @@ structure State where
   -- The second `Expr` should be of the form `ty₁ → ty₂ → ⋯ → tyₙ`,
   --   where `ty₁, ty₂, ⋯, tyₙ` are canonicalized types within `tyCanMap`
   inhTys          : Array UMonoFact     := {}
-  inds            : Array (Array SimpleIndVal) := {}
+  inds            : Array SimpleMutIndVal := {}
   declName?       : Option Name
 
 abbrev ReifM := StateT State MetaM

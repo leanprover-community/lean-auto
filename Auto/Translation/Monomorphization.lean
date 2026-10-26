@@ -807,14 +807,14 @@ def getAllMonoLemmaInsts : MonoM LemmaInsts := do
   return lis ++ (← getCiInstDefEqs)
 
 /-- Collect inductive types -/
-def collectMonoMutInds : MonoM (Array (Array SimpleIndVal)) := do
+def collectMonoMutInds : MonoM (Array SimpleMutIndVal) := do
   let cis := (Array.mk ((← getCiMap).toList.map Prod.snd)).flatMap id
   let citys ← cis.mapM (fun ci => do
     let cie ← ci.toExpr
     let ty ← Meta.inferType cie
     return Expr.eraseMData ty)
   let minds ← collectExprsSimpleInduct citys
-  let cis ← (minds.flatMap id).mapM (fun ⟨_, type, ctors, projs⟩ => do
+  let cis ← (minds.flatMap (·.vals)).mapM (fun ⟨_, type, ctors, projs⟩ => do
     let cis₁ ← collectConstInsts #[] #[] type
     let cis₂ ← ctors.mapM (fun (val, ty) => do
       let cis₁ ← collectConstInsts #[] #[] val
@@ -1062,7 +1062,7 @@ def monomorphize (lemmas : Array Lemma) (inhFacts : Array Lemma) (k : Reif.State
 where
   /-- Instantiating quantifiers, collecting inductive types
     and filtering out non-quasi-monomorphic expressions -/
-  monoMAction : MonoM (LemmaInsts × Array (Array SimpleIndVal)) := do
+  monoMAction : MonoM (LemmaInsts × Array SimpleMutIndVal) := do
     let startTime ← IO.monoMsNow
     initializeMonoM lemmas
     saturate
@@ -1073,7 +1073,7 @@ where
   /-- Process lemmas and inductive types, collect inhabited types -/
   metaStateMAction
     (monoLemmas : LemmaInsts)
-    (monoIndVals : Array (Array SimpleIndVal))
+    (monoIndVals : Array SimpleMutIndVal)
     (monoSt : State) : MetaState.MetaStateM (Array FVarId × Reif.State) := do
     let (uvalids, s) ← (fvarRepMFactAction monoLemmas).run { ciMap := monoSt.ciMap }
     for ⟨proof, ty, _⟩ in uvalids do
@@ -1107,8 +1107,8 @@ where
         return .none
       else
         throwError m)
-  fvarRepMInductAction (ivals : Array (Array SimpleIndVal)) : FVarRep.FVarRepM (Array (Array SimpleIndVal)) :=
-    ivals.mapM (fun svals => svals.mapM (fun ⟨name, type, ctors, projs⟩ => do
+  fvarRepMInductAction (ivals : Array SimpleMutIndVal) : FVarRep.FVarRepM (Array SimpleMutIndVal) :=
+    ivals.mapM (fun ⟨svals, nested⟩ => do return ⟨← svals.mapM (fun ⟨name, type, ctors, projs⟩ => do
       let (type, _) ← FVarRep.processType type
       let ctors ← ctors.mapM (fun (val, ty) => do
         let (ty, _) ← FVarRep.processType ty
@@ -1122,6 +1122,6 @@ where
         | .inl e => return e
         -- If monomorphization fails on one projection, fail immediately
         | .inr m => throwError m))
-      return ⟨name, type, ctors, projs⟩))
+      return ⟨name, type, ctors, projs⟩), ← nested.mapM fun e => do return (← FVarRep.processType e).1⟩)
 
 end Auto.Monomorphization

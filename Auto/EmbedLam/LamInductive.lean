@@ -99,6 +99,12 @@ def IndInfo.projTerms (ii : IndInfo) : List LamTerm :=
   | _, _ => []
 
 /--
+  The characterization of the inductive type `ii` that does not depend on the other types of
+    its mutual block: distinctness and injectivity of the constructors, and the projections
+-/
+def IndInfo.specTerms (ii : IndInfo) : List LamTerm := ii.distinctTerms ++ ii.injectTerms ++ ii.projTerms
+
+/--
   If `a` is `B₁ → ⋯ → Bₘ → Tₗ`, where `Tₗ` is the `l`-th type of `mind` and `B₁ ⋯ Bₘ`
     do not mention the types of `mind`, return `l`. These are the sorts of the arguments
     of constructors that have induction hypotheses
@@ -151,9 +157,12 @@ def MutualIndInfo.inductionTerm (mind : MutualIndInfo) : LamTerm :=
     .mkForallEF ii.type (.app ii.type (mind.motive j 1) (.bvar 0)))
   LamTerm.mkForallEFN (.mkImpN hyps concl) mind.motiveTys
 
-/-- The characterization of the mutual inductive types `mind` (see `MutualIndInfo.Spec`) -/
+/--
+  The characterization of the mutual inductive types `mind` (see `MutualIndInfo.Spec`):
+    the characterizations of the types of `mind` (see `IndInfo.specTerms`), and induction
+-/
 def MutualIndInfo.specTerms (mind : MutualIndInfo) : List LamTerm :=
-  mind.flatMap (fun ii => ii.distinctTerms ++ ii.injectTerms ++ ii.projTerms) ++ [mind.inductionTerm]
+  mind.flatMap IndInfo.specTerms ++ [mind.inductionTerm]
 
 /--
   `lval` interprets `mind` as mutual inductive types:
@@ -170,6 +179,23 @@ def MutualIndInfo.specTerms (mind : MutualIndInfo) : List LamTerm :=
 -/
 def MutualIndInfo.Spec (lval : LamValuation) (mind : MutualIndInfo) : Prop :=
   ∀ t ∈ mind.specTerms, LamThmValid lval [] t
+
+/--
+  `MutualIndInfo.Spec` is the characterizations of the types of `mind`, which do not depend on
+    the other types of `mind`, together with induction
+-/
+theorem MutualIndInfo.spec_iff {lval : LamValuation} {mind : MutualIndInfo} :
+  mind.Spec lval ↔ (∀ ii ∈ mind, ∀ t ∈ ii.specTerms, LamThmValid lval [] t) ∧
+    LamThmValid lval [] mind.inductionTerm := by
+  constructor
+  · intro h
+    exact ⟨fun ii hii t ht => h t (List.mem_append_left _ (List.mem_flatMap.mpr ⟨ii, hii, ht⟩)),
+      h _ (List.mem_append_right _ (List.mem_singleton_self _))⟩
+  · intro ⟨hty, hind⟩ t ht
+    rcases List.mem_append.mp ht with ht | ht
+    · obtain ⟨ii, hii, ht⟩ := List.mem_flatMap.mp ht
+      exact hty ii hii t ht
+    · rw [List.mem_singleton.mp ht]; exact hind
 
 /-!
   Proof that `MutualIndInfo.SemSpec`, a statement in Lean about the interpretations of the
@@ -767,11 +793,10 @@ theorem MutualIndInfo.spec_iff_semSpec {lval : LamValuation.{u}} {mind : MutualI
   mind.Spec lval ↔ mind.SemSpec lval := by
   constructor
   · intro h
-    have hind := h _ (List.mem_append_right _ (List.mem_singleton_self _))
+    obtain ⟨hty, hind⟩ := spec_iff.mp h
     have wfCtor := inductionTerm_wfCtor hind
-    have hmem : ∀ (j : Fin mind.length) {t}, t ∈ mind[j].distinctTerms ++ mind[j].injectTerms ++ mind[j].projTerms →
-      LamThmValid lval [] t :=
-      fun j _ ht => h _ (List.mem_append_left _ (List.mem_flatMap.mpr ⟨mind[j], List.getElem_mem _, ht⟩))
+    have hmem : ∀ (j : Fin mind.length) {t}, t ∈ mind[j].specTerms → LamThmValid lval [] t :=
+      fun j _ ht => hty mind[j] (List.getElem_mem _) _ ht
     have hproj : ∀ (j : Fin mind.length) s c ps (hc : mind[j].ctors = [(s, c)]) (hp : mind[j].projs = .some ps)
       (hlen : ps.length = s.getArgTys.length) (i : Fin ps.length), LamThmValid lval [] _ :=
       fun j s c ps hc hp hlen i => hmem j (List.mem_append_right _ (IndInfo.projTerm_mem hc hp hlen i))
@@ -799,12 +824,10 @@ theorem MutualIndInfo.spec_iff_semSpec {lval : LamValuation.{u}} {mind : MutualI
       exact (IndInfo.projTerm_valid ⟨i, hlen ▸ i.isLt⟩ (wfCtor_single wfCtor j.isLt hc)
         (IndInfo.projTerm_wf ⟨i, hlen ▸ i.isLt⟩ (hproj j s c ps hc hp hlen i))).mp
         (hproj j s c ps hc hp hlen i) lctx lctxTerm wfc wfp xs
-  · intro h t ht
-    rw [specTerms, List.mem_append, List.mem_flatMap, List.mem_singleton] at ht
-    rcases ht with ⟨ii, hii, ht⟩ | rfl
-    case inr => exact (inductionTerm_valid h.wfCtor).mpr h.induction
+  · intro h
+    refine spec_iff.mpr ⟨fun ii hii t ht => ?_, (inductionTerm_valid h.wfCtor).mpr h.induction⟩
     obtain ⟨j, hj, rfl⟩ := List.mem_iff_getElem.mp hii
-    rw [List.mem_append, List.mem_append] at ht
+    rw [IndInfo.specTerms, List.mem_append, List.mem_append] at ht
     rcases ht with (ht | ht) | ht
     · obtain ⟨c₁, c₂, hne, rfl⟩ := IndInfo.mem_distinctTerms ht
       exact (IndInfo.distinctTerm_valid (h.wfCtor · ⟨j, hj⟩ c₁) (h.wfCtor · ⟨j, hj⟩ c₂)).mpr

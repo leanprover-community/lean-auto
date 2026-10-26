@@ -100,6 +100,46 @@ section Recursive
 
 end Recursive
 
+section Nested
+
+  -- Nested inductive types are declared together with the types nested in them,
+  --   e.g. `NTree` and `List NTree`
+  private inductive NTree where
+    | leaf : Nat → NTree
+    | node : List NTree → NTree
+
+  example (x : Nat) (l : List NTree) : NTree.leaf x ≠ NTree.node l := by auto
+
+  example (a b : NTree) (_h : NTree.node [a] = NTree.node [b]) : a = b := by auto
+
+  -- `List NTree` occurs before `NTree`
+  example (l : List NTree) (a : NTree) (_h : l = [a]) : NTree.node l ≠ NTree.leaf 0 := by auto
+
+  -- `List (List NTree)` depends on the block of `NTree` and `List NTree`
+  example (ll : List (List NTree)) (l : List NTree) (_h : ll = [l]) : ll ≠ [] := by auto
+
+  -- Nested through a structure
+  private inductive Rose (α : Type) where
+    | node : α → Array (Rose α) → Rose α
+
+  example (x y : Int) (a : Array (Rose Int)) (_h : Rose.node x a = Rose.node y a) : x = y := by auto
+
+  -- Nested through a nested inductive type
+  private inductive RTree where
+    | leaf
+    | mk : Rose RTree → RTree
+
+  example (r₁ r₂ : Rose RTree) (_h : RTree.mk r₁ = RTree.mk r₂) : r₁ = r₂ := by auto
+
+  -- `List Flat` is not nested in `Flat`, so it is declared separately after `Flat`
+  private inductive Flat where
+    | a
+    | b : Nat → Flat
+
+  example (l : List Flat) : Flat.a :: l ≠ [] := by auto
+
+end Nested
+
 section Mixed
 
   def List.myGet? : (as : List α) → (i : Nat) → Option α

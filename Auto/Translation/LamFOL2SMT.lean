@@ -1157,6 +1157,33 @@ def withExprValuation
 
 end SMT
 
+/--
+  Select the mutual blocks of inductive types to be declared as SMT datatypes, and order
+    them so that the datatypes used in the constructors of a block are declared before the
+    block. Each datatype must be declared once, and mutually recursive datatypes must be
+    declared together. The `MutualIndInfo` of a block contains the types nested in its
+    constructors (see `LamReif.reifMutInds`), so blocks may be contained in other blocks,
+    e.g. `[List Tr]` in `[Tr, List Tr]`. Only the blocks not contained in other blocks are
+    selected, and if two blocks have the same types, the first one is selected
+-/
+def selectSMTDatatypes (minds : Array MutualIndInfo) : Array MutualIndInfo := Id.run do
+  let tys (mind : MutualIndInfo) : List LamSort := mind.map (·.type)
+  let sub (m₁ m₂ : MutualIndInfo) : Bool := (tys m₁).all (tys m₂).contains
+  let sel := minds.zipIdx.filterMap fun (m, i) =>
+    if minds.zipIdx.any fun (m', i') => i' != i && sub m m' && (!sub m' m || i' < i) then .none else .some m
+  -- The sorts of the arguments of the constructors of `m` that are not types of `m`
+  let deps (m : MutualIndInfo) : List LamSort :=
+    (m.flatMap fun ii => ii.ctors.flatMap fun (s, _) => s.getArgTys).filter (!(tys m).contains ·)
+  let mut ret := #[]
+  let mut rest := sel
+  for _ in [0:sel.size] do
+    let ready (m : MutualIndInfo) := (deps m).all fun s => !rest.any fun m' => (tys m').contains s
+    match rest.findIdx? ready with
+    | .some i => ret := ret.push rest[i]!; rest := rest.eraseIdx! i
+    | .none => break
+  -- There should be no dependency cycles, as mutually recursive datatypes are in the same block
+  return ret ++ rest
+
 open SMT in
 /--
   `facts` should not contain import versions of `eq, ∀` or `∃`
@@ -1184,12 +1211,14 @@ def lamFOL2SMT
     let _ ← ofScientificDecls.mapM addCommand
   let mut compCtorProjs := #[]
   let mut selInfos : Array SelectorInfo := #[]
-  for mind in minds do
-    -- SMT datatypes cannot have function-typed fields, so such inductive types are
-    --   translated to uninterpreted sorts instead, e.g. bundled homomorphisms
+  -- SMT datatypes cannot have function-typed fields, so such inductive types are
+  --   translated to uninterpreted sorts instead, e.g. bundled homomorphisms
+  let minds ← minds.filterM fun mind => do
     if mind.any (fun ind => ind.ctors.any (fun (s, _) => s.getArgTys.any LamSort.isFunc)) then
       trace[auto.lamFOL2SMT] "MutualIndInfo {mind} has function-typed fields and is translated to uninterpreted sorts"
-      continue
+      return false
+    return true
+  for mind in selectSMTDatatypes minds do
     let (compCtors, compProjs, mindInfos, mindSelInfos) ← lamMutualIndInfo2STerm sni mind
     trace[auto.lamFOL2SMT] "MutualIndInfo {mind} translated to command {Command.declDtypes mindInfos}"
     trace[auto.lamFOL2SMT] "mindInfos for {mind}: {mindInfos.map (fun x => (x.1, DatatypeDecl.toString x.2.2))}"

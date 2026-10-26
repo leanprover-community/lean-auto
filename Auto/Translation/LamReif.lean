@@ -1659,18 +1659,44 @@ def reifMutInd (mind : Array SimpleIndVal) : ReifM (Option MutualIndInfo) := do
     ret := ret.push ii
   return ret.toList
 
-def reifMutInds (minds : Array (Array SimpleIndVal)) : ReifM (Array MutualIndInfo) := do
-  let mut ret := #[]
+/--
+  Reify the mutual blocks of inductive types `minds`, reifying each block once. The
+    `MutualIndInfo` of a block consists of the types of the block, followed by the
+    types nested in its constructors in the order of the motives of its recursors
+    (see `SimpleMutIndVal.nested`), which are found among the reified blocks by
+    their sorts. So the `MutualIndInfo`s of a block and of the blocks of its nested
+    types overlap, e.g. `[Tr, List Tr]` and `[List Tr]`
+-/
+def reifMutInds (minds : Array SimpleMutIndVal) : ReifM (Array MutualIndInfo) := do
+  let mut reified : Array (Option MutualIndInfo) := #[]
   for mind in minds do
     try
-      let .some mi ← reifMutInd mind
-        | continue
-      ret := ret.push mi
+      reified := reified.push (← reifMutInd mind.vals)
     catch e =>
       if auto.lamReif.ignoreUnusable.get (← getOptions) && (← isLamReifException e) then
-        trace[auto.lamReif.printResult] "{decl_name%} :: Failed to reify mutually inductive types {mind.map (·.name)}. Error: {e.toMessageData}"
+        trace[auto.lamReif.printResult] "{decl_name%} :: Failed to reify mutually inductive types {mind.vals.map (·.name)}. Error: {e.toMessageData}"
+        reified := reified.push .none
       else
         throw e
+  let infos := reified.flatMap fun mi? => (mi?.getD []).toArray
+  let mut ret := #[]
+  for (mind, mi?) in minds.zip reified do
+    let .some mi := mi?
+      | continue
+    let mut nested := #[]
+    for e in mind.nested do
+      let mut ii? := .none
+      try
+        let s ← reifType e
+        ii? := infos.find? (·.type == s)
+      catch err =>
+        if !(auto.lamReif.ignoreUnusable.get (← getOptions) && (← isLamReifException err)) then
+          throw err
+      match ii? with
+      | .some ii => nested := nested.push ii
+      | .none =>
+        trace[auto.lamReif.printResult] "{decl_name%} :: Type {e} nested in {mind.vals.map (·.name)} is not reified"
+    ret := ret.push (mi ++ nested.toList)
   return ret
 
 partial def collectDerivFor (re : REntry) : ReifM DTr := do

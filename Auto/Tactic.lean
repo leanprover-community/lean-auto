@@ -494,7 +494,7 @@ def runAuto
 where
   reifMAction
     (uvalids : Array UMonoFact) (uinhs : Array UMonoFact)
-    (minds : Array (Array SimpleIndVal)) : LamReif.ReifM Expr := do
+    (minds : Array SimpleMutIndVal) : LamReif.ReifM Expr := do
     let exportFacts ← LamReif.reifFacts uvalids
     let mut exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
     let _ ← LamReif.reifInhabitations uinhs
@@ -586,7 +586,7 @@ def runMono
 where
   reifMAction
     (uvalids : Array UMonoFact) (uinhs : Array UMonoFact)
-    (minds : Array (Array SimpleIndVal)) : LamReif.ReifM (Expr × MVarId × Array (FVarId × Expr) × Array (FVarId × DTr)) := do
+    (minds : Array SimpleMutIndVal) : LamReif.ReifM (Expr × MVarId × Array (FVarId × Expr) × Array (FVarId × DTr)) := do
     let exportFacts ← LamReif.reifFacts uvalids
     let mut exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
     let _ ← LamReif.reifInhabitations uinhs

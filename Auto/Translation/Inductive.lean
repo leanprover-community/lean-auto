@@ -81,6 +81,23 @@ def SimpleIndVal.zetaReduce (si : SimpleIndVal) : MetaM SimpleIndVal := do
   return ⟨name, ← Meta.zetaReduce type, ctors, projs⟩
 
 /--
+  An instantiated mutual block of simple inductive types, together with the
+    types nested in the constructors of the block
+-/
+structure SimpleMutIndVal where
+  /-- The types of the block, in the order of `InductiveVal.all` -/
+  vals   : Array SimpleIndVal
+  /--
+    The types nested in the constructors of `vals` (e.g. `List Tr` for
+      `inductive Tr | node : List Tr → Tr`), in the order of the motives of the
+      recursors of `vals` (see `Lean.Elab.Structural.IndGroupInst.nestedTypeFormers`)
+  -/
+  nested : Array Expr
+
+instance : ToMessageData SimpleMutIndVal where
+  toMessageData smiv := m!"{smiv.vals}, Nested : {smiv.nested}"
+
+/--
   For a given type constructor `tyctor`, `CollectIndState[tyctor]`
     is an array of `(instantiated_tyctor, [SimpleIndVal associated to tyctor])`
 -/
@@ -163,9 +180,29 @@ mutual
 
 end
 
-def collectExprsSimpleInduct (es : Array Expr) : MetaM (Array (Array SimpleIndVal)) := do
+/--
+  The types nested in the constructors of the instantiated mutual block `vals`,
+    in the order of the motives of the recursors of the block
+-/
+def nestedTypes (vals : Array SimpleIndVal) : MetaM (Array Expr) := do
+  let .some val := vals[0]?
+    | return #[]
+  let .const tyctor lvls := val.type.getAppFn
+    | throwError "{decl_name%} :: {val.type} is not an instantiated type constructor"
+  let .inductInfo indVal ← getConstInfo tyctor
+    | throwError "{decl_name%} :: {tyctor} is not a type constructor"
+  let igi : Elab.Structural.IndGroupInst :=
+    { Elab.Structural.IndGroupInfo.ofInductiveVal indVal with levels := lvls, params := val.type.getAppArgs }
+  igi.nestedTypeFormers
+
+/--
+  Collect the instantiated mutual blocks of simple inductive types in `es`. The
+    blocks that a block depends on come before it, except for the blocks of its
+    nested types
+-/
+def collectExprsSimpleInduct (es : Array Expr) : MetaM (Array SimpleMutIndVal) := do
   let (_, st) ← (es.mapM collectExprSimpleInduct).run {}
-  return st.sis
+  st.sis.mapM fun vals => do return ⟨vals, ← nestedTypes vals⟩
 
 end Auto
 
