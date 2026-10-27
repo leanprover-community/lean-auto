@@ -1491,6 +1491,13 @@ section NativeInductive
   inductive IRose (α : Type) where
     | mk : α → List (IRose α) → IRose α
 
+  -- Countable ordinals. The recursive argument of `lim` is a function, so the induction
+  --   hypothesis for `lim f` is `∀ n, P (f n)`
+  inductive ICOrd where
+    | zero : ICOrd
+    | succ : ICOrd → ICOrd
+    | lim : (Nat → ICOrd) → ICOrd
+
   -- The (emulated) native prover uses all the characterizations, so the kernel checks
   --   the proofs of the characterizations of all the mutual blocks
   example (c : IColor) (h : c = .red) : c = .red := by auto [h]
@@ -1498,6 +1505,7 @@ section NativeInductive
   example (a : IA) (h : a = .a1 (.b0 .a0)) : a = .a1 (.b0 .a0) := by auto [h]
   example (s : IS) (h : s = ⟨1, true⟩) : s = ⟨1, true⟩ := by auto [h]
   example (r : IRose Nat) (h : r = .mk 0 []) : r = .mk 0 [] := by auto [h]
+  example (o : ICOrd) (h : o = .lim (fun _ => .zero)) : o = .lim (fun _ => .zero) := by auto [h]
   set_option auto.checker.buildMode "indirectReduce" in
   example (t : INTree) (h : t = .node []) : t = .node [] := by auto [h]
   set_option auto.checker.buildMode "indirectReduce_reflection" in
@@ -1552,6 +1560,13 @@ section NativeInductive
     example : IA.a0 ≠ IA.a1 (IB.b0 IA.a0) := by mononative
     example (P : IColor → Prop) (h₀ : P .red) (h₁ : P .green) (h₂ : P .blue) : ∀ c, P c := by auto
     example (P : IColor → Prop) (h₀ : P .red) (h₁ : P .green) (h₂ : P .blue) : ∀ c, P c := by mononative
+    -- Distinctness, injectivity and induction for the countable ordinals
+    example : ICOrd.zero ≠ ICOrd.succ .zero := by auto
+    example (f g : Nat → ICOrd) (h : ICOrd.lim f = ICOrd.lim g) : f = g := by mononative
+    example (P : ICOrd → Prop) (h₀ : P .zero) (hs : ∀ o, P o → P (.succ o))
+      (hl : ∀ f : Nat → ICOrd, (∀ n, P (f n)) → P (.lim f)) : ∀ o, P o := by auto
+    example (P : ICOrd → Prop) (h₀ : P .zero) (hs : ∀ o, P o → P (.succ o))
+      (hl : ∀ f : Nat → ICOrd, (∀ n, P (f n)) → P (.lim f)) : ∀ o, P o := by mononative
     -- Induction over `INTree` and the type `List INTree` nested in it
     example (P : INTree → Prop) (Q : List INTree → Prop) (hl : ∀ n, P (.leaf n))
       (hn : ∀ ts, Q ts → P (.node ts)) (hnil : Q []) (hcons : ∀ t ts, P t → Q ts → Q (t :: ts)) :
