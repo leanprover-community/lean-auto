@@ -66,7 +66,7 @@ instance : ToString EvalAutoConfig where
     are assumed to be known by the prover
 -/
 private def runProverOnAutoLemma
-  (lem : Auto.Lemma) (prover : Array Lemma → Array Lemma → MetaM Expr) : CoreM Result := do
+  (lem : Auto.Lemma) (prover : NativeInterface Lemma → MetaM Expr) : CoreM Result := do
   if !(← Meta.MetaM.run' <| Meta.isProp lem.type) then
     return .nonProp
   -- **TODO: Aux theorem like those ending in `.proof_1`**
@@ -79,7 +79,7 @@ private def runProverOnAutoLemma
       let inhLemmas ← Auto.Inhabitation.getInhFactsFromLCtx
       let lctxLemmas ← Auto.collectLctxLemmas true #[]
       let allLemmas ← (lctxLemmas ++ usedThms).mapM (Auto.unfoldConstAndPreprocessLemma #[])
-      let proofOfFalse ← prover allLemmas inhLemmas
+      let proofOfFalse ← prover { valids := allLemmas, nonempties := inhLemmas }
       Meta.mkLambdaFVars #[negGoalFVar] proofOfFalse
     let goal := mkApp2 (.const ``Classical.byContradiction []) body negGoalImpFalse
     Meta.mkLambdaFVars bs goal
@@ -106,7 +106,7 @@ private def runProverOnAutoLemma
     are assumed to be known by the prover
 -/
 def runProverOnConst
-  (name : Name) (prover : Array Lemma → Array Lemma → MetaM Expr) : CoreM Result := do
+  (name : Name) (prover : NativeInterface Lemma → MetaM Expr) : CoreM Result := do
   let ci ← Name.getCi name decl_name%
   let .some v := ci.value?
     | throwError "{decl_name%} :: {name} has no value"
@@ -150,7 +150,8 @@ def runAutoOnConsts (config : EvalAutoConfig) (names : Array Name) : CoreM Unit 
               match config.solverConfig with
               | .rawNative => runProverOnConst name Solver.Native.queryNative
               | .leanSmt   => throwError "Lean-SMT is currently not supported"
-              | _          => runProverOnConst name (Auto.runAuto (.some name))
+              | _          => runProverOnConst name fun lemmas =>
+                Auto.runAuto (.some name) lemmas.valids lemmas.nonempties
         ))
     let problemTime := (← IO.monoMsNow) - problemStartTime
     let problemHb := (← IO.getNumHeartbeats) - problemStartHb

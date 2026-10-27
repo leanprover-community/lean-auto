@@ -377,7 +377,7 @@ open LamReif Embedding.Lam in
   does not use free variables introduced during monomorphization
 -/
 def callNative_checker
-  (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → Array Lemma → MetaM Expr) :
+  (nonempties : Array REntry) (valids : Array REntry) (prover : NativeInterface Lemma → MetaM Expr) :
   ReifM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := do
   let tyVal ← LamReif.getTyVal
   let varVal ← LamReif.getVarVal
@@ -418,7 +418,7 @@ open LamReif Embedding.Lam in
   does not use free variables introduced during monomorphization
 -/
 def callNative_direct
-  (nonempties : Array REntry) (valids : Array REntry) (prover : Array Lemma → Array Lemma → MetaM Expr) : ReifM Expr := do
+  (nonempties : Array REntry) (valids : Array REntry) (prover : NativeInterface Lemma → MetaM Expr) : ReifM Expr := do
   let tyVal ← LamReif.getTyVal
   let varVal ← LamReif.getVarVal
   let lamEVarTy ← LamReif.getLamEVarTy
@@ -452,7 +452,7 @@ open Embedding.Lam in
 -/
 def queryNative
   (declName? : Option Name) (exportFacts exportInhs : Array REntry)
-  (prover? : Option (Array Lemma → Array Lemma → MetaM Expr) := .none) : LamReif.ReifM Expr := do
+  (prover? : Option (NativeInterface Lemma → MetaM Expr) := .none) : LamReif.ReifM Expr := do
   let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ←
     callNative_checker exportInhs exportFacts (prover?.getD Solver.Native.queryNative)
   LamReif.newAssertion proof (.leaf "by_native::queryNative") proofLamTerm
@@ -635,7 +635,7 @@ def evalMono : Tactic
 -/
 def monoInterface
   (lemmas : Array Lemma) (inhFacts : Array Lemma)
-  (prover : Array Lemma → Array Lemma → MetaM Expr) : MetaM Expr := do
+  (prover : NativeInterface Lemma → MetaM Expr) : MetaM Expr := do
   let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) : LamReif.ReifM Expr := (do
     let exportFacts ← LamReif.reifFacts uvalids
     let exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
@@ -655,7 +655,7 @@ def monoInterface
   Run native `prover` with monomorphization and preprocessing of `auto`
 -/
 def runNativeProverWithAuto
-  (declName? : Option Name) (prover : Array Lemma → Array Lemma → MetaM Expr)
+  (declName? : Option Name) (prover : NativeInterface Lemma → MetaM Expr)
   (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr := do
   let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) : LamReif.ReifM Expr := (do
     let exportFacts ← LamReif.reifFacts uvalids

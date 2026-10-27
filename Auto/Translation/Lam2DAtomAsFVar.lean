@@ -8,6 +8,7 @@ public import Auto.Lib.ToExprExtra
 public import Auto.EmbedLam.LamChecker
 public import Auto.Translation.Assumptions
 public import Auto.Translation.LamUtils
+public import Auto.Solver.Native
 
 public section
 
@@ -181,7 +182,7 @@ def withAll
   does not use free variables introduced during monomorphization
 -/
 def callNativeWithAtomAsFVar
-  (nonemptiesWithDTr : Array (REntry × DTr)) (validsWithDTr : Array (REntry × DTr)) (prover : Array Lemma → Array Lemma → MetaM Expr) :
+  (nonemptiesWithDTr : Array (REntry × DTr)) (validsWithDTr : Array (REntry × DTr)) (prover : NativeInterface Lemma → MetaM Expr) :
   ExternM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := MetaState.withTemporaryLCtx {} {} <| do
   let (ss, ts, lemmas, inhLemmas) ← withAll nonemptiesWithDTr validsWithDTr
   let getFid (lem : Lemma) : ExternM FVarId := do
@@ -199,7 +200,7 @@ def callNativeWithAtomAsFVar
     -- It is important to add `Meta.withNewMCtxDepth`, otherwise exprmvars
     --   or levelmvars of the current level will be assigned, and we'll
     --   get weird proof reconstruction error
-    let mut expr ← Meta.withNewMCtxDepth <| prover lemmas inhLemmas
+    let mut expr ← Meta.withNewMCtxDepth <| prover { valids := lemmas, nonempties := inhLemmas }
     let mut usedHyps := []
     for (fvar, re_t) in (hypFVars.zip ((validsWithDTr.map Prod.fst).zip ts)).reverse do
       if expr.hasAnyFVar (· == fvar) then
