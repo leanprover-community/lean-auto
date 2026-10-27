@@ -492,12 +492,18 @@ def LamTerm.pushBVCast (ct : BVCastType) (t : LamTerm) : LamTerm :=
     | .app _ (.app _ (.base (.ncst .nadd)) lhs) rhs =>
       mkBvBinOp n (.bvadd n) (pushBVCast (.ofNat n) lhs) (pushBVCast (.ofNat n) rhs)
     | .app _ (.app _ (.base (.ncst .nsub)) lhs) rhs =>
-      bvofNat_nsub n lhs rhs (pushBVCast (.ofNat n ) lhs) (pushBVCast (.ofNat n ) rhs)
+      bvofNat_nsub n (pushBVCast .none lhs) (pushBVCast .none rhs)
+        (pushBVCast (.ofNat n) lhs) (pushBVCast (.ofNat n) rhs)
     | .app _ (.app _ (.base (.ncst .nmul)) lhs) rhs =>
       mkBvBinOp n (.bvmul n) (pushBVCast (.ofNat n) lhs) (pushBVCast (.ofNat n) rhs)
+    -- The cast is not pushed into other applications, but they are still traversed
+    | .app s fn arg => mkBvofNat n (.app s (pushBVCast .none fn) (pushBVCast .none arg))
     | _ => mkBvofNat n t
-  -- Not implemented
-  | .ofInt n => mkBvofInt n t
+  | .ofInt n =>
+    match t with
+    -- Pushing the cast is not implemented, but the application is still traversed
+    | .app s fn arg => mkBvofInt n (.app s (pushBVCast .none fn) (pushBVCast .none arg))
+    | _ => mkBvofInt n t
   | .none =>
     match t with
     | .lam s body => .lam s (pushBVCast .none body)
@@ -545,25 +551,29 @@ theorem LamTerm.maxEVarSucc_pushBVCast : maxEVarSucc (pushBVCast ct t) = maxEVar
       have leArg : LamTerm.size arg ≤ l := Nat.le_of_succ_le_succ (Nat.le_trans LamTerm.size_app_gt_size_arg tl)
       cases ct
       case ofNat m =>
-        cases fn <;> try apply Nat.max_zero_left
+        -- Applications that the cast is not pushed into
+        have hfall : maxEVarSucc (mkBvofNat m (.app s (pushBVCast .none fn) (pushBVCast .none arg))) =
+            maxEVarSucc (.app s fn arg) := by
+          simp only [mkBvofNat, maxEVarSucc, Nat.max_zero_left, IH leFn, IH leArg]
+        cases fn <;> try exact hfall
         case base b =>
-          cases b <;> try apply Nat.max_zero_left
+          cases b <;> try exact hfall
           case bvcst bvc =>
-            cases bvc <;> try apply Nat.max_zero_left
-            case bvtoNat =>
-              dsimp [pushBVCast, maxEVarSucc]; rw [IH leArg]
+            cases bvc <;> first | exact hfall | (dsimp [pushBVCast, maxEVarSucc]; rw [IH leArg])
         case app s fn arg₁ =>
-          cases fn <;> try apply Nat.max_zero_left
+          cases fn <;> try exact hfall
           case base b =>
-            cases b <;> try apply Nat.max_zero_left
+            cases b <;> try exact hfall
             case ncst nc =>
-              cases nc <;> (try apply Nat.max_zero_left) <;> try (
+              cases nc <;> (try exact hfall) <;> try (
                 dsimp [pushBVCast, maxEVarSucc, mkBvBinOp]
                 simp [IH (Nat.le_trans LamTerm.size_app_ge_size_arg leFn), IH leArg])
               case nsub =>
                 dsimp only [pushBVCast, maxEVarSucc, bvofNat_nsub, mkIte, mkBvBinOp, mkNatBinOp, Nat.max]
                 simp [IH (Nat.le_trans LamTerm.size_app_ge_size_arg leFn), IH leArg]
-      case ofInt m => apply Nat.max_zero_left
+      case ofInt m =>
+        show maxEVarSucc (mkBvofInt m (.app s (pushBVCast .none fn) (pushBVCast .none arg))) = _
+        simp only [mkBvofInt, maxEVarSucc, Nat.max_zero_left, IH leFn, IH leArg]
       case none =>
         have fneq := fun ct => @IH ct _ leFn
         have argeq := fun ct => @IH ct _ leArg
@@ -706,11 +716,15 @@ theorem LamEquiv.pushBVCast
       case ofNat m =>
         cases wft.getFn.getBase.getBvcst
         have wfapp' := wft.getArg
-        cases fn <;> try apply hequivRefl
+        -- Applications that the cast is not pushed into
+        have hfall : LamEquiv lval lctx (.base (.bv m)) (LamTerm.applyBVCast (.ofNat m) (.app s' fn arg))
+            (LamTerm.mkBvofNat m (.app s' (fn.pushBVCast .none) (arg.pushBVCast .none))) :=
+          congrArg wft.getFn (congr (IH (ct:=.none) wfapp'.getFn leFn) (IH (ct:=.none) wfapp'.getArg leArg))
+        cases fn <;> try exact hfall
         case base b =>
-          cases b <;> try apply hequivRefl
+          cases b <;> try exact hfall
           case bvcst bvc =>
-            cases bvc <;> try apply hequivRefl
+            cases bvc <;> try exact hfall
             case bvtoNat =>
               cases wfapp'.getFn.getBase.getBvcst
               have wfbv := wfapp'.getArg
@@ -719,13 +733,13 @@ theorem LamEquiv.pushBVCast
               apply congrArg (.ofBase (.ofBvzeroExtend _ _))
               apply IH (ct:=.none) (t:=arg) wfbv leArg
         case app s'' fn arg₁ =>
-          cases fn <;> try (dsimp [LamTerm.pushBVCast]; apply refl wft)
+          cases fn <;> try exact hfall
           have wfl := wfapp'.getFn.getArg; have wfr := wfapp'.getArg
           have leArg₁ := Nat.le_trans LamTerm.size_app_ge_size_arg leFn
           case base b =>
-            cases b <;> try (dsimp [LamTerm.pushBVCast]; apply refl wft)
+            cases b <;> try exact hfall
             case ncst nc =>
-              cases nc <;> dsimp [LamTerm.pushBVCast] <;> (try apply refl wft) <;>
+              cases nc <;> (try exact hfall) <;> dsimp [LamTerm.pushBVCast] <;>
                 (try cases wfapp'.getFn.getFn.getBase.getNcst; dsimp [LamTerm.applyBVCast])
               case nadd =>
                 apply trans (bvofNat_nadd wfl wfr)
@@ -734,9 +748,12 @@ theorem LamEquiv.pushBVCast
                 case eqr => apply IH (ct:=.ofNat m) (t:=arg) (.mkBvofNat wfr) leArg
               case nsub =>
                 apply trans (bvofNat_nsub wfl wfr)
-                apply congrArg
-                  (.ofApp _ (.ofApp _ (.ofBase (.ofIte _)) (.mkNatBinOp .ofNlt wfl wfr)) (.ofBase (.ofBvVal _ _)))
+                apply congr
+                  (congrFun (congrArg (.ofBase (.ofIte _)) (congr (congrArg (.ofBase .ofNlt) ?eqa) ?eqb))
+                    (.ofBase (.ofBvVal _ _)))
                   (congr (congrArg (.ofBase (.ofBvsub _)) ?eql) ?eqr)
+                case eqa => apply IH (ct:=.none) (t:=arg₁) wfl leArg₁
+                case eqb => apply IH (ct:=.none) (t:=arg) wfr leArg
                 case eql => apply IH (ct:=.ofNat m) (t:=arg₁) (.mkBvofNat wfl) leArg₁
                 case eqr => apply IH (ct:=.ofNat m) (t:=arg) (.mkBvofNat wfr) leArg
               case nmul =>
@@ -744,7 +761,10 @@ theorem LamEquiv.pushBVCast
                 apply congr (congrArg (.ofBase (.ofBvmul _)) ?eql) ?eqr
                 case eql => apply IH (ct:=.ofNat m) (t:=arg₁) (.mkBvofNat wfl) leArg₁
                 case eqr => apply IH (ct:=.ofNat m) (t:=arg) (.mkBvofNat wfr) leArg
-      case ofInt m => dsimp [LamTerm.pushBVCast]; apply refl wft
+      case ofInt m =>
+        -- The application that the cast is not pushed into
+        have wfapp' := wft.getArg
+        exact congrArg wft.getFn (congr (IH (ct:=.none) wfapp'.getFn leFn) (IH (ct:=.none) wfapp'.getArg leArg))
       case none =>
         have eFn := IH (ct:=.none) wft.getFn leFn
         have eArg := IH (ct:=.none) wft.getArg leArg

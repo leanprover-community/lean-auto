@@ -715,6 +715,14 @@ section SMT
     : String.isPrefixOf a b = String.isPrefixOf a b ∧
       String.replace a b a = String.replace a b a := by auto
 
+  -- SMT-LIB strings only have the code points up to `0x2FFFF`, so string literals
+  --   with other characters are not translated
+  example : "𯿿".length = 1 := by auto
+
+  example (h : False) : "󰀁".length = 9 := by
+    fail_if_success auto
+    contradiction
+
   -- BitVec
   example (a : BitVec k) (b : BitVec 2) : a = a ∧ b = b := by auto
 
@@ -735,6 +743,12 @@ section SMT
     a.msb = a.msb ∧ b.msb = b.msb ∧
     a.rotateLeft w = a.rotateLeft w ∧
     a.rotateRight w = a.rotateRight w := by auto
+
+  -- Shifts by `Nat` amounts inside casts are turned into SMT shifts
+  example (x : BitVec 8) :
+    BitVec.ofInt 8 ((x <<< 2).toInt) = x <<< 2 ∧
+    BitVec.ofNat 8 ((x <<< 2).toNat / 1) = x <<< 2 ∧
+    BitVec.ofNat 8 ((x <<< 2).toNat - 0) = x <<< 2 := by auto
 
   -- SMT attributes
   open Auto.SMT.Attribute in

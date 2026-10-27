@@ -822,7 +822,11 @@ private def lamBaseTerm2STerm_Arity0 (sni : SMTNamingInfo) : LamBaseTerm → Tra
 | .bcst .trueb        => return .qStrApp "true" #[]
 | .bcst .falseb       => return .qStrApp "false" #[]
 | .ncst (.natVal n)   => return .sConst (.num n)
-| .scst (.strVal s)   => return .sConst (.str s)
+| .scst (.strVal s)   => do
+  -- The alphabet of SMT-LIB strings consists of the code points up to `0x2FFFF`
+  if let .some c := s.toList.find? (·.toNat > 0x2FFFF) then
+    throwError "{decl_name%} :: The string literal {repr s} contains the character {repr c} (code point {c.toNat}), which is not representable in SMT-LIB strings"
+  return .sConst (.str s)
 | .bvcst (.bvVal n i) => return bitVec2STerm n i
 | .lcst (.real .zero) => do
   if sni.laterInterp.consts.contains (.real .zero) then
