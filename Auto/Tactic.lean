@@ -380,9 +380,8 @@ open LamReif Embedding.Lam in
   constants as proofs of the structures they come from, e.g. `RealInterpUnlifted.CoreSpec`
   (see `Lam2DAAF.withLaterSpecs`). They need not be in the `RTable`: only the ones used
   by the prover are added, by the checker steps determined by the fields they are in
-  (see `LaterSpecInterface.withSteps`). Similarly, the characterizations in `facts.indSpecs`
-  are offered to the prover, and only the blocks used by the prover are asserted, each
-  as one entry with the proof given by `LamReif.indSpecs`
+  (see `LaterSpecInterface.withSteps`). The characterization of each mutual block of
+  inductive types in `facts.indSpecs` is already in the `RTable` (see `LamReif.indSpecs`)
 
   Note that `MetaState.withTemporaryLCtx` is used to isolate the prover from the
   current local context. This is necessary because `lean-auto` assumes that the prover
@@ -401,8 +400,8 @@ def callNative_checker
   let laterSpecs := facts.laterSpecs.withSteps
   -- The derivation of a characterization is the one `collectDerivFor` gives after its checker step is run
   let laterSpecsWithDTr := laterSpecs.map (fun (fs, t) => (t, DTr.node (ChkStep.f fs).toString #[]))
-  let indSpecs ← facts.indSpecs.mapM indSpecProof
-  let indSpecsWithDTr := (facts.indSpecs.zip indSpecs).map (fun (bs, _, _, dtr) => bs.map (·, dtr))
+  let indSpecsWithDTr ← facts.indSpecs.mapM (fun bs =>
+    do return bs.map (·, ← collectDerivFor (.valid [] bs.toLamTerm)))
   let factsWithDTr : NativeInterface (LamTerm × DTr) (LamSort × DTr) :=
     { valids := validsWithDTr, nonempties := nonemptiesWithDTr, laterSpecs := laterSpecsWithDTr,
       indSpecs := indSpecsWithDTr }
@@ -412,9 +411,6 @@ def callNative_checker
   for (fs, t) in laterSpecs.toArray do
     if usedHyps.contains t then
       let _ ← newChkStep (.f fs) (.some (.addEntry (.valid [] t)))
-  for (t, proof, dtr) in indSpecs do
-    if usedHyps.contains t then
-      newAssertion proof dtr t
   return ret
 
 open LamReif Embedding.Lam in
@@ -446,7 +442,7 @@ open LamReif Embedding.Lam in
   characterizations of the core constants are proofs of the structures they come
   from, e.g. `RealInterpUnlifted.CoreSpec`. The characterizations in `facts.indSpecs`
   are sent to the prover as in `callNative_checker`, and the blocks used by the
-  prover are proved by the proofs given by `LamReif.indSpecs`
+  prover are proved by the proofs of their `ind` entries (see `LamReif.indSpecs`)
 
   Note that `MetaState.withTemporaryLCtx` is used to isolate the prover from the
   current local context. This is necessary because `lean-auto` assumes that the prover
@@ -483,9 +479,8 @@ def callNative_direct
     | _ => throwError "{decl_name%} :: {fs.toString} is not a characterization of a later-declared type")
   -- The proofs of the characterizations are closed, so they need not be free variables
   let prover' (ni : NativeInterface Lemma) := prover { ni with laterSpecs := laterSpecLemmas }
-  let indSpecs ← facts.indSpecs.mapM indSpecProof
-  let indSpecsWithDTr := (facts.indSpecs.zip indSpecs).map (fun (bs, _, _, dtr) => bs.map (·, dtr))
-  let indSpecProofs := Std.HashMap.ofList (indSpecs.toList.map fun (t, proof, _) => (t, proof))
+  let indSpecsWithDTr ← facts.indSpecs.mapM (fun bs =>
+    do return bs.map (·, ← collectDerivFor (.valid [] bs.toLamTerm)))
   let factsWithDTr : NativeInterface (LamTerm × DTr) (LamSort × DTr) :=
     { valids := validsWithDTr, nonempties := nonemptiesWithDTr, indSpecs := indSpecsWithDTr }
   let (proof, _, usedEtoms, usedInhs, usedHyps) ← MetaState.runAtMetaM' <|
@@ -502,11 +497,13 @@ def callNative_direct
       | .none => throwError "{decl_name%} :: Unexpected error"
     | _ => throwError "{decl_name%} :: Cannot find external proof of the inhabitation of {s}")
   let ts ← usedHyps.mapM (fun t => do
-    if let .some proof := indSpecProofs.get? t then
-      return proof
-    let .assertion e _ _ ← lookupREntryProof! (.valid [] t)
-      | throwError "{decl_name%} :: Cannot find external proof of {t}"
-    return e)
+    match ← lookupREntryProof! (.valid [] t) with
+    | .assertion e _ _ => return e
+    | .chkStep (.iv (.specOf pos)) =>
+      let .ind e _ _ ← lookupREntryProof! (← lookupRTable! pos)
+        | throwError "{decl_name%} :: Unexpected error"
+      return e
+    | _ => throwError "{decl_name%} :: Cannot find external proof of {t}")
   return mkAppN proof (ss ++ ts)
 
 open Embedding.Lam in

@@ -29,12 +29,16 @@ inductive REntry where
   --   validEVar0 from `ImportTable`
   | valid      : List LamSort → LamTerm → REntry
   | nonempty   : LamSort → REntry
+  -- Mutual blocks of inductive types, whose characterizations hold
+  --   (see `MutualIndInfo.Spec`). The `ind` entries are imported from `ImportTable`
+  | ind        : MutualIndInfo → REntry
   deriving Inhabited, Hashable, Lean.ToExpr
 
 def REntry.repr : REntry → String
 | .wf ss s t => s!"Auto.Embedding.Lam.REntry.wf {reprPrec ss 1} {reprPrec s 1} {reprPrec t 1}"
 | .valid ss t => s!"Auto.Embedding.Lam.REntry.valid {reprPrec ss 1} {reprPrec t 1}"
 | .nonempty s => s!"Auto.Embedding.Lam.REntry.nonempty {reprPrec s 1}"
+| .ind mind => s!"Auto.Embedding.Lam.REntry.ind {reprPrec mind 1}"
 
 instance : Repr REntry where
   reprPrec := fun re _ => re.repr
@@ -43,6 +47,7 @@ def REntry.toString : REntry → String
 | .wf ss s t => s!"wf {ss} {s} {t}"
 | .valid ss t => s!"valid {ss} {t}"
 | .nonempty s => s!"nonempty {s}"
+| .ind mind => s!"ind {mind}"
 
 instance : ToString REntry where
   toString := REntry.toString
@@ -51,6 +56,7 @@ def REntry.beq : REntry → REntry → Bool
 | .wf ss s t, .wf ss' s' t' => ss == ss' && s == s' && t == t'
 | .valid ss t, .valid ss' t' => ss == ss' && t == t'
 | .nonempty s, .nonempty s' => s == s'
+| .ind mind, .ind mind' => mind == mind'
 | _, _ => false
 
 instance : BEq REntry where
@@ -75,6 +81,8 @@ theorem REntry.eq_of_beq_eq_true {l r : REntry} (H : (l == r) = true) : l = r :=
     rw [LawfulBEq.eq_of_beq sseq, LawfulBEq.eq_of_beq teq]
   case nonempty =>
     rw [LawfulBEq.eq_of_beq H]
+  case ind =>
+    rw [LawfulBEq.eq_of_beq H]
 
 instance : LawfulBEq REntry where
   eq_of_beq := REntry.eq_of_beq_eq_true
@@ -85,12 +93,14 @@ def REntry.containsSort (re : REntry) (s : LamSort) : Bool :=
   | .wf ss s' t => ss.any (fun s' => s'.contains s) || s'.contains s || t.containsSort s
   | .valid ss t => ss.any (fun s' => s'.contains s) || t.containsSort s
   | .nonempty s' => s'.contains s
+  | .ind mind => mind.specTerm.containsSort s
 
 def REntry.allLamTerms (re : REntry) : List LamTerm :=
   match re with
   | .wf _ _ t   => [t]
   | .valid _  t => [t]
   | .nonempty _ => []
+  | .ind mind   => [mind.specTerm]
 
 /--
   Table of valid propositions and well-formed formulas
@@ -212,6 +222,7 @@ def REntry.correct (cv : CVal.{u} levt) (maxEVarSucc : Nat) : REntry → Prop
 | .wf lctx s t => LamThmWFP cv.toLamValuation lctx s t ∧ t.maxEVarSucc ≤ maxEVarSucc
 | .valid lctx t => LamThmValid cv.toLamValuation lctx t ∧ t.maxEVarSucc ≤ maxEVarSucc
 | .nonempty s => LamNonempty cv.tyVal s
+| .ind mind => mind.Spec cv.toLamValuation ∧ mind.specTerm.maxEVarSucc ≤ maxEVarSucc
 
 theorem REntry.correct_eVarIrrelevance
   (cpv : CPVal.{u})
@@ -222,7 +233,13 @@ theorem REntry.correct_eVarIrrelevance
     HEq (val₁ n) (val₂ n))
   (c₁ : REntry.correct ⟨cpv, val₁⟩ maxEVarSucc re) :
   REntry.correct ⟨cpv, val₂⟩ maxEVarSucc re := by
-  cases re <;> (try exact c₁) <;> (try apply And.intro _ c₁.right) <;> (try intro lctx')
+  cases re
+  case ind mind =>
+    apply And.intro _ c₁.right; apply MutualIndInfo.spec_iff_specTerm.mpr; intro lctx'
+    have hValid := MutualIndInfo.spec_iff_specTerm.mp c₁.left lctx'
+    apply LamValid.eVarIrrelevance (hValid := hValid) <;> try rfl
+    intro n H; apply hirr n (Nat.le_trans H c₁.right)
+  all_goals (try exact c₁) <;> (try apply And.intro _ c₁.right) <;> (try intro lctx')
   case _ =>
     cases c₁.left lctx'; case intro wf =>
       apply Nonempty.intro; apply LamWF.eVarIrrelevance (lwf:=wf) <;> try rfl
@@ -280,6 +297,11 @@ theorem RTable.nonemptyInv_get {r : RTable} {cv : CVal.{u} r.lamEVarTy}
   LamNonempty cv.tyVal s := by
   have inv' := inv n; dsimp [get?] at h; rw [h] at inv'; exact inv'
 
+theorem RTable.indInv_get {r : RTable} {cv : CVal.{u} r.lamEVarTy}
+  (inv : RTable.inv r cv) (h : get? r n = Option.some (.ind mind)) :
+  mind.Spec cv.toLamValuation ∧ mind.specTerm.maxEVarSucc ≤ r.maxEVarSucc := by
+  have inv' := inv n; dsimp [get?] at h; rw [h] at inv'; exact inv'
+
 def RTable.getWF (r : RTable) (w : Nat) : Option (List LamSort × LamSort × LamTerm) :=
   match r.get? w with
   | .some (.wf lctx s t) => .some (lctx, s, t)
@@ -293,6 +315,7 @@ theorem RTable.getWF_correct
   | .some (.wf _ _ _) => intro heq; cases heq; apply RTable.wfInv_get inv h
   | .some (.valid lctx t) => intro heq; cases heq
   | .some (.nonempty _) => intro heq; cases heq
+  | .some (.ind _) => intro heq; cases heq
   | .none => intro heq; cases heq
 
 def RTable.getValid (r : RTable) (v : Nat) : Option (List LamSort × LamTerm) :=
@@ -308,6 +331,7 @@ theorem RTable.getValid_correct
   | .some (.valid lctx t) => intro heq; cases heq; apply RTable.validInv_get inv h
   | .some (.wf _ _ _) => intro heq; cases heq
   | .some (.nonempty _) => intro heq; cases heq
+  | .some (.ind _) => intro heq; cases heq
   | .none => intro heq; cases heq
 
 def RTable.getValidEnsureLCtx (r : RTable) (lctx : List LamSort) (v : Nat) : Option LamTerm :=
@@ -369,6 +393,7 @@ def RTable.getValidsEnsureLCtx (r : RTable) (lctx : List LamSort) (vs : List Nat
       | false => .none
     | .some (.wf _ _ _) => .none
     | .some (.nonempty _) => .none
+    | .some (.ind _) => .none
     | .none => .none
 
 @[irreducible] noncomputable def RTable.getValidsEnsureLCtx_correct
@@ -393,6 +418,7 @@ def RTable.getValidsEnsureLCtx (r : RTable) (lctx : List LamSort) (vs : List Nat
       | false => intro heq; cases heq
     | .some (.wf _ _ _) => intro heq; cases heq
     | .some (.nonempty _) => intro heq; cases heq
+    | .some (.ind _) => intro heq; cases heq
     | .none => intro heq; cases heq
 
 def RTable.getNonempty (r : RTable) (v : Nat) : Option LamSort :=
@@ -408,15 +434,39 @@ theorem RTable.getNonempty_correct
   | .some (.nonempty s) => intro heq; cases heq; apply RTable.nonemptyInv_get inv h
   | .some (.wf _ _ _) => intro heq; cases heq
   | .some (.valid _ _) => intro heq; cases heq
+  | .some (.ind _) => intro heq; cases heq
+  | .none => intro heq; cases heq
+
+def RTable.getInd (r : RTable) (v : Nat) : Option MutualIndInfo :=
+  match r.get? v with
+  | .some (.ind mind) => .some mind
+  | _ => .none
+
+theorem RTable.getInd_correct
+  (inv : RTable.inv r cv) (heq : getInd r v = .some mind) :
+  mind.Spec cv.toLamValuation ∧ mind.specTerm.maxEVarSucc ≤ r.maxEVarSucc := by
+  revert heq; dsimp [getInd]
+  match h : r.get? v with
+  | .some (.ind _) => intro heq; cases heq; apply RTable.indInv_get inv h
+  | .some (.wf _ _ _) => intro heq; cases heq
+  | .some (.valid _ _) => intro heq; cases heq
+  | .some (.nonempty _) => intro heq; cases heq
   | .none => intro heq; cases heq
 
 inductive ImportEntry where
   | valid     : LamTerm → ImportEntry
   | nonempty  : LamSort → ImportEntry
+  /--
+    A mutual block of inductive types `mind`, with the import version of
+      `mind.specTerm`, which is the proposition being imported. The consistency
+      between the first and second argument is checked during import.
+  -/
+  | ind       : MutualIndInfo → LamTerm → ImportEntry
 
 def ImportEntry.correct (lval : LamValuation) : ImportEntry → Prop
 | .valid t => (t.interpAsProp lval dfLCtxTy (dfLCtxTerm _)).down
 | .nonempty s => Nonempty (s.interp lval.tyVal)
+| .ind _ t => (t.interpAsProp lval dfLCtxTy (dfLCtxTerm _)).down
 
 /-- The meta code of the checker will prepare this `ImportTable` -/
 abbrev ImportTable (cpv : CPVal.{u}) :=
@@ -439,12 +489,41 @@ noncomputable def ImportTable.importFacts (it : ImportTable cpv) : BinTree REntr
         | 0 => .some (.valid [] (p.resolveImport cpv.toLamTyValEraseEtom))
         | _ + 1 => .none
       | _                   => .none
-    | .nonempty s => .some (.nonempty s))
+    | .nonempty s => .some (.nonempty s)
+    | .ind mind p =>
+      match p.lamThmWFCheck? cpv.toLamTyValEraseEtom [] with
+      | .some (.base .prop) =>
+        match p.maxEVarSucc with
+        | 0 =>
+          match p.resolveImport cpv.toLamTyValEraseEtom == mind.specTerm with
+          | true => .some (.ind mind)
+          | false => .none
+        | _ + 1 => .none
+      | _                   => .none)
+
+theorem ImportTable.importFacts_validAux {p : LamTerm}
+  (validIe : ImportEntry.correct cpv.toLamValuationEraseEtom (.valid p))
+  (h₁ : p.lamThmWFCheck? cpv.toLamTyValEraseEtom [] = .some (.base .prop))
+  (h₃ : p.maxEVarSucc = 0) :
+  @REntry.correct levt ⟨cpv, eVarVal⟩ n (.valid [] (p.resolveImport cpv.toLamTyValEraseEtom)) := by
+  have ⟨h₁, h₂⟩ := LamTerm.lamThmWFCheck?_spec h₁
+  have h₂ := Nat.le_zero.mp h₂
+  apply And.intro
+  case left =>
+    apply LamThmValid.eVarIrrelevance cpv.toLamValuationEraseEtom <;> try rfl
+    case hirr =>
+      intro n H; rw [LamTerm.maxEVarSucc_resolveImport, h₃] at H; cases H
+    case a =>
+      apply LamThmValid.resolveImport (lval:=cpv.toLamValuationEraseEtom)
+      apply LamThmValid.ofInterpAsProp cpv.toLamValuationEraseEtom _ h₁ validIe h₂
+  case right =>
+    rw [LamTerm.maxEVarSucc_resolveImport]
+    rw [h₃]; apply Nat.zero_le
 
 theorem ImportTable.importFacts_correct (it : ImportTable cpv) (n : Nat) :
   it.importFacts.allp (@REntry.correct levt ⟨cpv, eVarVal⟩ n) := by
   dsimp [RTable.inv, importFacts]; rw [BinTree.mapOpt_allp]
-  intro n; apply Option.allp_uniform
+  intro i; apply Option.allp_uniform
   intro ⟨ie, validIe⟩; dsimp
   match ie with
   | .valid p =>
@@ -455,22 +534,24 @@ theorem ImportTable.importFacts_correct (it : ImportTable cpv) (n : Nat) :
       case base b =>
         cases b <;> try exact True.intro
         dsimp
-        have ⟨h₁, h₂⟩ := LamTerm.lamThmWFCheck?_spec h₁
-        have h₂ := Nat.le_zero.mp h₂
         cases h₃ : p.maxEVarSucc <;> try exact True.intro
-        apply And.intro
-        case left =>
-          apply LamThmValid.eVarIrrelevance cpv.toLamValuationEraseEtom <;> try rfl
-          case hirr =>
-            intro n H; rw [LamTerm.maxEVarSucc_resolveImport, h₃] at H; cases H
-          case a =>
-            apply LamThmValid.resolveImport (lval:=cpv.toLamValuationEraseEtom)
-            apply LamThmValid.ofInterpAsProp cpv.toLamValuationEraseEtom _ h₁ validIe h₂
-        case right =>
-          rw [LamTerm.maxEVarSucc_resolveImport]
-          rw [h₃]; apply Nat.zero_le
+        exact importFacts_validAux validIe h₁ h₃
   | .nonempty s =>
     dsimp [REntry.correct, Option.allp]; exact validIe
+  | .ind mind p =>
+    dsimp
+    cases h₁ : LamTerm.lamThmWFCheck? cpv.toLamTyValEraseEtom [] p <;> try exact True.intro
+    case some s =>
+      cases s <;> try exact True.intro
+      case base b =>
+        cases b <;> try exact True.intro
+        dsimp
+        cases h₃ : p.maxEVarSucc <;> try exact True.intro
+        dsimp
+        cases h₄ : (p.resolveImport cpv.toLamTyValEraseEtom == mind.specTerm) <;> try exact True.intro
+        have ⟨hv, hb⟩ := importFacts_validAux (levt:=levt) (eVarVal:=eVarVal) (n:=n) validIe h₁ h₃
+        rw [LawfulBEq.eq_of_beq h₄] at hv hb
+        exact ⟨MutualIndInfo.spec_iff_specTerm.mpr hv, hb⟩
 
 inductive ConvStep where
   | validOfHeadBeta (pos : Nat) : ConvStep
@@ -562,6 +643,11 @@ inductive InferenceStep where
   | validOfAndRight (pos : Nat) (occ : List Bool) : InferenceStep
   deriving Inhabited, Hashable, BEq, Lean.ToExpr
 
+inductive IndStep where
+  /-- The characterization `mind.specTerm` of the `ind mind` entry at `pos` -/
+  | specOf (pos : Nat) : IndStep
+  deriving Inhabited, Hashable, BEq, Lean.ToExpr
+
 inductive LCtxStep where
   | validOfIntro1F (pos : Nat) : LCtxStep
   | validOfIntro1H (pos : Nat) : LCtxStep
@@ -638,6 +724,7 @@ inductive ChkStep where
   | e : EtomStep → ChkStep
   | f : FactStep → ChkStep
   | i : InferenceStep → ChkStep
+  | iv : IndStep → ChkStep
   | l : LCtxStep → ChkStep
   | n : NonemptyStep → ChkStep
   | p : PrepConvStep → Nat → List Bool → ChkStep
@@ -694,6 +781,9 @@ section ChkStepToString
   | .validOfAndLeft pos occ => s!"validOfAndLeft {pos} {occ}"
   | .validOfAndRight pos occ => s!"validOfAndRight {pos} {occ}"
 
+  def IndStep.toString : IndStep → String
+  | .specOf pos => s!"specOf {pos}"
+
   def LCtxStep.toString : LCtxStep → String
   | .validOfIntro1F pos => s!"validOfIntro1F {pos}"
   | .validOfIntro1H pos => s!"validOfIntro1H {pos}"
@@ -742,6 +832,7 @@ section ChkStepToString
   | .e s  => EtomStep.toString s
   | .f s  => FactStep.toString s
   | .i s  => InferenceStep.toString s
+  | .iv s => IndStep.toString s
   | .l s  => LCtxStep.toString s
   | .n s  => NonemptyStep.toString s
   | .p s pos occ => s!"{PrepConvStep.toString s} {pos} {occ}"
@@ -802,6 +893,9 @@ section ChkStepPremises
   | .validOfAndLeft pos _ => [pos]
   | .validOfAndRight pos _ => [pos]
 
+  def IndStep.premises : IndStep → List Nat
+  | .specOf pos => [pos]
+
   def LCtxStep.premises : LCtxStep → List Nat
   | .validOfIntro1F pos => [pos]
   | .validOfIntro1H pos => [pos]
@@ -829,6 +923,7 @@ section ChkStepPremises
   | .e s  => EtomStep.premises s
   | .f s  => FactStep.premises s
   | .i s  => InferenceStep.premises s
+  | .iv s => IndStep.premises s
   | .l s  => LCtxStep.premises s
   | .n s  => NonemptyStep.premises s
   | .p _ pos _ => [pos]
@@ -1235,6 +1330,12 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
   | .some (lctx, t) => .addEntry (.valid (ex ++ lctx) (t.bvarLifts ex.length))
   | .none => .fail
 
+@[reducible] def IndStep.eval (r : RTable) : (cs : IndStep) → EvalResult
+| .specOf pos =>
+  match r.getInd pos with
+  | .some mind => .addEntry (.valid [] mind.specTerm)
+  | .none => .fail
+
 @[reducible] def NonemptyStep.eval (lvt : Nat → LamSort) (r : RTable) : (cs : NonemptyStep) → EvalResult
 | .nonemptyOfAtom n => .addEntry (.nonempty (lvt n))
 | .nonemptyOfEtom n =>
@@ -1295,6 +1396,7 @@ def ChkStep.eval (lvt lit : Nat → LamSort) (lsa : LaterSpecAvail) (r : RTable)
 | .e s  => EtomStep.eval lvt lit r s
 | .f s  => FactStep.eval lsa s
 | .i s  => InferenceStep.eval lvt lit r s
+| .iv s => IndStep.eval r s
 | .l s  => LCtxStep.eval r s
 | .n s  => NonemptyStep.eval lvt r s
 | .p s pos occ =>
@@ -2163,6 +2265,17 @@ theorem LCtxStep.eval_correct
       case vimp => intro hv; apply LamThmValid.prepend; exact hv
       case condimp => intro hcond; rw [LamTerm.maxEVarSucc_bvarLifts]; exact hcond
 
+theorem IndStep.eval_correct
+  (r : RTable) (cv : CVal.{u} r.lamEVarTy) (inv : r.inv cv) :
+  (cs : IndStep) → EvalResult.correct r cv (cs.eval r)
+| .specOf pos => by
+  dsimp [eval]
+  match h : r.getInd pos with
+  | .some mind =>
+    have ⟨hspec, hb⟩ := RTable.getInd_correct inv h
+    exact ⟨MutualIndInfo.spec_iff_specTerm.mp hspec, hb⟩
+  | .none => exact True.intro
+
 theorem NonemptyStep.eval_correct
   (r : RTable) (cv : CVal.{u} r.lamEVarTy) :
   (cs : NonemptyStep) → EvalResult.correct r cv (cs.eval cv.toLamVarTy r)
@@ -2315,6 +2428,7 @@ theorem ChkStep.eval_correct
 | .e s  => EtomStep.eval_correct r cv inv s
 | .f s  => FactStep.eval_correct r cv s
 | .i s  => InferenceStep.eval_correct r cv inv s
+| .iv s => IndStep.eval_correct r cv inv s
 | .l s  => LCtxStep.eval_correct r cv inv s
 | .n s  => NonemptyStep.eval_correct r cv s
 | .p s pos occ => by
@@ -2500,6 +2614,7 @@ structure RTableStatus where
   nonemptyMap   : Std.HashMap LamSort Nat := {}
   wfMap         : Std.HashMap (List LamSort × LamSort × LamTerm) Nat := {}
   validMap      : Std.HashMap (List LamSort × LamTerm) Nat := {}
+  indMap        : Std.HashMap MutualIndInfo Nat := {}
   -- maxEVarSucc
   maxEVarSucc   : Nat := 0
   -- lamEVarTy
@@ -2518,6 +2633,7 @@ def RTableStatus.push (rs : RTableStatus) (re : REntry) :=
   | .nonempty s => {rs with nonemptyMap := rs.nonemptyMap.insert s rsize}
   | .wf lctx s t => {rs with wfMap := rs.wfMap.insert (lctx, s, t) rsize}
   | .valid lctx t => {rs with validMap := rs.validMap.insert (lctx, t) rsize}
+  | .ind mind => {rs with indMap := rs.indMap.insert mind rsize}
 
 def RTableStatus.addEntry (rs : RTableStatus) (c : ChkStep) (re : REntry) :=
   { rs.push re with chkMap := rs.chkMap.insert re c}
@@ -2534,6 +2650,7 @@ def RTableStatus.findPos? (rs : RTableStatus) (re : REntry) :=
   | .nonempty s => rs.nonemptyMap.get? s
   | .wf lctx s t => rs.wfMap.get? (lctx, s, t)
   | .valid lctx t => rs.validMap.get? (lctx, t)
+  | .ind mind => rs.indMap.get? mind
 
 end Auto.Embedding.Lam
 

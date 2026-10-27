@@ -1578,6 +1578,14 @@ section NativeInductive
     example (P : INTree → Prop) (Q : List INTree → Prop) (hl : ∀ n, P (.leaf n))
       (hn : ∀ ts, Q ts → P (.node ts)) (hnil : Q []) (hcons : ∀ t ts, P t → Q ts → Q (t :: ts)) :
       (∀ t, P t) ∧ (∀ ts, Q ts) := by mononative
+    -- Without proof optimization, the checker contains the `ind` entries of all the
+    --   blocks, here `[INTree, List INTree]` and `[List INTree]`, including unused ones
+    set_option auto.optimizeCheckerProof false in
+    example (P : INTree → Prop) (Q : List INTree → Prop) (hl : ∀ n, P (.leaf n))
+      (hn : ∀ ts, Q ts → P (.node ts)) (hnil : Q []) (hcons : ∀ t ts, P t → Q ts → Q (t :: ts)) :
+      (∀ t, P t) ∧ (∀ ts, Q ts) := by mononative
+    set_option auto.checker.buildMode "directReduce" in
+    example (x : Nat) (xs : List Nat) : [] ≠ x :: xs := by mononative
 
     -- No characterization is offered if `auto.indSpec` is disabled
     set_option auto.indSpec false in

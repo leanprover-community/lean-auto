@@ -1111,6 +1111,20 @@ theorem LamValid.and_equiv :
     intro ⟨⟨wfa, va⟩, ⟨wfb, vb⟩⟩; exists (.mkAnd wfa wfb)
     intro lctxTerm; apply And.intro (va lctxTerm) (vb lctxTerm)
 
+theorem LamValid.mkAndN_iff :
+  LamValid lval lctx (.mkAndN ts) ↔ ∀ t ∈ ts, LamValid lval lctx t :=
+  match ts with
+  | [] => ⟨fun _ _ h => (nomatch h), fun _ => ⟨.ofBase .ofTrueE, fun _ => True.intro⟩⟩
+  | [_] => List.forall_mem_singleton.symm
+  | t :: t' :: ts => by
+    show LamValid lval lctx (.mkAnd t (.mkAndN (t' :: ts))) ↔ _
+    rw [and_equiv, List.forall_mem_cons, mkAndN_iff (ts:=t' :: ts)]
+
+theorem LamThmValid.mkAndN_iff :
+  LamThmValid lval lctx (.mkAndN ts) ↔ ∀ t ∈ ts, LamThmValid lval lctx t :=
+  ⟨fun h t ht lctx' => LamValid.mkAndN_iff.mp (h lctx') t ht,
+   fun h lctx' => LamValid.mkAndN_iff.mpr fun t ht => h t ht lctx'⟩
+
 theorem LamValid.and_left
   (wfa : LamWF lval.toLamTyVal ⟨lctx, a, .base .prop⟩)
   (wfb : LamWF lval.toLamTyVal ⟨lctx, b, .base .prop⟩) :

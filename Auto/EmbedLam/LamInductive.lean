@@ -10,6 +10,21 @@ structure IndInfo where
   type  : LamSort
   ctors : List (LamSort × LamTerm)
   projs : Option (List (LamSort × LamTerm))
+  deriving Inhabited, Hashable, Repr, Lean.ToExpr
+
+def IndInfo.beq (i₁ i₂ : IndInfo) : Bool :=
+  i₁.type == i₂.type && i₁.ctors == i₂.ctors && i₁.projs == i₂.projs
+
+instance : BEq IndInfo where
+  beq := IndInfo.beq
+
+instance : LawfulBEq IndInfo where
+  eq_of_beq {i₁ i₂} h := by
+    rcases i₁ with ⟨type₁, ctors₁, projs₁⟩; rcases i₂ with ⟨type₂, ctors₂, projs₂⟩
+    have h : (type₁ == type₂ && ctors₁ == ctors₂ && projs₁ == projs₂) = true := h
+    simp only [Bool.and_eq_true, beq_iff_eq] at h
+    rw [h.left.left, h.left.right, h.right]
+  rfl {i} := show (i.type == i.type && i.ctors == i.ctors && i.projs == i.projs) = true by simp
 
 def IndInfo.toString (i : IndInfo) :=
   s!"IndInfo ⦗⦗ {i.type} || " ++
@@ -164,6 +179,9 @@ def MutualIndInfo.inductionTerm (mind : MutualIndInfo) : LamTerm :=
 def MutualIndInfo.specTerms (mind : MutualIndInfo) : List LamTerm :=
   mind.flatMap IndInfo.specTerms ++ [mind.inductionTerm]
 
+/-- The conjunction of the characterizations of `mind`, which is one fact in the verified checker -/
+def MutualIndInfo.specTerm (mind : MutualIndInfo) : LamTerm := LamTerm.mkAndN mind.specTerms
+
 /--
   `lval` interprets `mind` as mutual inductive types:
   · Different constructors of the same type produce different values
@@ -196,6 +214,9 @@ theorem MutualIndInfo.spec_iff {lval : LamValuation} {mind : MutualIndInfo} :
     · obtain ⟨ii, hii, ht⟩ := List.mem_flatMap.mp ht
       exact hty ii hii t ht
     · rw [List.mem_singleton.mp ht]; exact hind
+
+theorem MutualIndInfo.spec_iff_specTerm {lval : LamValuation} {mind : MutualIndInfo} :
+  mind.Spec lval ↔ LamThmValid lval [] mind.specTerm := LamThmValid.mkAndN_iff.symm
 
 /-!
   Proof that `MutualIndInfo.SemSpec`, a statement in Lean about the interpretations of the
@@ -1385,8 +1406,9 @@ structure IndTypeSpec (α : Type u) where
 -/
 structure IndBlockSpec (α : Type u) where
   /--
-    The characterizations of the types of the block. The types nested in them (e.g.
-      `List Tr` for `inductive Tr | node : List Tr → Tr`) are characterized in their own blocks
+    The characterizations of the types of the block and the types nested in them (e.g.
+      `List Tr` for `inductive Tr | node : List Tr → Tr`), so the latter are also
+      characterized in their own blocks
   -/
   types     : Array (IndTypeSpec α)
   /-- Induction over the types of the block and the types nested in them (see `MutualIndInfo.inductionTerm`) -/
@@ -1417,12 +1439,15 @@ def IndBlockSpec.replace? (bs : IndBlockSpec α) (as : Array β) : Option (IndBl
       set (i + 1)
       as[i]?).run' 0
 
-/-- The conjunction of the characterizations in `bs`, which is one fact in the verified checker -/
+/--
+  The conjunction of the characterizations in `bs`, which is one fact in the verified checker.
+    For `bs := IndBlockSpec.ofMutualIndInfo mind`, this is `mind.specTerm`
+-/
 def IndBlockSpec.toLamTerm (bs : IndBlockSpec LamTerm) : LamTerm := LamTerm.mkAndN bs.toArray.toList
 
-/-- The characterization of the mutual block `mind`, whose first `n` types are the types of the block -/
-def IndBlockSpec.ofMutualIndInfo (mind : MutualIndInfo) (n : Nat) : IndBlockSpec LamTerm where
-  types := (mind.take n).toArray.map fun ii =>
+/-- The characterization of the mutual block `mind` (see `MutualIndInfo.specTerms`) -/
+def IndBlockSpec.ofMutualIndInfo (mind : MutualIndInfo) : IndBlockSpec LamTerm where
+  types := mind.toArray.map fun ii =>
     { distinct := ii.distinctTerms.toArray, inject := ii.injectTerms.toArray, proj := ii.projTerms.toArray }
   induction := mind.inductionTerm
 
