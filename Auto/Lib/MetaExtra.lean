@@ -130,6 +130,21 @@ def Meta.isTypeCorrectCore (e : Expr) : MetaM Bool := do
   let type? ← Meta.coreCheck e
   return type?.isSome
 
+/-- A proof of `a₁ ∧ (a₂ ∧ ⋯ ∧ aₙ)` (`True` if `n = 0`), given proofs `hs` of `a₁, ⋯, aₙ` -/
+def Meta.mkAndIntroN (hs : Array Expr) : MetaM Expr := do
+  let .some last := hs.back?
+    | return .const ``True.intro []
+  hs.pop.foldrM (fun h acc => Meta.mkAppM ``And.intro #[h, acc]) last
+
+/-- Proofs of `a₁, ⋯, aₙ`, given `h : a₁ ∧ (a₂ ∧ ⋯ ∧ aₙ)` with `n ≥ 1` -/
+def Meta.mkAndProjN (h : Expr) (n : Nat) : MetaM (Array Expr) := do
+  let mut conjs := #[]
+  let mut rest := h
+  for _ in [1:n] do
+    conjs := conjs.push (← Meta.mkAppM ``And.left #[rest])
+    rest ← Meta.mkAppM ``And.right #[rest]
+  return conjs.push rest
+
 def Meta.withMaxHeartbeats [Monad m] [MonadLiftT BaseIO m]
     [MonadWithReaderOf Core.Context m] (n : Nat) (x : m α) : m α := do
   let numHeartbeats ← IO.getNumHeartbeats

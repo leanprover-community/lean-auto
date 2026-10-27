@@ -1361,3 +1361,69 @@ theorem MutualIndInfo.isomType_of_spec {lval : LamValuation.{u}} {mind : MutualI
   exact cs.fold_mkVal lval.tyVal _ _ j c xs
 
 end Auto.Embedding.Lam
+
+namespace Auto
+
+open Embedding.Lam
+
+/--
+  The characterization of an inductive type (see `IndInfo.specTerms`), by kind.
+    This is used when `lean-auto` sends facts to provers, e.g. in `NativeInterface`
+-/
+structure IndTypeSpec (α : Type u) where
+  /-- Different constructors produce different values (see `IndInfo.distinctTerms`) -/
+  distinct : Array α := #[]
+  /-- The constructors are injective (see `IndInfo.injectTerms`) -/
+  inject   : Array α := #[]
+  /-- The projections of a structure project the arguments of its constructor (see `IndInfo.projTerms`) -/
+  proj     : Array α := #[]
+
+/--
+  The characterization of a mutual block of inductive types, which is one fact in the
+    verified checker (see `IndBlockSpec.toLamTerm`). This is used when `lean-auto` sends
+    facts to provers, e.g. in `NativeInterface`
+-/
+structure IndBlockSpec (α : Type u) where
+  /--
+    The characterizations of the types of the block. The types nested in them (e.g.
+      `List Tr` for `inductive Tr | node : List Tr → Tr`) are characterized in their own blocks
+  -/
+  types     : Array (IndTypeSpec α)
+  /-- Induction over the types of the block and the types nested in them (see `MutualIndInfo.inductionTerm`) -/
+  induction : α
+
+def IndTypeSpec.toArray (ts : IndTypeSpec α) : Array α := ts.distinct ++ ts.inject ++ ts.proj
+
+def IndTypeSpec.mapM {m : Type u → Type v} [Monad m] (f : α → m β) (ts : IndTypeSpec α) : m (IndTypeSpec β) := do
+  return { distinct := ← ts.distinct.mapM f, inject := ← ts.inject.mapM f, proj := ← ts.proj.mapM f }
+
+/-- All the characterizations in `bs`, in the order of the conjuncts of `IndBlockSpec.toLamTerm` -/
+def IndBlockSpec.toArray (bs : IndBlockSpec α) : Array α :=
+  (bs.types.flatMap IndTypeSpec.toArray).push bs.induction
+
+def IndBlockSpec.mapM {m : Type u → Type v} [Monad m] (f : α → m β) (bs : IndBlockSpec α) : m (IndBlockSpec β) := do
+  return { types := ← bs.types.mapM (·.mapM f), induction := ← f bs.induction }
+
+def IndBlockSpec.map (f : α → β) (bs : IndBlockSpec α) : IndBlockSpec β :=
+  Id.run (bs.mapM (pure ∘ f))
+
+/-- `bs` with its characterizations replaced by `as`, in the order of `IndBlockSpec.toArray` -/
+def IndBlockSpec.replace? (bs : IndBlockSpec α) (as : Array β) : Option (IndBlockSpec β) :=
+  if bs.toArray.size != as.size then
+    .none
+  else
+    (bs.mapM (m := StateT Nat Option) fun _ => do
+      let i ← get
+      set (i + 1)
+      as[i]?).run' 0
+
+/-- The conjunction of the characterizations in `bs`, which is one fact in the verified checker -/
+def IndBlockSpec.toLamTerm (bs : IndBlockSpec LamTerm) : LamTerm := LamTerm.mkAndN bs.toArray.toList
+
+/-- The characterization of the mutual block `mind`, whose first `n` types are the types of the block -/
+def IndBlockSpec.ofMutualIndInfo (mind : MutualIndInfo) (n : Nat) : IndBlockSpec LamTerm where
+  types := (mind.take n).toArray.map fun ii =>
+    { distinct := ii.distinctTerms.toArray, inject := ii.injectTerms.toArray, proj := ii.projTerms.toArray }
+  induction := mind.inductionTerm
+
+end Auto

@@ -605,12 +605,7 @@ def LaterInfo.coreSpecOfConj (li : LaterInfo) (t : LaterType) (h : Expr) : MetaM
     | throwError "{decl_name%} :: Unexpected proof {coreSpec}"
   let .ctorInfo ctor ← getConstInfo ctorName
     | throwError "{decl_name%} :: `{ctorName}` is not a constructor"
-  let mut conjs := #[]
-  let mut rest := h
-  for _ in [1:ctor.numFields] do
-    conjs := conjs.push (← Meta.mkAppM ``And.left #[rest])
-    rest ← Meta.mkAppM ``And.right #[rest]
-  conjs := conjs.push rest
+  let conjs ← Meta.mkAndProjN h ctor.numFields
   return mkAppN coreSpec.getAppFn (coreSpec.getAppArgs.extract 0 ctor.numParams ++ conjs)
 
 /-- The proof in `extSpecs` of the characterization of `lc`, e.g. `sub_eq_add_neg` for `.real .sub` -/

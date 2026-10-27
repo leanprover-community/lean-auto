@@ -360,6 +360,7 @@ open LamReif Embedding.Lam in
   · `facts.nonempties = #[s₀, s₁, ⋯, sᵤ₋₁]`
   · `facts.valids = #[t₀, t₁, ⋯, kₖ₋₁]`
   · `facts.laterSpecs`, characterizations of later-declared types
+  · `facts.indSpecs`, characterizations of mutual blocks of inductive types
   Invoke prover to get a proof of
     `proof : (∀ (_ : v₀) (_ : v₁) ⋯ (_ : vᵤ₋₁), w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥).interp`
   and returns
@@ -378,7 +379,9 @@ open LamReif Embedding.Lam in
   constants as proofs of the structures they come from, e.g. `RealInterpUnlifted.CoreSpec`
   (see `Lam2DAAF.withLaterSpecs`). They need not be in the `RTable`: only the ones used
   by the prover are added, by the checker steps determined by the fields they are in
-  (see `LaterSpecInterface.withSteps`)
+  (see `LaterSpecInterface.withSteps`). Similarly, the characterizations in `facts.indSpecs`
+  are offered to the prover, and only the blocks used by the prover are asserted, each
+  as one entry with the proof given by `LamReif.indSpecs`
 
   Note that `MetaState.withTemporaryLCtx` is used to isolate the prover from the
   current local context. This is necessary because `lean-auto` assumes that the prover
@@ -397,14 +400,20 @@ def callNative_checker
   let laterSpecs := facts.laterSpecs.withSteps
   -- The derivation of a characterization is the one `collectDerivFor` gives after its checker step is run
   let laterSpecsWithDTr := laterSpecs.map (fun (fs, re) => (re, DTr.node (ChkStep.f fs).toString #[]))
+  let indSpecs ← facts.indSpecs.mapM indSpecProof
+  let indSpecsWithDTr := (facts.indSpecs.zip indSpecs).map (fun (bs, _, _, dtr) => bs.map (·, dtr))
   let factsWithDTr : NativeInterface (REntry × DTr) :=
-    { valids := validsWithDTr, nonempties := nonemptiesWithDTr, laterSpecs := laterSpecsWithDTr }
+    { valids := validsWithDTr, nonempties := nonemptiesWithDTr, laterSpecs := laterSpecsWithDTr,
+      indSpecs := indSpecsWithDTr }
   let ret@(_, _, _, _, usedHyps) ← MetaState.runAtMetaM' <|
     (Lam2DAAF.callNativeWithAtomAsFVar factsWithDTr prover).run'
       { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy, laterInfo := ← getLaterInfo }
   for (fs, re) in laterSpecs.toArray do
     if usedHyps.contains re then
       let _ ← newChkStep (.f fs) (.some (.addEntry re))
+  for (t, proof, dtr) in indSpecs do
+    if usedHyps.contains (.valid [] t) then
+      newAssertion proof dtr t
   return ret
 
 open LamReif Embedding.Lam in
@@ -434,7 +443,9 @@ open LamReif Embedding.Lam in
   The characterizations in `facts.laterSpecs` are sent to the prover with their proofs
   in `LaterInfo`, which are closed terms. As in `callNative_checker`, the
   characterizations of the core constants are proofs of the structures they come
-  from, e.g. `RealInterpUnlifted.CoreSpec`
+  from, e.g. `RealInterpUnlifted.CoreSpec`. The characterizations in `facts.indSpecs`
+  are sent to the prover as in `callNative_checker`, and the blocks used by the
+  prover are proved by the proofs given by `LamReif.indSpecs`
 
   Note that `MetaState.withTemporaryLCtx` is used to isolate the prover from the
   current local context. This is necessary because `lean-auto` assumes that the prover
@@ -473,8 +484,13 @@ def callNative_direct
     | _ => throwError "{decl_name%} :: {fs.toString} is not a characterization of a later-declared type")
   -- The proofs of the characterizations are closed, so they need not be free variables
   let prover' (ni : NativeInterface Lemma) := prover { ni with laterSpecs := laterSpecLemmas }
+  let indSpecs ← facts.indSpecs.mapM indSpecProof
+  let indSpecsWithDTr := (facts.indSpecs.zip indSpecs).map (fun (bs, _, _, dtr) => bs.map (·, dtr))
+  let indSpecProofs := Std.HashMap.ofList (indSpecs.toList.map fun (t, proof, _) => (REntry.valid [] t, proof))
+  let factsWithDTr : NativeInterface (REntry × DTr) :=
+    { valids := validsWithDTr, nonempties := nonemptiesWithDTr, indSpecs := indSpecsWithDTr }
   let (proof, _, usedEtoms, usedInhs, usedHyps) ← MetaState.runAtMetaM' <|
-    (Lam2DAAF.callNativeWithAtomAsFVar { valids := validsWithDTr, nonempties := nonemptiesWithDTr } prover').run'
+    (Lam2DAAF.callNativeWithAtomAsFVar factsWithDTr prover').run'
       { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
   if usedEtoms.size != 0 then
     throwError "{decl_name%} :: etoms should not occur here"
@@ -487,6 +503,8 @@ def callNative_direct
       | .none => throwError "{decl_name%} :: Unexpected error"
     | _ => throwError "{decl_name%} :: Cannot find external proof of {re}")
   let ts ← usedHyps.mapM (fun re => do
+    if let .some proof := indSpecProofs.get? re then
+      return proof
     let .assertion e _ _ ← lookupREntryProof! re
       | throwError "{decl_name%} :: Cannot find external proof of {re}"
     return e)
@@ -548,10 +566,10 @@ where
     let _ ← LamReif.reifInhabitations uinhs
     let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
       (fun (s, _) => Embedding.Lam.REntry.nonempty s)
-    let exportInds ← LamReif.reifMutInds minds
+    let indBlocks ← LamReif.reifMutInds minds
     LamReif.printValuation
     -- **Preprocessing in Verified Checker**
-    let (exportFacts', exportInds) ← LamReif.preprocess exportFacts exportInds
+    let (exportFacts', exportInds) ← LamReif.preprocess exportFacts (indBlocks.map (·.info))
     exportFacts := exportFacts'
     -- **TPTP invocation and Premise Selection**
     if auto.tptp.get (← getOptions) then
@@ -571,7 +589,8 @@ where
     exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)
     if auto.native.get (← getOptions) then
       let laterSpecs ← LamReif.laterSpecs exportFacts
-      return ← queryNative declName? { valids := exportFacts, nonempties := exportInhs, laterSpecs }
+      let indSpecs ← LamReif.indSpecs indBlocks
+      return ← queryNative declName? { valids := exportFacts, nonempties := exportInhs, laterSpecs, indSpecs }
     throwError "Auto failed to find proof"
 
 @[tactic auto]
@@ -641,7 +660,7 @@ where
     let _ ← LamReif.reifInhabitations uinhs
     let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
       (fun (s, _) => Embedding.Lam.REntry.nonempty s)
-    let exportInds ← LamReif.reifMutInds minds
+    let exportInds := (← LamReif.reifMutInds minds).map (·.info)
     LamReif.printValuation
     -- **Preprocessing in Verified Checker**
     let (exportFacts', _) ← LamReif.preprocess exportFacts exportInds
@@ -685,20 +704,24 @@ def evalMono : Tactic
 def monoInterface
   (lemmas : Array Lemma) (inhFacts : Array Lemma)
   (prover : NativeInterface Lemma → MetaM Expr) : MetaM Expr := do
-  let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) : LamReif.ReifM Expr := (do
+  let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) (minds : Array SimpleMutIndVal) :
+    LamReif.ReifM Expr := (do
     let exportFacts ← LamReif.reifFacts uvalids
     let exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
     let _ ← LamReif.reifInhabitations uinhs
     let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
       (fun (s, _) => Embedding.Lam.REntry.nonempty s)
+    let indBlocks ← LamReif.reifMutInds minds
     LamReif.printValuation
-    callNative_direct
-      { valids := exportFacts, nonempties := exportInhs, laterSpecs := ← LamReif.laterSpecs exportFacts } prover)
+    let laterSpecs ← LamReif.laterSpecs exportFacts
+    let indSpecs ← LamReif.indSpecs indBlocks
+    callNative_direct { valids := exportFacts, nonempties := exportInhs, laterSpecs, indSpecs } prover)
   let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
     let uvalids ← liftM <| Reif.getFacts
     let uinhs ← liftM <| Reif.getInhTys
+    let uinds ← liftM <| Reif.getInds
     let u ← computeMaxLevel uvalids
-    (afterReify uvalids uinhs).run' (← LamReif.State.init u))
+    (afterReify uvalids uinhs uinds).run' (← LamReif.State.init u))
   return proof
 
 /--
@@ -707,20 +730,23 @@ def monoInterface
 def runNativeProverWithAuto
   (declName? : Option Name) (prover : NativeInterface Lemma → MetaM Expr)
   (lemmas : Array Lemma) (inhFacts : Array Lemma) : MetaM Expr := do
-  let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) : LamReif.ReifM Expr := (do
+  let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) (minds : Array SimpleMutIndVal) :
+    LamReif.ReifM Expr := (do
     let exportFacts ← LamReif.reifFacts uvalids
     let exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
     let _ ← LamReif.reifInhabitations uinhs
     let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
       (fun (s, _) => Embedding.Lam.REntry.nonempty s)
+    let indBlocks ← LamReif.reifMutInds minds
     LamReif.printValuation
     let (exportFacts, _) ← LamReif.preprocess exportFacts #[]
     let laterSpecs ← LamReif.laterSpecs exportFacts
-    return ← queryNative declName? { valids := exportFacts, nonempties := exportInhs, laterSpecs } prover)
+    let indSpecs ← LamReif.indSpecs indBlocks
+    return ← queryNative declName? { valids := exportFacts, nonempties := exportInhs, laterSpecs, indSpecs } prover)
   let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
     let s ← get
     let u ← computeMaxLevel s.facts
-    (afterReify s.facts s.inhTys).run' (← LamReif.State.init u))
+    (afterReify s.facts s.inhTys s.inds).run' (← LamReif.State.init u))
   trace[auto.tactic] "{decl_name%} :: Found proof of {← Meta.inferType proof}"
   return proof
 

@@ -7,6 +7,7 @@ public import Auto.Lib.MetaExtra
 public import Auto.Translation.ReifM
 public import Auto.Translation.LamUtils
 public import Auto.Translation.LamLater
+public import Auto.Translation.IndSpec
 public import Auto.Translation.SMTAttributes
 public import Auto.EmbedLam.LamChecker
 public import Auto.EmbedLam.LamInhReasoning
@@ -112,6 +113,10 @@ structure State where
   u             : Level
   -- Later-declared types recognized from the environment, and their constants
   laterInfo     : LaterInfo                       := {}
+  -- The proofs and derivations of the characterizations of mutual blocks of inductive
+  --   types (see `indSpecs`), indexed by their `λ` terms. A characterization is
+  --   asserted when a prover uses it
+  indSpecProofs : Std.HashMap LamTerm (Expr × DTr) := {}
 deriving Inhabited
 
 def State.init (u : Level) : MetaM State := do
@@ -1687,6 +1692,15 @@ def reifMutInd (mind : Array SimpleIndVal) : ReifM (Option MutualIndInfo) := do
     ret := ret.push ii
   return ret.toList
 
+/-- A reified mutual block of inductive types -/
+structure ReifiedMutInd where
+  /-- The block -/
+  val           : SimpleMutIndVal
+  /-- The types of the block, followed by the types in `val.nested` that are reified -/
+  info          : MutualIndInfo
+  /-- Whether each type in `val.nested` is reified, i.e. is in `info` -/
+  nestedReified : Array Bool
+
 /--
   Reify the mutual blocks of inductive types `minds`, reifying each block once. The
     `MutualIndInfo` of a block consists of the types of the block, followed by the
@@ -1695,7 +1709,7 @@ def reifMutInd (mind : Array SimpleIndVal) : ReifM (Option MutualIndInfo) := do
     their sorts. So the `MutualIndInfo`s of a block and of the blocks of its nested
     types overlap, e.g. `[Tr, List Tr]` and `[List Tr]`
 -/
-def reifMutInds (minds : Array SimpleMutIndVal) : ReifM (Array MutualIndInfo) := do
+def reifMutInds (minds : Array SimpleMutIndVal) : ReifM (Array ReifiedMutInd) := do
   let mut reified : Array (Option MutualIndInfo) := #[]
   for mind in minds do
     try
@@ -1712,6 +1726,7 @@ def reifMutInds (minds : Array SimpleMutIndVal) : ReifM (Array MutualIndInfo) :=
     let .some mi := mi?
       | continue
     let mut nested := #[]
+    let mut nestedReified := #[]
     for e in mind.nested do
       let mut ii? := .none
       try
@@ -1724,8 +1739,53 @@ def reifMutInds (minds : Array SimpleMutIndVal) : ReifM (Array MutualIndInfo) :=
       | .some ii => nested := nested.push ii
       | .none =>
         trace[auto.lamReif.printResult] "{decl_name%} :: Type {e} nested in {mind.vals.map (·.name)} is not reified"
-    ret := ret.push (mi ++ nested.toList)
+      nestedReified := nestedReified.push ii?.isSome
+    ret := ret.push ⟨mind, mi ++ nested.toList, nestedReified⟩
   return ret
+
+/--
+  The characterizations of the mutual blocks of inductive types `blocks` (see
+    `IndBlockSpec.ofMutualIndInfo`), if `auto.indSpec` is enabled. The proof of
+    each block, i.e. of `IndBlockSpec.toLamTerm`, is recorded in `indSpecProofs`, and
+    the block is asserted when a prover uses it. The proof of each characterization
+    must prove its translation by `Lam2D`, otherwise an error is thrown
+-/
+def indSpecs (blocks : Array ReifiedMutInd) : ReifM (Array (IndBlockSpec REntry)) := do
+  if !(auto.indSpec.get (← getOptions)) then
+    return #[]
+  let tyValMap := Std.HashMap.ofList ((← getTyVal).toList.zipIdx.map fun ((e, _), i) => (i, e))
+  let varValMap := Std.HashMap.ofList ((← getVarVal).toList.zipIdx.map fun ((e, _), i) => (i, e))
+  blocks.mapM fun ⟨val, info, nestedReified⟩ => do
+    let names := val.vals.map (·.name)
+    let prove (prover : Expr → MetaM Expr) (t : LamTerm) : ReifM Expr := do
+      let stmt ← Core.betaReduce (← Lam2D.interpLamTermAsUnlifted tyValMap varValMap {} 0 t)
+      let proof ← prover stmt
+      Meta.check proof
+      if !(← Meta.isDefEq (← Meta.inferType proof) stmt) then
+        throwError "{decl_name%} :: {proof} does not prove the characterization {stmt} of {names}"
+      return proof
+    let spec := IndBlockSpec.ofMutualIndInfo info val.vals.size
+    let types ← spec.types.mapM fun ts => do
+      return ({
+        distinct := ← ts.distinct.mapM (prove IndSpec.proveDistinct)
+        inject   := ← ts.inject.mapM (prove IndSpec.proveInject)
+        proj     := ← ts.proj.mapM (prove IndSpec.proveProj) } : IndTypeSpec Expr)
+    let induction ← prove (IndSpec.proveInduction · val nestedReified) spec.induction
+    let proof ← Meta.mkAndIntroN ({ types, induction } : IndBlockSpec Expr).toArray
+    let dtr := DTr.leaf s!"indSpec {names}"
+    setIndSpecProofs ((← getIndSpecProofs).insert spec.toLamTerm (proof, dtr))
+    return spec.map (REntry.valid [] ·)
+
+/-- The `λ` term of the characterization `bs` of a mutual block, with its proof and derivation (see `indSpecs`) -/
+def indSpecProof (bs : IndBlockSpec REntry) : ReifM (LamTerm × Expr × DTr) := do
+  let ts ← bs.mapM fun re => do
+    let .valid [] t := re
+      | throwError "{decl_name%} :: {re} is not a `valid` entry"
+    return t
+  let t := ts.toLamTerm
+  let .some (proof, dtr) := (← getIndSpecProofs).get? t
+    | throwError "{decl_name%} :: The characterization {t} has no proof"
+  return (t, proof, dtr)
 
 partial def collectDerivFor (re : REntry) : ReifM DTr := do
   let proof ← lookupREntryProof! re

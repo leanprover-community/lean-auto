@@ -1452,6 +1452,107 @@ section Rat
 end Rat
 
 
+-- Characterizations of inductive types sent to native provers
+section NativeInductive
+
+  set_option auto.smt false
+  set_option auto.tptp false
+  set_option auto.native true
+
+  inductive IColor where | red | green | blue
+
+  inductive INTree where
+    | leaf : Nat → INTree
+    | node : List INTree → INTree
+
+  mutual
+    inductive IA where | a0 | a1 : IB → IA
+    inductive IB where | b0 : IA → IB | b1 : IA → IB → IB
+  end
+
+  structure IS where
+    x : Nat
+    y : Bool
+
+  inductive IRose (α : Type) where
+    | mk : α → List (IRose α) → IRose α
+
+  -- The (emulated) native prover uses all the characterizations, so the kernel checks
+  --   the proofs of the characterizations of all the mutual blocks
+  example (c : IColor) (h : c = .red) : c = .red := by auto [h]
+  example (t : INTree) (h : t = .node []) : t = .node [] := by auto [h]
+  example (a : IA) (h : a = .a1 (.b0 .a0)) : a = .a1 (.b0 .a0) := by auto [h]
+  example (s : IS) (h : s = ⟨1, true⟩) : s = ⟨1, true⟩ := by auto [h]
+  example (r : IRose Nat) (h : r = .mk 0 []) : r = .mk 0 [] := by auto [h]
+  set_option auto.checker.buildMode "indirectReduce" in
+  example (t : INTree) (h : t = .node []) : t = .node [] := by auto [h]
+  set_option auto.checker.buildMode "indirectReduce_reflection" in
+  example (t : INTree) (h : t = .node []) : t = .node [] := by auto [h]
+  example (t : INTree) (h : t = .node []) : t = .node [] := by mononative [h]
+
+  open Lean Meta Auto in
+  /--
+    A native prover that closes a negated goal `¬ P` among the regular facts with a
+      conjunct `∀ xs, H₁ → ⋯ → Hₙ → P'` of a characterization of inductive types,
+      where `H₁ ⋯ Hₙ` are regular facts
+  -/
+  def indSpecProver (ni : NativeInterface Lemma) : MetaM Expr := do
+    for neg in ni.valids do
+      let .forallE _ p (.const ``False []) _ ← whnfD neg.type
+        | continue
+      for spec in ni.indSpecs.flatMap IndBlockSpec.toArray do
+        let (xs, _, body) ← forallMetaTelescope spec.type
+        if !(← isDefEq body p) then
+          continue
+        for x in xs do
+          if ← x.mvarId!.isAssigned then
+            continue
+          for v in ni.valids do
+            if ← isDefEq (← inferType x) v.type then
+              x.mvarId!.assign v.proof
+              break
+        let proof ← instantiateMVars (.app neg.proof (mkAppN spec.proof xs))
+        if !proof.hasMVar then
+          return proof
+    throwError "indSpecProver :: No characterization closes the goal"
+
+  -- The kernel checks the characterizations used by the native prover
+  section
+    attribute [local rebind Auto.Native.solverFunc] indSpecProver
+
+    example (x : Nat) (xs : List Nat) : [] ≠ x :: xs := by auto
+    example (x : Nat) (xs : List Nat) : [] ≠ x :: xs := by mononative
+    example (a b : Nat) (as bs : List Nat) (h : a :: as = b :: bs) : a = b ∧ as = bs := by auto
+    example (a b : Nat) (as bs : List Nat) (h : a :: as = b :: bs) : a = b ∧ as = bs := by mononative
+    example : IA.a0 ≠ IA.a1 (IB.b0 IA.a0) := by auto
+    -- Preprocessing in the verified checker rewrites `s` by `h`, so the native prover gets
+    --   `¬ IS.x (IS.mk n b) = n`, which is closed by the characterization of `IS.x`
+    example (s : IS) (n : Nat) (b : Bool) (h : s = ⟨n, b⟩) : s.x = n := by auto
+    example : IA.a0 ≠ IA.a1 (IB.b0 IA.a0) := by mononative
+    example (P : IColor → Prop) (h₀ : P .red) (h₁ : P .green) (h₂ : P .blue) : ∀ c, P c := by auto
+    example (P : IColor → Prop) (h₀ : P .red) (h₁ : P .green) (h₂ : P .blue) : ∀ c, P c := by mononative
+    -- Induction over `INTree` and the type `List INTree` nested in it
+    example (P : INTree → Prop) (Q : List INTree → Prop) (hl : ∀ n, P (.leaf n))
+      (hn : ∀ ts, Q ts → P (.node ts)) (hnil : Q []) (hcons : ∀ t ts, P t → Q ts → Q (t :: ts)) :
+      (∀ t, P t) ∧ (∀ ts, Q ts) := by auto
+    set_option auto.checker.buildMode "indirectReduce_reflection" in
+    example (P : INTree → Prop) (Q : List INTree → Prop) (hl : ∀ n, P (.leaf n))
+      (hn : ∀ ts, Q ts → P (.node ts)) (hnil : Q []) (hcons : ∀ t ts, P t → Q ts → Q (t :: ts)) :
+      (∀ t, P t) ∧ (∀ ts, Q ts) := by auto
+    example (P : INTree → Prop) (Q : List INTree → Prop) (hl : ∀ n, P (.leaf n))
+      (hn : ∀ ts, Q ts → P (.node ts)) (hnil : Q []) (hcons : ∀ t ts, P t → Q ts → Q (t :: ts)) :
+      (∀ t, P t) ∧ (∀ ts, Q ts) := by mononative
+
+    -- No characterization is offered if `auto.indSpec` is disabled
+    set_option auto.indSpec false in
+    example (x : Nat) (xs : List Nat) : [] ≠ x :: xs := by
+      fail_if_success auto
+      simp
+  end
+
+end NativeInductive
+
+
 -- Issues
 section Issues
 
