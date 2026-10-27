@@ -592,6 +592,41 @@ def LaterInfo.laterValExpr (li : LaterInfo) (u : Level) : Expr :=
     #[li.laterTyValExpr u, real, complex, realCore, realExt, complexCore, complexExt]
 
 /--
+  Reassemble a proof `h` of the characterization of the core constants of `t`
+    (`LaterType.coreSpec`) as translated by `Lam2D` into a proof of the structure
+    in `coreSpecs`, e.g. `⟨h.1, h.2.1, ⋯⟩ : RealInterpUnlifted.CoreSpec ri`. The
+    conjuncts of the characterization are in the same order as the fields of the structure
+-/
+def LaterInfo.coreSpecOfConj (li : LaterInfo) (t : LaterType) (h : Expr) : MetaM Expr := do
+  let .some coreSpec := li.coreSpecs.get? t
+    | throwError "{decl_name%} :: The characterization of the core constants of `{Lam2D.interpLaterTypeAsUnlifted t}` is not available"
+  -- `coreSpec` is the constructor of the structure applied to its parameters and to proofs of its fields
+  let .const ctorName _ := coreSpec.getAppFn
+    | throwError "{decl_name%} :: Unexpected proof {coreSpec}"
+  let .ctorInfo ctor ← getConstInfo ctorName
+    | throwError "{decl_name%} :: `{ctorName}` is not a constructor"
+  let mut conjs := #[]
+  let mut rest := h
+  for _ in [1:ctor.numFields] do
+    conjs := conjs.push (← Meta.mkAppM ``And.left #[rest])
+    rest ← Meta.mkAppM ``And.right #[rest]
+  conjs := conjs.push rest
+  return mkAppN coreSpec.getAppFn (coreSpec.getAppArgs.extract 0 ctor.numParams ++ conjs)
+
+/-- The proof in `extSpecs` of the characterization of `lc`, e.g. `sub_eq_add_neg` for `.real .sub` -/
+def LaterInfo.extSpecProof (li : LaterInfo) (lc : LaterConst) : MetaM Expr := do
+  let t : LaterType := match lc with
+    | .real _ => .real
+    | .complex _ => .complex
+  let .some extSpec := li.extSpecs.get? t
+    | throwError "{decl_name%} :: The characterizations of the constants of `{Lam2D.interpLaterTypeAsUnlifted t}` are unknown"
+  -- The field of `lc` is `some (PLift.up _ proof)` if the characterization of `lc` is available
+  let field ← Meta.whnfD (← Meta.mkProjection extSpec lc.specField)
+  let .app (.app (.const ``Option.some _) _) (.app (.app (.const ``PLift.up _) _) proof) := field
+    | throwError "{decl_name%} :: The characterization of `{lc.reprAux}` is not available"
+  return proof
+
+/--
   The characterizations available in `li.laterValExpr u`. It must be equal to `LaterVal.specAvail`
     of `li.laterValExpr u` by reduction, which is checked by the kernel
 -/

@@ -356,10 +356,10 @@ def querySMT (exportFacts : Array REntry) (exportInds : Array MutualIndInfo) : L
 
 open LamReif Embedding.Lam in
 /--
-  Given
-  · `nonempties = #[s₀, s₁, ⋯, sᵤ₋₁]`
-  · `valids = #[t₀, t₁, ⋯, kₖ₋₁]`
-  · `laterSpecs`, characterizations of later-declared types
+  Given `facts` with
+  · `facts.nonempties = #[s₀, s₁, ⋯, sᵤ₋₁]`
+  · `facts.valids = #[t₀, t₁, ⋯, kₖ₋₁]`
+  · `facts.laterSpecs`, characterizations of later-declared types
   Invoke prover to get a proof of
     `proof : (∀ (_ : v₀) (_ : v₁) ⋯ (_ : vᵤ₋₁), w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥).interp`
   and returns
@@ -374,31 +374,34 @@ open LamReif Embedding.Lam in
     the characterizations of later-declared types used by the prover
   · `etoms` are all the etoms present in `w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥`
 
-  The characterizations in `laterSpecs` are offered to the prover. They need not be in
-  the `RTable`: only the ones used by the prover are added, by the checker steps
-  determined by the fields they are in (see `LaterSpecInterface.withSteps`)
+  The characterizations in `facts.laterSpecs` are offered to the prover, the ones of the core
+  constants as proofs of the structures they come from, e.g. `RealInterpUnlifted.CoreSpec`
+  (see `Lam2DAAF.withLaterSpecs`). They need not be in the `RTable`: only the ones used
+  by the prover are added, by the checker steps determined by the fields they are in
+  (see `LaterSpecInterface.withSteps`)
 
   Note that `MetaState.withTemporaryLCtx` is used to isolate the prover from the
   current local context. This is necessary because `lean-auto` assumes that the prover
   does not use free variables introduced during monomorphization
 -/
 def callNative_checker
-  (nonempties : Array REntry) (valids : Array REntry) (laterSpecs : LaterSpecInterface REntry)
-  (prover : NativeInterface Lemma → MetaM Expr) :
+  (facts : NativeInterface REntry) (prover : NativeInterface Lemma → MetaM Expr) :
   ReifM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := do
   let tyVal ← LamReif.getTyVal
   let varVal ← LamReif.getVarVal
   let lamEVarTy ← LamReif.getLamEVarTy
-  let nonemptiesWithDTr ← nonempties.mapM (fun re =>
+  let nonemptiesWithDTr ← facts.nonempties.mapM (fun re =>
     do return (re, ← collectDerivFor re))
-  let validsWithDTr ← valids.mapM (fun re =>
+  let validsWithDTr ← facts.valids.mapM (fun re =>
     do return (re, ← collectDerivFor re))
-  let laterSpecs := laterSpecs.withSteps
+  let laterSpecs := facts.laterSpecs.withSteps
   -- The derivation of a characterization is the one `collectDerivFor` gives after its checker step is run
   let laterSpecsWithDTr := laterSpecs.map (fun (fs, re) => (re, DTr.node (ChkStep.f fs).toString #[]))
+  let factsWithDTr : NativeInterface (REntry × DTr) :=
+    { valids := validsWithDTr, nonempties := nonemptiesWithDTr, laterSpecs := laterSpecsWithDTr }
   let ret@(_, _, _, _, usedHyps) ← MetaState.runAtMetaM' <|
-    (Lam2DAAF.callNativeWithAtomAsFVar nonemptiesWithDTr validsWithDTr laterSpecsWithDTr prover).run'
-      { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
+    (Lam2DAAF.callNativeWithAtomAsFVar factsWithDTr prover).run'
+      { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy, laterInfo := ← getLaterInfo }
   for (fs, re) in laterSpecs.toArray do
     if usedHyps.contains re then
       let _ ← newChkStep (.f fs) (.some (.addEntry re))
@@ -428,21 +431,50 @@ open LamReif Embedding.Lam in
   `callNativeChecker`, but we return a proof of `⊥` by applying `proof`
   to un-reified facts.
 
+  The characterizations in `facts.laterSpecs` are sent to the prover with their proofs
+  in `LaterInfo`, which are closed terms. As in `callNative_checker`, the
+  characterizations of the core constants are proofs of the structures they come
+  from, e.g. `RealInterpUnlifted.CoreSpec`
+
   Note that `MetaState.withTemporaryLCtx` is used to isolate the prover from the
   current local context. This is necessary because `lean-auto` assumes that the prover
   does not use free variables introduced during monomorphization
 -/
 def callNative_direct
-  (nonempties : Array REntry) (valids : Array REntry) (prover : NativeInterface Lemma → MetaM Expr) : ReifM Expr := do
+  (facts : NativeInterface REntry) (prover : NativeInterface Lemma → MetaM Expr) : ReifM Expr := do
   let tyVal ← LamReif.getTyVal
   let varVal ← LamReif.getVarVal
   let lamEVarTy ← LamReif.getLamEVarTy
-  let nonemptiesWithDTr ← nonempties.mapM (fun re =>
+  let nonemptiesWithDTr ← facts.nonempties.mapM (fun re =>
     do return (re, ← collectDerivFor re))
-  let validsWithDTr ← valids.mapM (fun re =>
+  let validsWithDTr ← facts.valids.mapM (fun re =>
     do return (re, ← collectDerivFor re))
+  let laterInfo ← getLaterInfo
+  let coreLemma (t : LaterType) (dtr : DTr) : ReifM Lemma := do
+    let .some proof := laterInfo.coreSpecs.get? t
+      | throwError "{decl_name%} :: The characterization of the core constants of `{Lam2D.interpLaterTypeAsUnlifted t}` is not available"
+    return ⟨⟨proof, ← Meta.inferType proof, dtr⟩, #[]⟩
+  -- As in `callNative_checker`, the prover sees the translation of the characterization by `Lam2D`
+  let extLemma (lc : LaterConst) (t : LamTerm) (dtr : DTr) : ReifM Lemma := do
+    let proof ← laterInfo.extSpecProof lc
+    let stmt ← Core.betaReduce (← Lam2D.interpLamTermAsUnlifted {} {} {} 0 t)
+    if !(← Meta.isDefEq (← Meta.inferType proof) stmt) then
+      throwError "{decl_name%} :: {proof} does not prove the characterization {stmt}"
+    return ⟨⟨proof, stmt, dtr⟩, #[]⟩
+  let laterSpecLemmas ← facts.laterSpecs.withSteps.mapM (fun (fs, re) => do
+    let .valid [] t := re
+      | throwError "{decl_name%} :: {re} is not a `valid` entry"
+    let dtr := DTr.node (ChkStep.f fs).toString #[]
+    match fs with
+    | .realCoreSpec => coreLemma .real dtr
+    | .complexCoreSpec => coreLemma .complex dtr
+    | .realExtSpec rc => extLemma (.real rc) t dtr
+    | .complexExtSpec cc => extLemma (.complex cc) t dtr
+    | _ => throwError "{decl_name%} :: {fs.toString} is not a characterization of a later-declared type")
+  -- The proofs of the characterizations are closed, so they need not be free variables
+  let prover' (ni : NativeInterface Lemma) := prover { ni with laterSpecs := laterSpecLemmas }
   let (proof, _, usedEtoms, usedInhs, usedHyps) ← MetaState.runAtMetaM' <|
-    (Lam2DAAF.callNativeWithAtomAsFVar nonemptiesWithDTr validsWithDTr {} prover).run'
+    (Lam2DAAF.callNativeWithAtomAsFVar { valids := validsWithDTr, nonempties := nonemptiesWithDTr } prover').run'
       { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
   if usedEtoms.size != 0 then
     throwError "{decl_name%} :: etoms should not occur here"
@@ -464,13 +496,13 @@ open Embedding.Lam in
 /--
   If `prover?` is specified, use the specified one.
   Otherwise use the one determined by `Solver.Native.queryNative`.
-  See `callNative_checker` for `laterSpecs`
+  See `callNative_checker` for `facts`
 -/
 def queryNative
-  (declName? : Option Name) (exportFacts exportInhs : Array REntry) (laterSpecs : LaterSpecInterface REntry)
+  (declName? : Option Name) (facts : NativeInterface REntry)
   (prover? : Option (NativeInterface Lemma → MetaM Expr) := .none) : LamReif.ReifM Expr := do
   let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ←
-    callNative_checker exportInhs exportFacts laterSpecs (prover?.getD Solver.Native.queryNative)
+    callNative_checker facts (prover?.getD Solver.Native.queryNative)
   LamReif.newAssertion proof (.leaf "by_native::queryNative") proofLamTerm
   let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
   let forallElimed ← LamReif.validOfElimForalls etomInstantiated usedInhs
@@ -538,7 +570,8 @@ where
     -- **Native Prover**
     exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)
     if auto.native.get (← getOptions) then
-      return ← queryNative declName? exportFacts exportInhs (← LamReif.laterSpecs exportFacts)
+      let laterSpecs ← LamReif.laterSpecs exportFacts
+      return ← queryNative declName? { valids := exportFacts, nonempties := exportInhs, laterSpecs }
     throwError "Auto failed to find proof"
 
 @[tactic auto]
@@ -659,7 +692,8 @@ def monoInterface
     let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
       (fun (s, _) => Embedding.Lam.REntry.nonempty s)
     LamReif.printValuation
-    callNative_direct exportInhs exportFacts prover)
+    callNative_direct
+      { valids := exportFacts, nonempties := exportInhs, laterSpecs := ← LamReif.laterSpecs exportFacts } prover)
   let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
     let uvalids ← liftM <| Reif.getFacts
     let uinhs ← liftM <| Reif.getInhTys
@@ -681,7 +715,8 @@ def runNativeProverWithAuto
       (fun (s, _) => Embedding.Lam.REntry.nonempty s)
     LamReif.printValuation
     let (exportFacts, _) ← LamReif.preprocess exportFacts #[]
-    return ← queryNative declName? exportFacts exportInhs (← LamReif.laterSpecs exportFacts) prover)
+    let laterSpecs ← LamReif.laterSpecs exportFacts
+    return ← queryNative declName? { valids := exportFacts, nonempties := exportInhs, laterSpecs } prover)
   let (proof, _) ← Monomorphization.monomorphize lemmas inhFacts (@id (Reif.ReifM Expr) do
     let s ← get
     let u ← computeMaxLevel s.facts

@@ -23,7 +23,10 @@ structure NativeInterface (α : Type u) where
   valids     : Array α
   /-- Inhabitation facts -/
   nonempties : Array α
-  /-- Characterizations of the constants of later-declared types, e.g. `Real` -/
+  /--
+    Characterizations of the constants of later-declared types, e.g. `Real`. The ones
+      of the core constants are proofs of structures, e.g. `RealInterpUnlifted.CoreSpec`
+  -/
   laterSpecs : LaterSpecInterface α := {}
 
 end Auto

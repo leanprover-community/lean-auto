@@ -1297,26 +1297,31 @@ section NativeComplex
 
   run_meta checkSpecFactStep (.complexExtSpec .add) (.complexExtSpec .add) `Complex.addSpecTest
 
-  open Lean in
-  /-- Proofs of the conjuncts of `ty`, given `proof : ty` -/
-  def conjuncts (proof ty : Expr) : Array (Expr × Expr) :=
-    match ty with
-    | .app (.app (.const ``And []) a) b =>
-      conjuncts (mkApp3 (.const ``And.left []) a b proof) a ++ conjuncts (mkApp3 (.const ``And.right []) a b proof) b
-    | _ => #[(proof, ty)]
+  open Lean Meta in
+  /--
+    Proofs of the fields of `proof`, recursively, if its type is a structure, e.g.
+      `And` or `RealInterpUnlifted.CoreSpec`
+  -/
+  partial def fieldProofs (proof : Expr) : MetaM (Array Expr) := do
+    let .const n _ := (← whnf (← inferType proof)).getAppFn
+      | return #[proof]
+    if !isStructure (← getEnv) n then
+      return #[proof]
+    (getStructureFields (← getEnv) n).foldlM (fun acc f => do
+      return acc ++ (← fieldProofs (← mkProjection proof f))) #[]
 
   open Lean Meta Auto in
   /--
     A native prover that closes a negated goal `¬ P` among the regular facts with a
-      conjunct `∀ xs, P'` of a characterization of later-declared types
+      field `∀ xs, P'` of a characterization of later-declared types
   -/
   def specProver (ni : NativeInterface Lemma) : MetaM Expr := do
     for neg in ni.valids do
       let .forallE _ p (.const ``False []) _ ← whnfD neg.type
         | continue
       for spec in ni.laterSpecs.toArray do
-        for (specProof, specTy) in conjuncts spec.proof spec.type do
-          let (xs, _, body) ← forallMetaTelescope specTy
+        for specProof in ← fieldProofs spec.proof do
+          let (xs, _, body) ← forallMetaTelescope (← inferType specProof)
           if ← isDefEq body p then
             let proof ← instantiateMVars (.app neg.proof (mkAppN specProof xs))
             if !proof.hasMVar then
@@ -1348,6 +1353,12 @@ section NativeComplex
     example (x y : Real) : x + y = y + x := by auto
     set_option auto.checker.buildMode "indirectReduce_reflection" in
     example (z w : Complex) : (z + w).re = z.re + w.re := by auto
+    -- Without the verified checker, the characterizations are proved by the proofs
+    --   `lean-auto` finds for them
+    example (x y : Real) : x + y = y + x := by mononative
+    example (x y : Real) : x - y = x + -y := by mononative
+    example (z w : Complex) : (z + w).re = z.re + w.re := by mononative
+    example (z : Complex) : Complex.mk z.re z.im = z := by mononative
   end
 
   -- Characterizations are offered for the later-declared types occurring in
