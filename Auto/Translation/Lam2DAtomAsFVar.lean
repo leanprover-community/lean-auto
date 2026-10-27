@@ -18,6 +18,7 @@ initialize
   registerTraceClass `auto.lam2D
   registerTraceClass `auto.lam2D.printInhs
   registerTraceClass `auto.lam2D.printHyps
+  registerTraceClass `auto.lam2D.printLaterSpecs
   registerTraceClass `auto.lam2D.printProof
 
 /-
@@ -174,17 +175,43 @@ def withAll
   return (ss, ts, lemmas, inhLemmas)
 
 /--
+  Add the characterizations of later-declared types into the local context as free
+    variables. Returns the `λ` terms of the characterizations and their free variables
+-/
+def withLaterSpecs (laterSpecsWithDTr : LaterSpecInterface (REntry × DTr)) :
+  ExternM (Array LamTerm × Array FVarId × LaterSpecInterface Lemma) := do
+  let laterSpecs ← laterSpecsWithDTr.mapM (fun (re, dtr) => do
+    let .valid [] t := re
+      | throwError "{decl_name%} :: {re} is not a `valid` entry"
+    let #[spec] ← withTranslatedLamTerms #[t]
+      | throwError "{decl_name%} :: Unexpected error"
+    if !(← runMetaM <| Meta.isTypeCorrect spec) then
+      throwError "{decl_name%} :: Malformed characterization {spec}"
+    let spec ← runMetaM <| Core.betaReduce spec
+    trace[auto.lam2D.printLaterSpecs] "{spec}"
+    let #[fvar] ← withHyps #[spec]
+      | throwError "{decl_name%} :: Unexpected error"
+    let lem : Lemma := ⟨⟨.fvar fvar, spec, dtr⟩, #[]⟩
+    return (t, fvar, lem))
+  let entries := laterSpecs.toArray
+  return (entries.map (·.1), entries.map (·.2.1), laterSpecs.map (·.2.2))
+
+/--
   Calling external prover with type atoms, atoms, etoms, inhabitation facts
-  and lemmas as free variables
+  and lemmas as free variables. Each characterization of later-declared types
+  in `laterSpecsWithDTr` is a free variable too, and is treated as a lemma
+  when it is used
 
   Note that `MetaState.withTemporaryLCtx` is used to isolate the prover from the
   current local context. This is necessary because `lean-auto` assumes that the prover
   does not use free variables introduced during monomorphization
 -/
 def callNativeWithAtomAsFVar
-  (nonemptiesWithDTr : Array (REntry × DTr)) (validsWithDTr : Array (REntry × DTr)) (prover : NativeInterface Lemma → MetaM Expr) :
+  (nonemptiesWithDTr : Array (REntry × DTr)) (validsWithDTr : Array (REntry × DTr))
+  (laterSpecsWithDTr : LaterSpecInterface (REntry × DTr)) (prover : NativeInterface Lemma → MetaM Expr) :
   ExternM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := MetaState.withTemporaryLCtx {} {} <| do
   let (ss, ts, lemmas, inhLemmas) ← withAll nonemptiesWithDTr validsWithDTr
+  let (specTs, specFVars, laterSpecs) ← withLaterSpecs laterSpecsWithDTr
   let getFid (lem : Lemma) : ExternM FVarId := do
     match lem.proof with
     | .fvar id => return id
@@ -200,9 +227,11 @@ def callNativeWithAtomAsFVar
     -- It is important to add `Meta.withNewMCtxDepth`, otherwise exprmvars
     --   or levelmvars of the current level will be assigned, and we'll
     --   get weird proof reconstruction error
-    let mut expr ← Meta.withNewMCtxDepth <| prover { valids := lemmas, nonempties := inhLemmas }
+    let mut expr ← Meta.withNewMCtxDepth <| prover { valids := lemmas, nonempties := inhLemmas, laterSpecs }
     let mut usedHyps := []
-    for (fvar, re_t) in (hypFVars.zip ((validsWithDTr.map Prod.fst).zip ts)).reverse do
+    let hypREntries := validsWithDTr.map Prod.fst ++ laterSpecsWithDTr.toArray.map Prod.fst
+    let hyps := (hypFVars ++ specFVars).zip (hypREntries.zip (ts ++ specTs))
+    for (fvar, re_t) in hyps.reverse do
       if expr.hasAnyFVar (· == fvar) then
         expr ← Meta.mkLambdaFVars #[.fvar fvar] expr
         usedHyps := re_t :: usedHyps

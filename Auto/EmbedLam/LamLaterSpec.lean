@@ -274,4 +274,51 @@ theorem LamThmValid.complexExtSpec :
 | .pow, h => LamThmValid.ofInterpAsProp _ _ rfl ⟨h.left, fun z n => h.right z n.down⟩ rfl
 | .re, _ | .im, _ | .mk, _ => LamThmValid.ofInterpAsProp _ _ rfl True.intro rfl
 
+/-- The characterization of the core constants of `t` -/
+def LaterType.coreSpec : LaterType → LamTerm
+| .real    => LamTerm.realCoreSpec
+| .complex => LamTerm.complexCoreSpec
+
+/-- The characterization of `lc`, if `lc` is not a core constant -/
+def LaterConst.extSpec : LaterConst → LamTerm
+| .real rc    => LamTerm.realExtSpec rc
+| .complex cc => LamTerm.complexExtSpec cc
+
 end Auto.Embedding.Lam
+
+namespace Auto
+
+open Embedding.Lam
+
+/--
+  Characterizations of the constants of later-declared types, one field for each kind of
+    characterization the verified checker can produce (see `FactStep`). This is used when
+    `lean-auto` sends facts to provers, e.g. in `NativeInterface`
+-/
+structure LaterSpecInterface (α : Type u) where
+  /-- The characterization of the core constants of `Real` (see `RealInterpUnlifted.CoreSpec`) -/
+  realCore    : Option α                 := .none
+  /-- The characterizations of the other constants of `Real` (see `RealInterpUnlifted.extProp`) -/
+  realExt     : Array (RealConst × α)    := #[]
+  /-- The characterization of the core constants of `Complex` (see `ComplexInterpUnlifted.CoreSpec`) -/
+  complexCore : Option α                 := .none
+  /-- The characterizations of the other constants of `Complex` (see `ComplexInterpUnlifted.extProp`) -/
+  complexExt  : Array (ComplexConst × α) := #[]
+
+/-- All the characterizations in `ls` -/
+def LaterSpecInterface.toArray (ls : LaterSpecInterface α) : Array α :=
+  ls.realCore.toArray ++ ls.realExt.map Prod.snd ++ ls.complexCore.toArray ++ ls.complexExt.map Prod.snd
+
+def LaterSpecInterface.mapM {m : Type u → Type v} [Monad m] (f : α → m β) (ls : LaterSpecInterface α) :
+  m (LaterSpecInterface β) := do
+  return {
+    realCore    := ← ls.realCore.mapM f
+    realExt     := ← ls.realExt.mapM fun (rc, a) => return (rc, ← f a)
+    complexCore := ← ls.complexCore.mapM f
+    complexExt  := ← ls.complexExt.mapM fun (cc, a) => return (cc, ← f a)
+  }
+
+def LaterSpecInterface.map (f : α → β) (ls : LaterSpecInterface α) : LaterSpecInterface β :=
+  Id.run (ls.mapM (pure ∘ f))
+
+end Auto

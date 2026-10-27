@@ -983,6 +983,34 @@ section CheckerUtils
     ret := ret.append (← iteSorts.toArray.mapM iteSpec)
     return ret
 
+  /--
+    The characterizations of the constants of later-declared types that are available
+      in the valuation, for the later-declared types whose sorts occur in `vs` and the
+      later-declared types they depend on. The checker steps producing them are only
+      evaluated, so the entries are not added to the `RTable`
+  -/
+  def laterSpecs (vs : Array REntry) : ReifM (LaterSpecInterface REntry) := do
+    let mut types := LaterType.all.filter fun t => vs.any (·.containsSort (.base (.later t)))
+    -- `LaterType.all` lists each later-declared type after the ones it depends on
+    for t in LaterType.all.reverse do
+      if types.contains t then
+        types := types ++ t.deps.filter (!types.contains ·)
+    let lsa := (← getLaterInfo).specAvail
+    let entry? (fs : FactStep) : Option REntry :=
+      match fs.eval lsa with
+      | .addEntry re => .some re
+      | _ => .none
+    let mut ls : LaterSpecInterface REntry := {}
+    if types.contains .real then
+      ls := { ls with
+        realCore := entry? .realCoreSpec
+        realExt := RealConst.all.toArray.filterMap fun rc => (entry? (.realExtSpec rc)).map (rc, ·) }
+    if types.contains .complex then
+      ls := { ls with
+        complexCore := entry? .complexCoreSpec
+        complexExt := ComplexConst.all.toArray.filterMap fun cc => (entry? (.complexExtSpec cc)).map (cc, ·) }
+    return ls
+
 end CheckerUtils
 
 /--

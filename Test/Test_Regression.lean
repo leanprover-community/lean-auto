@@ -1297,6 +1297,82 @@ section NativeComplex
 
   run_meta checkSpecFactStep (.complexExtSpec .add) (.complexExtSpec .add) `Complex.addSpecTest
 
+  open Lean in
+  /-- Proofs of the conjuncts of `ty`, given `proof : ty` -/
+  def conjuncts (proof ty : Expr) : Array (Expr × Expr) :=
+    match ty with
+    | .app (.app (.const ``And []) a) b =>
+      conjuncts (mkApp3 (.const ``And.left []) a b proof) a ++ conjuncts (mkApp3 (.const ``And.right []) a b proof) b
+    | _ => #[(proof, ty)]
+
+  open Lean Meta Auto in
+  /--
+    A native prover that closes a negated goal `¬ P` among the regular facts with a
+      conjunct `∀ xs, P'` of a characterization of later-declared types
+  -/
+  def specProver (ni : NativeInterface Lemma) : MetaM Expr := do
+    for neg in ni.valids do
+      let .forallE _ p (.const ``False []) _ ← whnfD neg.type
+        | continue
+      for spec in ni.laterSpecs.toArray do
+        for (specProof, specTy) in conjuncts spec.proof spec.type do
+          let (xs, _, body) ← forallMetaTelescope specTy
+          if ← isDefEq body p then
+            let proof ← instantiateMVars (.app neg.proof (mkAppN specProof xs))
+            if !proof.hasMVar then
+              return proof
+    throwError "specProver :: No characterization closes the goal"
+
+  open Lean Auto in
+  /-- Behaves like `emulateNative` if the characterizations offered satisfy `p` -/
+  def checkSpecsProver (p : LaterSpecInterface Lemma → Bool) (ni : NativeInterface Lemma) : MetaM Expr := do
+    if !p ni.laterSpecs then
+      throwError "checkSpecsProver :: Unexpected characterizations {ni.laterSpecs.toArray}"
+    Solver.Native.emulateNative ni
+
+  def noSpecsProver := checkSpecsProver (·.toArray.isEmpty)
+
+  def realCoreProver := checkSpecsProver (·.realCore.isSome)
+
+  -- The kernel checks the characterizations used by the native prover
+  section
+    set_option auto.smt false
+    set_option auto.native true
+    attribute [local rebind Auto.Native.solverFunc] specProver
+
+    example (x y : Real) : x + y = y + x := by auto
+    example (x y : Real) : x - y = x + -y := by auto
+    example (z w : Complex) : (z + w).re = z.re + w.re := by auto
+    example (z : Complex) : Complex.mk z.re z.im = z := by auto
+    set_option auto.checker.buildMode "indirectReduce" in
+    example (x y : Real) : x + y = y + x := by auto
+    set_option auto.checker.buildMode "indirectReduce_reflection" in
+    example (z w : Complex) : (z + w).re = z.re + w.re := by auto
+  end
+
+  -- Characterizations are offered for the later-declared types occurring in
+  --   the facts, and for the later-declared types they depend on
+  section
+    set_option auto.smt false
+    set_option auto.native true
+
+    section
+      attribute [local rebind Auto.Native.solverFunc] noSpecsProver
+      example (n m : Nat) (h : n + m = m + n) : n + m = m + n := by auto [h]
+      example (x y : Real) (h : x + y = y + x) : x + y = y + x := by
+        fail_if_success auto [h]
+        exact h
+    end
+
+    section
+      attribute [local rebind Auto.Native.solverFunc] realCoreProver
+      example (z w : Complex) (h : z + w = w + z) : z + w = w + z := by auto [h]
+      example (n m : Nat) (h : n + m = m + n) : n + m = m + n := by
+        fail_if_success auto [h]
+        exact h
+    end
+  end
+
 end NativeComplex
 
 

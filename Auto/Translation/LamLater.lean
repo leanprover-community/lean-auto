@@ -3,6 +3,7 @@ module
 public import Lean
 public import Auto.Translation.LamUtils
 public import Auto.EmbedLam.LamBVarOp
+public import Auto.EmbedLam.LamLaterSpec
 
 public section
 
@@ -374,36 +375,53 @@ private def LaterInfo.addSpecs (li : LaterInfo) (t : LaterType) (interp : Expr) 
       catch err =>
         trace[auto.lamLater] "{decl_name%} :: `{stx}` does not prove `{field}` for `{ty}`: {err.toMessageData}"
     return .none
+  -- A characterization is only made available if the constants it mentions are recognized,
+  --   so that its translation by `Lam2D` agrees with the valuation
+  let unrecognized (spec : LamTerm) : List String :=
+    (LamExportUtils.collectLamTermLaterConsts spec).toList.filter (!li.consts.contains ·) |>.map (·.reprAux)
   let mut li := li
   -- The core constants, as a whole
   let (coreCtor, coreFields) ← specFields coreName interpNames coreParams
+  let coreUnrecognized := unrecognized t.coreSpec
   let mut coreProofs := #[]
   let mut coreFailed := #[]
-  for (field, _, stmt) in coreFields do
-    match ← prove field stmt with
-    | .some proof => coreProofs := coreProofs.push proof
-    | .none => coreFailed := coreFailed.push field
-  if coreFailed.isEmpty then
-    li := { li with coreSpecs := li.coreSpecs.insert t (mkAppN coreCtor (coreParams ++ coreProofs)) }
+  if coreUnrecognized.isEmpty then
+    for (field, _, stmt) in coreFields do
+      match ← prove field stmt with
+      | .some proof => coreProofs := coreProofs.push proof
+      | .none => coreFailed := coreFailed.push field
+    if coreFailed.isEmpty then
+      li := { li with coreSpecs := li.coreSpecs.insert t (mkAppN coreCtor (coreParams ++ coreProofs)) }
   -- The other constants, each with an optional proof
   let (extCtor, extFields) ← specFields extName interpNames extParams
   let mut extArgs := #[]
   let mut extFailed := #[]
+  let mut extUnrecognized := #[]
   for (field, stmt, _) in extFields do
     let .app (.const ``Option optLvls) plift@(.app (.const ``PLift pliftLvls) p) := stmt
       | throwError "{decl_name%} :: Field `{field}` of `{extName}` is not of the form `Option (PLift _)`"
+    let .some lc := t.consts.find? (·.specField == field)
+      | throwError "{decl_name%} :: Field `{field}` of `{extName}` does not correspond to a constant of `{ty}`"
+    let noneArg := mkApp (.const ``Option.none optLvls) plift
+    if !(unrecognized lc.extSpec).isEmpty then
+      extArgs := extArgs.push noneArg
+      extUnrecognized := extUnrecognized.push field
+      continue
     -- `p` is e.g. `ri.extProp rc`
     let reducedP ← reduceInterpProjs interpNames (← Meta.whnfD p)
     if let .some proof ← prove field reducedP then
       let proof := mkApp2 (.const ``PLift.up pliftLvls) p proof
       extArgs := extArgs.push (mkApp2 (.const ``Option.some optLvls) plift proof)
-      if let .some lc := t.consts.find? (·.specField == field) then
-        li := { li with extAvail := li.extAvail.insert lc }
+      li := { li with extAvail := li.extAvail.insert lc }
     else
-      extArgs := extArgs.push (mkApp (.const ``Option.none optLvls) plift)
+      extArgs := extArgs.push noneArg
       extFailed := extFailed.push field
   li := { li with extSpecs := li.extSpecs.insert t (mkAppN extCtor (extParams ++ extArgs)) }
-  trace[auto.lamLater] "Characterizations of `{ty}`: core constants {if coreFailed.isEmpty then m!"proved" else m!"not proved, failed: {coreFailed.toList}"}; other constants not proved: {extFailed.toList}"
+  let coreMsg :=
+    if !coreUnrecognized.isEmpty then m!"not available, mentions constants that are not recognized: {coreUnrecognized}"
+    else if coreFailed.isEmpty then m!"proved"
+    else m!"not proved, failed: {coreFailed.toList}"
+  trace[auto.lamLater] "Characterizations of `{ty}`: core constants {coreMsg}; other constants not proved: {extFailed.toList}; other constants whose characterizations mention constants that are not recognized: {extUnrecognized.toList}"
   return li
 
 /-- Recognize `t` and the canonical forms of its constants from the environment -/
@@ -434,8 +452,6 @@ private def LaterInfo.add (li : LaterInfo) (t : LaterType) : MetaM LaterInfo := 
   let elems := (t.deps.push t).filterMap li.elems.get?
   let interp := t.mkInterp canons elems
   li := { li with interps := li.interps.insert t interp }
-  if auto.lamLater.spec.get (← getOptions) then
-    li ← li.addSpecs t interp
   let mut forms := #[]
   let mut missing := #[]
   for (lc, e?) in t.consts.zip canons do
@@ -445,6 +461,9 @@ private def LaterInfo.add (li : LaterInfo) (t : LaterType) : MetaM LaterInfo := 
       forms := forms.push (⟨e, eTy, .base (.lcst lc)⟩, lc.reprAux)
     else
       missing := missing.push lc.reprAux
+  -- After the constants are recognized, see `LaterInfo.addSpecs`
+  if auto.lamLater.spec.get (← getOptions) then
+    li ← li.addSpecs t interp
   for (mkCanon, term) in t.derivedForms do
     -- Derived forms are recognized only if the constants they mention are recognized
     if let .some lc := (LamExportUtils.collectLamTermLaterConsts term).toArray.find? (!li.consts.contains ·) then

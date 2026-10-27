@@ -1103,6 +1103,7 @@ def InferenceStep.evalValidOfBVarLowers (r : RTable) (lctx : List LamSort) (pns 
 | .complexExtSpec cc =>
   if lsa.complexExt.contains cc then .addEntry (.valid [] (LamTerm.complexExtSpec cc)) else .fail
 
+
 @[reducible] def InferenceStep.eval (lvt lit : Nat → LamSort) (r : RTable) : (cs : InferenceStep) → EvalResult
 | .validOfBVarLower pv pn =>
   match r.getValid pv with
@@ -2539,3 +2540,20 @@ def RTableStatus.findPos? (rs : RTableStatus) (re : REntry) :=
   | .valid lctx t => rs.validMap.get? (lctx, t)
 
 end Auto.Embedding.Lam
+
+namespace Auto
+
+open Embedding.Lam
+
+/--
+  Pair each characterization in `ls` with the checker step producing it,
+    which is determined by the field the characterization is in
+-/
+def LaterSpecInterface.withSteps (ls : LaterSpecInterface α) : LaterSpecInterface (FactStep × α) := {
+  realCore    := ls.realCore.map (.realCoreSpec, ·)
+  realExt     := ls.realExt.map fun (rc, a) => (rc, (.realExtSpec rc, a))
+  complexCore := ls.complexCore.map (.complexCoreSpec, ·)
+  complexExt  := ls.complexExt.map fun (cc, a) => (cc, (.complexExtSpec cc, a))
+}
+
+end Auto
