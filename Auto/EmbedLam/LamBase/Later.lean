@@ -1122,8 +1122,9 @@ def LaterConst.LamWF.ofCheck (H : l.lamCheck = s) : LamWF l s := by
 
 /--
   Interpretation of the constants associated with each later-declared type, with the
-    available characterizations of the constants (see `RealInterpUnlifted.CoreSpec`
-    and `RealInterpUnlifted.ExtSpec`)
+    available characterizations of the constants (see `RealInterpUnlifted.CoreSpec`,
+    `RealInterpUnlifted.ExtSpec`, `ComplexInterpUnlifted.CoreSpec` and
+    `ComplexInterpUnlifted.ExtSpec`)
 -/
 structure LaterVal (later : LaterType → Type u) where
   real     : RealInterp (later .real)

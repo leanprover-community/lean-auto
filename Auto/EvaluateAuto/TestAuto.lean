@@ -244,8 +244,8 @@ def leanFileLinesCallingRunAutoOnConsts
     "import Duper.Tactic",
     "open Lean Auto EvalAuto",
     "",
-    "def Auto.duperRaw (lemmas : Array Lemma) (inhs : Array Lemma) : MetaM Expr := do",
-    "  let lemmas : Array (Expr × Expr × Array Name × Bool) ← lemmas.mapM",
+    "def Auto.duperRaw (ni : NativeInterface Lemma) : MetaM Expr := do",
+    "  let lemmas : Array (Expr × Expr × Array Name × Bool) ← ni.valids.mapM",
     "    (fun ⟨⟨proof, ty, _⟩, _⟩ => do return (ty, ← Meta.mkAppM ``eq_true #[proof], #[], true))",
     "  Duper.runDuper lemmas.toList [] 0",
     "",
@@ -329,6 +329,9 @@ where
         evaluateFilesHandle.putStrLn s!"{idx} : {retCode}"
         evaluateFilesHandle.flush
       | .none => running' := running'.push (idx, proc)
+    -- Avoid busy-waiting when no process has finished
+    if running'.size == running.size then
+      IO.sleep 100
     return running'
   evalFile (names : Array Name) (config : EvalAutoConfig) : String :=
     let pre := imports.map (fun name => s!"import {name}")
@@ -361,7 +364,7 @@ def readEATAEvaluateFiles (config : EvalAutoAsyncConfig) : CoreM (Array Nat × A
   let mut retEnd := #[]
   for line in lines do
     if line.contains ':' then
-      let [idx, retCode] := line.splitOn ":"
+      let [idx, retCode] := line.splitOn " : "
         | throwError "{decl_name%} :: Unexpected line format, line content : `{line}`"
       let (.some idx, .some retCode) := (idx.toNat?, retCode.toNat?)
         | throwError "{decl_name%} :: Unexpected line format, line content : `{line}`"

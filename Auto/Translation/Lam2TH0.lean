@@ -33,7 +33,7 @@ def lam2TH0 (lamVarTy : Array LamSort) (lamEVarTy : Array LamSort) (facts : Arra
     icHs.toList.map (fun ic => s!"thf(typedecl_icst_{transIntConst ic}, type, {transIntConst ic}: {transIntConstSort ic}).") ++
     qcHs.toList.map (fun qc => s!"thf(typedecl_qcst_{transRatConst qc}, type, {transRatConst qc}: {transRatConstSort qc}).") ++
     scHs.toList.map (fun sc => s!"thf(typedecl_icst_{transStringConst sc}, type, {transStringConst sc}: {transStringConstSort sc}).") ++
-    bvHs.toList.map (fun bvc => s!"thf(typedecl_bv{transBitVecConst bvc}, type, t_bv{transBitVecConst bvc}: {transBitVecConstSort bvc}).") ++
+    bvHs.toList.map (fun bvc => s!"thf(typedecl_{transBitVecConst bvc}, type, {transBitVecConst bvc}: {transBitVecConstSort bvc}).") ++
     lcHs.toList.map (fun lc => s!"thf(typedecl_lcst_{transLaterConst lc}, type, {transLaterConst lc}: {transLaterConstSort lc}).") ++
      (← termHs.toList.mapM (fun i => do
       let .some s := lamVarTy[i]?

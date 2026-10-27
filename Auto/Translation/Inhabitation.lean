@@ -138,7 +138,7 @@ where
   canonicalizeAtomic (inhTy : Expr) (atomTys : Array Expr) : MetaM Expr := do
     for a in atomTys do
       if (← Meta.withNewMCtxDepth (Meta.isDefEq inhTy a)) then
-        return inhTy
+        return a
     throwError "{decl_name%} :: Unable to canonicalize {inhTy}"
 
 end Auto.Inhabitation

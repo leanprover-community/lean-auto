@@ -482,10 +482,14 @@ theorem LamTerm.maxEVarSucc_bvarLower?
   LamTerm.maxEVarSucc_bvarLowersIdx? heq
 
 def getILSortString : LamBaseTerm → String
-| .eq s      => s!"{s}"
-| .forallE s => s!"{s}"
-| .existE s  => s!"{s}"
-| .ite s     => s!"{s}"
+| .eq s       => s!"{s}"
+| .forallE s  => s!"{s}"
+| .existE s   => s!"{s}"
+| .ite s      => s!"{s}"
+| .eqI n      => s!"ILTy {n}"
+| .forallEI n => s!"ILTy {n}"
+| .existEI n  => s!"ILTy {n}"
+| .iteI n     => s!"ILTy {n}"
 | _ => "❌"
 
 -- Unfortunately, we have to define `bvarLift` before defining `toStringLCtx`
@@ -519,7 +523,7 @@ partial def LamTerm.toStringLCtx (lctx : Nat) : LamTerm → String
           | .lam s t => s!"({b} x{lctx} : {s}, {toStringLCtx (.succ lctx) t})"
           | arg =>
             let arg's := toStringLCtx (.succ lctx) arg.bvarLift
-            s!"({b}x{lctx} : {getILSortString b}, {arg's} x{lctx})"
+            s!"({b} x{lctx} : {getILSortString b}, {arg's} x{lctx})"
         | false =>
           match b with
           | .icst .iabs => s!"|{toStringLCtx lctx arg}|ᵢ"

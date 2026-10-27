@@ -343,7 +343,7 @@ where
     let tr := ((line.takeWhile (fun c => c != ']')).split ", ").toStringArray
     let tr : Array (Result × Nat × Nat) ← tr.mapM (fun s => do
       let [sr, st, sh] := s.splitOn " "
-        | throwError "s!{decl_name%} :: In file {fileName}, {s} is not of the form `<result> <time> <heartbeats>`"
+        | throwError "{decl_name%} :: In file {fileName}, {s} is not of the form `<result> <time> <heartbeats>`"
       match Result.ofConcise? sr, String.toNat? st, String.toNat? sh with
       | .some r, .some t, .some h => return (r, t, h)
       | _, _, _ => throwError s!"{decl_name%} :: In file {fileName}, {s} is not of the form `<result> <time> <heartbeats>`")
@@ -426,6 +426,9 @@ where
         evaluateFilesHandle.putStrLn s!"{mm} : {retCode}"
         evaluateFilesHandle.flush
       | .none => running' := running'.push (mm, proc)
+    -- Avoid busy-waiting when no process has finished
+    if running'.size == running.size then
+      IO.sleep 100
     return running'
   evalFile
     (mm : Name) (validThms : Array Name)

@@ -55,7 +55,7 @@ def smtSymbolToLeanName (s : String) : List (Name × SymbolInput) :=
   | "and" => [(``And, LeftAssocAllProp), (``and, LeftAssocAllBool)]
   | "not" => [(``Not, UnaryProp), (``not, UnaryBool)]
   | "=" => [(``Eq, TwoExactEq)]
-  | "ite" => [(``Ite, Ite)]
+  | "ite" => [(``ite, Ite)]
   | _ => []
 
 def builtInSymbolMap : Std.HashMap String Expr :=
@@ -78,7 +78,7 @@ def builtInSymbolMap : Std.HashMap String Expr :=
   let map := map.insert "and" (mkConst ``And)
   let map := map.insert "not" (mkConst ``Not)
   let map := map.insert "=" (mkConst ``Eq)
-  let map := map.insert "ite" (mkConst ``Ite)
+  let map := map.insert "ite" (mkConst ``ite)
   map
 
 /-- Given an expression `∀ x1 : t1, x2 : t2, ... xn : tn, b`, returns `[t1, t2, ..., tn]`. If the given expression is not

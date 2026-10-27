@@ -123,9 +123,9 @@ inductive ERE where
   | star     : ERE → ERE
   -- Repeat exactly `n` times
   | repN     : ERE → (n : Nat) → ERE
-  -- Repeat at most `n` times
-  | repGe    : ERE → (n : Nat) → ERE
   -- Repeat at least `n` times
+  | repGe    : ERE → (n : Nat) → ERE
+  -- Repeat at most `n` times
   | repLe    : ERE → (n : Nat) → ERE
   -- Repeat at least `n` times and at most `m` times
   | repGeLe  : ERE → (n : Nat) → (m : Nat) → ERE

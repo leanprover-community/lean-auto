@@ -103,7 +103,7 @@ def withTermAtomsAsFVar (atoms : Array Nat) : ExternM Unit :=
 def withEtomsAsFVar (etoms : Array Nat) : ExternM Unit :=
   for etom in etoms do
     if (← getEtomFVars).contains etom then
-      return
+      continue
     let .some s := (← getLamEVarTy)[etom]?
       | throwError "{decl_name%} :: Unknown etom {etom}"
     let sinterp ← Lam2D.interpLamSortAsUnlifted (← getTypeAtomFVars) s

@@ -10,8 +10,8 @@ import Auto.Tactic
 import Duper.Tactic
 
 open Lean Auto in
-def Auto.duperRaw (lemmas : Array Lemma) (inhs : Array Lemma) : MetaM Expr := do
-  let lemmas : Array (Expr × Expr × Array Name × Bool) ← lemmas.mapM
+def Auto.duperRaw (ni : NativeInterface Lemma) : MetaM Expr := do
+  let lemmas : Array (Expr × Expr × Array Name × Bool) ← ni.valids.mapM
     (fun ⟨⟨proof, ty, _⟩, _⟩ => do return (ty, ← Meta.mkAppM ``eq_true #[proof], #[], true))
   Duper.runDuper lemmas.toList [] 0
 
@@ -33,9 +33,9 @@ Type **"auto 👍"** to test whether auto is set up.
   * ``d[<ident>,*]``: Add definitional equality related to identifiers
 * The file ``Test/Test_Regression.lean`` in this repo contains working examples of usages of ``lean-auto``. Note that the ``native`` mode in ``Test/Test_Regression`` uses a dummy native solver, but this is only for testing. In real use cases, you should replace the dummy solver with a native theorem prover such as ``duper``. See below for detailed instructions.
 * Currently, auto supports
-  * SMT solver invocation: ``set_option auto.smt true``, but without proof reconstruction. Make sure that SMT solvers are installed, and that ``auto.smt.solver.name`` is correctly set. If you want to try 
+  * SMT solver invocation: ``set_option auto.smt true``, but without proof reconstruction. Make sure that SMT solvers are installed, and that ``auto.smt.solver.name`` is correctly set.
   * TPTP solver invocation: ``set_option auto.tptp true``, but without proof reconstruction.
-    * Currently, we only support the TPTP solver ``zipperposition``
+    * Currently, we support the TPTP solvers ``zipperposition`` (also in its portfolio mode), ``eprover-ho`` and ``vampire``
     * To use the raw ``zipperposition`` executable, use ``set_option auto.tptp.solver.name "zipperposition"``. The executable will be automatically downloaded when `lean-auto` is built.
     * To use the advanced ``zipperposition`` portfolio mode, use ``set_option auto.tptp.solver.name zeport-lams`` or ``set_option auto.tptp.solver.name zeport-fo``. You need to obtain the source code of ``zipperposition`` and make sure that ``auto.tptp.zeport.path`` points to the correct python script that runs ``zipperposition`` with the portfolio mode, presumably in the ``portfolio`` folder of the source code of zipperposition.
   * Proof search by native prover. Assume your native prover is a `lean` repository that has `lean-auto` as dependency. To enable proof search by native prover, use ``set_option auto.native true``, and use ``attribute [rebind Auto.Native.solverFunc] <solve_interface>`` to bind `lean-auto` to the interface of the solver, which should be a Lean constant of type ``NativeInterface Lemma → MetaM Expr``. Besides the regular facts (``valids``) and inhabitation facts (``nonempties``), the ``NativeInterface`` contains the characterizations of the constants of later-declared types such as ``Real`` and ``Complex`` (``laterSpecs``), and the characterizations of the mutual blocks of inductive types (``indSpecs``).

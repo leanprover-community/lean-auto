@@ -29,12 +29,12 @@ inductive REntry where
   --   validEVar0 from `ImportTable`
   | valid      : List LamSort → LamTerm → REntry
   | nonempty   : LamSort → REntry
-  deriving Inhabited, Hashable, BEq, Lean.ToExpr
+  deriving Inhabited, Hashable, Lean.ToExpr
 
 def REntry.repr : REntry → String
 | .wf ss s t => s!"Auto.Embedding.Lam.REntry.wf {reprPrec ss 1} {reprPrec s 1} {reprPrec t 1}"
 | .valid ss t => s!"Auto.Embedding.Lam.REntry.valid {reprPrec ss 1} {reprPrec t 1}"
-| .nonempty s => s!"Audo.Embedding.Lam.REntry.nonempty {reprPrec s 1}"
+| .nonempty s => s!"Auto.Embedding.Lam.REntry.nonempty {reprPrec s 1}"
 
 instance : Repr REntry where
   reprPrec := fun re _ => re.repr
@@ -532,7 +532,7 @@ inductive FactStep where
 inductive InferenceStep where
   /--
     If `t` has no loose bvar `0` and `s` is inhabited (pn), then
-    `∀ (_ : s), t` (pv) implies `LamTerm.instantiate1 (.atom 0) t`
+    `valid (s :: lctx) t` (pv) implies `valid lctx (t.bvarLower)`
   -/
   | validOfBVarLower (pv : Nat) (pn : Nat) : InferenceStep
   /-- Equivalent to repeated `validOfBVarLower` -/
@@ -2349,14 +2349,10 @@ def RTable.runEvalResult (r : RTable) (n : Nat) : EvalResult → RTable
 
 /--
   The first `ChkStep` specifies the checker step
-  The second `Nat` specifies the position to insert the resulting term
-  Note that
-    1. All entries `(x : ChkStep × Nat)` that insert result into the
-       `wf` table should have distinct second component
-    2. All entries `(x : ChkStep × Nat)` that insert result into the
-       `valid` table should have distinct second component
-  Note that we decide where (`wf` or `valid`) to insert the resulting
-    term by looking at `(c : ChkStep).eval`
+  The second `Nat` specifies the position to insert the resulting entry
+  Note that all entries `(x : ChkStep × Nat)` should have distinct second
+    components, because the resulting `wf`, `valid` and `nonempty` entries
+    are all inserted into the same table `RTable.entries`
 -/
 abbrev ChkSteps := BinTree (ChkStep × Nat)
 

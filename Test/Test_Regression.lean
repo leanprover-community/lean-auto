@@ -1490,6 +1490,13 @@ section NativeInductive
   example (t : INTree) (h : t = .node []) : t = .node [] := by auto [h]
   example (t : INTree) (h : t = .node []) : t = .node [] := by mononative [h]
 
+  -- `IPF.mk.inj` omits the proof field, whose equation is proved by proof irrelevance
+  structure IPF where
+    x : Nat
+    h : True
+
+  example (s : IPF) (h : s.x = 1) : s.x = 1 := by auto [h]
+
   open Lean Meta Auto in
   /--
     A native prover that closes a negated goal `¬ P` among the regular facts with a

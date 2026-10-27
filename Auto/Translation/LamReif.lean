@@ -997,7 +997,7 @@ section CheckerUtils
 
   /--
     The characterizations of the constants of later-declared types that are available
-      in the valuation, for the later-declared types whose sorts occur in `vs` and the
+      in the valuation, for the later-declared types whose sorts occur in `ts` and the
       later-declared types they depend on. The checker steps producing them are only
       evaluated, so the entries are not added to the `RTable`
   -/

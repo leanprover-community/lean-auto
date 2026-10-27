@@ -372,7 +372,8 @@ open LamReif Embedding.Lam in
   Here
   · `[v₀, v₁, ⋯, vᵤ₋₁]` is a subsequence of `[s₀, s₁, ⋯, sᵤ₋₁]`
   · `[w₀, w₁, ⋯, wₗ₋₁]` is a subsequence of `[t₀, t₁, ⋯, kₖ₋₁]`, followed by
-    the characterizations of later-declared types used by the prover
+    the characterizations of later-declared types and of mutual blocks of
+    inductive types used by the prover
   · `etoms` are all the etoms present in `w₀ → w₁ → ⋯ → wₗ₋₁ → ⊥`
 
   The characterizations in `facts.laterSpecs` are offered to the prover, the ones of the core
@@ -706,7 +707,8 @@ def monoInterface
     let exportFacts ← LamReif.reifFacts uvalids
     let _ ← LamReif.reifInhabitations uinhs
     let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map Prod.fst
-    let indBlocks ← LamReif.reifMutInds minds
+    -- Inductive types are only reified for their characterizations
+    let indBlocks ← if auto.indSpec.get (← getOptions) then LamReif.reifMutInds minds else pure #[]
     LamReif.printValuation
     let laterSpecs ← LamReif.laterSpecs exportFacts
     let indSpecs ← LamReif.indSpecs indBlocks
@@ -731,7 +733,8 @@ def runNativeProverWithAuto
     let exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
     let _ ← LamReif.reifInhabitations uinhs
     let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map Prod.fst
-    let indBlocks ← LamReif.reifMutInds minds
+    -- Inductive types are only reified for their characterizations
+    let indBlocks ← if auto.indSpec.get (← getOptions) then LamReif.reifMutInds minds else pure #[]
     LamReif.printValuation
     let (exportFacts, _) ← LamReif.preprocess exportFacts #[]
     let exportFacts ← LamReif.validTerms exportFacts

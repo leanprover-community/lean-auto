@@ -5,8 +5,9 @@ public import Auto.EmbedLam.LamTermInterp
 @[expose] public section
 
 /-!
-  Characterizations of the constants of later-declared types (see `RealInterpUnlifted.CoreSpec`
-    and `RealInterpUnlifted.ExtSpec`) as `λ` terms, which are valid if the characterizations
+  Characterizations of the constants of later-declared types (see `RealInterpUnlifted.CoreSpec`,
+    `RealInterpUnlifted.ExtSpec`, `ComplexInterpUnlifted.CoreSpec` and
+    `ComplexInterpUnlifted.ExtSpec`) as `λ` terms, which are valid if the characterizations
     are available in the valuation
 -/
 

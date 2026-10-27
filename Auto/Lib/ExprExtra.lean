@@ -27,7 +27,7 @@ def Expr.eraseMData : Expr → Expr
 | .lam name ty body bi => .lam name (eraseMData ty) (eraseMData body) bi
 | .forallE name ty body bi => .forallE name (eraseMData ty) (eraseMData body) bi
 | .letE name type value body nonDep => .letE name (eraseMData type) (eraseMData value) (eraseMData body) nonDep
-| .mdata _ expr => expr
+| .mdata _ expr => eraseMData expr
 | .proj typeName idx struct => .proj typeName idx (eraseMData struct)
 | e => e
 
@@ -346,7 +346,7 @@ meta register_option lazyReduce.logInfo : Bool := {
 
 meta register_option lazyReduce.printTime : Bool := {
   defValue := false
-  descr    := "Whether to print result of #reduce"
+  descr    := "Whether to print the time taken by #lazyReduce"
 }
 
 open Meta in

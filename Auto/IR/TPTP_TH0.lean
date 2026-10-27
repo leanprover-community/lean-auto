@@ -74,7 +74,20 @@ def transStringConst : StringConst → String
 | .strVal s  => "t_strVal_" ++ transString s
 | sc         => "t_" ++ sc.reprAux
 
-def transBitVecConst (bvc : BitVecConst) : String := "t_" ++ bvc.reprAux.replace " " "_"
+/--
+  The name of `bvc` in TPTP, read back by `Parser.TPTP.ident2BitVecConst`. The operators
+    are named by `BVAOp.repr`, `BVCmp.repr` and `BVShOp.repr`, since the `reprAux` of their
+    constructors shows the operators' symbols, which are not valid in TPTP identifiers
+-/
+def transBitVecConst (bvc : BitVecConst) : String :=
+  let name := match bvc with
+    | .bvaOp n op => op.repr n
+    | .bvcmp n cmp => cmp.repr n false
+    | .bvpropcmp n cmp => cmp.repr n true
+    | .bvshOp n shOp => shOp.repr n false
+    | .bvsmtshOp n shOp => shOp.repr n true
+    | bvc => bvc.reprAux
+  "t_" ++ name.replace " " "_"
 
 def transLaterConst : LaterConst → String
 | .real rc => "t_r" ++ rc.reprAux

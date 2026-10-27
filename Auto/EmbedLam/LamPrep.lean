@@ -756,7 +756,7 @@ theorem LamGenConv.not_imp_equiv_and_not? : LamGenConv lval LamTerm.not_imp_equi
   have hequiv := LamEquiv.not_imp_equiv_and_not? wf heq
   have ⟨wf', _⟩ := hequiv; cases (LamWF.unique wf wf').left; exact hequiv
 
-/-- (a = b) ↔ (a ∨ b) ∧ (¬ a ∨ ¬ b) -/
+/-- (a ≠ b) ↔ (a ∨ b) ∧ (¬ a ∨ ¬ b) -/
 def LamTerm.propne? (t : LamTerm) : Option LamTerm :=
   match t with
   | .app _ (.base .not) (.app (.base .prop) (.app _ (.base (.eq _)) lhs) rhs) =>

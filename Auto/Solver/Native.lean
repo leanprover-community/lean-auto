@@ -20,8 +20,8 @@ namespace Auto
 
 /--
   The input of a native prover at various stages during translation.
-  Here `α` and `β` represents `LamSort`s and `LamTerm`s at
-  various stages during translation.
+  Here `α` and `β` represent the regular facts and the inhabitation facts
+  (e.g. `LamTerm`s and `LamSort`s) at various stages during translation.
 -/
 structure NativeInterface (α : Type u) (β : Type u := α) where
   /-- Regular facts -/
@@ -45,8 +45,6 @@ initialize
   registerTraceClass `auto.native.printProof
 
 namespace Auto.Solver.Native
-
-private def nativeFuncExpectedType := Array Lemma → MetaM Expr
 
 private meta unsafe def queryNativeUnsafe (lemmas : NativeInterface Lemma) : MetaM Expr := do
   let nativeFuncCst ← eval_rebind% Auto.Native.solverFunc

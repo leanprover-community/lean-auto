@@ -175,7 +175,7 @@ private def emitReprPrec (c : ConstFamilyCtx) : CommandElabM Unit := do
     def $reprPrecId (x : $tyName:ident) (n : Nat) : Std.Format :=
       match n with
       | 0 => f!"Auto.Embedding.Lam.{$nmStr}.{$reprAuxId x}"
-      | _ + 1 => f!"({$reprAuxId x})")
+      | _ + 1 => f!"(.{$reprAuxId x})")
   elabCommand <| ← `(instance : Repr $tyName:ident where reprPrec := $reprPrecId)
 
 private def emitToString (c : ConstFamilyCtx) : CommandElabM Unit := do

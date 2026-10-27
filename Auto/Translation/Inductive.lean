@@ -155,7 +155,8 @@ mutual
       if ← Meta.isDefEq e e' then
         return
     for tyctor' in val.all do
-      setRecorded ((← getRecorded).insert tyctor' (arr.push (mkAppN (.const tyctor' lvls) args)))
+      let arr' := (← getRecorded).getD tyctor' #[]
+      setRecorded ((← getRecorded).insert tyctor' (arr'.push (mkAppN (.const tyctor' lvls) args)))
     let mutualInductVal ← val.all.mapM (collectSimpleInduct · lvls args)
     for inductval in mutualInductVal do
       for (_, type) in inductval.ctors do

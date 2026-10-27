@@ -375,7 +375,6 @@ def ForallLift.default (β : Sort v') : ForallLift.{v', v, w, imax v' w} β :=
 theorem forallGLift_equiv (p : β → Prop) : (∀ (x : GLift β), p x.down) = (∀ x, p x) := by
   apply propext (Iff.intro ?mp ?mpr) <;> intros h x <;> apply h
 
-set_option pp.universes true
 -- Isomorphic domain, β is the lifted one
 def existLift {α : Sort u} {β : Sort v} (I : IsomType α β)
   (p : β → GLift.{1, x} Prop) :=

@@ -177,6 +177,9 @@ where
         evaluateNamesHandle.putStrLn s!"{idx} : {retCode}"
         evaluateNamesHandle.flush
       | .none => running' := running'.push (idx, proc)
+    -- Avoid busy-waiting when no process has finished
+    if running'.size == running.size then
+      IO.sleep 100
     return running'
 
 /--

@@ -245,13 +245,13 @@ abbrev LamTerm.bvsge (n : Nat) : LamTerm := .flipApp (.base (.bvsle n)) (.base (
 
 abbrev LamTerm.bvsgt (n : Nat) : LamTerm := .flipApp (.base (.bvslt n)) (.base (.bv n)) (.base (.bv n)) (.base .bool)
 
-abbrev LamTerm.bvpropuge (n : Nat) : LamTerm := .flipApp (.base (.bvpropule n)) (.base (.bv n)) (.base (.bv n)) (.base .bool)
+abbrev LamTerm.bvpropuge (n : Nat) : LamTerm := .flipApp (.base (.bvpropule n)) (.base (.bv n)) (.base (.bv n)) (.base .prop)
 
-abbrev LamTerm.bvpropugt (n : Nat) : LamTerm := .flipApp (.base (.bvpropult n)) (.base (.bv n)) (.base (.bv n)) (.base .bool)
+abbrev LamTerm.bvpropugt (n : Nat) : LamTerm := .flipApp (.base (.bvpropult n)) (.base (.bv n)) (.base (.bv n)) (.base .prop)
 
-abbrev LamTerm.bvpropsge (n : Nat) : LamTerm := .flipApp (.base (.bvpropsle n)) (.base (.bv n)) (.base (.bv n)) (.base .bool)
+abbrev LamTerm.bvpropsge (n : Nat) : LamTerm := .flipApp (.base (.bvpropsle n)) (.base (.bv n)) (.base (.bv n)) (.base .prop)
 
-abbrev LamTerm.bvpropsgt (n : Nat) : LamTerm := .flipApp (.base (.bvpropslt n)) (.base (.bv n)) (.base (.bv n)) (.base .bool)
+abbrev LamTerm.bvpropsgt (n : Nat) : LamTerm := .flipApp (.base (.bvpropslt n)) (.base (.bv n)) (.base (.bv n)) (.base .prop)
 
 abbrev LamTerm.bvsmtHshl (n m : Nat) : LamTerm :=
   .lam (.base (.bv n)) (.lam (.base (.bv m)) (.app (.base .nat) (.app (.base (.bv n)) (.base (.bvshl n)) (.bvar 1)) (.app (.base (.bv m)) (.base (.bvtoNat m)) (.bvar 0))))

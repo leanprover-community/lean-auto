@@ -28,7 +28,11 @@ def proveDistinct (stmt : Expr) : MetaM Expr :=
       | throwError "{decl_name%} :: Unexpected statement {stmt}"
     Meta.mkLambdaFVars xs (← Meta.mkNoConfusion body h)
 
-/-- Prove `∀ x₁ ⋯ xₙ y₁ ⋯ yₙ, c x₁ ⋯ xₙ = c y₁ ⋯ yₙ → x₁ = y₁ ∧ ⋯ ∧ xₙ = yₙ` by `c.inj` -/
+/--
+  Prove `∀ x₁ ⋯ xₙ y₁ ⋯ yₙ, c x₁ ⋯ xₙ = c y₁ ⋯ yₙ → x₁ = y₁ ∧ ⋯ ∧ xₙ = yₙ` by `c.inj`.
+    `c.inj` omits the equations of the fields that are proofs, which are proved by
+    proof irrelevance instead
+-/
 def proveInject (stmt : Expr) : MetaM Expr :=
   Meta.forallTelescopeReducing stmt fun xs _ => do
     let .some h := xs.back?
@@ -37,7 +41,22 @@ def proveInject (stmt : Expr) : MetaM Expr :=
       | throwError "{decl_name%} :: Unexpected statement {stmt}"
     let .const ctor _ := (← Meta.whnf lhs).getAppFn
       | throwError "{decl_name%} :: Unexpected statement {stmt}"
-    Meta.mkLambdaFVars xs (← Meta.mkAppM (ctor ++ `inj) #[h])
+    -- `xs` is `x₁ ⋯ xₙ y₁ ⋯ yₙ h`
+    let n := (xs.size - 1) / 2
+    let isProofField ← (xs.extract 0 n).mapM Meta.isProof
+    let numData := (isProofField.filter (!·)).size
+    let dataEqs ←
+      if numData == 0 then pure #[]
+      else Meta.mkAndProjN (← Meta.mkAppM (ctor ++ `inj) #[h]) numData
+    let mut eqs := #[]
+    let mut j := 0
+    for i in [0:n] do
+      if isProofField[i]! then
+        eqs := eqs.push (← Meta.mkAppM ``proof_irrel #[xs[i]!, xs[n + i]!])
+      else
+        eqs := eqs.push dataEqs[j]!
+        j := j + 1
+    Meta.mkLambdaFVars xs (← Meta.mkAndIntroN eqs)
 
 /-- Prove `∀ x₁ ⋯ xₙ, projᵢ (c x₁ ⋯ xₙ) = xᵢ` by reflexivity -/
 def proveProj (stmt : Expr) : MetaM Expr :=

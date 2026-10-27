@@ -97,8 +97,8 @@ def elabdeclarelemdb : CommandElab := fun stx => do
   | `(declarelemdb | #declare_lemdb $dbname) =>
     let dbname := dbname.getId
     let state := lemDBExt.getState (← getEnv)
-    if let some db := state.get? dbname then
-      throwError "Lemma database {repr db} has already been declared"
+    if state.contains dbname then
+      throwError "Lemma database {dbname} has already been declared"
     else
       let state' := state.insert dbname .empty
       modifyEnv fun env => lemDBExt.modifyState env fun _ => state'
@@ -124,8 +124,8 @@ def elabcomposelemdb : CommandElab := fun stx => do
     for db in dbs do
       if !state.contains db then
         throwError "Unknown lemma database {repr db}"
-    if let some db := state.get? db then
-      throwError "Lemma database {repr db} has already been declared"
+    if state.contains db then
+      throwError "Lemma database {db} has already been declared"
     else
       let state' := state.insert db (.compose dbs)
       modifyEnv fun env => lemDBExt.modifyState env fun _ => state'

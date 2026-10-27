@@ -341,7 +341,7 @@ theorem insert'.correct₂ (bt : BinTree β) (n₁ n₂ : Nat) (x : β) : n₁ �
 theorem insert.correct₂ (bt : BinTree β) (n₁ n₂ : Nat) (x : β) (H : n₁ ≠ n₂) : get? (insert bt n₁ x) n₂ = get? bt n₂ :=
   insert'.correct₂ bt (.succ n₁) (.succ n₂) x (fun h => H (Nat.succ.inj h))
 
-/-- Depth-first preorder traversal of the `BinTree` -/
+/-- Depth-first in-order traversal of the `BinTree` -/
 def foldl (f : α → β → α) (init : α) : BinTree β → α
 | .leaf => init
 | .node l x r =>

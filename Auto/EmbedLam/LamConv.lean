@@ -1440,7 +1440,7 @@ opaque LamTerm.betaReduceHackyAux (t : LamTerm) : LamTerm × Nat := Id.run <| do
   let mut n := 1
   while true do
     let cur := t.betaBounded n
-    if (t.betaBounded n).betaReduced then
+    if cur.betaReduced then
       return (cur, n)
     n := n * 2
   return (t, n)
@@ -2016,7 +2016,7 @@ section UnsafeOps
       · Finally, remove the original equation (i.e. `lhs = rhs`) from the set of input formulas
       It's easy to see that the above procedure is sound and complete if
         `rhs` does not contains `lhs`.
-    · Note that the above procedure will not be complete if we relax the iteition
+    · Note that the above procedure will not be complete if we relax the condition
         `` `i₀, i₁, ⋯, iₖ₋₁` is a permutation of `0, 1, 2, ⋯, k - 1` ``
         to
         `` `i₀, i₁, ⋯, iₖ₋₁` is a permutation of a subsequence of `0, 1, 2, ⋯, k - 1` ``

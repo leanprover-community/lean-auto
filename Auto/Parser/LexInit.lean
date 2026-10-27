@@ -48,7 +48,7 @@ private def stringAux : EREBracket :=
   .minus (.inStr ("\"" ++ unprintable)) (.inStr whitespace)
 
 def string : ERE :=
-  .star (.comp #[.inStr "\"", .star (.bracketN (.inStr ("\"" ++ unprintable))), .inStr "\""])
+  ERE.some (.comp #[.inStr "\"", .star (.bracketN stringAux), .inStr "\""])
 
 private def ssymbstart : EREBracket :=
   .plus #[.cc .alpha, .inStr "~!@$%^&*_-+=<>.?/"]

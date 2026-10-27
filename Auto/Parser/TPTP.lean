@@ -386,7 +386,7 @@ def ident2NatConst (s : String) : Option NatConst :=
   | "t_nmax" => .some .nmax
   | "t_nmin" => .some .nmin
   | _ =>
-    match s.take 9 with
+    match (s.take 9).toString with
     | "t_natVal_" =>
       match (s.drop 9).toNat? with
       | .some n => .some (.natVal n)
@@ -407,7 +407,7 @@ def ident2StringConst (s : String) : Option StringConst :=
       match x, y.toNat? with
       | .some l, .some y' => .some (l.push (Char.ofNat y'))
       | _,       _        => .none
-    match s.take 9, (((s.drop 9).split "d").drop 1).toStringArray.foldl foldFn (.some "") with
+    match (s.take 9).toString, (((s.drop 9).split "d").drop 1).toStringArray.foldl foldFn (.some "") with
     | "t_strVal_", .some s => .some (.strVal s)
     | _,         _       => .none
 
@@ -499,7 +499,7 @@ def ident2RatConst (s : String) : Option RatConst :=
 
 open Embedding.Lam in
 def ident2BitVecConst (s : String) : Option BitVecConst :=
-  match s.take 7 with
+  match (s.take 7).toString with
   | "t_bvVal" =>
     match ((s.drop 7).split "_").toList with
     | ["", ns, is] =>
@@ -548,23 +548,23 @@ def ident2BitVecConst (s : String) : Option BitVecConst :=
     | '_', .some n => .some (.bvmul n)
     | _,   _       => .none
   | "t_bvudi" =>
-    match s.take 9, (s.drop 8).toNat? with
+    match (s.take 9).toString, (s.drop 9).toNat? with
     | "t_bvudiv_", .some n => .some (.bvudiv n)
     | _,           _       => .none
   | "t_bvure" =>
-    match s.take 9, (s.drop 8).toNat? with
+    match (s.take 9).toString, (s.drop 9).toNat? with
     | "t_bvurem_", .some n => .some (.bvurem n)
     | _,           _       => .none
   | "t_bvsdi" =>
-    match s.take 9, (s.drop 8).toNat? with
+    match (s.take 9).toString, (s.drop 9).toNat? with
     | "t_bvsdiv_", .some n => .some (.bvsdiv n)
     | _,           _       => .none
   | "t_bvsre" =>
-    match s.take 9, (s.drop 8).toNat? with
+    match (s.take 9).toString, (s.drop 9).toNat? with
     | "t_bvsrem_", .some n => .some (.bvsrem n)
     | _,           _       => .none
   | "t_bvsmo" =>
-    match s.take 9, (s.drop 8).toNat? with
+    match (s.take 9).toString, (s.drop 9).toNat? with
     | "t_bvsmod_", .some n => .some (.bvsmod n)
     | _,           _       => .none
   | "t_bvult" =>
@@ -588,7 +588,7 @@ def ident2BitVecConst (s : String) : Option BitVecConst :=
     | '_', .some n => .some (.bvand n)
     | _,   _       => .none
   | "t_bvor_" =>
-    match (s.drop 8).toNat? with
+    match (s.drop 7).toNat? with
     | .some n => .some (.bvor n)
     | _       => .none
   | "t_bvxor" =>
@@ -604,54 +604,54 @@ def ident2BitVecConst (s : String) : Option BitVecConst :=
     | '_', .some n => .some (.bvshl n)
     | _,   _       => .none
   | "t_bvlsh" =>
-    match s.take 9, (s.drop 8).toNat? with
+    match (s.take 9).toString, (s.drop 9).toNat? with
     | "t_bvlshr_", .some n => .some (.bvlshr n)
     | _,           _       => .none
   | "t_bvash" =>
-    match s.take 9, (s.drop 8).toNat? with
+    match (s.take 9).toString, (s.drop 9).toNat? with
     | "t_bvashr_", .some n => .some (.bvashr n)
     | _,           _       => .none
   | "t_bvsmt" =>
-    match (s.drop 7).take 4 with
+    match ((s.drop 7).take 4).toString with
     | "shl_" =>
       match (s.drop 11).toNat? with
       | .some n => .some (.bvsmtshl n)
       | .none   => .none
     | _ =>
-      match (s.drop 7).take 5, (s.drop 12).toNat? with
-      | "lshr", .some n => .some (.bvsmtlshr n)
-      | "ashr", .some n => .some (.bvsmtashr n)
+      match ((s.drop 7).take 5).toString, (s.drop 12).toNat? with
+      | "lshr_", .some n => .some (.bvsmtlshr n)
+      | "ashr_", .some n => .some (.bvsmtashr n)
       | _,      _       => .none
   | "t_bvapp" =>
-    match s.take 11, ((s.drop 11).split "_").toList with
+    match (s.take 11).toString, ((s.drop 11).split "_").toList with
     | "t_bvappend_", [ns, ms] =>
       match ns.toNat?, ms.toNat? with
       | .some n, .some m => .some (.bvappend n m)
       | _,       _       => .none
     | _,             _        => .none
   | "t_bvext" =>
-    match s.take 12, ((s.drop 12).split "_").toList with
+    match (s.take 12).toString, ((s.drop 12).split "_").toList with
     | "t_bvextract_", [ns, hs, ls] =>
       match ns.toNat?, hs.toNat?, ls.toNat? with
       | .some n, .some h, .some l => .some (.bvextract n h l)
       | _,       _,       _       => .none
     | _,              _            => .none
   | "t_bvrep" =>
-    match s.take 11, ((s.drop 11).split "_").toList with
+    match (s.take 11).toString, ((s.drop 11).split "_").toList with
     | "t_bvrepeat_", [ws, is] =>
       match ws.toNat?, is.toNat? with
       | .some w, .some i => .some (.bvrepeat w i)
       | _,       _       => .none
     | _,             _        => .none
   | "t_bvzer" =>
-    match s.take 15, ((s.drop 15).split "_").toList with
+    match (s.take 15).toString, ((s.drop 15).split "_").toList with
     | "t_bvzeroExtend_", [ws, vs] =>
       match ws.toNat?, vs.toNat? with
       | .some w, .some v => .some (.bvzeroExtend w v)
       | _,       _       => .none
     | _,             _        => .none
   | "t_bvsig" =>
-    match s.take 15, ((s.drop 15).split "_").toList with
+    match (s.take 15).toString, ((s.drop 15).split "_").toList with
     | "t_bvsignExtend_", [ws, vs] =>
       match ws.toNat?, vs.toNat? with
       | .some w, .some v => .some (.bvsignExtend w v)
@@ -707,7 +707,7 @@ def ident2LamConstr (pi : ParsingInfo) (s : String) : LamConstr :=
       | .some b => .sort b
       | _       => .error s!"Unknown identifier {s}"
     | 't' =>
-      match s.take 3 with
+      match (s.take 3).toString with
       | "t_a" =>
         match (s.drop 3).toNat? with
         | .some n =>

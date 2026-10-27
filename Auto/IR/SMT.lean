@@ -179,10 +179,10 @@ private partial def STerm.toStringAux : STerm → List SIdent → String
     let tail := String.intercalate " " (STerm.toStringAux a binders :: goQIdApp as binders)
     intro ++ tail ++ ")"
   | .letE name binding body, binders =>
-    let binders := (SIdent.symb name) :: binders
-    let intro := s!"(let ({SIdent.symb name} "
-    let binding := STerm.toStringAux binding binders ++ ") "
-    let body := STerm.toStringAux body binders ++ ")"
+    let intro := s!"(let (({SIdent.symb name} "
+    -- `name` is not bound in `binding`
+    let binding := STerm.toStringAux binding binders ++ ")) "
+    let body := STerm.toStringAux body ((SIdent.symb name) :: binders) ++ ")"
     intro ++ binding ++ body
   | .forallE name binderType body, binders =>
     let binders := (SIdent.symb name) :: binders
