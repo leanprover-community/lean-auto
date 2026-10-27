@@ -144,26 +144,18 @@ def withHyps (hyps : Array Expr) : ExternM (Array FVarId) := do
     ret := ret.push newFVarId
   return ret
 
+/-- Returns the lemmas for `validsWithDTr` and for `nonemptiesWithDTr` -/
 def withAll
-  (nonemptiesWithDTr : Array (REntry × DTr))
-  (validsWithDTr : Array (REntry × DTr)) :
-  ExternM (Array LamSort × Array LamTerm × Array Lemma × Array Lemma) := do
-  let ss ← nonemptiesWithDTr.mapM (fun (re, _) => do
-    match re with
-    | .nonempty s => return s
-    | _ => throwError "{decl_name%} :: {re} is not a `nonempty` entry")
-  let inhs ← withTranslatedLamSorts ss
+  (nonemptiesWithDTr : Array (LamSort × DTr))
+  (validsWithDTr : Array (LamTerm × DTr)) :
+  ExternM (Array Lemma × Array Lemma) := do
+  let inhs ← withTranslatedLamSorts (nonemptiesWithDTr.map Prod.fst)
   for inh in inhs do
     trace[auto.lam2D.printInhs] "{inh}"
   let inhFVars ← withHyps inhs
   let inhDTrs := nonemptiesWithDTr.map Prod.snd
-  let valids := validsWithDTr.map Prod.fst
   let hypDTrs := validsWithDTr.map Prod.snd
-  let ts ← valids.mapM (fun re => do
-    match re with
-    | .valid [] t => return t
-    | _ => throwError "{decl_name%} :: {re} is not a `valid` entry")
-  let hyps ← withTranslatedLamTerms ts
+  let hyps ← withTranslatedLamTerms (validsWithDTr.map Prod.fst)
   for hyp in hyps do
     if !(← runMetaM <| Meta.isTypeCorrect hyp) then
       throwError "{decl_name%} :: Malformed hypothesis {hyp}"
@@ -176,7 +168,7 @@ def withAll
     (fun ((ty, proof), dtr) => ⟨⟨.fvar proof, ty, dtr⟩, #[]⟩)
   let inhLemmas : Array Lemma := ((inhs.zip inhFVars).zip inhDTrs).map
     (fun ((ty, proof), dtr) => ⟨⟨.fvar proof, ty, dtr⟩, #[]⟩)
-  return (ss, ts, lemmas, inhLemmas)
+  return (lemmas, inhLemmas)
 
 /--
   Add the characterizations of later-declared types into the local context as free
@@ -185,12 +177,10 @@ def withAll
     (see `LaterInfo.coreSpecOfConj`). Returns the `λ` terms of the characterizations
     and their free variables
 -/
-def withLaterSpecs (laterSpecsWithDTr : LaterSpecInterface (REntry × DTr)) :
+def withLaterSpecs (laterSpecsWithDTr : LaterSpecInterface (LamTerm × DTr)) :
   ExternM (Array LamTerm × Array FVarId × LaterSpecInterface Lemma) := do
   let laterInfo ← getLaterInfo
-  let laterSpecs ← laterSpecsWithDTr.withSteps.mapM (fun (fs, re, dtr) => do
-    let .valid [] t := re
-      | throwError "{decl_name%} :: {re} is not a `valid` entry"
+  let laterSpecs ← laterSpecsWithDTr.withSteps.mapM (fun (fs, t, dtr) => do
     let #[spec] ← withTranslatedLamTerms #[t]
       | throwError "{decl_name%} :: Unexpected error"
     if !(← runMetaM <| Meta.isTypeCorrect spec) then
@@ -216,14 +206,10 @@ def withLaterSpecs (laterSpecsWithDTr : LaterSpecInterface (REntry × DTr)) :
     Each block is split into its conjuncts before it is sent to the external prover.
     Returns the `λ` terms of the blocks and their free variables
 -/
-def withIndSpecs (indSpecsWithDTr : Array (IndBlockSpec (REntry × DTr))) :
+def withIndSpecs (indSpecsWithDTr : Array (IndBlockSpec (LamTerm × DTr))) :
   ExternM (Array LamTerm × Array FVarId × Array (IndBlockSpec Lemma)) := do
   let blocks ← indSpecsWithDTr.mapM (fun bs => do
-    let ts ← bs.mapM (fun (re, _) => do
-      let .valid [] t := re
-        | throwError "{decl_name%} :: {re} is not a `valid` entry"
-      return t)
-    let t := ts.toLamTerm
+    let t := (bs.map Prod.fst).toLamTerm
     let #[spec] ← withTranslatedLamTerms #[t]
       | throwError "{decl_name%} :: Unexpected error"
     if !(← runMetaM <| Meta.isTypeCorrect spec) then
@@ -252,9 +238,9 @@ def withIndSpecs (indSpecsWithDTr : Array (IndBlockSpec (REntry × DTr))) :
   does not use free variables introduced during monomorphization
 -/
 def callNativeWithAtomAsFVar
-  (facts : NativeInterface (REntry × DTr)) (prover : NativeInterface Lemma → MetaM Expr) :
-  ExternM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := MetaState.withTemporaryLCtx {} {} <| do
-  let (ss, ts, lemmas, inhLemmas) ← withAll facts.nonempties facts.valids
+  (facts : NativeInterface (LamTerm × DTr) (LamSort × DTr)) (prover : NativeInterface Lemma → MetaM Expr) :
+  ExternM (Expr × LamTerm × Array Nat × Array LamSort × Array LamTerm) := MetaState.withTemporaryLCtx {} {} <| do
+  let (lemmas, inhLemmas) ← withAll facts.nonempties facts.valids
   let (specTs, specFVars, laterSpecs) ← withLaterSpecs facts.laterSpecs
   let (indTs, indFVars, indSpecs) ← withIndSpecs facts.indSpecs
   let getFid (lem : Lemma) : ExternM FVarId := do
@@ -274,18 +260,16 @@ def callNativeWithAtomAsFVar
     --   get weird proof reconstruction error
     let mut expr ← Meta.withNewMCtxDepth <| prover { valids := lemmas, nonempties := inhLemmas, laterSpecs, indSpecs }
     let mut usedHyps := []
-    let hypREntries := facts.valids.map Prod.fst ++ facts.laterSpecs.toArray.map Prod.fst ++
-      indTs.map (REntry.valid [] ·)
-    let hyps := (hypFVars ++ specFVars ++ indFVars).zip (hypREntries.zip (ts ++ specTs ++ indTs))
-    for (fvar, re_t) in hyps.reverse do
+    let hyps := (hypFVars ++ specFVars ++ indFVars).zip (facts.valids.map Prod.fst ++ specTs ++ indTs)
+    for (fvar, t) in hyps.reverse do
       if expr.hasAnyFVar (· == fvar) then
         expr ← Meta.mkLambdaFVars #[.fvar fvar] expr
-        usedHyps := re_t :: usedHyps
+        usedHyps := t :: usedHyps
     let mut usedInhs := []
-    for (fvar, re_s) in (inhFVars.zip ((facts.nonempties.map Prod.fst).zip ss)).reverse do
+    for (fvar, s) in (inhFVars.zip (facts.nonempties.map Prod.fst)).reverse do
       if expr.hasAnyFVar (· == fvar) then
         expr ← Meta.mkLambdaFVars #[.fvar fvar] expr
-        usedInhs := re_s :: usedInhs
+        usedInhs := s :: usedInhs
     let mut usedEtoms := []
     for (fvar, eidx) in etomsToAbstract.reverse do
       if expr.hasAnyFVar (· == fvar) then
@@ -296,8 +280,8 @@ def callNativeWithAtomAsFVar
       if expr.hasAnyFVar (· == fvar) then
         expr ← Meta.mkLambdaFVars #[.fvar fvar] expr
         usedVals := val :: usedVals
-    let proofLamTermPre := (Array.mk usedHyps).foldr (fun (_, t') t => t'.mkImp t) (.base .falseE)
-    let proofLamTermPre := (Array.mk usedInhs).foldr (fun (_, s) t => t.mkForallEF s) proofLamTermPre
+    let proofLamTermPre := (Array.mk usedHyps).foldr (fun t' t => t'.mkImp t) (.base .falseE)
+    let proofLamTermPre := (Array.mk usedInhs).foldr (fun s t => t.mkForallEF s) proofLamTermPre
     let proofLamTermPre := proofLamTermPre.abstractsRevImp ((Array.mk usedEtoms).map LamTerm.etom)
     let usedEtomTys ← usedEtoms.mapM (fun etom => do
       let .some ty := lamEVarTy[etom]?
@@ -306,13 +290,15 @@ def callNativeWithAtomAsFVar
     let proofLamTerm := usedEtomTys.foldr (fun s cur => LamTerm.mkForallEF s cur) proofLamTermPre
     let proof := mkAppN expr ⟨usedVals⟩
     trace[auto.lam2D.printProof] "Found proof of {proofLamTerm}\n\n{proof}"
-    return (proof, proofLamTerm, ⟨usedEtoms⟩, ⟨usedInhs.map Prod.fst⟩, ⟨usedHyps.map Prod.fst⟩))
+    return (proof, proofLamTerm, ⟨usedEtoms⟩, ⟨usedInhs⟩, ⟨usedHyps⟩))
 
 @[inherit_doc callNativeWithAtomAsFVar]
 def callMkMVarWithAtomAsFVar
-  (nonemptiesWithDTr : Array (REntry × DTr)) (validsWithDTr : Array (REntry × DTr)) :
+  (nonemptiesWithDTr : Array (LamSort × DTr)) (validsWithDTr : Array (LamTerm × DTr)) :
   ExternM (MVarId × Expr × LamTerm × Array Expr × Array Nat) := MetaState.withTemporaryLCtx {} {} <| do
-  let (ss, ts, lemmas, inhLemmas) ← withAll nonemptiesWithDTr validsWithDTr
+  let (lemmas, inhLemmas) ← withAll nonemptiesWithDTr validsWithDTr
+  let ss := nonemptiesWithDTr.map Prod.fst
+  let ts := validsWithDTr.map Prod.fst
   let getFid (lem : Lemma) : ExternM FVarId := do
     match lem.proof with
     | .fvar id => return id

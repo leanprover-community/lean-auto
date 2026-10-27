@@ -274,6 +274,13 @@ def lookupREntryProof! (re : REntry) : ReifM REntryProof := do
   | .some proof => return proof
   | .none => throwError "{decl_name%} :: Unknown REntry {re}"
 
+/-- The `λ` terms of the entries `res`, which must be `valid` entries with empty local contexts -/
+def validTerms (res : Array REntry) : MetaM (Array LamTerm) :=
+  res.mapM fun re => do
+    let .valid [] t := re
+      | throwError "{decl_name%} :: {re} is not a `valid` entry with empty local context"
+    return t
+
 def lookupLamEVarTy! (idx : Nat) : ReifM LamSort := do
   if let .some s := (← getLamEVarTy)[idx]? then
     return s
@@ -994,18 +1001,18 @@ section CheckerUtils
       later-declared types they depend on. The checker steps producing them are only
       evaluated, so the entries are not added to the `RTable`
   -/
-  def laterSpecs (vs : Array REntry) : ReifM (LaterSpecInterface REntry) := do
-    let mut types := LaterType.all.filter fun t => vs.any (·.containsSort (.base (.later t)))
+  def laterSpecs (ts : Array LamTerm) : ReifM (LaterSpecInterface LamTerm) := do
+    let mut types := LaterType.all.filter fun t => ts.any (·.containsSort (.base (.later t)))
     -- `LaterType.all` lists each later-declared type after the ones it depends on
     for t in LaterType.all.reverse do
       if types.contains t then
         types := types ++ t.deps.filter (!types.contains ·)
     let lsa := (← getLaterInfo).specAvail
-    let entry? (fs : FactStep) : Option REntry :=
+    let entry? (fs : FactStep) : Option LamTerm :=
       match fs.eval lsa with
-      | .addEntry re => .some re
+      | .addEntry (.valid [] t) => .some t
       | _ => .none
-    let mut ls : LaterSpecInterface REntry := {}
+    let mut ls : LaterSpecInterface LamTerm := {}
     if types.contains .real then
       ls := { ls with
         realCore := entry? .realCoreSpec
@@ -1750,7 +1757,7 @@ def reifMutInds (minds : Array SimpleMutIndVal) : ReifM (Array ReifiedMutInd) :=
     the block is asserted when a prover uses it. The proof of each characterization
     must prove its translation by `Lam2D`, otherwise an error is thrown
 -/
-def indSpecs (blocks : Array ReifiedMutInd) : ReifM (Array (IndBlockSpec REntry)) := do
+def indSpecs (blocks : Array ReifiedMutInd) : ReifM (Array (IndBlockSpec LamTerm)) := do
   if !(auto.indSpec.get (← getOptions)) then
     return #[]
   let tyValMap := Std.HashMap.ofList ((← getTyVal).toList.zipIdx.map fun ((e, _), i) => (i, e))
@@ -1774,15 +1781,11 @@ def indSpecs (blocks : Array ReifiedMutInd) : ReifM (Array (IndBlockSpec REntry)
     let proof ← Meta.mkAndIntroN ({ types, induction } : IndBlockSpec Expr).toArray
     let dtr := DTr.leaf s!"indSpec {names}"
     setIndSpecProofs ((← getIndSpecProofs).insert spec.toLamTerm (proof, dtr))
-    return spec.map (REntry.valid [] ·)
+    return spec
 
 /-- The `λ` term of the characterization `bs` of a mutual block, with its proof and derivation (see `indSpecs`) -/
-def indSpecProof (bs : IndBlockSpec REntry) : ReifM (LamTerm × Expr × DTr) := do
-  let ts ← bs.mapM fun re => do
-    let .valid [] t := re
-      | throwError "{decl_name%} :: {re} is not a `valid` entry"
-    return t
-  let t := ts.toLamTerm
+def indSpecProof (bs : IndBlockSpec LamTerm) : ReifM (LamTerm × Expr × DTr) := do
+  let t := bs.toLamTerm
   let .some (proof, dtr) := (← getIndSpecProofs).get? t
     | throwError "{decl_name%} :: The characterization {t} has no proof"
   return (t, proof, dtr)

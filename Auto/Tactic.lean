@@ -388,46 +388,46 @@ open LamReif Embedding.Lam in
   does not use free variables introduced during monomorphization
 -/
 def callNative_checker
-  (facts : NativeInterface REntry) (prover : NativeInterface Lemma → MetaM Expr) :
-  ReifM (Expr × LamTerm × Array Nat × Array REntry × Array REntry) := do
+  (facts : NativeInterface LamTerm LamSort) (prover : NativeInterface Lemma → MetaM Expr) :
+  ReifM (Expr × LamTerm × Array Nat × Array LamSort × Array LamTerm) := do
   let tyVal ← LamReif.getTyVal
   let varVal ← LamReif.getVarVal
   let lamEVarTy ← LamReif.getLamEVarTy
-  let nonemptiesWithDTr ← facts.nonempties.mapM (fun re =>
-    do return (re, ← collectDerivFor re))
-  let validsWithDTr ← facts.valids.mapM (fun re =>
-    do return (re, ← collectDerivFor re))
+  let nonemptiesWithDTr ← facts.nonempties.mapM (fun s =>
+    do return (s, ← collectDerivFor (.nonempty s)))
+  let validsWithDTr ← facts.valids.mapM (fun t =>
+    do return (t, ← collectDerivFor (.valid [] t)))
   let laterSpecs := facts.laterSpecs.withSteps
   -- The derivation of a characterization is the one `collectDerivFor` gives after its checker step is run
-  let laterSpecsWithDTr := laterSpecs.map (fun (fs, re) => (re, DTr.node (ChkStep.f fs).toString #[]))
+  let laterSpecsWithDTr := laterSpecs.map (fun (fs, t) => (t, DTr.node (ChkStep.f fs).toString #[]))
   let indSpecs ← facts.indSpecs.mapM indSpecProof
   let indSpecsWithDTr := (facts.indSpecs.zip indSpecs).map (fun (bs, _, _, dtr) => bs.map (·, dtr))
-  let factsWithDTr : NativeInterface (REntry × DTr) :=
+  let factsWithDTr : NativeInterface (LamTerm × DTr) (LamSort × DTr) :=
     { valids := validsWithDTr, nonempties := nonemptiesWithDTr, laterSpecs := laterSpecsWithDTr,
       indSpecs := indSpecsWithDTr }
   let ret@(_, _, _, _, usedHyps) ← MetaState.runAtMetaM' <|
     (Lam2DAAF.callNativeWithAtomAsFVar factsWithDTr prover).run'
       { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy, laterInfo := ← getLaterInfo }
-  for (fs, re) in laterSpecs.toArray do
-    if usedHyps.contains re then
-      let _ ← newChkStep (.f fs) (.some (.addEntry re))
+  for (fs, t) in laterSpecs.toArray do
+    if usedHyps.contains t then
+      let _ ← newChkStep (.f fs) (.some (.addEntry (.valid [] t)))
   for (t, proof, dtr) in indSpecs do
-    if usedHyps.contains (.valid [] t) then
+    if usedHyps.contains t then
       newAssertion proof dtr t
   return ret
 
 open LamReif Embedding.Lam in
 def callMkMVar_checker
-  (nonempties : Array REntry) (valids : Array REntry) :
-  ReifM (Array (REntry × DTr) × Array (REntry × DTr) × MVarId ×
+  (nonempties : Array LamSort) (valids : Array LamTerm) :
+  ReifM (Array (LamSort × DTr) × Array (LamTerm × DTr) × MVarId ×
          Expr × LamTerm × Array Expr × Array Nat) := do
   let tyVal ← LamReif.getTyVal
   let varVal ← LamReif.getVarVal
   let lamEVarTy ← LamReif.getLamEVarTy
-  let nonemptiesWithDTr ← nonempties.mapM (fun re =>
-    do return (re, ← collectDerivFor re))
-  let validsWithDTr ← valids.mapM (fun re =>
-    do return (re, ← collectDerivFor re))
+  let nonemptiesWithDTr ← nonempties.mapM (fun s =>
+    do return (s, ← collectDerivFor (.nonempty s)))
+  let validsWithDTr ← valids.mapM (fun t =>
+    do return (t, ← collectDerivFor (.valid [] t)))
   let result ← MetaState.runAtMetaM' <| (Lam2DAAF.callMkMVarWithAtomAsFVar nonemptiesWithDTr validsWithDTr).run'
     { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
   return (nonemptiesWithDTr, validsWithDTr, result)
@@ -452,14 +452,14 @@ open LamReif Embedding.Lam in
   does not use free variables introduced during monomorphization
 -/
 def callNative_direct
-  (facts : NativeInterface REntry) (prover : NativeInterface Lemma → MetaM Expr) : ReifM Expr := do
+  (facts : NativeInterface LamTerm LamSort) (prover : NativeInterface Lemma → MetaM Expr) : ReifM Expr := do
   let tyVal ← LamReif.getTyVal
   let varVal ← LamReif.getVarVal
   let lamEVarTy ← LamReif.getLamEVarTy
-  let nonemptiesWithDTr ← facts.nonempties.mapM (fun re =>
-    do return (re, ← collectDerivFor re))
-  let validsWithDTr ← facts.valids.mapM (fun re =>
-    do return (re, ← collectDerivFor re))
+  let nonemptiesWithDTr ← facts.nonempties.mapM (fun s =>
+    do return (s, ← collectDerivFor (.nonempty s)))
+  let validsWithDTr ← facts.valids.mapM (fun t =>
+    do return (t, ← collectDerivFor (.valid [] t)))
   let laterInfo ← getLaterInfo
   let coreLemma (t : LaterType) (dtr : DTr) : ReifM Lemma := do
     let .some proof := laterInfo.coreSpecs.get? t
@@ -472,9 +472,7 @@ def callNative_direct
     if !(← Meta.isDefEq (← Meta.inferType proof) stmt) then
       throwError "{decl_name%} :: {proof} does not prove the characterization {stmt}"
     return ⟨⟨proof, stmt, dtr⟩, #[]⟩
-  let laterSpecLemmas ← facts.laterSpecs.withSteps.mapM (fun (fs, re) => do
-    let .valid [] t := re
-      | throwError "{decl_name%} :: {re} is not a `valid` entry"
+  let laterSpecLemmas ← facts.laterSpecs.withSteps.mapM (fun (fs, t) => do
     let dtr := DTr.node (ChkStep.f fs).toString #[]
     match fs with
     | .realCoreSpec => coreLemma .real dtr
@@ -486,27 +484,27 @@ def callNative_direct
   let prover' (ni : NativeInterface Lemma) := prover { ni with laterSpecs := laterSpecLemmas }
   let indSpecs ← facts.indSpecs.mapM indSpecProof
   let indSpecsWithDTr := (facts.indSpecs.zip indSpecs).map (fun (bs, _, _, dtr) => bs.map (·, dtr))
-  let indSpecProofs := Std.HashMap.ofList (indSpecs.toList.map fun (t, proof, _) => (REntry.valid [] t, proof))
-  let factsWithDTr : NativeInterface (REntry × DTr) :=
+  let indSpecProofs := Std.HashMap.ofList (indSpecs.toList.map fun (t, proof, _) => (t, proof))
+  let factsWithDTr : NativeInterface (LamTerm × DTr) (LamSort × DTr) :=
     { valids := validsWithDTr, nonempties := nonemptiesWithDTr, indSpecs := indSpecsWithDTr }
   let (proof, _, usedEtoms, usedInhs, usedHyps) ← MetaState.runAtMetaM' <|
     (Lam2DAAF.callNativeWithAtomAsFVar factsWithDTr prover').run'
       { tyVal := tyVal, varVal := varVal, lamEVarTy := lamEVarTy }
   if usedEtoms.size != 0 then
     throwError "{decl_name%} :: etoms should not occur here"
-  let ss ← usedInhs.mapM (fun re => do
-    match ← lookupREntryProof! re with
+  let ss ← usedInhs.mapM (fun s => do
+    match ← lookupREntryProof! (.nonempty s) with
     | .inhabitation e _ _ => return e
     | .chkStep (.n (.nonemptyOfAtom n)) =>
       match varVal[n]? with
       | .some (e, _) => return e
       | .none => throwError "{decl_name%} :: Unexpected error"
-    | _ => throwError "{decl_name%} :: Cannot find external proof of {re}")
-  let ts ← usedHyps.mapM (fun re => do
-    if let .some proof := indSpecProofs.get? re then
+    | _ => throwError "{decl_name%} :: Cannot find external proof of the inhabitation of {s}")
+  let ts ← usedHyps.mapM (fun t => do
+    if let .some proof := indSpecProofs.get? t then
       return proof
-    let .assertion e _ _ ← lookupREntryProof! re
-      | throwError "{decl_name%} :: Cannot find external proof of {re}"
+    let .assertion e _ _ ← lookupREntryProof! (.valid [] t)
+      | throwError "{decl_name%} :: Cannot find external proof of {t}"
     return e)
   return mkAppN proof (ss ++ ts)
 
@@ -517,14 +515,14 @@ open Embedding.Lam in
   See `callNative_checker` for `facts`
 -/
 def queryNative
-  (declName? : Option Name) (facts : NativeInterface REntry)
+  (declName? : Option Name) (facts : NativeInterface LamTerm LamSort)
   (prover? : Option (NativeInterface Lemma → MetaM Expr) := .none) : LamReif.ReifM Expr := do
   let (proof, proofLamTerm, usedEtoms, usedInhs, unsatCore) ←
     callNative_checker facts (prover?.getD Solver.Native.queryNative)
   LamReif.newAssertion proof (.leaf "by_native::queryNative") proofLamTerm
   let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (usedEtoms.map .etom)
-  let forallElimed ← LamReif.validOfElimForalls etomInstantiated usedInhs
-  let contra ← LamReif.validOfImps forallElimed unsatCore
+  let forallElimed ← LamReif.validOfElimForalls etomInstantiated (usedInhs.map .nonempty)
+  let contra ← LamReif.validOfImps forallElimed (unsatCore.map (.valid [] ·))
   LamReif.printProofs
   Reif.setDeclName? declName?
   let checker ← LamReif.buildCheckerExprFor contra
@@ -564,8 +562,7 @@ where
     let exportFacts ← LamReif.reifFacts uvalids
     let mut exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
     let _ ← LamReif.reifInhabitations uinhs
-    let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
-      (fun (s, _) => Embedding.Lam.REntry.nonempty s)
+    let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map Prod.fst
     let indBlocks ← LamReif.reifMutInds minds
     LamReif.printValuation
     -- **Preprocessing in Verified Checker**
@@ -588,9 +585,10 @@ where
     -- **Native Prover**
     exportFacts := exportFacts.append (← LamReif.auxLemmas exportFacts)
     if auto.native.get (← getOptions) then
-      let laterSpecs ← LamReif.laterSpecs exportFacts
+      let valids ← LamReif.validTerms exportFacts
+      let laterSpecs ← LamReif.laterSpecs valids
       let indSpecs ← LamReif.indSpecs indBlocks
-      return ← queryNative declName? { valids := exportFacts, nonempties := exportInhs, laterSpecs, indSpecs }
+      return ← queryNative declName? { valids, nonempties := exportInhs, laterSpecs, indSpecs }
     throwError "Auto failed to find proof"
 
 @[tactic auto]
@@ -658,8 +656,7 @@ where
     let exportFacts ← LamReif.reifFacts uvalids
     let mut exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
     let _ ← LamReif.reifInhabitations uinhs
-    let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
-      (fun (s, _) => Embedding.Lam.REntry.nonempty s)
+    let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map Prod.fst
     let exportInds := (← LamReif.reifMutInds minds).map (·.info)
     LamReif.printValuation
     -- **Preprocessing in Verified Checker**
@@ -667,10 +664,10 @@ where
     exportFacts := exportFacts'.append (← LamReif.auxLemmas exportFacts)
     -- **Query the dummy prover which creates a metavariable**
     let (nonemptyWithDTrs, validWithDTrs, goalId, proof, proofLamTerm, atomVals, etoms) ←
-      callMkMVar_checker exportInhs exportFacts
+      callMkMVar_checker exportInhs (← LamReif.validTerms exportFacts)
     LamReif.newAssertion proof (.leaf "by_native::queryNative") proofLamTerm
     let etomInstantiated ← LamReif.validOfInstantiateForall (.valid [] proofLamTerm) (etoms.map .etom)
-    let forallElimed ← LamReif.validOfElimForalls etomInstantiated exportInhs
+    let forallElimed ← LamReif.validOfElimForalls etomInstantiated (exportInhs.map .nonempty)
     let contra ← LamReif.validOfImps forallElimed exportFacts
     LamReif.printProofs
     Reif.setDeclName? declName?
@@ -678,7 +675,7 @@ where
     let contra ← Meta.mkAppM ``Embedding.Lam.LamThmValid.getFalse #[checker]
     let (goalFVars, goalId) ← goalId.introN (atomVals.size + etoms.size)
     let (goalCtx, goalId) ← goalId.introN (exportInhs.size + exportFacts.size)
-    let goalCtxWithDeriv := goalCtx.zip ((nonemptyWithDTrs ++ validWithDTrs).map Prod.snd)
+    let goalCtxWithDeriv := goalCtx.zip (nonemptyWithDTrs.map Prod.snd ++ validWithDTrs.map Prod.snd)
     return (contra, goalId, goalFVars.zip atomVals, goalCtxWithDeriv)
 
 @[tactic mono]
@@ -707,10 +704,8 @@ def monoInterface
   let afterReify (uvalids : Array UMonoFact) (uinhs : Array UMonoFact) (minds : Array SimpleMutIndVal) :
     LamReif.ReifM Expr := (do
     let exportFacts ← LamReif.reifFacts uvalids
-    let exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
     let _ ← LamReif.reifInhabitations uinhs
-    let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
-      (fun (s, _) => Embedding.Lam.REntry.nonempty s)
+    let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map Prod.fst
     let indBlocks ← LamReif.reifMutInds minds
     LamReif.printValuation
     let laterSpecs ← LamReif.laterSpecs exportFacts
@@ -735,11 +730,11 @@ def runNativeProverWithAuto
     let exportFacts ← LamReif.reifFacts uvalids
     let exportFacts := exportFacts.map (Embedding.Lam.REntry.valid [])
     let _ ← LamReif.reifInhabitations uinhs
-    let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map
-      (fun (s, _) => Embedding.Lam.REntry.nonempty s)
+    let exportInhs := (← LamReif.getRst).nonemptyMap.toArray.map Prod.fst
     let indBlocks ← LamReif.reifMutInds minds
     LamReif.printValuation
     let (exportFacts, _) ← LamReif.preprocess exportFacts #[]
+    let exportFacts ← LamReif.validTerms exportFacts
     let laterSpecs ← LamReif.laterSpecs exportFacts
     let indSpecs ← LamReif.indSpecs indBlocks
     return ← queryNative declName? { valids := exportFacts, nonempties := exportInhs, laterSpecs, indSpecs } prover)

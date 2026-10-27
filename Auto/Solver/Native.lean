@@ -18,12 +18,16 @@ register_option auto.native : Bool := {
 
 namespace Auto
 
-/-- The input of a native prover, which should prove `False` from it -/
-structure NativeInterface (α : Type u) where
+/--
+  The input of a native prover at various stages during translation.
+  Here `α` and `β` represents `LamSort`s and `LamTerm`s at
+  various stages during translation.
+-/
+structure NativeInterface (α : Type u) (β : Type u := α) where
   /-- Regular facts -/
   valids     : Array α
   /-- Inhabitation facts -/
-  nonempties : Array α
+  nonempties : Array β
   /--
     Characterizations of the constants of later-declared types, e.g. `Real`. The ones
       of the core constants are proofs of structures, e.g. `RealInterpUnlifted.CoreSpec`
