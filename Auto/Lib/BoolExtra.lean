@@ -50,12 +50,12 @@ theorem Bool.ofProp_spec' (c : Prop) : Bool.ofProp c = false ↔ ¬ c := by
 attribute [irreducible] Bool.ofProp
 
 theorem Bool.ite_eq_true (p : Prop) [inst : Decidable p] (a b : α) : p → ite p a b = a := by
-  intro hp; dsimp [ite]; cases inst
+  intro hp; cases inst
   case isFalse hnp => apply False.elim (hnp hp)
   case isTrue _ => rfl
 
 theorem Bool.ite_eq_false (p : Prop) [inst : Decidable p] (a b : α) : ¬ p → ite p a b = b := by
-  intro hnp; dsimp [ite]; cases inst
+  intro hnp; cases inst
   case isFalse _ => rfl
   case isTrue hp => apply False.elim (hnp hp)
 
