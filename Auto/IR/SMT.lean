@@ -46,6 +46,11 @@ def SIdent.toString : SIdent → String
 instance : ToString SIdent where
   toString := SIdent.toString
 
+/-- The symbol of `i`, without its indices -/
+def SIdent.name : SIdent → String
+| .symb s => s
+| .indexed s _ => s
+
 inductive SSort where
   | bvar : Nat → SSort -- Only useful in sort declarations
   | app : SIdent → Array SSort → SSort
