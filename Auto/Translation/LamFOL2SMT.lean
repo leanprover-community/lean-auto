@@ -237,7 +237,7 @@ private def lamBaseSort2SSort (sni : SMTNamingInfo) : LamBaseSort → TransM Lam
     return .app (.symb (← lamLaterSort2String sni .real)) #[]
 | .later .complex => do
   if sni.laterInterp.types.contains .complex then
-    return .app (.symb "Complex") #[]
+    return .app (.symb "autoComplex") #[]
   else
     return .app (.symb (← lamLaterSort2String sni .complex)) #[]
 
@@ -1055,9 +1055,11 @@ private def compEqn
     eqn := lamQuantified2STerm sni true s eqn
   return .assert (← eqn)
 
+-- The datatype of complex numbers is named `autoComplex` because `Complex`
+--   causes errors in the latest versions of z3 that supports native compelx arithmetic
 def sortAuxDecls : Array IR.SMT.Command :=
   #[.declSort "Empty" 0,
-    .declDtypes #[("Complex", 0, ⟨#[], #[⟨"cmk", #[("cre", .app (.symb "Real") #[]), ("cim", .app (.symb "Real") #[])]⟩]⟩)]]
+    .declDtypes #[("autoComplex", 0, ⟨#[], #[⟨"cmk", #[("cre", .app (.symb "Real") #[]), ("cim", .app (.symb "Real") #[])]⟩]⟩)]]
 
 def termAuxDecls : Array IR.SMT.Command :=
   #[.defFun false "nsub" #[("x", .app (.symb "Int") #[]), ("y", .app (.symb "Int") #[])] (.app (.symb "Int") #[])
@@ -1080,25 +1082,25 @@ def termAuxDecls : Array IR.SMT.Command :=
       (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "y" #[], .sConst (.decimal 0 0)], .sConst (.decimal 0 0), .qStrApp "/" #[.qStrApp "x" #[], .qStrApp "y" #[]]]),
     .defFun false "rinv" #[("x", .app (.symb "Real") #[])] (.app (.symb "Real") #[])
       (.qStrApp "ite" #[.qStrApp "=" #[.qStrApp "x" #[], .sConst (.decimal 0 0)], .sConst (.decimal 0 0), .qStrApp "/" #[.sConst (.decimal 1 0), .qStrApp "x" #[]]]),
-    .defFun false "czero" #[] (.app (.symb "Complex") #[]) (.qStrApp "cmk" #[.sConst (.decimal 0 0), .sConst (.decimal 0 0)]),
-    .defFun false "cone" #[] (.app (.symb "Complex") #[]) (.qStrApp "cmk" #[.sConst (.decimal 1 0), .sConst (.decimal 0 0)]),
-    .defFun false "cI" #[] (.app (.symb "Complex") #[]) (.qStrApp "cmk" #[.sConst (.decimal 0 0), .sConst (.decimal 1 0)]),
-    .defFun false "cadd" #[("z", .app (.symb "Complex") #[]), ("w", .app (.symb "Complex") #[])] (.app (.symb "Complex") #[])
+    .defFun false "czero" #[] (.app (.symb "autoComplex") #[]) (.qStrApp "cmk" #[.sConst (.decimal 0 0), .sConst (.decimal 0 0)]),
+    .defFun false "cone" #[] (.app (.symb "autoComplex") #[]) (.qStrApp "cmk" #[.sConst (.decimal 1 0), .sConst (.decimal 0 0)]),
+    .defFun false "cI" #[] (.app (.symb "autoComplex") #[]) (.qStrApp "cmk" #[.sConst (.decimal 0 0), .sConst (.decimal 1 0)]),
+    .defFun false "cadd" #[("z", .app (.symb "autoComplex") #[]), ("w", .app (.symb "autoComplex") #[])] (.app (.symb "autoComplex") #[])
       (.qStrApp "cmk" #[.qStrApp "+" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "cre" #[.qStrApp "w" #[]]], .qStrApp "+" #[.qStrApp "cim" #[.qStrApp "z" #[]], .qStrApp "cim" #[.qStrApp "w" #[]]]]),
-    .defFun false "csub" #[("z", .app (.symb "Complex") #[]), ("w", .app (.symb "Complex") #[])] (.app (.symb "Complex") #[])
+    .defFun false "csub" #[("z", .app (.symb "autoComplex") #[]), ("w", .app (.symb "autoComplex") #[])] (.app (.symb "autoComplex") #[])
       (.qStrApp "cmk" #[.qStrApp "-" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "cre" #[.qStrApp "w" #[]]], .qStrApp "-" #[.qStrApp "cim" #[.qStrApp "z" #[]], .qStrApp "cim" #[.qStrApp "w" #[]]]]),
-    .defFun false "cneg" #[("z", .app (.symb "Complex") #[])] (.app (.symb "Complex") #[])
+    .defFun false "cneg" #[("z", .app (.symb "autoComplex") #[])] (.app (.symb "autoComplex") #[])
       (.qStrApp "cmk" #[.qStrApp "-" #[.sConst (.decimal 0 0), .qStrApp "cre" #[.qStrApp "z" #[]]], .qStrApp "-" #[.sConst (.decimal 0 0), .qStrApp "cim" #[.qStrApp "z" #[]]]]),
-    .defFun false "cmul" #[("z", .app (.symb "Complex") #[]), ("w", .app (.symb "Complex") #[])] (.app (.symb "Complex") #[])
+    .defFun false "cmul" #[("z", .app (.symb "autoComplex") #[]), ("w", .app (.symb "autoComplex") #[])] (.app (.symb "autoComplex") #[])
       (.qStrApp "cmk" #[.qStrApp "-" #[.qStrApp "*" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "cre" #[.qStrApp "w" #[]]], .qStrApp "*" #[.qStrApp "cim" #[.qStrApp "z" #[]], .qStrApp "cim" #[.qStrApp "w" #[]]]], .qStrApp "+" #[.qStrApp "*" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "cim" #[.qStrApp "w" #[]]], .qStrApp "*" #[.qStrApp "cim" #[.qStrApp "z" #[]], .qStrApp "cre" #[.qStrApp "w" #[]]]]]),
-    .defFun false "cinv" #[("z", .app (.symb "Complex") #[])] (.app (.symb "Complex") #[])
+    .defFun false "cinv" #[("z", .app (.symb "autoComplex") #[])] (.app (.symb "autoComplex") #[])
       (.qStrApp "cmk" #[.qStrApp "rdiv" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "+" #[.qStrApp "*" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "cre" #[.qStrApp "z" #[]]], .qStrApp "*" #[.qStrApp "cim" #[.qStrApp "z" #[]], .qStrApp "cim" #[.qStrApp "z" #[]]]]], .qStrApp "rdiv" #[.qStrApp "-" #[.sConst (.decimal 0 0), .qStrApp "cim" #[.qStrApp "z" #[]]], .qStrApp "+" #[.qStrApp "*" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "cre" #[.qStrApp "z" #[]]], .qStrApp "*" #[.qStrApp "cim" #[.qStrApp "z" #[]], .qStrApp "cim" #[.qStrApp "z" #[]]]]]]),
-    .defFun false "cdiv" #[("z", .app (.symb "Complex") #[]), ("w", .app (.symb "Complex") #[])] (.app (.symb "Complex") #[]) (.qStrApp "cmul" #[.qStrApp "z" #[], .qStrApp "cinv" #[.qStrApp "w" #[]]]),
-    .defFun false "cofInt" #[("x", .app (.symb "Int") #[])] (.app (.symb "Complex") #[]) (.qStrApp "cmk" #[.qStrApp "to_real" #[.qStrApp "x" #[]], .sConst (.decimal 0 0)]),
-    .defFun false "cofReal" #[("x", .app (.symb "Real") #[])] (.app (.symb "Complex") #[]) (.qStrApp "cmk" #[.qStrApp "x" #[], .sConst (.decimal 0 0)]),
-    .defFun false "cnormSq" #[("z", .app (.symb "Complex") #[])] (.app (.symb "Real") #[])
+    .defFun false "cdiv" #[("z", .app (.symb "autoComplex") #[]), ("w", .app (.symb "autoComplex") #[])] (.app (.symb "autoComplex") #[]) (.qStrApp "cmul" #[.qStrApp "z" #[], .qStrApp "cinv" #[.qStrApp "w" #[]]]),
+    .defFun false "cofInt" #[("x", .app (.symb "Int") #[])] (.app (.symb "autoComplex") #[]) (.qStrApp "cmk" #[.qStrApp "to_real" #[.qStrApp "x" #[]], .sConst (.decimal 0 0)]),
+    .defFun false "cofReal" #[("x", .app (.symb "Real") #[])] (.app (.symb "autoComplex") #[]) (.qStrApp "cmk" #[.qStrApp "x" #[], .sConst (.decimal 0 0)]),
+    .defFun false "cnormSq" #[("z", .app (.symb "autoComplex") #[])] (.app (.symb "Real") #[])
       (.qStrApp "+" #[.qStrApp "*" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "cre" #[.qStrApp "z" #[]]], .qStrApp "*" #[.qStrApp "cim" #[.qStrApp "z" #[]], .qStrApp "cim" #[.qStrApp "z" #[]]]]),
-    .defFun false "cconj" #[("z", .app (.symb "Complex") #[])] (.app (.symb "Complex") #[])
+    .defFun false "cconj" #[("z", .app (.symb "autoComplex") #[])] (.app (.symb "autoComplex") #[])
       (.qStrApp "cmk" #[.qStrApp "cre" #[.qStrApp "z" #[]], .qStrApp "-" #[.sConst (.decimal 0 0), .qStrApp "cim" #[.qStrApp "z" #[]]]])
    ]
 
@@ -1125,7 +1127,7 @@ def ofScientificDecls : Array IR.SMT.Command :=
 
 /-- `z ^ n` for `z : Complex` and `n : Nat`. Note that the second argument is never negative -/
 def cnpowDecl : IR.SMT.Command :=
-  .defFun true "cnpow" #[("z", .app (.symb "Complex") #[]), ("n", .app (.symb "Int") #[])] (.app (.symb "Complex") #[])
+  .defFun true "cnpow" #[("z", .app (.symb "autoComplex") #[]), ("n", .app (.symb "Int") #[])] (.app (.symb "autoComplex") #[])
     (.qStrApp "ite" #[.qStrApp "<=" #[.qStrApp "n" #[], .sConst (.num 0)], .qStrApp "cone" #[],
       .qStrApp "cmul" #[.qStrApp "z" #[], .qStrApp "cnpow" #[.qStrApp "z" #[], .qStrApp "-" #[.qStrApp "n" #[], .sConst (.num 1)]]]])
 
