@@ -113,10 +113,10 @@ def MyList.recMotive (β : Sort v) (motive : ∀ (α : Type u), MyList α → β
   | 0 => motive α x
   | n + 1 => motive (MyList.iter α (n + 1)) x.conv
 
-noncomputable def MyList.rec {motive : ∀ (α : Type u), MyList α → Sort v}
+noncomputable def MyList.rec {α : Type u} {motive : ∀ (α : Type u), MyList α → Sort v}
   (nil : ∀ α, motive α (.nil _))
   (cons : ∀ (α) (head : α) (tail : MyList (MyList α)), motive _ tail → motive _ (MyList.cons head tail))
-  (α) : (t : MyList α) → motive α t :=
+  : (t : MyList α) → motive α t :=
   @MyListPre.rec α (MyList.recMotive _ motive α)
     (fun n =>
       match n with
