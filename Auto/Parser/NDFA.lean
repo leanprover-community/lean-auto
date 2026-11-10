@@ -19,13 +19,13 @@ section NFA
   -- Alphabet of NFA
   variable (σ : Type) [BEq σ] [Hashable σ]
 
-  instance : BEq (Unit ⊕ σ) where
+  local instance : BEq (Unit ⊕ σ) where
     beq : Unit ⊕ σ → Unit ⊕ σ → Bool
     | .inl _, .inl _ => true
     | .inr a, .inr b => BEq.beq a b
     | _, _           => false
 
-  instance : Hashable (Unit ⊕ σ) where
+  local instance : Hashable (Unit ⊕ σ) where
     hash : Unit ⊕ σ → UInt64
     | .inl _ => Hashable.hash (0, 0)
     | .inr a => Hashable.hash (1, hash a)

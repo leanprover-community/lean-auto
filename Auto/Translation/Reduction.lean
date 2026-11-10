@@ -8,7 +8,7 @@ public section
 
 open Lean Meta
 
-instance : ToString TransparencyMode where
+local instance : ToString TransparencyMode where
   toString : TransparencyMode → String
   | .all       => "all"
   | .default   => "default"
@@ -17,7 +17,9 @@ instance : ToString TransparencyMode where
   | .implicit  => "implicit"
   | .none      => "none"
 
-instance : Lean.KVMap.Value TransparencyMode where
+namespace Auto
+
+scoped instance : Lean.KVMap.Value TransparencyMode where
   toDataValue t := toString t
   ofDataValue?
   | "all"       => some .all
@@ -27,6 +29,10 @@ instance : Lean.KVMap.Value TransparencyMode where
   | "implicit"  => some .implicit
   | "none"      => some .none
   | _           => none
+
+end Auto
+
+open scoped Auto
 
 register_option auto.redMode : TransparencyMode := {
   defValue := .reducible
