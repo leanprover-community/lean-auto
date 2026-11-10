@@ -25,7 +25,7 @@ def isSimpleSymbol (s : String) : Bool :=
 -- <index>      ::= <numeral> | <symbol>
 -- <identifier> ::= <symbol>  | (_ <symbol> <index>+)
 
-private instance : Hashable (String ⊕ Nat) where
+private local instance : Hashable (String ⊕ Nat) where
   hash : String ⊕ Nat → UInt64
   | .inl s => hash ("0" ++ s)
   | .inr n => hash ("1" ++ toString n)

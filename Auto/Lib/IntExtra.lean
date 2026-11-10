@@ -11,7 +11,7 @@ def Int.beq : Int → Int → Bool
 | .negSucc n₁, .negSucc n₂ => n₁.beq n₂
 | _,           _           => false
 
-instance : BEq Int where
+local instance : BEq Int where
   beq := Int.beq
 
 theorem Int.beq_def {a b : Int} : (a == b) = Int.beq a b := rfl
@@ -27,7 +27,7 @@ theorem Int.eq_of_beq_eq_true {i₁ i₂ : Int} : Int.beq i₁ i₂ → i₁ = i
   | .ofNat n₁, .negSucc n₂ => fun H => by cases H
   | .negSucc n₁, .ofNat n₂ => fun H => by cases H
 
-instance : LawfulBEq Int where
+local instance : LawfulBEq Int where
   eq_of_beq := Int.eq_of_beq_eq_true
   rfl := Int.beq_refl
 

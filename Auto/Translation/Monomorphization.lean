@@ -16,6 +16,7 @@ public import Auto.Translation.SMTAttributes
 public section
 
 open Lean
+open scoped Auto
 
 initialize
   registerTraceClass `auto.mono
