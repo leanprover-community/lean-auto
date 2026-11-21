@@ -29,9 +29,9 @@ namespace Auto
 syntax hintelem := term <|> "*" (ident)?
 syntax hints := ("[" hintelem,* "]")?
 /-- Specify constants to unfold. `unfolds` Must not contain cyclic dependency -/
-syntax unfolds := "u[" ident,* "]"
+syntax unfolds := &"u" noWs "[" ident,* "]"
 /-- Specify constants to collect definitional equality for -/
-syntax defeqs := "d[" ident,* "]"
+syntax defeqs := &"d" noWs "[" ident,* "]"
 syntax uord := atomic(unfolds) <|> defeqs
 syntax autoinstr := ("👍" <|> "👎")?
 syntax (name := auto) "auto" autoinstr hints (uord)* : tactic
