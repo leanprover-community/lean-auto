@@ -362,7 +362,7 @@ open Meta in
     let logInfo? := lazyReduce.logInfo.get opts
     let printTime? := lazyReduce.printTime.get opts
     -- TODO: add options or notation for setting the following parameters
-    withTheReader Core.Context (fun ctx => { ctx with options := ctx.options.setBool `smartUnfolding false }) do
+    withTheReader Core.Context (fun ctx => ctx.setOptions (ctx.options.setBool `smartUnfolding false)) do
       let e ← withTransparency (mode := TransparencyMode.all) <| reduce e (skipProofs := skipProof?) (skipTypes := skipType?)
       if logInfo? then
         logInfoAt tk e
